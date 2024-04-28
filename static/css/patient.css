@@ -1,0 +1,14 @@
+
+.btn-large {
+    height: 200px;  /* Hauteur pour carré */
+    width: 200px;    /* Largeur pour ajuster */
+    background-size: contain; /* Changez de cover à contain pour voir toute l'image */
+    background-repeat: no-repeat; /* Empêche la répétition de l'image */
+    background-position: center; /* Centre l'image dans le bouton */
+    overflow: hidden; /* Empêche le débordement de contenu */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white; /* Couleur du texte */
+    font-size: 24px; /* Taille du texte */
+}

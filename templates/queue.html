@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Liste des Patients en File d'Attente</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Liste des Patients</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Numéro d'Appel</th>
+                <th>Motif de Visite</th>
+                <th>Heure d'Enregistrement</th>
+                <th>Statut</th>
+                <th>Comptoir</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for patient in patients %}
+            <tr>
+                <td>{{ patient.call_number }}</td>
+                <td>{{ patient.visit_reason }}</td>
+                <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ patient.status }}</td>
+                <td>{{ patient.counter_number }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

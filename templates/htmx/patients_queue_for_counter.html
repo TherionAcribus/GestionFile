@@ -1,0 +1,5 @@
+<ul>
+    {% for patient in patients %}
+        <li>Patient {{ patient.call_number }} - {{ patient.visit_reason }} - {{ patient.timestamp | format_time}}</li>
+    {% endfor %}
+</ul>

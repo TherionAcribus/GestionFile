@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Enregistrement de la file d'attente</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="../static/css/patient.css">
+</head>
+<body>
+
+    <h1 class = "text-center">Bienvenue à la Pharmacie Sainte-Agathe</h1>
+    <h3>Afin d'améliorer votre prise en charge, saisissez le motif de votre visite</h3>
+
+    <div class="container">
+        <form action="/patients_submit" method="post">
+            <div class="row">
+                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance" style="background-image:url('/static/images/prescription.png'); background-size: cover;">
+                    {{ _('Ordonnance') }}
+                </button>
+                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="retrait" style="background-image:url('/static/images/retrait.png'); background-size: cover;">
+                    {{ _('Retrait de commande / dû') }}
+                </button>
+            </div>
+            <div class="row">
+                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="vaccination" style="background-image:url('/static/images/vaccin.png'); background-size: cover;">
+                    {{ _('Vaccination') }}
+                </button>
+                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="rdv" style="background-image:url('/static/images/rdv.png'); background-size: cover;">
+                    {{ _('Rendez-vous') }}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if image_qr %}
+    <img src="/static/qr_patients/qr_patient.png">
+    {% endif %}
+
+    <div class="container">
+        <form action="/language_submit" method="post">
+            <div class="row text-center">
+                <button class="btn-large waves-effect waves-light col" type="submit" name="language" value="fr" style="background-image:url('/static/images/pays/france.png'); background-size: cover;">
+                </button>
+                <button class="btn-large waves-effect waves-light col" type="submit" name="language" value="us" style="background-image:url('/static/images/pays/etats-unis.png'); background-size: cover;">
+                </button>
+        </form>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+</body>
+</html>

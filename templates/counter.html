@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Comptoir {{ counter_number }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="../static/css/counter.css">
+</head>
+<body>
+    <h1>Comptoir {{ counter_number }}</h1>
+
+
+    {% if next_patient %}
+    Patient {{ next_patient.call_number }} en appel ({{ next_patient.visit_reason }})
+    {% elif current_patient %}
+    Patient {{ current_patient.call_number }} au comptoir ({{ current_patient.visit_reason }})
+    {% else %}
+    Aucun patient
+    {% endif %}
+
+    <form id="actionForm" action="{{ url_for('validate_and_call_next', counter_number=counter_number) }}">
+        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
+                style="background-image:url('/static/images/next.png');">
+            Suivant
+        </button>        
+    </form>
+
+    {% if next_patient %}
+    <form id="actionForm" action="{{ url_for('validate_patient', counter_number=counter_number, patient_number=next_patient.id) }}">
+        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
+                style="background-image:url('/static/images/Valide.jpg');">
+            Valider
+        </button>        
+    </form>
+    {% endif %}
+
+    {% if current_patient %}
+    <form id="actionForm" action="{{ url_for('pause_patient', counter_number=counter_number, current_patient_id=current_patient.id) }}">
+        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
+                style="background-image:url('/static/images/pause.jpg');">
+            Pause
+        </button>        
+    </form>
+    {% endif %}
+
+    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/patients_queue_for_counter" hx-swap="innerHTML">
+    </div>
+
+            <div>
+        <label>
+          <input id="cb_vaccination" type="checkbox"/>
+          <span>Vaccination</span>
+        </label>
+    </div>
+
+    <div>
+        <label>
+            <input id="cb_test" type="checkbox"/>
+            <span>Test Antigenique</span>
+          </label>
+    </div>
+
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <script src="../static/js/counter.js"></script>
+</body>
+</html>

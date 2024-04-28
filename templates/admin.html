@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Page administrateur</title>
+        <!-- Compiled and minified CSS -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+
+        <!-- Compiled and minified JavaScript -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+</head>
+
+<body>
+    <h1 class="text-center">Page administrateur</h1>
+
+
+    <div class="container">
+
+        <div class="row">
+            <div class="col s12">
+                <ul class="tabs">
+                    <li class="tab col s4"><a href="#tab1">Liste des pages</a></li>
+                    <li class="tab col s4"><a href="#tab2">Gestion de la BDD patients</a></li>
+                    <li class="tab col s4"><a href="#tab3">Gestion des Comptoirs</a></li>
+                </ul>
+            </div>
+
+            <div id="tab1" class="col s12">    
+                <h2>Liste des pages</h2>
+                <ul>
+                    <li><a href="/display" target="_blank">Page "écran"</a></li>
+                    <li><a href="/counter/1" target="_blank">Page "comptoir"</a></li>
+                    <li><a href="/patients" target="_blank">Page "accueil patient"</a></li>
+                    <li><a href="/queue" target="_blank">Page "liste des patients"</a></li>
+                </ul>
+            </div>
+
+            <div id="tab2" class="col s12">    
+                <h2>Opérations sur la base de données</h2>
+                <ul>
+                    <li><a href="/clear_all_patients_from_db">Supprimer tous les patients de la BD</a></li>
+                </ul>
+            </div>
+
+            <div id="tab3" class="col s12">
+                <h2>Gerer les comptoirs</h2>
+                <form action="/add_counter" method="post">
+                    <label for="name">Nom du Comptoir:</label>
+                    <input type="text" id="name" name="name" required><br><br>
+                    <input type="submit" value="Ajouter Comptoir">
+                </form>
+
+                <h1>Liste des Comptoirs</h1>
+                <table>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nom</th>
+                        <th>Est Actif ?</th>
+                        <th>Actions Non Réalisées</th>
+                        <th>Actions Prioritaires</th>
+                    </tr>
+                    {% for counter in counters %}
+                    <tr>
+                        <td>{{ counter.id }}</td>
+                        <td>{{ counter.name }}</td>
+                        <td>{{ 'Oui' if counter.is_active else 'Non' }}</td>
+                        <td>{{ counter.non_actions }}</td>
+                        <td>{{ counter.priority_actions }}</td>
+                    </tr>
+                    {% endfor %}
+                </table>
+
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+
+
+
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var elems = document.querySelectorAll('.tabs');
+            var options = {};
+            var instance = M.Tabs.init(elems, options);
+        });
+    </script>
+
+</body>
+</html>
