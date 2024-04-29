@@ -3,6 +3,9 @@
 # TODO : Affichage d'un message en etranger si patient etranger "on going"
 # TODO : Si choix langue en etranger -> Diriger vers comptoir en etranger
 
+# a appeler avant tout le reste
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, current_app
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
