@@ -33,7 +33,7 @@
     </div>
 
     {% if image_qr %}
-    <img src="/static/qr_patients/qr_patient.png">
+        <img src="{{ url_for('static', filename='qr_patients/qr_patient.png') }}" alt="QR Code">
     {% endif %}
 
     <div class="container">

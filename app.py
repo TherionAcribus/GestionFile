@@ -279,7 +279,7 @@ def create_qr_code(call_number, reason):
     
     # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
     directory = os.path.join(current_app.static_folder, 'qr_patients')
-    filename = 'qr_patients.png'
+    filename = 'qr_patient.png'
     img_path = os.path.join(directory, filename)
 
     # Assurer que le répertoire existe
