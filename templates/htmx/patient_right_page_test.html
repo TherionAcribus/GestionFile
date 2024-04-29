@@ -1,0 +1,17 @@
+<div class="col s12">
+    <div>
+        <button class="btn-test waves-effect waves-light s12" hx-post="/patients_submit" hx-target="#right_page" hx-vals='{"reason": "covid"}'>
+            <p class="button-text-style">{{ _('Grippe / Covid') }}</p>
+        </button>
+    </div>
+    <div>
+        <button class="btn-test waves-effect waves-light" hx-post="/patients_submit" hx-target="#right_page" hx-vals='{"reason": "angine"}'>
+            <p class="button-text-style">{{ _('Angine') }}</p>
+        </button>
+    </div>
+    <div>
+        <button class="btn-test waves-effect waves-light" hx-post="/patients_submit" hx-target="#right_page" hx-vals='{"reason": "cystite"}'>
+            <p class="button-text-style">{{ _('Cystite') }}</p>
+        </button>
+    </div>
+</div>

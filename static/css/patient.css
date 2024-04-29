@@ -10,6 +10,12 @@ body {
 
 }
 
+#right_page {
+    height: 100%;
+    background-color: white;
+    margin: 10px;
+}
+
 .btn-large {
     height: 200px;  /* Hauteur pour carré */
     width: 200px;    /* Largeur pour ajuster */
@@ -27,7 +33,25 @@ body {
     color: white; 
     -webkit-text-stroke-color: #000000;
     -webkit-text-stroke-width: 1px;
+}
 
+.btn-test{
+    height: 100px;  /* Hauteur pour carré */
+    width: 100%;    /* Largeur pour ajuster */
+    background-size: contain; /* Changez de cover à contain pour voir toute l'image */
+    background-repeat: no-repeat; /* Empêche la répétition de l'image */
+    background-position: center; /* Centre l'image dans le bouton */
+    overflow: hidden; /* Empêche le débordement de contenu */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white; /* Couleur du texte */
+    font-size: 24px; /* Taille du texte */
+    font-weight: 700;
+    line-height: 1.2;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 1px;
 }
 
 .div-btn-large {

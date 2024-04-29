@@ -102,6 +102,12 @@ def patients():
     return render_template('patients.html')
 
 
+@app.route('/patient_right_page_default')
+def patient_right_page_default():
+    print("default")
+    return render_template('htmx/patient_right_page_default.html')
+
+
 @app.route('/counter/<int:counter_number>')
 def counter(counter_number):
 
@@ -258,11 +264,29 @@ def display():
 
 @app.route('/patients_submit', methods=['POST'])
 def patients_submit():
+    print("patients_submit")
     # Récupération des données du formulaire
     reason = request.form.get('reason')
     name = request.form.get('name')  # Assurez-vous que ce champ est présent dans votre formulaire HTML
 
-    call_number = get_next_call_number()
+    if reason == 'rdv':
+        return render_template('htmx/patient_right_page_test.html')
+
+    if reason in ['vaccination', 'ordonnance', 'retrait', 'covid', 'angine', 'cystite']:
+        call_number = get_next_call_number()
+        add_patient(call_number, reason)
+        # Création du QR Code
+        image_qr = create_qr_code(call_number, reason)
+        text = f"{call_number}"
+        # rafraichissement des pages display et counter
+        socketio.emit('trigger_new_patient', {})
+        return render_template('htmx/patient_qr_right_page.html', image_url=image_qr, text=text)
+    
+    print(f"Name: {name}, Reason: {reason}, Time: {datetime.now(timezone.utc)}")
+    return render_template('patients.html', image_qr=image_qr)  # Redirection vers la page du formulaire ou autre page de confirmation
+
+
+def add_patient(call_number, reason):
 
     # Création d'un nouvel objet Patient
     new_patient = Patient(
@@ -275,16 +299,6 @@ def patients_submit():
     # Ajout à la base de données
     db.session.add(new_patient)
     db.session.commit()  # Enregistrement des changements dans la base de données
-
-    # Création du QR Code
-    image_qr = create_qr_code(call_number, reason)
-
-    # rafraichissement des pages display et counter
-    socketio.emit('trigger_new_patient', {})
-    
-    print(f"Name: {name}, Reason: {reason}, Time: {datetime.now(timezone.utc)}")
-    return render_template('patients.html', image_qr=image_qr)  # Redirection vers la page du formulaire ou autre page de confirmation
-
 
 def create_qr_code(call_number, reason):
     print(reason)
