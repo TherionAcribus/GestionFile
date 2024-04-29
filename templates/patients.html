@@ -36,7 +36,7 @@
                         </button>
                     </div>
                     <div class="col s6 valign-wrapper div-btn-large">
-                        <button class="btn-large waves-effect waves-light col" hx-get="/patients_submit" hx-vals='{"reason": "rdv"}' hx-target="#right_page" style="background-image:url('/static/images/rdv.png'); background-size: cover;">
+                        <button class="btn-large waves-effect waves-light col" hx-post="/patients_submit" hx-vals='{"reason": "rdv"}' hx-target="#right_page" style="background-image:url('/static/images/rdv.png'); background-size: cover;">
                             <p class="button-text-style">{{ _('Rendez-vous') }}</p>
                         </button>
                     </div>
