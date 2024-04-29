@@ -5,6 +5,8 @@
 
 from flask import Flask, render_template, request, redirect, url_for, session, current_app
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy import create_engine
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date
@@ -24,6 +26,17 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'
 app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
+
+# Configuration de la base de données avec session scoped
+engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
+db_session = scoped_session(sessionmaker(autocommit=False,
+                                        autoflush=False,
+                                        bind=engine))
+
+
+@app.teardown_appcontext
+def remove_session(ex=None):
+    db_session.remove()
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
