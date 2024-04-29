@@ -1,3 +1,14 @@
+body {
+    background-image: url('/static/images/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    height: 100vh;
+}
+
+.top {
+
+}
 
 .btn-large {
     height: 200px;  /* Hauteur pour carré */
@@ -11,4 +22,36 @@
     align-items: center;
     color: white; /* Couleur du texte */
     font-size: 24px; /* Taille du texte */
+    font-weight: 700;
+    line-height: 1.2;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 1px;
+
+}
+
+.div-btn-large {
+    display: flex; 
+    justify-content: center; 
+    height: 100%;
+}
+
+.btn-country{
+    height: 50px;  /* Hauteur pour carré */
+    width: 50px;    /* Largeur pour ajuster */
+    background-color: rgba(255, 255, 255, 0);
+    border: none;
+    margin: 10px;
+}
+
+.btn-country:hover{
+    background-color: rgba(255, 255, 255, 0);
+}
+
+
+.button-text-style {
+width: 100%;
+background-color: rgba(255, 255, 255, 0.5); /* Fond blanc semi-transparent */
+backdrop-filter: blur(1px); /* Effet de flou */
+padding: 10px; /* Espacement interne pour mieux voir l'effet */
 }

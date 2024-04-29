@@ -3,7 +3,7 @@
 # TODO : Affichage d'un message en etranger si patient etranger "on going"
 # TODO : Si choix langue en etranger -> Diriger vers comptoir en etranger
 
-# a appeler avant tout le reste
+# deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, current_app

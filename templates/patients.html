@@ -8,28 +8,45 @@
 </head>
 <body>
 
-    <h1 class = "text-center">Bienvenue à la Pharmacie Sainte-Agathe</h1>
-    <h3>Afin d'améliorer votre prise en charge, saisissez le motif de votre visite</h3>
+    <div class="center-align top">
+        <h1>{{ _('Bienvenue à la Pharmacie Sainte-Agathe') }}</h1>
+        <h3>{{ _("Afin d'améliorer votre prise en charge, saisissez le motif de votre visite. Nous vous appelerons à votre tour.") }}</h3>
+    </div>
 
-    <div class="container">
-        <form action="/patients_submit" method="post">
-            <div class="row">
-                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance" style="background-image:url('/static/images/prescription.png'); background-size: cover;">
-                    {{ _('Ordonnance') }}
-                </button>
-                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="retrait" style="background-image:url('/static/images/retrait.png'); background-size: cover;">
-                    {{ _('Retrait de commande / dû') }}
-                </button>
-            </div>
-            <div class="row">
-                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="vaccination" style="background-image:url('/static/images/vaccin.png'); background-size: cover;">
-                    {{ _('Vaccination') }}
-                </button>
-                <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="rdv" style="background-image:url('/static/images/rdv.png'); background-size: cover;">
-                    {{ _('Rendez-vous') }}
-                </button>
-            </div>
-        </form>
+    <div class="row s12">
+        <div class="container col s6">
+            <form action="/patients_submit" method="post">
+                <div class="row">
+                    <div class="col s6 valign-wrapper div-btn-large">
+                        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance" style="background-image:url('/static/images/prescription.png'); background-size: cover;">
+                            <p class="button-text-style">{{ _('Ordonnance / Conseil') }}</p>
+                        </button>
+                    </div>
+                    <div class="col s6 valign-wrapper div-btn-large">
+                        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="retrait" style="background-image:url('/static/images/retrait.png'); background-size: cover;">
+                            <p class="button-text-style">{{ _('Retrait de commande / dû') }}</p>
+                        </button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col s6 valign-wrapper div-btn-large">
+                        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="vaccination" style="background-image:url('/static/images/vaccin.png'); background-size: cover;">
+                            <p class="button-text-style">{{ _('Vaccination') }}</p>
+                        </button>
+                    </div>
+                    <div class="col s6 valign-wrapper div-btn-large">
+                        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="rdv" style="background-image:url('/static/images/rdv.png'); background-size: cover;">
+                            <p class="button-text-style">{{ _('Rendez-vous') }}</p>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="container col s6">
+            TEST
+        </div>
+
     </div>
 
     {% if image_qr %}
@@ -37,10 +54,10 @@
     {% endif %}
 
     <div class="container">
-            <div class="row text-center">
-                <a href="/patients/fr"><button class="btn-large waves-effect waves-light col" type="submit" name="language" value="fr" style="background-image:url('/static/images/pays/france.png'); background-size: cover;"></button></a>
-                <a href="/patients/en"><button class="btn-large waves-effect waves-light col" type="submit" name="language" value="us" style="background-image:url('/static/images/pays/etats-unis.png'); background-size: cover;">
-                </button></a>
+        <div class="row text-center s12 center-align" style="display: flex; justify-content: center;">
+            <a href="/patients/fr"><button class="btn btn-country waves-effect waves-light col" type="submit" name="language" value="fr" style="background-image:url('/static/images/pays/france.png'); background-size: cover;"></button></a>
+            <a href="/patients/en"><button class="btn btn-country waves-effect waves-light col" type="submit" name="language" value="us" style="background-image:url('/static/images/pays/etats-unis.png'); background-size: cover;"></button></a>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
