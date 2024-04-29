@@ -12,19 +12,18 @@ from flask_wtf import FlaskForm  # A mettre en place : Pour sécurisation
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 from flask_babel import Babel
+from flask_babel import gettext as _
 from gtts import gTTS
 import qrcode
 import json
 import os
-
-import time
 
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 socketio = SocketIO(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'
-app.config['AUDIO_FOLDER'] = 'static/audio'
+app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
 
 db = SQLAlchemy(app)
@@ -61,10 +60,16 @@ with app.app_context():
     print("Creating database tables...")
     db.create_all()
 
-
 def get_locale():
-    # Vérifiez si la langue est stockée dans la session de l'utilisateur
-    return session.get('lang', 'fr')
+    return session.get('lang', request.accept_languages.best_match(['en', 'fr']))
+babel.init_app(app, locale_selector=get_locale)
+
+@app.before_request
+def set_locale():
+    from flask import request
+    user_language = request.cookies.get('lang', 'fr')  # Exemple: lire la langue depuis un cookie
+    request.babel_locale = user_language
+
 
 @app.route('/')
 def home():
@@ -213,9 +218,12 @@ def update_patient_status():
     return 'Status Updated'
 
 
-@app.route('/language_submit/<lang>')
-def language_submit(lang):
-    return render_template('patients.html')
+# Route pour la page patients qui accepte une langue via l'URL
+@app.route('/patients/<lang>')
+def patients_langue(lang):
+    session['lang'] = lang
+    print(session['lang'])
+    return render_template('patients.html', cache=False)
 
 
 @app.route('/display')
@@ -268,8 +276,16 @@ def create_qr_code(call_number, reason):
 
     # Générer le QR Code
     img = qrcode.make(data)
+    
     # Chemin pour enregistrer l'image
-    img_path = 'static/qr_patients/qr_patient.png'
+    directory = 'static/qr_patients'
+    filename = 'qr_patient.png'
+    img_path = os.path.join(directory, filename)
+
+    # Assurer que le répertoire existe
+    if not os.path.exists(directory):
+        os.makedirs(directory)  # Créer le dossier s'il n'existe pas
+
     # Enregistrement de l'image dans le dossier static
     img.save(img_path)
 
