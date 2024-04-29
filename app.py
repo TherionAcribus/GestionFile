@@ -3,7 +3,7 @@
 # TODO : Affichage d'un message en etranger si patient etranger "on going"
 # TODO : Si choix langue en etranger -> Diriger vers comptoir en etranger
 
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
@@ -277,8 +277,8 @@ def create_qr_code(call_number, reason):
     # Générer le QR Code
     img = qrcode.make(data)
     
-    # Chemin pour enregistrer l'image
-    directory = 'static/qr_patients'
+    # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
+    directory = os.path.join(current_app.static_folder, 'qr_patients')
     filename = 'qr_patient.png'
     img_path = os.path.join(directory, filename)
 
