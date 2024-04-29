@@ -49,7 +49,7 @@
                     });
                 }
 
-        var socket = io.connect('http://127.0.0.1:5000/');
+        var socket = io.connect();
         socket.on('trigger_htmx_update', function() {
         // Utiliser HTMX pour déclencher une mise à jour
         console.log("Mise à jour de l'écran d'affichage...");
