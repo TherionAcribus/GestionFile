@@ -72,19 +72,19 @@
             // Utiliser HTMX pour déclencher AUDIO
             console.log("Calling... Audio");
 
-            let audiofile = data.audiofile;
-            console.log("Playing audio...", audiofile);
-            playAudio(audiofile);
+            let audioUrl = data.audio_url;
+            console.log("Playing audio...", audioUrl);
+            playAudio(audioUrl);
         });
 
 
-    function playAudio(audiofile) {
+        function playAudio(audioUrl) {
         const player = document.getElementById('player');
-        console.log("Playing audio...");
-        player.src = `/static/audio/${audiofile}`;
+        console.log("Playing audio...", audioUrl);
+        player.src = audioUrl;
         player.play();
         console.log("Playing audio... DONE");
-    }
+}
 
     </script>
 

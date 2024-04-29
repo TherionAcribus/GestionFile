@@ -12,7 +12,6 @@ from flask_wtf import FlaskForm  # A mettre en place : Pour sécurisation
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 from flask_babel import Babel
-from flask_babel import gettext as _
 from gtts import gTTS
 import qrcode
 import json
@@ -73,8 +72,7 @@ def set_locale():
 
 @app.route('/')
 def home():
-    return "Bonjour le monde!"
-
+    return "Bonjour la pharmacie!"
 
 
 @app.route('/admin')
@@ -139,14 +137,24 @@ def call_next(counter_number):
     return next_patient
 
 def generate_audio_calling(counter_number, next_patient):
-    # Générer le fichier audio
-    text = f"Nous invitons le patient {next_patient.call_number}à se rendre au comptoir {counter_number}."
-    tts = gTTS(text, lang='fr', tld='ca')
+    # Texte pour la synthèse vocale
+    text = f"Nous invitons le patient {next_patient.call_number} à se rendre au comptoir {counter_number}."
+    tts = gTTS(text, lang='fr', tld='ca')  # Utilisation de gTTS avec langue française
+
+    # Chemin de sauvegarde du fichier audio
     audiofile = f'patient_{next_patient.call_number}.mp3'
-    audio_path = os.path.join(app.config['AUDIO_FOLDER'], audiofile)
+    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)  # Enregistrement dans le dossier 'static/audio'
+
+    # Assurer que le répertoire existe
+    if not os.path.exists(os.path.dirname(audio_path)):
+        os.makedirs(os.path.dirname(audio_path))
+
+    # Sauvegarde du fichier audio
     tts.save(audio_path)
 
-    socketio.emit('trigger_audio_calling', {'audiofile': audiofile})
+    # Envoi du chemin relatif via Socket.IO
+    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
+    socketio.emit('trigger_audio_calling', {'audio_url': audio_url})
 
 
 
