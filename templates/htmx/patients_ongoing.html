@@ -1,0 +1,5 @@
+<ul>
+    {% for patient in patients %}
+        <li class="list_counter_infos">Comptoir {{ patient.counter_number }} : {{ patient.call_number }} </li>
+    {% endfor %}
+</ul>

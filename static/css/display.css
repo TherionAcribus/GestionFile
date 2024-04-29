@@ -1,0 +1,58 @@
+body {
+    background-image: url('/static/images/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    height: 100vh;
+}
+
+#patient_calling {
+    text-align: center;
+    margin: auto;
+    font-size: 80px;
+    font-weight: 900;
+    background-color: white;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 4px;
+    margin-top: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.list_counter_infos{
+    font-size: 80px;
+    font-weight: 900;
+    color: white;
+    margin-top: 0px;
+    padding-top: 0%;
+}
+
+.div_under_calling{
+    width: 100%;
+}
+
+#div_announcements {
+    height: 60vh;  /* Définir une hauteur spécifique peut aider à gérer l'espace pour l'image */
+    width: 100%;   /* Utilise toute la largeur disponible */
+    display: flex;  /* Permet d'utiliser 'margin: auto' dans l'image pour la centrer */
+    align-items: center;  /* Centre verticalement le contenu */
+    justify-content: center;  /* Centre horizontalement le contenu */
+}
+
+#image_announcement {
+    max-height: 100%;  /* Ajuste l'image pour ne pas dépasser la hauteur de son conteneur */
+    max-width: 100%;   /* Ajuste l'image pour ne pas dépasser la largeur de son conteneur */
+    height: auto;      /* Garantit que le ratio de l'image est maintenu */
+    width: auto;       /* Garantit que le ratio de l'image est maintenu */
+    display: block;    /* Élimine l'espace supplémentaire en dessous de l'image */
+    margin: auto;      /* Centre l'image horizontalement si elle est plus petite que le conteneur */
+}
+
+#image_announcement {
+    width: 100%;   /* Utilise toute la largeur de son conteneur */
+    height: 100%;  /* Utilise toute la hauteur de son conteneur */
+    object-fit: contain;  /* Assure que l'image s'adapte à son conteneur tout en conservant son ratio */
+    display: block;    /* Élimine l'espace supplémentaire en dessous de l'image */
+    margin: auto;      /* Centre l'image horizontalement et verticalement */
+}

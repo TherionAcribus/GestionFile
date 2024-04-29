@@ -7,20 +7,39 @@
         <script src="https://unpkg.com/htmx.org"></script>
         <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
         <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        <link rel="stylesheet" href="../static/css/display.css">
 </head>
 <body>
-    <button onclick="initializeAudio()">Activer le Son</button>
-    <audio id="player" src="" hidden></audio>
 
-    <h1>Patients en Cours de Service</h1>
-    <div id="update-section"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-    </div>
+    <div id="full_page">
+        <div id="update-section"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
+        </div>
 
-    <div id="patient_calling" hx-trigger="refresh_calling, load" hx-get="/patients_calling" hx-swap="innerHTML">
+        <div id="patient_calling" class="center-align" hx-trigger="refresh_calling, load" hx-get="/patients_calling" hx-swap="innerHTML">
+        </div>
+
+        <div id="div_under_calling" class="row s12">
+            <div id="left_side" class="col s8">
+                <div id="patient_ongoing" hx-trigger="refresh_ongoing, load" hx-get="/patients_ongoing" hx-swap="innerHTML">
+                </div>
+            </div>
+
+            <div id="right_side" class="col s4">
+                <div id="div_announcements">
+                    
+                </div>
+            </div>
+        </div>
+
         
-    </div>
 
-    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/patients_queue" hx-swap="innerHTML">
+        <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/patients_queue" hx-swap="innerHTML">
+        </div>
+
+        <button onclick="initializeAudio()">Activer le Son</button>
+        <audio id="player" src="" hidden></audio>
+
     </div>
 
     <script type="text/javascript">
@@ -68,6 +87,12 @@
         htmx.trigger('#patient_calling', 'refresh_calling', {target: '#patient_calling'});
         });
 
+        socket.on('trigger_patient_ongoing', function(data) {
+        // Utiliser HTMX pour déclencher une mise à jour
+        console.log("Ongoing...");
+        htmx.trigger('#patient_ongoing', 'refresh_ongoing', {target: '#patient_ongoing'});
+        });
+
         socket.on('trigger_audio_calling', function(data) {
             // Utiliser HTMX pour déclencher AUDIO
             console.log("Calling... Audio");
@@ -83,8 +108,21 @@
         console.log("Playing audio...", audioUrl);
         player.src = audioUrl;
         player.play();
-        console.log("Playing audio... DONE");
+        console.log("Playing audio... DONE");        
 }
+
+
+    let currentIndex = 0; // Commencer par la première image après l'image de départ
+    const changeInterval = 30000; // 30 secondes, ajustable
+
+    function updateImage() {
+        currentIndex++; // Passer à la prochaine image
+        // Utiliser HTMX pour charger la prochaine image
+        htmx.ajax('GET', `/next_image/${currentIndex}`, '#div_announcements');
+    }
+
+    // Définir un intervalle pour mettre à jour l'image
+    setInterval(updateImage, changeInterval);
 
     </script>
 

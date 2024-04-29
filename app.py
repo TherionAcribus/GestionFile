@@ -66,7 +66,6 @@ class Counter(db.Model):
     priority_actions = db.Column(db.String(255))  # Liste des actions prioritaires réalisées par ce comptoir
 
 
-
     def __repr__(self):
         return f'<Counter {self.name}>'
 
@@ -200,6 +199,7 @@ def validate_and_call_next(counter_number):
     # TODO Prevoir que ne renvoie rien
     next_patient = call_next(counter_number)  
     socketio.emit('trigger_new_patient', {})
+    socketio.emit('trigger_patient_ongoing', {})  
 
     # Appelle automatiquement le prochain patient
     return redirect(url_for('counter', counter_number=counter_number, next_patient_id=next_patient.id if next_patient else None)) 
@@ -215,6 +215,7 @@ def validate_patient(counter_number, patient_number):
         db.session.commit()
 
     socketio.emit('trigger_patient_calling', {})
+    socketio.emit('trigger_patient_ongoing', {})  
 
     return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
 
@@ -230,6 +231,7 @@ def pause_patient(counter_number, current_patient_id):
         db.session.commit()
 
     socketio.emit('trigger_patient_calling', {})
+    socketio.emit('trigger_patient_ongoing', {})  
 
     return redirect(url_for('counter', counter_number=counter_number))
 
@@ -380,6 +382,14 @@ def patients_calling():
     return render_template('htmx/patients_calling.html', patients=patients)
 
 
+@app.route('/patients_ongoing')
+def patients_ongoing():
+    patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_number).all()
+    print("Patients")
+    return render_template('htmx/patients_ongoing.html', patients=patients)
+
+
+
 @app.route('/clear_all_patients_from_db')
 def clear_all_patients_from_db():
     try:
@@ -398,6 +408,18 @@ def test_connect():
 @socketio.on('disconnect')
 def test_disconnect():
     print('Client disconnected')
+
+
+# Liste des images dans le répertoire statique
+image_dir = os.path.join(app.static_folder, "images/annonces")
+images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
+
+@app.route('/next_image/<int:index>')
+def next_image(index):
+    # Sélectionner l'image suivante en boucle
+    print("index", index)
+    image_url = images[index % len(images)]
+    return render_template('htmx/display_image_announcement.html', image_url=image_url)
 
 
 # Définir un filtre pour Jinja2
