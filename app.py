@@ -376,4 +376,9 @@ def format_time(value):
     return value.strftime('%H:%M') if value else ''
 
 if __name__ == "__main__":
-    socketio = SocketIO(app, debug=True)
+    # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
+    port = int(os.environ.get("PORT", 5000))
+    # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
+    debug = os.environ.get("DEBUG", "False") == "True"
+
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
