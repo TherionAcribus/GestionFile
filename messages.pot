@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2024-04-29 07:59+0200\n"
+"POT-Creation-Date: 2024-04-30 07:46+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,19 +17,45 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.14.0\n"
 
-#: templates/patients.html:18
-msgid "Ordonnance"
+#: templates/patients.html:14
+msgid "Bienvenue à la Pharmacie Sainte-Agathe"
 msgstr ""
 
-#: templates/patients.html:21
+#: templates/patients.html:15
+msgid ""
+"Afin d'améliorer votre prise en charge, saisissez le motif de votre "
+"visite. Nous vous appelerons à votre tour."
+msgstr ""
+
+#: templates/patients.html:23
+msgid "Ordonnance / Conseil"
+msgstr ""
+
+#: templates/patients.html:28
 msgid "Retrait de commande / dû"
 msgstr ""
 
-#: templates/patients.html:26
+#: templates/patients.html:35
 msgid "Vaccination"
 msgstr ""
 
-#: templates/patients.html:29
+#: templates/patients.html:40
 msgid "Rendez-vous"
+msgstr ""
+
+#: templates/htmx/patient_right_page_default.html:1
+msgid "Un message bien utile"
+msgstr ""
+
+#: templates/htmx/patient_right_page_test.html:4
+msgid "Grippe / Covid"
+msgstr ""
+
+#: templates/htmx/patient_right_page_test.html:9
+msgid "Angine"
+msgstr ""
+
+#: templates/htmx/patient_right_page_test.html:14
+msgid "Cystite"
 msgstr ""
 

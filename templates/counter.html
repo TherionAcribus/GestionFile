@@ -19,30 +19,32 @@
     Aucun patient
     {% endif %}
 
-    <form id="actionForm" action="{{ url_for('validate_and_call_next', counter_number=counter_number) }}">
-        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
-                style="background-image:url('/static/images/next.png');">
-            Suivant
-        </button>        
-    </form>
+    <div class="row s12">
+        <form id="actionForm" action="{{ url_for('validate_and_call_next', counter_number=counter_number) }}">
+            <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
+                    style="background-image:url('/static/images/next.png');">
+                Suivant
+            </button>        
+        </form>
 
-    {% if next_patient %}
-    <form id="actionForm" action="{{ url_for('validate_patient', counter_number=counter_number, patient_number=next_patient.id) }}">
-        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
-                style="background-image:url('/static/images/Valide.jpg');">
-            Valider
-        </button>        
-    </form>
-    {% endif %}
+        {% if next_patient %}
+        <form id="actionForm" action="{{ url_for('validate_patient', counter_number=counter_number, patient_number=next_patient.id) }}">
+            <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
+                    style="background-image:url('/static/images/Valide.jpg');">
+                Valider
+            </button>        
+        </form>
+        {% endif %}
 
-    {% if current_patient %}
-    <form id="actionForm" action="{{ url_for('pause_patient', counter_number=counter_number, current_patient_id=current_patient.id) }}">
-        <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
-                style="background-image:url('/static/images/pause.jpg');">
-            Pause
-        </button>        
-    </form>
-    {% endif %}
+        {% if current_patient %}
+        <form id="actionForm" action="{{ url_for('pause_patient', counter_number=counter_number, current_patient_id=current_patient.id) }}">
+            <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
+                    style="background-image:url('/static/images/pause.jpg');">
+                Pause
+            </button>        
+        </form>
+        {% endif %}
+    </div>
 
     <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/patients_queue_for_counter" hx-swap="innerHTML">
     </div>

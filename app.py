@@ -417,7 +417,6 @@ images = [os.path.join("/static/images/annonces", image) for image in os.listdir
 @app.route('/next_image/<int:index>')
 def next_image(index):
     # Sélectionner l'image suivante en boucle
-    print("index", index)
     image_url = images[index % len(images)]
     return render_template('htmx/display_image_announcement.html', image_url=image_url)
 

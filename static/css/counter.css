@@ -11,4 +11,9 @@
     align-items: center;
     color: white; /* Couleur du texte */
     font-size: 24px; /* Taille du texte */
+    font-weight: 700;
+    line-height: 1.2;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 1px;
 }
