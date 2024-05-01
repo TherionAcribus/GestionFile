@@ -4,7 +4,12 @@ socket.on('trigger_new_patient', function() {
 // Utiliser HTMX pour déclencher une mise à jour
 console.log("Nouveau patient...");
 htmx.trigger('#patient_on_queue', 'refresh_queue', {target: "#patient_on_queue"});
+});
 
+socket.on('trigger_patient_ongoing', function() {
+    //htmx.trigger('#change_buttons', 'refresh_buttons', {target: "#validation_buttons"});
+    htmx.trigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});
+    htmx.trigger('#button_section', 'refresh_current_buttons', {target: "#button_section"});
 });
 
 

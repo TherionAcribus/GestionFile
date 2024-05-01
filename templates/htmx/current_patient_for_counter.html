@@ -1,0 +1,7 @@
+{% if patient.status == 'calling' %}
+    Patient {{ patient.call_number }} en appel ({{ patient.visit_reason }})
+{% elif patient.status == 'ongoing' %}
+    Patient {{ patient.call_number }} au comptoir ({{ patient.visit_reason }})
+{% else %}
+    Aucun patient
+{% endif %}

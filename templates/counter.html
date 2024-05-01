@@ -3,46 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <title>Comptoir {{ counter_number }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
     <link rel="stylesheet" href="../static/css/counter.css">
 </head>
 <body>
     <h1>Comptoir <span id="counter_number">{{ counter_number }}</span></h1>
 
-    {% if next_patient %}
-        Patient {{ next_patient.call_number }} en appel ({{ next_patient.visit_reason }})
-    {% elif current_patient %}
-        Patient {{ current_patient.call_number }} au comptoir ({{ current_patient.visit_reason }})
-    {% else %}
-        Aucun patient
-    {% endif %}
+    <div 
+        id="div_current_patient" 
+        hx-trigger="refresh_current_patient, load" 
+        hx-get="/current_patient_for_counter/{{ counter_number }}" 
+        hx-swap="innerHTML">
+    </div>
 
-    <div class="row s12">
-        <form id="actionForm" action="{{ url_for('validate_and_call_next', counter_number=counter_number) }}">
-            <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
-                    style="background-image:url('/static/images/next.png');">
-                Suivant
-            </button>        
-        </form>
-
-        {% if next_patient %}
-        <form id="actionForm" action="{{ url_for('validate_patient', counter_number=counter_number, patient_number=next_patient.id) }}">
-            <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
-                    style="background-image:url('/static/images/Valide.jpg');">
-                Valider
-            </button>        
-        </form>
-        {% endif %}
-
-        {% if current_patient %}
-        <form id="actionForm" action="{{ url_for('pause_patient', counter_number=counter_number, current_patient_id=current_patient.id) }}">
-            <button class="btn-large waves-effect waves-light col" type="submit" name="reason" value="ordonnance"
-                    style="background-image:url('/static/images/pause.jpg');">
-                Pause
-            </button>        
-        </form>
-        {% endif %}
+    <div 
+        id="button_section" 
+        class="row s12" 
+        hx-trigger="load, refresh_current_buttons" 
+        hx-get="/counter_refresh_buttons/{{ counter_number }}" 
+        hx-swap="innerHTML">
     </div>
 
     <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/patients_queue_for_counter" hx-swap="innerHTML">

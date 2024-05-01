@@ -1,0 +1,26 @@
+<button hx-post="/validate_and_call_next/2"
+class="btn-large waves-effect waves-light col"
+style="background-image:url('/static/images/next.png');">
+    Suivant
+</button>
+
+{% if status == 'calling' %}
+<button hx-post="{{ url_for('validate_patient', counter_number=counter_number, patient_id=patient_id) }}"
+hx-target="#button_section"
+hx-swap="outerHTML"
+class="btn-large waves-effect waves-light col"
+style="background-image:url('/static/images/Valide.jpg');">
+Valider
+</button>
+{% endif %}
+
+
+{% if status == 'ongoing' %}
+<button hx-post="{{ url_for('pause_patient', counter_number=counter_number, patient_id=patient_id) }}"
+hx-target="#button_section"
+hx-swap="outerHTML"
+class="btn-large waves-effect waves-light col"
+style="background-image:url('/static/images/pause.jpg');">
+Pause
+</button>
+{% endif %}
