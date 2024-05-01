@@ -214,7 +214,7 @@ def validate_and_call_next(counter_number):
 
     # TODO Prevoir que ne renvoie rien
     next_patient = call_next(counter_number)  
-    socketio.emit('trigger_new_patient', {})
+    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     socketio.emit('trigger_patient_ongoing', {})  
     return '', 204  # No content to send back
 
@@ -227,7 +227,7 @@ def call_specific_patient(counter_number, patient_id):
 
     # Récupération du patient spécifique
     next_patient = Patient.query.get(patient_id)
-    socketio.emit('trigger_new_patient', {})
+    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     socketio.emit('trigger_patient_ongoing', {})  
     
     if next_patient:
@@ -329,13 +329,17 @@ def patients_submit():
         text = f"{call_number}"
         # rafraichissement des pages display et counter
         # envoye de data pour être récupéré sous forme de liste par PySide
-        patients_standing = Patient.query.filter_by(status='standing').all()
-        patients_data = [patient.to_dict() for patient in patients_standing]
-        socketio.emit('trigger_new_patient', {"patient_standing": patients_data})
+        socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
         return render_template('htmx/patient_qr_right_page.html', image_url=image_qr, text=text)
     
     else:
         print("Merde, la raison n'a pas été prévue....")
+
+
+def list_patients_standing():
+    patients_standing = Patient.query.filter_by(status='standing').all()
+    patients_data = [patient.to_dict() for patient in patients_standing]
+    return patients_data
 
 
 def add_patient(call_number, reason):
