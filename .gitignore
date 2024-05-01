@@ -1,5 +1,6 @@
 venv/
 __pycache__/
 *.pyc
-instance/queuedatabase.db
+instance/*.*
 static/audio/annonces/*.*
+

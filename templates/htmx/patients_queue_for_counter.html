@@ -1,5 +1,9 @@
 <ul>
     {% for patient in patients %}
-        <li>Patient {{ patient.call_number }} - {{ patient.visit_reason }} - {{ patient.timestamp | format_time}}</li>
+        <li>Patient {{ patient.call_number }} - 
+            {{ patient.visit_reason }} - 
+            {{ patient.timestamp | format_time}}
+            <button id="btn_select_patient_{{ patient.id }}" class="btn_select_patient">Selectionner</button>
+        </li>
     {% endfor %}
 </ul>

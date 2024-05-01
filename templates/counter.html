@@ -8,15 +8,14 @@
     <link rel="stylesheet" href="../static/css/counter.css">
 </head>
 <body>
-    <h1>Comptoir {{ counter_number }}</h1>
-
+    <h1>Comptoir <span id="counter_number">{{ counter_number }}</span></h1>
 
     {% if next_patient %}
-    Patient {{ next_patient.call_number }} en appel ({{ next_patient.visit_reason }})
+        Patient {{ next_patient.call_number }} en appel ({{ next_patient.visit_reason }})
     {% elif current_patient %}
-    Patient {{ current_patient.call_number }} au comptoir ({{ current_patient.visit_reason }})
+        Patient {{ current_patient.call_number }} au comptoir ({{ current_patient.visit_reason }})
     {% else %}
-    Aucun patient
+        Aucun patient
     {% endif %}
 
     <div class="row s12">

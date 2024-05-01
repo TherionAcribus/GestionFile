@@ -55,7 +55,16 @@ class Patient(db.Model):
     counter_number = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
-        return f'<Patient {self.call_number}>'
+        return f'<Patient {self.call_number}> ({self.id})'
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "call_number": self.call_number,
+            "visit_reason": self.visit_reason,
+            "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Format datetime as string
+            "status": self.status
+        }
     
 
 class Counter(db.Model):
@@ -112,9 +121,11 @@ def counter(counter_number):
 
     # Récupérez le paramètre 'next_patient' si présent
     next_patient_id = request.args.get('next_patient_id')
+    print("COUNTER", next_patient_id)
     if next_patient_id:
     # Vous pourriez vouloir récupérer des détails sur ce patient
         next_patient = Patient.query.get(int(next_patient_id))
+        print("NEXT PATIENT", next_patient)
     else :
         next_patient = None
 
@@ -139,10 +150,8 @@ def call_next(counter_number):
 
     next_patient = Patient.query.filter_by(status='standing').order_by(Patient.call_number).first()
 
-
     if next_patient:
-        socketio.emit('trigger_htmx_update', {})  # ????
-
+        #socketio.emit('trigger_htmx_update', {})  # ????
         # Met à jour le statut du patient
         next_patient.status = 'calling'
         next_patient.counter_number = counter_number
@@ -178,23 +187,22 @@ def generate_audio_calling(counter_number, next_patient):
     socketio.emit('trigger_audio_calling', {'audio_url': audio_url})
 
 
-
-
-
-@app.route('/validate_and_call_next/<int:counter_number>')
-def validate_and_call_next(counter_number):
-
+def validate_current_patient(counter_number):
     # si patient actuel 
-    print(Patient.query.filter_by(counter_number=counter_number))
     patients_at_counter = Patient.query.filter_by(counter_number=counter_number).all()
     if patients_at_counter :
         print("patient dans le comptoir")
         # Mise à jour du statut pour tous les patients au comptoir
         Patient.query.filter_by(counter_number=counter_number).update({'status': 'done'})
-        db.session.commit()
-
+        db.session.commit()    
     else:
         print("pas de patient")
+
+
+@app.route('/validate_and_call_next/<int:counter_number>')
+def validate_and_call_next(counter_number):
+
+    validate_current_patient(counter_number)
 
     # TODO Prevoir que ne renvoie rien
     next_patient = call_next(counter_number)  
@@ -203,6 +211,36 @@ def validate_and_call_next(counter_number):
 
     # Appelle automatiquement le prochain patient
     return redirect(url_for('counter', counter_number=counter_number, next_patient_id=next_patient.id if next_patient else None)) 
+
+# TODO A TERMINER !!!!
+@app.route('/call_specific_patient/<int:counter_number>/<int:patient_id>')
+def call_specific_patient(counter_number, patient_id):
+    print("specifique", patient_id)
+
+    validate_current_patient(counter_number)
+
+    # Récupération du patient spécifique
+    next_patient = Patient.query.get(patient_id)
+    socketio.emit('trigger_new_patient', {})
+    socketio.emit('trigger_patient_ongoing', {})  
+    
+    if next_patient:
+        print("Appel du patient :", patient_id, "au comptoir", counter_number)
+        # Mise à jour du statut du patient
+        next_patient.status = 'calling'
+        next_patient.counter_number = counter_number
+        db.session.commit()
+        
+        # Notifier tous les clients via SocketIO
+        socketio.emit('trigger_patient_calling', {'patient_id': patient_id, 'counter_number': counter_number})
+        socketio.emit('trigger_patient_ongoing', {})
+    else:
+        print("Aucun patient trouvé avec l'ID :", patient_id)
+    
+    print("next_patient", type(next_patient.id))
+
+    # Redirection vers la page du comptoir ou une autre page appropriée
+    return redirect(url_for('counter', counter_number=counter_number, next_patient_id = str(next_patient.id)))
 
 
 
@@ -269,23 +307,26 @@ def patients_submit():
     print("patients_submit")
     # Récupération des données du formulaire
     reason = request.form.get('reason')
-    name = request.form.get('name')  # Assurez-vous que ce champ est présent dans votre formulaire HTML
 
     if reason == 'rdv':
         return render_template('htmx/patient_right_page_test.html')
 
     if reason in ['vaccination', 'ordonnance', 'retrait', 'covid', 'angine', 'cystite']:
-        call_number = get_next_call_number()
-        add_patient(call_number, reason)
+        call_number = get_next_category_number(reason)
+        print("call_number", call_number)
+        new_patient = add_patient(call_number, reason)
         # Création du QR Code
-        image_qr = create_qr_code(call_number, reason)
+        image_qr = create_qr_code(new_patient)
         text = f"{call_number}"
         # rafraichissement des pages display et counter
-        socketio.emit('trigger_new_patient', {})
+        # envoye de data pour être récupéré sous forme de liste par PySide
+        patients_standing = Patient.query.filter_by(status='standing').all()
+        patients_data = [patient.to_dict() for patient in patients_standing]
+        socketio.emit('trigger_new_patient', {"patient_standing": patients_data})
         return render_template('htmx/patient_qr_right_page.html', image_url=image_qr, text=text)
     
-    print(f"Name: {name}, Reason: {reason}, Time: {datetime.now(timezone.utc)}")
-    return render_template('patients.html', image_qr=image_qr)  # Redirection vers la page du formulaire ou autre page de confirmation
+    else:
+        print("Merde, la raison n'a pas été prévue....")
 
 
 def add_patient(call_number, reason):
@@ -302,13 +343,14 @@ def add_patient(call_number, reason):
     db.session.add(new_patient)
     db.session.commit()  # Enregistrement des changements dans la base de données
 
-def create_qr_code(call_number, reason):
-    print(reason)
-    print(call_number)
+    return new_patient
+
+def create_qr_code(patient):
     patient_info = {
-            "patient_number": call_number,
+            "id": patient.id,
+            "patient_number": patient.call_number,
             "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "reason": reason
+            "reason": patient.visit_reason
     }
         
     # Convertir les données en chaîne JSON
@@ -331,12 +373,38 @@ def create_qr_code(call_number, reason):
 
     return img_path
 
-def get_next_call_number():
+def get_next_call_number_simple():
     # Obtenir le dernier patient enregistré aujourd'hui
     last_patient_today = Patient.query.filter(db.func.date(Patient.timestamp) == date.today()).order_by(Patient.id.desc()).first()
     if last_patient_today:
         return last_patient_today.call_number + 1
     return 1  # Réinitialiser le compteur si aucun patient n'a été enregistré aujourd'hui
+
+
+def get_next_category_number(reason):
+    category_to_letter = {
+        'vaccination': 'V',
+        'angine': 'T',
+        'covid': 'T',
+        'cystite': 'T',
+        'rdv': 'R',
+        'retrait': 'D',
+        'ordonnance': 'O',
+    }
+    
+    letter_prefix = category_to_letter.get(reason, 'X')  # 'X' sera utilisé si la catégorie n'est pas trouvée
+    today = date.today()
+
+    # Compter combien de patients sont déjà enregistrés aujourd'hui avec le même préfixe de lettre
+    today_count = Patient.query.filter(
+        db.func.date(Patient.timestamp) == today,
+        db.func.substr(Patient.call_number, 1, 1) == letter_prefix
+    ).count()
+
+    # Le prochain numéro sera le nombre actuel + 1
+    next_number = today_count + 1
+
+    return f"{letter_prefix}-{next_number}"
 
 
 @app.route('/current_patients')
@@ -358,21 +426,15 @@ def add_counter():
     return "Erreur dans la soumission du formulaire"
 
 
-@app.route('/trigger_update')
-def trigger_update():
-    #socketio.emit('refresh', {'message': 'Update available'}, broadcast=True)
-    return 'Update Triggered'
-
-
 @app.route('/patients_queue')
 def patients_queue():
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.call_number).all()
+    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
     return render_template('htmx/patients_queue.html', patients=patients)
 
 
 @app.route('/patients_queue_for_counter')
 def patients_queue_for_counter():
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.call_number).all()
+    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
     return render_template('htmx/patients_queue_for_counter.html', patients=patients)
 
 
