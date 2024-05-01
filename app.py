@@ -155,7 +155,7 @@ def call_next(counter_number):
     # Récupère le premier patient en attente 
     # TODO PERMETTRE DE FIXER DES REGLES ou CHOIX ARBITRAIRE
 
-    next_patient = Patient.query.filter_by(status='standing').order_by(Patient.call_number).first()
+    next_patient = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).first()
 
     if next_patient:
         #socketio.emit('trigger_htmx_update', {})  # ????
@@ -206,7 +206,7 @@ def validate_current_patient(counter_number):
         print("pas de patient")
 
 
-@app.route('/validate_and_call_next/<int:counter_number>', methods=['POST'])
+@app.route('/validate_and_call_next/<int:counter_number>', methods=['POST', 'GET'])
 def validate_and_call_next(counter_number):
     print('validate_and_call_next', counter_number)
 
@@ -218,10 +218,7 @@ def validate_and_call_next(counter_number):
     socketio.emit('trigger_patient_ongoing', {})  
     return '', 204  # No content to send back
 
-    # Appelle automatiquement le prochain patient
-    #return redirect(url_for('counter', counter_number=counter_number, next_patient_id=next_patient.id if next_patient else None)) 
 
-# TODO A TERMINER !!!!
 @app.route('/call_specific_patient/<int:counter_number>/<int:patient_id>')
 def call_specific_patient(counter_number, patient_id):
     print("specifique", patient_id)
@@ -239,10 +236,12 @@ def call_specific_patient(counter_number, patient_id):
         next_patient.status = 'calling'
         next_patient.counter_number = counter_number
         db.session.commit()
-        
+       
         # Notifier tous les clients via SocketIO
-        socketio.emit('trigger_patient_calling', {'patient_id': patient_id, 'counter_number': counter_number})
+        socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
         socketio.emit('trigger_patient_ongoing', {})
+
+        generate_audio_calling(counter_number, next_patient)
     else:
         print("Aucun patient trouvé avec l'ID :", patient_id)
     
@@ -253,7 +252,7 @@ def call_specific_patient(counter_number, patient_id):
 
 
 
-@app.route('/validate_patient/<int:counter_number>/<int:patient_id>', methods=['POST'])
+@app.route('/validate_patient/<int:counter_number>/<int:patient_id>', methods=['POST', 'GET'])
 def validate_patient(counter_number, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
     current_patient = Patient.query.get(patient_id)
@@ -268,7 +267,7 @@ def validate_patient(counter_number, patient_id):
     return '', 204  # No content to send back
 
 
-@app.route('/pause_patient/<int:counter_number>/<int:patient_id>', methods=['POST'])
+@app.route('/pause_patient/<int:counter_number>/<int:patient_id>', methods=['POST', 'GET'])
 def pause_patient(counter_number, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
     print("pause_patient")
