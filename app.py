@@ -68,13 +68,19 @@ class Patient(db.Model):
         }
     
 
+counters_activities = db.Table('counters_activities',
+    db.Column('counter_id', db.Integer, db.ForeignKey('counter.id'), primary_key=True),
+    db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True)
+)
+
 class Counter(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=False)  # Indique si le comptoir est actuellement utilisé
     non_actions = db.Column(db.String(255))  # Liste des actes non réalisés par ce comptoir
     priority_actions = db.Column(db.String(255))  # Liste des actions prioritaires réalisées par ce comptoir
-
+    activities = db.relationship('Activity', secondary=counters_activities, lazy='subquery',
+            backref=db.backref('counters', lazy=True)) 
 
     def __repr__(self):
         return f'<Counter {self.name}>'
@@ -379,6 +385,124 @@ def add_new_activity():
 
 # -------- Fin de ADMIN -> Activity  ---------
 
+
+# --------  ADMIN -> Counter  ---------
+
+# page de base
+@app.route('/admin/counter')
+def admin_counter():
+    return render_template('/admin/counter.html')
+
+# affiche le tableau des counters 
+@app.route('/admin/counter/table')
+def display_counter_table():
+    counters = Counter.query.all()
+    activities =Activity.query.all()
+    return render_template('admin/counter_htmx_table.html', counters=counters, activities = activities)
+
+
+# mise à jour des informations d'un counter
+@app.route('/admin/counter/counter_update/<int:counter_id>', methods=['POST'])
+def update_counter(counter_id):
+    try:
+        counter = Counter.query.get(counter_id)
+        if counter:
+            if request.form.get('name') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                return ""
+            counter.name = request.form.get('name', counter.name)
+            activities_ids = request.form.getlist('activities')
+
+            # Suppression des activités ajoutées pour éviter les erreur de duplication
+            activities_ids = request.form.getlist('activities')
+            new_activities = Activity.query.filter(Activity.id.in_(activities_ids)).all()
+
+            # Clear existing activities and add the new ones
+            counter.activities = new_activities
+
+            db.session.commit()
+            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Comptoir introuvable"})
+            return ""
+
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': e})
+            print("ERREURRRR", e)
+            return jsonify(status="error", message=str(e)), 500
+
+
+# affiche la modale pour confirmer la suppression d'un comptoir
+@app.route('/admin/counter/confirm_delete/<int:counter_id>', methods=['GET'])
+def confirm_delete_counter(counter_id):
+    counter = Counter.query.get(counter_id)
+    return render_template('/admin/counter_modal_confirm_delete.html', counter=counter)
+
+
+# supprime un comptoir
+@app.route('/admin/counter/delete/<int:counter_id>', methods=['GET'])
+def delete_counter(counter_id):
+    try:
+        counter = Pharmacist.query.get(counter_id)
+        if not counter:
+            socketio.emit('display_toast', {'success': False, 'message': "Comptoir non trouvé"})
+            return display_counter_table()
+
+        db.session.delete(counter)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        return display_counter_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': e})
+        return display_counter_table()
+
+
+# affiche le formulaire pour ajouter un counter
+@app.route('/admin/counter/add_form')
+def add_counter_form():
+    activities = Activity.query.all()
+    return render_template('/admin/counter_add_form.html', activities=activities)
+
+
+# enregistre le comptoir dans la Bdd
+@app.route('/admin/counter/add_new_counter', methods=['POST'])
+def add_new_counter():
+    try:
+        name = request.form.get('name')
+        activities_ids = request.form.getlist('activities')
+
+        if not name:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            return display_activity_table()
+
+        new_counter = Counter(
+            name=name,
+        )
+        db.session.add(new_counter)
+        db.session.commit()
+
+
+        # Associer les activités sélectionnées avec le nouveau pharmacien
+        for activity_id in activities_ids:
+            activity = Activity.query.get(int(activity_id))
+            if activity:
+                new_counter.activities.append(activity)
+        db.session.commit()
+
+        socketio.emit('delete_add_counter_form')
+        socketio.emit('display_toast', {'success': True, 'message': "Comptoir ajouté avec succès"})
+
+        return display_counter_table()
+
+    except Exception as e:
+        db.session.rollback()
+        socketio.emit('display_toast', {'success': False, 'message': e})
+        return display_activity_table()
+
+
+# -------- fin de ADMIN -> Counter  ---------
 
 @app.route('/patients')
 def patients():

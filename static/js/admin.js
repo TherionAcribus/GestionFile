@@ -20,6 +20,11 @@ socket.on('open_modal_confirm_delete_activity', function(data) {
     instance_activity.open();
 });
 
+// ouvre le modal de confirmation counter
+socket.on('open_modal_confirm_delete_counter', function(data) {
+    instance_activity.open();
+});
+
 // supprime le formulaire d'ajout d'un membre
 socket.on('delete_add_staff_form', function(data) {
     console.log("Delete add staff form...");
@@ -30,6 +35,12 @@ socket.on('delete_add_staff_form', function(data) {
 socket.on('delete_add_activity_form', function(data) {
     console.log("Delete add staff form...");
     document.getElementById('div_add_activity_form').innerHTML = "";
+});
+
+// supprime le formulaire d'ajout d'un counter
+socket.on('delete_add_counter_form', function(data) {
+    console.log("Delete add staff form...");
+    document.getElementById('div_add_counter_form').innerHTML = "";
 });
 
 document.addEventListener('DOMContentLoaded', function() {

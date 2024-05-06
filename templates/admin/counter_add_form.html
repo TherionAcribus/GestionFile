@@ -1,0 +1,40 @@
+<table id="new_counter_form">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Acte réalisés</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" name="name" value="" id="name"></td>
+            <td>
+                <!-- Affichage des checkboxes pour chaque activité -->
+                {% for counter in counters %}
+                <label>
+                    <input class="counter" type="checkbox" name="counter" checked="checked"  value="{{ counter.id }}" />
+                    <span>{{ counter.name }}</span>
+                </label>
+                {% endfor %}
+            </td>
+            <td>
+                {% for activity in activities %}
+                <label>
+                    <input class="activities" type="checkbox" name="activities" checked="checked"  value="{{ activity.id }}" />
+                    <span>{{ activity.name }}</span>
+                </label>
+                {% endfor %}
+            </td>
+            <td>
+                <button class="btn" 
+                    hx-target="#div_counter_table"
+                    hx-post="/admin/counter/add_new_counter"
+                    hx-include=".activities"
+                    hx-vals='js:{"name": document.getElementById("name").value     
+                        }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+    </tbody>
+</table>

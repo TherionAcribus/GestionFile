@@ -1,0 +1,50 @@
+<table id="counter_table" class="striped">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Actes réalisés</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for counter in counters %}
+        <tr>
+            <td><input type="text" name="name" value="{{ counter.name }}" id="name-{{ counter.id }}"></td>
+                            <!-- Affichage des checkboxes pour chaque activité -->
+            <td>
+                <!-- Affichage des checkboxes pour chaque activité -->
+                {% for activity in activities %}
+                {% if activity in counter.activities %}
+                    <label>
+                        <input class="activities-{{ counter.id }}" type="checkbox" name="activities" value="{{ activity.id }}" checked />
+                        <span>{{ activity.name }}</span>
+                    </label>
+                {% else %}
+                    <label>
+                        <input class="activities-{{ counter.id }}" type="checkbox" name="activities" value="{{ activity.id }}" />
+                        <span>{{ activity.name }}</span>
+                    </label>
+                {% endif %}
+                {% endfor %}
+            </td>
+            <td>
+                <button class="btn" 
+                    hx-target="#invisible"
+                    hx-include=".activities-{{ counter.id }}"
+                    hx-post="/admin/counter/counter_update/{{ counter.id }}"
+                    hx-vals='js:{"name": document.getElementById("name-{{ counter.id }}").value 
+                            }'>
+                    Enregistrer
+                </button>
+
+                <button class="btn modal-trigger red"
+                        hx-get="/admin/counter/confirm_delete/{{ counter.id }}"
+                        hx-target="#modal_delete_counter"
+                        hx-trigger="click"
+                        data-target="modal_delete_counter">
+                    Supprimer
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
