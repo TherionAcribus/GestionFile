@@ -1,0 +1,11 @@
+<form hx-post="/add_pharmacist" hx-swap="beforeend:#pharmacist_table tbody" hx-target="#pharmacist_table tbody" hx-trigger="submit">
+    <input type="text" name="name" placeholder="Name" required>
+    <input type="text" name="initials" placeholder="Initials" required>
+    <input type="text" name="language" placeholder="Language">
+    <label>
+        <input type="checkbox" name="is_active">
+        <span>Is Active?</span>
+    </label>
+    <input type="text" name="activity" placeholder="Activity">
+    <button type="submit" class="btn waves-effect waves-light">Save Pharmacist</button>
+</form>

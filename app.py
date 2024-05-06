@@ -5,9 +5,9 @@
 # TODO : Bouton Help ?
 
 # deux lignes a appeler avant tout le reste (pour server Render)
-import eventlet
-eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, current_app
+#import eventlet
+#eventlet.monkey_patch()
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy import create_engine
@@ -53,7 +53,7 @@ class Patient(db.Model):
     visit_reason = db.Column(db.String(120), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(50), nullable=False, default='standing') 
-    counter_number = db.Column(db.Integer, nullable=True)
+    #counter_number = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'
@@ -80,9 +80,34 @@ class Counter(db.Model):
         return f'<Counter {self.name}>'
 
 
-with app.app_context():
-    print("Creating database tables...")
-    db.create_all()
+pharmacists_activities = db.Table('pharmacists_activities',
+    db.Column('pharmacist_id', db.Integer, db.ForeignKey('pharmacist.id'), primary_key=True),
+    db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True)
+)
+
+class Pharmacist(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    initials = db.Column(db.String(10), nullable=False)
+    language = db.Column(db.String(20), default=False)
+    is_active = db.Column(db.Boolean, default=False)
+    activities = db.relationship('Activity', secondary=pharmacists_activities, lazy='subquery',
+        backref=db.backref('pharmacists', lazy=True))   
+
+    def __repr__(self):
+        return f'<Pharmacist {self.name}>'
+
+
+class Activity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), nullable=False, unique=True)
+    name = db.Column(db.String(100), nullable=False)
+    letter = db.Column(db.String(1), nullable=False)
+
+    def __repr__(self):
+        return f'<Activity {self.code} - {self.name}>'
+
+
 
 def get_locale():
     return session.get('lang', request.accept_languages.best_match(['en', 'fr']))
@@ -100,10 +125,259 @@ def home():
     return "Bonjour la pharmacie!"
 
 
-@app.route('/admin')
-def admin():
+@app.route('/admin_old')
+def admin_old():
     all_counters = Counter.query.all()  # Récupère tous les comptoirs de la base de données
     return render_template('admin.html', counters=all_counters)
+
+# --------   ADMIN   ---------
+@app.route('/admin')
+def admin():
+    return render_template('/admin/admin.html')
+
+# --------  ADMIN -> Staff   ---------
+
+# base
+@app.route('/admin/staff')
+def staff():
+    return render_template('/admin/staff.html')
+
+# affiche la table de l'équipe
+@app.route('/admin/staff/table')
+def display_staff_table():
+    staff = Pharmacist.query.all()
+    activities =Activity.query.all()
+    print("ALL", staff)
+    return render_template('admin/staff_htmx_table.html', staff=staff, activities=activities)
+
+
+# mise à jour des informations d'un membre
+@app.route('/admin/staff/member_update/<int:member_id>', methods=['POST'])
+def update_member(member_id):
+    try:
+        member = Pharmacist.query.get(member_id)
+        if member:
+            if request.form.get('name') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                return ""
+            if request.form.get('initials') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Les initiales sont obligatoires"})
+                return ""
+            member.name = request.form.get('name', member.name)
+            member.initials = request.form.get('initials', member.initials)
+            member.language = request.form.get('language', member.language)
+            activities_ids = request.form.getlist('activities')
+
+            # Suppression des activités ajoutées pour éviter les erreur de duplication
+            activities_ids = request.form.getlist('activities')
+            new_activities = Activity.query.filter(Activity.id.in_(activities_ids)).all()
+
+            # Clear existing activities and add the new ones
+            member.activities = new_activities
+
+            db.session.commit()
+            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
+            return ""
+
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': e})
+            print("ERREURRRR", e)
+            return jsonify(status="error", message=str(e)), 500
+
+
+# affiche la modale pour confirmer la suppression d'un membre
+@app.route('/admin/staff/confirm_delete/<int:member_id>', methods=['GET'])
+def confirm_delete(member_id):
+    staff = Pharmacist.query.get(member_id)
+    return render_template('/admin/staff_modal_confirm_delete.html', staff=staff)
+
+
+# supprime un membre de l'equipe
+@app.route('/admin/staff/delete/<int:member_id>', methods=['GET'])
+def delete_staff(member_id):
+    try:
+        member = Pharmacist.query.get(member_id)
+        if not member:
+            socketio.emit('display_toast', {'success': False, 'message': "Membre non trouvé"})
+            return display_staff_table()
+
+        db.session.delete(member)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        return display_staff_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': e})
+        return display_staff_table()
+    
+
+# affiche le formulaire pour ajouter un membre
+@app.route('/admin/staff/add_form')
+def add_staff_form():
+    activities =Activity.query.all()
+    return render_template('/admin/staff_add_form.html', activities=activities)
+
+
+# enregistre le membre dans la Bdd
+@app.route('/admin/staff/add_new_staff', methods=['POST'])
+def add_new_staff():
+    try:
+        name = request.form.get('name')
+        initials = request.form.get('initials')
+        language = request.form.get('language')
+        activities_ids = request.form.getlist('activities')
+
+        if not name:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            return display_staff_table()
+        if not initials:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Initiales obligatoires"})
+            return display_staff_table()
+
+        new_staff = Pharmacist(
+            name=name,
+            initials=initials,
+            language=language,
+        )
+        db.session.add(new_staff)
+        db.session.commit()
+
+        # Associer les activités sélectionnées avec le nouveau pharmacien
+        print("ACTIVITIES IDS", activities_ids)
+        for activity_id in activities_ids:
+            print("ACTIVITY ID", activity_id)
+            activity = Activity.query.get(int(activity_id))
+            if activity:
+                new_staff.activities.append(activity)
+        db.session.commit()
+
+        socketio.emit('delete_add_staff_form')
+        socketio.emit('display_toast', {'success': True, 'message': "Membre ajouté avec succès"})
+
+        return display_staff_table()
+
+    except Exception as e:
+        db.session.rollback()
+        socketio.emit('display_toast', {'success': False, 'message': e})
+        return display_staff_table()
+
+# --------  FIN  de ADMIN -> Staff   ---------
+
+# --------  ADMIN -> Activity  ---------
+
+# page de base
+@app.route('/admin/activity')
+def activity():
+    return render_template('/admin/activity.html')
+
+# affiche le tableau des activités 
+@app.route('/admin/activity/table')
+def display_activity_table():
+    activities = Activity.query.all()
+    print("ALL", staff)
+    return render_template('admin/activity_htmx_table.html', activities=activities)
+
+
+# mise à jour des informations d'une activité 
+@app.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
+def update_activity(activity_id):
+    try:
+        activity = Activity.query.get(activity_id)
+        if activity:
+            if request.form.get('name') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                return ""
+            if request.form.get('code') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Le code est obligatoire"})
+                return ""
+            if request.form.get('letter') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "La lettre est obligatoire"})
+                return ""
+            activity.name = request.form.get('name', activity.name)
+            activity.code = request.form.get('code', activity.code)
+            activity.letter = request.form.get('letter', activity.letter)
+            db.session.commit()
+            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Activité introuvable"})
+            return ""
+
+    except Exception as e:
+            print(e)
+            socketio.emit('display_toast', {'success': False, 'message': e})
+            return ""
+
+
+# affiche la modale pour confirmer la suppression d'une activité
+@app.route('/admin/activity/confirm_delete/<int:activity_id>', methods=['GET'])
+def confirm_delete_activity(activity_id):
+    activity = Activity.query.get(activity_id)
+    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity)
+
+
+# supprime un membre de l'equipe
+@app.route('/admin/activity/delete/<int:activity_id>', methods=['GET'])
+def delete_activity(activity_id):
+    try:
+        activity = Activity.query.get(activity_id)
+        if not activity:
+            socketio.emit('display_toast', {'success': False, 'message': "Activité non trouvée"})
+            return display_activity_table()
+
+        db.session.delete(activity)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        return display_activity_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': e})
+        return display_activity_table()
+    
+
+# affiche le formulaire pour ajouter un activité
+@app.route('/admin/activity/add_form')
+def add_activity_form():
+    return render_template('/admin/activity_add_form.html')
+
+
+# enregistre le membre dans la Bdd
+@app.route('/admin/activity/add_new_activity', methods=['POST'])
+def add_new_activity():
+    try:
+        name = request.form.get('name')
+        code = request.form.get('code')
+        letter = request.form.get('letter')
+
+        if not name:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            return display_activity_table()
+        if not code:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Code obligatoire"})
+            return display_activity_table()
+
+        new_activity = Activity(
+            name=name,
+            code=code,
+            letter=letter,
+        )
+        db.session.add(new_activity)
+        db.session.commit()
+        socketio.emit('delete_add_activity_form')
+        socketio.emit('display_toast', {'success': True, 'message': "Activité ajoutée avec succès"})
+
+        return display_activity_table()
+
+    except Exception as e:
+        db.session.rollback()
+        socketio.emit('display_toast', {'success': False, 'message': e})
+        return display_activity_table()
+
+
+# -------- Fin de ADMIN -> Activity  ---------
 
 
 @app.route('/patients')
@@ -489,6 +763,43 @@ def patients_ongoing():
     return render_template('htmx/patients_ongoing.html', patients=patients)
 
 
+@app.route('/pharmacists')
+def pharmacists():
+    all_pharmacists = Pharmacist.query.all()
+    print("ALL", all_pharmacists)
+    return render_template('pharmacists.html', pharmacists=all_pharmacists)
+
+
+@app.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
+def update_pharmacist(pharmacist_id):
+    pharmacist = Pharmacist.query.get(pharmacist_id)
+    if pharmacist:
+        pharmacist.name = request.form.get('name', pharmacist.name)
+        pharmacist.initials = request.form.get('initials', pharmacist.initials)
+        pharmacist.language = request.form.get('language', pharmacist.language)
+        pharmacist.is_active = 'is_active' in request.form
+        pharmacist.activity = request.form.get('activity', pharmacist.activity)
+        db.session.commit()
+    return redirect(url_for('pharmacists'))
+
+
+@app.route('/add_pharmacist', methods=['POST'])
+def add_pharmacist():
+    name = request.form.get('name')
+    initials = request.form.get('initials')
+    language = request.form.get('language')
+    is_active = request.form.get('is_active') == 'on'
+    activity = request.form.get('activity')
+    new_pharmacist = Pharmacist(name=name, initials=initials, language=language, is_active=is_active, activity=activity)
+    db.session.add(new_pharmacist)
+    db.session.commit()
+    return render_template('htmx/menu_admin_pharmacist_row.html', pharmacist=new_pharmacist)
+
+@app.route('/new_pharmacist_form')
+def new_pharmacist_form():
+    print("new_pharmacist_form")
+    return render_template('htmx/menu_admin_new_pharmacist_form.html')
+
 
 @app.route('/clear_all_patients_from_db')
 def clear_all_patients_from_db():
@@ -526,10 +837,52 @@ def next_image(index):
 def format_time(value):
     return value.strftime('%H:%M') if value else ''
 
+
+def init_activity_data_from_json(json_file='static/json/activities.json'):
+    print("Initialisation de la base de données...")
+    # Vérifier si la table est vide
+    if Activity.query.first() is None:
+        # Charger les activités depuis le fichier JSON
+        if os.path.exists(json_file):
+            with open(json_file, 'r') as f:
+                activities = json.load(f)
+
+            # Ajouter chaque activité à la base de données
+            for activity in activities:
+                new_activity = Activity(
+                    code=activity['code'],
+                    name=activity['name'],
+                    letter=activity['letter']
+                )
+                db.session.add(new_activity)
+
+            # Valider les changements
+            db.session.commit()
+            print("Base de données initialisée avec des activités prédéfinies.")
+        else:
+            print(f"Fichier {json_file} introuvable.")
+    else:
+        print("La base de données contient déjà des données.")
+
+# creation BDD si besoin et initialise certaines tables (Activités)
+with app.app_context():
+    print("Creating database tables...")
+    db.create_all()
+    init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
+
 if __name__ == "__main__":
+    print("Starting Flask app...")  
+
+
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
-
     socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+
+
+
+
+    
+
+

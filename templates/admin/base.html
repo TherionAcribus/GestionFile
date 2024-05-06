@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    {% block title %}
+    <!-- Titre -->
+    {% endblock %}
+    <!-- WebSocket -->
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <!-- Materialize -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidenav structure -->
+    <ul id="slide-out" class="sidenav sidenav-fixed">
+        <li><a class="sidenav-close" href="#!"><i class="material-icons">menu</i></a></li>
+        <li><a href="#!"><i class="material-icons">cloud</i>First Link</a></li>
+        <li><a href="#!">Second Link</a></li>
+        <li><div class="divider"></div></li>
+        <li><a class="subheader">Gestion de la pharmacie</a></li>
+        <li><a class="waves-effect" href="/admin/staff">Equipe</a></li>
+        <li><a class="waves-effect" href="/admin/counter">Comptoirs</a></li>
+        <li><a class="waves-effect" href="/admin/activity">Activités</a></li>
+    </ul>
+    <h1 class="center-align">Page administrateur</h1>
+
+    <div style="margin-left: 350px;">
+        {% block content %}
+        <!-- Content specific to each page -->
+        {% endblock %}
+    </div>
+
+
+    <script src="../static/js/admin.js"></script>
+</body>
+</html>

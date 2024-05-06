@@ -1,0 +1,29 @@
+<table id="new_activity_form">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Code</th>
+            <th>Lettre</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" name="name" value="" id="name"></td>
+            <td><input type="text" name="code" value="" id="code"></td>
+            <td><input type="text" name="letter" value="" id="letter"></td>
+
+            <td>
+                <button class="btn" 
+                    hx-target="#div_activity_table"
+                    hx-post="/admin/activity/add_new_activity"
+                    hx-vals='js:{"name": document.getElementById("name").value, 
+                            "code": document.getElementById("code").value, 
+                            "letter": document.getElementById("letter").value,
+                        }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+    </tbody>
+</table>

@@ -1,0 +1,38 @@
+<table id="staff_table" class="striped">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Code</th>
+            <th>Lettre</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for activity in activities %}
+        <tr>
+            <td><input type="text" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
+            <td><input type="text" name="code" value="{{ activity.code }}" id="code-{{ activity.id }}"></td>
+            <td><input type="text" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
+            <td>
+                <button class="btn" 
+                    hx-target="#invisible"
+                    hx-post="/admin/activity/activity_update/{{ activity.id }}"
+                    hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
+                            "initials": document.getElementById("code-{{ activity.id }}").value, 
+                            "language": document.getElementById("letter-{{ activity.id }}").value
+                            }'>
+                    Enregistrer
+                </button>
+
+                <button class="btn modal-trigger red"
+                        hx-get="/admin/activity/confirm_delete/{{ activity.id }}"
+                        hx-target="#modal_delete_activity"
+                        hx-trigger="click"
+                        data-target="modal_delete_activity">
+                    Supprimer
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

@@ -1,0 +1,39 @@
+<h2>Pharmacists</h2>
+    <table id="pharmacist_table" class="striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Initials</th>
+                <th>Language</th>
+                <th>Is Active</th>
+                <th>Activity</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            PH {{ pharmacists}}
+            {% for pharmacist in pharmacists %}
+            <tr>
+                <form action="{{ url_for('update_pharmacist', pharmacist_id=pharmacist.id) }}" method="POST">
+                    <td><input type="text" name="name" value="{{ pharmacist.name }}"></td>
+                    <td><input type="text" name="initials" value="{{ pharmacist.initials }}"></td>
+                    <td><input type="text" name="language" value="{{ pharmacist.language }}"></td>
+                    <td><label><input type="checkbox" name="is_active" {% if pharmacist.is_active %}checked{% endif %}><span></span></label></td>
+                    <td><input type="text" name="activity" value="{{ pharmacist.activity }}"></td>
+                    <td><button type="submit" class="btn">Update</button></td>
+                </form>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <button id="show_form_btn" class="btn waves-effect waves-light"
+        hx-get="/new_pharmacist_form"
+        hx-target="#new_pharmacist_container"
+        hx-swap="innerHTML">
+        Add New Pharmacist
+    </button>
+    
+    <!-- Container to display the form returned by the server -->
+    <div id="new_pharmacist_container">
+    </div>

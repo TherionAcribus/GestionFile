@@ -1,4 +1,4 @@
-<button hx-post="/validate_and_call_next/2"
+<button hx-post="{{ url_for('validate_and_call_next', counter_number=counter_number) }}"
 class="btn-large waves-effect waves-light col"
 style="background-image:url('/static/images/next.png');">
     Suivant

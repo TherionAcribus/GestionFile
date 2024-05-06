@@ -1,0 +1,27 @@
+[
+    {
+        "code": "covid",
+        "name": "test covid",
+        "letter": "T"
+    },
+    {
+        "code": "angine",
+        "name": "test angine",
+        "letter": "T"
+    },
+    {
+        "code": "cystite",
+        "name": "test cystite",
+        "letter": "T"
+    },
+    {
+        "code": "ordonnance",
+        "name": "ordonnances",
+        "letter": "O"
+    },
+    {
+        "code": "retrait",
+        "name": "retrait de commande",
+        "letter": "R"
+    }
+]

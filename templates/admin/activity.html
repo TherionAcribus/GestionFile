@@ -1,0 +1,31 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Activités{% endblock %}
+
+{% block content %}
+    <h3>Activités</h3>
+
+    <div id="div_activity_table"
+        hx-get="/admin/activity/table"
+        hx-trigger="load"
+        hx-target="#div_activity_table"
+        hx-swap="innerHTML">        
+    </div>
+
+    <!-- Ajout nouveau membre -->
+    <a class="waves-effect waves-light btn"
+        hx-get="/admin/activity/add_form"
+        hx-target="#div_add_activity_form"
+        hx-swap="innerHTML">
+    Ajouter une Activité
+    </a>    
+    <div id="div_add_activity_form"></div>
+
+    <!-- Modal Structure -->
+    <div id="modal_delete_activity" class="modal">
+    </div>
+
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+    <div id="invisible" style="display:none;"></div>
+    
+{% endblock %}

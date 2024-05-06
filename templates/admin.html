@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Page administrateur</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
         <!-- Compiled and minified CSS -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
 
@@ -13,15 +15,15 @@
 <body>
     <h1 class="center-align">Page administrateur</h1>
 
-
     <div class="container">
 
         <div class="row">
             <div class="col s12">
                 <ul class="tabs">
-                    <li class="tab col s4"><a href="#tab1">Liste des pages</a></li>
-                    <li class="tab col s4"><a href="#tab2">Gestion de la BDD patients</a></li>
-                    <li class="tab col s4"><a href="#tab3">Gestion des Comptoirs</a></li>
+                    <li class="tab col s3"><a href="#tab1">Liste des pages</a></li>
+                    <li class="tab col s3"><a href="#tab2">Gestion des patients</a></li>
+                    <li class="tab col s3"><a href="#tab3">Configuration de la pharmacie</a></li>
+                    <li class="tab col s3"><a href="#tab4">Stats</a></li>
                 </ul>
             </div>
 
@@ -43,35 +45,20 @@
             </div>
 
             <div id="tab3" class="col s12">
-                <h1>Gerer les comptoirs</h2>
+                <div class="col s12">
+                    <ul class="tabs">
+                        <li class="tab col s3"><a href="#menu_counters">Gestion des comptoirs</a></li>
+                        <li class="tab col s3"><a href="#menu_pharmacists">Gestion du personnel</a></li>
+                    </ul>
+                </div>
 
-                <h2>Liste des Comptoirs</h2>
-                <table>
-                    <tr>
-                        <th>ID</th>
-                        <th>Nom</th>
-                        <th>Est Actif ?</th>
-                        <th>Actions Non Réalisées</th>
-                        <th>Actions Prioritaires</th>
-                    </tr>
-                    {% for counter in counters %}
-                    <tr>
-                        <td>{{ counter.id }}</td>
-                        <td>{{ counter.name }}</td>
-                        <td>{{ 'Oui' if counter.is_active else 'Non' }}</td>
-                        <td>{{ counter.non_actions }}</td>
-                        <td>{{ counter.priority_actions }}</td>
-                    </tr>
-                    {% endfor %}
-                </table>
 
-                <hr>
-                <h2>Ajouter un comptoir</h2>
-                <form action="/add_counter" method="post">
-                    <label for="name">Nom du Comptoir:</label>
-                    <input type="text" id="name" name="name" required><br><br>
-                    <input type="submit" value="Ajouter Comptoir">
-                </form>
+                    <div id="menu_counters" class="col s12">    
+                        {% include '/menu_pharmacie_counters.html' %}
+                    </div>
+                    <div id="menu_pharmacists" class="col s12">    
+                        {% include '/menu_pharmacie_pharmacists.html' %}
+                    </div>
 
             </div>
         </div>
@@ -86,13 +73,6 @@
 
 
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var elems = document.querySelectorAll('.tabs');
-            var options = {};
-            var instance = M.Tabs.init(elems, options);
-        });
-    </script>
-
+    <script src="../static/js/admin.js"></script>
 </body>
 </html>

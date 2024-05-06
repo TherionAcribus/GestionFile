@@ -1,0 +1,12 @@
+<div class="modal-content">
+    <h4>Suppression d'une activité</h4>
+    <p>Vous vous appretez à supprimer {{activity.name}} définitivement. Confirmez-vous la suppression ? </p>
+    </div>
+    <div class="modal-footer">
+    <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
+    <a href="#!" 
+        class="modal-close waves-effect waves-red btn-flat"
+        hx-get="/admin/activity/delete/{{ activity.id }}"
+        hx-target="#div_activity_table">
+        Confirmer</a>
+    </div>

@@ -1,0 +1,29 @@
+<h1>Gerer les comptoirs</h2>
+
+    <h2>Liste des Comptoirs</h2>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Nom</th>
+            <th>Est Actif ?</th>
+            <th>Actions Non Réalisées</th>
+            <th>Actions Prioritaires</th>
+        </tr>
+        {% for counter in counters %}
+        <tr>
+            <td>{{ counter.id }}</td>
+            <td>{{ counter.name }}</td>
+            <td>{{ 'Oui' if counter.is_active else 'Non' }}</td>
+            <td>{{ counter.non_actions }}</td>
+            <td>{{ counter.priority_actions }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <hr>
+    <h2>Ajouter un comptoir</h2>
+    <form action="/add_counter" method="post">
+        <label for="name">Nom du Comptoir:</label>
+        <input type="text" id="name" name="name" required><br><br>
+        <input type="submit" value="Ajouter Comptoir">
+    </form>
