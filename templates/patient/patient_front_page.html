@@ -17,8 +17,12 @@
 
     <div class="row s12">
 
-        <div id="left_page_patient" class="container col s6">
-            
+        <div id="left_page_patient" 
+            class="container col s6"
+            hx-get="/patient/patient_buttons_left"
+            hx-trigger="load"
+            hx-target="#left_page_patient"
+            hx-swap="innerHTML"> 
         </div>
 
         <div id="left_page_patient" class="container col s6">

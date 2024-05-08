@@ -5,6 +5,7 @@
 {% block content %}
     <h3>Page patient</h3>
 
+    <!--
     <div class="row">
         <div class="input-field col s6">
           <input placeholder="Titre" id="input_title" type="text" class="validate" value="{{ title_page }}"">
@@ -12,13 +13,21 @@
         </div>
     </div>
 
-
     <div>
         <a href="#!" 
             class="modal-close waves-effect waves-red btn">
             Enregistrer les changements</a>
     </div>
+    -->
 
+    <h3>Boutons de la page patient</h3>
+
+    <div id="div_buttons_table"
+        hx-get="/admin/patient/button_table"
+        hx-trigger="load"
+        hx-target="#div_buttons_table"
+        hx-swap="innerHTML">
+    </div>
 
     
 {% endblock %}

@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from sqlalchemy.sql import text
 
 
 def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
@@ -12,7 +13,7 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
     print("DATA VERSION", data['version'])
 
     current_version = ConfigVersion.query.filter_by(key="buttons_version").first()
-    print("Current version:", current_version.version)
+    #print("Current version:", current_version.version)
     print("Data version:", data['version'])
     if not current_version or current_version.version != data['version']:
         # Mise à jour de la version
@@ -50,3 +51,6 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
         
         db.session.commit()
         print("Database updated to version:", data['version'])
+
+
+

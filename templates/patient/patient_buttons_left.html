@@ -1,0 +1,8 @@
+Bouton {{buttons}}
+{% for button in buttons %}
+<div class="col s6 valign-wrapper div-btn-large">
+    <button class="btn-large waves-effect waves-light col" hx-post="/patients_submit" hx-vals='{"reason": "retrait"}' hx-target="#right_page" style="background-image:url('/static/images/retrait.png'); background-size: cover;">
+        <p class="button-text-style">{{ button.label }}</p>
+    </button>
+</div>
+{% endfor %}
