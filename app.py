@@ -8,9 +8,10 @@
 #import eventlet
 #eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify
+import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date
@@ -30,6 +31,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de données pour les comptoirs, équipes et patients
+#app.config['SQLALCHEMY_DATABASE_URI'] = 'duckdb:///database.duckdb'
 app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
 
@@ -50,12 +52,11 @@ babel = Babel(app)
 
 
 class Patient(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.Integer, nullable=False)
     visit_reason = db.Column(db.String(120), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(50), nullable=False, default='standing') 
-    #counter_number = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'
@@ -76,7 +77,7 @@ counters_activities = db.Table('counters_activities',
 )
 
 class Counter(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, Sequence('counter_id_seq'), primary_key=True)
     name = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=False)  # Indique si le comptoir est actuellement utilisé
     non_actions = db.Column(db.String(255))  # Liste des actes non réalisés par ce comptoir
@@ -89,25 +90,31 @@ class Counter(db.Model):
 
 
 pharmacists_activities = db.Table('pharmacists_activities',
-    db.Column('pharmacist_id', db.Integer, db.ForeignKey('pharmacist.id'), primary_key=True),
-    db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True)
+    db.Column('pharmacist_id', db.Integer, db.ForeignKey('pharmacist.id', name='fk_pharmacists_activities_pharmacist_id'), primary_key=True),
+    db.Column('activity_id', db.Integer, db.ForeignKey('activity.id', name='fk_pharmacists_activities_activity_id'), primary_key=True)
 )
 
 class Pharmacist(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, Sequence('pharmacist_id_seq'), primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     initials = db.Column(db.String(10), nullable=False)
     language = db.Column(db.String(20), default=False)
     is_active = db.Column(db.Boolean, default=False)
     activities = db.relationship('Activity', secondary=pharmacists_activities, lazy='subquery',
         backref=db.backref('pharmacists', lazy=True))   
+    
+    # Ajout d'une contrainte unique nominative sur 'initials'
+    __table_args__ = (
+        UniqueConstraint('initials', name='uq_pharmacist_initials'),
+    )
 
     def __repr__(self):
         return f'<Pharmacist {self.name}>'
 
 
 class Activity(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = 'activity'
+    id = db.Column(db.Integer, Sequence('activity_id_seq'), primary_key=True)
     code = db.Column(db.String(20), nullable=False, unique=True)
     name = db.Column(db.String(100), nullable=False)
     letter = db.Column(db.String(1), nullable=False)
@@ -117,7 +124,7 @@ class Activity(db.Model):
 
 
 class ConfigOption(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, Sequence('config_option_id_seq'), primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     value_str = db.Column(db.String(200))  # Pour les chaînes de caractères
     value_int = db.Column(db.Integer)     # Pour les entiers
@@ -129,7 +136,7 @@ class ConfigOption(db.Model):
 
 
 class ConfigVersion(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, Sequence('config_version_id_seq'), primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     version = db.Column(db.String(50), nullable=False, unique=True)
     comments = db.Column(db.Text)
@@ -140,7 +147,9 @@ class ConfigVersion(db.Model):
 
 
 class Button(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = 'button'
+
+    id = db.Column(db.Integer, Sequence('button_id_seq'), primary_key=True)
     by_user = db.Column(db.Boolean, default=False)  # True si le bouton est créé par un user. Permet de savoir si bouton d'origine ou non
     code = db.Column(db.String(20), nullable=True, unique=True)  # Code unique est interne pour les boutons d'origine du logiciel. Permet de les reconnaitre même si le titre change.
     label = db.Column(db.String(50), nullable=False)
@@ -149,10 +158,21 @@ class Button(db.Model):
     is_present = db.Column(db.Boolean, default=True)
     shape = db.Column(db.String(20), default='square')
     image_url = db.Column(db.String(100))
+    background_color = db.Column(db.String(20))
+    text_color = db.Column(db.String(20))
+
+    # Ajouter une référence directe à Activity
+    activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_button_activity_id'))
+    activity = db.relationship('Activity', backref=db.backref('buttons', lazy=True))
 
     # relation ForeignKey entre deux boutons (un bouton est enfant d'un autre)
-    parent_button_id = db.Column(db.Integer, db.ForeignKey('button.id'), nullable=True)
+    parent_button_id = db.Column(db.Integer, db.ForeignKey('button.id', name='fk_button_parent_id'), nullable=True)
     parent_button = db.relationship('Button', remote_side=[id], backref='dependent_buttons')
+
+    # Ajoutez des contraintes uniques directement dans la définition du modèle
+    __table_args__ = (
+        UniqueConstraint('code', name='uq_button_code'),
+    )
 
     def __repr__(self):
         return f'<Button {self.label}>'
@@ -233,7 +253,7 @@ def update_member(member_id):
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': e})
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
             print("ERREURRRR", e)
             return jsonify(status="error", message=str(e)), 500
 
@@ -260,7 +280,7 @@ def delete_staff(member_id):
         return display_staff_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': e})
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_staff_table()
     
 
@@ -311,7 +331,7 @@ def add_new_staff():
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': e})
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_staff_table()
 
 # --------  FIN  de ADMIN -> Staff   ---------
@@ -358,7 +378,7 @@ def update_activity(activity_id):
 
     except Exception as e:
             print(e)
-            socketio.emit('display_toast', {'success': False, 'message': e})
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
             return ""
 
 
@@ -384,7 +404,7 @@ def delete_activity(activity_id):
         return display_activity_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': e})
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_activity_table()
     
 
@@ -423,7 +443,7 @@ def add_new_activity():
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': e})
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_activity_table()
 
 
@@ -437,11 +457,12 @@ def add_new_activity():
 def admin_counter():
     return render_template('/admin/counter.html')
 
+
 # affiche le tableau des counters 
 @app.route('/admin/counter/table')
 def display_counter_table():
     counters = Counter.query.all()
-    activities =Activity.query.all()
+    activities = Activity.query.all()
     return render_template('admin/counter_htmx_table.html', counters=counters, activities = activities)
 
 
@@ -472,7 +493,7 @@ def update_counter(counter_id):
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': e})
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
             print("ERREURRRR", e)
             return jsonify(status="error", message=str(e)), 500
 
@@ -499,7 +520,7 @@ def delete_counter(counter_id):
         return display_counter_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': e})
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_counter_table()
 
 
@@ -542,14 +563,14 @@ def add_new_counter():
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': e})
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_activity_table()
 
 
 # -------- fin de ADMIN -> Counter  ---------
 
 # --------  ADMIN -> Page patient  ---------
-@app.route('/admin/patient/')
+@app.route('/admin/patient')
 def admin_patient():
     buttons = Button.query.all()
     print("BUTTONS", buttons)
@@ -562,6 +583,76 @@ def display_button_table():
     buttons = Button.query.all()
     activities = Activity.query.all()
     return render_template('admin/patient_page_htmx_buttons_table.html', buttons=buttons, activities = activities)
+
+
+# mise à jour des informations d'un membre
+@app.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
+def update_button(button_id):
+    try:
+        button = Button.query.get(button_id)
+        if button:
+            # Récupérer l'ID de l'activité depuis le formulaire
+            activity_id = request.form.get('activity')
+
+            # Récupérer l'instance de l'activité correspondante
+            if activity_id:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    button.activity = activity
+                else:
+                    return "Activité non trouvée", 404
+            else:
+                # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
+                button.activity = None
+            
+            is_present = True if request.form.get('is_present') == "true" else False
+            button.is_present = is_present
+
+            button.label = request.form.get('label', button.label)
+            button.label_en = request.form.get('label_en', button.label_en)
+            #button.is_present = request.form.get('is_present', button.is_present)
+            
+
+            db.session.commit()
+            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
+            return ""
+
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            print("ERREURRRR", e)
+            return jsonify(status="error", message=str(e)), 500
+
+
+
+# affiche la modale pour confirmer la suppression d'un patient
+@app.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
+def confirm_delete_button(button_id):
+    button = Button.query.get(button_id)
+    return render_template('/admin/patient_page_button_modal_confirm_delete.html', button=button)
+
+
+# supprime un bouton
+@app.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
+def delete_button(button_id):
+    try:
+        button = Button.query.get(button_id)
+        if not button:
+            socketio.emit('display_toast', {'success': False, 'message': "Bouton non trouvé"})
+            return display_button_table()
+
+        db.session.delete(button)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        return display_button_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        print(e)
+        return display_button_table()
+
 
 
 # -------- fin de ADMIN -> Page patient  ---------
@@ -585,7 +676,7 @@ def patient_right_page_default():
 # affiche les boutons de gauche
 @app.route('/patient/patient_buttons_left')
 def patient_right_page():
-    buttons = Button.query.all()
+    buttons = Button.query.filter_by(is_present = True).all()
     print("BUTTONS", buttons)
     return render_template('patient/patient_buttons_left.html', buttons=buttons)
 
@@ -1105,6 +1196,7 @@ def init_default_options_db_from_json(json_file='static/json/default_config.json
 # creation BDD si besoin et initialise certaines tables (Activités)
 with app.app_context():
     print("Creating database tables...")
+    #if not os.path.exists("database.duckdb"):
     db.create_all()  # permet de recréer les Bdd si n'existent pas. None = default + config + buttons
     init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
     #init_default_options_db_from_json()  # Initialiser les données d'activité si nécessaire

@@ -25,6 +25,12 @@ socket.on('open_modal_confirm_delete_counter', function(data) {
     instance_activity.open();
 });
 
+
+// ouvre le modal de confirmation bouton patient
+socket.on('open_modal_confirm_delete_button', function(data) {
+    instance_activity.open();
+});
+
 // supprime le formulaire d'ajout d'un membre
 socket.on('delete_add_staff_form', function(data) {
     console.log("Delete add staff form...");
@@ -43,6 +49,15 @@ socket.on('delete_add_counter_form', function(data) {
     document.getElementById('div_add_counter_form').innerHTML = "";
 });
 
+
+// initialisation des selects, seulement une fois l'htmx chargé
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    // Vérifiez si l'élément mis à jour contient des éléments `select`
+    if (event.detail.target.querySelector('select')) {
+        M.FormSelect.init(document.querySelectorAll('select'));
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     // initialisation de la sidenav
     var elems = document.querySelectorAll('.sidenav');
@@ -51,9 +66,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // initialisation du modal
     var elems = document.querySelectorAll('.modal');
     var instances = M.Modal.init(elems);
-    //var elem_staff = document.getElementById('modal_delete_staff');
-    //var instance_staff = M.Modal.getInstance(elem_staff);
-    //var elem_activity = document.getElementById('modal_delete_activity');
-    //var instance_activity = M.Modal.getInstance(elem_activity);
+
 });
 

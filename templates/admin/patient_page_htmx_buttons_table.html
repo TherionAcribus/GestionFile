@@ -3,33 +3,52 @@
         <tr>
             <th>Intitulé</th>
             <th>Anglais</th>
-            <th>Forme</th>            
-            <th>Présence</th>
-            <th>Actif</th>
+            <th>Présence</th>            
+            <th>Activité</th>
             <th>Dépendance</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
-        {{buttons}}
         {% for button in buttons %}
         <tr>
             <td><input type="text" name="label" value="{{ button.label }}" id="label-{{ button.id }}"></td>
             <td><input type="text" name="label_en" value="{{ button.label_en }}" id="label_en-{{ button.id }}"></td>
-            <td><input type="text" name="shape" value="{{ button.shape }}" id="shape-{{ button.id }}"></td>
+            <td>
+                <p>
+                    <label>
+                        <input 
+                        id="is_present-{{ button.id }}" 
+                        type="checkbox" {{ 'checked' if button.is_present == True else '' }}>
+                    <span></span>
+                    </label>
+                </p>
+            </td>
+            <td>
+                <div class="input-field">
+                <select id="activity-{{ button.id }}">
+                    <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
+                    
+                    {% for activity in activities %}
+                    <option value="{{ activity.id }}" {{ 'selected' if activity.id == button.activity.id else '' }}>{{ activity.name }} </option>
+                    {% endfor %}
+                </select>
+                </div>
+            </td>
             <td>
                 <button class="btn" 
                     hx-target="#invisible"
                     hx-post="/admin/patient/button_update/{{ button.id }}"
                     hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value, 
                             "label_en": document.getElementById("label_en-{{ button.id }}").value, 
-                            "shape": document.getElementById("shape-{{ button.id }}").value, 
+                            "is_present": document.getElementById("is_present-{{ button.id }}").checked,
+                            "activity": document.getElementById("activity-{{ button.id }}").value, 
                             }'>
                     Enregistrer
                 </button>
 
                 <button class="btn modal-trigger red"
-                        hx-get="/admin/patient/confirm_delete/{{ button.id }}"
+                        hx-get="/admin/patient/confirm_delete_button/{{ button.id }}"
                         hx-target="#modal_delete_button"
                         hx-trigger="click"
                         data-target="modal_delete_button">
@@ -40,3 +59,4 @@
         {% endfor %}
     </tbody>
 </table>
+
