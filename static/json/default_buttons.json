@@ -1,0 +1,24 @@
+{
+    "version": "0.3",
+    "comments": "Version de test",
+        "buttons": [
+        {
+            "code": "ORDO",
+            "label": "Ordonnance / Conseil",
+            "label_en": "Prescription / OTC",
+            "shape": "square",
+            "image_url": "",
+            "is_present": true,
+            "is_active": true
+        },
+        {
+            "code": "TEST",
+            "label": "Test",
+            "label_en": "Test",
+            "shape": "square",
+            "image_url": "",
+            "is_present": true,
+            "is_active": true
+        }
+    ]
+}

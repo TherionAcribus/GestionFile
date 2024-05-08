@@ -1,0 +1,24 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Page Patient{% endblock %}
+
+{% block content %}
+    <h3>Page patient</h3>
+
+    <div class="row">
+        <div class="input-field col s6">
+          <input placeholder="Titre" id="input_title" type="text" class="validate" value="{{ title_page }}"">
+          <label for="input_title">Titre</label>
+        </div>
+    </div>
+
+
+    <div>
+        <a href="#!" 
+            class="modal-close waves-effect waves-red btn">
+            Enregistrer les changements</a>
+    </div>
+
+
+    
+{% endblock %}

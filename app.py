@@ -23,11 +23,16 @@ import qrcode
 import json
 import os
 
+from bdd import init_update_default_buttons_db_from_json
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de données pour les comptoirs, équipes et patients
+app.config['SQLALCHEMY_BINDS'] = {'configs': 'sqlite:///configdatabase.db',  # base de données pour la configuration
+                                  'buttons': 'sqlite:///buttonsdatabase.db'  # base pour les boutons
+                                }  
 app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
 
@@ -114,6 +119,49 @@ class Activity(db.Model):
         return f'<Activity {self.code} - {self.name}>'
 
 
+class ConfigOption(db.Model):
+    __bind_key__ = 'configs'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    value_str = db.Column(db.String(200))  # Pour les chaînes de caractères
+    value_int = db.Column(db.Integer)     # Pour les entiers
+    value_bool = db.Column(db.Boolean)    # Pour les valeurs booléennes
+    value_text = db.Column(db.Text)       # Pour les très longues chaînes
+
+    def __repr__(self):
+        return f'<ConfigOption {self.key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
+
+
+class ConfigVersion(db.Model):
+    __bind_key__ = 'configs'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(50), unique=True, nullable=False)
+    version = db.Column(db.String(50), nullable=False, unique=True)
+    comments = db.Column(db.Text)
+    date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self):
+        return f'<ConfigVersion {self.version}>'
+
+
+class Button(db.Model):
+    __bind_key__ = 'buttons'
+    id = db.Column(db.Integer, primary_key=True)
+    by_user = db.Column(db.Boolean, default=False)  # True si le bouton est créé par un user. Permet de savoir si bouton d'origine ou non
+    code = db.Column(db.String(20), nullable=True, unique=True)  # Code unique est interne pour les boutons d'origine du logiciel. Permet de les reconnaitre même si le titre change.
+    label = db.Column(db.String(50), nullable=False)
+    label_en = db.Column(db.String(50))
+    is_active = db.Column(db.Boolean, default=True)
+    is_present = db.Column(db.Boolean, default=True)
+    shape = db.Column(db.String(20), default='square')
+
+    # relation ForeignKey entre deux boutons (un bouton est enfant d'un autre)
+    parent_button_id = db.Column(db.Integer, db.ForeignKey('button.id'), nullable=True)
+    parent_button = db.relationship('Button', remote_side=[id], backref='dependent_buttons')
+
+    def __repr__(self):
+        return f'<Button {self.label}>'
+
 
 def get_locale():
     return session.get('lang', request.accept_languages.best_match(['en', 'fr']))
@@ -152,7 +200,7 @@ def staff():
 @app.route('/admin/staff/table')
 def display_staff_table():
     staff = Pharmacist.query.all()
-    activities =Activity.query.all()
+    activities = Activity.query.all()
     print("ALL", staff)
     return render_template('admin/staff_htmx_table.html', staff=staff, activities=activities)
 
@@ -504,8 +552,17 @@ def add_new_counter():
 
 # -------- fin de ADMIN -> Counter  ---------
 
-@app.route('/patients')
-def patients():
+# --------  ADMIN -> Page patient  ---------
+@app.route('/admin/patient/')
+def admin_patient():
+    return render_template('/admin/patient_page.html',
+                            title_page = ConfigOption.query.filter_by(key="page_patient_title").first().value_str)
+
+# -------- fin de ADMIN -> Page patient  ---------
+
+
+@app.route('/patients_old')
+def patients_old():
     return render_template('patients.html')
 
 
@@ -988,15 +1045,59 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
     else:
         print("La base de données contient déjà des données.")
 
+
+
+
+
+
+
+def init_default_options_db_from_json(json_file='static/json/default_config.json'):
+    with app.app_context():        
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            current_version = ConfigVersion.query.first()
+
+            if not current_version or current_version.version != data['version']:
+                if current_version:
+
+                    current_version.version = data['version']
+                else:
+                    db.session.add(ConfigVersion(version=data['version']))
+
+                for key, value in data['configurations'].items():
+                    config_option = ConfigOption.query.filter_by(key=key).first()
+                    if config_option:
+                        # Update the existing config option
+                        if isinstance(value, str) and len(value) < 200:
+                            config_option.value_str = value
+                        elif isinstance(value, int):
+                            config_option.value_int = value
+                        elif isinstance(value, bool):
+                            config_option.value_bool = value
+                        elif isinstance(value, str):
+                            config_option.value_text = value
+                    else:
+                        # Add new config option
+                        new_option = ConfigOption(
+                            key=key,
+                            value_str=value if isinstance(value, str) and len(value) < 200 else None,
+                            value_int=value if isinstance(value, int) else None,
+                            value_bool=value if isinstance(value, bool) else None,
+                            value_text=value if isinstance(value, str) and len(value) >= 200 else None
+                        )
+                        db.session.add(new_option)
+                db.session.commit()
+
 # creation BDD si besoin et initialise certaines tables (Activités)
 with app.app_context():
     print("Creating database tables...")
-    db.create_all()
+    db.create_all(bind_key=[None, 'configs', 'buttons'])  # permet de recréer les Bdd si n'existent pas. None = default + config + buttons
     init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
+    #init_default_options_db_from_json()  # Initialiser les données d'activité si nécessaire
+    init_update_default_buttons_db_from_json(ConfigVersion, Button, db)  # Init ou Maj des boutons partients
 
 if __name__ == "__main__":
     print("Starting Flask app...")  
-
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))
