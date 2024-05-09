@@ -1,7 +1,7 @@
 <ul>
     {% for patient in patients %}
         <li>Patient {{ patient.call_number }} - 
-            {{ patient.visit_reason }} - 
+            {{ patient.activity.name }} - 
             {{ patient.timestamp | format_time}}
             <button id="btn_select_patient_{{ patient.id }}" class="btn_select_patient">Selectionner</button>
         </li>

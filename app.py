@@ -5,8 +5,8 @@
 # TODO : Bouton Help ?
 
 # deux lignes a appeler avant tout le reste (pour server Render)
-#import eventlet
-#eventlet.monkey_patch()
+import eventlet
+eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
@@ -54,11 +54,13 @@ babel = Babel(app)
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.Integer, nullable=False)
-    visit_reason = db.Column(db.String(120), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(50), nullable=False, default='standing')
     counter_id = db.Column(db.Integer, db.ForeignKey('counter.id', name='fk_patient_counter_id'), nullable=True)  # nullable=True si un patient peut ne pas être à un comptoir
     counter = db.relationship('Counter', backref=db.backref('patients', lazy=True))
+    activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_patient_activity_id'), nullable=False)  # Now referencing the activity directly
+    activity = db.relationship('Activity', backref=db.backref('patients', lazy=True))
+
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'
@@ -67,7 +69,7 @@ class Patient(db.Model):
         return {
             "id": self.id,
             "call_number": self.call_number,
-            "visit_reason": self.visit_reason,
+            "activity_id": self.activity_id,
             "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Format datetime as string
             "status": self.status,
             "counter_id": self.counter_id
@@ -939,7 +941,7 @@ def left_page_validate_patient(activity):
     else:
         call_number = get_next_call_number_simple()
     print("call_number", call_number)
-    new_patient = add_patient(call_number, activity.code)
+    new_patient = add_patient(call_number, activity)
     image_name_qr = create_qr_code(new_patient)
     text = f"{call_number}"
     # rafraichissement des pages display et counter
@@ -948,12 +950,12 @@ def left_page_validate_patient(activity):
     return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
 
-def add_patient(call_number, reason):
+def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
     # Création d'un nouvel objet Patient
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
-        visit_reason=reason,
+        activity = activity,
         timestamp=datetime.now(timezone.utc),
         status='standing'
     )    
@@ -1006,7 +1008,7 @@ def create_qr_code(patient):
             "id": patient.id,
             "patient_number": patient.call_number,
             "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "reason": patient.visit_reason
+            "reason": patient.activity.code
     }
         
     # Convertir les données en chaîne JSON
@@ -1129,6 +1131,13 @@ def pause_patient(counter_id, patient_id):
     return '', 204  # No content to send back
 
 
+@app.route('/counter/patients_queue_for_counter')
+def patients_queue_for_counter():
+    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
+    return render_template('/counter/patients_queue_for_counter.html', patients=patients)
+
+
+
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
 
 
@@ -1155,14 +1164,6 @@ def add_counter():
 def patients_queue():
     patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
     return render_template('htmx/patients_queue.html', patients=patients)
-
-
-@app.route('/patients_queue_for_counter')
-def patients_queue_for_counter():
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
-    return render_template('htmx/patients_queue_for_counter.html', patients=patients)
-
-
 
 
 @app.route('/counter_refresh_buttons/<int:counter_id>/')

@@ -11,7 +11,7 @@
         {% for patient in patients %}
         <tr>
             <td><input type="text" name="name" value="{{ patient.call_number }}" id="patient-{{ patient.id }}"></td>
-            <td>{{ patient.visit_reason }}</td>
+            <td>{{ patient.activity.code }}</td>
             <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>{{ patient.status }}</td>
             <td>{{ patient.counter_id }}</td>
