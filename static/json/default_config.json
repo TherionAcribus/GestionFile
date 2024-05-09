@@ -1,8 +1,8 @@
 {
     "version": "0.1",
+    "comments": "Version de test",
         "configurations": {
-        "page_patient_title": "Bienvenue à la Pharmacie Sainte-Agathe",
-        "page_patient_text": "Afin d'améliorer votre prise en charge, saisissez le motif de votre visite. Nous vous appelerons à votre tour.",
-        "page_patient_language_list": true
+            "numbering_by_activity": true,
+            "printer": false
     }
 }

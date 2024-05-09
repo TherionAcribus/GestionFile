@@ -1,0 +1,34 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Application{% endblock %}
+
+{% block content %}
+    <h3>Application</h3>
+
+    <div>
+        {{numbering_by_activity}}
+        <!-- Switch -->
+        <div class="switch">
+            <span>Mode de numérotation : </span>
+            <label>
+            Numérotation globale
+            <input id="numbering_by_activity" 
+                    type="checkbox"
+                    {% if numbering_by_activity == True %}checked{% endif %}
+                    hx-post="/admin/app/update_numbering_by_activity"
+                    hx-target="#invisible"
+                    hx-vals='js:{"numbering_by_activity": document.getElementById("numbering_by_activity").checked}'>
+            <span class="lever"></span>
+            Par activité
+            </label>
+        </div>
+
+    </div>  
+
+    <div>Ajouter bouton redémarrage du serveur</div>
+
+        <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+        <div id="invisible" style="display:none;"></div>
+
+
+{% endblock %}

@@ -1,0 +1,10 @@
+<div class="center-align">
+    <div id="right_page_print">
+        <p>Numéro : {{ text }}</p>
+        <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
+        <p>Nous vous appelerons à votre tour.</p>
+    </div>
+        <button href="patient/validate" class="btn-small">Imprimer</button>
+        <button href="patient/validate" class="btn-small">Valider sans impression</button>
+        <button href="patient/cancel" class="btn-small">Annuler</button>
+</div>

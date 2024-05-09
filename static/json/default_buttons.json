@@ -1,5 +1,5 @@
 {
-    "version": "0.4",
+    "version": "0.5",
     "comments": "Version de test",
         "buttons": [
         {
@@ -15,6 +15,24 @@
             "code": "TEST",
             "label": "Test",
             "label_en": "Test",
+            "shape": "square",
+            "image_url": "",
+            "is_present": true,
+            "is_active": true
+        },
+        {
+            "code": "COLLECT",
+            "label": "Retrait de commande",
+            "label_en": "Collect order",
+            "shape": "square",
+            "image_url": "",
+            "is_present": true,
+            "is_active": true
+        },
+        {
+            "code": "PRIORITY",
+            "label": "Prioritaire",
+            "label_en": "Priority",
             "shape": "square",
             "image_url": "",
             "is_present": true,

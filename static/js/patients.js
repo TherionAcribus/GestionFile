@@ -1,3 +1,10 @@
+var socket = io.connect();
+
+
+socket.on('trigger_valide_activity', function(data) {
+    console.log(data.activity);
+});
+
 
 function printDiv(divId) {
     var content = document.getElementById(divId).innerHTML;
@@ -6,3 +13,5 @@ function printDiv(divId) {
     window.print();
     document.body.innerHTML = originalContent;
 }
+
+

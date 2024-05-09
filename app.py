@@ -24,7 +24,7 @@ import qrcode
 import json
 import os
 
-from bdd import init_update_default_buttons_db_from_json
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration
 
 
 app = Flask(__name__)
@@ -204,6 +204,39 @@ def admin_old():
 @app.route('/admin')
 def admin():
     return render_template('/admin/admin.html')
+
+# --------  ADMIN -> App  ---------
+
+@app.route('/admin/app')
+def admin_app():
+    return render_template('/admin/app.html', 
+                            numbering_by_activity=ConfigOption.query.filter_by(key="numbering_by_activity").first().value_bool) 
+
+
+@app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
+def update_numbering_by_activity():
+    new_value = request.values.get('numbering_by_activity')
+    print("new_value", new_value)
+    try:
+        # Récupérer la valeur du checkbox à partir de la requête
+        new_value = request.values.get('numbering_by_activity')
+        config_option = ConfigOption.query.filter_by(key="numbering_by_activity").first()
+        if config_option:
+            config_option.value_bool = True if new_value == "true" else False
+            db.session.commit()
+            socketio.emit('display_toast', {'success': True, 'message': "Mise à jour réussie. Redémarrer le serveur pour que les nouvelles configurations s'appliquent."})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Configuration option not found"})
+            return ""
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            print(e)
+            return jsonify(status="error", message=str(e)), 500
+    
+
+# --------  FIn ADMIN -> Main   ---------
+
 
 # --------  ADMIN -> Staff   ---------
 
@@ -663,9 +696,7 @@ def patients_old():
     return render_template('patients.html')
 
 
-@app.route('/patient')
-def patients_front_page():
-    return render_template('patient/patient_front_page.html')
+
 
 @app.route('/patient_right_page_default')
 def patient_right_page_default():
@@ -875,8 +906,8 @@ def display():
     return render_template('display.html', current_patients=current_patients)
 
 
-@app.route('/patients_submit', methods=['POST'])
-def patients_submit():
+@app.route('/patients_submit_old', methods=['POST'])
+def patients_submit_old():
     print("patients_submit")
     # Récupération des données du formulaire
     reason = request.form.get('reason')
@@ -899,28 +930,98 @@ def patients_submit():
     else:
         print("Merde, la raison n'a pas été prévue....")
 
+# ---------------- PAGE PATIENTS FRONT ----------------
 
-def list_patients_standing():
-    patients_standing = Patient.query.filter_by(status='standing').all()
-    patients_data = [patient.to_dict() for patient in patients_standing]
-    return patients_data
+@app.route('/patient')
+def patients_front_page():
+    return render_template('patient/patient_front_page.html')
+
+
+@app.route('/patients_submit', methods=['POST'])
+def patients_submit():
+    print("patients_submit")
+    # Récupération des données du formulaire
+    print(request.form)
+    activity_id = request.form.get('activity_id')
+    print("reason", activity_id)
+
+    # Si le bouton contient bien une activité
+    if activity_id != "":
+        activity = Activity.query.get(activity_id)
+        print("activity", activity.id)
+        socketio.emit('trigger_valide_activity', {'activity': activity.id})
+        return left_page_validate_patient(activity)
+
+
+# page de validation (QR Code, Impression, Validation, Annulation)
+def left_page_validate_patient(activity):
+    numbering_by_activity = app.config.get('NUMBERING_BY_ACTIVITY', False)
+    if numbering_by_activity:
+        call_number = get_next_category_number(activity)
+    else:
+        call_number = get_next_call_number_simple()
+    print("call_number", call_number)
+    new_patient = add_patient(call_number, activity.code)
+    image_name_qr = create_qr_code(new_patient)
+    text = f"{call_number}"
+    # rafraichissement des pages display et counter
+    # envoye de data pour être récupéré sous forme de liste par PySide
+    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
+    return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
 
 def add_patient(call_number, reason):
-
+    """ CRéation d'un nouveau patient et ajout à la BDD"""
     # Création d'un nouvel objet Patient
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         visit_reason=reason,
         timestamp=datetime.now(timezone.utc),
         status='standing'
-    )
-    
+    )    
     # Ajout à la base de données
     db.session.add(new_patient)
     db.session.commit()  # Enregistrement des changements dans la base de données
 
     return new_patient
+
+
+# liste des patients en attente : Nécessaire pour être transmis à Pyside
+def list_patients_standing():
+    patients_standing = Patient.query.filter_by(status='standing').all()
+    patients_data = [patient.to_dict() for patient in patients_standing]
+    return patients_data
+
+
+def get_next_call_number_simple():
+    # Obtenir le dernier patient enregistré aujourd'hui
+    # BUG Connu : Si on passe de simple à par activité puis retour à simple -> repart à 1
+    last_patient_today = Patient.query.filter(db.func.date(Patient.timestamp) == date.today()).order_by(Patient.id.desc()).first()
+    if last_patient_today:
+        if str(last_patient_today.call_number).isdigit():
+            print(last_patient_today.call_number, type(last_patient_today.call_number))
+            return last_patient_today.call_number + 1
+        return 1
+    return 1  # Réinitialiser le compteur si aucun patient n'a été enregistré aujourd'hui
+
+
+# Générer le numéro d'appel en fonction de l'activité
+def get_next_category_number(activity):
+    # on utilise le code prévu de l'activité. Plusieurs activités peuvent avoir la même lettre
+    letter_prefix = activity.letter
+    today = date.today()
+
+    # Compter combien de patients sont déjà enregistrés aujourd'hui avec le même préfixe de lettre
+    today_count = Patient.query.filter(
+        db.func.date(Patient.timestamp) == today,
+        db.func.substr(Patient.call_number, 1, 1) == letter_prefix
+    ).count()
+
+    # Le prochain numéro sera le nombre actuel + 1
+    next_number = today_count + 1
+
+    return f"{letter_prefix}-{next_number}"
+
 
 def create_qr_code(patient):
     patient_info = {
@@ -938,7 +1039,7 @@ def create_qr_code(patient):
     
     # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
     directory = os.path.join(current_app.static_folder, 'qr_patients')
-    filename = 'qr_patient.png'
+    filename = f'qr_patient-{patient.id}.png'
     img_path = os.path.join(directory, filename)
 
     # Assurer que le répertoire existe
@@ -948,40 +1049,11 @@ def create_qr_code(patient):
     # Enregistrement de l'image dans le dossier static
     img.save(img_path)
 
-    return img_path
-
-def get_next_call_number_simple():
-    # Obtenir le dernier patient enregistré aujourd'hui
-    last_patient_today = Patient.query.filter(db.func.date(Patient.timestamp) == date.today()).order_by(Patient.id.desc()).first()
-    if last_patient_today:
-        return last_patient_today.call_number + 1
-    return 1  # Réinitialiser le compteur si aucun patient n'a été enregistré aujourd'hui
+    return filename
 
 
-def get_next_category_number(reason):
-    category_to_letter = {
-        'vaccination': 'V',
-        'angine': 'T',
-        'covid': 'T',
-        'cystite': 'T',
-        'rdv': 'R',
-        'retrait': 'D',
-        'ordonnance': 'O',
-    }
-    
-    letter_prefix = category_to_letter.get(reason, 'X')  # 'X' sera utilisé si la catégorie n'est pas trouvée
-    today = date.today()
 
-    # Compter combien de patients sont déjà enregistrés aujourd'hui avec le même préfixe de lettre
-    today_count = Patient.query.filter(
-        db.func.date(Patient.timestamp) == today,
-        db.func.substr(Patient.call_number, 1, 1) == letter_prefix
-    ).count()
-
-    # Le prochain numéro sera le nombre actuel + 1
-    next_number = today_count + 1
-
-    return f"{letter_prefix}-{next_number}"
+# ---------------- FIN  PAGE PATIENTS FRONT ----------------
 
 
 @app.route('/current_patients')
@@ -1156,52 +1228,15 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
         print("La base de données contient déjà des données.")
 
 
-def init_default_options_db_from_json(json_file='static/json/default_config.json'):
-    with app.app_context():        
-        with open(json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            current_version = ConfigVersion.query.first()
-
-            if not current_version or current_version.version != data['version']:
-                if current_version:
-
-                    current_version.version = data['version']
-                else:
-                    db.session.add(ConfigVersion(version=data['version']))
-
-                for key, value in data['configurations'].items():
-                    config_option = ConfigOption.query.filter_by(key=key).first()
-                    if config_option:
-                        # Update the existing config option
-                        if isinstance(value, str) and len(value) < 200:
-                            config_option.value_str = value
-                        elif isinstance(value, int):
-                            config_option.value_int = value
-                        elif isinstance(value, bool):
-                            config_option.value_bool = value
-                        elif isinstance(value, str):
-                            config_option.value_text = value
-                    else:
-                        # Add new config option
-                        new_option = ConfigOption(
-                            key=key,
-                            value_str=value if isinstance(value, str) and len(value) < 200 else None,
-                            value_int=value if isinstance(value, int) else None,
-                            value_bool=value if isinstance(value, bool) else None,
-                            value_text=value if isinstance(value, str) and len(value) >= 200 else None
-                        )
-                        db.session.add(new_option)
-                db.session.commit()
-
 # creation BDD si besoin et initialise certaines tables (Activités)
 with app.app_context():
     print("Creating database tables...")
     #if not os.path.exists("database.duckdb"):
     db.create_all()  # permet de recréer les Bdd si n'existent pas. None = default + config + buttons
     init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
-    #init_default_options_db_from_json()  # Initialiser les données d'activité si nécessaire
+    init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)  # Initialiser les données d'activité si nécessaire
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)  # Init ou Maj des boutons partients
-
+    load_configuration(app, ConfigOption)
 
 if __name__ == "__main__":
     print("Starting Flask app...")  

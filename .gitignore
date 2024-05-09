@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 instance/*.*
 static/audio/annonces/*.*
+static/qr_patients/*.*
 
