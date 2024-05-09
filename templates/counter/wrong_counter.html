@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Comptoir {{ counter_id }}</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="../static/css/counter.css">
+</head>
+<body>
+    <h1>Erreur identifiant comptoir</h1>
+
+    <div>Aucun comptoir ne possède l'indentifiant {{ counter_id }}. Peut-être vouliez vous accéder à la page d'un des comptoirs suivants :</div>
+    <ul>
+    {% for counter in counters %}
+        <li>
+            <a href="/counter/{{ counter.id }}">{{ counter.name }} </a>
+        </li>
+    {% endfor %}
+    </ul>
+
+
+</body>
+</html>

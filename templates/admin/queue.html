@@ -1,0 +1,54 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}File{% endblock %}
+
+{% block content %}
+    <h3>File d'attente</h3>
+
+    <button 
+        class="btn modal-trigger red"
+        hx-get="/admin/database/confirm_delete_patient_table"
+        hx-target="#modal_delete_queue"
+        hx-trigger="click"
+        data-target="modal_delete_queue"
+    >
+        Supprimer toute la liste
+    </button>
+
+    <div class="input-field col s12">
+        <select multiple
+            id="select_patient_filter"
+            hx-post="/admin/queue/table"
+            hx-target="#div_queue_table"
+            hx-swap="innerHTML"
+            hx-vals='js:{"ongoing": document.getElementById("ongoing").selected,
+                        "standing": document.getElementById("standing").selected,
+                        "calling": document.getElementById("calling").selected,
+                        "done": document.getElementById("done").selected}'
+            >
+            <option value="" disabled selected>Affichage : </option>
+            <option id="ongoing" selected value="ongoing">En cours</option>
+            <option id="standing" selected value="standing">En attente</option>
+            <option id="calling" selected value="calling">Appelé</option>
+            <option id="done" value="done">Servi</option>
+        </select>
+        <label>Choisir les patients à afficher (si rien n'est coché, tout sera affiché)</label>
+    </div>
+
+    <div id="div_queue_table"
+        hx-post="/admin/queue/table"
+        hx-trigger="load, refresh_queue_patient from:body"
+        hx-target="#div_queue_table"
+        hx-swap="innerHTML"
+        hx-vals='js:{"ongoing": document.getElementById("ongoing").selected,
+                    "standing": document.getElementById("standing").selected,
+                    "calling": document.getElementById("calling").selected,
+                    "done": document.getElementById("done").selected}'
+        >
+    </div>
+
+    <!-- Modal Structure -->
+    <div id="modal_delete_queue" class="modal">
+    </div>
+        
+{% endblock %}

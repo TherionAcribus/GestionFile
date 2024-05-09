@@ -1,0 +1,21 @@
+<table id="queue_table" class="striped">
+    <thead>            <tr>
+        <th>Numéro d'Appel</th>
+        <th>Motif de Visite</th>
+        <th>Heure d'Enregistrement</th>
+        <th>Statut</th>
+        <th>Comptoir</th>
+    </tr>
+    </thead>
+    <tbody>
+        {% for patient in patients %}
+        <tr>
+            <td><input type="text" name="name" value="{{ patient.call_number }}" id="patient-{{ patient.id }}"></td>
+            <td>{{ patient.visit_reason }}</td>
+            <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ patient.status }}</td>
+            <td>{{ patient.counter_id }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

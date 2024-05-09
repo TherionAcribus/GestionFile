@@ -1,11 +1,11 @@
-<button hx-post="{{ url_for('validate_and_call_next', counter_number=counter_number) }}"
+<button hx-post="{{ url_for('validate_and_call_next', counter_id=counter_id) }}"
 class="btn-large waves-effect waves-light col"
 style="background-image:url('/static/images/next.png');">
     Suivant
 </button>
 
 {% if status == 'calling' %}
-<button hx-post="{{ url_for('validate_patient', counter_number=counter_number, patient_id=patient_id) }}"
+<button hx-post="{{ url_for('validate_patient', counter_id=counter_id, patient_id=patient_id) }}"
 hx-target="#button_section"
 hx-swap="outerHTML"
 class="btn-large waves-effect waves-light col"
@@ -16,7 +16,7 @@ Valider
 
 
 {% if status == 'ongoing' %}
-<button hx-post="{{ url_for('pause_patient', counter_number=counter_number, patient_id=patient_id) }}"
+<button hx-post="{{ url_for('pause_patient', counter_id=counter_id, patient_id=patient_id) }}"
 hx-target="#button_section"
 hx-swap="outerHTML"
 class="btn-large waves-effect waves-light col"

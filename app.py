@@ -56,7 +56,9 @@ class Patient(db.Model):
     call_number = db.Column(db.Integer, nullable=False)
     visit_reason = db.Column(db.String(120), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    status = db.Column(db.String(50), nullable=False, default='standing') 
+    status = db.Column(db.String(50), nullable=False, default='standing')
+    counter_id = db.Column(db.Integer, db.ForeignKey('counter.id', name='fk_patient_counter_id'), nullable=True)  # nullable=True si un patient peut ne pas être à un comptoir
+    counter = db.relationship('Counter', backref=db.backref('patients', lazy=True))
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'
@@ -67,7 +69,8 @@ class Patient(db.Model):
             "call_number": self.call_number,
             "visit_reason": self.visit_reason,
             "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Format datetime as string
-            "status": self.status
+            "status": self.status,
+            "counter_id": self.counter_id
         }
     
 
@@ -205,6 +208,59 @@ def admin_old():
 def admin():
     return render_template('/admin/admin.html')
 
+
+# --------  ADMIN -> Queue ---------
+
+@app.route('/admin/queue')
+def queue():
+    return render_template('admin/queue.html')
+
+
+# affiche le tableau des patients
+@app.route('/admin/queue/table', methods=['POST'])
+def display_queue_table():
+    print(request.form)
+    # Récupération des statuts en une liste pour tri ultérieur
+    filters = [status for status, value in request.form.items() if value == 'true']
+    print("Filters received:", filters)
+
+    # Filtrage des patients en fonction des statuts sélectionnés
+    if filters:
+        patients = Patient.query.filter(Patient.status.in_(filters)).all()
+    else:
+        patients = Patient.query.all()
+
+    return render_template('admin/queue_htmx_table.html', patients=patients)
+
+
+# affiche la modale pour confirmer la suppression d'un membre
+@app.route('/admin/database/confirm_delete_patient_table', methods=['GET'])
+def confirm_delete_patient_table():
+    print("MODALE")
+    return render_template('/admin/queue_modal_confirm_delete.html')
+
+
+@app.route('/admin/database/clear_all_patients')
+def clear_all_patients_from_db():
+    print("Suppression de la table Patient")
+    try:
+        num_rows_deleted = db.session.query(Patient).delete()
+        db.session.commit()
+        socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
+        socketio.emit('display_toast', {'success': True, 'message': "Suppression de la table 'Patient' réussie."})
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        print(e)
+        return jsonify(status="error", message=str(e)), 500
+
+
+# --------  FIn de ADMIN -> Queue ---------
+
+
+
+
 # --------  ADMIN -> App  ---------
 
 @app.route('/admin/app')
@@ -287,7 +343,6 @@ def update_member(member_id):
 
     except Exception as e:
             socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            print("ERREURRRR", e)
             return jsonify(status="error", message=str(e)), 500
 
 
@@ -739,35 +794,6 @@ def counter_old(counter_number):
                             current_patient=current_patient)
 
 
-@app.route('/counter/<int:counter_number>')
-def counter(counter_number):
-    return render_template('counter.html', 
-                            counter_number=counter_number)
-
-
-@app.route('/call_next/<int:counter_number>')
-def call_next(counter_number):
-    # Récupère le premier patient en attente 
-    # TODO PERMETTRE DE FIXER DES REGLES ou CHOIX ARBITRAIRE
-
-    next_patient = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).first()
-
-    if next_patient:
-        #socketio.emit('trigger_htmx_update', {})  # ????
-        # Met à jour le statut du patient
-        next_patient.status = 'calling'
-        next_patient.counter_number = counter_number
-        db.session.commit()
-        socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
-        # Optionnel: Ajoutez ici u système pour annoncer le patient au système audio ou un écran d'affichage
-
-        generate_audio_calling(counter_number, next_patient)
-
-    else:
-        next_patient = None
-
-    return next_patient
-
 def generate_audio_calling(counter_number, next_patient):
     # Texte pour la synthèse vocale
     text = f"Nous invitons le patient {next_patient.call_number} à se rendre au comptoir {counter_number}."
@@ -789,36 +815,11 @@ def generate_audio_calling(counter_number, next_patient):
     socketio.emit('trigger_audio_calling', {'audio_url': audio_url})
 
 
-def validate_current_patient(counter_number):
-    # si patient actuel 
-    patients_at_counter = Patient.query.filter_by(counter_number=counter_number).all()
-    if patients_at_counter :
-        print("patient dans le comptoir")
-        # Mise à jour du statut pour tous les patients au comptoir
-        Patient.query.filter_by(counter_number=counter_number).update({'status': 'done'})
-        db.session.commit()    
-    else:
-        print("pas de patient")
-
-
-@app.route('/validate_and_call_next/<int:counter_number>', methods=['POST', 'GET'])
-def validate_and_call_next(counter_number):
-    print('validate_and_call_next', counter_number)
-
-    validate_current_patient(counter_number)
-
-    # TODO Prevoir que ne renvoie rien
-    next_patient = call_next(counter_number)  
-    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
-    socketio.emit('trigger_patient_ongoing', {})  
-    return '', 204  # No content to send back
-
-
-@app.route('/call_specific_patient/<int:counter_number>/<int:patient_id>')
-def call_specific_patient(counter_number, patient_id):
+@app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
+def call_specific_patient(counter_id, patient_id):
     print("specifique", patient_id)
 
-    validate_current_patient(counter_number)
+    validate_current_patient(counter_id)
 
     # Récupération du patient spécifique
     next_patient = Patient.query.get(patient_id)
@@ -826,17 +827,17 @@ def call_specific_patient(counter_number, patient_id):
     socketio.emit('trigger_patient_ongoing', {})  
     
     if next_patient:
-        print("Appel du patient :", patient_id, "au comptoir", counter_number)
+        print("Appel du patient :", patient_id, "au comptoir", counter_id)
         # Mise à jour du statut du patient
         next_patient.status = 'calling'
-        next_patient.counter_number = counter_number
+        next_patient.counter_id = counter_id
         db.session.commit()
        
         # Notifier tous les clients via SocketIO
         socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
         socketio.emit('trigger_patient_ongoing', {})
 
-        generate_audio_calling(counter_number, next_patient)
+        generate_audio_calling(counter_id, next_patient)
     else:
         print("Aucun patient trouvé avec l'ID :", patient_id)
     
@@ -847,8 +848,8 @@ def call_specific_patient(counter_number, patient_id):
 
 
 
-@app.route('/validate_patient/<int:counter_number>/<int:patient_id>', methods=['POST', 'GET'])
-def validate_patient(counter_number, patient_id):
+@app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
+def validate_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
     current_patient = Patient.query.get(patient_id)
     if current_patient:
@@ -860,29 +861,6 @@ def validate_patient(counter_number, patient_id):
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return '', 204  # No content to send back
-
-
-@app.route('/pause_patient/<int:counter_number>/<int:patient_id>', methods=['POST', 'GET'])
-def pause_patient(counter_number, patient_id):
-    # Valide le patient actuel au comptoir sans appeler le prochain
-    print("pause_patient")
-    print("p", patient_id, "c",counter_number)
-    current_patient = Patient.query.get(patient_id)
-    if current_patient:
-        current_patient.status = 'done'
-        db.session.commit()
-
-    socketio.emit('trigger_patient_calling', {})
-    socketio.emit('trigger_patient_ongoing', {})  
-
-    return '', 204  # No content to send back
-
-
-@app.route('/queue')
-def queue():
-    # Récupère tous les patients en attente ou en train d'être servis
-    patients = Patient.query.all()
-    return render_template('queue.html', patients=patients)
 
 
 @app.route('/update_patient_status')
@@ -1052,8 +1030,106 @@ def create_qr_code(patient):
     return filename
 
 
-
 # ---------------- FIN  PAGE PATIENTS FRONT ----------------
+
+
+# ---------------- PAGE COUNTER FRONT ----------------
+
+#  On utilise l'ID dans l'URL pour éviter les erreurs (espace dans le nom...)
+@app.route('/counter/<int:counter_id>')
+def counter(counter_id):
+    print("counter_number", counter_id)
+    counter = Counter.query.get(counter_id)
+    # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
+    if not counter:
+        return wrong_counter(counter_id)
+    return render_template('counter/counter.html', 
+                            counter=counter)
+
+
+def wrong_counter(counter_id):
+    return render_template('counter/wrong_counter.html', 
+                    counters=Counter.query.all(), 
+                    counter_id=counter_id)
+
+
+@app.route('/current_patient_for_counter/<int:counter_id>')
+def current_patient_for_counter(counter_id):
+    """ Affiche le patient en cours de traitement pour un comptoir """
+    print('counter_number', counter_id)
+    patient = Patient.query.filter(
+        Patient.counter_id == counter_id,
+        Patient.status != 'done'
+    ).first()
+    print("CURRENT", patient)
+    return render_template('counter/current_patient_for_counter.html', patient=patient)
+
+
+@app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
+def validate_and_call_next(counter_id):
+    print('validate_and_call_next', counter_id)
+
+    validate_current_patient(counter_id)
+
+    # TODO Prevoir que ne renvoie rien
+    next_patient = call_next(counter_id)  
+    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
+    socketio.emit('trigger_patient_ongoing', {})  
+    return '', 204  # No content to send back
+
+
+def validate_current_patient(counter_id):
+    # si patient actuel 
+    patients_at_counter = Patient.query.filter_by(counter_id=counter_id).all()
+    if patients_at_counter :
+        print("patient dans le comptoir")
+        # Mise à jour du statut pour tous les patients au comptoir
+        Patient.query.filter_by(counter_id=counter_id).update({'status': 'done'})
+        db.session.commit()    
+    else:
+        print("pas de patient")
+
+
+@app.route('/call_next/<int:counter_id>')
+def call_next(counter_id):
+    # Récupère le premier patient en attente 
+    # TODO PERMETTRE DE FIXER DES REGLES ou CHOIX ARBITRAIRE
+
+    next_patient = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).first()
+
+    if next_patient:
+        #socketio.emit('trigger_htmx_update', {})  # ????
+        # Met à jour le statut du patient
+        next_patient.status = 'calling'
+        next_patient.counter_id = counter_id
+        db.session.commit()
+        socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
+        # Optionnel: Ajoutez ici u système pour annoncer le patient au système audio ou un écran d'affichage
+
+        generate_audio_calling(counter_id, next_patient)
+
+    else:
+        next_patient = None
+
+    return next_patient
+
+@app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
+def pause_patient(counter_id, patient_id):
+    # Valide le patient actuel au comptoir sans appeler le prochain
+    print("pause_patient")
+    print("p", patient_id, "c",counter_id)
+    current_patient = Patient.query.get(patient_id)
+    if current_patient:
+        current_patient.status = 'done'
+        db.session.commit()
+
+    socketio.emit('trigger_patient_calling', {})
+    socketio.emit('trigger_patient_ongoing', {})  
+
+    return '', 204  # No content to send back
+
+
+# ---------------- FIN  PAGE COUNTER FRONT ----------------
 
 
 @app.route('/current_patients')
@@ -1087,21 +1163,15 @@ def patients_queue_for_counter():
     return render_template('htmx/patients_queue_for_counter.html', patients=patients)
 
 
-@app.route('/current_patient_for_counter/<int:counter_number>')
-def current_patient_for_counter(counter_number):
-    patient = Patient.query.filter(
-    Patient.counter_number == counter_number, 
-    Patient.status != "done"
-    ).first()
-    return render_template('htmx/current_patient_for_counter.html', patient=patient)
 
 
-@app.route('/counter_refresh_buttons/<int:counter_number>/')
-def counter_refresh_buttons(counter_number):
+@app.route('/counter_refresh_buttons/<int:counter_id>/')
+def counter_refresh_buttons(counter_id):
     patient = Patient.query.filter(
-    Patient.counter_number == counter_number, 
+    Patient.counter_id == counter_id, 
     Patient.status != "done"
     ).first()
+    print("Patient", patient)
     if not patient:
         patient_id = None
         patient_status = None
@@ -1109,7 +1179,7 @@ def counter_refresh_buttons(counter_number):
         patient_id = patient.id
         patient_status = patient.status
 
-    return render_template('htmx/counter/display_buttons.html', counter_number = counter_number, patient_id=patient_id, status=patient_status)
+    return render_template('htmx/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
 
 
 @app.route('/patients_calling')
@@ -1163,16 +1233,7 @@ def new_pharmacist_form():
     return render_template('htmx/menu_admin_new_pharmacist_form.html')
 
 
-@app.route('/clear_all_patients_from_db')
-def clear_all_patients_from_db():
-    try:
-        num_rows_deleted = db.session.query(Patient).delete()
-        db.session.commit()
-        message = f'Successfully deleted {num_rows_deleted} patients.'
-    except Exception as e:
-        db.session.rollback()
-        message = f'Error occurred: {str(e)}'
-    return render_template('admin.html', message=message)
+
 
 @socketio.on('connect')
 def test_connect():

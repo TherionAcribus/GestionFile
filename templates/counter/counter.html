@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Comptoir {{ counter.name }}</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="../static/css/counter.css">
+</head>
+<body>
+    <h1>Comptoir <span style ="display: none" id="counter_id">{{ counter.id }}</span>{{ counter.name }}</h1>
+
+    <div 
+        id="div_current_patient" 
+        hx-trigger="refresh_current_patient, load" 
+        hx-get="/current_patient_for_counter/{{ counter.id }}" 
+        hx-swap="innerHTML">
+    </div>
+
+    <div 
+        id="button_section" 
+        class="row s12" 
+        hx-trigger="load, refresh_current_buttons" 
+        hx-get="/counter_refresh_buttons/{{  counter.id }}" 
+        hx-swap="innerHTML">
+    </div>
+
+    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/patients_queue_for_counter" hx-swap="innerHTML">
+    </div>
+
+            <div>
+        <label>
+          <input id="cb_vaccination" type="checkbox"/>
+          <span>Vaccination</span>
+        </label>
+    </div>
+
+    <div>
+        <label>
+            <input id="cb_test" type="checkbox"/>
+            <span>Test Antigenique</span>
+          </label>
+    </div>
+
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <script src="../static/js/counter.js"></script>
+</body>
+</html>
