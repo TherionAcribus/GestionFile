@@ -7,7 +7,7 @@
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -20,6 +20,7 @@ from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 from flask_babel import Babel
 from gtts import gTTS
+from werkzeug.utils import secure_filename
 import qrcode
 import json
 import os
@@ -34,6 +35,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de 
 #app.config['SQLALCHEMY_DATABASE_URI'] = 'duckdb:///database.duckdb'
 app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -189,6 +191,11 @@ class Button(db.Model):
 
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
+
+# Permet de définir le type de fichiers autorisés pour l'ajout d'images
+def allowed_image_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def get_locale():
@@ -790,6 +797,7 @@ def update_button(button_id):
                         button.activity = activity
                         button.is_parent = False
                     else:
+                        print("Activité non trouvée")
                         return "Activité non trouvée", 404
                 else:
                     # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
@@ -800,8 +808,6 @@ def update_button(button_id):
                 parent_button = Button.query.get(parent_btn_id)
                 if parent_button:
                     button.parent_button = parent_button
-                else:
-                    return "Bouton parent non trouvé", 404
 
             is_present = True if request.form.get('is_present') == "true" else False
             button.is_present = is_present
@@ -851,6 +857,25 @@ def delete_button(button_id):
         print(e)
         return display_button_table()
 
+
+@app.route('/upload_image/<int:button_id>', methods=['POST'])
+def upload_image(button_id):
+    button = Button.query.get(button_id)
+    if 'file' not in request.files:
+        return "No file part", 400
+    file = request.files['file']
+    if file.filename == '':
+        return "No selected file", 400
+    if file and allowed_image_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.static_folder, 'images/buttons',  filename)
+        file.save(file_path)
+        button.image_url = filename
+        db.session.commit()
+        # Renvoyer un fragment HTML pour la mise à jour
+        return redirect("/admin/patient", code=302)
+        #return f'<div id="button-image-{button.id}"><img src="{url_for('static', filename=button.image_url)}" style="width: 100px;"></div>'
+    return "Invalid file", 400
 
 
 # -------- fin de ADMIN -> Page patient  ---------

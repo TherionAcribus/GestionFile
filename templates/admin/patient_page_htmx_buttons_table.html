@@ -24,6 +24,7 @@
                     </label>
                 </p>
             </td>
+            
             <td>
                 <div class="input-field">
                     <select id="activity-{{ button.id }}">
@@ -38,6 +39,7 @@
                     </select>
                 </div>
             </td>
+
             <td>
                 <div id="select_parent_buttons-{{ button.id }}"
                     hx-get="/admin/patient/display_parent_buttons/{{ button.id }}"
@@ -48,6 +50,26 @@
                     <!-- Place du Select bouton enfant -->
                 </div>
             </td>
+
+            <td>
+                <form action="{{ url_for('upload_image', button_id=button.id) }}" method="post"
+                    enctype="multipart/form-data"
+                    hx-post="{{ url_for('upload_image', button_id=button.id) }}"
+                    hx-target="#button-image-{{ button.id }}"
+                    hx-swap="outerHTML"
+                    hx-encoding="multipart/form-data">
+                    <div class="file-upload">
+                        <button type="button">Choisir une image</button>
+                        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">
+                    </div>
+                    <div id="button-image-{{ button.id }}">
+                        {% if button.image_url %}
+                            <img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">
+                        {% endif %}
+                    </div>
+                </form>
+            </td>
+
             <td>
                 <button class="btn" 
                     hx-target="#invisible"

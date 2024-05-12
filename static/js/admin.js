@@ -80,7 +80,30 @@ socket.on('open_modal_confirm_delete_patient_table', function(data) {
 
 // ---------------- BOUTONS ----------------
 
+function submitFile(buttonId) {
+    var input = document.getElementById('file-input-' + buttonId);
+    var file = input.files[0];
+    if (file) {
+        var formData = new FormData();
+        formData.append('file', file);
 
+        // Pour le débogage, loggez le contenu de FormData
+        for (var pair of formData.entries()) {
+            console.log(pair[0]+ ', ' + pair[1]); 
+        }
+
+        htmx.ajax('POST', '/upload_image/' + buttonId, {
+            body: formData,
+            headers: {
+                'HX-Request': 'true',
+                'Content-Type': 'multipart/form-data' // Assurez-vous de ne pas définir explicitement Content-Type
+            },
+            target: '#button-image-' + buttonId
+        });
+    } else {
+        console.log('No file selected.');
+    }
+}
 
 
 // ---------------- GENERAL ----------------

@@ -1,0 +1,21 @@
+.file-upload {
+    overflow: hidden;
+    display: inline-block;
+    position: relative;
+    text-align: center;
+    vertical-align: top;
+}
+.file-upload input[type=file] {
+    font-size: 100px;
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+}
+.file-upload button {
+    border: none;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+}
