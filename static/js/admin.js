@@ -78,6 +78,11 @@ socket.on('open_modal_confirm_delete_patient_table', function(data) {
 });
 
 
+// ---------------- BOUTONS ----------------
+
+
+
+
 // ---------------- GENERAL ----------------
 
 function initSelects() {

@@ -1,0 +1,8 @@
+<select id="parent-{{ button.id }}">
+    <option value="None" selected>Aucun bouton enfant</option>
+    {% for but in buttons %}
+        <option value="{{ but.id }}"
+                {{ 'selected' if but.id == button.parent_button.id else '' }}
+        >{{ but.label }}</option>
+    {% endfor %}
+</select>

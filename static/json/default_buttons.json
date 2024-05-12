@@ -1,5 +1,5 @@
 {
-    "version": "0.5",
+    "version": "0.9",
     "comments": "Version de test",
         "buttons": [
         {
@@ -9,7 +9,8 @@
             "shape": "square",
             "image_url": "",
             "is_present": true,
-            "is_active": true
+            "is_active": true,
+            "is_parent": false
         },
         {
             "code": "TEST",
@@ -18,7 +19,8 @@
             "shape": "square",
             "image_url": "",
             "is_present": true,
-            "is_active": true
+            "is_active": true,
+            "is_parent": false
         },
         {
             "code": "COLLECT",
@@ -27,7 +29,8 @@
             "shape": "square",
             "image_url": "",
             "is_present": true,
-            "is_active": true
+            "is_active": true,
+            "is_parent": false
         },
         {
             "code": "PRIORITY",
@@ -36,7 +39,18 @@
             "shape": "square",
             "image_url": "",
             "is_present": true,
-            "is_active": true
+            "is_active": true,
+            "is_parent": false
+        },
+        {
+            "code": "PARENT",
+            "label": "Parent",
+            "label_en": "Parent",
+            "shape": "square",
+            "image_url": "",
+            "is_present": true,
+            "is_active": true,
+            "is_parent": true
         }
     ]
 }

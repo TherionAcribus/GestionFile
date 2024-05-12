@@ -76,6 +76,7 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
             print("maj boutons")
             button = Button.query.filter_by(code=button_data['code']).first()
             if button:
+                button.is_parent = button_data['is_parent']
                 button.label = button_data['label']
                 button.by_user = False
                 button.code = button_data['code']

@@ -146,7 +146,7 @@ class ConfigOption(db.Model):
 class ConfigVersion(db.Model):
     id = db.Column(db.Integer, Sequence('config_version_id_seq'), primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
-    version = db.Column(db.String(50), nullable=False, unique=True)
+    version = db.Column(db.String(50), nullable=False)
     comments = db.Column(db.Text)
     date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -160,6 +160,7 @@ class Button(db.Model):
     id = db.Column(db.Integer, Sequence('button_id_seq'), primary_key=True)
     by_user = db.Column(db.Boolean, default=False)  # True si le bouton est créé par un user. Permet de savoir si bouton d'origine ou non
     code = db.Column(db.String(20), nullable=True, unique=True)  # Code unique est interne pour les boutons d'origine du logiciel. Permet de les reconnaitre même si le titre change.
+    is_parent = db.Column(db.Boolean, default=False, nullable=True)
     label = db.Column(db.String(50), nullable=False)
     label_en = db.Column(db.String(50))
     is_active = db.Column(db.Boolean, default=True)
@@ -761,7 +762,15 @@ def display_button_table():
     return render_template('admin/patient_page_htmx_buttons_table.html', buttons=buttons, activities = activities)
 
 
-# mise à jour des informations d'un membre
+# affiche la liste des boutons pour le 
+@app.route('/admin/patient/display_parent_buttons/<int:button_id>', methods=['GET'])
+def display_children_buttons(button_id):
+    buttons = Button.query.filter_by(is_parent=True).all()
+    button = Button.query.get(button_id)
+    return render_template('admin/patient_page_button_display_children.html', buttons=buttons, button=button)
+
+
+# mise à jour des informations d'un bouton
 @app.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
 def update_button(button_id):
     try:
@@ -769,18 +778,31 @@ def update_button(button_id):
         if button:
             # Récupérer l'ID de l'activité depuis le formulaire
             activity_id = request.form.get('activity')
-
-            # Récupérer l'instance de l'activité correspondante
-            if activity_id:
-                activity = Activity.query.get(activity_id)
-                if activity:
-                    button.activity = activity
-                else:
-                    return "Activité non trouvée", 404
-            else:
-                # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
+            # GEstion du cas ou le bouton est un bouton parent
+            if activity_id == "parent_button":
+                button.is_parent = True
                 button.activity = None
+            else:
+                # Récupérer l'instance de l'activité correspondante
+                if activity_id:
+                    activity = Activity.query.get(activity_id)
+                    if activity:
+                        button.activity = activity
+                        button.is_parent = False
+                    else:
+                        return "Activité non trouvée", 404
+                else:
+                    # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
+                    button.activity = None
             
+            parent_btn_id = request.form.get('parent_btn')
+            if parent_btn_id:
+                parent_button = Button.query.get(parent_btn_id)
+                if parent_button:
+                    button.parent_button = parent_button
+                else:
+                    return "Bouton parent non trouvé", 404
+
             is_present = True if request.form.get('is_present') == "true" else False
             button.is_present = is_present
 
@@ -840,19 +862,11 @@ def patients_old():
 
 
 
-
 @app.route('/patient_right_page_default')
 def patient_right_page_default():
     print("default")
     return render_template('htmx/patient_right_page_default.html')
 
-
-# affiche les boutons de gauche
-@app.route('/patient/patient_buttons_left')
-def patient_right_page():
-    buttons = Button.query.filter_by(is_present = True).all()
-    print("BUTTONS", buttons)
-    return render_template('patient/patient_buttons_left.html', buttons=buttons)
 
 
 @app.route('/counter_old/<int:counter_number>')
@@ -1003,11 +1017,34 @@ def patients_front_page():
     return render_template('patient/patient_front_page.html')
 
 
+# affiche les boutons de gauche
+@app.route('/patient/patient_buttons_left')
+def patient_right_page():
+    buttons = Button.query.filter_by(is_present = True, parent_button_id = None).all()
+    print("BUTTONS", buttons)
+    return render_template('patient/patient_buttons_left.html', buttons=buttons)
+
+
 @app.route('/patients_submit', methods=['POST'])
 def patients_submit():
     print("patients_submit")
     # Récupération des données du formulaire
     print(request.form)
+    if request.form.get('is_parent')  == 'True':
+        return display_children_buttons_for_right_page(request)
+    else:
+        return display_validation_after_choice(request)
+
+
+# affiche les boutons "enfants" de droite
+def display_children_buttons_for_right_page(request):
+    children_buttons = Button.query.filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
+    print("children_buttons", children_buttons)
+    return render_template('patient/patient_buttons_left.html', buttons=children_buttons)
+
+
+# affiche la page de validation pour page gauche et droite
+def display_validation_after_choice(request):
     activity_id = request.form.get('activity_id')
     print("reason", activity_id)
 
@@ -1017,7 +1054,7 @@ def patients_submit():
         print("activity", activity.id)
         socketio.emit('trigger_valide_activity', {'activity': activity.id})
         return left_page_validate_patient(activity)
-
+    
 
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):

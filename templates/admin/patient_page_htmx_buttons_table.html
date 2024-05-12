@@ -26,13 +26,26 @@
             </td>
             <td>
                 <div class="input-field">
-                <select id="activity-{{ button.id }}">
-                    <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
-                    
-                    {% for activity in activities %}
-                    <option value="{{ activity.id }}" {{ 'selected' if activity.id == button.activity.id else '' }}>{{ activity.name }} </option>
-                    {% endfor %}
-                </select>
+                    <select id="activity-{{ button.id }}">
+                        <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
+                        <option value="parent_button" 
+                                {{ 'selected' if button.is_parent == True else '' }}>BOUTON PARENT
+                        </option>
+                        {% for activity in activities %}
+                            <option value="{{ activity.id }}" 
+                                            {{ 'selected' if activity.id == button.activity.id else '' }}>{{ activity.name }} </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
+            <td>
+                <div id="select_parent_buttons-{{ button.id }}"
+                    hx-get="/admin/patient/display_parent_buttons/{{ button.id }}"
+                    hx-trigger="load, refresh_parent_buttons"
+                    hx-target="#select_parent_buttons-{{ button.id }}"
+                    hx-swap="innerHTML"
+                >
+                    <!-- Place du Select bouton enfant -->
                 </div>
             </td>
             <td>
@@ -42,7 +55,8 @@
                     hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value, 
                             "label_en": document.getElementById("label_en-{{ button.id }}").value, 
                             "is_present": document.getElementById("is_present-{{ button.id }}").checked,
-                            "activity": document.getElementById("activity-{{ button.id }}").value, 
+                            "activity": document.getElementById("activity-{{ button.id }}").value,
+                            "parent_btn": document.getElementById("parent-{{ button.id }}").value, 
                             }'>
                     Enregistrer
                 </button>
