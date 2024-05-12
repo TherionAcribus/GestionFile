@@ -11,6 +11,61 @@
 <body>
     <h1>Comptoir <span style ="display: none" id="counter_id">{{ counter.id }}</span>{{ counter.name }}</h1>
 
+        <div id="staff_on_counter"
+                hx-get="/counter/is_staff_on_counter/{{ counter.id }}"
+                hx-trigger="load, refresh_staff_on_counter"
+                hx-swap="innerHTML"
+                hx-target="#staff_on_counter"
+                >
+            <!-- Nom du membre de l'équipe -->
+        </div>
+
+        <div class="row">
+            <div class="input-field col">
+                <input id="staff_initial" 
+                        type="text" 
+                        class="validate" 
+                        name="initials"
+                        placeholder="Entrez vos initiales"
+                        hx-post="/counter/update_staff"
+                        hx-trigger="keyup[keyCode==13]" 
+                        hx-target="#staff_on_counter" 
+                        hx-swap="innerHTML"
+                        hx-vals='js:{"initials": document.getElementById("staff_initial").value, 
+                        "counter_id": document.getElementById("counter_id").innerHTML,
+                        "deconnect": document.getElementById("deconnect").checked,}'>
+                                        
+            </div>
+
+            <button type="button" class="btn"
+                    hx-post="/counter/update_staff" 
+                    hx-target="#staff_on_counter" 
+                    hx-swap="innerHTML"
+                    hx-trigger="click"
+                    hx-vals='js:{"initials": document.getElementById("staff_initial").value, 
+                                "counter_id": document.getElementById("counter_id").innerHTML,
+                                "deconnect": document.getElementById("deconnect").checked,}'>
+                Valider
+            </button>
+
+            <button type="button" class="btn red"
+                    id="button_leave_counter"
+                    style="display: block;"
+                    hx-post="/counter/remove_staff" 
+                    hx-target="#staff_on_counter" 
+                    hx-swap="innerHTML"
+                    hx-trigger="click"
+                    hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML, 
+                                "counter_id": document.getElementById("counter_id").innerHTML}'>
+                Quitter
+            </button>
+        </div>
+
+        <label>
+            <input id="deconnect" type="checkbox" checked="checked" />
+            <span>Se déconnecter de tous les autres postes</span>
+        </label>
+
     <div 
         id="div_current_patient" 
         hx-trigger="refresh_current_patient, load" 
@@ -22,26 +77,22 @@
         id="button_section" 
         class="row s12" 
         hx-trigger="load, refresh_current_buttons" 
-        hx-get="/counter_refresh_buttons/{{  counter.id }}" 
+        hx-get="/counter_refresh_buttons/{{ counter.id }}" 
         hx-swap="innerHTML">
     </div>
 
     <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/counter/patients_queue_for_counter" hx-swap="innerHTML">
     </div>
 
-            <div>
-        <label>
-          <input id="cb_vaccination" type="checkbox"/>
-          <span>Vaccination</span>
-        </label>
+
+    <div id="list_of_activities"
+        hx-post="/counter/list_of_activities"
+        hx-trigger="on_update_staff_on_counter"
+        hx-swap="innerHTML"
+        hx-target="#list_of_activities"
+        hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML}'>
     </div>
 
-    <div>
-        <label>
-            <input id="cb_test" type="checkbox"/>
-            <span>Test Antigenique</span>
-          </label>
-    </div>
 
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>

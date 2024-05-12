@@ -1,0 +1,31 @@
+{% if staff == None %}
+    <span id="staff_id" style ="display: none">{{0}}</span>
+    <span class="green-text">
+        Aucun membre de l'équipe n'est assigné à ce comptoir
+    </span>
+    <script>
+        // cache le bouton pour quitter le comptoir
+        hideButtonLeaveCounter();
+    </script>
+{% elif staff == False %}
+    <span id="staff_id" style ="display: none">{{0}}</span>
+    <span class="red-text">
+        Erreur : Ces initiales n'existent pas !
+    </span>
+    <script>
+        // cache le bouton pour quitter le comptoir
+        hideButtonLeaveCounter();
+    </script>
+{% else %}
+    {{staff.name}} ({{staff.initials}}) 
+    <span id="staff_id" style ="display: none">{{staff.id}}</span>
+    <script>
+        // affiche le bouton pour quitter le comptoir
+        displayButtonLeaveCounter();
+    </script>
+{% endif %}
+<script>
+    // affiche liste des activités, mais uniquement une fois que l'utilisateur est connecté
+    // car on a besoin de récupérer son ID
+    htmx.trigger('#list_of_activities', 'on_update_staff_on_counter', {target: "#list_of_activities"});
+</script>

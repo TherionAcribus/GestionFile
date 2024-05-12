@@ -15,6 +15,7 @@
         Supprimer toute la liste
     </button>
 
+    <!-- Select patient filter  -->
     <div class="input-field col s12">
         <select multiple
             id="select_patient_filter"
@@ -35,6 +36,7 @@
         <label>Choisir les patients à afficher (si rien n'est coché, tout sera affiché)</label>
     </div>
 
+    <!-- Queue table -->
     <div id="div_queue_table"
         hx-post="/admin/queue/table"
         hx-trigger="load, refresh_queue_patient from:body"
@@ -47,8 +49,38 @@
         >
     </div>
 
+    
+    <div class="input-field row s12">
+        <div class="col s4">
+            <select 
+                id="create_new_patient_auto">
+                <option value="" disabled selected>Choisir un motif</option>
+                {% for activity in activities %}
+                    <option value="{{ activity.id }}">{{ activity.name }}</option>
+                {% endfor %}
+            </select>
+            <label></label>
+        </div>
+        <div class="col s4">
+            <button
+                class ="btn"
+                hx-post="/admin/queue/create_new_patient_auto"
+                hx-target="#invisible"
+                hx-trigger="click"
+                hx-swap="innerHTML"
+                hx-vals='js:{"activity_id": document.getElementById("create_new_patient_auto").value}'
+                >
+                Création rapide
+            </button>
+        </div>
+    </div>
+
+
     <!-- Modal Structure -->
     <div id="modal_delete_queue" class="modal">
     </div>
+
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+    <div id="invisible" style="display:none;"></div>
         
 {% endblock %}

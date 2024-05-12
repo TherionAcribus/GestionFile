@@ -13,6 +13,17 @@ socket.on('trigger_patient_ongoing', function() {
 });
 
 
+// si user se déconnecte de tous les postes on raffraichit tous les postes pour effacer le nom de l'utilisateur
+socket.on('trigger_disconnect_staff', function() {
+    htmx.trigger('#staff_on_counter', 'refresh_staff_on_counter', {target: "#staff_on_counter"});
+});
+
+
+// affiche la liste des activites par défaut d'un membre de l'équipe dès que l'on raffraichi l'utilisateur au comptoir
+socket.on("trigger_connect_staff", function() {
+    htmx.trigger('#list_of_activities', 'on_update_staff_on_counter', {target: "#list_of_activities"});
+})
+
 document.body.addEventListener('htmx:afterSwap', function(event) {
     if (event.detail.target.id === "patient_on_queue") {
         attachButtonListeners();
@@ -43,4 +54,15 @@ function attachButtonListeners() {
 function selectPatient(patientId) {
     console.log("Patient sélectionné :", patientId);
     // Ajoutez ici plus de logique pour gérer le patient sélectionné
+}
+
+// ces deux fonctions sont appelées via un script dans l'htmx qui affiche le 
+// nom de l'utilisateur lorsqu'il est connecté  ou le nom de personne si 
+// personne n'est connecté (ou erreur)
+function displayButtonLeaveCounter() {
+    document.getElementById('button_leave_counter').style.display = 'block';
+}
+
+function hideButtonLeaveCounter() {
+    document.getElementById('button_leave_counter').style.display = 'none';
 }

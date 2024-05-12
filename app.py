@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, c
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence
+from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date
@@ -89,6 +89,9 @@ class Counter(db.Model):
     priority_actions = db.Column(db.String(255))  # Liste des actions prioritaires réalisées par ce comptoir
     activities = db.relationship('Activity', secondary=counters_activities, lazy='subquery',
             backref=db.backref('counters', lazy=True)) 
+    # Ajouter une référence à un membre de l'équipe
+    staff_id = db.Column(db.Integer, db.ForeignKey('pharmacist.id', name='fk_counter_staff_id'))
+    staff = db.relationship('Pharmacist', backref=db.backref('counter', lazy=True))
 
     def __repr__(self):
         return f'<Counter {self.name}>'
@@ -183,6 +186,10 @@ class Button(db.Model):
         return f'<Button {self.label}>'
     
 
+# A mettre dans la BDD ?
+status_list = ['ongoing', 'standing', 'done', 'calling']
+
+
 def get_locale():
     return session.get('lang', request.accept_languages.best_match(['en', 'fr']))
 babel.init_app(app, locale_selector=get_locale)
@@ -215,7 +222,8 @@ def admin():
 
 @app.route('/admin/queue')
 def queue():
-    return render_template('admin/queue.html')
+    activities = Activity.query.all()
+    return render_template('admin/queue.html', activities=activities)
 
 
 # affiche le tableau des patients
@@ -232,13 +240,16 @@ def display_queue_table():
     else:
         patients = Patient.query.all()
 
-    return render_template('admin/queue_htmx_table.html', patients=patients)
+    return render_template('admin/queue_htmx_table.html', 
+                            patients=patients, 
+                            activities=Activity.query.all(), 
+                            status_list=status_list,
+                            counters=Counter.query.all())
 
 
-# affiche la modale pour confirmer la suppression d'un membre
+# affiche la modale pour confirmer la suppression de toute la table patient
 @app.route('/admin/database/confirm_delete_patient_table', methods=['GET'])
 def confirm_delete_patient_table():
-    print("MODALE")
     return render_template('/admin/queue_modal_confirm_delete.html')
 
 
@@ -256,6 +267,81 @@ def clear_all_patients_from_db():
         socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         print(e)
         return jsonify(status="error", message=str(e)), 500
+
+
+
+# mise à jour des informations d'un patient
+@app.route('/admin/queue/patient_update/<int:patient_id>', methods=['POST'])
+def update_patient(patient_id):
+    try:
+        patient = Patient.query.get(patient_id)
+        if patient:
+            print(request.form)
+            if request.form.get('call_number') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Un numéro d'appel est obligatoire"})
+                return ""
+            patient.call_number = request.form.get('call_number', patient.call_number)
+            patient.status = request.form.get('status', patient.status)
+            activity_id = request.form.get('activity_id', patient.activity)
+            patient.activity = Activity.query.get(activity_id)
+            counter_id = request.form.get('counter_id', patient.counter)
+            patient.counter = Counter.query.get(counter_id)
+
+            db.session.commit()
+
+            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
+            return ""
+
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            print(e)
+            return jsonify(status="error", message=str(e)), 500
+
+
+# affiche la modale pour confirmer la suppression d'un patient particulier
+@app.route('/admin/queue/confirm_delete_patient/<int:patient_id>', methods=['GET'])
+def confirm_delete_patient(patient_id):
+    print("Confirmation de la suppression d'un patient")
+    patient = Patient.query.get(patient_id)
+    return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient)
+
+
+# supprime un patient
+@app.route('/admin/queue/delete_patient/<int:patient_id>', methods=['GET'])
+def delete_patient(patient_id):
+    try:
+        patient = Patient.query.get(patient_id)
+        if not patient:
+            socketio.emit('display_toast', {'success': False, 'message': "Patient non trouvé"})
+            socketio.emit("trigger_new_patient", {"patient_standing": list_patients_standing()})
+            return display_staff_table()
+
+        db.session.delete(patient)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        return display_queue_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        return display_queue_table()
+    
+
+# TODO PREVOIR "NONE" ou équivalent 
+@app.route('/admin/queue/create_new_patient_auto', methods=['POST'])
+def create_new_patient_auto():
+    activity = Activity.query.get(request.form.get('activity_id'))
+    print("activity_id", request.form)
+    print("activity", activity)
+    call_number = get_next_call_number(activity)
+    new_patient = add_patient(call_number, activity)  
+    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()}) 
+
+    return "", 204
+
+
 
 
 # --------  FIn de ADMIN -> Queue ---------
@@ -935,12 +1021,7 @@ def patients_submit():
 
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
-    numbering_by_activity = app.config.get('NUMBERING_BY_ACTIVITY', False)
-    if numbering_by_activity:
-        call_number = get_next_category_number(activity)
-    else:
-        call_number = get_next_call_number_simple()
-    print("call_number", call_number)
+    call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
     image_name_qr = create_qr_code(new_patient)
     text = f"{call_number}"
@@ -953,6 +1034,7 @@ def left_page_validate_patient(activity):
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
     # Création d'un nouvel objet Patient
+    print('    call_number 2', call_number)
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
@@ -971,6 +1053,17 @@ def list_patients_standing():
     patients_standing = Patient.query.filter_by(status='standing').all()
     patients_data = [patient.to_dict() for patient in patients_standing]
     return patients_data
+
+
+def get_next_call_number(activity):
+    """ Récupérer le numéro d'appel en fonction de la méthode choisie"""
+    numbering_by_activity = app.config.get('NUMBERING_BY_ACTIVITY', False)
+    if numbering_by_activity:
+        call_number = get_next_category_number(activity)
+    else:
+        call_number = get_next_call_number_simple()
+    print("call_number", call_number)
+    return call_number
 
 
 def get_next_call_number_simple():
@@ -1042,13 +1135,16 @@ def create_qr_code(patient):
 def counter(counter_id):
     print("counter_number", counter_id)
     counter = Counter.query.get(counter_id)
+    activities = Activity.query.all()
     # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
     if not counter:
         return wrong_counter(counter_id)
     return render_template('counter/counter.html', 
-                            counter=counter)
+                            counter=counter,
+                            activities=activities)
 
 
+# si le comptoir n'existe pas -> page avec liste des comptoirs
 def wrong_counter(counter_id):
     return render_template('counter/wrong_counter.html', 
                     counters=Counter.query.all(), 
@@ -1136,6 +1232,74 @@ def patients_queue_for_counter():
     patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
     return render_template('/counter/patients_queue_for_counter.html', patients=patients)
 
+
+@app.route('/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
+def is_staff_on_counter(counter_id):
+    counter = Counter.query.get(counter_id)
+    # emet un signal pour provoquer le réaffichage de la liste des activités
+    #socketio.emit("trigger_connect_staff", {})
+    print("EMITTTT")
+    return render_template('counter/staff_on_counter.html', staff=counter.staff)
+
+
+@app.route('/counter/remove_staff', methods=['POST'])
+def remove_counter_staff():
+    counter = Counter.query.get(request.form.get('counter_id')) 
+    counter.staff = None
+    db.session.commit()
+    return is_staff_on_counter(request.form.get('counter_id'))
+
+
+@app.route('/counter/update_staff', methods=['POST'])
+def update_counter_staff():
+    print(request.form)
+    counter = Counter.query.get(request.form.get('counter_id'))  
+    initials = request.form.get('initials')
+    staff = Pharmacist.query.filter(func.lower(Pharmacist.initials) == func.lower(initials)).first()
+    if staff:
+        # si demande de déconnexion
+        if request.form.get('deconnect') == "true":
+            # deconnexion de tous les postes
+            deconnect_staff_from_all_counters(staff)
+        # Ajout du membre de l'équipe au comptoir        
+        counter.staff = staff
+        db.session.commit()
+
+        # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
+        return is_staff_on_counter(request.form.get('counter_id'))
+  
+    # Si les initiales ne correspondent à rien
+    # on déconnecte l'utilisateur précedemement connecté
+    counter.staff = None
+    db.session.commit()
+    # on affiche une erreur à la place du nom
+    return render_template('counter/staff_on_counter.html', staff=False)
+
+
+def deconnect_staff_from_all_counters(staff):
+    """ Déconnecte le membre de l'équipe de tous les comptoirs """
+    for counter in Counter.query.all():
+        if counter.staff == staff:
+            counter.staff = None
+            db.session.commit()
+            socketio.emit("trigger_disconnect_staff", {})
+
+
+@app.route('/counter/list_of_activities', methods=['POST'])
+def list_of_activities():
+    activities = Activity.query.all()
+    staff_id = request.form.get('staff_id')
+    if staff_id == "0":
+        # TODO Créer un user "Anonyme" ????
+        # si personne au comptoir, on affiche toutes les activités
+        staff_activities_ids = [activity.id for activity in activities]
+
+    else:     
+        staff = Pharmacist.query.get(staff_id)
+        # on renvoie les activités du membre de l'équipe pour les cocher dans la liste
+        staff_activities_ids = [activity.id for activity in staff.activities]
+
+    return render_template('counter/counter_list_of_activities.html', activities=activities, staff_activities_ids=staff_activities_ids)
 
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
