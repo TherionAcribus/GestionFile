@@ -19,3 +19,6 @@
     color: white;
     cursor: pointer;
 }
+.selected-image {
+    border: #007bff 5px solid;
+}

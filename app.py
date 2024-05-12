@@ -860,6 +860,7 @@ def delete_button(button_id):
 
 @app.route('/upload_image/<int:button_id>', methods=['POST'])
 def upload_image(button_id):
+    """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
     button = Button.query.get(button_id)
     if 'file' not in request.files:
         return "No file part", 400
@@ -872,11 +873,37 @@ def upload_image(button_id):
         file.save(file_path)
         button.image_url = filename
         db.session.commit()
-        # Renvoyer un fragment HTML pour la mise à jour
+        # Retour à la page admin/patient
         return redirect("/admin/patient", code=302)
-        #return f'<div id="button-image-{button.id}"><img src="{url_for('static', filename=button.image_url)}" style="width: 100px;"></div>'
     return "Invalid file", 400
 
+
+@app.route('/admin/patient/gallery_button_images/<int:button_id>', methods=['GET'])
+def gallery_button_images(button_id):
+    directory = os.path.join(current_app.static_folder, 'images/buttons')
+    images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    button = Button.query.get(button_id)
+    print(images)
+    return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
+
+
+@app.route('/admin/patient/update_button_image_from_gallery', methods=['POST'])
+def update_button_image_from_gallery():
+    button_id = request.form.get('button_id')
+    image_url = request.form.get('image')
+    button = Button.query.get(button_id)
+    print(request.form)
+    button.image_url = image_url
+    db.session.commit()
+    return """<img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">"""
+
+
+@app.route("/admin/patient/delete_button_image/<int:button_id>", methods=['GET'])
+def delete_button_image(button_id):
+    button = Button.query.get(button_id)
+    button.image_url = None
+    db.session.commit()
+    return "<div>Pas d'image</div>"
 
 # -------- fin de ADMIN -> Page patient  ---------
 

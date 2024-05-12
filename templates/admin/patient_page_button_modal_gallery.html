@@ -1,0 +1,55 @@
+<div class="modal-content">
+    <h4>Choix d'une image</h4>
+    <p>Choisissez une image dans la galerie en cliquant dessus puis en validant ou ajoutant une image depuis votre ordinateur. </p>
+    <div class="image-grid">
+        {% for image in images %}
+        <img src="{{ url_for('static', filename='images/buttons/' + image) }}"
+            id="img_{{ image }}"
+            alt="Button Image"
+            style="width: 100px; cursor: pointer;"
+            onclick="selectImage('{{ image }}');">
+        {% endfor %}
+    </div>
+</div>
+
+<form action="{{ url_for('upload_image', button_id=button.id) }}" method="post"
+enctype="multipart/form-data"
+hx-post="{{ url_for('upload_image', button_id=button.id) }}"
+hx-target="#button-image-{{ button.id }}"
+hx-swap="outerHTML"
+hx-encoding="multipart/form-data">
+<div class="file-upload">
+    <button type="button">Ouvrir une image depuis votre ordinateur</button>
+    <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">
+</div>
+
+</form>
+
+<div class="modal-footer">
+    <span id="image_name_field"></span>
+    <a href="#!" class="modal-close waves-effect waves-red btn-flat">Annuler</a>
+    <a href="#!" 
+        class="modal-close waves-effect waves-green btn-flat"
+        hx-post="/admin/patient/update_button_image_from_gallery"
+        hx-vals='js:{"button_id": {{button.id}}, "image": document.getElementById("image_name_field").innerText}'
+        hx-target="#button-image-{{ button.id }}"
+        hx-swap="innerHTML"
+        >
+        Confirmer</a>
+  </div>
+
+<script>
+    // le js est dans l'html car ne doit être chargé que quand l'est l'html
+    function selectImage(imageName) {
+        // Mettre à jour l'URL de l'image dans le formulaire
+        document.getElementById('image_name_field').innerText = imageName;
+        // Cadre bleu autour de l'image
+        if (document.getElementsByClassName('selected-image')) {         
+        for (element of document.getElementsByClassName('selected-image')) {
+            element.classList.remove('selected-image');
+        }
+    }
+        document.getElementById('img_' + imageName).classList.add('selected-image');
+        // Fermer la modal
+    }
+</script>

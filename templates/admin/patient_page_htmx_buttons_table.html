@@ -51,24 +51,7 @@
                 </div>
             </td>
 
-            <td>
-                <form action="{{ url_for('upload_image', button_id=button.id) }}" method="post"
-                    enctype="multipart/form-data"
-                    hx-post="{{ url_for('upload_image', button_id=button.id) }}"
-                    hx-target="#button-image-{{ button.id }}"
-                    hx-swap="outerHTML"
-                    hx-encoding="multipart/form-data">
-                    <div class="file-upload">
-                        <button type="button">Choisir une image</button>
-                        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">
-                    </div>
-                    <div id="button-image-{{ button.id }}">
-                        {% if button.image_url %}
-                            <img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">
-                        {% endif %}
-                    </div>
-                </form>
-            </td>
+            
 
             <td>
                 <button class="btn" 
@@ -92,6 +75,42 @@
                 </button>
             </td>
         </tr>
+
+        <tr>
+            <td>
+                <div id="button-image-{{ button.id }}">
+                    {% if button.image_url %}
+                        <img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">
+                    {% else %}
+                        <p>Aucune image</p>
+                    {% endif %}
+                </div>
+            </td>
+            <td>
+
+                    <!-- Bouton pour ouvrir la modal -->
+                    <button class="btn modal-trigger blue"
+                    hx-get="/admin/patient/gallery_button_images/{{ button.id }}"
+                    hx-target="#modal_display_gallery"
+                    hx-trigger="click"
+                    data-target="modal_display_gallery">
+                Galerie
+            </button>
+            </td>
+
+            <td>
+                {% if button.image_url %}
+                    <button class="btn red"
+                        hx-get="/admin/patient/delete_button_image/{{ button.id }}"
+                        hx-target="#button-image-{{ button.id }}"
+                        hx-swap="innerHTML"
+                        >
+                        Supprimer l'image
+                    </button>
+                {% endif %}
+            </td>
+        </tr>
+
         {% endfor %}
     </tbody>
 </table>
