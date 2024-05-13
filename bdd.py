@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 
@@ -75,6 +76,7 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
         for button_data in data['buttons']:
             print("maj boutons")
             button = Button.query.filter_by(code=button_data['code']).first()
+            # TODO Ne mettre à jour que si n'existe pas
             if button:
                 button.is_parent = button_data['is_parent']
                 button.label = button_data['label']
@@ -87,6 +89,110 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
                 new_button = Button(**button_data)
                 db.session.add(new_button)
         
+        db.session.commit()
+        print("Database updated to version:", data['version'])
+
+
+
+def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db):
+    json_file = 'static/json/default_translations.json'
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="translations_version").first()
+    if not current_version or current_version.version != data['version']:
+        if current_version:
+            current_version.version = data['version']
+        else:
+            new_version = ConfigVersion(
+                key="translations_version",
+                version=data['version'],
+                comments=data['comments'],
+                date=datetime.now()
+            )
+            db.session.add(new_version)
+        
+        texts_data = data["texts"]
+        for key, translations in texts_data.items():
+            text = Text.query.filter_by(key=key).first()
+            if text:
+                for lang_code, translation in translations.items():
+                    language = Language.query.filter_by(code=lang_code).first()
+                    if language:
+                        text_trans = TextTranslation.query.filter_by(text_id=text.id, language_id=language.id).first()
+                        if text_trans:
+                            text_trans.translation = translation
+                        else:
+                            new_text_trans = TextTranslation(
+                                text_id=text.id,
+                                language_id=language.id,
+                                translation=translation
+                            )
+                            db.session.add(new_text_trans)
+        
+        db.session.commit()
+        print("Database updated to version:", data['version'])
+
+
+
+
+def init_default_languages_db_from_json(Language, db):
+    """ Remplit la BDD des langues par defaut. Uniquement au 1er lancement.
+    Permet de ne pas avoir à créer les langues de base : FR, EN """
+    json_file = 'static/json/default_languages.json'
+    # Vérifier si la table est vide
+    if Language.query.first() is None:
+        print("Initialisation des langues...")
+        # Charger les activités depuis le fichier JSON
+        if os.path.exists(json_file):
+            with open(json_file, 'r', encoding='utf-8') as f:
+                languages = json.load(f)
+
+            # Ajouter chaque activité à la base de données
+            for language in languages:
+                new_language = Language(                    
+                    code=language['code'],
+                    name=language['name'],
+                    traduction=language['traduction']
+                )
+                db.session.add(new_language)
+
+            # Valider les changements
+            db.session.commit()
+            print("Langues ajoutées avec succès.")
+
+        else:
+            print(f"Fichier {json_file} introuvable.")
+
+
+def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
+    json_file = 'static/json/default_texts.json'
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    print("DATA VERSION", data['version'])
+
+    current_version = ConfigVersion.query.filter_by(key="texts_version").first()
+    print("Data version:", data['version'])
+    if not current_version or current_version.version != data['version']:
+        # Mise à jour de la version
+        if current_version:
+            current_version.version = data['version']
+        else:
+            new_version = ConfigVersion(key="texts_version", version=data['version'], comments=data['comments'])
+            db.session.add(new_version)
+
+        db.session.commit()  # Commit early to save version information
+
+        # Mise à jour ou ajout de textes
+        for text_data in data['texts']:
+            text = Text.query.filter_by(key=text_data['key']).first()
+            if not text:
+                new_text = Text(key=text_data['key'])
+                db.session.add(new_text)
+            else:
+                text.text = text_data['value']
+
         db.session.commit()
         print("Database updated to version:", data['version'])
 

@@ -8,7 +8,7 @@ Bouton {{buttons}}
                     "button_id": "{{ button.id }}"
                     }' 
             hx-target="#htmx_div_left_page"
-            style="background-image:url('/static/images/retrait.png'); 
+            style="background-image:url('/static/images/buttons/{{ button.image_url }}'); 
                     background-size: cover;">
         <p class="button-text-style">{{ button.label }} {{ button.activity.id }}</p>
     </button>

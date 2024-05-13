@@ -1,0 +1,18 @@
+{
+    "version": "0.1",
+    "comments": "Version de test",
+    "texts": [
+        {
+            "key": "patient_page_title"
+        },
+        {
+            "key": "patient_page_subtitle"
+        },
+        {
+            "key": "patient_page_right_page"
+        },
+        {
+            "key": "announce_titre"
+        }
+    ]
+}

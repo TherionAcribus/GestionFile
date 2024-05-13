@@ -25,7 +25,7 @@ import qrcode
 import json
 import os
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json
 
 
 app = Flask(__name__)
@@ -188,6 +188,40 @@ class Button(db.Model):
     def __repr__(self):
         return f'<Button {self.label}>'
     
+
+class Language(db.Model):
+    __tablename__ = 'language'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(2), nullable=False, unique=True)
+    name = db.Column(db.String(50), nullable=False)
+    traduction = db.Column(db.String(50), nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('code', name='uq_language_code'),
+    )
+
+class Text(db.Model):
+    __tablename__ = 'text'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), nullable=False, unique=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('key', name='uq_text_key'),
+    )
+
+class TextTranslation(db.Model):
+    __tablename__ = 'text_translation'
+    id = db.Column(db.Integer, primary_key=True)
+    text_id = db.Column(db.Integer, db.ForeignKey('text.id', ondelete='CASCADE'), nullable=False)
+    language_id = db.Column(db.Integer, db.ForeignKey('language.id', ondelete='CASCADE'), nullable=False)
+    translation = db.Column(db.Text, nullable=False)
+
+    __table_args__ = (
+        db.ForeignKeyConstraint(['text_id'], ['text.id'], name='fk_text_translation_text_id', ondelete='CASCADE'),
+        db.ForeignKeyConstraint(['language_id'], ['language.id'], name='fk_text_translation_language_id', ondelete='CASCADE'),
+    )
+
+
 
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
@@ -1551,6 +1585,10 @@ with app.app_context():
     init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
     init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)  # Initialiser les données d'activité si nécessaire
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)  # Init ou Maj des boutons partients
+    init_default_languages_db_from_json(Language, db)
+    init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
+    init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
+    #init_update_default_texts_db_from_json(ConfigVersion, Text, db)  # Init ou Maj des textes partients
     load_configuration(app, ConfigOption)
 
 if __name__ == "__main__":
