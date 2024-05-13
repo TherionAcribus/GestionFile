@@ -1,0 +1,19 @@
+<button class="btn 
+            {% if algo_activated %}disabled{% endif %}"
+        hx-get="/admin/algo/on_click_button_activate"
+        hx-target="#div_buttons_activate_algo"
+        hx-trigger="click"
+        hx-swap="innerHTML"
+    >Activer l'Algorithme
+</button>
+
+<button class="btn red
+            {% if not algo_activated %}disabled{% endif %}"
+        hx-get="/admin/algo/on_click_button_desactivate"
+        hx-target="#div_buttons_activate_algo"
+        hx-trigger="click"
+        hx-swap="innerHTML"
+    >Désactiver l'algorithme
+</button>
+
+Pour l'instant pas de redémarrage/arret automatique de l'algo.

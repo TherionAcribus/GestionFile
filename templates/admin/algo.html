@@ -1,0 +1,19 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Algorithme de priorité{% endblock %}
+
+{% block content %}
+    <h3>Algorithme de priorité</h3>
+
+    <div id="div_buttons_activate_algo"
+        hx-get="/admin/button_des_activate_algo"
+        hx-swap="innerHTML"
+        hx-trigger="load"
+        hx-target="#div_buttons_activate_algo">
+        <!-- Bouton activer desactiver Algorithme -->
+    </div>
+
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+    <div id="invisible" style="display:none;"></div>
+    
+{% endblock %}

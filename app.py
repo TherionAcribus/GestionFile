@@ -145,6 +145,8 @@ class ConfigOption(db.Model):
         return f'<ConfigOption {self.key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
 
 
+
+
 class ConfigVersion(db.Model):
     id = db.Column(db.Integer, Sequence('config_version_id_seq'), primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
@@ -666,6 +668,43 @@ def add_new_activity():
 
 
 # -------- Fin de ADMIN -> Activity  ---------
+
+
+# --------  ADMIN -> Algo  ---------
+
+# page de base
+@app.route('/admin/algo')
+def admin_algo():
+    return render_template('/admin/algo.html')
+
+
+@app.route('/admin/button_des_activate_algo')
+def button_des_activate_algo():
+    return render_template("admin/algo_des_activate_buttons.html",
+                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
+
+
+@app.route('/admin/algo/on_click_button_activate')
+def on_click_button_activate():
+    app.config['ALGO_IS_ACTIVATED'] = True
+    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
+    algo_activated.value_bool = True
+    db.session.commit()
+    return render_template("admin/algo_des_activate_buttons.html",
+                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
+
+
+@app.route('/admin/algo/on_click_button_desactivate')
+def on_click_button_desactivate():
+    app.config['ALGO_IS_ACTIVATED'] = False
+    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
+    algo_activated.value_bool = False
+    db.session.commit()
+    return render_template("admin/algo_des_activate_buttons.html",
+                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
+
+
+# -------- Fin de ADMIN -> Algo  ---------
 
 
 # --------  ADMIN -> Counter  ---------
@@ -1315,7 +1354,9 @@ def validate_current_patient(counter_id):
 def call_next(counter_id):
 
     # CHoix du patient suivant pour un comptoir appelant
-    next_patient = algo_choice_next_patient(counter_id)    
+
+    next_patient = algo_choice_next_patient(counter_id)
+
 
     if next_patient:
         #socketio.emit('trigger_htmx_update', {})  # ????
@@ -1352,13 +1393,14 @@ def algo_choice_next_patient(counter_id):
         Patient.activity_id.in_(staff_activities)
     )
 
+    if app.config['ALGO_IS_ACTIVATED']:
     # priorité à un type d'activité si un patient répond aux critère
-    if priority:
-        is_priority_in_list = next_possible_patient.filter_by(activity_id=priority.id).first()
-        if is_priority_in_list:
-            next_possible_patient = next_possible_patient.filter(
-                Patient.activity_id == priority.id
-        )
+        if priority:
+            is_priority_in_list = next_possible_patient.filter_by(activity_id=priority.id).first()
+            if is_priority_in_list:
+                next_possible_patient = next_possible_patient.filter(
+                    Patient.activity_id == priority.id
+            )
 
     print('next_possible_patient', next_possible_patient)
     
@@ -1386,10 +1428,10 @@ def pause_patient(counter_id, patient_id):
     return '', 204  # No content to send back
 
 
-@app.route('/counter/patients_queue_for_counter')
-def patients_queue_for_counter():
+@app.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
+def patients_queue_for_counter(counter_id):
     patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
-    return render_template('/counter/patients_queue_for_counter.html', patients=patients)
+    return render_template('/counter/patients_queue_for_counter.html', patients=patients, counter_id=counter_id)
 
 
 @app.route('/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
@@ -1460,6 +1502,14 @@ def list_of_activities():
 
     return render_template('counter/counter_list_of_activities.html', activities=activities, staff_activities_ids=staff_activities_ids)
 
+
+@app.route("/counter/select_patient/<int:counter_id>/<int:patient_id>", methods=['GET'])
+def counter_select_patient(counter_id, patient_id):
+    """ Appeler lors du choix d'un patient spécifique au comptoir """
+    print("counter_select_patient", counter_id, patient_id)
+    call_specific_patient(counter_id, patient_id)
+
+    return '', 204
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
 
@@ -1624,7 +1674,6 @@ with app.app_context():
     init_default_languages_db_from_json(Language, db)
     init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
-    #init_update_default_texts_db_from_json(ConfigVersion, Text, db)  # Init ou Maj des textes partients
     load_configuration(app, ConfigOption)
 
 if __name__ == "__main__":

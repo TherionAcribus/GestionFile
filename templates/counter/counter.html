@@ -81,7 +81,7 @@
         hx-swap="innerHTML">
     </div>
 
-    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/counter/patients_queue_for_counter" hx-swap="innerHTML">
+    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/counter/patients_queue_for_counter/{{ counter.id }}" hx-swap="innerHTML">
     </div>
 
 
@@ -93,6 +93,9 @@
         hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML}'>
     </div>
 
+
+        <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+        <div id="invisible" style="display:none;"></div>
 
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>

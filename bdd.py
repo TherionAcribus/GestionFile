@@ -201,6 +201,9 @@ def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
 def load_configuration(app, ConfigOption):
     print("Loading configuration...")
     # Supposons que cette fonction charge la configuration depuis la base de données
-    config_option = ConfigOption.query.filter_by(key="numbering_by_activity").first()
-    if config_option:
-        app.config['NUMBERING_BY_ACTIVITY'] = config_option.value_bool
+    numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first()
+    if numbering_by_activity:
+        app.config['NUMBERING_BY_ACTIVITY'] = numbering_by_activity.value_bool
+    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
+    if algo_activated:
+        app.config['ALGO_IS_ACTIVATED'] = algo_activated.value_bool

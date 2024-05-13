@@ -3,7 +3,11 @@
         <li>Patient {{ patient.call_number }} - 
             {{ patient.activity.name }} - 
             {{ patient.timestamp | format_time}}
-            <button id="btn_select_patient_{{ patient.id }}" class="btn_select_patient">Selectionner</button>
+            <button id="btn_select_patient_{{ patient.id }}" 
+                    class="btn_select_patient"
+                    hx-get="/counter/select_patient/{{counter_id}}/{{ patient.id }}"
+                    hx-target="#invisible"
+            >Selectionner</button>
         </li>
     {% endfor %}
 </ul>
