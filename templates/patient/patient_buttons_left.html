@@ -1,5 +1,6 @@
 Bouton {{buttons}}
 {% for button in buttons %}
+{{button.activity}}
 <div class="col s6 valign-wrapper div-btn-large">
     <button class="btn-large waves-effect waves-light col" 
             hx-post="/patients_submit" 

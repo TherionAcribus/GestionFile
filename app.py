@@ -1115,7 +1115,7 @@ def patient_right_page():
 def patients_submit():
     print("patients_submit")
     # Récupération des données du formulaire
-    print(request.form)
+    print('SUBMIT', request.form)
     if request.form.get('is_parent')  == 'True':
         return display_children_buttons_for_right_page(request)
     else:
@@ -1313,10 +1313,9 @@ def validate_current_patient(counter_id):
 
 @app.route('/call_next/<int:counter_id>')
 def call_next(counter_id):
-    # Récupère le premier patient en attente 
-    # TODO PERMETTRE DE FIXER DES REGLES ou CHOIX ARBITRAIRE
 
-    next_patient = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).first()
+    # CHoix du patient suivant pour un comptoir appelant
+    next_patient = algo_choice_next_patient(counter_id)    
 
     if next_patient:
         #socketio.emit('trigger_htmx_update', {})  # ????
@@ -1333,6 +1332,43 @@ def call_next(counter_id):
         next_patient = None
 
     return next_patient
+
+
+def algo_choice_next_patient(counter_id):
+
+    counter = Counter.query.get(counter_id)
+
+    priority = Activity.query.get(5)
+    #priority = None
+
+    # activités possible par ce pharmacien
+    staff_activities = set(activity.id for activity in counter.staff.activities)
+
+    # choix parmi les patients qui attendent 
+    next_possible_patient = Patient.query.filter_by(status='standing')
+
+    # choix parmi les patient qui correspondent aux activités du pharmacien
+    next_possible_patient = next_possible_patient.filter(
+        Patient.activity_id.in_(staff_activities)
+    )
+
+    # priorité à un type d'activité si un patient répond aux critère
+    if priority:
+        is_priority_in_list = next_possible_patient.filter_by(activity_id=priority.id).first()
+        if is_priority_in_list:
+            next_possible_patient = next_possible_patient.filter(
+                Patient.activity_id == priority.id
+        )
+
+    print('next_possible_patient', next_possible_patient)
+    
+    # tri par date 
+    next_patient = next_possible_patient.order_by(Patient.timestamp).first()
+
+    print('next_patient', next_patient)
+
+    return next_patient
+
 
 @app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
 def pause_patient(counter_id, patient_id):
@@ -1390,7 +1426,7 @@ def update_counter_staff():
 
         # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
         return is_staff_on_counter(request.form.get('counter_id'))
-  
+
     # Si les initiales ne correspondent à rien
     # on déconnecte l'utilisateur précedemement connecté
     counter.staff = None
