@@ -30,7 +30,7 @@ from bdd import init_update_default_buttons_db_from_json, init_default_options_d
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-socketio = SocketIO(app, cors_allowed_origins="*", manage_session=False, logger=True, engineio_logger=True)
+socketio = SocketIO(app, cors_allowed_origins="*", engineio_logger=True, ping_timeout=60000, ping_interval=30000)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de données pour les comptoirs, équipes et patients
 #app.config['SQLALCHEMY_DATABASE_URI'] = 'duckdb:///database.duckdb'
 app.config['AUDIO_FOLDER'] = '/static/audio'
