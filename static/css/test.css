@@ -16,6 +16,17 @@
 
 }
 
+#div_intermediaire {
+    background-color: darkcyan;
+    height: 20px;
+}
+
+
+#div_buttons_children {
+    background-color: rgb(182, 245, 245);
+}
+
+
 .div_buttons {
     margin: 10px;
     background-color:darkcyan;
