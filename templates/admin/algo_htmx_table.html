@@ -1,0 +1,72 @@
+<table id="algo_table" class="striped">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Activité</th>
+            <th>Priorité</th>
+            <th>Min Patients</th>
+            <th>Max Patients</th>
+            <th>Début</th>
+            <th>Fin</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for rule in rules %}
+        <tr>
+            <td><input type="text" value="{{ rule.name }}" id="name-{{ rule.id }}"></td>
+            <td>
+                <div class="input-field">
+                <select id="activity-{{ rule.id }}">               
+                    {% for activity in activities %}
+                        <option value="{{ activity.id }}" {{ 'selected' if activity.id == rule.activity.id else '' }}>{{ activity.name }} </option>
+                    {% endfor %}
+                </select>
+                </div>
+            </td>
+            <td>
+                <div class="input-field">
+                <select id="priority_level-{{ rule.id }}">               
+                    {% for number in [1, 2, 3, 4, 5] %}
+                        <option value="{{ number }}" {{ 'selected' if number == rule.priority_level else '' }}>{{ number }} </option>
+                    {% endfor %}
+                </select>
+                </div>
+            </td>
+            <td>
+                <input type="text" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}">
+            </td>
+            <td>
+                <input type="text" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}">
+            </td>
+            <td><input type="time" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}"></td>
+            <td><input type="time" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}"></td>
+
+            <td>
+                <button class="btn" 
+                    hx-target="#invisible"
+                    hx-post="/admin/algo/rule_update/{{ rule.id }}"
+                    hx-vals='js:{"name": document.getElementById("name-{{ rule.id }}").value,
+                                "activity_id": document.getElementById("activity-{{ rule.id }}").value,
+                                "priority_level": document.getElementById("priority_level-{{ rule.id }}").value,
+                                "min_patients": document.getElementById("min_patients-{{ rule.id }}").value,
+                                "max_patients": document.getElementById("max_patients-{{ rule.id }}").value,
+                                "start_time": document.getElementById("start_time-{{ rule.id }}").value,
+                                "end_time": document.getElementById("end_time-{{ rule.id }}").value
+                            }'>
+                    Enregistrer
+                </button>
+
+                <button class="btn modal-trigger red"
+                    hx-get="/admin/algo/confirm_delete_rule/{{ rule.id }}"
+                    hx-target="#modal_delete_algo"
+                    hx-trigger="click"
+                    data-target="modal_delete_algo">
+                Supprimer
+                </button>
+            </td>
+
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

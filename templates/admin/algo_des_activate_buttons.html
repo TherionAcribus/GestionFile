@@ -1,6 +1,6 @@
 <button class="btn 
             {% if algo_activated %}disabled{% endif %}"
-        hx-get="/admin/algo/on_click_button_activate"
+        hx-get="/admin/algo/toggle_activation?action=activate"
         hx-target="#div_buttons_activate_algo"
         hx-trigger="click"
         hx-swap="innerHTML"
@@ -9,7 +9,7 @@
 
 <button class="btn red
             {% if not algo_activated %}disabled{% endif %}"
-        hx-get="/admin/algo/on_click_button_desactivate"
+        hx-get="/admin/algo/toggle_activation?action=deactivate"
         hx-target="#div_buttons_activate_algo"
         hx-trigger="click"
         hx-swap="innerHTML"

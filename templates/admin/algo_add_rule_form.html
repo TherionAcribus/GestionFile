@@ -1,0 +1,61 @@
+<table id="new_staff_form">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Activité</th>
+            <th>Priorité</th>
+            <th>Min Patients</th>
+            <th>Max Patients</th>
+            <th>Début</th>
+            <th>Fin</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" value="" id="name"></td>
+            <td>
+                <div class="input-field">
+                <select id="activity">               
+                    {% for activity in activities %}
+                        <option value="{{activity.id}}">{{ activity.name }} </option>
+                    {% endfor %}
+                </select>
+                </div>
+            </td>
+            <td>
+                <div class="input-field">
+                <select id="priority_level">               
+                    {% for number in [1, 2, 3, 4, 5] %}
+                        <option value="{{ number }}">{{ number }}</option>
+                    {% endfor %}
+                </select>
+                </div>
+            </td>
+            <td>
+                <input type="text" value="0" id="min_patients">
+            </td>
+            <td>
+                <input type="text" value="999" id="max_patients">
+            </td>
+            <td><input type="time" value="00:00" id="start_time"></td>
+            <td><input type="time" value="23:59" id="end_time"></td>
+            
+            <td>
+                <button class="btn" 
+                    hx-target="#div_algo_table"
+                    hx-post="/admin/algo/add_new_rule"
+                    hx-vals='js:{"name": document.getElementById("name").value,
+                                "activity_id": document.getElementById("activity").value,
+                                "priority_level": document.getElementById("priority_level").value,
+                                "min_patients": document.getElementById("min_patients").value,
+                                "max_patients": document.getElementById("max_patients").value,
+                                "start_time": document.getElementById("start_time").value,
+                                "end_time": document.getElementById("end_time").value
+                            }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+    </tbody>
+</table>

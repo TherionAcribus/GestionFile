@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, c
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func
+from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date
@@ -25,7 +25,7 @@ import qrcode
 import json
 import os
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json
 
 
 app = Flask(__name__)
@@ -131,6 +131,36 @@ class Activity(db.Model):
 
     def __repr__(self):
         return f'<Activity {self.code} - {self.name}>'
+    
+
+# pour l'instant les jours ne sont pas utilisées... Peut être plus simple d'ajouter une table pour les jours de la semaine ????
+class AlgoRule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    activity_id = db.Column(db.Integer, db.ForeignKey('activity.id'), nullable=False, index=True)
+    activity = db.relationship('Activity', backref=db.backref('priority_rules', lazy=True))
+    
+    min_patients = db.Column(db.Integer, nullable=False, default=0)
+    max_patients = db.Column(db.Integer, nullable=False, default=999)
+    CheckConstraint('min_patients <= max_patients', name='ck_priority_rules_min_max_patients')
+    
+    start_time = db.Column(db.Time, nullable=False)  # Heure de début de la validité de la règle
+    end_time = db.Column(db.Time, nullable=False)    # Heure de fin de la validité de la règle
+    CheckConstraint('start_time < end_time', name='ck_priority_rules_start_end_time')
+    
+    days_of_week = db.Column(db.String(30), nullable=False, default='Mon,Tue,Wed,Thu,Fri')  # Jours de la semaine, par exemple "Mon,Tue,Wed,Thu,Fri"
+    
+    priority_level = db.Column(db.Integer, nullable=False, default=1)  # Niveau de priorité, 1 étant le plus bas
+    CheckConstraint('priority_level > 0', name='ck_priority_rules_priority_level')
+
+    __table_args__ = (
+        UniqueConstraint('activity_id', 'start_time', 'end_time', 'days_of_week', name='uq_priority_rule_combination'),
+    )
+
+    def __repr__(self):
+        return (f'<PriorityRule for Activity ID {self.activity_id} with Priority {self.priority_level} '
+                f'from {self.start_time.strftime("%H:%M")} to {self.end_time.strftime("%H:%M")} '
+                f'on {self.days_of_week}>')
 
 
 class ConfigOption(db.Model):
@@ -507,7 +537,7 @@ def delete_staff(member_id):
 # affiche le formulaire pour ajouter un membre
 @app.route('/admin/staff/add_form')
 def add_staff_form():
-    activities =Activity.query.all()
+    activities = Activity.query.all()
     return render_template('/admin/staff_add_form.html', activities=activities)
 
 
@@ -677,31 +707,142 @@ def add_new_activity():
 def admin_algo():
     return render_template('/admin/algo.html')
 
+@app.route('/admin/algo/table')
+def display_algo_table():
+    rules = AlgoRule.query.all()
+    activities = Activity.query.all()
+    return render_template('admin/algo_htmx_table.html', rules=rules, activities=activities)
 
+# affiche le formulaire activer ou desactiver l'algorithme
 @app.route('/admin/button_des_activate_algo')
 def button_des_activate_algo():
     return render_template("admin/algo_des_activate_buttons.html",
                             algo_activated= app.config['ALGO_IS_ACTIVATED'])
 
-
-@app.route('/admin/algo/on_click_button_activate')
-def on_click_button_activate():
-    app.config['ALGO_IS_ACTIVATED'] = True
+# active ou desactive l'algorithme, enregistre l'info, retourne les boutons
+@app.route('/admin/algo/toggle_activation')
+def toggle_activation():
+    action = request.args.get('action', 'activate')
+    is_activated = action == 'activate'
+    
+    app.config['ALGO_IS_ACTIVATED'] = is_activated
     algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
-    algo_activated.value_bool = True
+    algo_activated.value_bool = is_activated
     db.session.commit()
+
     return render_template("admin/algo_des_activate_buttons.html",
-                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
+                            algo_activated=app.config['ALGO_IS_ACTIVATED'])
 
 
-@app.route('/admin/algo/on_click_button_desactivate')
-def on_click_button_desactivate():
-    app.config['ALGO_IS_ACTIVATED'] = False
-    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
-    algo_activated.value_bool = False
-    db.session.commit()
-    return render_template("admin/algo_des_activate_buttons.html",
-                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
+# affiche le formulaire pour ajouter une regle de l'algo
+@app.route('/admin/algo/add_rule_form')
+def add_rule_form():
+    activities = Activity.query.all()
+    return render_template('/admin/algo_add_rule_form.html', activities=activities)
+
+
+# enregistre la regledans la Bdd
+@app.route('/admin/algo/add_new_rule', methods=['POST'])
+def add_new_rule():
+    print("add_new_rule", request.form)
+    try:
+        name = request.form.get('name')
+        activity = Activity.query.get(request.form.get('activity_id'))
+        print("A", activity)
+        priority_level = request.form.get('priority_level')
+        min_patients = request.form.get('min_patients')
+        max_patients = request.form.get('max_patients')
+        start_time_str = request.form.get('start_time')            
+        start_time = datetime.strptime(start_time_str, "%H:%M").time()
+        end_time_str = request.form.get('end_time')
+        end_time = datetime.strptime(end_time_str, "%H:%M").time()
+
+        if not name:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            return display_algo_table()
+
+        new_rule = AlgoRule(
+            name=name,
+            activity = activity,
+            priority_level = priority_level,
+            min_patients = min_patients,
+            max_patients = max_patients,
+            start_time = start_time,
+            end_time = end_time
+        )
+        db.session.add(new_rule)
+        db.session.commit()
+
+        socketio.emit('delete_add_rule_form')
+        socketio.emit('display_toast', {'success': True, 'message': "Règle ajoutée avec succès"})
+
+        return display_algo_table()
+
+    except Exception as e:
+        db.session.rollback()
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        print(e)
+        return display_algo_table()
+
+
+# affiche la modale pour confirmer la suppression d'un membre
+@app.route('/admin/algo/confirm_delete_rule/<int:rule_id>', methods=['GET'])
+def confirm_delete_rule(rule_id):
+    rule = AlgoRule.query.get(rule_id)
+    return render_template('/admin/algo_modal_confirm_delete_rule.html', rule=rule)
+
+
+# supprime une regle de l'algo
+@app.route('/admin/algo/delete_rule/<int:algo_id>', methods=['GET'])
+def delete_algo(algo_id):
+    try:
+        rule = AlgoRule.query.get(algo_id)
+        if not rule:
+            socketio.emit('display_toast', {'success': False, 'message': "Règle non trouvée"})
+            return display_algo_table()
+
+        db.session.delete(rule)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        return display_algo_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        return display_algo_table()
+
+
+@app.route('/admin/algo/rule_update/<int:rule_id>', methods=['POST'])
+def update_algo_rule(rule_id):
+    try:
+        rule = AlgoRule.query.get(rule_id)
+        if rule:
+            if request.form.get('name') == '':
+                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                return ""
+
+            rule.name = request.form.get('name', rule.name)
+            activity = Activity.query.get(request.form.get('activity_id', rule.activity_id))
+            rule.activity = activity
+            rule.priority_level = request.form.get('priority_level', rule.priority_level)
+            rule.min_patients = request.form.get('min_patients', rule.min_patients)
+            rule.max_patients = request.form.get('max_patients', rule.max_patients)
+            start_time_str = request.form.get('start_time', rule.start_time.strftime("%H:%M"))            
+            rule.start_time = datetime.strptime(start_time_str, "%H:%M").time()
+            end_time_str = request.form.get('end_time', rule.end_time.strftime("%H:%M"))
+            rule.end_time = datetime.strptime(end_time_str, "%H:%M").time()
+
+            db.session.commit()
+
+            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Règle introuvable"})
+            return ""
+
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            print(e)
+            return jsonify(status="error", message=str(e)), 500
 
 
 # -------- Fin de ADMIN -> Algo  ---------
@@ -1111,35 +1252,17 @@ def display():
     return render_template('display.html', current_patients=current_patients)
 
 
-@app.route('/patients_submit_old', methods=['POST'])
-def patients_submit_old():
-    print("patients_submit")
-    # Récupération des données du formulaire
-    reason = request.form.get('reason')
 
-    if reason == 'rdv':
-        return render_template('htmx/patient_right_page_test.html')
-
-    if reason in ['vaccination', 'ordonnance', 'retrait', 'covid', 'angine', 'cystite']:
-        call_number = get_next_category_number(reason)
-        print("call_number", call_number)
-        new_patient = add_patient(call_number, reason)
-        # Création du QR Code
-        image_qr = create_qr_code(new_patient)
-        text = f"{call_number}"
-        # rafraichissement des pages display et counter
-        # envoye de data pour être récupéré sous forme de liste par PySide
-        socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
-        return render_template('htmx/patient_qr_right_page.html', image_url=image_qr, text=text)
-    
-    else:
-        print("Merde, la raison n'a pas été prévue....")
-
-# ---------------- PAGE PATIENTS FRONT ----------------
+# ---------------- PAGE PATIENT FRONT ----------------
 
 @app.route('/patient')
 def patients_front_page():
     return render_template('patient/patient_front_page.html')
+
+
+@app.route('/tests')
+def test():
+    return render_template('patient/test.html')
 
 
 # affiche les boutons de gauche
@@ -1674,6 +1797,7 @@ with app.app_context():
     init_default_languages_db_from_json(Language, db)
     init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
+    init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
 
 if __name__ == "__main__":

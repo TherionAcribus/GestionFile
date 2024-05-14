@@ -1,0 +1,35 @@
+#div_title_area {
+    text-align: center;
+    font-size: 50px;
+    font-weight: bold;
+    background-color:darkcyan;
+    color: white;
+}
+
+#div_buttons_parents{
+    display: flex;
+    flex-direction: row;
+    justify-content:space-around;
+    align-items: center;
+    background-color: rgb(182, 245, 245);
+    padding-top: 50px;
+
+}
+
+.div_buttons {
+    margin: 10px;
+    background-color:darkcyan;
+    border-radius: 50%;
+    box-shadow: 5px 5px 5px #888888;
+}
+
+.img_btn {
+    width: 300px;
+}
+
+.div_text_button{
+    text-align: center;
+    font-size: 30px;
+    font-weight: bold;
+    color: darkcyan;
+}

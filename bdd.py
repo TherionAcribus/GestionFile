@@ -197,6 +197,53 @@ def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
         print("Database updated to version:", data['version'])
 
 
+def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
+
+    json_file = 'static/json/default_algo_rules.json'
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="algo_rules_version").first()
+    if not current_version or current_version.version != data['version']:
+        print(f"Mise à jour de algo_rules : {current_version} vers {data['version']}")
+        
+        # pour l'instant pas prévu de pouvoir modifier la structure. A voir si besoin un jour
+        if not current_version:
+            for rule in data['rules']:
+                start_time_obj = datetime.strptime(rule['start_time'], '%H:%M').time()
+                end_time_obj = datetime.strptime(rule['end_time'], '%H:%M').time()
+
+                new_rule = AlgoRule(
+                    name=rule['name'],
+                    activity_id=rule['activity_id'],
+                    priority_level=rule['priority_level'],
+                    min_patients=rule['min_patients'],
+                    max_patients=rule['max_patients'],
+                    start_time=start_time_obj,
+                    end_time=end_time_obj,
+                    days_of_week=rule['days_of_the_week']
+                )
+                db.session.add(new_rule)
+
+            db.session.commit()
+            update_version(db, ConfigVersion, 'algo_rules_version', data['version'], data['comments'])
+        
+        print("Algo_rules bien mis à jour !")
+
+
+def update_version(db, ConfigVersion, key, version, comments):
+    """ Enregistre la version du json modèle dans la base de données COnfigVersion """
+    current_version = ConfigVersion.query.filter_by(key=key).first()
+    if not current_version:
+        new_version = ConfigVersion(key=key, version=version)
+        new_version.comments = comments
+        db.session.add(new_version)
+    else:
+        current_version.version = version
+        new_version.comments = comments
+    db.session.commit()
+
+
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
 def load_configuration(app, ConfigOption):
     print("Loading configuration...")

@@ -1,0 +1,27 @@
+{
+    "name": "algo_rules",
+    "version": "0.1",
+    "comments": "Version de test",
+    "rules": [
+    {
+        "name": "priorité retraits",
+        "activity_id": 5,
+        "priority_level": 1,
+        "min_patients": 0,
+        "max_patients": 999,
+        "start_time": "00:00",
+        "end_time": "23:59",
+        "days_of_the_week": "Mon,Tue,Wed,Thu,Fri"            
+    },
+    {   
+        "name": "priorité rendez-vous",
+        "activity_id": 1,
+        "priority_level": 2,
+        "min_patients": 0,
+        "max_patients": 999,
+        "start_time": "00:00",
+        "end_time": "23:59",
+        "days_of_the_week": "Mon,Tue,Wed,Thu,Fri"            
+    }
+    ]
+}

@@ -10,6 +10,13 @@ socket.on('display_toast', function(data) {
     }
 });
 
+
+// ------ STAFF ------
+// supprime le formulaire d'ajout d'un membre
+socket.on('delete_add_rule_form', function(data) {
+    document.getElementById('div_add_rule_form').innerHTML = "";
+});
+
 // ------ STAFF ------
 
 // ouvre le modal de confirmation staff

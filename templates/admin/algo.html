@@ -13,6 +13,29 @@
         <!-- Bouton activer desactiver Algorithme -->
     </div>
 
+
+    <div id="div_algo_table"
+        hx-get="/admin/algo/table"
+        hx-trigger="load"
+        hx-target="#div_algo_table"
+        hx-swap="innerHTML">        
+    </div>
+
+
+    <!-- Ajout nouvelle regle -->
+    <a class="waves-effect waves-light btn"
+        hx-get="/admin/algo/add_rule_form"
+        hx-target="#div_add_rule_form"
+        hx-swap="innerHTML">
+    Ajouter une règle à l'algorithme
+    </a>    
+    <div id="div_add_rule_form"></div>
+
+
+    <!-- Modal Structure -->
+    <div id="modal_delete_algo" class="modal">
+    </div>
+
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
     
