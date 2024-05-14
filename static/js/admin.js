@@ -1,12 +1,4 @@
-const baseUrl = window.location.origin;
-
-const socket = io(baseUrl, {
-    reconnection: true,        // Activer la reconnexion automatique
-    reconnectionAttempts: Infinity, // Nombre maximal de tentatives de reconnexion
-    reconnectionDelay: 1000,   // Délai initial de reconnexion en millisecondes
-    reconnectionDelayMax: 5000, // Délai maximal de reconnexion
-    randomizationFactor: 0.5   // Facteur de randomisation du délai de reconnexion
-});
+var socket = io.connect();
 
 // affiche le toast de succes ou d'erreur lors d'un changement d'informations pour un membre
 socket.on('display_toast', function(data) {
