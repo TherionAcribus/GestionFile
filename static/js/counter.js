@@ -1,4 +1,28 @@
-var socket = io.connect();
+var socket = io.connect('http://gestionfile.onrender.com:5000');
+
+var eventSource = new EventSource('/stream');
+var lastEventTime = 0;
+
+function handleNewPatient() {
+    var now = Date.now();
+    // Empêcher la double exécution en vérifiant l'heure du dernier événement
+    if (now - lastEventTime > 1000) { // Par exemple, ignorer les événements dans un intervalle de 1 seconde
+        lastEventTime = now;
+        console.log("Nouveau patient...");
+        htmx.trigger('#patient_on_queue', 'refresh_queue', {target: "#patient_on_queue"});
+    }
+}
+
+socket.on('trigger_update_patient', function() {
+    handleNewPatient();
+});
+
+eventSource.onmessage = function(event) {
+    console.log("SSE received:", event.data); // Ajout pour voir les données reçues
+    var data = JSON.parse(event.data);
+    handleNewPatient();
+};
+
 
 socket.on('trigger_new_patient', function() {
 // Utiliser HTMX pour déclencher une mise à jour

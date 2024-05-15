@@ -7,7 +7,7 @@
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -24,6 +24,9 @@ from werkzeug.utils import secure_filename
 import qrcode
 import json
 import os
+import threading
+import queue
+from queue import Queue
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json
 
@@ -36,6 +39,47 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de 
 app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+sse_queues  = []
+
+def notify_sse_clients():
+    print("SSE", sse_queues)
+    for client in sse_queues :
+        try:
+            data_to_send = {"message": "New patient added"}
+            client.put(f"event: update_patient\ndata: {json.dumps(data_to_send)}\n\n".encode('utf-8'))
+        except Exception as e:
+            sse_queues .remove(client)
+
+
+@app.route('/stream')
+def sse_stream():
+    q = Queue()
+    sse_queues.append(q)
+    try:
+        def generate():
+            while True:
+                data = q.get()  # Attend un nouveau message à envoyer
+                try:
+                    yield f"data: {json.dumps(data)}\n\n".encode('utf-8')
+                except TypeError as e:
+                    print("Failed to serialize:", data)  # Log pour diagnostic
+                    continue  # Passer cet élément si non sérialisable
+        return Response(generate(), mimetype='text/event-stream')
+    except GeneratorExit:
+        sse_queues.remove(q)
+
+def notify_all_subscribers(data):
+    print("Sending data:", data)  # Ajouter pour diagnostic
+    if isinstance(data, bytes):
+        data = data.decode('utf-8')  # Convertir les bytes en str avant de les mettre dans la queue
+    elif not isinstance(data, (dict, list, str, int, float, bool, type(None))):
+        data = str(data)  # Convertir d'autres types en str (solution de dernier recours)
+        
+    for q in sse_queues:
+        print("queue", q)
+        q.put(data)
+
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -1312,7 +1356,9 @@ def left_page_validate_patient(activity):
     text = f"{call_number}"
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
-    socketio.emit('trigger_new_patient', {})
+    socketio.emit('trigger_update_patient', {})
+    notify_sse_clients()
+    notify_all_subscribers("test")
     #socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
