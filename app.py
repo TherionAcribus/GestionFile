@@ -1312,7 +1312,8 @@ def left_page_validate_patient(activity):
     text = f"{call_number}"
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
-    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
+    socketio.emit('trigger_new_patient', {})
+    #socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
 
