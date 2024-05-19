@@ -15,30 +15,31 @@ from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Se
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date
-from flask_wtf import FlaskForm  # A mettre en place : Pour sécurisation
-from wtforms import StringField, SubmitField
-from wtforms.validators import DataRequired
 from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
+from flask_apscheduler import APScheduler
 import qrcode
 import json
 import os
-import threading
-import queue
 from queue import Queue
+import logging
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, load_configuration, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json
+
+class Config:
+    SCHEDULER_API_ENABLED = True
+    SECRET_KEY = 'your_secret_key'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
+    #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    AUDIO_FOLDER = '/static/audio'
+    BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
 
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
+app.config.from_object(Config())
 socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de données pour les comptoirs, équipes et patients
-#app.config['SQLALCHEMY_DATABASE_URI'] = 'duckdb:///database.duckdb'
-app.config['AUDIO_FOLDER'] = '/static/audio'
-app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 
 # Configuration de la base de données avec session scoped
@@ -46,6 +47,15 @@ engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 db_session = scoped_session(sessionmaker(autocommit=False,
                                         autoflush=False,
                                         bind=engine))
+
+# Gestion du scheduler / CRON
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
+
+# Pour le logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
 
 @app.teardown_appcontext
@@ -268,7 +278,7 @@ status_list = ['ongoing', 'standing', 'done', 'calling']
 # Permet de définir le type de fichiers autorisés pour l'ajout d'images
 def allowed_image_file(filename):
     return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+        filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
 
 
 def get_locale():
@@ -337,18 +347,17 @@ def confirm_delete_patient_table():
 @app.route('/admin/database/clear_all_patients')
 def clear_all_patients_from_db():
     print("Suppression de la table Patient")
-    try:
-        num_rows_deleted = db.session.query(Patient).delete()
-        db.session.commit()
-        socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
-        socketio.emit('display_toast', {'success': True, 'message': "Suppression de la table 'Patient' réussie."})
-        return '', 204
-    except Exception as e:
-        db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-        print(e)
-        return jsonify(status="error", message=str(e)), 500
-
+    with app.app_context():  # Nécessaire pour pouvoir effacer la table via le CRON
+        try:
+            db.session.query(Patient).delete()
+            db.session.commit()
+            app.logger.info("La table Patient a été vidée")
+            notification("update_patients")
+            return display_toast(message="La table Patient a été vidée")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(str(e))
+            return display_toast(success = False, message=str(e))
 
 
 # mise à jour des informations d'un patient
@@ -370,7 +379,7 @@ def update_patient(patient_id):
 
             db.session.commit()
 
-            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            return display_toast(message="Mise à jour effectuée")
             return ""
         else:
             socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
@@ -396,29 +405,27 @@ def delete_patient(patient_id):
     try:
         patient = Patient.query.get(patient_id)
         if not patient:
-            socketio.emit('display_toast', {'success': False, 'message': "Patient non trouvé"})
-            socketio.emit("trigger_new_patient", {"patient_standing": list_patients_standing()})
-            return display_staff_table()
+            return display_toast(success=False, message="Patient introuvable")
 
         db.session.delete(patient)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
-        return display_queue_table()
+        notification("update_patients")
+        return display_toast()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-        return display_queue_table()
-    
+        app.logger(e)
+        return display_toast(success=False, message=str(e))
 
-# TODO PREVOIR "NONE" ou équivalent 
+
+# TODO PREVOIR "NONE" pour Activité ou équivalent 
 @app.route('/admin/queue/create_new_patient_auto', methods=['POST'])
 def create_new_patient_auto():
     activity = Activity.query.get(request.form.get('activity_id'))
     print("activity_id", request.form)
     print("activity", activity)
     call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity)  
-    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()}) 
+    new_patient = add_patient(call_number, activity)
+    notification("update_patients")
 
     return "", 204
 
@@ -441,6 +448,7 @@ def update_switch():
         if config_option:
             config_option.value_bool = True if value == "true" else False
             db.session.commit()
+            call_function_with_switch(key, value)
             return display_toast()
         else:
             return display_toast(success='False', message="Option non trouvée.")
@@ -448,6 +456,14 @@ def update_switch():
             print(e)
             return display_toast(success='False', message=str(e))
 
+
+def call_function_with_switch(key, value):
+    """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde"""
+    if key == "cron_delete_patient_table_activated":
+        if value == "true":
+            scheduler_clear_all_patients()
+        else:
+            remove_scheduler_clear_all_patients()
 
 
 # --------  ADMIN -> App  ---------
@@ -486,6 +502,55 @@ def update_numbering_by_activity():
     
 
 # --------  FIn ADMIN -> Main   ---------
+
+
+# --------  ADMIN -> DataBase  ---------
+
+@app.route('/admin/database')
+def admin_database():
+    cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"]
+    return render_template('/admin/database.html',
+                        cron_delete_patient_table_activated = cron_delete_patient_table_activated)
+
+
+@app.route("/admin/database/schedule_tasks_list")
+def display_schedule_tasks_list():
+    jobs = scheduler.get_jobs()
+    jobs_info = [{
+        'id': job.id,
+        'next_run_time': str(job.next_run_time),
+        'function_name': job.func.__name__
+    } for job in jobs]
+    return render_template('/admin/database_schedule_tasks_list.html',
+                        jobs_info=jobs_info)
+
+
+def scheduler_clear_all_patients():
+    # vide la table patient à minuit
+    try:
+        scheduler.add_job(id='Clear Patient Table', func=clear_all_patients_from_db, trigger='cron', hour=00, minute=00)
+        app.logger.info("Job 'Clear Patient Table' successfully added.")
+        notification("update_admin", data="schedule_tasks_list")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to add job 'Clear Patient Table': {e}")
+        return False
+
+
+def remove_scheduler_clear_all_patients():
+    try:
+        # Supprime le job à l'aide de son id
+        scheduler.remove_job('Clear Patient Table')
+        app.logger.info("Job 'Clear Patient Table' successfully removed.")
+        notification("update_admin", data="schedule_tasks_list")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to remove job 'Clear Patient Table': {e}")
+        return False
+
+
+
+# --------  FIn ADMIN -> DataBase  ---------
 
 
 # --------  ADMIN -> Staff   ---------
@@ -1793,6 +1858,7 @@ def patients_ongoing():
 
 # liste des flux SSE
 update_patients = []
+update_admin = []
 play_sound_streams = []
 counter_streams = {}
 
@@ -1849,7 +1915,12 @@ def events_update_counter(client_id):
     return Response(event_stream_dict(client_id), content_type='text/event-stream')
 
 
-def notification(stream, client_id = None, audio_source=None):
+@app.route('/events/update_admin')
+def events_update_admin():
+    return Response(event_stream(update_admin), content_type='text/event-stream')
+
+
+def notification(stream, data=None, client_id = None, audio_source=None):
     """ Effectue la communication avec les clients """
     message = {"type": stream, "data": ""}
     print("notification", stream, client_id, audio_source, message)
@@ -1858,12 +1929,13 @@ def notification(stream, client_id = None, audio_source=None):
     if stream == "update_patients":
         for client in update_patients:
             client.put(message)
+    elif stream == "update_admin":
+        for client in update_admin:
+            client.put(data)
     elif stream == "update_counter":
-        print("client id", client_id, counter_streams)
         if client_id in counter_streams:
             counter_streams[client_id].put(message)
     elif stream == "update_audio":
-        print("audio source", audio_source)
         message["data"] = {"audio_url": audio_source}
         for client in play_sound_streams:
             client.put(json.dumps(message))
@@ -2003,6 +2075,40 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
         print("La base de données contient déjà des données.")
 
 
+
+# Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
+def load_configuration(app, ConfigOption):
+    app.logger.info("Loading configuration from database")
+    # Supposons que cette fonction charge la configuration depuis la base de données
+    numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first()
+    if numbering_by_activity:
+        app.config['NUMBERING_BY_ACTIVITY'] = numbering_by_activity.value_bool
+    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
+    if algo_activated:
+        app.config['ALGO_IS_ACTIVATED'] = algo_activated.value_bool
+    algo_overtaken_limit = ConfigOption.query.filter_by(key="algo_overtaken_limit").first()
+    if algo_overtaken_limit:
+        app.config['ALGO_OVERTAKEN_LIMIT'] = algo_overtaken_limit.value_int
+    printer = ConfigOption.query.filter_by(key="printer").first()
+    if printer:
+        app.config['PRINTER'] = printer.value_bool
+    announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
+    if announce_sound:
+        app.config['ANNOUNCE_SOUND'] = announce_sound.value_bool
+    announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first()
+    if announce_staff_name:
+        app.config['ANNOUNCE_STAFF_NAME'] = announce_staff_name.value_bool
+    announce_infos_display = ConfigOption.query.filter_by(key="announce_infos_display").first()
+    if announce_infos_display:
+        app.config['ANNOUNCE_INFOS_DISPLAY'] = announce_infos_display.value_bool
+    cron_delete_patient_table_activated = ConfigOption.query.filter_by(key="cron_delete_patient_table_activated").first()
+    if cron_delete_patient_table_activated:
+        app.config['CRON_DELETE_PATIENT_TABLE_ACTIVATED'] = cron_delete_patient_table_activated.value_bool
+        # si au lancement on veut une planif de l'effacement de la table on s'assure que ce soit fait
+        if app.config['CRON_DELETE_PATIENT_TABLE_ACTIVATED']:
+            scheduler_clear_all_patients()
+
+
 # creation BDD si besoin et initialise certaines tables (Activités)
 with app.app_context():
     print("Creating database tables...")
@@ -2017,8 +2123,9 @@ with app.app_context():
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
 
+
 if __name__ == "__main__":
-    print("Starting Flask app...")  
+    app.logger.info("Starting Flask app...")
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))

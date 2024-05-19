@@ -78,6 +78,7 @@ socket.on('open_modal_confirm_delete_patient_table', function(data) {
 });
 
 
+
 // ---------------- BOUTONS ----------------
 
 function submitFile(buttonId) {
@@ -107,6 +108,16 @@ function submitFile(buttonId) {
 
 
 // ---------------- GENERAL ----------------
+
+// utiliser pour les communications spécifiques du serveur vers l'admin
+var eventSource = new EventSource('/events/update_admin');
+eventSource.onmessage = function(event) {
+    console.log(event.data);
+    if (event.data = "schedule_tasks_list"){
+        htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
+    }
+};
+
 
 function initSelects() {
     var elems = document.querySelectorAll('select');

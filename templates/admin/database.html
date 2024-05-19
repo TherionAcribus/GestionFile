@@ -1,0 +1,36 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Admin - Base de données{% endblock %}
+
+{% block content %}
+    <h3>Base de données</h3>
+
+    <!-- Switch -->
+    <div class="switch">
+        <span>Vider automatiquement la table des patients une fois par jour : </span>
+        <label>
+        Non
+        <input id="cron_delete_patient_table_activated" 
+                type="checkbox"
+                {% if cron_delete_patient_table_activated == "true" %}checked{% endif %}
+                hx-post="/admin/update_switch"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "cron_delete_patient_table_activated",
+                            "value": document.getElementById("cron_delete_patient_table_activated").checked}'>
+        <span class="lever"></span>
+        Oui
+        </label>
+    </div>
+
+    <div id="div_schedule_tasks_list"
+        hx-get="/admin/database/schedule_tasks_list"
+        hx-trigger="load, refresh_schedule_tasks_list"
+        hx-target="#div_schedule_tasks_list"
+        hx-swap="innerHTML">
+    </div>
+
+            <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+        <div id="invisible" style="display:none;"></div>
+
+
+{% endblock %}

@@ -1,0 +1,10 @@
+{% if jobs_info|length == 0%}
+    Aucune tâche planifiée
+{% else %}
+    Tâches planifiées:
+    <ol>
+    {% for job in jobs_info %}
+        <li>{{ job.id }} - Next run time : {{ job.next_run_time }}</li>
+    {% endfor %}
+    </ol>
+{% endif %}

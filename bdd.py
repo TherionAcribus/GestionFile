@@ -2,7 +2,6 @@ import json
 import os
 from datetime import datetime
 
-
 # Mise à jour ou initialisation des options par défaut
 def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
     json_file='static/json/default_config.json'
@@ -245,30 +244,3 @@ def update_version(db, ConfigVersion, key, version, comments):
     db.session.commit()
 
 
-# Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
-def load_configuration(app, ConfigOption):
-    print("Loading configuration...")
-    # Supposons que cette fonction charge la configuration depuis la base de données
-    numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first()
-    if numbering_by_activity:
-        app.config['NUMBERING_BY_ACTIVITY'] = numbering_by_activity.value_bool
-    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
-    if algo_activated:
-        app.config['ALGO_IS_ACTIVATED'] = algo_activated.value_bool
-    algo_overtaken_limit = ConfigOption.query.filter_by(key="algo_overtaken_limit").first()
-    if algo_overtaken_limit:
-        app.config['ALGO_OVERTAKEN_LIMIT'] = algo_overtaken_limit.value_int
-    printer = ConfigOption.query.filter_by(key="printer").first()
-    if printer:
-        app.config['PRINTER'] = printer.value_bool
-    announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
-    print("announce_sound", announce_sound)
-    if announce_sound:
-        app.config['ANNOUNCE_SOUND'] = announce_sound.value_bool
-    announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first()
-    if announce_staff_name:
-        app.config['ANNOUNCE_STAFF_NAME'] = announce_staff_name.value_bool
-    announce_infos_display = ConfigOption.query.filter_by(key="announce_infos_display").first()
-    if announce_infos_display:
-        app.config['ANNOUNCE_INFOS_DISPLAY'] = announce_infos_display.value_bool
-    print("Configuration loaded !")
