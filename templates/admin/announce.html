@@ -1,0 +1,51 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Page "Annonce"{% endblock %}
+
+{% block content %}
+    <h3>Page "Annonce"</h3>
+
+    <div>
+        <!-- Switch -->
+        <div class="switch">
+            <span>Activer le son pour les annonces : </span>
+            <label>
+            Muet
+            {{announce_sound}}
+            <input id="announce_sound" 
+                    type="checkbox"
+                    {% if announce_sound == "true" %}checked{% endif %}
+                    hx-post="/admin/update_switch"
+                    hx-target="#invisible"
+                    hx-vals='js:{"key": "announce_sound",
+                                "value": document.getElementById("announce_sound").checked}'>
+            <span class="lever"></span>
+            Activé
+            </label>
+        </div>
+
+        <!-- Switch -->
+        <div class="switch">
+            <span>Indiquer la personne au comptoir : </span>
+            <label>
+            Non
+            <input id="announce_staff_name" 
+                    type="checkbox"
+                    {% if announce_staff_name == "true" %}checked{% endif %}
+                    hx-post="/admin/update_switch"
+                    hx-target="#invisible"
+                    hx-vals='js:{"key": "announce_staff_name",
+                                "value": document.getElementById("announce_staff_name").checked}'>
+            <span class="lever"></span>
+            Oui
+            </label>
+        </div>
+
+
+    </div>  
+
+        <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+        <div id="invisible" style="display:none;"></div>
+
+
+{% endblock %}

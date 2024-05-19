@@ -4,32 +4,34 @@
     <meta charset="UTF-8">
     <title>Enregistrement de la file d'attente</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-    <link rel="stylesheet" href="../static/css/patient.css">
+    <link rel="stylesheet" href="../static/css/test.css">
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.js"></script>
 </head>
 <body>
 
-    <div class="center-align top">
-        <h1>{{ _('Bienvenue à la Pharmacie Sainte-Agathe') }}</h1>
-        <h3>{{ _("Afin d'améliorer votre prise en charge, saisissez le motif de votre visite. Nous vous appelerons à votre tour.") }}</h3>
-    </div>
 
-    <div class="row s12">
-        <div id="left_page_patient" 
-            class="container col s6"
+    <div id="main">
+        <div id="div_title_area">
+            Bienvenue à la Pharmacie Sainte-Agathe !
+        </div>
+
+        <div id="div_buttons_parents"
             hx-get="/patient/patient_buttons_left"
             hx-trigger="load"
-            hx-target="#left_page_patient"
-            hx-swap="innerHTML"> 
+            hx-target="#div_buttons_parents"
+            hx-swap="innerHTML">
         </div>
 
-        <div id="left_page_patient" class="container col s6">
-            <div id="htmx_div_left_page">
-                <!-- Affichage infos dynamiques à droite -->
-            </div>
+        <div id="div_intermediaire">
+
         </div>
+
+        <div id="div_buttons_children">
+
+        </div>
+
 
     </div>
     

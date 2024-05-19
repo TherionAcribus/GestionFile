@@ -73,13 +73,15 @@
         hx-swap="innerHTML">
     </div>
 
+    
     <div 
         id="button_section" 
         class="row s12" 
-        hx-trigger="load, refresh_current_buttons" 
-        hx-get="/counter_refresh_buttons/{{ counter.id }}" 
+        hx-trigger="load, refresh_buttons" 
+        hx-get="/counter/buttons/{{ counter.id }}" 
         hx-swap="innerHTML">
     </div>
+
 
     <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/counter/patients_queue_for_counter/{{ counter.id }}" hx-swap="innerHTML">
     </div>

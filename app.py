@@ -33,7 +33,7 @@ from bdd import init_update_default_buttons_db_from_json, init_default_options_d
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-socketio = SocketIO(app, cors_allowed_origins="*", engineio_logger=True, ping_timeout=60000, ping_interval=30000)
+socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///queuedatabase.db'  # base de données pour les comptoirs, équipes et patients
 #app.config['SQLALCHEMY_DATABASE_URI'] = 'duckdb:///database.duckdb'
 app.config['AUDIO_FOLDER'] = '/static/audio'
@@ -52,22 +52,7 @@ def notify_sse_clients():
             sse_queues .remove(client)
 
 
-@app.route('/stream')
-def sse_stream():
-    q = Queue()
-    sse_queues.append(q)
-    try:
-        def generate():
-            while True:
-                data = q.get()  # Attend un nouveau message à envoyer
-                try:
-                    yield f"data: {json.dumps(data)}\n\n".encode('utf-8')
-                except TypeError as e:
-                    print("Failed to serialize:", data)  # Log pour diagnostic
-                    continue  # Passer cet élément si non sérialisable
-        return Response(generate(), mimetype='text/event-stream')
-    except GeneratorExit:
-        sse_queues.remove(q)
+
 
 def notify_all_subscribers(data):
     print("Sending data:", data)  # Ajouter pour diagnostic
@@ -75,7 +60,7 @@ def notify_all_subscribers(data):
         data = data.decode('utf-8')  # Convertir les bytes en str avant de les mettre dans la queue
     elif not isinstance(data, (dict, list, str, int, float, bool, type(None))):
         data = str(data)  # Convertir d'autres types en str (solution de dernier recours)
-        
+
     for q in sse_queues:
         print("queue", q)
         q.put(data)
@@ -217,7 +202,6 @@ class ConfigOption(db.Model):
 
     def __repr__(self):
         return f'<ConfigOption {self.key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
-
 
 
 
@@ -461,18 +445,46 @@ def create_new_patient_auto():
 
 
 
-
 # --------  FIn de ADMIN -> Queue ---------
 
 
+@app.route('/admin/update_switch', methods=['POST'])
+def update_switch():
+    """ Mise à jour des switches d'options de l'application """
+    key = request.values.get('key')
+    value = request.values.get('value')
+    print("update_switch", key, value)
+    try:
+        # MAJ BDD
+        config_option = ConfigOption.query.filter_by(key=key).first()
+        # MAJ Config
+        app.config[key.upper()] = value
+        print("app.config", app.config)
+        if config_option:
+            config_option.value_bool = True if value == "true" else False
+            db.session.commit()
+            socketio.emit('display_toast', {'success': True, 'message': "Mise à jour réussie. Redémarrer le serveur pour que les nouvelles configurations s'appliquent."})
+            return ""
+        else:
+            socketio.emit('display_toast', {'success': False, 'message': "Configuration option not found"})
+            return ""
+    except Exception as e:
+            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            print(e)
+            return jsonify(status="error", message=str(e)), 500
 
 
 # --------  ADMIN -> App  ---------
 
 @app.route('/admin/app')
 def admin_app():
+    numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first().value_bool
+    announce_sound = ConfigOption.query.filter_by(key="announce_sound").first().value_bool
+    announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first().value_bool
     return render_template('/admin/app.html', 
-                            numbering_by_activity=ConfigOption.query.filter_by(key="numbering_by_activity").first().value_bool) 
+                            numbering_by_activity = numbering_by_activity, 
+                            announce_sound = announce_sound,
+                            announce_staff_name = announce_staff_name)
 
 
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
@@ -1166,9 +1178,20 @@ def delete_button_image(button_id):
 # -------- fin de ADMIN -> Page patient  ---------
 
 
-@app.route('/patients_old')
-def patients_old():
-    return render_template('patients.html')
+# -------- ADMIN -> Page Announce  ---------
+
+@app.route('/admin/announce')
+def announce_page():
+    announce_sound = app.config['ANNOUNCE_SOUND']
+    print("langue", announce_sound)
+    announce_staff_name = app.config['ANNOUNCE_STAFF_NAME']
+    return render_template('/admin/announce.html', 
+                            announce_sound = announce_sound,
+                            announce_staff_name = announce_staff_name)
+
+
+
+# -------- fin de ADMIN -> Page Announce  ---------
 
 
 
@@ -1177,33 +1200,6 @@ def patient_right_page_default():
     print("default")
     return render_template('htmx/patient_right_page_default.html')
 
-
-
-@app.route('/counter_old/<int:counter_number>')
-def counter_old(counter_number):
-
-    # Récupérez le paramètre 'next_patient' si présent
-    next_patient_id = request.args.get('next_patient_id')
-    print("COUNTER", next_patient_id)
-    if next_patient_id:
-    # Vous pourriez vouloir récupérer des détails sur ce patient
-        next_patient = Patient.query.get(int(next_patient_id))
-        print("NEXT PATIENT", next_patient)
-    else :
-        next_patient = None
-
-    current_patient_id = request.args.get("current_patient_id")
-    if current_patient_id:
-        current_patient = Patient.query.get(int(current_patient_id))
-    else:
-        current_patient = None
-
-    # Récupère le premier patient en attente
-    #next_patient = Patient.query.filter_by(status='standing').order_by(Patient.call_number).first()
-    return render_template('counter.html', 
-                            counter_number=counter_number, 
-                            next_patient=next_patient, 
-                            current_patient=current_patient)
 
 
 def generate_audio_calling(counter_number, next_patient):
@@ -1224,7 +1220,7 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Envoi du chemin relatif via Socket.IO
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    socketio.emit('trigger_audio_calling', {'audio_url': audio_url})
+    notification("update_audio", audio_source=audio_url)
 
 
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
@@ -1245,7 +1241,9 @@ def call_specific_patient(counter_id, patient_id):
         next_patient.counter_id = counter_id
         db.session.commit()
        
-        # Notifier tous les clients via SocketIO
+        # Notifier tous les clients 
+        notification("update_patients")
+
         socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
         socketio.emit('trigger_patient_ongoing', {})
 
@@ -1268,8 +1266,8 @@ def validate_patient(counter_id, patient_id):
         current_patient.status = 'ongoing'
         db.session.commit()
 
-    socketio.emit('trigger_patient_calling', {})
-    socketio.emit('trigger_patient_ongoing', {})  
+    notification("update_patients")
+    notification("update_counter", counter_id)    
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return '', 204  # No content to send back
@@ -1288,12 +1286,6 @@ def patients_langue(lang):
     session['lang'] = lang
     print(session['lang'])
     return render_template('patients.html', cache=False)
-
-
-@app.route('/display')
-def display():
-    current_patients = Patient.query.filter_by(status='au comptoir').order_by(Patient.call_number).all()
-    return render_template('display.html', current_patients=current_patients)
 
 
 
@@ -1495,6 +1487,27 @@ def current_patient_for_counter(counter_id):
     return render_template('counter/current_patient_for_counter.html', patient=patient)
 
 
+@app.route('/counter/buttons/<int:counter_id>/')
+def counter_refresh_buttons(counter_id):
+    patient = Patient.query.filter(
+        Patient.counter_id == counter_id, 
+        Patient.status != "done"
+    ).first()
+    print("Patient", patient)
+    if not patient:
+        patient_id = None
+        patient_status = None
+    else :
+        patient_id = patient.id
+        patient_status = patient.status
+
+    return render_template('/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
+
+
+
+
+
+
 @app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
 def validate_and_call_next(counter_id):
     print('validate_and_call_next', counter_id)
@@ -1502,7 +1515,11 @@ def validate_and_call_next(counter_id):
     validate_current_patient(counter_id)
 
     # TODO Prevoir que ne renvoie rien
-    next_patient = call_next(counter_id)  
+    next_patient = call_next(counter_id)
+
+    notification("update_patients")
+    notification("update_counter", counter_id)
+
     socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     socketio.emit('trigger_patient_ongoing', {})  
     return '', 204  # No content to send back
@@ -1679,9 +1696,151 @@ def counter_select_patient(counter_id, patient_id):
     print("counter_select_patient", counter_id, patient_id)
     call_specific_patient(counter_id, patient_id)
 
+    notification("update_patients")
+    notification("update_counter", counter_id)    
+
     return '', 204
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
+
+
+# ---------------- PAGE AnnoNces FRONT ----------------
+
+
+@app.route('/display')
+def display():
+    return render_template('/announce/announce.html', current_patients=current_patients)
+
+
+@app.route('/announce/patients_calling')
+def patients_calling():
+    patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
+    return render_template('announce/patients_calling.html', patients=patients)
+
+
+@app.route('/announce/patients_ongoing')
+def patients_ongoing():
+    patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
+    print("Patients")
+    return render_template('announce/patients_ongoing.html', patients=patients)
+
+
+# ---------------- FIN  PAGE AnnoNces FRONT ----------------
+
+# ---------------- FONCTIONS Généralistes / COmmunication ---------------- 
+
+# liste des flux SSE
+update_patients = []
+play_sound_streams = []
+counter_streams = {}
+
+
+def notify_clients(clients):
+    for client in clients:
+        try:
+            client.put(True, timeout=1)
+        except:
+            pass
+
+@app.route('/stream')
+def sse_stream():
+    q = Queue()
+    sse_queues.append(q)
+    try:
+        def generate():
+            while True:
+                data = q.get()  # Attend un nouveau message à envoyer
+                try:
+                    yield f"data: {json.dumps(data)}\n\n".encode('utf-8')
+                except TypeError as e:
+                    print("Failed to serialize:", data)  # Log pour diagnostic
+                    continue  # Passer cet élément si non sérialisable
+        return Response(generate(), mimetype='text/event-stream')
+    except GeneratorExit:
+        sse_queues.remove(q)
+
+
+def event_stream(clients):
+    while True:
+        client = Queue()
+        clients.append(client)
+        try:
+            while True:
+                message = client.get()
+                print("message", message)
+                yield f'data: {message}\n\n'
+        except GeneratorExit:
+            clients.remove(client)
+
+
+def event_stream_dict(client_id):
+    while True:
+        client = Queue()
+        counter_streams[client_id] = client
+        try:
+            while True:
+                message = client.get()
+                yield f'data: {message}\n\n'
+        except GeneratorExit:
+            # Assurez-vous de retirer le client de la liste en cas de fermeture
+            counter_streams.pop(client_id, None)
+        finally:
+            counter_streams.pop(client_id, None)
+
+
+@app.route('/events/update_patients')
+def events_update_patients():
+    return Response(event_stream(update_patients), content_type='text/event-stream')
+
+
+@app.route('/events/sound_calling')
+def events_update_sound_calling():
+    return Response(event_stream(play_sound_streams), content_type='text/event-stream')
+
+
+@app.route('/events/update_counter/<int:client_id>')
+def events_update_counter(client_id):
+    print("counter id", client_id)
+    return Response(event_stream_dict(client_id), content_type='text/event-stream')
+
+
+def notification(stream, client_id = None, audio_source=None):
+    """ Effectue la communication avec les clients """
+    message = {"type": stream, "data": ""}
+    print("notification", stream, client_id, audio_source, message)
+    
+    # SSE
+    if stream == "update_patients":
+        for client in update_patients:
+            client.put(message)
+    elif stream == "update_counter":
+        print("client id", client_id, counter_streams)
+        if client_id in counter_streams:
+            counter_streams[client_id].put(message)
+    elif stream == "update_audio":
+        print("audio source", audio_source)
+        message["data"] = {"audio_url": audio_source}
+        for client in play_sound_streams:
+            client.put(json.dumps(message))
+
+    # Websocket
+    #socketio.emit('trigger_patient_ongoing', {})  
+
+
+# A VIRER QUAND OK FRONT PATIENT -> COMPTOIR
+def sse_notification(data):
+    print("Sending data:", data)  # Ajouter pour diagnostic
+    if isinstance(data, bytes):
+        data = data.decode('utf-8')  # Convertir les bytes en str avant de les mettre dans la queue
+    elif not isinstance(data, (dict, list, str, int, float, bool, type(None))):
+        data = str(data)  # Convertir d'autres types en str (solution de dernier recours)
+
+    for q in sse_queues:
+        print("queue", q)
+        q.put(data)
+
+
+# ---------------- FIN FONCTIONS Généralistes ---------------- 
 
 
 @app.route('/current_patients')
@@ -1707,36 +1866,6 @@ def add_counter():
 def patients_queue():
     patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
     return render_template('htmx/patients_queue.html', patients=patients)
-
-
-@app.route('/counter_refresh_buttons/<int:counter_id>/')
-def counter_refresh_buttons(counter_id):
-    patient = Patient.query.filter(
-    Patient.counter_id == counter_id, 
-    Patient.status != "done"
-    ).first()
-    print("Patient", patient)
-    if not patient:
-        patient_id = None
-        patient_status = None
-    else :
-        patient_id = patient.id
-        patient_status = patient.status
-
-    return render_template('htmx/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
-
-
-@app.route('/patients_calling')
-def patients_calling():
-    patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
-    return render_template('htmx/patients_calling.html', patients=patients)
-
-
-@app.route('/patients_ongoing')
-def patients_ongoing():
-    patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_number).all()
-    print("Patients")
-    return render_template('htmx/patients_ongoing.html', patients=patients)
 
 
 @app.route('/pharmacists')

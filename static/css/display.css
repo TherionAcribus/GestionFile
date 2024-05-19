@@ -1,10 +1,66 @@
-body {
-    background-image: url('/static/images/background.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    height: 100vh;
+html, body {
+    height: 100%; /* Assure que le html et body prennent toute la hauteur de l'écran */
+    margin: 0; /* Enlève les marges par défaut */
+    padding: 0; /* Enlève les paddings par défaut */
+    overflow: hidden; /* Empêche le défilement */
 }
+
+#full_page {
+    height: 100%; /* Prend toute la hauteur disponible */
+}
+
+#div_title_area {
+    height: 10%;
+    text-align: center;
+    font-size: 50px;
+    font-weight: bold;
+    background-color:darkcyan;
+    color: white;
+}
+
+#div_center{
+    height: 90%;
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Deux colonnes de taille égale */
+    background-color: rgb(182, 245, 245);
+}
+
+
+#div_calling{
+    background-color: rgba(0, 139, 139, 0.5);
+}
+
+
+#div_pub{
+    background-color: rgb(255, 255, 255);
+}
+
+#text_title {
+    text-align: center;
+    margin: auto;
+    font-size: 50px;
+    font-weight: 900;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 2px;
+    margin-top: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.text_patient_calling, .text_patient_ongoing {
+    text-align: center;
+    margin: auto;
+    font-size: 30px;
+    font-weight: 900;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 1px;
+    margin-top: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
 
 #patient_calling {
     text-align: center;

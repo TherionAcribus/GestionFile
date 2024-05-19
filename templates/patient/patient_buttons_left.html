@@ -1,17 +1,17 @@
-Bouton {{buttons}}
 {% for button in buttons %}
-{{button.activity}}
-<div class="col s6 valign-wrapper div-btn-large">
-    <button class="btn-large waves-effect waves-light col" 
-            hx-post="/patients_submit" 
-            hx-vals='{"activity_id": "{{ button.activity.id }}",
-                    "is_parent": "{{ button.is_parent }}",
-                    "button_id": "{{ button.id }}"
-                    }' 
-            hx-target="#htmx_div_left_page"
-            style="background-image:url('/static/images/buttons/{{ button.image_url }}'); 
-                    background-size: cover;">
-        <p class="button-text-style">{{ button.label }} {{ button.activity.id }}</p>
-    </button>
+<div class="div_bloc_activity"
+        hx-post="/patients_submit" 
+        hx-vals='{"activity_id": "{{ button.activity.id }}",
+                "is_parent": "{{ button.is_parent }}",
+                "button_id": "{{ button.id }}"
+                }' 
+        hx-target="#div_buttons_children"
+                >
+        <div class="div_buttons">
+                <img class="img_btn" src='/static/images/buttons/{{ button.image_url }}'>
+        </div>
+        <div class="div_text_button">
+                <p>{{ button.label }}</p>
+        </div>
 </div>
 {% endfor %}

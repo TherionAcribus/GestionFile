@@ -254,3 +254,10 @@ def load_configuration(app, ConfigOption):
     algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
     if algo_activated:
         app.config['ALGO_IS_ACTIVATED'] = algo_activated.value_bool
+    announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
+    print("announce_sound", announce_sound)
+    if announce_sound:
+        app.config['ANNOUNCE_SOUND'] = announce_sound.value_bool
+    announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first()
+    if announce_staff_name:
+        app.config['ANNOUNCE_STAFF_NAME'] = announce_staff_name.value_bool

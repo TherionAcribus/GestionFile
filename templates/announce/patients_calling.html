@@ -1,0 +1,7 @@
+{% if patients%}
+<ul>
+    {% for patient in patients %}
+        <li class="text_patient_calling ">Nous appelons le patient {{ patient.call_number }} au comptoir {{ patient.counter.name }}</li>
+    {% endfor %}
+</ul>
+{% endif %}

@@ -68,15 +68,10 @@ socket.on('delete_add_counter_form', function(data) {
 
 // -------------- QUEUE  --------------
 
-function refreshQueueTable() {
-    console.log("Refresh queue table...");
+var eventSource = new EventSource('/events/update_patients');
+eventSource.onmessage = function(event) {
     htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
-}
-
-// quand un nouveau patient est ajouté, au comptoir, etc... on rafraichit le tableau
-socket.on('trigger_new_patient', refreshQueueTable);
-socket.on('trigger_patient_ongoing', refreshQueueTable);
-socket.on('trigger_patient_calling', refreshQueueTable);
+};
 
 
 // ouvre le modal de confirmation counter
