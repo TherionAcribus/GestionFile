@@ -21,14 +21,13 @@ html, body {
 }
 
 #div_buttons_parents{
-    height: 30%;
+    height: 45%;
     display: flex;
     flex-direction: row;
     justify-content:space-around;
     align-items: center;
     background-color: rgb(182, 245, 245);
     padding-top: 50px;
-
 }
 
 #div_intermediaire {
@@ -38,17 +37,34 @@ html, body {
 
 
 #div_buttons_children {
-    height: 20%;
+    height: 45%;
     background-color: rgb(182, 245, 245);
 }
 
 
+#div_text_explanation{
+    text-align: center;
+    font-size: 80px;
+    font-weight: bold;
+    color: darkcyan;
+}
+
+
+.div_bloc_activity{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
 .div_buttons {
-    height: 10%;
+    width: 200px;  /* Largeur fixe */
+    height: 200px;
     margin: 10px;
     background-color:darkcyan;
     border-radius: 50%;
     box-shadow: 5px 5px 5px #888888;
+    text-align: center;
 }
 
 .img_btn {
@@ -59,5 +75,44 @@ html, body {
     text-align: center;
     font-size: 30px;
     font-weight: bold;
+    color: darkcyan;
+}
+
+#div_confirmation{
+    display: flex;
+    flex-direction: row;
+}
+
+#div_qr_code{
+    width: 50%;
+    text-align: center;
+    padding-top: 1%;
+}
+
+#div_validation_buttons{
+    width: 50%;
+}
+
+.div_validation_one_button{
+    background-color:darkcyan;
+    border-radius: 10%;
+    box-shadow: 5px 5px 5px #888888;
+    color: white;
+    text-align: center;
+    margin: 30px ;
+}
+
+.validation_button {
+    font-size: 50px;
+    font-weight: 500;
+}
+
+#div_call_number{
+    text-align: center;
+}
+
+#text_call_number{
+    font-size: 50px;
+    font-weight: 500;
     color: darkcyan;
 }

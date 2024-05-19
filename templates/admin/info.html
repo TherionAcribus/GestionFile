@@ -1,0 +1,28 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Informations patient{% endblock %}
+
+{% block content %}
+    <h3>Informations patient</h3>
+
+    <!-- Switch -->
+    <div class="switch">
+        <span>Afficher les images : </span>
+        <label>
+        Non {{announce_infos_display}}
+        <input id="announce_infos_display" 
+                type="checkbox"
+                {% if announce_infos_display == "true" %}checked{% endif %}
+                hx-post="/admin/update_switch"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "announce_infos_display",
+                            "value": document.getElementById("announce_infos_display").checked}'>
+        <span class="lever"></span>
+        Oui
+        </label>
+    </div>
+    
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+    <div id="invisible" style="display:none;"></div>
+    
+{% endblock %}

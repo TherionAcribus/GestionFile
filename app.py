@@ -459,19 +459,18 @@ def update_switch():
         config_option = ConfigOption.query.filter_by(key=key).first()
         # MAJ Config
         app.config[key.upper()] = value
-        print("app.config", app.config)
         if config_option:
             config_option.value_bool = True if value == "true" else False
             db.session.commit()
-            socketio.emit('display_toast', {'success': True, 'message': "Mise à jour réussie. Redémarrer le serveur pour que les nouvelles configurations s'appliquent."})
-            return ""
+            data = {'success': "True", 'message': "Mise à jour réussie."}
+            return f'<script>display_toast({data})</script>'
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Configuration option not found"})
-            return ""
+            data = {'success': "True", 'message': "Option non trouvée."}
+            return f'<script>display_toast({data})</script>'
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            data = {'success': "True", 'message': "erreur : " + str(e)}
             print(e)
-            return jsonify(status="error", message=str(e)), 500
+            return f'<script>display_toast({data})</script>'
 
 
 # --------  ADMIN -> App  ---------
@@ -1189,9 +1188,18 @@ def announce_page():
                             announce_sound = announce_sound,
                             announce_staff_name = announce_staff_name)
 
-
-
 # -------- fin de ADMIN -> Page Announce  ---------
+
+
+# -------- ADMIN -> Page INfos ---------
+
+@app.route('/admin/info')
+def admin_info():
+    announce_infos_display = app.config['ANNOUNCE_INFOS_DISPLAY']
+    return render_template('/admin/info.html', announce_infos_display=announce_infos_display)
+
+
+# --------  Fin ADMIN -> Page INfos ---------
 
 
 
@@ -1301,8 +1309,8 @@ def test():
     return render_template('patient/test.html')
 
 
-# affiche les boutons de gauche
-@app.route('/patient/patient_buttons_left')
+# affiche les boutons
+@app.route('/patient/patient_buttons')
 def patient_right_page():
     buttons = Button.query.filter_by(is_present = True, parent_button_id = None).all()
     print("BUTTONS", buttons)
@@ -1502,9 +1510,6 @@ def counter_refresh_buttons(counter_id):
         patient_status = patient.status
 
     return render_template('/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
-
-
-
 
 
 
@@ -1726,6 +1731,8 @@ def patients_ongoing():
 
 
 # ---------------- FIN  PAGE AnnoNces FRONT ----------------
+
+
 
 # ---------------- FONCTIONS Généralistes / COmmunication ---------------- 
 

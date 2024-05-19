@@ -1,14 +1,12 @@
 var socket = io.connect();
 
-// affiche le toast de succes ou d'erreur lors d'un changement d'informations pour un membre
-socket.on('display_toast', function(data) {
-    // Utilisez HTMX ou une requête AJAX pour rafraîchir le contenu du tableau
-    if (data.success === true) {
-        M.toast({html: data.message});
+function display_toast(data) {
+    if (data.success === "True") {
+        M.toast({html: data.message, classes: 'green'});
     } else {
         M.toast({html: data.message, classes: 'red'});
-    }
-});
+    }    
+}
 
 
 // ------ STAFF ------

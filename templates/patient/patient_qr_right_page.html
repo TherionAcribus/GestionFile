@@ -1,10 +1,21 @@
-<div class="center-align">
-    <div id="right_page_print">
-        <p>Numéro : {{ text }}</p>
+<div id="div_confirmation">
+
+    <div id="div_qr_code">
         <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
-        <p>Nous vous appelerons à votre tour.</p>
     </div>
-        <button href="patient/validate" class="btn-small">Imprimer</button>
-        <button href="patient/validate" class="btn-small">Valider sans impression</button>
-        <button href="patient/cancel" class="btn-small">Annuler</button>
+
+    <div id="div_validation_buttons">
+        <div id="div_call_number">
+            <p id="text_call_number">Votre numéro : {{ text }}</p>
+        </div>
+        <div class="div_validation_one_button">
+            <p class="validation_button">Imprimer et valider</p>
+        </div>
+        <div class="div_validation_one_button">
+            <p class="validation_button">Valider sans impression</p>
+        </div>
+        <div class="div_validation_one_button">
+            <p class="validation_button">Annuler</p>
+        </div>
+    </div>
 </div>

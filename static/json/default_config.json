@@ -1,12 +1,13 @@
 {
     "name": "default_config",
-    "version": "0.9",
+    "version": "0.1",
     "comments": "Version de test",
         "configurations": {
             "algo_activate": true,
             "numbering_by_activity": true,
             "printer": false,
             "announce_sound": true,
-            "announce_staff_name": true
+            "announce_staff_name": true,
+            "announce_infos_display": true
     }
 }

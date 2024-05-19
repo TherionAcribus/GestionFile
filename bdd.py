@@ -261,3 +261,7 @@ def load_configuration(app, ConfigOption):
     announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first()
     if announce_staff_name:
         app.config['ANNOUNCE_STAFF_NAME'] = announce_staff_name.value_bool
+    announce_infos_display = ConfigOption.query.filter_by(key="announce_infos_display").first()
+    if announce_infos_display:
+        app.config['ANNOUNCE_INFOS_DISPLAY'] = announce_infos_display.value_bool
+    print("Configuration loaded !")
