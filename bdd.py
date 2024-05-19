@@ -219,6 +219,7 @@ def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
                     priority_level=rule['priority_level'],
                     min_patients=rule['min_patients'],
                     max_patients=rule['max_patients'],
+                    max_overtaken=rule['max_overtaken'],
                     start_time=start_time_obj,
                     end_time=end_time_obj,
                     days_of_week=rule['days_of_the_week']
@@ -254,6 +255,12 @@ def load_configuration(app, ConfigOption):
     algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
     if algo_activated:
         app.config['ALGO_IS_ACTIVATED'] = algo_activated.value_bool
+    algo_overtaken_limit = ConfigOption.query.filter_by(key="algo_overtaken_limit").first()
+    if algo_overtaken_limit:
+        app.config['ALGO_OVERTAKEN_LIMIT'] = algo_overtaken_limit.value_int
+    printer = ConfigOption.query.filter_by(key="printer").first()
+    if printer:
+        app.config['PRINTER'] = printer.value_bool
     announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
     print("announce_sound", announce_sound)
     if announce_sound:

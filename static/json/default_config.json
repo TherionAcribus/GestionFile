@@ -4,6 +4,7 @@
     "comments": "Version de test",
         "configurations": {
             "algo_activate": true,
+            "algo_overtaken_limit": 3,
             "numbering_by_activity": true,
             "printer": false,
             "announce_sound": true,

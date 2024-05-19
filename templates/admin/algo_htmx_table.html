@@ -6,6 +6,7 @@
             <th>Priorité</th>
             <th>Min Patients</th>
             <th>Max Patients</th>
+            <th>Dépassement Max</th>
             <th>Début</th>
             <th>Fin</th>
             <th>Actions</th>
@@ -39,6 +40,9 @@
             <td>
                 <input type="text" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}">
             </td>
+            <td>
+                <input type="text" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}">
+            </td>
             <td><input type="time" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}"></td>
             <td><input type="time" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}"></td>
 
@@ -51,6 +55,7 @@
                                 "priority_level": document.getElementById("priority_level-{{ rule.id }}").value,
                                 "min_patients": document.getElementById("min_patients-{{ rule.id }}").value,
                                 "max_patients": document.getElementById("max_patients-{{ rule.id }}").value,
+                                "max_overtaken": document.getElementById("max_overtaken-{{ rule.id }}").value,
                                 "start_time": document.getElementById("start_time-{{ rule.id }}").value,
                                 "end_time": document.getElementById("end_time-{{ rule.id }}").value
                             }'>

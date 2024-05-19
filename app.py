@@ -11,7 +11,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, c
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker
-from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint
+from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date
@@ -40,31 +40,6 @@ app.config['AUDIO_FOLDER'] = '/static/audio'
 app.config['BABEL_DEFAULT_LOCALE'] = 'fr'  # Définit la langue par défaut
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-sse_queues  = []
-
-def notify_sse_clients():
-    print("SSE", sse_queues)
-    for client in sse_queues :
-        try:
-            data_to_send = {"message": "New patient added"}
-            client.put(f"event: update_patient\ndata: {json.dumps(data_to_send)}\n\n".encode('utf-8'))
-        except Exception as e:
-            sse_queues .remove(client)
-
-
-
-
-def notify_all_subscribers(data):
-    print("Sending data:", data)  # Ajouter pour diagnostic
-    if isinstance(data, bytes):
-        data = data.decode('utf-8')  # Convertir les bytes en str avant de les mettre dans la queue
-    elif not isinstance(data, (dict, list, str, int, float, bool, type(None))):
-        data = str(data)  # Convertir d'autres types en str (solution de dernier recours)
-
-    for q in sse_queues:
-        print("queue", q)
-        q.put(data)
-
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -91,6 +66,7 @@ class Patient(db.Model):
     counter = db.relationship('Counter', backref=db.backref('patients', lazy=True))
     activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_patient_activity_id'), nullable=False)  # Now referencing the activity directly
     activity = db.relationship('Activity', backref=db.backref('patients', lazy=True))
+    overtaken = db.Column(db.Integer, default=0)
 
 
     def __repr__(self):
@@ -166,12 +142,15 @@ class Activity(db.Model):
 class AlgoRule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255))
     activity_id = db.Column(db.Integer, db.ForeignKey('activity.id'), nullable=False, index=True)
     activity = db.relationship('Activity', backref=db.backref('priority_rules', lazy=True))
     
     min_patients = db.Column(db.Integer, nullable=False, default=0)
     max_patients = db.Column(db.Integer, nullable=False, default=999)
     CheckConstraint('min_patients <= max_patients', name='ck_priority_rules_min_max_patients')
+
+    max_overtaken = db.Column(db.Integer, nullable=False, default=999)
     
     start_time = db.Column(db.Time, nullable=False)  # Heure de début de la validité de la règle
     end_time = db.Column(db.Time, nullable=False)    # Heure de fin de la validité de la règle
@@ -462,15 +441,13 @@ def update_switch():
         if config_option:
             config_option.value_bool = True if value == "true" else False
             db.session.commit()
-            data = {'success': "True", 'message': "Mise à jour réussie."}
-            return f'<script>display_toast({data})</script>'
+            return display_toast()
         else:
-            data = {'success': "True", 'message': "Option non trouvée."}
-            return f'<script>display_toast({data})</script>'
+            return display_toast(success='False', message="Option non trouvée.")
     except Exception as e:
-            data = {'success': "True", 'message': "erreur : " + str(e)}
             print(e)
-            return f'<script>display_toast({data})</script>'
+            return display_toast(success='False', message=str(e))
+
 
 
 # --------  ADMIN -> App  ---------
@@ -760,7 +737,9 @@ def add_new_activity():
 # page de base
 @app.route('/admin/algo')
 def admin_algo():
-    return render_template('/admin/algo.html')
+    algo_overtaken_limit = app.config['ALGO_OVERTAKEN_LIMIT']
+    return render_template('/admin/algo.html',
+                            algo_overtaken_limit=algo_overtaken_limit)
 
 @app.route('/admin/algo/table')
 def display_algo_table():
@@ -789,6 +768,21 @@ def toggle_activation():
                             algo_activated=app.config['ALGO_IS_ACTIVATED'])
 
 
+@app.route('/admin/algo/change_overtaken_limit', methods=['POST'])
+def change_overtaken_limit():
+    overtaken_limit = request.form.get('overtaken_limit')
+
+    app.config['ALGO_OVERTAKEN_LIMIT'] = overtaken_limit
+    try:
+        algo_overtaken_limit = ConfigOption.query.filter_by(key="algo_overtaken_limit").first()
+        algo_overtaken_limit.value_int = overtaken_limit
+        db.session.commit()
+        return display_toast()
+    except Exception as e:
+        print(e)
+        return display_toast(success='False', message=str(e))
+
+
 # affiche le formulaire pour ajouter une regle de l'algo
 @app.route('/admin/algo/add_rule_form')
 def add_rule_form():
@@ -807,6 +801,7 @@ def add_new_rule():
         priority_level = request.form.get('priority_level')
         min_patients = request.form.get('min_patients')
         max_patients = request.form.get('max_patients')
+        max_overtaken = request.form.get('max_overtaken')
         start_time_str = request.form.get('start_time')            
         start_time = datetime.strptime(start_time_str, "%H:%M").time()
         end_time_str = request.form.get('end_time')
@@ -822,6 +817,7 @@ def add_new_rule():
             priority_level = priority_level,
             min_patients = min_patients,
             max_patients = max_patients,
+            max_overtaken = max_overtaken,
             start_time = start_time,
             end_time = end_time
         )
@@ -881,6 +877,7 @@ def update_algo_rule(rule_id):
             rule.priority_level = request.form.get('priority_level', rule.priority_level)
             rule.min_patients = request.form.get('min_patients', rule.min_patients)
             rule.max_patients = request.form.get('max_patients', rule.max_patients)
+            rule.max_overtaken = request.form.get('max_overtaken', rule.max_overtaken)
             start_time_str = request.form.get('start_time', rule.start_time.strftime("%H:%M"))            
             rule.start_time = datetime.strptime(start_time_str, "%H:%M").time()
             end_time_str = request.form.get('end_time', rule.end_time.strftime("%H:%M"))
@@ -1239,8 +1236,6 @@ def call_specific_patient(counter_id, patient_id):
 
     # Récupération du patient spécifique
     next_patient = Patient.query.get(patient_id)
-    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
-    socketio.emit('trigger_patient_ongoing', {})  
     
     if next_patient:
         print("Appel du patient :", patient_id, "au comptoir", counter_id)
@@ -1248,12 +1243,10 @@ def call_specific_patient(counter_id, patient_id):
         next_patient.status = 'calling'
         next_patient.counter_id = counter_id
         db.session.commit()
-       
-        # Notifier tous les clients 
-        notification("update_patients")
 
-        socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
-        socketio.emit('trigger_patient_ongoing', {})
+        # Notifier tous les clients et mettre à jour le comptoir
+        notification("update_patients")
+        notification("update_counter", counter_id)
 
         generate_audio_calling(counter_id, next_patient)
     else:
@@ -1357,8 +1350,7 @@ def left_page_validate_patient(activity):
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
     socketio.emit('trigger_update_patient', {})
-    notify_sse_clients()
-    notify_all_subscribers("test")
+    notification("update_patients")
     #socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
@@ -1571,7 +1563,7 @@ def algo_choice_next_patient(counter_id):
 
     counter = Counter.query.get(counter_id)
 
-    priority = Activity.query.get(5)
+    #priority = Activity.query.get(5)
     #priority = None
 
     # activités possible par ce pharmacien
@@ -1585,23 +1577,86 @@ def algo_choice_next_patient(counter_id):
         Patient.activity_id.in_(staff_activities)
     )
 
-    if app.config['ALGO_IS_ACTIVATED']:
+    # permet de voir si un patient s'est fait doubler plus que le nombre prévu
+    # Si oui on bloque l'algo le temps de rétablir l'équilibre
+    is_patient_waiting_too_long = Patient.query.filter(
+        and_(Patient.status == 'standing',
+                Patient.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"])).first()
+    print("is_patient_waiting_too_long", is_patient_waiting_too_long)
+
+    applicable_rules = None
+    if app.config['ALGO_IS_ACTIVATED'] and not is_patient_waiting_too_long:
     # priorité à un type d'activité si un patient répond aux critère
-        if priority:
-            is_priority_in_list = next_possible_patient.filter_by(activity_id=priority.id).first()
-            if is_priority_in_list:
-                next_possible_patient = next_possible_patient.filter(
-                    Patient.activity_id == priority.id
-            )
+    # Récupération des règles applicables
+        current_day = datetime.now().weekday()
+        current_time = datetime.now().time()
+        print('current_time', current_time)
+        print('current_day', current_day)
+        number_of_patients = Patient.query.filter_by(status='standing').count()
+        print('number_of_patients', number_of_patients)
+
+        # cherche des regles applicables
+        applicable_rules = AlgoRule.query.filter(
+            AlgoRule.start_time <= current_time,  # L'heure actuelle doit être après l'heure de début
+            AlgoRule.end_time >= current_time,    # et avant l'heure de fin
+            AlgoRule.min_patients <= number_of_patients,  # Le nombre de patients doit être dans l'intervalle
+            AlgoRule.max_patients >= number_of_patients,
+            #AlgoRule.days_of_week.contains(current_day)  # Le jour actuel doit être inclus dans les jours valides
+        )
+        print("applicable_rules", applicable_rules)
+
+        # S'il y a des regles applicables, regarde niveau par niveau les activités correspondantes
+        if applicable_rules:
+            for level in range(1, 6):
+                rules_at_level = applicable_rules.filter(AlgoRule.priority_level == level)
+                if rules_at_level:
+                    print("level", level)
+                    activity_ids_from_rules  = [rule.activity_id for rule in rules_at_level]
+                    next_possible_patient_via_rules = next_possible_patient.filter(
+                        Patient.activity_id.in_(activity_ids_from_rules)
+                    )
+
+                    print("next_possible_patient", next_possible_patient_via_rules.all())
+                    # pour les patients qui rentrent dans les priorité on va regarder si on ne dépasse pas le nombre de patients à dépasser de la régle
+                    if next_possible_patient_via_rules.all():
+                        for patient in next_possible_patient_via_rules.all():
+                            print("patient", patient)
+                            patients_ahead_count = next_possible_patient.filter(
+                                                                                        Patient.timestamp < patient.timestamp
+                                                                                    ).count()
+                            max_overtaken = min(rule.max_overtaken for rule in patient.activity.priority_rules)
+                            print("max_overtaken", max_overtaken, patients_ahead_count)
+                            if patients_ahead_count < max_overtaken:
+                                next_possible_patient = next_possible_patient_via_rules
+                                break
 
     print('next_possible_patient', next_possible_patient)
     
     # tri par date 
     next_patient = next_possible_patient.order_by(Patient.timestamp).first()
 
+    if applicable_rules:
+        patient_overtaken(next_patient)
+
     print('next_patient', next_patient)
 
     return next_patient
+
+
+def patient_overtaken(next_patient):
+    """ Met a jour le nombre de fois que le patient a été doublé"""
+    patients_overtaken = Patient.query.filter(
+        and_(
+            Patient.status == 'standing',
+            Patient.timestamp < next_patient.timestamp 
+        )
+    ).all() 
+
+    for patient in patients_overtaken:
+        patient.overtaken = patient.overtaken + 1
+        print("patient overtaken", patient)
+        db.session.commit()
+
 
 
 @app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
@@ -1749,23 +1804,6 @@ def notify_clients(clients):
         except:
             pass
 
-@app.route('/stream')
-def sse_stream():
-    q = Queue()
-    sse_queues.append(q)
-    try:
-        def generate():
-            while True:
-                data = q.get()  # Attend un nouveau message à envoyer
-                try:
-                    yield f"data: {json.dumps(data)}\n\n".encode('utf-8')
-                except TypeError as e:
-                    print("Failed to serialize:", data)  # Log pour diagnostic
-                    continue  # Passer cet élément si non sérialisable
-        return Response(generate(), mimetype='text/event-stream')
-    except GeneratorExit:
-        sse_queues.remove(q)
-
 
 def event_stream(clients):
     while True:
@@ -1833,18 +1871,14 @@ def notification(stream, client_id = None, audio_source=None):
     # Websocket
     #socketio.emit('trigger_patient_ongoing', {})  
 
-
-# A VIRER QUAND OK FRONT PATIENT -> COMPTOIR
-def sse_notification(data):
-    print("Sending data:", data)  # Ajouter pour diagnostic
-    if isinstance(data, bytes):
-        data = data.decode('utf-8')  # Convertir les bytes en str avant de les mettre dans la queue
-    elif not isinstance(data, (dict, list, str, int, float, bool, type(None))):
-        data = str(data)  # Convertir d'autres types en str (solution de dernier recours)
-
-    for q in sse_queues:
-        print("queue", q)
-        q.put(data)
+def display_toast(success="True", message=None):
+    """ Affiche le toast dans la page Admin.
+    Pour validation réussie, on peut simplement appeler la fonction sans argument """
+    if message is None:
+        message = "Enregistrement effectué"
+        
+    data = {'success': success, 'message': message}
+    return f'<script>display_toast({data})</script>'
 
 
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
