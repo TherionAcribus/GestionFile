@@ -549,6 +549,23 @@ def remove_scheduler_clear_all_patients():
         return False
 
 
+def clear_old_patients_table():
+    # Vérifie si la fonctionnalité est activée dans la configuration
+    if app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
+        # Obtenez la date actuelle en UTC
+        today = datetime.now(timezone.utc).date()
+        
+        # Construisez la requête pour trouver tous les patients dont la date est antérieure à aujourd'hui
+        old_patients = Patient.query.filter(Patient.timestamp < today)
+        
+        # Supprimez ces patients
+        old_patients.delete(synchronize_session='fetch')
+        db.session.commit()
+        notification("update_patients")
+        app.logger.info(f"Deleted old patients not from today ({today}).")
+    else:
+        app.logger.info("Deletion of old patients is disabled.")
+
 
 # --------  FIn ADMIN -> DataBase  ---------
 
@@ -2122,8 +2139,9 @@ with app.app_context():
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
-
-
+    clear_old_patients_table()
+    
+    
 if __name__ == "__main__":
     app.logger.info("Starting Flask app...")
 

@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.2",
+    "version": "0.1",
     "comments": "Version de test",
         "configurations": {
             "cron_delete_patient_table_activated": true,
