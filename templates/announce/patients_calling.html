@@ -1,7 +1,7 @@
-{% if patients%}
+{% if call_patients%}
 <ul>
-    {% for patient in patients %}
-        <li class="text_patient_calling ">Nous appelons le patient {{ patient.call_number }} au comptoir {{ patient.counter.name }}</li>
+    {% for call_patient in call_patients %}
+        <li class="text_patient_calling ">{{ call_patient }}</li>
     {% endfor %}
 </ul>
 {% endif %}

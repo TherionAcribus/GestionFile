@@ -107,6 +107,22 @@ function submitFile(buttonId) {
 }
 
 
+// ---------------- ANNOUNCES ----------------
+
+function insertPlaceholder(textareaId, text) {
+    var textarea = document.getElementById(textareaId);
+    var cursorPos = textarea.selectionStart;
+    var v = textarea.value;
+    var textBefore = v.substring(0, cursorPos);
+    var textAfter = v.substring(cursorPos, v.length);
+
+    textarea.value = textBefore + text + textAfter;
+    textarea.selectionStart = cursorPos + text.length;
+    textarea.selectionEnd = cursorPos + text.length;
+    textarea.focus();
+}
+
+
 // ---------------- GENERAL ----------------
 
 // utiliser pour les communications spécifiques du serveur vers l'admin
@@ -138,10 +154,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var elems = document.querySelectorAll('.modal');
     var instances = M.Modal.init(elems);
 
+    // initialisation des tabs
+    var elems = document.querySelectorAll('.tabs');
+    var instance = M.Tabs.init(elems);
+
     // initialisation du select
     initSelects();
-    // 
-    
+   
 
 });
 

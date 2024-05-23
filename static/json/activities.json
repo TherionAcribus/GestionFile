@@ -23,5 +23,10 @@
         "code": "retrait",
         "name": "retrait de commande",
         "letter": "R"
+    },
+    {
+        "code": "priority",
+        "name": "personne prioritaire",
+        "letter": "P"
     }
 ]

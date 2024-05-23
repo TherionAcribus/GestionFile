@@ -85,8 +85,9 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
                 button.is_active = button_data['is_active']
                 button.shape = button_data['shape']
             else:
-                new_button = Button(**button_data)
-                db.session.add(new_button)
+                #new_button = Button(**button_data)
+                #db.session.add(new_button)
+                pass
         
         db.session.commit()
         print("Database updated to version:", data['version'])

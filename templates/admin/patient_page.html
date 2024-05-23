@@ -20,25 +20,20 @@
     </div>
     -->
 
-    <h3>Boutons de la page patient</h3>
-
-    <div id="div_buttons_table"
-        hx-get="/admin/patient/button_table"
-        hx-trigger="load"
-        hx-target="#div_buttons_table"
-        hx-swap="innerHTML">
+    <div class="row">
+        <div class="col s12">
+            <ul class="tabs">
+                <li class="tab col s3"><a class="active" href="#test1">Textes</a></li>
+                <li class="tab col s3"><a href="#tab_buttons">Boutons</a></li>
+            </ul>
+        </div>
+        <div id="test1" class="col s12">Textes</div>
+        <div id="tab_buttons" class="col s12">
+            {% include 'admin/page_patient_buttons.html' %}
+        </div>
     </div>
 
-
-    <!-- Modal Structure Confirm Delete-->
-    <div id="modal_delete_button" class="modal">
-    </div>
-
-    
-    <!-- Modal Structure Confirm Delete-->
-    <div id="modal_display_gallery" class="modal">
-    </div>
-    
+        
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>

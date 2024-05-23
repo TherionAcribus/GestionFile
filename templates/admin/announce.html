@@ -5,6 +5,29 @@
 {% block content %}
     <h3>Page "Annonce"</h3>
 
+    <div class="row">
+        <div class="row">
+            <div class="input-field col s12">
+                <textarea id="announce_call_text" class="materialize-textarea">{{announce_call_text}}</textarea>
+                <label for="announce_call_text">Texte pour annoncer le tour d'un patient</label>
+            </div>
+            Vous pouvez utiliser 
+            <span class="variables_calling" onclick="insertPlaceholder('announce_call_text', '{P}')">{P}</span>
+            pour le numéro du patient, 
+            <span class="variables_calling" onclick="insertPlaceholder('announce_call_text', '{C}')">{C}</span>
+            pour le comptoir et 
+            <span class="variables_calling" onclick="insertPlaceholder('announce_call_text', '{M}')">{M}</span> 
+            pour le membre de l'équipe.</span>
+        </div>
+        <button
+            class="btn"
+            hx-post="/admin/update_input"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "announce_call_text",
+                        "value": document.getElementById("announce_call_text").value}'>
+                    Enregistrer</button>
+    </div>
+
     <div>
         <!-- Switch -->
         <div class="switch">
@@ -23,21 +46,27 @@
             </label>
         </div>
 
-        <!-- Switch -->
-        <div class="switch">
-            <span>Indiquer la personne au comptoir : </span>
-            <label>
-            Non
-            <input id="announce_staff_name" 
-                    type="checkbox"
-                    {% if announce_staff_name == "true" %}checked{% endif %}
-                    hx-post="/admin/update_switch"
-                    hx-target="#invisible"
-                    hx-vals='js:{"key": "announce_staff_name",
-                                "value": document.getElementById("announce_staff_name").checked}'>
-            <span class="lever"></span>
-            Oui
-            </label>
+        <div class="row">
+            <div class="row">
+                <div class="input-field col s12">
+                    <textarea id="announce_call_sound" class="materialize-textarea">{{announce_call_text}}</textarea>
+                    <label for="announce_call_sound">Texte pour annoncer le tour d'un patient</label>
+                </div>
+                Vous pouvez utiliser 
+                <span class="variables_calling" onclick="insertPlaceholder('announce_call_sound', '{P}')">{P}</span>
+                pour le numéro du patient, 
+                <span class="variables_calling" onclick="insertPlaceholder('announce_call_sound', '{C}')">{C}</span>
+                pour le comptoir et 
+                <span class="variables_calling" onclick="insertPlaceholder('announce_call_sound', '{M}')">{M}</span> 
+                pour le membre de l'équipe.</span>
+            </div>
+            <button
+                class="btn"
+                hx-post="/admin/update_input"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "announce_call_sound",
+                            "value": document.getElementById("announce_call_sound").value}'>
+                        Enregistrer</button>
         </div>
 
 

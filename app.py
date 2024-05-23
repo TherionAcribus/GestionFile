@@ -26,6 +26,7 @@ from queue import Queue
 import logging
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json
+from utils import validate_and_transform_text
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -455,6 +456,37 @@ def update_switch():
     except Exception as e:
             print(e)
             return display_toast(success='False', message=str(e))
+    
+
+@app.route('/admin/update_input', methods=['POST'])
+def update_input():
+    """ Mise à jour des input d'options de l'application """
+    key = request.values.get('key')
+    value = request.values.get('value')
+    # verification que l'entrée user utilise uniquement le balises {P}, {C} ou {M}. Sinon plantage lors du format
+    if key == "announce_call_text" or key == "announce_call_sound":
+        check = check_balises(value)
+        if check["success"]:
+            value = check["value"]
+        else:
+            return display_toast(success='False', message=check["value"])
+    try:
+        # MAJ BDD
+        config_option = ConfigOption.query.filter_by(key=key).first()
+        
+        # MAJ Config
+        app.config[key.upper()] = value
+        if config_option:
+            config_option.value_str = value
+            db.session.commit()
+            
+            return display_toast()
+        else:
+            return display_toast(success='False', message="Option non trouvée.")
+    except Exception as e:
+            print(e)
+            return display_toast(success='False', message=str(e))
+
 
 
 def call_function_with_switch(key, value):
@@ -464,6 +496,13 @@ def call_function_with_switch(key, value):
             scheduler_clear_all_patients()
         else:
             remove_scheduler_clear_all_patients()
+
+
+def check_balises(value):
+    """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
+    print("call_function_with_input", value)
+    
+    return validate_and_transform_text(value)
 
 
 # --------  ADMIN -> App  ---------
@@ -1262,10 +1301,10 @@ def delete_button_image(button_id):
 def announce_page():
     announce_sound = app.config['ANNOUNCE_SOUND']
     print("langue", announce_sound)
-    announce_staff_name = app.config['ANNOUNCE_STAFF_NAME']
+    announce_call_text = app.config['ANNOUNCE_CALL_TEXT']
     return render_template('/admin/announce.html', 
                             announce_sound = announce_sound,
-                            announce_staff_name = announce_staff_name)
+                            announce_call_text=announce_call_text)
 
 # -------- fin de ADMIN -> Page Announce  ---------
 
@@ -1291,7 +1330,9 @@ def patient_right_page_default():
 
 def generate_audio_calling(counter_number, next_patient):
     # Texte pour la synthèse vocale
-    text = f"Nous invitons le patient {next_patient.call_number} à se rendre au comptoir {counter_number}."
+    text_template = app.config["ANNOUNCE_CALL_SOUND"]
+    text = replace_balise_announces(text_template, next_patient)
+    print('TEXT', text)
     tts = gTTS(text, lang='fr', tld='ca')  # Utilisation de gTTS avec langue française
 
     # Chemin de sauvegarde du fichier audio
@@ -1571,6 +1612,7 @@ def current_patient_for_counter(counter_id):
 
 @app.route('/counter/buttons/<int:counter_id>/')
 def counter_refresh_buttons(counter_id):
+    print('BUTTONS', counter_id)
     patient = Patient.query.filter(
         Patient.counter_id == counter_id, 
         Patient.status != "done"
@@ -1857,7 +1899,12 @@ def display():
 @app.route('/announce/patients_calling')
 def patients_calling():
     patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
-    return render_template('announce/patients_calling.html', patients=patients)
+    announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first().value_str
+    print("BACHIBOUZOUK")
+    call_patients = []
+    for patient in patients:
+        call_patients.append(replace_balise_announces(announce_call_text, patient))
+    return render_template('announce/patients_calling.html', call_patients=call_patients)
 
 
 @app.route('/announce/patients_ongoing')
@@ -1867,6 +1914,9 @@ def patients_ongoing():
     return render_template('announce/patients_ongoing.html', patients=patients)
 
 
+def replace_balise_announces(template, patient):
+    """ Remplace les balises dans les textes d'annonces (texte et son)"""
+    return template.format(P=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
 # ---------------- FIN  PAGE AnnoNces FRONT ----------------
 
 
@@ -2037,7 +2087,6 @@ def new_pharmacist_form():
 
 
 
-
 @socketio.on('connect')
 def test_connect():
     print('Client connected')
@@ -2112,13 +2161,16 @@ def load_configuration(app, ConfigOption):
     announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
     if announce_sound:
         app.config['ANNOUNCE_SOUND'] = announce_sound.value_bool
-    announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first()
-    if announce_staff_name:
-        app.config['ANNOUNCE_STAFF_NAME'] = announce_staff_name.value_bool
     announce_infos_display = ConfigOption.query.filter_by(key="announce_infos_display").first()
     if announce_infos_display:
         app.config['ANNOUNCE_INFOS_DISPLAY'] = announce_infos_display.value_bool
+    announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first()
+    if announce_call_text:
+        app.config['ANNOUNCE_CALL_TEXT'] = announce_call_text.value_str
     cron_delete_patient_table_activated = ConfigOption.query.filter_by(key="cron_delete_patient_table_activated").first()
+    announce_call_sound = ConfigOption.query.filter_by(key="announce_call_sound").first()
+    if announce_call_sound:
+        app.config['ANNOUNCE_CALL_SOUND'] = announce_call_sound.value_str
     if cron_delete_patient_table_activated:
         app.config['CRON_DELETE_PATIENT_TABLE_ACTIVATED'] = cron_delete_patient_table_activated.value_bool
         # si au lancement on veut une planif de l'effacement de la table on s'assure que ce soit fait

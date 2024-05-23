@@ -13,6 +13,8 @@
 <body>
 
     <div id="full_page">
+        <button onclick="initializeAudio()">Activer le Son</button>
+        <audio id="player" src="" hidden></audio>
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
             <h1 id="text_title">Bienvenue à la Pharmacie Sainte-Agathe</h1>
         </div>
@@ -47,8 +49,7 @@
     </div>
 
 
-        <button onclick="initializeAudio()">Activer le Son</button>
-        <audio id="player" src="" hidden></audio>
+
 
     </div>
 

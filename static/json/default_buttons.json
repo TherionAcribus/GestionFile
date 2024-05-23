@@ -1,5 +1,5 @@
 {
-    "version": "0.9",
+    "version": "0.1",
     "comments": "Version de test",
         "buttons": [
         {
@@ -8,7 +8,7 @@
             "label_en": "Prescription / OTC",
             "activity": 4,
             "shape": "square",
-            "image_url": "",
+            "image_url": "prescription.png",
             "is_present": true,
             "is_active": true,
             "is_parent": false            
@@ -25,12 +25,23 @@
             "is_parent": false
         },
         {
+            "code": "VACCIN",
+            "label": "Vaccination",
+            "label_en": "Vaccination",
+            "activity": 6,
+            "shape": "square",
+            "image_url": "vaccin.png",
+            "is_present": true,
+            "is_active": true,
+            "is_parent": false            
+        },
+        {
             "code": "COLLECT",
             "label": "Retrait de commande",
             "label_en": "Collect order",
             "activity": 5, 
             "shape": "square",
-            "image_url": "",
+            "image_url": "retrait.png",
             "is_present": true,
             "is_active": true,
             "is_parent": false
@@ -50,6 +61,17 @@
             "code": "PARENT",
             "label": "Parent",
             "label_en": "Parent",
+            "activity": 0, 
+            "shape": "square",
+            "image_url": "",
+            "is_present": true,
+            "is_active": true,
+            "is_parent": true
+        },
+        {
+            "code": "STAFF",
+            "label": "Membre de l'équipe",
+            "label_en": "Staff member",
             "activity": 0, 
             "shape": "square",
             "image_url": "",

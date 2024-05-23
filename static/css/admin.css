@@ -22,3 +22,8 @@
 .selected-image {
     border: #007bff 5px solid;
 }
+
+.variables_calling {
+    background-color: antiquewhite;
+    padding: 3px;
+}
