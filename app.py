@@ -1369,7 +1369,7 @@ def call_specific_patient(counter_id, patient_id):
 
         # Notifier tous les clients et mettre à jour le comptoir
         notification("update_patients")
-        notification("update_counter", counter_id)
+        notification("update_counter", client_id=counter_id)
 
         generate_audio_calling(counter_id, next_patient)
     else:
@@ -1391,7 +1391,7 @@ def validate_patient(counter_id, patient_id):
         db.session.commit()
 
     notification("update_patients")
-    notification("update_counter", counter_id)    
+    notification("update_counter", client_id=counter_id)    
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return '', 204  # No content to send back
@@ -1639,7 +1639,7 @@ def validate_and_call_next(counter_id):
     next_patient = call_next(counter_id)
 
     notification("update_patients")
-    notification("update_counter", counter_id)
+    notification("update_counter", client_id=counter_id)
 
     socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     socketio.emit('trigger_patient_ongoing', {})  
@@ -1881,7 +1881,7 @@ def counter_select_patient(counter_id, patient_id):
     call_specific_patient(counter_id, patient_id)
 
     notification("update_patients")
-    notification("update_counter", counter_id)    
+    notification("update_counter", client_id=counter_id)    
 
     return '', 204
 
@@ -1958,6 +1958,7 @@ def event_stream_dict(client_id):
         try:
             while True:
                 message = client.get()
+                print("message test", message)
                 yield f'data: {message}\n\n'
         except GeneratorExit:
             # Assurez-vous de retirer le client de la liste en cas de fermeture

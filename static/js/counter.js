@@ -5,6 +5,7 @@ var eventSourceforCounter = new EventSource(`/events/update_counter/${counter_id
 
 
 eventSourceforCounter.onmessage = function(event) {
+    console.log("Refresh :", event.data);
     htmx.trigger('#button_section', 'refresh_buttons', {target: "#button_section"});
     htmx.trigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});
 };
