@@ -1,3 +1,8 @@
+announce_infos_display_time = document.getElementById('announce_infos_display_time').innerText;
+announce_infos_display = ;
+initGallery();
+
+
 // création du flux SSE
 const eventSourceCalling = new EventSource("/events/update_patients");
         eventSourceCalling.onmessage = function(event) {
@@ -61,3 +66,27 @@ function requestPermissions() {
                 }
             });
         }
+
+
+function isGallery() {
+    if (document.getElementById('announce_infos_display').innerText == "true") {
+        startGallery();
+    }
+}
+
+function startGallery() {
+    announce_infos_display_time = document.getElementById('announce_infos_display_time').innerText;    
+}
+
+
+let currentIndex = 0; // Commencer par la première image après l'image de départ
+const changeInterval = 30000; // 30 secondes, ajustable
+
+function updateImage() {
+    currentIndex++; // Passer à la prochaine image
+    // Utiliser HTMX pour charger la prochaine image
+    htmx.ajax('GET', `/next_image/${currentIndex}`, '#div_pub');
+}
+
+// Définir un intervalle pour mettre à jour l'image
+setInterval(updateImage, changeInterval);

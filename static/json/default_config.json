@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.2",
+    "version": "0.3",
     "comments": "Version de test",
         "configurations": {
             "cron_delete_patient_table_activated": true,
@@ -11,6 +11,7 @@
             "announce_sound": true,
             "announce_call_text": "Le patient {P} est invité au comptoir {C}",
             "announce_call_sound": "Le patient {P} est invité au comptoir {C}",
-            "announce_infos_display": true
+            "announce_infos_display": true,
+            "announce_infos_display_time": 30
     }
 }

@@ -445,7 +445,7 @@ def update_switch():
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(key=key).first()
         # MAJ Config
-        app.config[key.upper()] = value
+        app.config[key.upper()] = True if value == "true" else False
         if config_option:
             config_option.value_bool = True if value == "true" else False
             db.session.commit()
@@ -1300,7 +1300,6 @@ def delete_button_image(button_id):
 @app.route('/admin/announce')
 def announce_page():
     announce_sound = app.config['ANNOUNCE_SOUND']
-    print("langue", announce_sound)
     announce_call_text = app.config['ANNOUNCE_CALL_TEXT']
     return render_template('/admin/announce.html', 
                             announce_sound = announce_sound,
@@ -1314,7 +1313,10 @@ def announce_page():
 @app.route('/admin/info')
 def admin_info():
     announce_infos_display = app.config['ANNOUNCE_INFOS_DISPLAY']
-    return render_template('/admin/info.html', announce_infos_display=announce_infos_display)
+    announce_infos_display_time = app.config['ANNOUNCE_INFOS_DISPLAY_TIME']
+    return render_template('/admin/info.html', 
+                            announce_infos_display=announce_infos_display,
+                            announce_infos_display_time=announce_infos_display_time)
 
 
 # --------  Fin ADMIN -> Page INfos ---------
@@ -1329,6 +1331,11 @@ def patient_right_page_default():
 
 
 def generate_audio_calling(counter_number, next_patient):
+    print("SOUND", app.config["ANNOUNCE_SOUND"])
+    # Si on ne veux pas de son, on quitte
+    if not app.config["ANNOUNCE_SOUND"]:
+        return
+    
     # Texte pour la synthèse vocale
     text_template = app.config["ANNOUNCE_CALL_SOUND"]
     text = replace_balise_announces(text_template, next_patient)
@@ -1893,7 +1900,10 @@ def counter_select_patient(counter_id, patient_id):
 
 @app.route('/display')
 def display():
-    return render_template('/announce/announce.html', current_patients=current_patients)
+    return render_template('/announce/announce.html', 
+                            current_patients=current_patients,
+                            announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
+                            announce_infos_display_time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'])
 
 
 @app.route('/announce/patients_calling')
@@ -2165,6 +2175,9 @@ def load_configuration(app, ConfigOption):
     announce_infos_display = ConfigOption.query.filter_by(key="announce_infos_display").first()
     if announce_infos_display:
         app.config['ANNOUNCE_INFOS_DISPLAY'] = announce_infos_display.value_bool
+    announce_infos_display_time = ConfigOption.query.filter_by(key="announce_infos_display_time").first()
+    if announce_infos_display_time:
+        app.config['ANNOUNCE_INFOS_DISPLAY_TIME'] = announce_infos_display_time.value_int
     announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first()
     if announce_call_text:
         app.config['ANNOUNCE_CALL_TEXT'] = announce_call_text.value_str

@@ -17,6 +17,11 @@
         <audio id="player" src="" hidden></audio>
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
             <h1 id="text_title">Bienvenue à la Pharmacie Sainte-Agathe</h1>
+            <h3 id="text_subtitle"></h3>
+            <div style="display: block;">
+                <span id="announce_infos_display">{{announce_infos_display}}</span>
+                <span id="announce_infos_display_time">{{announce_infos_display_time}}</span>
+            </div>
         </div>
 
         <div id="div_center">
@@ -24,7 +29,7 @@
                 <div id="div_calling"
                         hx-trigger="refresh_calling, load" 
                         hx-get="/announce/patients_calling" 
-                        hx-swap="innerHTML"">
+                        hx-swap="innerHTML">
                     <!-- PATIENT CALLING -->
                 </div>
 
@@ -56,17 +61,7 @@
     <script type="text/javascript">
 
 
-    let currentIndex = 0; // Commencer par la première image après l'image de départ
-    const changeInterval = 30000; // 30 secondes, ajustable
 
-    function updateImage() {
-        currentIndex++; // Passer à la prochaine image
-        // Utiliser HTMX pour charger la prochaine image
-        htmx.ajax('GET', `/next_image/${currentIndex}`, '#div_pub');
-    }
-
-    // Définir un intervalle pour mettre à jour l'image
-    setInterval(updateImage, changeInterval);
 
     </script>
 
