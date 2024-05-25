@@ -9,6 +9,12 @@
         <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
         <link rel="stylesheet" href="../static/css/display.css">
+        <!-- Swiper-->
+        <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
+        />
+        <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 </head>
 <body>
 
@@ -18,10 +24,6 @@
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
             <h1 id="text_title">Bienvenue à la Pharmacie Sainte-Agathe</h1>
             <h3 id="text_subtitle"></h3>
-            <div style="display: block;">
-                <span id="announce_infos_display">{{announce_infos_display}}</span>
-                <span id="announce_infos_display_time">{{announce_infos_display_time}}</span>
-            </div>
         </div>
 
         <div id="div_center">
@@ -41,7 +43,10 @@
                 </div>
             </div>
 
-            <div id="div_pub">
+            <div id="div_pub"
+                hx-get="/announce/init_gallery"
+                hx-swap="innerHTML"
+                hx-trigger="load">
                 <!-- PUB / ANNONCES -->
             </div>
 

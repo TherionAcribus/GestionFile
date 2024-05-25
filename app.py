@@ -2107,15 +2107,12 @@ def test_disconnect():
     print('Client disconnected')
 
 
-# Liste des images dans le répertoire statique
-image_dir = os.path.join(app.static_folder, "images/annonces")
-images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
-
-@app.route('/next_image/<int:index>')
-def next_image(index):
-    # Sélectionner l'image suivante en boucle
-    image_url = images[index % len(images)]
-    return render_template('htmx/display_image_announcement.html', image_url=image_url)
+@app.route('/announce/init_gallery')
+def announce_init_gallery():
+    image_dir = os.path.join(app.static_folder, "images/annonces")
+    images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
+    return render_template('announce/gallery.html', images=images,
+                            time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'])
 
 
 # Définir un filtre pour Jinja2

@@ -1,0 +1,39 @@
+<!-- Structure de Swiper -->
+<div class="swiper">
+    <div class="swiper-wrapper">
+        <!-- Images ajoutées dynamiquement -->
+
+        {% for image in images %}
+        <div class="swiper-slide">
+            <img src="{{ image }}" alt="Slide image">
+        </div>
+        {% endfor %}            
+    </div>
+</div>
+
+
+<script>
+    document.addEventListener('htmx:afterSettle', function(evt) {
+        console.log("Swiper...");
+        delay_timer = {{time}} * 1000;
+        console.log(delay_timer);
+        if (!window.swiperInstance) {  // Vérifie si l'instance de Swiper existe déjà
+        window.swiperInstance = new Swiper('.swiper', {
+            loop: true,
+            effect: 'slide',
+            slidesPerView: 1,
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+            },
+            autoplay: {
+                delay: delay_timer,
+                disableOnInteraction: false,
+            }
+        });
+    } else {
+        window.swiperInstance.update();  // Met à jour l'instance existante de Swiper
+    }
+    });
+
+</script>

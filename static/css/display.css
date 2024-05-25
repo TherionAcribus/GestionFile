@@ -112,3 +112,14 @@ html, body {
     display: block;    /* Élimine l'espace supplémentaire en dessous de l'image */
     margin: auto;      /* Centre l'image horizontalement et verticalement */
 }
+
+.swiper {
+    width: 600px;
+    height: 1000px;
+}
+
+.swiper-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Cela garantit que l'image couvre la diapositive mais conserve ses proportions */
+}
