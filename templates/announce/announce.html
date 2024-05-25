@@ -35,12 +35,14 @@
                     <!-- PATIENT CALLING -->
                 </div>
 
-                <div id="div_ongoing"
-                        hx-trigger="refresh_ongoing, load" 
-                        hx-get="/announce/patients_ongoing" 
-                        hx-swap="innerHTML">
-                    <!-- PATIENT ON GOING -->
-                </div>
+                {% if announce_ongoing_display %}
+                    <div id="div_ongoing"
+                            hx-trigger="refresh_ongoing, load" 
+                            hx-get="/announce/patients_ongoing" 
+                            hx-swap="innerHTML">
+                        <!-- PATIENT ON GOING -->
+                    </div>
+                {% endif %}
             </div>
 
         {% if announce_infos_display %}

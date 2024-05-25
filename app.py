@@ -1323,12 +1323,14 @@ def delete_button_image(button_id):
 def announce_page():
     announce_sound = app.config['ANNOUNCE_SOUND']
     announce_call_text = app.config['ANNOUNCE_CALL_TEXT']
+    announce_ongoing_display = app.config['ANNOUNCE_ONGOING_DISPLAY']
     announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
     announce_title = app.config['ANNOUNCE_TITLE']
     announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
     return render_template('/admin/announce.html', 
                             announce_sound = announce_sound,
                             announce_call_text=announce_call_text,
+                            announce_ongoing_display=announce_ongoing_display,
                             announce_ongoing_text=announce_ongoing_text,
                             announce_title=announce_title,
                             announce_subtitle=announce_subtitle)
@@ -1933,11 +1935,13 @@ def counter_select_patient(counter_id, patient_id):
 def display():
     announce_title = app.config['ANNOUNCE_TITLE'] 
     announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
+    announce_ongoing_display = app.config['ANNOUNCE_ONGOING_DISPLAY']
     return render_template('/announce/announce.html', 
                             current_patients=current_patients,
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
                             announce_title=announce_title,
-                            announce_subtitle=announce_subtitle)
+                            announce_subtitle=announce_subtitle,
+                            announce_ongoing_display=announce_ongoing_display)
 
 
 @app.route('/announce/patients_calling')
@@ -2243,6 +2247,9 @@ def load_configuration(app, ConfigOption):
     announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first()
     if announce_call_text:
         app.config['ANNOUNCE_CALL_TEXT'] = announce_call_text.value_str
+    announce_ongoing_display = ConfigOption.query.filter_by(key="announce_ongoing_display").first()
+    if announce_ongoing_display:
+        app.config['ANNOUNCE_ONGOING_DISPLAY'] = announce_ongoing_display.value_bool
     announce_ongoing_text = ConfigOption.query.filter_by(key="announce_ongoing_text").first()
     if announce_ongoing_text:
         app.config['ANNOUNCE_ONGOING_TEXT'] = announce_ongoing_text.value_str

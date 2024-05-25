@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.1",
+    "version": "0.2",
     "comments": "Version de test",
         "configurations": {
             "cron_delete_patient_table_activated": true,
@@ -12,6 +12,7 @@
             "announce_title": "Bienvenue à la pharmacie Sainte-Agathe",
             "announce_subtitle": "Merci de vous enregistrer sur la borne à l'entrée",
             "announce_call_text": "Le patient {P} est invité au comptoir {C}",
+            "announce_ongoing_display": true,
             "announce_ongoing_text": "Comptoir {C} : Patient {P}",
             "announce_call_sound": "Le patient {P} est invité au comptoir {C}",
             "announce_infos_display": true,

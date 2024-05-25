@@ -60,6 +60,24 @@
                     Enregistrer</button>
     </div>
 
+    <div>
+        <!-- Switch -->
+        <div class="switch">
+            <span>Afficher les patients au comptoir : </span>
+            <label>
+            Muet
+            <input id="announce_ongoing_display" 
+                    type="checkbox"
+                    {% if announce_ongoing_display == True %}checked{% endif %}
+                    hx-post="/admin/update_switch"
+                    hx-target="#invisible"
+                    hx-vals='js:{"key": "announce_ongoing_display",
+                                "value": document.getElementById("announce_ongoing_display").checked}'>
+            <span class="lever"></span>
+            Activé
+            </label>
+        </div>
+
     <div class="row">
         <div class="row">
             <div class="input-field col s12">
@@ -91,7 +109,7 @@
             Muet
             <input id="announce_sound" 
                     type="checkbox"
-                    {% if announce_sound == "true" %}checked{% endif %}
+                    {% if announce_sound == True %}checked{% endif %}
                     hx-post="/admin/update_switch"
                     hx-target="#invisible"
                     hx-vals='js:{"key": "announce_sound",
