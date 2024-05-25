@@ -22,8 +22,8 @@
         <button onclick="initializeAudio()">Activer le Son</button>
         <audio id="player" src="" hidden></audio>
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-            <h1 id="text_title">Bienvenue à la Pharmacie Sainte-Agathe</h1>
-            <h3 id="text_subtitle"></h3>
+            <h1 id="text_title">{{announce_title}}</h1>
+            <h3 id="text_subtitle">{{announce_subtitle}}</h3>
         </div>
 
         <div id="div_center">
@@ -43,12 +43,14 @@
                 </div>
             </div>
 
+        {% if announce_infos_display %}
             <div id="div_pub"
                 hx-get="/announce/init_gallery"
                 hx-swap="innerHTML"
                 hx-trigger="load">
                 <!-- PUB / ANNONCES -->
             </div>
+        {% endif %}
 
         </div>
 
@@ -57,9 +59,6 @@
         </div>
 
     </div>
-
-
-
 
     </div>
 

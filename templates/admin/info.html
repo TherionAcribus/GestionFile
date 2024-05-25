@@ -34,6 +34,32 @@
                 Enregistrer</button>
     </div>
 
+    A{{announce_infos_transition}}
+    <div class="input-field col s12">
+        <select
+          id="announce_infos_transition"
+          hx-post="/admin/update_select"
+          hx-target="#invisible"
+          hx-vals='js:{"key": "announce_infos_transition", "value": document.getElementById("announce_infos_transition").value}'>
+          <option value="" disabled selected>Choisir le mode de transition</option>
+          <option value="slide" {% if announce_infos_transition == "slide" %}selected{% endif %}>Slide</option>
+          <option value="fade" {% if announce_infos_transition == "fade" %}selected{% endif %}>Fade</option>
+          <option value="cube" {% if announce_infos_transition == "cube" %}selected{% endif %}>Cube</option>
+          <option value="coverflow" {% if announce_infos_transition == "coverflow" %}selected{% endif %}>coverflow</option>
+          <option value="flip" {% if announce_infos_transition == "flip" %}selected{% endif %}>flip</option>
+          <option value="cards" {% if announce_infos_transition == "cards" %}selected{% endif %}>cards</option>
+        </select>
+        <label>Mode de transition</label>
+      </div>
+
+
+    <div>
+        <button class="btn"
+                hx-get="/announce/refresh"
+                hx-target="#invisible"                    
+                >Relancer la page "Annonce"</button>
+    </div>
+
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
     

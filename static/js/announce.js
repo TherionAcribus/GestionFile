@@ -17,7 +17,6 @@ function refresh_calling_list() {
 }
 
 
-
 const eventSourceSoundCalling = new EventSource("/events/sound_calling");
 eventSourceSoundCalling.onmessage = function(event) {
     // Utiliser HTMX pour déclencher AUDIO
@@ -30,6 +29,7 @@ eventSourceSoundCalling.onmessage = function(event) {
     console.log("Playing audio...", audioUrl);
     playAudio(audioUrl);
 }
+
 
 function playAudio(audioUrl) {
     const player = document.getElementById('player');
@@ -63,3 +63,21 @@ function requestPermissions() {
         }
 
 
+// stream permettant de rafraichir la page pour appliquer les modifications
+const eventSourceAnnounce = new EventSource("/events/update_announce");
+eventSourceAnnounce.onmessage = function(event) {
+    console.log("Update announce");
+    refresh_page();            
+};
+
+// refresh page pour appliquer les modifications
+function refresh_page() {
+    console.log("Refresh page...");
+    eventSourceAnnounce.close(); // Ferme la connexion SSE
+    window.location.reload();
+}
+
+
+window.addEventListener('beforeunload', function() {
+    eventSourceAnnounce.close();
+});

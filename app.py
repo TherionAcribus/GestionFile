@@ -464,7 +464,7 @@ def update_input():
     key = request.values.get('key')
     value = request.values.get('value')
     # verification que l'entrée user utilise uniquement le balises {P}, {C} ou {M}. Sinon plantage lors du format
-    if key == "announce_call_text" or key == "announce_call_sound":
+    if key in ["announce_call_text", "announce_call_sound", "announce_ongoing_text"]:
         check = check_balises(value)
         if check["success"]:
             value = check["value"]
@@ -487,6 +487,28 @@ def update_input():
             print(e)
             return display_toast(success='False', message=str(e))
 
+
+@app.route('/admin/update_select', methods=['POST'])
+def update_select():
+    """ Mise à jour des selects d'options de l'application """
+    key = request.values.get('key')
+    value = request.values.get('value')
+    print("update_select", key, value)
+    try:
+        # MAJ BDD
+        config_option = ConfigOption.query.filter_by(key=key).first()        
+        # MAJ Config
+        app.config[key.upper()] = value
+        if config_option:
+            config_option.value_str = value
+            db.session.commit()
+            
+            return display_toast()
+        else:
+            return display_toast(success='False', message="Option non trouvée.")
+    except Exception as e:
+            print(e)
+            return display_toast(success='False', message=str(e))
 
 
 def call_function_with_switch(key, value):
@@ -1301,9 +1323,15 @@ def delete_button_image(button_id):
 def announce_page():
     announce_sound = app.config['ANNOUNCE_SOUND']
     announce_call_text = app.config['ANNOUNCE_CALL_TEXT']
+    announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
+    announce_title = app.config['ANNOUNCE_TITLE']
+    announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
     return render_template('/admin/announce.html', 
                             announce_sound = announce_sound,
-                            announce_call_text=announce_call_text)
+                            announce_call_text=announce_call_text,
+                            announce_ongoing_text=announce_ongoing_text,
+                            announce_title=announce_title,
+                            announce_subtitle=announce_subtitle)
 
 # -------- fin de ADMIN -> Page Announce  ---------
 
@@ -1314,9 +1342,12 @@ def announce_page():
 def admin_info():
     announce_infos_display = app.config['ANNOUNCE_INFOS_DISPLAY']
     announce_infos_display_time = app.config['ANNOUNCE_INFOS_DISPLAY_TIME']
+    announce_infos_transition = app.config['ANNOUNCE_INFOS_TRANSITION']
+    print("announce_infos_transition", announce_infos_transition)
     return render_template('/admin/info.html', 
                             announce_infos_display=announce_infos_display,
-                            announce_infos_display_time=announce_infos_display_time)
+                            announce_infos_display_time=announce_infos_display_time,
+                            announce_infos_transition=announce_infos_transition)
 
 
 # --------  Fin ADMIN -> Page INfos ---------
@@ -1900,17 +1931,19 @@ def counter_select_patient(counter_id, patient_id):
 
 @app.route('/display')
 def display():
+    announce_title = app.config['ANNOUNCE_TITLE'] 
+    announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
     return render_template('/announce/announce.html', 
                             current_patients=current_patients,
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
-                            announce_infos_display_time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'])
+                            announce_title=announce_title,
+                            announce_subtitle=announce_subtitle)
 
 
 @app.route('/announce/patients_calling')
 def patients_calling():
     patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
     announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first().value_str
-    print("BACHIBOUZOUK")
     call_patients = []
     for patient in patients:
         call_patients.append(replace_balise_announces(announce_call_text, patient))
@@ -1919,14 +1952,34 @@ def patients_calling():
 
 @app.route('/announce/patients_ongoing')
 def patients_ongoing():
+    announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
     patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
-    print("Patients")
-    return render_template('announce/patients_ongoing.html', patients=patients)
+    ongoing_patients = []
+    for patient in patients:
+        ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
+    return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
 
 
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     return template.format(P=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
+
+
+@app.route('/announce/init_gallery')
+def announce_init_gallery():
+    image_dir = os.path.join(app.static_folder, "images/annonces")
+    images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
+    return render_template('announce/gallery.html', images=images,
+                            time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
+                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION'])
+
+
+@app.route('/announce/refresh')
+def announce_refresh():
+    """ Permet de rafraichir la page des annonces pour appliquer les changements """
+    notification("update_announce")
+    return '', 204
+
 # ---------------- FIN  PAGE AnnoNces FRONT ----------------
 
 
@@ -1938,6 +1991,7 @@ update_patients = []
 update_admin = []
 play_sound_streams = []
 counter_streams = {}
+update_announce = []
 
 
 def notify_clients(clients):
@@ -1997,6 +2051,10 @@ def events_update_counter(client_id):
 def events_update_admin():
     return Response(event_stream(update_admin), content_type='text/event-stream')
 
+@app.route('/events/update_announce')
+def events_update_announce():
+    return Response(event_stream(update_announce), content_type='text/event-stream')
+
 
 def notification(stream, data=None, client_id = None, audio_source=None):
     """ Effectue la communication avec les clients """
@@ -2006,6 +2064,10 @@ def notification(stream, data=None, client_id = None, audio_source=None):
     # SSE
     if stream == "update_patients":
         for client in update_patients:
+            client.put(message)
+    elif stream == "update_announce":
+        for client in update_announce:
+            print("update announce", client)
             client.put(message)
     elif stream == "update_admin":
         for client in update_admin:
@@ -2107,12 +2169,6 @@ def test_disconnect():
     print('Client disconnected')
 
 
-@app.route('/announce/init_gallery')
-def announce_init_gallery():
-    image_dir = os.path.join(app.static_folder, "images/annonces")
-    images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
-    return render_template('announce/gallery.html', images=images,
-                            time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'])
 
 
 # Définir un filtre pour Jinja2
@@ -2166,6 +2222,12 @@ def load_configuration(app, ConfigOption):
     printer = ConfigOption.query.filter_by(key="printer").first()
     if printer:
         app.config['PRINTER'] = printer.value_bool
+    announce_title = ConfigOption.query.filter_by(key="announce_title").first()
+    if announce_title:
+        app.config['ANNOUNCE_TITLE'] = announce_title.value_str
+    announce_subtitle = ConfigOption.query.filter_by(key="announce_subtitle").first()
+    if announce_subtitle:
+        app.config['ANNOUNCE_SUBTITLE'] = announce_subtitle.value_str
     announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
     if announce_sound:
         app.config['ANNOUNCE_SOUND'] = announce_sound.value_bool
@@ -2175,9 +2237,15 @@ def load_configuration(app, ConfigOption):
     announce_infos_display_time = ConfigOption.query.filter_by(key="announce_infos_display_time").first()
     if announce_infos_display_time:
         app.config['ANNOUNCE_INFOS_DISPLAY_TIME'] = announce_infos_display_time.value_int
+    announce_infos_transition = ConfigOption.query.filter_by(key="announce_infos_transition").first()
+    if announce_infos_transition:
+        app.config['ANNOUNCE_INFOS_TRANSITION'] = announce_infos_transition.value_str
     announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first()
     if announce_call_text:
         app.config['ANNOUNCE_CALL_TEXT'] = announce_call_text.value_str
+    announce_ongoing_text = ConfigOption.query.filter_by(key="announce_ongoing_text").first()
+    if announce_ongoing_text:
+        app.config['ANNOUNCE_ONGOING_TEXT'] = announce_ongoing_text.value_str
     cron_delete_patient_table_activated = ConfigOption.query.filter_by(key="cron_delete_patient_table_activated").first()
     announce_call_sound = ConfigOption.query.filter_by(key="announce_call_sound").first()
     if announce_call_sound:

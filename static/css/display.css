@@ -10,7 +10,7 @@ html, body {
 }
 
 #div_title_area {
-    height: 10%;
+    height: 15%;
     text-align: center;
     font-size: 50px;
     font-weight: bold;
@@ -19,7 +19,7 @@ html, body {
 }
 
 #div_center{
-    height: 90%;
+    height: 85%;
     display: grid;
     grid-template-columns: 1fr 1fr; /* Deux colonnes de taille égale */
     background-color: rgb(182, 245, 245);

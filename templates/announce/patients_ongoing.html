@@ -1,5 +1,7 @@
+{% if ongoing_patients %}
 <ul>
-    {% for patient in patients %}
-        <li class="text_patient_ongoing">Comptoir {{ patient.counter.name }} : {{ patient.call_number }} </li>
+    {% for ongoing_patient in ongoing_patients %}
+        <li class="text_patient_ongoing ">{{ ongoing_patient }}</li>
     {% endfor %}
 </ul>
+{% endif %}
