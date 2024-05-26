@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import re
 
 def validate_and_transform_text(user_input):

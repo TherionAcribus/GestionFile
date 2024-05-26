@@ -2020,19 +2020,20 @@ def event_stream(clients):
 
 
 def event_stream_dict(client_id):
-    while True:
-        client = Queue()
-        counter_streams[client_id] = client
-        try:
-            while True:
-                message = client.get()
-                print("message test", message)
-                yield f'data: {message}\n\n'
-        except GeneratorExit:
-            # Assurez-vous de retirer le client de la liste en cas de fermeture
-            counter_streams.pop(client_id, None)
-        finally:
-            counter_streams.pop(client_id, None)
+    client_queue = counter_streams[client_id]
+    print("client id", client_id)
+    try:
+        while True:
+            message = client_queue.get(timeout=30)  # Ajoute un timeout pour éviter le blocage
+            print("message test", message)
+            yield f'data: {message}\n\n'
+    except Queue.Empty:
+        yield 'data: no-message\n\n'
+    except GeneratorExit:
+        print("Generator exit, client disconnected")
+    finally:
+        counter_streams.pop(client_id, None)
+        print("Stream closed for client", client_id)
 
 
 @app.route('/events/update_patients')

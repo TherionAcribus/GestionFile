@@ -1,3 +1,5 @@
+import eventlet
+eventlet.monkey_patch()
 import json
 import os
 from datetime import datetime
