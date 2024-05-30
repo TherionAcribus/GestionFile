@@ -1,6 +1,6 @@
-import eventlet
-eventlet.monkey_patch()
 import re
+from datetime import datetime
+
 
 def validate_and_transform_text(user_input):
     """ Verif et conversion des entrées pour les annonces"""
@@ -15,3 +15,13 @@ def validate_and_transform_text(user_input):
     
     print("corrected_input", corrected_input)
     return {"success": True, "value": corrected_input}
+
+
+def parse_time(time_str):
+    """ Transforme une heure au format 'HH:MM' ou 'HH:MM:SS' en objet 'time' Python. """
+    if time_str:
+        if len(time_str.split(':')) == 2:  # Format HH:MM
+            return datetime.strptime(time_str, '%H:%M').time()
+        elif len(time_str.split(':')) == 3:  # Format HH:MM:SS
+            return datetime.strptime(time_str, '%H:%M:%S').time()
+    return None

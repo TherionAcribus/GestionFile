@@ -2,7 +2,7 @@ import eventlet
 eventlet.monkey_patch()
 import json
 import os
-from datetime import datetime
+from datetime import datetime, time
 
 # Mise à jour ou initialisation des options par défaut
 def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
@@ -45,6 +45,7 @@ def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
 def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
     """ Mise à jour de la BDD des boutons par defaut. Init """
 
+    print("MAJ Boutons")
     json_file='static/json/default_buttons.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -72,13 +73,30 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
             )
             db.session.add(new_version)
             db.session.commit()
+
+            for button_data in data['buttons']:
+                new_button = Button(
+                    code=button_data['code'],
+                    is_parent=button_data['is_parent'],
+                    label=button_data['label'],
+                    by_user=False,
+                    image_url=button_data['image_url'],
+                    is_active=button_data['is_active'],
+                    shape=button_data['shape']
+                )
+                db.session.add(new_button)
+
+            db.session.commit()
+
         
         # Mise à jour ou ajout de boutons
         for button_data in data['buttons']:
             print("maj boutons")
             button = Button.query.filter_by(code=button_data['code']).first()
+            print("button", button)
             # TODO Ne mettre à jour que si n'existe pas
             if button:
+                print("maj boutons")
                 button.is_parent = button_data['is_parent']
                 button.label = button_data['label']
                 button.by_user = False
@@ -232,6 +250,41 @@ def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
             update_version(db, ConfigVersion, 'algo_rules_version', data['version'], data['comments'])
         
         print("Algo_rules bien mis à jour !")
+
+
+def init_days_of_week_db_from_json(Weekday, db, app):
+    if Weekday.query.first() is None:
+        app.logger.info("Initialisation des jours de la semaine...")
+        for day in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']:
+            new_day = Weekday(name=day)
+            db.session.add(new_day)
+        db.session.commit()
+
+
+def init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app):
+    if ActivitySchedule.query.first() is None:
+        app.logger.info("Initialisation des horaires d'activité...")
+
+        with open('static/json/default_schedules.json', 'r', encoding='utf-8') as file:
+            schedules = json.load(file)
+
+        for schedule in schedules:
+            # Convertir les heures de début et de fin en objets time
+            start_time_obj = time.fromisoformat(schedule['start'])
+            end_time_obj = time.fromisoformat(schedule['end'])
+            new_schedule = ActivitySchedule(
+                name=schedule['name'],
+                start_time=start_time_obj,
+                end_time=end_time_obj
+            )
+        
+            # Associer les jours de la semaine
+            day_ids = [int(day.strip()) for day in schedule['days'].split(',')]
+            weekdays = Weekday.query.filter(Weekday.id.in_(day_ids)).all()
+            new_schedule.weekdays.extend(weekdays)
+            db.session.add(new_schedule)
+
+        db.session.commit()
 
 
 def update_version(db, ConfigVersion, key, version, comments):

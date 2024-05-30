@@ -10,7 +10,7 @@ eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
@@ -25,8 +25,8 @@ import os
 from queue import Queue
 import logging
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json
-from utils import validate_and_transform_text
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
+from utils import validate_and_transform_text, parse_time
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -66,7 +66,6 @@ def remove_session(ex=None):
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
 babel = Babel(app)
-
 
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
@@ -138,15 +137,51 @@ class Pharmacist(db.Model):
         return f'<Pharmacist {self.name}>'
 
 
+activity_schedule_weekday = db.Table('activity_schedule_weekday',
+    db.Column('schedule_id', db.Integer, db.ForeignKey('activity_schedules.id'), primary_key=True),
+    db.Column('weekday_id', db.Integer, db.ForeignKey('weekdays.id'), primary_key=True)
+)
+
+
+class Weekday(db.Model):
+    __tablename__ = 'weekdays'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(10), nullable=False, unique=True)  # Par exemple 'Monday', 'Tuesday', etc.
+    schedules = relationship('ActivitySchedule', secondary=activity_schedule_weekday, back_populates='weekdays')
+
+    def __repr__(self):
+        return f'<Weekday {self.name}>'
+    
+
+
 class Activity(db.Model):
     __tablename__ = 'activity'
     id = db.Column(db.Integer, Sequence('activity_id_seq'), primary_key=True)
-    code = db.Column(db.String(20), nullable=False, unique=True)
     name = db.Column(db.String(100), nullable=False)
     letter = db.Column(db.String(1), nullable=False)
+    schedules = relationship('ActivitySchedule', secondary='activity_schedule_link', back_populates='activities')
 
     def __repr__(self):
-        return f'<Activity {self.code} - {self.name}>'
+        return f'<Activity - {self.name}>'
+    
+
+# Table d'association pour la relation many-to-many
+activity_schedule_link = db.Table('activity_schedule_link',
+    db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True),
+    db.Column('schedule_id', db.Integer, db.ForeignKey('activity_schedules.id'), primary_key=True)
+)
+
+class ActivitySchedule(db.Model):
+    __tablename__ = 'activity_schedules'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50))
+    start_time = db.Column(db.Time)
+    end_time = db.Column(db.Time)
+    weekdays = relationship('Weekday', secondary='activity_schedule_weekday', back_populates='schedules')
+    activities = relationship('Activity', secondary='activity_schedule_link', back_populates='schedules')
+
+    def __repr__(self):
+        return f'<ActivitySchedule from {self.start_time} to {self.end_time}>'
     
 
 # pour l'instant les jours ne sont pas utilisées... Peut être plus simple d'ajouter une table pour les jours de la semaine ????
@@ -353,7 +388,7 @@ def clear_all_patients_from_db():
             db.session.query(Patient).delete()
             db.session.commit()
             app.logger.info("La table Patient a été vidée")
-            notification("update_patients")
+            communication("update_patients")
             return display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
@@ -410,7 +445,7 @@ def delete_patient(patient_id):
 
         db.session.delete(patient)
         db.session.commit()
-        notification("update_patients")
+        communication("update_patients")
         return display_toast()
 
     except Exception as e:
@@ -426,7 +461,7 @@ def create_new_patient_auto():
     print("activity", activity)
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
-    notification("update_patients")
+    communication("update_patients")
 
     return "", 204
 
@@ -533,11 +568,9 @@ def check_balises(value):
 def admin_app():
     numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first().value_bool
     announce_sound = ConfigOption.query.filter_by(key="announce_sound").first().value_bool
-    announce_staff_name = ConfigOption.query.filter_by(key="announce_staff_name").first().value_bool
     return render_template('/admin/app.html', 
                             numbering_by_activity = numbering_by_activity, 
-                            announce_sound = announce_sound,
-                            announce_staff_name = announce_staff_name)
+                            announce_sound = announce_sound)
 
 
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
@@ -591,7 +624,7 @@ def scheduler_clear_all_patients():
     try:
         scheduler.add_job(id='Clear Patient Table', func=clear_all_patients_from_db, trigger='cron', hour=00, minute=00)
         app.logger.info("Job 'Clear Patient Table' successfully added.")
-        notification("update_admin", data="schedule_tasks_list")
+        communication("update_admin", data="schedule_tasks_list")
         return True
     except Exception as e:
         app.logger.error(f"Failed to add job 'Clear Patient Table': {e}")
@@ -603,7 +636,7 @@ def remove_scheduler_clear_all_patients():
         # Supprime le job à l'aide de son id
         scheduler.remove_job('Clear Patient Table')
         app.logger.info("Job 'Clear Patient Table' successfully removed.")
-        notification("update_admin", data="schedule_tasks_list")
+        communication("update_admin", data="schedule_tasks_list")
         return True
     except Exception as e:
         app.logger.error(f"Failed to remove job 'Clear Patient Table': {e}")
@@ -622,7 +655,7 @@ def clear_old_patients_table():
         # Supprimez ces patients
         old_patients.delete(synchronize_session='fetch')
         db.session.commit()
-        notification("update_patients")
+        communication("update_patients")
         app.logger.info(f"Deleted old patients not from today ({today}).")
     else:
         app.logger.info("Deletion of old patients is disabled.")
@@ -654,10 +687,10 @@ def update_member(member_id):
         member = Pharmacist.query.get(member_id)
         if member:
             if request.form.get('name') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                display_toast(success=False, message="Le nom est obligatoire")
                 return ""
             if request.form.get('initials') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Les initiales sont obligatoires"})
+                display_toast(success=False, message="Les initiales sont obligatoires")
                 return ""
             member.name = request.form.get('name', member.name)
             member.initials = request.form.get('initials', member.initials)
@@ -672,14 +705,14 @@ def update_member(member_id):
             member.activities = new_activities
 
             db.session.commit()
-            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
+            display_toast(success=False, message="Membre de l'équipe introuvable")
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+            display_toast(success=False, message="Erreur : " + str(e))
             return jsonify(status="error", message=str(e)), 500
 
 
@@ -696,16 +729,16 @@ def delete_staff(member_id):
     try:
         member = Pharmacist.query.get(member_id)
         if not member:
-            socketio.emit('display_toast', {'success': False, 'message': "Membre non trouvé"})
+            display_toast(success=False, message="Membre de l'équipe non trouvé")
             return display_staff_table()
 
         db.session.delete(member)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        display_toast(success=True, message="Suppression réussie")
         return display_staff_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="Erreur : " + str(e))
         return display_staff_table()
     
 
@@ -726,10 +759,10 @@ def add_new_staff():
         activities_ids = request.form.getlist('activities')
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            display_toast(success=False, message="Nom obligatoire")
             return display_staff_table()
         if not initials:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Initiales obligatoires"})
+            display_toast(success=False, message="Initiales obligatoires")
             return display_staff_table()
 
         new_staff = Pharmacist(
@@ -741,22 +774,20 @@ def add_new_staff():
         db.session.commit()
 
         # Associer les activités sélectionnées avec le nouveau pharmacien
-        print("ACTIVITIES IDS", activities_ids)
         for activity_id in activities_ids:
-            print("ACTIVITY ID", activity_id)
             activity = Activity.query.get(int(activity_id))
             if activity:
                 new_staff.activities.append(activity)
         db.session.commit()
 
-        socketio.emit('delete_add_staff_form')
-        socketio.emit('display_toast', {'success': True, 'message': "Membre ajouté avec succès"})
+        communication("update_admin", data="delete_add_staff_form")
+        display_toast(success=True, message="Membre ajouté avec succès")
 
         return display_staff_table()
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=True, message= "Erreur : " + str(e))
         return display_staff_table()
 
 # --------  FIN  de ADMIN -> Staff   ---------
@@ -772,8 +803,10 @@ def activity():
 @app.route('/admin/activity/table')
 def display_activity_table():
     activities = Activity.query.all()
-    print("ALL", staff)
-    return render_template('admin/activity_htmx_table.html', activities=activities)
+    schedules = ActivitySchedule.query.all()
+    return render_template('admin/activity_htmx_table.html',
+                            activities=activities,
+                            schedules=schedules)
 
 
 # mise à jour des informations d'une activité 
@@ -785,26 +818,24 @@ def update_activity(activity_id):
             if request.form.get('name') == '':
                 socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
                 return ""
-            if request.form.get('code') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Le code est obligatoire"})
-                return ""
             if request.form.get('letter') == '':
                 socketio.emit('display_toast', {'success': False, 'message': "La lettre est obligatoire"})
                 return ""
             activity.name = request.form.get('name', activity.name)
-            activity.code = request.form.get('code', activity.code)
             activity.letter = request.form.get('letter', activity.letter)
+
+            # Mettre à jour les horaires
+            schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
+            activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
+
             db.session.commit()
-            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
-            return ""
+            return display_toast(message="Activité mise à jour")
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Activité introuvable"})
-            return ""
+            return display_toast(success=False, message="Activité introuvable")
 
     except Exception as e:
-            print(e)
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            return ""
+        app.logger.error(str(e))
+        return display_toast(success = False, message=str(e))
 
 
 # affiche la modale pour confirmer la suppression d'une activité
@@ -836,33 +867,39 @@ def delete_activity(activity_id):
 # affiche le formulaire pour ajouter un activité
 @app.route('/admin/activity/add_form')
 def add_activity_form():
-    return render_template('/admin/activity_add_form.html')
+    schedules = ActivitySchedule.query.all()
+    return render_template('/admin/activity_add_form.html', schedules=schedules)
 
 
-# enregistre le membre dans la Bdd
+# enregistre l'activité' dans la Bdd
 @app.route('/admin/activity/add_new_activity', methods=['POST'])
 def add_new_activity():
     try:
         name = request.form.get('name')
-        code = request.form.get('code')
         letter = request.form.get('letter')
+        schedule_ids = request.form.getlist('schedules')
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
             socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
             return display_activity_table()
-        if not code:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Code obligatoire"})
-            return display_activity_table()
+
 
         new_activity = Activity(
             name=name,
-            code=code,
             letter=letter,
         )
+
         db.session.add(new_activity)
+
         db.session.commit()
-        socketio.emit('delete_add_activity_form')
-        socketio.emit('display_toast', {'success': True, 'message': "Activité ajoutée avec succès"})
+
+        for schedule_id in schedule_ids:
+            schedule = ActivitySchedule.query.get(int(schedule_id))
+            if schedule:
+                new_activity.schedules.append(schedule)
+        db.session.commit()
+
+        communication("update_admin", data="delete_add_activity_form")
 
         return display_activity_table()
 
@@ -871,6 +908,118 @@ def add_new_activity():
         socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
         return display_activity_table()
 
+
+# affiche le tableau des plages horaires
+@app.route('/admin/schedule/table')
+def display_schedule_table():
+    schedules = ActivitySchedule.query.all()
+    weekdays = Weekday.query.all()
+    return render_template('admin/schedule_htmx_table.html',
+                            schedules=schedules,
+                            weekdays=weekdays)
+
+
+# mise à jour des informations d'une activité 
+@app.route('/admin/schedule/schedule_update/<int:schedule_id>', methods=['POST'])
+def update_schedule(schedule_id):
+    try:
+        schedule = ActivitySchedule.query.get(schedule_id)
+        if schedule:
+            schedule.name = request.form.get('name', schedule.name)
+            start_time_str = request.form.get('start_time')
+            end_time_str = request.form.get('end_time')
+            schedule.start_time = parse_time(start_time_str) if start_time_str else schedule.start_time
+            schedule.end_time = parse_time(end_time_str) if end_time_str else schedule.end_time
+
+            # Mettre à jour les horaires
+            weekdays_ids = request.form.getlist('weekdays')  # Cela devrait retourner une liste de IDs
+            schedule.weekdays = [Weekday.query.get(int(id)) for id in weekdays_ids]
+
+            db.session.commit()
+            return display_toast(message="Plage horaire mise à jour")
+        else:
+            return display_toast(success=False, message="Plage horaire introuvable")
+
+    except Exception as e:
+        app.logger.error(str(e))
+        return display_toast(success = False, message=str(e))
+
+
+# affiche le formulaire pour ajouter un activité
+@app.route('/admin/schedule/add_form')
+def add_schedule_form():
+    weekdays = Weekday.query.all()
+    return render_template('/admin/schedule_add_form.html', weekdays=weekdays)
+
+
+# enregistre l'activité' dans la Bdd
+@app.route('/admin/schedule/add_new_schedule', methods=['POST'])
+def add_new_schedule():
+    print("add_new_schedule")
+    try:
+        print(request.form)
+        name = request.form.get('name')
+        start_time_str = request.form.get('start_time')
+        end_time_str = request.form.get('end_time')
+        start_time = parse_time(start_time_str)
+        end_time = parse_time(end_time_str)
+
+        if not name:  # Vérifiez que les champs obligatoires sont remplis
+            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            return display_schedule_table()
+
+        new_schedule = ActivitySchedule(
+            name=name,
+            start_time=start_time,
+            end_time=end_time)
+
+        db.session.add(new_schedule)
+
+        db.session.commit()
+
+        weekdays_ids = request.form.getlist('weekdays')  # Cela devrait retourner une liste de IDs
+        for weekdays_id in weekdays_ids:
+            weekday = Weekday.query.get(int(weekdays_id))
+            if weekday:
+                new_schedule.weekdays.append(weekday)
+        db.session.commit()
+
+        communication("update_admin", data="delete_add_schedule_form")
+
+        return display_schedule_table()
+
+    except Exception as e:
+        db.session.rollback()
+        print(e)
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        return display_schedule_table()
+    
+
+# affiche la modale pour confirmer la suppression d'une plage horaire
+@app.route('/admin/schedule/confirm_delete/<int:schedule_id>', methods=['GET'])
+def confirm_delete_schedule(schedule_id):
+    schedule = ActivitySchedule.query.get(schedule_id)
+    return render_template('/admin/schedule_modal_confirm_delete.html', schedule=schedule)
+
+
+# supprime un membre de l'equipe
+@app.route('/admin/schedule/delete/<int:schedule_id>', methods=['GET'])
+def delete_schedule(schedule_id):
+    try:
+        schedule = ActivitySchedule.query.get(schedule_id)
+        if not schedule:
+            socketio.emit('display_toast', {'success': False, 'message': "Plage horaire non trouvée"})
+            return display_schedule_table()
+
+        db.session.delete(schedule)
+        db.session.commit()
+        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+
+        return display_schedule_table()
+
+    except Exception as e:
+        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        return display_schedule_table()
 
 # -------- Fin de ADMIN -> Activity  ---------
 
@@ -1388,7 +1537,7 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Envoi du chemin relatif via Socket.IO
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    notification("update_audio", audio_source=audio_url)
+    communication("update_audio", audio_source=audio_url)
 
 
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
@@ -1408,8 +1557,8 @@ def call_specific_patient(counter_id, patient_id):
         db.session.commit()
 
         # Notifier tous les clients et mettre à jour le comptoir
-        notification("update_patients")
-        notification("update_counter", client_id=counter_id)
+        communication("update_patients")
+        communication("update_counter", client_id=counter_id)
 
         generate_audio_calling(counter_id, next_patient)
     else:
@@ -1430,8 +1579,8 @@ def validate_patient(counter_id, patient_id):
         current_patient.status = 'ongoing'
         db.session.commit()
 
-    notification("update_patients")
-    notification("update_counter", client_id=counter_id)    
+    communication("update_patients")
+    communication("update_counter", client_id=counter_id)    
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return '', 204  # No content to send back
@@ -1513,7 +1662,7 @@ def left_page_validate_patient(activity):
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
     socketio.emit('trigger_update_patient', {})
-    notification("update_patients")
+    communication("update_patients")
     #socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
@@ -1678,8 +1827,8 @@ def validate_and_call_next(counter_id):
     # TODO Prevoir que ne renvoie rien
     next_patient = call_next(counter_id)
 
-    notification("update_patients")
-    notification("update_counter", client_id=counter_id)
+    communication("update_patients")
+    communication("update_counter", client_id=counter_id)
 
     socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
     socketio.emit('trigger_patient_ongoing', {})  
@@ -1920,8 +2069,8 @@ def counter_select_patient(counter_id, patient_id):
     print("counter_select_patient", counter_id, patient_id)
     call_specific_patient(counter_id, patient_id)
 
-    notification("update_patients")
-    notification("update_counter", client_id=counter_id)    
+    communication("update_patients")
+    communication("update_counter", client_id=counter_id)    
 
     return '', 204
 
@@ -1981,7 +2130,7 @@ def announce_init_gallery():
 @app.route('/announce/refresh')
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
-    notification("update_announce")
+    communication("update_announce")
     return '', 204
 
 # ---------------- FIN  PAGE AnnoNces FRONT ----------------
@@ -2005,7 +2154,6 @@ def notify_clients(clients):
         except:
             pass
 
-
 def event_stream(clients):
     while True:
         client = Queue()
@@ -2021,14 +2169,15 @@ def event_stream(clients):
 
 def event_stream_dict(client_id):
     client_queue = counter_streams[client_id]
+    print("client queue", counter_streams)
     print("client id", client_id)
     try:
         while True:
             message = client_queue.get(timeout=30)  # Ajoute un timeout pour éviter le blocage
             print("message test", message)
             yield f'data: {message}\n\n'
-    except Queue.Empty:
-        yield 'data: no-message\n\n'
+    #except Queue.Empty:
+    #    yield 'data: no-message\n\n'
     except GeneratorExit:
         print("Generator exit, client disconnected")
     finally:
@@ -2048,7 +2197,11 @@ def events_update_sound_calling():
 
 @app.route('/events/update_counter/<int:client_id>')
 def events_update_counter(client_id):
+    global counter_streams
     print("counter id", client_id)
+    if client_id not in counter_streams:
+        counter_streams[client_id] = Queue()  # Crée une nouvelle Queue si elle n'existe pas
+    print("counter streams", counter_streams)
     return Response(event_stream_dict(client_id), content_type='text/event-stream')
 
 
@@ -2056,15 +2209,16 @@ def events_update_counter(client_id):
 def events_update_admin():
     return Response(event_stream(update_admin), content_type='text/event-stream')
 
+
 @app.route('/events/update_announce')
 def events_update_announce():
     return Response(event_stream(update_announce), content_type='text/event-stream')
 
 
-def notification(stream, data=None, client_id = None, audio_source=None):
+def communication(stream, data=None, client_id = None, audio_source=None):
     """ Effectue la communication avec les clients """
     message = {"type": stream, "data": ""}
-    print("notification", stream, client_id, audio_source, message)
+    print("communication", stream, client_id, audio_source, message)
     
     # SSE
     if stream == "update_patients":
@@ -2085,8 +2239,6 @@ def notification(stream, data=None, client_id = None, audio_source=None):
         for client in play_sound_streams:
             client.put(json.dumps(message))
 
-    # Websocket
-    #socketio.emit('trigger_patient_ongoing', {})  
 
 def display_toast(success="True", message=None):
     """ Affiche le toast dans la page Admin.
@@ -2094,8 +2246,18 @@ def display_toast(success="True", message=None):
     if message is None:
         message = "Enregistrement effectué"
         
-    data = {'success': success, 'message': message}
-    return f'<script>display_toast({data})</script>'
+    data = json.dumps({"toast": True, 'success': success, 'message': message})
+    communication("update_admin", data)
+    #return f'<script>display_toast({data})</script>'
+
+
+# ---------------- FONCTIONS Généralistes > Communication avec Pyside ---------------- 
+
+@app.route('/api/counters', methods=['GET'])
+def get_counters():
+    counters = Counter.query.all()
+    counters_list = [{'id': counter.id, 'name': counter.name} for counter in counters]
+    return jsonify(counters_list)
 
 
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
@@ -2174,8 +2336,6 @@ def test_disconnect():
     print('Client disconnected')
 
 
-
-
 # Définir un filtre pour Jinja2
 @app.template_filter('format_time')
 def format_time(value):
@@ -2188,16 +2348,26 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
     if Activity.query.first() is None:
         # Charger les activités depuis le fichier JSON
         if os.path.exists(json_file):
-            with open(json_file, 'r') as f:
+            with open(json_file, 'r', encoding='utf-8') as f:
                 activities = json.load(f)
+
+            # Charger tous les horaires existants pour éviter de multiples requêtes dans la boucle
+            schedules = {sched.id: sched for sched in ActivitySchedule.query.all()}
 
             # Ajouter chaque activité à la base de données
             for activity in activities:
                 new_activity = Activity(
-                    code=activity['code'],
                     name=activity['name'],
                     letter=activity['letter']
                 )
+
+                # Associer l'horaire à l'activité
+                schedule_id = activity.get('schedule')
+                if schedule_id and schedule_id in schedules:
+                    new_activity.schedules.append(schedules[schedule_id])
+                else:
+                    print(f"Aucun horaire trouvé pour l'ID {schedule_id}, vérifiez que l'horaire existe.")
+
                 db.session.add(new_activity)
 
             # Valider les changements
@@ -2270,6 +2440,8 @@ with app.app_context():
     print("Creating database tables...")
     #if not os.path.exists("database.duckdb"):
     db.create_all()  # permet de recréer les Bdd si n'existent pas. None = default + config + buttons
+    init_days_of_week_db_from_json(Weekday, db, app)
+    init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
     init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)  # Initialiser les données d'activité si nécessaire
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)  # Init ou Maj des boutons partients

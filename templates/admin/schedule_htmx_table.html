@@ -1,0 +1,64 @@
+<table id="staff_table" class="striped">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Heure de début</th>
+            <th>Heure de fin</th>
+            <th>Jours</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for schedule in schedules %}
+        <tr>
+            <td><input type="text" name="name" value="{{ schedule.name }}" id="name-{{ schedule.id }}"></td>
+            <td><input type="text" name="start_time" value="{{ schedule.start_time }}" id="start_time-{{ schedule.id }}"></td>
+            <td><input type="text" name="start_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}"></td>
+            <td>
+                <div class="input-field col">   
+                    <select multiple id="weekdays-{{ schedule.id }}">
+                        {% for weekday in weekdays %}
+                            <option value="{{weekday.id}}"
+                                    {% if weekday in schedule.weekdays %}selected{% endif %}>{{weekday.name}}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
+            <td>
+                <button class="btn" 
+                    hx-target="#invisible"
+                    hx-post="/admin/schedule/schedule_update/{{ schedule.id }}"
+                    hx-vals='js:{"name": document.getElementById("name-{{ schedule.id }}").value,
+                            "start_time": document.getElementById("start_time-{{ schedule.id }}").value,
+                            "end_time": document.getElementById("end_time-{{ schedule.id }}").value,
+                            "weekdays": getSelectedOptions("weekdays-{{ schedule.id }}")
+                            }'>
+                    Enregistrer
+                </button>
+
+                <button class="btn modal-trigger red"
+                        hx-get="/admin/schedule/confirm_delete/{{ schedule.id }}"
+                        hx-target="#modal_delete_schedule"
+                        hx-trigger="click"
+                        data-target="modal_delete_schedule">
+                    Supprimer
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+<script>
+    // Permet de récuperer les options multiples
+    function getSelectedOptions(selectElementId) {
+    var selectElement = document.getElementById(selectElementId);
+    var selectedValues = [];
+    for (var option of selectElement.options) {
+        if (option.selected) {
+            selectedValues.push(option.value);
+        }
+    }
+    return selectedValues;
+}
+</script>

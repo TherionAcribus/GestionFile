@@ -2,8 +2,8 @@
     <thead>
         <tr>
             <th>Nom</th>
-            <th>Code</th>
             <th>Lettre</th>
+            <th>Horaires</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -11,15 +11,27 @@
         {% for activity in activities %}
         <tr>
             <td><input type="text" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
-            <td><input type="text" name="code" value="{{ activity.code }}" id="code-{{ activity.id }}"></td>
             <td><input type="text" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
+            <td>
+                <div class="row s12">
+                    <div class="input-field col s10">   
+                        <select multiple id="schedules-{{ activity.id }}">
+                            {% for schedule in schedules %}
+                                <option value="{{schedule.id}}"
+                                        {% if schedule in activity.schedules %}selected{% endif %}>{{schedule.name}}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button class="btn s2">+</button>
+                </div>
+            </td>
             <td>
                 <button class="btn" 
                     hx-target="#invisible"
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
-                            "initials": document.getElementById("code-{{ activity.id }}").value, 
-                            "language": document.getElementById("letter-{{ activity.id }}").value
+                            "letter": document.getElementById("letter-{{ activity.id }}").value,
+                            "schedules": getSelectedOptions("schedules-{{ activity.id }}")
                             }'>
                     Enregistrer
                 </button>
@@ -36,3 +48,18 @@
         {% endfor %}
     </tbody>
 </table>
+
+
+<script>
+    // Permet de récuperer les options multiples
+    function getSelectedOptions(selectElementId) {
+    var selectElement = document.getElementById(selectElementId);
+    var selectedValues = [];
+    for (var option of selectElement.options) {
+        if (option.selected) {
+            selectedValues.push(option.value);
+        }
+    }
+    return selectedValues;
+}
+</script>

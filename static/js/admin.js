@@ -1,7 +1,8 @@
 var socket = io.connect();
 
 function display_toast(data) {
-    if (data.success === "True") {
+    console.log('toast', data);
+    if (data.success === true) {
         M.toast({html: data.message, classes: 'green'});
     } else {
         M.toast({html: data.message, classes: 'red'});
@@ -39,12 +40,6 @@ socket.on('open_modal_confirm_delete_button', function(data) {
 // ouvre le modal de confirmation activité
 socket.on('open_modal_confirm_delete_activity', function(data) {
     instance_activity.open();
-});
-
-// supprime le formulaire d'ajout d'une activité
-socket.on('delete_add_activity_form', function(data) {
-    console.log("Delete add staff form...");
-    document.getElementById('div_add_activity_form').innerHTML = "";
 });
 
 
@@ -128,9 +123,24 @@ function insertPlaceholder(textareaId, text) {
 // utiliser pour les communications spécifiques du serveur vers l'admin
 var eventSource = new EventSource('/events/update_admin');
 eventSource.onmessage = function(event) {
-    console.log(event.data);
-    if (event.data = "schedule_tasks_list"){
+    console.log(typeof(event.data));
+    data = JSON.parse(event.data);
+    console.log("toqt ?", data);
+    console.log("toqt ?", data.toast);
+    if (data.toast){
+        display_toast(data);
+    }
+    else if (event.data === "schedule_tasks_list"){
         htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
+    }
+    else if (event.data === "delete_add_activity_form"){
+        document.getElementById('div_add_activity_form').innerHTML = "";
+    }
+    else if (event.data === "delete_add_schedule_form"){
+        document.getElementById('div_add_schedule_form').innerHTML = "";
+    }
+    else if (event.data === "delete_add_staff_form"){
+        document.getElementById('div_add_staff_form').innerHTML = "";
     }
 };
 

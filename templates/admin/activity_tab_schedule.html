@@ -1,0 +1,15 @@
+<div id="div_schedule_table"
+    hx-get="/admin/schedule/table"
+    hx-trigger="load"
+    hx-target="#div_schedule_table"
+    hx-swap="innerHTML">        
+</div>
+
+<!-- Ajout nouvelle plage horaire -->
+<a class="waves-effect waves-light btn"
+        hx-get="/admin/schedule/add_form"
+        hx-target="#div_add_schedule_form"
+        hx-swap="innerHTML">
+        Ajouter une plage horaire
+</a>    
+<div id="div_add_schedule_form"></div>

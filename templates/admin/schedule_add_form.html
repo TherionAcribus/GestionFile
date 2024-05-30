@@ -1,0 +1,41 @@
+<table id="new_activity_form">
+    <thead>
+        <tr>
+            <th>Nom</th>
+            <th>Heure de début</th>
+            <th>Heure de fin</th>
+            <th>Jours</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" name="name" value="" id="name"></td>
+            <td><input type="text" name="start_time" value="00:00" id="start_time"></td>
+            <td><input type="text" name="start_time" value="23:59" id="end_time"></td>
+
+            <td>
+                <div class="input-field col">   
+                    <select multiple id="weekdays">
+                        {% for weekday in weekdays %}
+                            <option value="{{weekday.id}}"
+                                    selected>{{weekday.name}}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
+
+            <td>
+                <button class="btn" 
+                    hx-target="#div_schedule_table"
+                    hx-post="/admin/schedule/add_new_schedule"
+                    hx-vals='js:{"name": document.getElementById("name").value, 
+                            "start_time": document.getElementById("start_time").value,
+                            "end_time": document.getElementById("end_time").value,
+                            "weekdays": getSelectedOptions("weekdays")
+                        }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+    </tbody>
+</table>

@@ -2,24 +2,33 @@
     <thead>
         <tr>
             <th>Nom</th>
-            <th>Code</th>
             <th>Lettre</th>
+            <th>Horaires</th>
             <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td><input type="text" name="name" value="" id="name"></td>
-            <td><input type="text" name="code" value="" id="code"></td>
             <td><input type="text" name="letter" value="" id="letter"></td>
+            <td>
+                <div class="input-field col s12">   
+                    <select multiple id="schedules">
+                        {% for schedule in schedules %}
+                            <option value="{{schedule.id}}"
+                                    {% if schedule.id == 1 %}selected{% endif %}>{{schedule.name}}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
 
             <td>
                 <button class="btn" 
                     hx-target="#div_activity_table"
                     hx-post="/admin/activity/add_new_activity"
                     hx-vals='js:{"name": document.getElementById("name").value, 
-                            "code": document.getElementById("code").value, 
                             "letter": document.getElementById("letter").value,
+                            "schedules": getSelectedOptions("schedules")
                         }'>
                     Enregistrer
                 </button>

@@ -1,0 +1,15 @@
+<div id="div_activity_table"
+    hx-get="/admin/activity/table"
+    hx-trigger="load"
+    hx-target="#div_activity_table"
+    hx-swap="innerHTML">        
+</div>
+
+<!-- Ajout nouvelle activité -->
+<a class="waves-effect waves-light btn"
+        hx-get="/admin/activity/add_form"
+        hx-target="#div_add_activity_form"
+        hx-swap="innerHTML">
+        Ajouter une Activité
+</a>    
+<div id="div_add_activity_form"></div>

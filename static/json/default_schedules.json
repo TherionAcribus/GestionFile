@@ -1,0 +1,22 @@
+[
+    {
+        "name": "continu",
+        "days": "1, 2, 3, 4, 5, 6, 7",
+        "start": "00:00",
+        "end": "23:59"
+
+    },
+    {
+        "name": "matin tous les jours",
+        "days": "1, 2, 3, 4, 5, 6, 7",
+        "start": "00:00",
+        "end": "12:00"
+
+    },
+    {
+        "name": "après midi tous les jours",
+        "days": "1, 2, 3, 4, 5, 6, 7",
+        "start": "14:00",
+        "end": "23:59"
+    }
+]

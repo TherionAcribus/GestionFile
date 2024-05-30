@@ -1,32 +1,32 @@
 [
     {
-        "code": "covid",
         "name": "test covid",
-        "letter": "T"
+        "letter": "T",
+        "schedule": 1
     },
     {
-        "code": "angine",
         "name": "test angine",
-        "letter": "T"
+        "letter": "T",
+        "schedule": 1
     },
     {
-        "code": "cystite",
         "name": "test cystite",
-        "letter": "T"
+        "letter": "T",
+        "schedule": 1
     },
     {
-        "code": "ordonnance",
         "name": "ordonnances",
-        "letter": "O"
+        "letter": "O",
+        "schedule": 1
     },
     {
-        "code": "retrait",
         "name": "retrait de commande",
-        "letter": "R"
+        "letter": "R",
+        "schedule": 1
     },
     {
-        "code": "priority",
         "name": "personne prioritaire",
-        "letter": "P"
+        "letter": "P",
+        "schedule": 1
     }
 ]
