@@ -9,7 +9,7 @@
     </thead>
     <tbody>
         <tr>
-            <td><input type="text" name="name" value="" id="name"></td>
+            <td><input type="text" name="name_schedule" value="" id="name_schedule"></td>
             <td><input type="text" name="start_time" value="00:00" id="start_time"></td>
             <td><input type="text" name="start_time" value="23:59" id="end_time"></td>
 
@@ -28,7 +28,7 @@
                 <button class="btn" 
                     hx-target="#div_schedule_table"
                     hx-post="/admin/schedule/add_new_schedule"
-                    hx-vals='js:{"name": document.getElementById("name").value, 
+                    hx-vals='js:{"name_schedule": document.getElementById("name_schedule").value, 
                             "start_time": document.getElementById("start_time").value,
                             "end_time": document.getElementById("end_time").value,
                             "weekdays": getSelectedOptions("weekdays")

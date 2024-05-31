@@ -1,4 +1,4 @@
-var socket = io.connect();
+
 
 function display_toast(data) {
     console.log('toast', data);
@@ -10,55 +10,6 @@ function display_toast(data) {
 }
 
 
-// ------ STAFF ------
-// supprime le formulaire d'ajout d'un membre
-socket.on('delete_add_rule_form', function(data) {
-    document.getElementById('div_add_rule_form').innerHTML = "";
-});
-
-// ------ STAFF ------
-
-// ouvre le modal de confirmation staff
-socket.on('open_modal_confirm_delete', function(data) {
-    instance_staff.open();
-});
-
-// supprime le formulaire d'ajout d'un membre
-socket.on('delete_add_staff_form', function(data) {
-    console.log("Delete add staff form...");
-    document.getElementById('div_add_staff_form').innerHTML = "";
-});
-
-// ouvre le modal de confirmation bouton supprimer staff
-socket.on('open_modal_confirm_delete_button', function(data) {
-    instance_activity.open();
-});
-
-
-// ------ ACTIVITE ------
-
-// ouvre le modal de confirmation activité
-socket.on('open_modal_confirm_delete_activity', function(data) {
-    instance_activity.open();
-});
-
-
-// --- COMPTOIR ---
-
-
-// ouvre le modal de confirmation counter
-socket.on('open_modal_confirm_delete_counter', function(data) {
-    instance_activity.open();
-});
-
-
-// supprime le formulaire d'ajout d'un counter
-socket.on('delete_add_counter_form', function(data) {
-    console.log("Delete add staff form...");
-    document.getElementById('div_add_counter_form').innerHTML = "";
-});
-
-
 // -------------- QUEUE  --------------
 
 var eventSource = new EventSource('/events/update_patients');
@@ -67,10 +18,6 @@ eventSource.onmessage = function(event) {
 };
 
 
-// ouvre le modal de confirmation counter
-socket.on('open_modal_confirm_delete_patient_table', function(data) {
-    instance_activity.open();
-});
 
 
 
@@ -123,6 +70,7 @@ function insertPlaceholder(textareaId, text) {
 // utiliser pour les communications spécifiques du serveur vers l'admin
 var eventSource = new EventSource('/events/update_admin');
 eventSource.onmessage = function(event) {
+    console.log("toqt ?", event.data);
     console.log(typeof(event.data));
     data = JSON.parse(event.data);
     console.log("toqt ?", data);
@@ -133,16 +81,24 @@ eventSource.onmessage = function(event) {
     else if (event.data === "schedule_tasks_list"){
         htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
     }
-    else if (event.data === "delete_add_activity_form"){
+    else if (data.action === "delete_add_activity_form"){
         document.getElementById('div_add_activity_form').innerHTML = "";
     }
-    else if (event.data === "delete_add_schedule_form"){
+    else if (data.action === "delete_add_schedule_form"){
         document.getElementById('div_add_schedule_form').innerHTML = "";
     }
-    else if (event.data === "delete_add_staff_form"){
+    else if (data.action=== "delete_add_staff_form"){
         document.getElementById('div_add_staff_form').innerHTML = "";
     }
+    else if (data.action = "delete_add_rule_form"){
+        document.getElementById('div_add_rule_form').innerHTML = "";
+    }
+    else if (data.action = "delete_add_counter_form"){
+        document.getElementById('div_add_counter_form').innerHTML = "";
+    }
 };
+
+
 
 
 function initSelects() {

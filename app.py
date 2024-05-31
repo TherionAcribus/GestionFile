@@ -19,6 +19,8 @@ from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
 from flask_apscheduler import APScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 import qrcode
 import json
 import os
@@ -50,9 +52,18 @@ db_session = scoped_session(sessionmaker(autocommit=False,
                                         bind=engine))
 
 # Gestion du scheduler / CRON
+# Configuration du Scheduler
+class ConfigScheduler:
+    JOBS = []
+    SCHEDULER_JOBSTORES = {
+        'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI'])  
+    }
+    SCHEDULER_API_ENABLED = True  # Permet d'activer l'API pour interroger le scheduler
+app.config.from_object(ConfigScheduler())
 scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
+
 
 # Pour le logging
 logging.basicConfig(level=logging.DEBUG,
@@ -307,7 +318,6 @@ class TextTranslation(db.Model):
     )
 
 
-
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
@@ -356,7 +366,6 @@ def queue():
 # affiche le tableau des patients
 @app.route('/admin/queue/table', methods=['POST'])
 def display_queue_table():
-    print(request.form)
     # Récupération des statuts en une liste pour tri ultérieur
     filters = [status for status, value in request.form.items() if value == 'true']
     print("Filters received:", filters)
@@ -404,7 +413,7 @@ def update_patient(patient_id):
         if patient:
             print(request.form)
             if request.form.get('call_number') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Un numéro d'appel est obligatoire"})
+                display_toast(success = False, message="Un numéro d'appel est obligatoire")
                 return ""
             patient.call_number = request.form.get('call_number', patient.call_number)
             patient.status = request.form.get('status', patient.status)
@@ -415,22 +424,21 @@ def update_patient(patient_id):
 
             db.session.commit()
 
-            return display_toast(message="Mise à jour effectuée")
+            display_toast(success=True, message="Mise à jour effectuée")
             return ""
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
+            display_toast(success = False, message="Membre de l'équipe introuvable")
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            print(e)
+            display_toast(success = False, message=str(e))
+            app.logger(e)
             return jsonify(status="error", message=str(e)), 500
 
 
 # affiche la modale pour confirmer la suppression d'un patient particulier
 @app.route('/admin/queue/confirm_delete_patient/<int:patient_id>', methods=['GET'])
 def confirm_delete_patient(patient_id):
-    print("Confirmation de la suppression d'un patient")
     patient = Patient.query.get(patient_id)
     return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient)
 
@@ -457,8 +465,6 @@ def delete_patient(patient_id):
 @app.route('/admin/queue/create_new_patient_auto', methods=['POST'])
 def create_new_patient_auto():
     activity = Activity.query.get(request.form.get('activity_id'))
-    print("activity_id", request.form)
-    print("activity", activity)
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
     communication("update_patients")
@@ -475,7 +481,6 @@ def update_switch():
     """ Mise à jour des switches d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
-    print("update_switch", key, value)
     try:
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(key=key).first()
@@ -485,12 +490,12 @@ def update_switch():
             config_option.value_bool = True if value == "true" else False
             db.session.commit()
             call_function_with_switch(key, value)
-            return display_toast()
+            return display_toast(success=True, message="Option mise à jour.")
         else:
-            return display_toast(success='False', message="Option non trouvée.")
+            return display_toast(success=False, message="Option non trouvée.")
     except Exception as e:
             print(e)
-            return display_toast(success='False', message=str(e))
+            return display_toast(success=False, message=str(e))
     
 
 @app.route('/admin/update_input', methods=['POST'])
@@ -504,7 +509,7 @@ def update_input():
         if check["success"]:
             value = check["value"]
         else:
-            return display_toast(success='False', message=check["value"])
+            return display_toast(success=False, message=check["value"])
     try:
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(key=key).first()
@@ -515,12 +520,12 @@ def update_input():
             config_option.value_str = value
             db.session.commit()
             
-            return display_toast()
+            return display_toast(success=True, message="Option mise à jour.")
         else:
-            return display_toast(success='False', message="Option non trouvée.")
+            return display_toast(success=False, message="Option non trouvée.")
     except Exception as e:
             print(e)
-            return display_toast(success='False', message=str(e))
+            return display_toast(success=False, message=str(e))
 
 
 @app.route('/admin/update_select', methods=['POST'])
@@ -528,7 +533,6 @@ def update_select():
     """ Mise à jour des selects d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
-    print("update_select", key, value)
     try:
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(key=key).first()        
@@ -536,14 +540,13 @@ def update_select():
         app.config[key.upper()] = value
         if config_option:
             config_option.value_str = value
-            db.session.commit()
-            
-            return display_toast()
+            db.session.commit()            
+            return display_toast(success=True)
         else:
-            return display_toast(success='False', message="Option non trouvée.")
+            return display_toast(success=False, message="Option non trouvée.")
     except Exception as e:
             print(e)
-            return display_toast(success='False', message=str(e))
+            return display_toast(success=False, message=str(e))
 
 
 def call_function_with_switch(key, value):
@@ -584,14 +587,14 @@ def update_numbering_by_activity():
         if config_option:
             config_option.value_bool = True if new_value == "true" else False
             db.session.commit()
-            socketio.emit('display_toast', {'success': True, 'message': "Mise à jour réussie. Redémarrer le serveur pour que les nouvelles configurations s'appliquent."})
+            display_toast(success=True, message="Configuration mise à jour.")
             return ""
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Configuration option not found"})
+            display_toast(success=False, message="Configuration non trouvée.")
             return ""
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            print(e)
+            display_toast(success=False, message=str(e))
+            app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
     
 
@@ -780,7 +783,7 @@ def add_new_staff():
                 new_staff.activities.append(activity)
         db.session.commit()
 
-        communication("update_admin", data="delete_add_staff_form")
+        communication("update_admin", data={"action": "delete_add_staff_form"})
         display_toast(success=True, message="Membre ajouté avec succès")
 
         return display_staff_table()
@@ -816,10 +819,10 @@ def update_activity(activity_id):
         activity = Activity.query.get(activity_id)
         if activity:
             if request.form.get('name') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                display_toast(success=False, message="Le nom est obligatoire")
                 return ""
             if request.form.get('letter') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "La lettre est obligatoire"})
+                display_toast(success=False, message="La lettre est obligatoire")
                 return ""
             activity.name = request.form.get('name', activity.name)
             activity.letter = request.form.get('letter', activity.letter)
@@ -829,7 +832,8 @@ def update_activity(activity_id):
             activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
 
             db.session.commit()
-            return display_toast(message="Activité mise à jour")
+            display_toast(success=True, message="Activité ajoutée avec succès")
+            return ""
         else:
             return display_toast(success=False, message="Activité introuvable")
 
@@ -851,16 +855,18 @@ def delete_activity(activity_id):
     try:
         activity = Activity.query.get(activity_id)
         if not activity:
-            socketio.emit('display_toast', {'success': False, 'message': "Activité non trouvée"})
+            display_toast(success=False, message="Activité non trouvée")
             return display_activity_table()
 
         db.session.delete(activity)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        display_toast(success=True, message="Activité supprimée avec succès")
         return display_activity_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        db.session.rollback()
+        app.logger.error(str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return display_activity_table()
     
 
@@ -880,7 +886,7 @@ def add_new_activity():
         schedule_ids = request.form.getlist('schedules')
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            communication("update_admin", data='Nom obligatoire')
             return display_activity_table()
 
 
@@ -899,13 +905,24 @@ def add_new_activity():
                 new_activity.schedules.append(schedule)
         db.session.commit()
 
-        communication("update_admin", data="delete_add_activity_form")
+        for schedule_id in schedule_ids:
+            schedule = ActivitySchedule.query.get(int(schedule_id))
+            scheduler.add_job(func=update_button_presence, args=[new_activity.id, True, app],
+                            trigger="cron", day_of_week='mon-sun', 
+                            hour=schedule.start_time.hour, minute=schedule.start_time.minute,
+                            id=f'activate_activity{new_activity.id}_schedule{schedule.id}')
+            scheduler.add_job(func=update_button_presence, args=[new_activity.id, False, app],
+                            trigger="cron", day_of_week='mon-sun', 
+                            hour=schedule.end_time.hour, minute=schedule.end_time.minute,
+                            id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
+
+        communication("update_admin", data={"action":"delete_add_activity_form"})
 
         return display_activity_table()
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="erreur : " + str(e))
         return display_activity_table()
 
 
@@ -922,10 +939,11 @@ def display_schedule_table():
 # mise à jour des informations d'une activité 
 @app.route('/admin/schedule/schedule_update/<int:schedule_id>', methods=['POST'])
 def update_schedule(schedule_id):
+    print(request.form)
     try:
         schedule = ActivitySchedule.query.get(schedule_id)
         if schedule:
-            schedule.name = request.form.get('name', schedule.name)
+            schedule.name = request.form.get('name_schedule', schedule.name)
             start_time_str = request.form.get('start_time')
             end_time_str = request.form.get('end_time')
             schedule.start_time = parse_time(start_time_str) if start_time_str else schedule.start_time
@@ -936,13 +954,16 @@ def update_schedule(schedule_id):
             schedule.weekdays = [Weekday.query.get(int(id)) for id in weekdays_ids]
 
             db.session.commit()
-            return display_toast(message="Plage horaire mise à jour")
+            display_toast(success=True, message="Plage horaire mise à jour")
+            return ""
         else:
-            return display_toast(success=False, message="Plage horaire introuvable")
+            display_toast(success=False, message="Plage horaire introuvable")
+            return ""
 
     except Exception as e:
         app.logger.error(str(e))
-        return display_toast(success = False, message=str(e))
+        display_toast(success = False, message=str(e))
+        return ""
 
 
 # affiche le formulaire pour ajouter un activité
@@ -955,17 +976,16 @@ def add_schedule_form():
 # enregistre l'activité' dans la Bdd
 @app.route('/admin/schedule/add_new_schedule', methods=['POST'])
 def add_new_schedule():
-    print("add_new_schedule")
+    print(request.form)
     try:
-        print(request.form)
-        name = request.form.get('name')
+        name = request.form.get('name_schedule')
         start_time_str = request.form.get('start_time')
         end_time_str = request.form.get('end_time')
         start_time = parse_time(start_time_str)
         end_time = parse_time(end_time_str)
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            display_toast(success=False, message="Nom obligatoire")
             return display_schedule_table()
 
         new_schedule = ActivitySchedule(
@@ -984,16 +1004,30 @@ def add_new_schedule():
                 new_schedule.weekdays.append(weekday)
         db.session.commit()
 
-        communication("update_admin", data="delete_add_schedule_form")
+        communication("update_admin", data={"action": "delete_add_schedule_form"})
 
         return display_schedule_table()
 
     except Exception as e:
         db.session.rollback()
-        print(e)
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()
     
+
+
+def update_button_presence(activity_id, is_present, app):
+    print("update_button_presence", activity_id, is_present)
+    with app.app_context():  # Crée un contexte d'application
+        try:
+            buttons = Button.query.filter_by(activity_id=activity_id).all()
+            for button in buttons:
+                button.is_present = is_present
+            db.session.commit()
+            print(f"Buttons for activity {activity_id} set to {'present' if is_present else 'not present'}")
+        except Exception as e:
+            print(f"Failed to update button presence: {str(e)}")
+            db.session.rollback()
+
 
 # affiche la modale pour confirmer la suppression d'une plage horaire
 @app.route('/admin/schedule/confirm_delete/<int:schedule_id>', methods=['GET'])
@@ -1008,17 +1042,18 @@ def delete_schedule(schedule_id):
     try:
         schedule = ActivitySchedule.query.get(schedule_id)
         if not schedule:
-            socketio.emit('display_toast', {'success': False, 'message': "Plage horaire non trouvée"})
+            display_toast(success=False, message="Plage horaire introuvable")
             return display_schedule_table()
 
         db.session.delete(schedule)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        display_toast(success=True, message="Suppression réussie'")
 
         return display_schedule_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        db.session.rollback()
+        display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()
 
 # -------- Fin de ADMIN -> Activity  ---------
@@ -1072,7 +1107,7 @@ def change_overtaken_limit():
         return display_toast()
     except Exception as e:
         print(e)
-        return display_toast(success='False', message=str(e))
+        return display_toast(success=False, message=str(e))
 
 
 # affiche le formulaire pour ajouter une regle de l'algo
@@ -1085,11 +1120,9 @@ def add_rule_form():
 # enregistre la regledans la Bdd
 @app.route('/admin/algo/add_new_rule', methods=['POST'])
 def add_new_rule():
-    print("add_new_rule", request.form)
     try:
         name = request.form.get('name')
         activity = Activity.query.get(request.form.get('activity_id'))
-        print("A", activity)
         priority_level = request.form.get('priority_level')
         min_patients = request.form.get('min_patients')
         max_patients = request.form.get('max_patients')
@@ -1100,7 +1133,7 @@ def add_new_rule():
         end_time = datetime.strptime(end_time_str, "%H:%M").time()
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            display_toast(success=False, message="Nom obligatoire")
             return display_algo_table()
 
         new_rule = AlgoRule(
@@ -1116,14 +1149,14 @@ def add_new_rule():
         db.session.add(new_rule)
         db.session.commit()
 
-        socketio.emit('delete_add_rule_form')
-        socketio.emit('display_toast', {'success': True, 'message': "Règle ajoutée avec succès"})
+        communication('update_admin', data={"action": "delete_add_rule_form"})
+        display_toast(success=True, message="Règle ajoutée avec succès")
 
         return display_algo_table()
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="erreur : " + str(e))
         print(e)
         return display_algo_table()
 
@@ -1141,16 +1174,17 @@ def delete_algo(algo_id):
     try:
         rule = AlgoRule.query.get(algo_id)
         if not rule:
-            socketio.emit('display_toast', {'success': False, 'message': "Règle non trouvée"})
+            display_toast(success=False, message="Règle non trouvée")
             return display_algo_table()
 
         db.session.delete(rule)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+
+        display_toast(success=True, message="Règle supprimée")
         return display_algo_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="erreur : " + str(e))
         return display_algo_table()
 
 
@@ -1160,7 +1194,7 @@ def update_algo_rule(rule_id):
         rule = AlgoRule.query.get(rule_id)
         if rule:
             if request.form.get('name') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                display_toast(success=False, message="Le nom est obligatoire")
                 return ""
 
             rule.name = request.form.get('name', rule.name)
@@ -1177,15 +1211,15 @@ def update_algo_rule(rule_id):
 
             db.session.commit()
 
-            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Règle introuvable"})
+            display_toast(success=False, message="Règle introuvable")
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            print(e)
+            display_toast(success=False, message="erreur : " + str(e))
+            app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
 
 
@@ -1215,7 +1249,7 @@ def update_counter(counter_id):
         counter = Counter.query.get(counter_id)
         if counter:
             if request.form.get('name') == '':
-                socketio.emit('display_toast', {'success': False, 'message': "Le nom est obligatoire"})
+                display_toast(success=False, message="Le nom est obligatoire")
                 return ""
             counter.name = request.form.get('name', counter.name)
             activities_ids = request.form.getlist('activities')
@@ -1228,16 +1262,16 @@ def update_counter(counter_id):
             counter.activities = new_activities
 
             db.session.commit()
-            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Comptoir introuvable"})
+            display_toast(success=False, message="Comptoir introuvable")
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            print("ERREURRRR", e)
-            return jsonify(status="error", message=str(e)), 500
+            display_toast(success=False, message="erreur : " + str(e))
+            app.logger.error(e)
+            return ""
 
 
 # affiche la modale pour confirmer la suppression d'un comptoir
@@ -1253,16 +1287,18 @@ def delete_counter(counter_id):
     try:
         counter = Pharmacist.query.get(counter_id)
         if not counter:
-            socketio.emit('display_toast', {'success': False, 'message': "Comptoir non trouvé"})
+            display_toast(success=False, message="Comptoir introuvable")
             return display_counter_table()
 
         db.session.delete(counter)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+
+        display_toast(success=True, message="Comptoir supprimé")
         return display_counter_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.error(e)
         return display_counter_table()
 
 
@@ -1281,7 +1317,7 @@ def add_new_counter():
         activities_ids = request.form.getlist('activities')
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            socketio.emit('display_toast', {'success': False, 'message': "Nom obligatoire"})
+            display_toast(success=False, message="Le nom est obligatoire")
             return display_activity_table()
 
         new_counter = Counter(
@@ -1298,14 +1334,15 @@ def add_new_counter():
                 new_counter.activities.append(activity)
         db.session.commit()
 
-        socketio.emit('delete_add_counter_form')
-        socketio.emit('display_toast', {'success': True, 'message': "Comptoir ajouté avec succès"})
+        communication("update_admin", data={"action": "delete_add_counter_form"})
+        display_toast(success=True, message="Comptoir ajouté")
 
         return display_counter_table()
 
     except Exception as e:
         db.session.rollback()
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
+        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.error(e)
         return display_activity_table()
 
 
@@ -1376,15 +1413,15 @@ def update_button(button_id):
             
 
             db.session.commit()
-            socketio.emit('display_toast', {'success': True, 'message': 'Mise à jour réussie'})
+            display_toast(success=True, message="Mise à jour effectuée")
             return ""
         else:
-            socketio.emit('display_toast', {'success': False, 'message': "Membre de l'équipe introuvable"})
+            display_toast(success=False, message="Membre de l'équipe introuvable")
             return ""
 
     except Exception as e:
-            socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-            print("ERREURRRR", e)
+            display_toast(success=False, message="erreur : " + str(e))
+            app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
 
 
@@ -1402,17 +1439,18 @@ def delete_button(button_id):
     try:
         button = Button.query.get(button_id)
         if not button:
-            socketio.emit('display_toast', {'success': False, 'message': "Bouton non trouvé"})
+            display_toast(success=False, message="Bouton non trouvé")
             return display_button_table()
 
         db.session.delete(button)
         db.session.commit()
-        socketio.emit('display_toast', {'success': True, 'message': 'Suppression réussie'})
+        display_toast(success=True, message="Bouton supprimé")
         return display_button_table()
 
     except Exception as e:
-        socketio.emit('display_toast', {'success': False, 'message': "erreur : " + str(e)})
-        print(e)
+        db.session.rollback()
+        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.error(e)
         return display_button_table()
 
 
@@ -1589,7 +1627,6 @@ def validate_patient(counter_id, patient_id):
 @app.route('/update_patient_status')
 def update_patient_status():
     # Mettez à jour la base de données comme nécessaire
-    #socketio.emit('htmx:load', {'data': 'update'})
     return 'Status Updated'
 
 
@@ -2230,7 +2267,7 @@ def communication(stream, data=None, client_id = None, audio_source=None):
             client.put(message)
     elif stream == "update_admin":
         for client in update_admin:
-            client.put(data)
+            client.put(json.dumps(data))
     elif stream == "update_counter":
         if client_id in counter_streams:
             counter_streams[client_id].put(message)
@@ -2240,13 +2277,13 @@ def communication(stream, data=None, client_id = None, audio_source=None):
             client.put(json.dumps(message))
 
 
-def display_toast(success="True", message=None):
+def display_toast(success=True, message=None):
     """ Affiche le toast dans la page Admin.
     Pour validation réussie, on peut simplement appeler la fonction sans argument """
     if message is None:
         message = "Enregistrement effectué"
         
-    data = json.dumps({"toast": True, 'success': success, 'message': message})
+    data = {"toast": True, 'success': success, 'message': message}
     communication("update_admin", data)
     #return f'<script>display_toast({data})</script>'
 

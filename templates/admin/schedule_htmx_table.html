@@ -10,7 +10,7 @@
     <tbody>
         {% for schedule in schedules %}
         <tr>
-            <td><input type="text" name="name" value="{{ schedule.name }}" id="name-{{ schedule.id }}"></td>
+            <td><input type="text" name="name" value="{{ schedule.name }}" id="name_schedule-{{ schedule.id }}"></td>
             <td><input type="text" name="start_time" value="{{ schedule.start_time }}" id="start_time-{{ schedule.id }}"></td>
             <td><input type="text" name="start_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}"></td>
             <td>
@@ -27,7 +27,7 @@
                 <button class="btn" 
                     hx-target="#invisible"
                     hx-post="/admin/schedule/schedule_update/{{ schedule.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ schedule.id }}").value,
+                    hx-vals='js:{"name_schedule": document.getElementById("name_schedule-{{ schedule.id }}").value,
                             "start_time": document.getElementById("start_time-{{ schedule.id }}").value,
                             "end_time": document.getElementById("end_time-{{ schedule.id }}").value,
                             "weekdays": getSelectedOptions("weekdays-{{ schedule.id }}")

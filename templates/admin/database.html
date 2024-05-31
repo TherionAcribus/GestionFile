@@ -12,7 +12,7 @@
         Non
         <input id="cron_delete_patient_table_activated" 
                 type="checkbox"
-                {% if cron_delete_patient_table_activated == "true" %}checked{% endif %}
+                {% if cron_delete_patient_table_activated == True %}checked{% endif %}
                 hx-post="/admin/update_switch"
                 hx-target="#invisible"
                 hx-vals='js:{"key": "cron_delete_patient_table_activated",
