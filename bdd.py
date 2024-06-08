@@ -1,5 +1,3 @@
-import eventlet
-eventlet.monkey_patch()
 import json
 import os
 from datetime import datetime, time
@@ -255,8 +253,17 @@ def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
 def init_days_of_week_db_from_json(Weekday, db, app):
     if Weekday.query.first() is None:
         app.logger.info("Initialisation des jours de la semaine...")
-        for day in ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']:
-            new_day = Weekday(name=day)
+        days = [
+            {'french': 'Lundi', 'english': 'monday', 'abbreviation': 'mon'},
+            {'french': 'Mardi', 'english': 'tuesday', 'abbreviation': 'tue'},
+            {'french': 'Mercredi', 'english': 'wednesday', 'abbreviation': 'wed'},
+            {'french': 'Jeudi', 'english': 'thursday', 'abbreviation': 'thu'},
+            {'french': 'Vendredi', 'english': 'friday', 'abbreviation': 'fri'},
+            {'french': 'Samedi', 'english': 'saturday', 'abbreviation': 'sat'},
+            {'french': 'Dimanche', 'english': 'sunday', 'abbreviation': 'sun'},
+        ]
+        for day in days:
+            new_day = Weekday(name=day['french'], english_name=day['english'], abbreviation=day['abbreviation'])
             db.session.add(new_day)
         db.session.commit()
 

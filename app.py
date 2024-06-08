@@ -34,6 +34,7 @@ class Config:
     SCHEDULER_API_ENABLED = True
     SECRET_KEY = 'your_secret_key'
     SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
+    SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     AUDIO_FOLDER = '/static/audio'
@@ -56,7 +57,7 @@ db_session = scoped_session(sessionmaker(autocommit=False,
 class ConfigScheduler:
     JOBS = []
     SCHEDULER_JOBSTORES = {
-        'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI'])  
+        'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI_SCHEDULER'])  
     }
     SCHEDULER_API_ENABLED = True  # Permet d'activer l'API pour interroger le scheduler
 app.config.from_object(ConfigScheduler())
@@ -157,7 +158,9 @@ activity_schedule_weekday = db.Table('activity_schedule_weekday',
 class Weekday(db.Model):
     __tablename__ = 'weekdays'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(10), nullable=False, unique=True)  # Par exemple 'Monday', 'Tuesday', etc.
+    name = db.Column(db.String(10), nullable=False, unique=True)  
+    english_name = db.Column(db.String(10), nullable=False, unique=True)  
+    abbreviation = db.Column(db.String(3), unique=True) 
     schedules = relationship('ActivitySchedule', secondary=activity_schedule_weekday, back_populates='weekdays')
 
     def __repr__(self):
@@ -337,6 +340,14 @@ def set_locale():
     from flask import request
     user_language = request.cookies.get('lang', 'fr')  # Exemple: lire la langue depuis un cookie
     request.babel_locale = user_language
+
+
+# permet d'avoir le contexte de l'App pour le Scheduler. A utiliser comme décorateur
+def with_app_context(func):
+    def wrapper(*args, **kwargs):
+        with app.app_context():
+            return func(*args, **kwargs)
+    return wrapper
 
 
 @app.route('/')
@@ -830,6 +841,7 @@ def update_activity(activity_id):
             # Mettre à jour les horaires
             schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
             activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
+            update_scheduler_for_activity(activity)
 
             db.session.commit()
             display_toast(success=True, message="Activité ajoutée avec succès")
@@ -1055,6 +1067,67 @@ def delete_schedule(schedule_id):
         db.session.rollback()
         display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()
+
+
+def update_scheduler_for_activity(activity):
+    # Supprimer les anciens jobs pour cette activité
+    job_id_disable_prefix = f"disable_{activity.id}_"
+    job_id_enable_prefix = f"enable_{activity.id}_"
+
+    # Supprimer les anciens jobs
+    for job in scheduler.get_jobs():
+        if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
+            scheduler.remove_job(job.id)
+
+    # Ajouter de nouveaux jobs pour chaque jour de la semaine
+    for schedule in activity.schedules:
+        for weekday in schedule.weekdays:
+            day = weekday.abbreviation.strip().lower()
+
+            if not day:
+                print(f"Invalid weekday name \"{weekday.name}\".")
+                continue
+
+            start_time = schedule.start_time
+            end_time = schedule.end_time
+
+            scheduler.add_job(
+                id=f"{job_id_disable_prefix}{day}",
+                func='app:disable_buttons_for_activity',  # Nom du module et nom de la fonction
+                args=[activity.id],
+                trigger='cron',
+                day_of_week=day,
+                hour=start_time.hour,
+                minute=start_time.minute
+            )
+
+            scheduler.add_job(
+                id=f"{job_id_enable_prefix}{day}",
+                func='app:enable_buttons_for_activity',  # Nom du module et nom de la fonction
+                args=[activity.id],
+                trigger='cron',
+                day_of_week=day,
+                hour=end_time.hour,
+                minute=end_time.minute
+            )
+
+            print(f"Scheduled disable job at {start_time} on {day} and enable job at {end_time} on {day} for activity {activity.name}")
+
+
+@with_app_context
+def disable_buttons_for_activity(activity_id):
+    # Logique pour désactiver les boutons pour une activité donnée
+    activity = Activity.query.get(activity_id)
+    if activity:
+        print(f"Disabling buttons for activity: {activity.name}")
+
+
+@with_app_context
+def enable_buttons_for_activity(activity_id):
+    # Logique pour activer les boutons pour une activité donnée
+    activity = Activity.query.get(activity_id)
+    if activity:
+        print(f"Enabling buttons for activity: {activity.name}")
 
 # -------- Fin de ADMIN -> Activity  ---------
 
@@ -1352,8 +1425,12 @@ def add_new_counter():
 @app.route('/admin/patient')
 def admin_patient():
     buttons = Button.query.all()
-    print("BUTTONS", buttons)
-    return render_template('/admin/patient_page.html', buttons=buttons)
+    page_patient_title = app.config['PAGE_PATIENT_TITLE']
+    page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
+
+    return render_template('/admin/patient_page.html', buttons=buttons,
+                            page_patient_title = page_patient_title,
+                            page_patient_subtitle = page_patient_subtitle)
 
 
 # affiche le tableau des boutons 
@@ -1643,7 +1720,11 @@ def patients_langue(lang):
 
 @app.route('/patient')
 def patients_front_page():
-    return render_template('patient/patient_front_page.html')
+    page_patient_title = app.config['PAGE_PATIENT_TITLE']
+    page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
+    return render_template('patient/patient_front_page.html', 
+                            page_patient_title=page_patient_title, 
+                            page_patient_subtitle=page_patient_subtitle)
 
 
 @app.route('/tests')
@@ -1774,7 +1855,7 @@ def create_qr_code(patient):
             "id": patient.id,
             "patient_number": patient.call_number,
             "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "reason": patient.activity.code
+            "reason": patient.activity.name
     }
         
     # Convertir les données en chaîne JSON
@@ -2461,10 +2542,16 @@ def load_configuration(app, ConfigOption):
     announce_ongoing_text = ConfigOption.query.filter_by(key="announce_ongoing_text").first()
     if announce_ongoing_text:
         app.config['ANNOUNCE_ONGOING_TEXT'] = announce_ongoing_text.value_str
-    cron_delete_patient_table_activated = ConfigOption.query.filter_by(key="cron_delete_patient_table_activated").first()
     announce_call_sound = ConfigOption.query.filter_by(key="announce_call_sound").first()
     if announce_call_sound:
         app.config['ANNOUNCE_CALL_SOUND'] = announce_call_sound.value_str
+    page_patient_title = ConfigOption.query.filter_by(key="page_patient_title").first()
+    if page_patient_title:
+        app.config['PAGE_PATIENT_TITLE'] = page_patient_title.value_str
+    page_patient_subtitle = ConfigOption.query.filter_by(key="page_patient_subtitle").first()
+    if page_patient_subtitle:
+        app.config['PAGE_PATIENT_SUBTITLE'] = page_patient_subtitle.value_str    
+    cron_delete_patient_table_activated = ConfigOption.query.filter_by(key="cron_delete_patient_table_activated").first()
     if cron_delete_patient_table_activated:
         app.config['CRON_DELETE_PATIENT_TABLE_ACTIVATED'] = cron_delete_patient_table_activated.value_bool
         # si au lancement on veut une planif de l'effacement de la table on s'assure que ce soit fait

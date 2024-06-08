@@ -1,0 +1,33 @@
+<h3>Page "Patient"</h3>
+
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="page_patient_title" class="materialize-textarea">{{page_patient_title}}</textarea>
+            <label for="page_patient_title">Texte en haut de la page (Titre)</label>
+        </div>
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "page_patient_title",
+                    "value": document.getElementById("page_patient_title").value}'>
+                Enregistrer</button>
+</div>
+
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="page_patient_subtitle" class="materialize-textarea">{{page_patient_subtitle}}</textarea>
+            <label for="page_patient_subtitle">Texte en bas de la page (Indications)</label>
+        </div>
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "page_patient_subtitle",
+                    "value": document.getElementById("page_patient_subtitle").value}'>
+                Enregistrer</button>
+</div>
