@@ -14,7 +14,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker, relationship
 from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, time
 from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
@@ -826,32 +826,28 @@ def display_activity_table():
 # mise à jour des informations d'une activité 
 @app.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
 def update_activity(activity_id):
-    try:
-        activity = Activity.query.get(activity_id)
-        if activity:
-            if request.form.get('name') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return ""
-            if request.form.get('letter') == '':
-                display_toast(success=False, message="La lettre est obligatoire")
-                return ""
-            activity.name = request.form.get('name', activity.name)
-            activity.letter = request.form.get('letter', activity.letter)
 
-            # Mettre à jour les horaires
-            schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
-            activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
-            update_scheduler_for_activity(activity)
-
-            db.session.commit()
-            display_toast(success=True, message="Activité ajoutée avec succès")
+    activity = Activity.query.get(activity_id)
+    if activity:
+        if request.form.get('name') == '':
+            display_toast(success=False, message="Le nom est obligatoire")
             return ""
-        else:
-            return display_toast(success=False, message="Activité introuvable")
+        if request.form.get('letter') == '':
+            display_toast(success=False, message="La lettre est obligatoire")
+            return ""
+        activity.name = request.form.get('name', activity.name)
+        activity.letter = request.form.get('letter', activity.letter)
 
-    except Exception as e:
-        app.logger.error(str(e))
-        return display_toast(success = False, message=str(e))
+        # Mettre à jour les horaires
+        schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
+        activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
+        update_scheduler_for_activity(activity)
+
+        db.session.commit()
+        display_toast(success=True, message="Activité ajoutée avec succès")
+        return ""
+    else:
+        return display_toast(success=False, message="Activité introuvable")
 
 
 # affiche la modale pour confirmer la suppression d'une activité
@@ -1074,44 +1070,79 @@ def update_scheduler_for_activity(activity):
     job_id_disable_prefix = f"disable_{activity.id}_"
     job_id_enable_prefix = f"enable_{activity.id}_"
 
-    # Supprimer les anciens jobs
     for job in scheduler.get_jobs():
         if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
             scheduler.remove_job(job.id)
 
-    # Ajouter de nouveaux jobs pour chaque jour de la semaine
+    # Fonction utilitaire pour vérifier si les horaires couvrent toute la journée
+    def is_full_day(start_time, end_time):
+        return start_time == time(0, 0) and end_time == time(23, 59)
+    
+    # Fonction utilitaire pour vérifier si les jours couvrent toute la semaine
+    def is_full_week(weekdays):
+        all_days = {'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'}
+        active_days = {day.abbreviation.strip().lower() for day in weekdays}
+        return active_days == all_days
+    
+    # Pour chaque schedule, ajouter des jobs en fonction des horaires et des jours actifs
     for schedule in activity.schedules:
+        full_day = is_full_day(schedule.start_time, schedule.end_time)
+        full_week = is_full_week(schedule.weekdays)
+
+        if full_day and full_week:
+            # Ne pas créer de jobs car l'activité est toujours active
+            print(f"Full day and full week: No jobs created for {activity.name}")
+            continue
+        
+        # Si l'activité est active toute la journée mais pas tous les jours
+        if full_day:
+            start_day = min(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
+            end_day = max(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
+
+            scheduler.add_job(
+                id=f"{job_id_enable_prefix}{start_day}",
+                func='app:enable_buttons_for_activity',
+                args=[activity.id],
+                trigger='cron',
+                day_of_week=start_day,
+                hour=0,
+                minute=0
+            )
+            scheduler.add_job(
+                id=f"{job_id_disable_prefix}{end_day}",
+                func='app:disable_buttons_for_activity',
+                args=[activity.id],
+                trigger='cron',
+                day_of_week=end_day,
+                hour=23,
+                minute=59
+            )
+            print(f"Scheduled full-day jobs for activity {activity.name} from {start_day} to {end_day}")
+            continue
+        
+        # Si l'activité a des plages horaires spécifiques
         for weekday in schedule.weekdays:
             day = weekday.abbreviation.strip().lower()
 
-            if not day:
-                print(f"Invalid weekday name \"{weekday.name}\".")
-                continue
-
-            start_time = schedule.start_time
-            end_time = schedule.end_time
-
             scheduler.add_job(
-                id=f"{job_id_disable_prefix}{day}",
-                func='app:disable_buttons_for_activity',  # Nom du module et nom de la fonction
+                id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
+                func='app:enable_buttons_for_activity',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=day,
-                hour=start_time.hour,
-                minute=start_time.minute
+                hour=schedule.start_time.hour,
+                minute=schedule.start_time.minute
             )
-
             scheduler.add_job(
-                id=f"{job_id_enable_prefix}{day}",
-                func='app:enable_buttons_for_activity',  # Nom du module et nom de la fonction
+                id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
+                func='app:disable_buttons_for_activity',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=day,
-                hour=end_time.hour,
-                minute=end_time.minute
+                hour=schedule.end_time.hour,
+                minute=schedule.end_time.minute
             )
-
-            print(f"Scheduled disable job at {start_time} on {day} and enable job at {end_time} on {day} for activity {activity.name}")
+            print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
 
 
 @with_app_context
