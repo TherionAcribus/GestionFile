@@ -4,6 +4,7 @@
             <th>Nom</th>
             <th>Lettre</th>
             <th>Horaires</th>
+            <th>Message si inactivité</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -13,17 +14,17 @@
             <td><input type="text" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
             <td><input type="text" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
             <td>
-                <div class="row s12">
-                    <div class="input-field col s10">   
-                        <select multiple id="schedules-{{ activity.id }}">
-                            {% for schedule in schedules %}
-                                <option value="{{schedule.id}}"
-                                        {% if schedule in activity.schedules %}selected{% endif %}>{{schedule.name}}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <button class="btn s2">+</button>
+                <div class="input-field col s10">   
+                    <select multiple id="schedules-{{ activity.id }}">
+                        {% for schedule in schedules %}
+                            <option value="{{schedule.id}}"
+                                    {% if schedule in activity.schedules %}selected{% endif %}>{{schedule.name}}</option>
+                        {% endfor %}
+                    </select>
                 </div>
+            </td>
+            <td>
+                <input type="text" name="message" value="{{ activity.inactivity_message }}" id="message-{{ activity.id }}">
             </td>
             <td>
                 <button class="btn" 
@@ -31,6 +32,7 @@
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
                             "letter": document.getElementById("letter-{{ activity.id }}").value,
+                            "message": document.getElementById("message-{{ activity.id }}").value,
                             "schedules": getSelectedOptions("schedules-{{ activity.id }}")
                             }'>
                     Enregistrer

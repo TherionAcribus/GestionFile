@@ -1,17 +1,19 @@
 {% for button in buttons %}
-<div class="div_bloc_activity"
-        hx-post="/patients_submit" 
-        hx-vals='{"activity_id": "{{ button.activity.id }}",
-                "is_parent": "{{ button.is_parent }}",
-                "button_id": "{{ button.id }}"
-                }' 
-        hx-target="#div_buttons_children"
-                >
-        <div class="div_buttons">
-                <img class="img_btn" src='/static/images/buttons/{{ button.image_url }}'>
-        </div>
-        <div class="div_text_button">
-                <p>{{ button.label }}</p>
-        </div>
-</div>
+        <div class="div_bloc_activity"
+                hx-post="/patients_submit" 
+                hx-vals='{"activity_id": "{{ button.activity.id }}",
+                        "is_parent": "{{ button.is_parent }}",
+                        "is_active": "{{ button.is_active }}",
+                        "button_id": "{{ button.id }}"
+                        }' 
+                hx-target="#div_buttons_children"
+        >
+                <div class="div_buttons {% if button.is_active %} div_button_active {% else %} div_button_inactive {% endif %}">
+                        <img class="img_btn {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}" 
+                                src='/static/images/buttons/{{ button.image_url }}'>
+                </div>
+                <div class="div_text_button {% if button.is_active %} div_text_button_active {% else %} div_text_button_inactive {% endif %}">
+                        <p>{{ button.label }}</p>
+                </div>
+        </div>        
 {% endfor %}

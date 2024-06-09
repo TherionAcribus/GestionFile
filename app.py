@@ -173,6 +173,7 @@ class Activity(db.Model):
     id = db.Column(db.Integer, Sequence('activity_id_seq'), primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     letter = db.Column(db.String(1), nullable=False)
+    inactivity_message = db.Column(db.String(255))
     schedules = relationship('ActivitySchedule', secondary='activity_schedule_link', back_populates='activities')
 
     def __repr__(self):
@@ -837,6 +838,7 @@ def update_activity(activity_id):
             return ""
         activity.name = request.form.get('name', activity.name)
         activity.letter = request.form.get('letter', activity.letter)
+        activity.inactivity_message = request.form.get('message', activity.inactivity_message)
 
         # Mettre à jour les horaires
         schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
@@ -1067,8 +1069,8 @@ def delete_schedule(schedule_id):
 
 def update_scheduler_for_activity(activity):
     # Supprimer les anciens jobs pour cette activité
-    job_id_disable_prefix = f"disable_{activity.id}_"
-    job_id_enable_prefix = f"enable_{activity.id}_"
+    job_id_disable_prefix = f"disable_{activity.name}_"
+    job_id_enable_prefix = f"enable_{activity.name}_"
 
     for job in scheduler.get_jobs():
         if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
@@ -1150,7 +1152,17 @@ def disable_buttons_for_activity(activity_id):
     # Logique pour désactiver les boutons pour une activité donnée
     activity = Activity.query.get(activity_id)
     if activity:
-        print(f"Disabling buttons for activity: {activity.name}")
+        app.logger.info(f"Disabling buttons for activity: {activity.name}")
+        buttons = Button.query.filter_by(activity_id=activity.id).all()
+        print(buttons, "buttons")
+        for button in buttons:
+            if app.config["PAGE_PATIENT_DISABLE_BUTTON"]:
+                button.is_active = False
+            else:
+                button.is_present = False
+        db.session.commit()
+        communication("update_page_patient", data={"action": "refresh buttons"})
+        
 
 
 @with_app_context
@@ -1158,7 +1170,17 @@ def enable_buttons_for_activity(activity_id):
     # Logique pour activer les boutons pour une activité donnée
     activity = Activity.query.get(activity_id)
     if activity:
-        print(f"Enabling buttons for activity: {activity.name}")
+        app.logger.info(f"Enabling buttons for activity: {activity.name}")
+        buttons = Button.query.filter_by(activity_id=activity.id).all()
+        print(buttons, "buttons")
+        for button in buttons:
+            print(button)
+            # ici on ne regarde pas si on veut que le bouton soit grisé ou non
+            # on réactive tout pour être sûr que le bouton est présent (ex: gère le fait qu'on a changé de mode en cours de programme)
+            button.is_active = True
+            button.is_present = True
+        db.session.commit()
+        communication("update_page_patient", data={"action": "refresh buttons"})
 
 # -------- Fin de ADMIN -> Activity  ---------
 
@@ -1456,12 +1478,12 @@ def add_new_counter():
 @app.route('/admin/patient')
 def admin_patient():
     buttons = Button.query.all()
-    page_patient_title = app.config['PAGE_PATIENT_TITLE']
-    page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
 
     return render_template('/admin/patient_page.html', buttons=buttons,
-                            page_patient_title = page_patient_title,
-                            page_patient_subtitle = page_patient_subtitle)
+                            page_patient_disable_button = app.config['PAGE_PATIENT_DISABLE_BUTTON'],
+                            page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
+                            page_patient_title = app.config['PAGE_PATIENT_TITLE'],
+                            page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'])
 
 
 # affiche le tableau des boutons 
@@ -1776,10 +1798,25 @@ def patients_submit():
     print("patients_submit")
     # Récupération des données du formulaire
     print('SUBMIT', request.form)
+    if request.form.get('is_active')  == 'False':
+        return display_activity_inactive(request)
     if request.form.get('is_parent')  == 'True':
         return display_children_buttons_for_right_page(request)
     else:
         return display_validation_after_choice(request)
+
+
+def display_activity_inactive(request):
+    print("display_activity_inactive")
+    print(request.form)
+    activity = Activity.query.get(request.form.get('activity_id'))
+    print("activity", activity)
+    message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
+    print(activity.inactivity_message)
+    if activity.inactivity_message != "":
+        message = activity.inactivity_message
+    return render_template('patient/activity_inactive.html',
+                            page_patient_disable_default_message=message)
 
 
 # affiche les boutons "enfants" de droite
@@ -2290,6 +2327,7 @@ def announce_refresh():
 
 # liste des flux SSE
 update_patients = []
+update_page_patient = []
 update_admin = []
 play_sound_streams = []
 counter_streams = {}
@@ -2363,6 +2401,10 @@ def events_update_admin():
 def events_update_announce():
     return Response(event_stream(update_announce), content_type='text/event-stream')
 
+@app.route('/events/update_page_patient')
+def events_update_page_patients():
+    return Response(event_stream(update_page_patient), content_type='text/event-stream')
+
 
 def communication(stream, data=None, client_id = None, audio_source=None):
     """ Effectue la communication avec les clients """
@@ -2377,6 +2419,10 @@ def communication(stream, data=None, client_id = None, audio_source=None):
         for client in update_announce:
             print("update announce", client)
             client.put(message)
+    elif stream == "update_page_patient":
+        for client in update_page_patient:
+            print("update page patient", client)
+            client.put(json.dumps(data))
     elif stream == "update_admin":
         for client in update_admin:
             client.put(json.dumps(data))
@@ -2469,20 +2515,12 @@ def add_pharmacist():
     db.session.commit()
     return render_template('htmx/menu_admin_pharmacist_row.html', pharmacist=new_pharmacist)
 
+
 @app.route('/new_pharmacist_form')
 def new_pharmacist_form():
     print("new_pharmacist_form")
     return render_template('htmx/menu_admin_new_pharmacist_form.html')
 
-
-
-@socketio.on('connect')
-def test_connect():
-    print('Client connected')
-
-@socketio.on('disconnect')
-def test_disconnect():
-    print('Client disconnected')
 
 
 # Définir un filtre pour Jinja2
@@ -2507,7 +2545,8 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
             for activity in activities:
                 new_activity = Activity(
                     name=activity['name'],
-                    letter=activity['letter']
+                    letter=activity['letter'],
+                    inactivity_message = ""
                 )
 
                 # Associer l'horaire à l'activité
@@ -2533,61 +2572,37 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
 def load_configuration(app, ConfigOption):
     app.logger.info("Loading configuration from database")
-    # Supposons que cette fonction charge la configuration depuis la base de données
-    numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first()
-    if numbering_by_activity:
-        app.config['NUMBERING_BY_ACTIVITY'] = numbering_by_activity.value_bool
-    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
-    if algo_activated:
-        app.config['ALGO_IS_ACTIVATED'] = algo_activated.value_bool
-    algo_overtaken_limit = ConfigOption.query.filter_by(key="algo_overtaken_limit").first()
-    if algo_overtaken_limit:
-        app.config['ALGO_OVERTAKEN_LIMIT'] = algo_overtaken_limit.value_int
-    printer = ConfigOption.query.filter_by(key="printer").first()
-    if printer:
-        app.config['PRINTER'] = printer.value_bool
-    announce_title = ConfigOption.query.filter_by(key="announce_title").first()
-    if announce_title:
-        app.config['ANNOUNCE_TITLE'] = announce_title.value_str
-    announce_subtitle = ConfigOption.query.filter_by(key="announce_subtitle").first()
-    if announce_subtitle:
-        app.config['ANNOUNCE_SUBTITLE'] = announce_subtitle.value_str
-    announce_sound = ConfigOption.query.filter_by(key="announce_sound").first()
-    if announce_sound:
-        app.config['ANNOUNCE_SOUND'] = announce_sound.value_bool
-    announce_infos_display = ConfigOption.query.filter_by(key="announce_infos_display").first()
-    if announce_infos_display:
-        app.config['ANNOUNCE_INFOS_DISPLAY'] = announce_infos_display.value_bool
-    announce_infos_display_time = ConfigOption.query.filter_by(key="announce_infos_display_time").first()
-    if announce_infos_display_time:
-        app.config['ANNOUNCE_INFOS_DISPLAY_TIME'] = announce_infos_display_time.value_int
-    announce_infos_transition = ConfigOption.query.filter_by(key="announce_infos_transition").first()
-    if announce_infos_transition:
-        app.config['ANNOUNCE_INFOS_TRANSITION'] = announce_infos_transition.value_str
-    announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first()
-    if announce_call_text:
-        app.config['ANNOUNCE_CALL_TEXT'] = announce_call_text.value_str
-    announce_ongoing_display = ConfigOption.query.filter_by(key="announce_ongoing_display").first()
-    if announce_ongoing_display:
-        app.config['ANNOUNCE_ONGOING_DISPLAY'] = announce_ongoing_display.value_bool
-    announce_ongoing_text = ConfigOption.query.filter_by(key="announce_ongoing_text").first()
-    if announce_ongoing_text:
-        app.config['ANNOUNCE_ONGOING_TEXT'] = announce_ongoing_text.value_str
-    announce_call_sound = ConfigOption.query.filter_by(key="announce_call_sound").first()
-    if announce_call_sound:
-        app.config['ANNOUNCE_CALL_SOUND'] = announce_call_sound.value_str
-    page_patient_title = ConfigOption.query.filter_by(key="page_patient_title").first()
-    if page_patient_title:
-        app.config['PAGE_PATIENT_TITLE'] = page_patient_title.value_str
-    page_patient_subtitle = ConfigOption.query.filter_by(key="page_patient_subtitle").first()
-    if page_patient_subtitle:
-        app.config['PAGE_PATIENT_SUBTITLE'] = page_patient_subtitle.value_str    
-    cron_delete_patient_table_activated = ConfigOption.query.filter_by(key="cron_delete_patient_table_activated").first()
-    if cron_delete_patient_table_activated:
-        app.config['CRON_DELETE_PATIENT_TABLE_ACTIVATED'] = cron_delete_patient_table_activated.value_bool
-        # si au lancement on veut une planif de l'effacement de la table on s'assure que ce soit fait
-        if app.config['CRON_DELETE_PATIENT_TABLE_ACTIVATED']:
-            scheduler_clear_all_patients()
+    
+    config_mappings = {
+        "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
+        "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
+        "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
+        "printer": ("PRINTER", "value_bool"),
+        "announce_title": ("ANNOUNCE_TITLE", "value_str"),
+        "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
+        "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
+        "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
+        "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
+        "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
+        "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
+        "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
+        "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
+        "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
+        "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
+        "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
+        "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
+        "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
+        "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool")        
+    }
+
+    for key, (config_name, value_type) in config_mappings.items():
+        config_option = ConfigOption.query.filter_by(key=key).first()
+        if config_option:
+            app.config[config_name] = getattr(config_option, value_type)
+
+    # Handling special case for cron_delete_patient_table_activated
+    if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
+        scheduler_clear_all_patients()
 
 
 # creation BDD si besoin et initialise certaines tables (Activités)

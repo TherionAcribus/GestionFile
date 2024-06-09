@@ -42,11 +42,15 @@ html, body {
 }
 
 
-#div_text_explanation{
+.div_text_explanation{
     text-align: center;
     font-size: 80px;
     font-weight: bold;
     color: darkcyan;
+}
+
+.div_text_explanation_inactive {
+    color: #888888;
 }
 
 
@@ -61,21 +65,40 @@ html, body {
     width: 200px;  /* Largeur fixe */
     height: 200px;
     margin: 10px;
-    background-color:darkcyan;
     border-radius: 50%;
     box-shadow: 5px 5px 5px #888888;
     text-align: center;
 }
 
+.div_button_active {
+    background-color:darkcyan;
+}
+
+.div_button_inactive {
+    background-color:rgb(102, 105, 105);
+}
+
+
 .img_btn {
     height: 200px;
+}
+
+.img_btn_inactive {
+    filter: grayscale(100%);
 }
 
 .div_text_button{
     text-align: center;
     font-size: 30px;
     font-weight: bold;
+}
+
+.div_text_button_active{
     color: darkcyan;
+}
+
+.div_text_button_inactive{
+    color: rgb(102, 105, 105);
 }
 
 #div_confirmation{

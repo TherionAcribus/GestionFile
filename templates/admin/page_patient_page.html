@@ -1,5 +1,21 @@
 <h3>Page "Patient"</h3>
 
+<div class="switch">
+    <span>Griser ou effacer les boutons si l'activité n'est pas en cours : </span>
+    <label>
+    Effacer
+    <input id="page_patient_disable_button" 
+            type="checkbox"
+            {% if page_patient_disable_button == True %}checked{% endif %}
+            hx-post="/admin/update_switch"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "page_patient_disable_button",
+                        "value": document.getElementById("page_patient_disable_button").checked}'>
+    <span class="lever"></span>
+    Griser
+    </label>
+</div>
+
 <div class="row">
     <div class="row">
         <div class="input-field col s12">
@@ -29,5 +45,21 @@
         hx-target="#invisible"
         hx-vals='js:{"key": "page_patient_subtitle",
                     "value": document.getElementById("page_patient_subtitle").value}'>
+                Enregistrer</button>
+</div>
+
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="page_patient_disable_default_message" class="materialize-textarea">{{page_patient_disable_default_message}}</textarea>
+            <label for="page_patient_disable_default_message">Texte qui s'affiche pas défaut quand l'activité n'est pas en cours</label>
+        </div>
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "page_patient_disable_default_message",
+                    "value": document.getElementById("page_patient_disable_default_message").value}'>
                 Enregistrer</button>
 </div>

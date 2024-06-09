@@ -19,7 +19,7 @@
 
         <div id="div_buttons_parents"
             hx-get="/patient/patient_buttons"
-            hx-trigger="load"
+            hx-trigger="load, refresh_buttons"
             hx-target="#div_buttons_parents"
             hx-swap="innerHTML">
         </div>
@@ -29,7 +29,7 @@
         </div>
 
         <div id="div_buttons_children">
-            <div id="div_text_explanation">
+            <div class="div_text_explanation">
                 {{page_patient_subtitle}}
             </div>
         </div>
