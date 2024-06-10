@@ -174,6 +174,7 @@ class Activity(db.Model):
     name = db.Column(db.String(100), nullable=False)
     letter = db.Column(db.String(1), nullable=False)
     inactivity_message = db.Column(db.String(255))
+    notification = db.Column(db.Boolean, default=False)
     schedules = relationship('ActivitySchedule', secondary='activity_schedule_link', back_populates='activities')
 
     def __repr__(self):
@@ -827,7 +828,7 @@ def display_activity_table():
 # mise à jour des informations d'une activité 
 @app.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
 def update_activity(activity_id):
-
+    print(request.form)
     activity = Activity.query.get(activity_id)
     if activity:
         if request.form.get('name') == '':
@@ -839,6 +840,7 @@ def update_activity(activity_id):
         activity.name = request.form.get('name', activity.name)
         activity.letter = request.form.get('letter', activity.letter)
         activity.inactivity_message = request.form.get('message', activity.inactivity_message)
+        activity.notification = True if request.form.get('notification', activity.notification) == "true" else False
 
         # Mettre à jour les horaires
         schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
@@ -894,6 +896,8 @@ def add_new_activity():
         name = request.form.get('name')
         letter = request.form.get('letter')
         schedule_ids = request.form.getlist('schedules')
+        message = request.form.get('message')
+        notification = True if request.form.get('notification') == "true" else False
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
             communication("update_admin", data='Nom obligatoire')
@@ -903,6 +907,8 @@ def add_new_activity():
         new_activity = Activity(
             name=name,
             letter=letter,
+            inactivity_message=message,
+            notification=notification
         )
 
         db.session.add(new_activity)
@@ -1847,9 +1853,11 @@ def left_page_validate_patient(activity):
     text = f"{call_number}"
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
-    socketio.emit('trigger_update_patient', {})
-    communication("update_patients")
-    #socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
+    data = None
+    if activity.notification:
+        data = {"type": "notification_new_patient", "message": f"Demande pour '{activity.name}'"}
+    communication("update_patients", data = data)
+
     return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
 
 
@@ -2332,7 +2340,7 @@ update_admin = []
 play_sound_streams = []
 counter_streams = {}
 update_announce = []
-
+update_patient_pyside = []
 
 def notify_clients(clients):
     for client in clients:
@@ -2405,6 +2413,10 @@ def events_update_announce():
 def events_update_page_patients():
     return Response(event_stream(update_page_patient), content_type='text/event-stream')
 
+@app.route('/events/update_patient_pyside')
+def events_update_patient_pyside():
+    return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
+
 
 def communication(stream, data=None, client_id = None, audio_source=None):
     """ Effectue la communication avec les clients """
@@ -2415,6 +2427,11 @@ def communication(stream, data=None, client_id = None, audio_source=None):
     if stream == "update_patients":
         for client in update_patients:
             client.put(message)
+        for client in update_patient_pyside:
+            patients = create_patients_list_for_pyside()
+            client.put(json.dumps({"type": "patient", "list": patients}))
+            if data["type"] == "notification_new_patient":
+                client.put(json.dumps(data))         
     elif stream == "update_announce":
         for client in update_announce:
             print("update announce", client)
@@ -2433,6 +2450,12 @@ def communication(stream, data=None, client_id = None, audio_source=None):
         message["data"] = {"audio_url": audio_source}
         for client in play_sound_streams:
             client.put(json.dumps(message))
+
+
+def create_patients_list_for_pyside():
+    patients = Patient.query.all()
+    patients_list = [{"id": patient.id, "call_number": patient.call_number, "activity_id": patient.activity_id} for patient in patients]
+    return patients_list
 
 
 def display_toast(success=True, message=None):

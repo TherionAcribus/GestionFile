@@ -5,6 +5,7 @@
             <th>Lettre</th>
             <th>Horaires</th>
             <th>Message si inactivité</th>
+            <th>Notification</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -27,12 +28,21 @@
                 <input type="text" name="message" value="{{ activity.inactivity_message }}" id="message-{{ activity.id }}">
             </td>
             <td>
+                <p>
+                    <label>
+                        <input id ="notification-{{ activity.id }}" type="checkbox" {% if activity.notification %}checked{% endif %}>
+                        <span></span>
+                    </label>
+                </p>
+            </td>
+            <td>
                 <button class="btn" 
                     hx-target="#invisible"
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
                             "letter": document.getElementById("letter-{{ activity.id }}").value,
                             "message": document.getElementById("message-{{ activity.id }}").value,
+                            "notification": document.getElementById("notification-{{ activity.id }}").checked,
                             "schedules": getSelectedOptions("schedules-{{ activity.id }}")
                             }'>
                     Enregistrer

@@ -4,6 +4,8 @@
             <th>Nom</th>
             <th>Lettre</th>
             <th>Horaires</th>
+            <th>Message si inactivité</th>
+            <th>Notification</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -21,13 +23,25 @@
                     </select>
                 </div>
             </td>
-
+            <td>
+                <input type="text" name="message" id="message">
+            </td>
+            <td>
+                <p>
+                    <label>
+                        <input id ="notification" type="checkbox">
+                        <span></span>
+                    </label>
+                </p>
+            </td>
             <td>
                 <button class="btn" 
                     hx-target="#div_activity_table"
                     hx-post="/admin/activity/add_new_activity"
                     hx-vals='js:{"name": document.getElementById("name").value, 
                             "letter": document.getElementById("letter").value,
+                            "message": document.getElementById("message").value,
+                            "notification": document.getElementById("notification").checked,
                             "schedules": getSelectedOptions("schedules")
                         }'>
                     Enregistrer
