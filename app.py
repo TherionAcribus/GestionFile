@@ -24,8 +24,11 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 import qrcode
 import json
 import os
-from queue import Queue
+from queue import Queue, Empty
 import logging
+import subprocess
+import threading
+
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time
@@ -44,7 +47,6 @@ class Config:
 app = Flask(__name__)
 app.config.from_object(Config())
 socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
-
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -356,11 +358,6 @@ def with_app_context(func):
 def home():
     return "Bonjour la pharmacie!"
 
-
-@app.route('/admin_old')
-def admin_old():
-    all_counters = Counter.query.all()  # Récupère tous les comptoirs de la base de données
-    return render_template('admin.html', counters=all_counters)
 
 # --------   ADMIN   ---------
 @app.route('/admin')
@@ -2368,17 +2365,18 @@ def event_stream_dict(client_id):
     print("client id", client_id)
     try:
         while True:
-            message = client_queue.get(timeout=30)  # Ajoute un timeout pour éviter le blocage
-            print("message test", message)
-            yield f'data: {message}\n\n'
-    #except Queue.Empty:
-    #    yield 'data: no-message\n\n'
+            try:
+                message = client_queue.get(timeout=30)  # Ajoute un timeout pour éviter le blocage
+                print("message test", message)
+                yield f'data: {message}\n\n'
+            except Empty:
+                yield 'data: no-message\n\n'
     except GeneratorExit:
         print("Generator exit, client disconnected")
     finally:
-        counter_streams.pop(client_id, None)
+        if client_id in counter_streams:
+            counter_streams.pop(client_id, None)
         print("Stream closed for client", client_id)
-
 
 @app.route('/events/update_patients')
 def events_update_patients():
@@ -2421,7 +2419,6 @@ def events_update_patient_pyside():
 def communication(stream, data=None, client_id = None, audio_source=None):
     """ Effectue la communication avec les clients """
     message = {"type": stream, "data": ""}
-    print("communication", stream, client_id, audio_source, message)
     
     # SSE
     if stream == "update_patients":
@@ -2430,8 +2427,11 @@ def communication(stream, data=None, client_id = None, audio_source=None):
         for client in update_patient_pyside:
             patients = create_patients_list_for_pyside()
             client.put(json.dumps({"type": "patient", "list": patients}))
-            if data["type"] == "notification_new_patient":
-                client.put(json.dumps(data))         
+            app.logger.info("data", data)
+            if data:
+                if data["type"] == "notification_new_patient":
+                    client.put(json.dumps(data))
+            app.logger.info("apres")
     elif stream == "update_announce":
         for client in update_announce:
             print("update announce", client)
@@ -2453,8 +2453,8 @@ def communication(stream, data=None, client_id = None, audio_source=None):
 
 
 def create_patients_list_for_pyside():
-    patients = Patient.query.all()
-    patients_list = [{"id": patient.id, "call_number": patient.call_number, "activity_id": patient.activity_id} for patient in patients]
+    patients = Patient.query.filter_by(status="standing").all()
+    patients_list = [{"id": patient.id, "call_number": patient.call_number, "activity_id": patient.activity_id, "activity": patient.activity.name} for patient in patients]
     return patients_list
 
 
@@ -2477,6 +2477,23 @@ def get_counters():
     counters_list = [{'id': counter.id, 'name': counter.name} for counter in counters]
     return jsonify(counters_list)
 
+
+# ---------------- FONCTIONS Généralistes > Affichage page sur téléphone ---------------- 
+
+@app.route('/phone/<int:patient_id>', methods=['GET'])
+def phone(patient_id):
+    patient = Patient.query.get(patient_id)
+    return render_template('/patient/phone.html', patient=patient)
+
+
+def start_serveo():
+    command = ["ssh", "-R", "pharmaciesainteagathe:80:localhost:5000", "serveo.net"]
+    subprocess.run(command)
+
+# Démarrer LocalTunnel lorsque Flask démarre
+def start_serveo_tunnel_in_thread():
+    serveo_thread = threading.Thread(target=start_serveo)
+    serveo_thread.start()
 
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
 
@@ -2646,7 +2663,7 @@ with app.app_context():
     clear_old_patients_table()
     
     
-if __name__ == "__main__":
+"""if __name__ == "__main__":
     app.logger.info("Starting Flask app...")
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
@@ -2654,6 +2671,22 @@ if __name__ == "__main__":
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
     socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+    start_serveo_tunnel_in_thread()"""
+
+if __name__ == "__main__":
+    app.logger.info("Starting Flask app...")
+
+    # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
+    port = int(os.environ.get("PORT", 5000))
+    # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
+    debug = os.environ.get("DEBUG", "False") == "True"
+
+    # Démarrer Flask dans un thread séparé
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
+    flask_thread.start()
+
+    # Démarrer Serveo après avoir démarré Flask
+    start_serveo()
 
 
 

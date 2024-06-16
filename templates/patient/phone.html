@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Information</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="../static/css/phone.css">
+</head>
+<body>
+    <div class="container">
+
+        <div id="div_title_area">
+            <h1 id="text_title">Bienvenue à la pharmacie Sainte-Agathe</h1>
+        </div>
+        <div id="div_infos">
+            <p>Votre numéro d'appel : {{ patient.call_number }}</p>
+            <p>Votre demande : {{ patient.activity.name }}</p>
+            <p>Afin d'améliorer les temps d'attente, l'ordre de passage peut-être légerement différent de l'ordre d'arrivée.</p>
+            <p>Nous vous appelerons à votre tour.</p>
+            <!-- Add more patient information here -->
+        </div>
+    </div>
+
+
+</body>
+</html>
