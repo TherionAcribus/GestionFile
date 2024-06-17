@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.5",
+    "version": "0.1",
     "comments": "Version de test",
         "configurations": {
             "cron_delete_patient_table_activated": true,
@@ -19,8 +19,18 @@
             "announce_infos_display_time": 30,
             "announce_infos_transition": "slide",
             "page_patient_disable_button": true,
-            "page_patient_disable_default_message": "Cette activité est momentanement indisponible. Adressez-vous à notre équipe pour plus d'informations.",
+            "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",
             "page_patient_title": "Bienvenue à la pharmacie Sainte-Agathe",
-            "page_patient_subtitle": "Afin de faciliter votre prise en charge, merci de vous enregistrer sur cette borne."
+            "page_patient_subtitle": "Afin de faciliter votre prise en charge, merci de vous enregistrer sur cette borne.",
+            "page_patient_qrcode_display": true,
+            "page_patient_qrcode_web_page": true,
+            "page_patient_qrcode_data": "Numéro d'appel : {P}",
+            "phone_title": "Bienvenue à la pharmacie Sainte-Agathe",
+            "phone_line1": "Votre numéro d'appel :",
+            "phone_line2": "{P}",
+            "phone_line3": "Votre demande :",
+            "phone_line4": "{A}",
+            "phone_line5": "Afin d'améliorer les temps d'attente, l'ordre de passage peut être légèrement différent de l'ordre d'arrivée.",
+            "phone_line6": "Nous vous appelerons à votre tour."
     }
 }

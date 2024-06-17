@@ -25,6 +25,7 @@
             <ul class="tabs">
                 <li class="tab col s3"><a class="active" href="#test1">Textes</a></li>
                 <li class="tab col s3"><a href="#tab_buttons">Boutons</a></li>
+                <li class="tab col s3"><a href="#tab_qrcode">QR Code</a></li>
             </ul>
         </div>
         <div id="test1" class="col s12">
@@ -32,6 +33,9 @@
         </div>
         <div id="tab_buttons" class="col s12">
             {% include 'admin/page_patient_buttons.html' %}
+        </div>
+        <div id="tab_qrcode" class="col s12">
+            {% include 'admin/page_patient_qrcode.html' %}
         </div>
     </div>
 

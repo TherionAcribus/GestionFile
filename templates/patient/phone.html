@@ -14,11 +14,10 @@
             <h1 id="text_title">Bienvenue à la pharmacie Sainte-Agathe</h1>
         </div>
         <div id="div_infos">
-            <p>Votre numéro d'appel : {{ patient.call_number }}</p>
-            <p>Votre demande : {{ patient.activity.name }}</p>
-            <p>Afin d'améliorer les temps d'attente, l'ordre de passage peut-être légerement différent de l'ordre d'arrivée.</p>
-            <p>Nous vous appelerons à votre tour.</p>
-            <!-- Add more patient information here -->
+            
+            {% for phone_line in phone_lines %}
+                <p>{{ phone_line }}</p>
+            {% endfor %}
         </div>
     </div>
 

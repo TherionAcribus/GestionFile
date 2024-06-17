@@ -28,10 +28,11 @@ from queue import Queue, Empty
 import logging
 import subprocess
 import threading
+import socket
 
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
-from utils import validate_and_transform_text, parse_time
+from utils import validate_and_transform_text, validate_and_transform_text_for_phone, parse_time
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -43,6 +44,8 @@ class Config:
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
 
+# A CHANGER POUR ADRESSE DYNAMIQUE
+adresse = "http://localhost:5000"
 
 app = Flask(__name__)
 app.config.from_object(Config())
@@ -485,7 +488,6 @@ def create_new_patient_auto():
 
 # --------  FIn de ADMIN -> Queue ---------
 
-
 @app.route('/admin/update_switch', methods=['POST'])
 def update_switch():
     """ Mise à jour des switches d'options de l'application """
@@ -513,9 +515,16 @@ def update_input():
     """ Mise à jour des input d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
+
     # verification que l'entrée user utilise uniquement le balises {P}, {C} ou {M}. Sinon plantage lors du format
     if key in ["announce_call_text", "announce_call_sound", "announce_ongoing_text"]:
         check = check_balises(value)
+        if check["success"]:
+            value = check["value"]
+        else:
+            return display_toast(success=False, message=check["value"])
+    elif key.startswith("phone_line"):
+        check = check_balises_for_phone(value)
         if check["success"]:
             value = check["value"]
         else:
@@ -574,6 +583,11 @@ def check_balises(value):
     
     return validate_and_transform_text(value)
 
+def check_balises_for_phone(value):
+    """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
+    print("call_function_with_input", value)
+    
+    return validate_and_transform_text_for_phone(value)
 
 # --------  ADMIN -> App  ---------
 
@@ -589,7 +603,6 @@ def admin_app():
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
 def update_numbering_by_activity():
     new_value = request.values.get('numbering_by_activity')
-    print("new_value", new_value)
     try:
         # Récupérer la valeur du checkbox à partir de la requête
         new_value = request.values.get('numbering_by_activity')
@@ -689,7 +702,6 @@ def staff():
 def display_staff_table():
     staff = Pharmacist.query.all()
     activities = Activity.query.all()
-    print("ALL", staff)
     return render_template('admin/staff_htmx_table.html', staff=staff, activities=activities)
 
 
@@ -825,7 +837,6 @@ def display_activity_table():
 # mise à jour des informations d'une activité 
 @app.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
 def update_activity(activity_id):
-    print(request.form)
     activity = Activity.query.get(activity_id)
     if activity:
         if request.form.get('name') == '':
@@ -952,7 +963,6 @@ def display_schedule_table():
 # mise à jour des informations d'une activité 
 @app.route('/admin/schedule/schedule_update/<int:schedule_id>', methods=['POST'])
 def update_schedule(schedule_id):
-    print(request.form)
     try:
         schedule = ActivitySchedule.query.get(schedule_id)
         if schedule:
@@ -989,7 +999,6 @@ def add_schedule_form():
 # enregistre l'activité' dans la Bdd
 @app.route('/admin/schedule/add_new_schedule', methods=['POST'])
 def add_new_schedule():
-    print(request.form)
     try:
         name = request.form.get('name_schedule')
         start_time_str = request.form.get('start_time')
@@ -1029,7 +1038,6 @@ def add_new_schedule():
 
 
 def update_button_presence(activity_id, is_present, app):
-    print("update_button_presence", activity_id, is_present)
     with app.app_context():  # Crée un contexte d'application
         try:
             buttons = Button.query.filter_by(activity_id=activity_id).all()
@@ -1486,7 +1494,10 @@ def admin_patient():
                             page_patient_disable_button = app.config['PAGE_PATIENT_DISABLE_BUTTON'],
                             page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
                             page_patient_title = app.config['PAGE_PATIENT_TITLE'],
-                            page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'])
+                            page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'],
+                            page_patient_display_qrcode = app.config['PAGE_PATIENT_QRCODE_DISPLAY'],
+                            page_patient_qrcode_web_page = app.config['PAGE_PATIENT_QRCODE_WEB_PAGE'],
+                            page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'])
 
 
 # affiche le tableau des boutons 
@@ -1673,6 +1684,24 @@ def admin_info():
 
 
 # --------  Fin ADMIN -> Page INfos ---------
+
+# -------- ADMIN -> Page Phone ---------
+
+@app.route('/admin/phone')
+def admin_phone():
+    phone_lines = []
+    for line in range(1, 7):
+        exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
+        phone_lines.append(eval(f"phone_line{line}"))
+    print("PL", phone_lines)
+    return render_template('/admin/phone.html', 
+                            phone_title=app.config['PHONE_TITLE'],
+                            phone_lines=phone_lines)
+                            
+
+
+# --------  Fin ADMIN -> Page Phone ---------
+
 
 
 
@@ -1924,7 +1953,12 @@ def get_next_category_number(activity):
 
 
 def create_qr_code(patient):
-    patient_info = {
+    if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
+        data = f"{adresse}/phone/{patient.id}"
+    else :
+        template = app.config['PAGE_PATIENT_QRCODE_DATA']
+        data = replace_balise_phone(template, patient)
+    """patient_info = {
             "id": patient.id,
             "patient_number": patient.call_number,
             "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -1932,7 +1966,7 @@ def create_qr_code(patient):
     }
         
     # Convertir les données en chaîne JSON
-    data = json.dumps(patient_info)
+    data = json.dumps(patient_info)"""
 
     # Générer le QR Code
     img = qrcode.make(data)
@@ -2306,7 +2340,14 @@ def patients_ongoing():
 
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
+    print("replace_balise_announces", template, patient)
     return template.format(P=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
+
+
+def replace_balise_phone(template, patient):
+    """ Remplace les balises dans les textes d'annonces (texte et son)"""
+    print("replace_balise_announces", template, patient)
+    return template.format(P=patient.call_number, A=patient.activity.name)
 
 
 @app.route('/announce/init_gallery')
@@ -2380,6 +2421,12 @@ def event_stream_dict(client_id):
 
 @app.route('/events/update_patients')
 def events_update_patients():
+    return Response(event_stream(update_patients), content_type='text/event-stream')
+
+
+# pour mettre à jour l'App patient (impressions)
+@app.route('/events/update_patient_app')
+def events_update_patients_app():
     return Response(event_stream(update_patients), content_type='text/event-stream')
 
 
@@ -2483,17 +2530,50 @@ def get_counters():
 @app.route('/phone/<int:patient_id>', methods=['GET'])
 def phone(patient_id):
     patient = Patient.query.get(patient_id)
-    return render_template('/patient/phone.html', patient=patient)
+    phone_lines = []
+    for line in range(1, 7):
+        exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
+        exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
+        phone_lines.append(eval(f"phone_line{line}"))
+    return render_template('/patient/phone.html', patient=patient,
+                            phone_title=app.config['PHONE_TITLE'],
+                            phone_lines=phone_lines)
 
 
 def start_serveo():
-    command = ["ssh", "-R", "pharmaciesainteagathe:80:localhost:5000", "serveo.net"]
+    port = 80
+    if is_port_open('localhost', port):
+        app.logger.info(f"Port {port} is open. Trying with port 8080.")
+        port = 8080
+    
+    command = ["ssh", "-i", os.path.expanduser("~/.ssh/id_rsa"), "-R", f"pharmaciesainteagathe:{port}:localhost:5000", "serveo.net"]
     subprocess.run(command)
+    app.logger.info(f"Serveo tunnel started on port {port}")
+
+def is_port_open(host, port):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.connect((host, port))
+        s.shutdown(socket.SHUT_RDWR)
+        return True
+    except:
+        return False
+    finally:
+        s.close()
 
 # Démarrer LocalTunnel lorsque Flask démarre
 def start_serveo_tunnel_in_thread():
+    app.logger.info("start serveo tunnel in thread")
     serveo_thread = threading.Thread(target=start_serveo)
     serveo_thread.start()
+
+
+@app.before_request
+def log_request_info():
+    app.logger.debug('Headers: %s', request.headers)
+    app.logger.debug('Body: %s', request.get_data())
+    app.logger.debug('Full Path: %s', request.full_path)
+    app.logger.debug('URL: %s', request.url)
 
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
 
@@ -2560,7 +2640,6 @@ def add_pharmacist():
 def new_pharmacist_form():
     print("new_pharmacist_form")
     return render_template('htmx/menu_admin_new_pharmacist_form.html')
-
 
 
 # Définir un filtre pour Jinja2
@@ -2632,6 +2711,16 @@ def load_configuration(app, ConfigOption):
         "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
         "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
         "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
+        "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
+        "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
+        "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
+        "phone_title": ("PHONE_TITLE", "value_str"),
+        "phone_line1": ("PHONE_LINE1", "value_str"),
+        "phone_line2": ("PHONE_LINE2", "value_str"),
+        "phone_line3": ("PHONE_LINE3", "value_str"),
+        "phone_line4": ("PHONE_LINE4", "value_str"),
+        "phone_line5": ("PHONE_LINE5", "value_str"),
+        "phone_line6": ("PHONE_LINE6", "value_str"),
         "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool")        
     }
 
@@ -2662,6 +2751,7 @@ with app.app_context():
     load_configuration(app, ConfigOption)
     clear_old_patients_table()
     
+    #start_serveo_tunnel_in_thread()
     
 """if __name__ == "__main__":
     app.logger.info("Starting Flask app...")
@@ -2671,6 +2761,7 @@ with app.app_context():
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
     socketio.run(app, host='0.0.0.0', port=port, debug=debug)
+    print("operating ????")
     start_serveo_tunnel_in_thread()"""
 
 if __name__ == "__main__":
@@ -2681,12 +2772,14 @@ if __name__ == "__main__":
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
 
+    print("Starting Flask...")
     # Démarrer Flask dans un thread séparé
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     flask_thread.start()
 
+    #print("Starting Serveo tunnel...")
     # Démarrer Serveo après avoir démarré Flask
-    start_serveo()
+    #start_serveo_tunnel_in_thread()
 
 
 

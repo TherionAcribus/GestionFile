@@ -1,0 +1,57 @@
+<h3>QR Code</h3>
+<p>Le Qr Code permet au patient de scanner son numéro de passage</p>
+
+<div class="switch">
+    <span>Masquer ou Afficher le Qr Code</span>
+    <label>
+    Masquer
+    <input id="page_patient_display_qrcode" 
+            type="checkbox"
+            {% if page_patient_display_qrcode == True %}checked{% endif %}
+            hx-post="/admin/update_switch"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "page_patient_display_qrcode",
+                        "value": document.getElementById("page_patient_display_qrcode").checked}'>
+    <span class="lever"></span>
+    Afficher
+    </label>
+</div>
+
+<div class="switch">
+    <span>Le QrCode affiche des valeurs brutes ou une page web</span>
+    <label>
+    Valeurs brutes
+    <input id="page_patient_qrcode_web_page" 
+            type="checkbox"
+            {% if page_patient_qrcode_web_page == True %}checked{% endif %}
+            hx-post="/admin/update_switch"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "page_patient_qrcode_web_page",
+                        "value": document.getElementById("page_patient_qrcode_web_page").checked}'>
+    <span class="lever"></span>
+    Page web
+    </label>
+</div>
+<p>Il n'est pour l'instant pas possible d'afficher une page web si le serveur tourne sur un serveur local.</p>
+
+<h5>Données brutes</h5>
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="page_patient_qrcode_data" class="materialize-textarea">{{page_patient_qrcode_data}}</textarea>
+            <label for="page_patient_qrcode_data">Données à afficher</label>
+        </div>
+        Vous pouvez utiliser 
+        <span class="variables_calling" onclick="insertPlaceholder('page_patient_qrcode_data', '{P}')">{P}</span>
+        pour le numéro du patient et
+        <span class="variables_calling" onclick="insertPlaceholder('page_patient_qrcode_data', '{A}')">{A}</span>
+        pour l'activité'
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "page_patient_qrcode_data",
+                "value": document.getElementById("page_patient_qrcode_data").value}'>
+        Enregistrer</button>
+</div>

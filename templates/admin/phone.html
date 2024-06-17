@@ -1,0 +1,58 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Page "Annonce"{% endblock %}
+
+{% block content %}
+    <h3>Page "Téléphone patient"</h3>
+    <p>Cette page permet de paramétrer les éléments qui s'affichent sur le téléphone du patient quand celui-ci scanne le QRCode.</p>
+
+    <div class="row">
+
+        <div class="row">
+            <div class="row">
+                <div class="input-field col s12">
+                    <textarea id="phone_title" class="materialize-textarea">{{phone_title}}</textarea>
+                    <label for="phone_title">Texte en haut de la page (Titre)</label>
+                </div>
+            </div>
+            <button
+                class="btn"
+                hx-post="/admin/update_input"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "phone_title",
+                            "value": document.getElementById("phone_title").value}'>
+                        Enregistrer</button>
+        </div>
+
+        {% for phone_line in phone_lines %}
+
+        <div class="row">
+            <div class="row">
+                <div class="input-field col s12">
+                    <textarea id="phone_line{{ loop.index }}" class="materialize-textarea">{{ phone_line }}</textarea>
+                    <label for="phone_line{{ loop.index }}">Ligne {{ loop.index }}</label>
+                </div>
+                Vous pouvez utiliser 
+                <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{P}')">{P}</span>
+                pour le numéro du patient et
+                <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{A}')">{A}</span>
+                pour l'activité'
+            </div>
+            <button
+                class="btn"
+                hx-post="/admin/update_input"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "phone_line{{ loop.index }}",
+                        "value": document.getElementById("phone_line{{ loop.index }}").value}'>
+                Enregistrer</button>
+        </div>
+    {% endfor %}
+    
+
+    </div>  
+
+        <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+        <div id="invisible" style="display:none;"></div>
+
+
+{% endblock %}
