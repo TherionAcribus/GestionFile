@@ -1,0 +1,82 @@
+<div class="switch">
+    <span>Masquer ou Afficher la possibilité d'imprimer le ticket</span>
+    <label>
+    Masquer
+    <input id="page_patient_print_ticket_display" 
+            type="checkbox"
+            {% if page_patient_print_ticket_display == True %}checked{% endif %}
+            hx-post="/admin/update_switch"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "page_patient_print_ticket_display",
+                        "value": document.getElementById("page_patient_print_ticket_display").checked}'>
+    <span class="lever"></span>
+    Afficher
+    </label>
+</div>
+
+<h5>Message du ticket</h5>
+
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="ticket_header" class="materialize-textarea">{{ticket_header}}</textarea>
+            <label for="ticket_header">En-tête du message</label>
+        </div>
+        Vous pouvez utiliser 
+        <span class="variables_calling" onclick="insertPlaceholder('ticket_header', '{P}')">{P}</span>
+        pour le numéro du patient et
+        <span class="variables_calling" onclick="insertPlaceholder('ticket_header', '{A}')">{A}</span>
+        pour l'activité'
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "ticket_header",
+                "value": document.getElementById("ticket_header").value}'>
+        Enregistrer</button>
+</div>
+
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="ticket_message" class="materialize-textarea">{{ticket_message}}</textarea>
+            <label for="ticket_message">Corps du message</label>
+        </div>
+        Vous pouvez utiliser 
+        <span class="variables_calling" onclick="insertPlaceholder('ticket_message', '{P}')">{P}</span>
+        pour le numéro du patient et
+        <span class="variables_calling" onclick="insertPlaceholder('ticket_message', '{A}')">{A}</span>
+        pour l'activité'
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "ticket_message",
+                "value": document.getElementById("ticket_message").value}'>
+        Enregistrer</button>
+</div>
+
+<div class="row">
+    <div class="row">
+        <div class="input-field col s12">
+            <textarea id="ticket_footer" class="materialize-textarea">{{ticket_footer}}</textarea>
+            <label for="ticket_footer">Pied du message</label>
+        </div>
+        Vous pouvez utiliser 
+        <span class="variables_calling" onclick="insertPlaceholder('ticket_footer', '{P}')">{P}</span>
+        pour le numéro du patient et
+        <span class="variables_calling" onclick="insertPlaceholder('ticket_footer', '{A}')">{A}</span>
+        pour l'activité'
+    </div>
+    <button
+        class="btn"
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "ticket_footer",
+                "value": document.getElementById("ticket_footer").value}'>
+        Enregistrer</button>
+</div>
+
+

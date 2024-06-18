@@ -32,7 +32,7 @@ import socket
 
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
-from utils import validate_and_transform_text, validate_and_transform_text_for_phone, parse_time
+from utils import validate_and_transform_text, validate_and_transform_text_for_phone, parse_time, convert_markdown_to_escpos
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -529,12 +529,25 @@ def update_input():
             value = check["value"]
         else:
             return display_toast(success=False, message=check["value"])
-    try:
-        # MAJ BDD
-        config_option = ConfigOption.query.filter_by(key=key).first()
         
+    if key.startswith("ticket_"):
+        escpos_text = convert_markdown_to_escpos(value)
+        print("escpos_text", escpos_text)
+        key_printer = key + "_printer"
+        app.config[key_printer.upper()] = escpos_text
+        config_option = ConfigOption.query.filter_by(key=key_printer).first()
+        if config_option:
+            print("escpos_text2", escpos_text)
+            config_option.value_str = escpos_text
+            db.session.commit()
+
+    try:
         # MAJ Config
         app.config[key.upper()] = value
+
+        # MAJ BDD
+        config_option = ConfigOption.query.filter_by(key=key).first()        
+
         if config_option:
             config_option.value_str = value
             db.session.commit()
@@ -1497,7 +1510,12 @@ def admin_patient():
                             page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'],
                             page_patient_display_qrcode = app.config['PAGE_PATIENT_QRCODE_DISPLAY'],
                             page_patient_qrcode_web_page = app.config['PAGE_PATIENT_QRCODE_WEB_PAGE'],
-                            page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'])
+                            page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'],
+                            page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
+                            ticket_header = app.config['TICKET_HEADER'],
+                            ticket_message = app.config['TICKET_MESSAGE'],
+                            ticket_footer = app.config['TICKET_FOOTER']
+                            )
 
 
 # affiche le tableau des boutons 
@@ -1866,7 +1884,6 @@ def display_validation_after_choice(request):
     # Si le bouton contient bien une activité
     if activity_id != "":
         activity = Activity.query.get(activity_id)
-        print("activity", activity.id)
         socketio.emit('trigger_valide_activity', {'activity': activity.id})
         return left_page_validate_patient(activity)
     
@@ -1884,7 +1901,31 @@ def left_page_validate_patient(activity):
         data = {"type": "notification_new_patient", "message": f"Demande pour '{activity.name}'"}
     communication("update_patients", data = data)
 
-    return render_template('patient/patient_qr_right_page.html', image_name_qr=image_name_qr, text=text)
+    return render_template('patient/patient_qr_right_page.html', 
+                            image_name_qr=image_name_qr, 
+                            text=text,
+                            activity=activity)
+
+@app.route('/patient/print_and_validate', methods=['POST'])
+def print_and_validate():
+    activity = Activity.query.get(request.form.get('activity_id'))
+    call_number = get_next_call_number(activity)
+    new_patient = add_patient(call_number, activity)
+    text = format_ticket_text()
+    communication("update_patient_app", data={"type": "print", "message": text})
+    return ""
+
+
+def format_ticket_text():
+    text_list = [
+        app.config['TICKET_HEADER_PRINTER'],
+        app.config['TICKET_MESSAGE_PRINTER'],
+        app.config['TICKET_FOOTER_PRINTER']
+    ]
+    combined_text = "\n".join(text_list)
+    formatted_text = convert_markdown_to_escpos(combined_text)
+    return formatted_text
+    
 
 
 def add_patient(call_number, activity):
@@ -2379,6 +2420,7 @@ play_sound_streams = []
 counter_streams = {}
 update_announce = []
 update_patient_pyside = []
+update_patient_app = []
 
 def notify_clients(clients):
     for client in clients:
@@ -2423,11 +2465,10 @@ def event_stream_dict(client_id):
 def events_update_patients():
     return Response(event_stream(update_patients), content_type='text/event-stream')
 
-
 # pour mettre à jour l'App patient (impressions)
 @app.route('/events/update_patient_app')
 def events_update_patients_app():
-    return Response(event_stream(update_patients), content_type='text/event-stream')
+    return Response(event_stream(update_patient_app), content_type='text/event-stream')
 
 
 @app.route('/events/sound_calling')
@@ -2486,6 +2527,10 @@ def communication(stream, data=None, client_id = None, audio_source=None):
     elif stream == "update_page_patient":
         for client in update_page_patient:
             print("update page patient", client)
+            client.put(json.dumps(data))
+    elif stream == "update_patient_app":
+        print("update patient app", data)
+        for client in update_patient_app:
             client.put(json.dumps(data))
     elif stream == "update_admin":
         for client in update_admin:
@@ -2714,6 +2759,13 @@ def load_configuration(app, ConfigOption):
         "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
         "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
         "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
+        "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
+        "ticket_header": ("TICKET_HEADER", "value_str"),
+        "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
+        "ticket_message": ("TICKET_MESSAGE", "value_str"),
+        "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
+        "ticket_footer": ("TICKET_FOOTER", "value_str"),
+        "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
         "phone_title": ("PHONE_TITLE", "value_str"),
         "phone_line1": ("PHONE_LINE1", "value_str"),
         "phone_line2": ("PHONE_LINE2", "value_str"),
@@ -2752,17 +2804,9 @@ with app.app_context():
     clear_old_patients_table()
     
     #start_serveo_tunnel_in_thread()
-    
-"""if __name__ == "__main__":
-    app.logger.info("Starting Flask app...")
-
-    # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
-    port = int(os.environ.get("PORT", 5000))
-    # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
-    debug = os.environ.get("DEBUG", "False") == "True"
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug)
-    print("operating ????")
-    start_serveo_tunnel_in_thread()"""
+    #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
+    #flask_thread.start()
+        
 
 if __name__ == "__main__":
     app.logger.info("Starting Flask app...")
@@ -2773,13 +2817,9 @@ if __name__ == "__main__":
     debug = os.environ.get("DEBUG", "False") == "True"
 
     print("Starting Flask...")
-    # Démarrer Flask dans un thread séparé
-    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
-    flask_thread.start()
+    app.logger.info(f"Starting Flask on port {port} with debug={debug}")
 
-    #print("Starting Serveo tunnel...")
-    # Démarrer Serveo après avoir démarré Flask
-    #start_serveo_tunnel_in_thread()
+    app.run(host='0.0.0.0', port=port, debug=debug)
 
 
 

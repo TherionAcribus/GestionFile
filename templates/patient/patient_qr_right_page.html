@@ -8,9 +8,16 @@
         <div id="div_call_number">
             <p id="text_call_number">Votre numéro : {{ text }}</p>
         </div>
-        <div class="div_validation_one_button">
+
+        <div 
+            class="div_validation_one_button"
+            hx-post="patient/print_and_validate"
+            hx-vals='{"activity_id": "{{ activity.id }}"}'
+            hx-target="#invisible">
             <p class="validation_button">Imprimer et valider</p>
         </div>
+
+
         <div class="div_validation_one_button">
             <p class="validation_button">Valider sans impression</p>
         </div>
