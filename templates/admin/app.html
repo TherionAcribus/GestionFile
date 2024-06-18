@@ -3,6 +3,7 @@
 {% block title %}Application{% endblock %}
 
 {% block content %}
+    {% import '/admin/macros.html' as macros %}
     <h3>Application</h3>
 
     <div>
@@ -22,9 +23,12 @@
             Par activité
             </label>
         </div>
-
     </div>  
 
+    A METTRE AILLEURS !!!
+    {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}
+
+    A FAIRE !!! 
     <div>Ajouter bouton redémarrage du serveur</div>
 
         <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->

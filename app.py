@@ -610,7 +610,8 @@ def admin_app():
     announce_sound = ConfigOption.query.filter_by(key="announce_sound").first().value_bool
     return render_template('/admin/app.html', 
                             numbering_by_activity = numbering_by_activity, 
-                            announce_sound = announce_sound)
+                            announce_sound = announce_sound,
+                            pharmacy_name = app.config["PHARMACY_NAME"])
 
 
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
@@ -1515,7 +1516,8 @@ def admin_patient():
                             page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
                             ticket_header = app.config['TICKET_HEADER'],
                             ticket_message = app.config['TICKET_MESSAGE'],
-                            ticket_footer = app.config['TICKET_FOOTER']
+                            ticket_footer = app.config['TICKET_FOOTER'],
+                            printer_width = app.config['PRINTER_WIDTH']
                             )
 
 
@@ -1932,7 +1934,7 @@ def format_ticket_text(new_patient):
     ]
     combined_text = "\n".join(text_list)
     combined_text = replace_balise_phone(combined_text, new_patient)
-    formatted_text = convert_markdown_to_escpos(combined_text, line_width=42)
+    formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
     return formatted_text
     
 
@@ -2391,13 +2393,14 @@ def patients_ongoing():
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     print("replace_balise_announces", template, patient)
-    return template.format(P=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
+    return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
 
 
 def replace_balise_phone(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     print("replace_balise_announces", template, patient)
-    return template.format(P=patient.call_number, 
+    return template.format(P=app.config["PHARMACY_NAME"],
+                            N=patient.call_number, 
                             A=patient.activity.name, 
                             D=date.today().strftime("%d/%m/%y"),
                             H=datetime.now().strftime("%H:%M"))
@@ -2750,13 +2753,12 @@ def load_configuration(app, ConfigOption):
     app.logger.info("Loading configuration from database")
     
     config_mappings = {
+        "pharmacy_name": ("PHARMACY_NAME", "value_str"),
         "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
         "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
         "printer": ("PRINTER", "value_bool"),
-        "printer_vendor_id": ("PRINTER_VENDOR_ID", "value_str"),
-        "printer_product_id": ("PRINTER_PRODUCT_ID", "value_str"),
-        "printer_profile": ("PRINTER_PROFILE", "value_str"),
+        "printer_width": ("PRINTER_WIDTH", "value_int"),
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
