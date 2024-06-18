@@ -1,0 +1,49 @@
+{% macro button(key) %}
+<button
+    class="btn"
+    hx-post="/admin/update_input"
+    hx-target="#invisible"
+    hx-vals='js:{"key": "{{ key }}", "value": document.getElementById("{{ key }}").value}'>
+    Enregistrer</button>
+{% endmacro %}
+
+{% macro balises_PANDH(key) %}
+<div>
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
+    pour le numéro du patient, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{A}</span>
+    pour l'activité, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+    pour la date,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+    pour l'heure.
+</div>
+{% endmacro %}
+
+{% macro textarea(key, value, label) %}
+<div class="input-field col s12">
+    <textarea id="{{ key }}" class="materialize-textarea">{{ value }}</textarea>
+    <label for="{{ key }}">{{label}}</label>
+</div>
+{% endmacro %}
+
+
+{% macro textarea_full_PANDH(key, value, label) %}
+<div class="row">
+    <div class="row">
+        {{ textarea(key, value, label) }}
+        {{ balises_PANDH(key) }}
+    </div>
+    {{ button(key) }}
+</div>
+{% endmacro %}
+
+
+{% macro textarea_full(key, value, label) %}
+<div class="row">
+    <div class="row">
+        {{ textarea(key, value, label) }}
+    </div>
+    {{ button(key) }}
+</div>
+{% endmacro %}

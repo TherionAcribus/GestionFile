@@ -523,7 +523,7 @@ def update_input():
             value = check["value"]
         else:
             return display_toast(success=False, message=check["value"])
-    elif key.startswith("phone_line"):
+    elif key.startswith("phone_line") or key.startswith("ticket_"):
         check = check_balises_for_phone(value)
         if check["success"]:
             value = check["value"]
@@ -634,7 +634,8 @@ def update_numbering_by_activity():
             return jsonify(status="error", message=str(e)), 500
     
 
-# --------  FIn ADMIN -> Main   ---------
+# --------  FIn ADMIN -> App  ---------
+
 
 
 # --------  ADMIN -> DataBase  ---------
@@ -1663,6 +1664,13 @@ def delete_button_image(button_id):
     db.session.commit()
     return "<div>Pas d'image</div>"
 
+@app.route("/admin/patient/print_ticket_test")
+def print_ticket_test():
+    text = "12345678901234567890123456789012345678901234567890"
+    print(text)
+    communication("update_patient_app", data={"type": "print", "message": text})
+
+
 # -------- fin de ADMIN -> Page patient  ---------
 
 
@@ -1911,19 +1919,20 @@ def print_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
-    text = format_ticket_text()
+    text = format_ticket_text(new_patient)
     communication("update_patient_app", data={"type": "print", "message": text})
     return ""
 
 
-def format_ticket_text():
+def format_ticket_text(new_patient):
     text_list = [
         app.config['TICKET_HEADER_PRINTER'],
         app.config['TICKET_MESSAGE_PRINTER'],
         app.config['TICKET_FOOTER_PRINTER']
     ]
     combined_text = "\n".join(text_list)
-    formatted_text = convert_markdown_to_escpos(combined_text)
+    combined_text = replace_balise_phone(combined_text, new_patient)
+    formatted_text = convert_markdown_to_escpos(combined_text, line_width=42)
     return formatted_text
     
 
@@ -2388,7 +2397,10 @@ def replace_balise_announces(template, patient):
 def replace_balise_phone(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     print("replace_balise_announces", template, patient)
-    return template.format(P=patient.call_number, A=patient.activity.name)
+    return template.format(P=patient.call_number, 
+                            A=patient.activity.name, 
+                            D=date.today().strftime("%d/%m/%y"),
+                            H=datetime.now().strftime("%H:%M"))
 
 
 @app.route('/announce/init_gallery')
@@ -2742,6 +2754,9 @@ def load_configuration(app, ConfigOption):
         "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
         "printer": ("PRINTER", "value_bool"),
+        "printer_vendor_id": ("PRINTER_VENDOR_ID", "value_str"),
+        "printer_product_id": ("PRINTER_PRODUCT_ID", "value_str"),
+        "printer_profile": ("PRINTER_PROFILE", "value_str"),
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
