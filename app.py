@@ -32,7 +32,7 @@ import socket
 
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
-from utils import validate_and_transform_text, validate_and_transform_text_for_phone, parse_time, convert_markdown_to_escpos
+from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -49,7 +49,7 @@ adresse = "http://localhost:5000"
 
 app = Flask(__name__)
 app.config.from_object(Config())
-socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
+#socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -516,20 +516,21 @@ def update_input():
     """ Mise à jour des input d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
-
-    # verification que l'entrée user utilise uniquement le balises {P}, {C} ou {M}. Sinon plantage lors du format
-    if key in ["announce_call_text", "announce_call_sound", "announce_ongoing_text"]:
-        check = check_balises(value)
-        if check["success"]:
-            value = check["value"]
+    check = request.values.get('check')
+    print(request.form)
+    
+    if check:
+        if check == "welcome":
+            authorized_letters = "PDH"
+        elif check == "before_call":
+            authorized_letters = "PDHAN"
+        elif check == "after_call":
+            authorized_letters = "PDHANMC"
+        text_check = validate_and_transform_text(value, authorized_letters)
+        if text_check["success"]:
+            value = text_check["value"]
         else:
-            return display_toast(success=False, message=check["value"])
-    elif key.startswith("phone_line") or key.startswith("ticket_"):
-        check = check_balises_for_phone(value)
-        if check["success"]:
-            value = check["value"]
-        else:
-            return display_toast(success=False, message=check["value"])
+            return display_toast(success=False, message=text_check["value"])
         
     if key.startswith("ticket_"):
         escpos_text = convert_markdown_to_escpos(value)
@@ -592,17 +593,17 @@ def call_function_with_switch(key, value):
             remove_scheduler_clear_all_patients()
 
 
-def check_balises(value):
+def check_balises_before_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
     print("call_function_with_input", value)
     
-    return validate_and_transform_text(value)
+    #return validate_and_transform_text_for_before_validation(value)
 
-def check_balises_for_phone(value):
+def check_balises_after_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
     print("call_function_with_input", value)
     
-    return validate_and_transform_text_for_phone(value)
+    #return validate_and_transform_text_for_after_validation(value)
 
 # --------  ADMIN -> App  ---------
 
@@ -1901,7 +1902,7 @@ def display_validation_after_choice(request):
     # Si le bouton contient bien une activité
     if activity_id != "":
         activity = Activity.query.get(activity_id)
-        socketio.emit('trigger_valide_activity', {'activity': activity.id})
+        #socketio.emit('trigger_valide_activity', {'activity': activity.id})
         return left_page_validate_patient(activity)
     
 
@@ -2089,6 +2090,12 @@ def create_qr_code(patient):
 
     return filename
 
+@app.route('/patient/refresh')
+def patient_refresh():
+    """ Permet de rafraichir la page des patients pour effectuer des changements """
+    communication("update_page_patient", data={"action": "refresh"})
+    return '', 204
+
 
 
 # ---------------- FIN  PAGE PATIENTS FRONT ----------------
@@ -2160,8 +2167,6 @@ def validate_and_call_next(counter_id):
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
 
-    socketio.emit('trigger_new_patient', {"patient_standing": list_patients_standing()})
-    socketio.emit('trigger_patient_ongoing', {})  
     return '', 204  # No content to send back
 
 
@@ -2186,12 +2191,11 @@ def call_next(counter_id):
 
 
     if next_patient:
-        #socketio.emit('trigger_htmx_update', {})  # ????
         # Met à jour le statut du patient
         next_patient.status = 'calling'
         next_patient.counter_id = counter_id
         db.session.commit()
-        socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
+        #socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
         # Optionnel: Ajoutez ici u système pour annoncer le patient au système audio ou un écran d'affichage
 
         generate_audio_calling(counter_id, next_patient)
@@ -2312,8 +2316,8 @@ def pause_patient(counter_id, patient_id):
         current_patient.status = 'done'
         db.session.commit()
 
-    socketio.emit('trigger_patient_calling', {})
-    socketio.emit('trigger_patient_ongoing', {})  
+    #socketio.emit('trigger_patient_calling', {})
+    #socketio.emit('trigger_patient_ongoing', {})  
 
     return '', 204  # No content to send back
 
@@ -2373,7 +2377,7 @@ def deconnect_staff_from_all_counters(staff):
         if counter.staff == staff:
             counter.staff = None
             db.session.commit()
-            socketio.emit("trigger_disconnect_staff", {})
+            #socketio.emit("trigger_disconnect_staff", {})
 
 
 @app.route('/counter/list_of_activities', methods=['POST'])

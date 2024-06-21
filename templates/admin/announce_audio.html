@@ -15,25 +15,5 @@
     </label>
 </div>
 
-<div class="row">
-    <div class="row">
-        <div class="input-field col s12">
-            <textarea id="announce_call_sound" class="materialize-textarea">{{announce_call_text}}</textarea>
-            <label for="announce_call_sound">Texte pour annoncer le tour d'un patient</label>
-        </div>
-        Vous pouvez utiliser 
-        <span class="variables_calling" onclick="insertPlaceholder('announce_call_sound', '{P}')">{P}</span>
-        pour le numéro du patient, 
-        <span class="variables_calling" onclick="insertPlaceholder('announce_call_sound', '{C}')">{C}</span>
-        pour le comptoir et 
-        <span class="variables_calling" onclick="insertPlaceholder('announce_call_sound', '{M}')">{M}</span> 
-        pour le membre de l'équipe.</span>
-    </div>
-    <button
-        class="btn"
-        hx-post="/admin/update_input"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_call_sound",
-                    "value": document.getElementById("announce_call_sound").value}'>
-                Enregistrer</button>
-</div>
+
+{{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Appel audio pour annoncer le tour d'un patient") }}

@@ -3,7 +3,6 @@
 {% block title %}Page Patient{% endblock %}
 
 {% block content %}
-    {% import '/admin/macros.html' as macros %}
     <h3>Page patient</h3>
 
     <!--
@@ -42,6 +41,15 @@
         <div id="tab_qrcode" class="col s12">
             {% include 'admin/page_patient_qrcode.html' %}
         </div>
+    </div>
+
+    <div>
+        <button class="btn red"
+                hx-get="/patient/refresh"
+                hx-target="#invisible"                    
+                >Relancer la page "Patient"
+        </button>
+        Assurez que la page ne soit pas en cours d'utilisation !
     </div>
 
         

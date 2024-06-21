@@ -2,29 +2,16 @@ import re
 from datetime import datetime
 
 
-def validate_and_transform_text(user_input):
-    """ Verif et conversion des entrées pour les annonces"""
-    # Convertir les minuscules {n}, {c}, {m} en majuscules {N}, {C}, {M}
-    corrected_input = re.sub(r"\{(n|c|m)\}", lambda m: "{" + m.group(1).upper() + "}", user_input)
+def validate_and_transform_text(user_input, allowed_letters):
+    """ Vérification et transformation des entrées avec des lettres autorisées spécifiques"""
+    # Convertir les lettres spécifiées en minuscules en majuscules
+    pattern = r"\{(" + "|".join(allowed_letters.lower()) + r")\}"
+    corrected_input = re.sub(pattern, lambda m: "{" + m.group(1).upper() + "}", user_input)
 
-    # Vérifier si tous les placeholders sont {P}, {C}, {M} après correction
-    # Cette regex recherche toute chaîne qui ne suit pas exactement le modèle autorisé
-    if re.search(r"\{[^NCM]?\}", corrected_input) or re.search(r"\{[NCM][^}]", corrected_input):
-        return {"success": False, "value": "Certaines balises sont incorrectes. Vous ne pouvez utiliser que {P}, {C} ou {M}."}
-    
-    print("corrected_input", corrected_input)
-    return {"success": True, "value": corrected_input}
-
-
-def validate_and_transform_text_for_phone(user_input):
-    """ Verif et conversion des entrées pour les annonces"""
-    # Convertir les minuscules {p}, {a} en majuscules {P}, {A}, {H}, {D}, {N}
-    corrected_input = re.sub(r"\{(p|a|h|d|n)\}", lambda m: "{" + m.group(1).upper() + "}", user_input)
-
-    # Vérifier si tous les placeholders sont {P}, {A}, {H}, {D}, {N} après correction
-    # Cette regex recherche toute chaîne qui ne suit pas exactement le modèle autorisé
-    if re.search(r"\{[^PAHDN]?\}", corrected_input) or re.search(r"\{[PAHDN][^}]", corrected_input):
-        return {"success": False, "value": "Certaines balises sont incorrectes. Vous ne pouvez utiliser que {P}, {A}, {H}, {D} ou {N}."}
+    # Vérifier si tous les placeholders sont parmi les lettres autorisées après correction
+    allowed_pattern = "[" + "".join(allowed_letters) + "]"
+    if re.search(r"\{[^" + allowed_pattern + "]?\}", corrected_input) or re.search(r"\{" + allowed_pattern + "[^}]", corrected_input):
+        return {"success": False, "value": f"Certaines balises sont incorrectes. Vous ne pouvez utiliser que {', '.join(['{' + letter + '}' for letter in allowed_letters])}."}
     
     print("corrected_input", corrected_input)
     return {"success": True, "value": corrected_input}

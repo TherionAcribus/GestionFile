@@ -1,57 +1,8 @@
-<div class="row">
-    <div class="row">
-        <div class="input-field col s12">
-            <textarea id="announce_title" class="materialize-textarea">{{announce_title}}</textarea>
-            <label for="announce_title">Texte en haut de la page (Titre)</label>
-        </div>
-    </div>
-    <button
-        class="btn"
-        hx-post="/admin/update_input"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_title",
-                    "value": document.getElementById("announce_title").value}'>
-                Enregistrer</button>
-</div>
+{{ macros.textbloc_welcome("announce_title", announce_title, "Texte en haut de la page (Titre)") }}
 
-<div class="row">
-    <div class="row">
-        <div class="input-field col s12">
-            <textarea id="announce_subtitle" class="materialize-textarea">{{announce_subtitle}}</textarea>
-            <label for="announce_subtitle">Seconde ligne (Sous-titre)</label>
-        </div>
-    </div>
-    <button
-        class="btn"
-        hx-post="/admin/update_input"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_subtitle",
-                    "value": document.getElementById("announce_subtitle").value}'>
-                Enregistrer</button>
-</div>
+{{ macros.textbloc_welcome("announce_subtitle", announce_subtitle, "Seconde ligne (Sous-titre)") }}
 
-<div class="row">
-    <div class="row">
-        <div class="input-field col s12">
-            <textarea id="announce_call_text" class="materialize-textarea">{{announce_call_text}}</textarea>
-            <label for="announce_call_text">Texte pour annoncer le tour d'un patient</label>
-        </div>
-        Vous pouvez utiliser 
-        <span class="variables_calling" onclick="insertPlaceholder('announce_call_text', '{P}')">{P}</span>
-        pour le numéro du patient, 
-        <span class="variables_calling" onclick="insertPlaceholder('announce_call_text', '{C}')">{C}</span>
-        pour le comptoir et 
-        <span class="variables_calling" onclick="insertPlaceholder('announce_call_text', '{M}')">{M}</span> 
-        pour le membre de l'équipe.</span>
-    </div>
-    <button
-        class="btn"
-        hx-post="/admin/update_input"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_call_text",
-                    "value": document.getElementById("announce_call_text").value}'>
-                Enregistrer</button>
-</div>
+{{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Texte pour annoncer le tour d'un patient") }}
 
     <!-- Switch -->
     <div class="switch">
@@ -70,25 +21,4 @@
         </label>
     </div>
 
-    <div class="row">
-        <div class="row">
-            <div class="input-field col s12">
-                <textarea id="announce_ongoing_text" class="materialize-textarea">{{announce_ongoing_text}}</textarea>
-                <label for="announce_ongoing_text">Texte pour indiquer qu'un patient est au comptoir</label>
-            </div>
-            Vous pouvez utiliser 
-            <span class="variables_calling" onclick="insertPlaceholder('announce_ongoing_text', '{P}')">{P}</span>
-            pour le numéro du patient, 
-            <span class="variables_calling" onclick="insertPlaceholder('announce_ongoing_text', '{C}')">{C}</span>
-            pour le comptoir et 
-            <span class="variables_calling" onclick="insertPlaceholder('announce_ongoing_text', '{M}')">{M}</span> 
-            pour le membre de l'équipe.</span>
-        </div>
-        <button
-            class="btn"
-            hx-post="/admin/update_input"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "announce_ongoing_text",
-                        "value": document.getElementById("announce_ongoing_text").value}'>
-                    Enregistrer</button>
-    </div>
+{{ macros.textbloc_after_call("announce_ongoing_text", announce_ongoing_text, "Texte pour indiquer qu'un patient est au comptoir") }}

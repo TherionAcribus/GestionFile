@@ -1,13 +1,15 @@
-{% macro button(key) %}
+{% macro button(key, check) %}
 <button
     class="btn"
     hx-post="/admin/update_input"
     hx-target="#invisible"
-    hx-vals='js:{"key": "{{ key }}", "value": document.getElementById("{{ key }}").value}'>
+    hx-vals='js:{"key": "{{ key }}", 
+            "value": document.getElementById("{{ key }}").value,
+            "check": "{{ check }}"}''>
     Enregistrer</button>
 {% endmacro %}
 
-{% macro balises_PANDH(key) %}
+{% macro balises_before_call(key) %}
 <div>
     <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
     pour le nom de la pharmacie,  
@@ -22,6 +24,36 @@
 </div>
 {% endmacro %}
 
+{% macro balises_after_call(key) %}
+<div>
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
+    pour le nom de la pharmacie,  
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</span>
+    pour le numéro du patient, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{M}</span>
+    pour le membre de l'équipe, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{C}')">{C}</span>
+    pour le comptoir,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+    pour la date,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+    pour l'heure.
+</div>
+{% endmacro %}
+
+
+{% macro balises_welcome(key) %}
+<div>
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
+    pour le nom de la pharmacie, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+    pour la date,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+    pour l'heure.
+</div>
+{% endmacro %}
+
+
 {% macro textarea(key, value, label) %}
 <div class="input-field col s12">
     <textarea id="{{ key }}" class="materialize-textarea">{{ value }}</textarea>
@@ -30,13 +62,33 @@
 {% endmacro %}
 
 
-{% macro textarea_full_PANDH(key, value, label) %}
+{% macro textbloc_before_call(key, value, label) %}
 <div class="row">
     <div class="row">
         {{ textarea(key, value, label) }}
-        {{ balises_PANDH(key) }}
+        {{ balises_before_call(key) }}
     </div>
-    {{ button(key) }}
+    {{ button(key, "before_call") }}
+</div>
+{% endmacro %}
+
+{% macro textbloc_after_call(key, value, label) %}
+<div class="row">
+    <div class="row">
+        {{ textarea(key, value, label) }}
+        {{ balises_after_call(key) }}
+    </div>
+    {{ button(key, "after_call") }}
+</div>
+{% endmacro %}
+
+{% macro textbloc_welcome(key, value, label) %}
+<div class="row">
+    <div class="row">
+        {{ textarea(key, value, label) }}
+        {{ balises_welcome(key) }}
+    </div>
+    {{ button(key, "welcome") }}
 </div>
 {% endmacro %}
 

@@ -35,23 +35,5 @@
 <p>Il n'est pour l'instant pas possible d'afficher une page web si le serveur tourne sur un serveur local.</p>
 
 <h5>Données brutes</h5>
-<div class="row">
-    <div class="row">
-        <div class="input-field col s12">
-            <textarea id="page_patient_qrcode_data" class="materialize-textarea">{{page_patient_qrcode_data}}</textarea>
-            <label for="page_patient_qrcode_data">Données à afficher</label>
-        </div>
-        Vous pouvez utiliser 
-        <span class="variables_calling" onclick="insertPlaceholder('page_patient_qrcode_data', '{P}')">{P}</span>
-        pour le numéro du patient et
-        <span class="variables_calling" onclick="insertPlaceholder('page_patient_qrcode_data', '{A}')">{A}</span>
-        pour l'activité'
-    </div>
-    <button
-        class="btn"
-        hx-post="/admin/update_input"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "page_patient_qrcode_data",
-                "value": document.getElementById("page_patient_qrcode_data").value}'>
-        Enregistrer</button>
-</div>
+
+{{ macros.textbloc_before_call("page_patient_qrcode_data", page_patient_qrcode_data, "Données à afficher") }}
