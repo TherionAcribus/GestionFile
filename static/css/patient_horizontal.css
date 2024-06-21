@@ -1,0 +1,21 @@
+#div_buttons_parents{
+    height: 45%;
+    display: flex;
+    flex-direction: row;
+}
+
+#div_buttons_children {
+    height: 45%;
+    background-color: rgb(182, 245, 245);
+}
+
+.div_text_explanation{
+    text-align: center;
+    font-size: 80px;
+    font-weight: bold;
+    color: darkcyan;
+}
+
+.div_text_explanation_inactive {
+    color: #888888;
+}

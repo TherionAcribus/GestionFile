@@ -1,5 +1,20 @@
 <h3>Page "Patient"</h3>
 
+
+<div class="input-field col s12">
+    <select
+        id="page_patient_structure"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "page_patient_structure", "value": document.getElementById("page_patient_structure").value}'>
+        <option value="" disabled selected>Choisir le type d'affichage</option>
+        <option value="full" {% if page_patient_structure == "full" %}selected{% endif %}>Plein page</option>
+        <option value="vertical" {% if page_patient_structure == "vertical" %}selected{% endif %}>Séparation verticale</option>
+        <option value="horizontal" {% if page_patient_structure == "horizontal" %}selected{% endif %}>Séparation horizontale</option>
+    </select>
+    <label>Structure de la page</label>
+</div>
+
 <div class="switch">
     <span>Griser ou effacer les boutons si l'activité n'est pas en cours : </span>
     <label>

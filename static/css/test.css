@@ -14,43 +14,32 @@ html, body {
 #div_title_area {
     height: 10%;
     text-align: center;
-    font-size: 20px;
+    font-size: 40px;
     font-weight: bold;
-    background-color:darkcyan;
+    background-color: darkcyan;
     color: white;
+    display: flex;        /* Utilise Flexbox */
+    align-items: center;  /* Centre le contenu verticalement */
+    justify-content: center; /* Centre le contenu horizontalement */
 }
 
 #div_buttons_parents{
-    height: 45%;
-    display: flex;
-    flex-direction: row;
     justify-content:space-around;
     align-items: center;
     background-color: rgb(182, 245, 245);
-    padding-top: 50px;
+}
+
+#div_buttons_children {
+    height: 10%;
+    background-color: darkcyan;
+    display: flex;        /* Utilise Flexbox */
+    align-items: center;  /* Centre le contenu verticalement */
+    justify-content: center; /* Centre le contenu horizontalement */
 }
 
 #div_intermediaire {
     height: 2%;
     background-color: darkcyan;
-}
-
-
-#div_buttons_children {
-    height: 45%;
-    background-color: rgb(182, 245, 245);
-}
-
-
-.div_text_explanation{
-    text-align: center;
-    font-size: 80px;
-    font-weight: bold;
-    color: darkcyan;
-}
-
-.div_text_explanation_inactive {
-    color: #888888;
 }
 
 
@@ -101,20 +90,18 @@ html, body {
     color: rgb(102, 105, 105);
 }
 
-#div_confirmation{
+.div_summary{
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
 }
 
 #div_qr_code{
+    display: flex;
     width: 50%;
     text-align: center;
     padding-top: 1%;
 }
 
-#div_validation_buttons{
-    width: 50%;
-}
 
 .div_validation_one_button{
     background-color:darkcyan;
@@ -134,8 +121,45 @@ html, body {
     text-align: center;
 }
 
-#text_call_number{
+.div_qr_plus_buttons{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+
+.text_summary {
     font-size: 50px;
     font-weight: 500;
     color: darkcyan;
+}
+
+#conclusion_page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+}
+
+#div_conclusion_buttons{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+#timer_container {
+    width: 100%;
+    height: 20px;
+    background-color: #e0e0e0;
+    position: relative;
+    margin-top: 10px;
+}
+
+#timer_gauge {
+    width: 100%;
+    height: 100%;
+    background-color: #76c7c0;
+    transition: width 1s linear;
 }

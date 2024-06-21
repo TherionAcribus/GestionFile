@@ -1,28 +1,60 @@
-<div id="div_confirmation">
-
-    <div id="div_qr_code">
-        <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
+<div id="div_confirmation" class="div_summary">
+    <div id="div_call_number" class="div_text_summary">
+        <p id="text_call_number" class="text_summary">Vous avez choisi : {{ text | capitalize }}</p>
     </div>
 
-    <div id="div_validation_buttons">
-        <div id="div_call_number">
-            <p id="text_call_number">Votre numéro : {{ text }}</p>
+    <div class="div_qr_plus_buttons">
+        
+        <div id="div_qr_code" class="div_qr_code">
+            <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
         </div>
 
-        <div 
-            class="div_validation_one_button"
-            hx-post="patient/print_and_validate"
-            hx-vals='{"activity_id": "{{ activity.id }}"}'
-            hx-target="#invisible">
-            <p class="validation_button">Imprimer et valider</p>
+        <div class="div_validation_buttons">
+            <div 
+                class="div_validation_one_button"
+                hx-post="patient/print_and_validate"
+                hx-vals='{"activity_id": "{{ activity.id }}"}'
+                {% if page_patient_structure=="full"%}
+                    hx-target="#div_buttons_parents"
+                {% else %}
+                    hx-target="#div_buttons_children"
+                {% endif %}
+                >
+                <p class="validation_button">Imprimer et valider</p>
+            </div>
+    
+            <div class="div_validation_one_button"
+                hx-post="patient/scan_and_validate"
+                {% if page_patient_structure=="full"%}
+                    hx-target="#div_buttons_parents"
+                {% else %}
+                    hx-target="#div_buttons_children"
+                {% endif %}
+                hx-vals='{"activity_id": "{{ activity.id }}"}'>
+                <p class="validation_button">Scanner puis valider</p>
+            </div>
+    
+            {% if page_patient_structure=="full"%}
+                <div class="div_validation_one_button"
+                    hx-get="patient/patient_buttons"
+                    hx-target="#div_buttons_parents">
+                    <p class="validation_button">Annuler</p>
+                </div>
+            {% else %}
+                <div class="div_validation_one_button"
+                    hx-get="patient/patient_buttons"
+                    hx-target="#div_buttons_parents">
+                    <div id="second_action"
+                        hx-get="patient/default_subtitle"
+                        hx-target="#div_buttons_children"
+                        hx-swap="innerHTML">
+                        <p class="validation_button">Annuler</p>
+                    </div>
+                </div>
+            {% endif %}
+
         </div>
 
-
-        <div class="div_validation_one_button">
-            <p class="validation_button">Valider sans impression</p>
-        </div>
-        <div class="div_validation_one_button">
-            <p class="validation_button">Annuler</p>
-        </div>
     </div>
+
 </div>

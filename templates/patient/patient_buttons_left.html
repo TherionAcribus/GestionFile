@@ -1,19 +1,29 @@
-{% for button in buttons %}
-        <div class="div_bloc_activity"
-                hx-post="/patients_submit" 
-                hx-vals='{"activity_id": "{{ button.activity.id }}",
-                        "is_parent": "{{ button.is_parent }}",
-                        "is_active": "{{ button.is_active }}",
-                        "button_id": "{{ button.id }}"
-                        }' 
-                hx-target="#div_buttons_children"
-        >
-                <div class="div_buttons {% if button.is_active %} div_button_active {% else %} div_button_inactive {% endif %}">
-                        <img class="img_btn {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}" 
-                                src='/static/images/buttons/{{ button.image_url }}'>
-                </div>
-                <div class="div_text_button {% if button.is_active %} div_text_button_active {% else %} div_text_button_inactive {% endif %}">
-                        <p>{{ button.label }}</p>
-                </div>
-        </div>        
-{% endfor %}
+{% if page_patient_structure == "full" %}
+    {% if buttons|length > 4 %}
+        {% set half_length = (buttons|length // 2) + (buttons|length % 2) %}
+        <div class="outer-grid-container">
+            <div class="inner-grid-container" style="grid-template-columns: repeat({{ half_length }}, 1fr);">
+                {% for button in buttons[:half_length] %}
+                    {% include "patient/one_button.html"%}
+                {% endfor %}
+            </div>
+            <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length - half_length }}, 1fr);">
+                {% for button in buttons[half_length:] %}
+                    {% include "patient/one_button.html"%}
+                {% endfor %}
+            </div>
+        </div>
+    {% else %}
+        <div class="outer-grid-container">
+            <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length }}, 1fr);">
+                {% for button in buttons %}
+                    {% include "patient/one_button.html"%}
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    {% for button in buttons %}
+        {% include "patient/one_button.html"%}
+    {% endfor %}
+{% endif %}

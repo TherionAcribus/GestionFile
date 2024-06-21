@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.2",
+    "version": "0.1",
     "comments": "Version de test",
         "configurations": {
             "pharmacy_name": "Pharmacie Sainte-Agathe",
@@ -20,6 +20,7 @@
             "announce_infos_display": true,
             "announce_infos_display_time": 30,
             "announce_infos_transition": "slide",
+            "page_patient_structure": "full",
             "page_patient_disable_button": true,
             "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",
             "page_patient_title": "Bienvenue à la pharmacie Sainte-Agathe",

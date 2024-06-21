@@ -1,0 +1,84 @@
+<div id="div_conclusion" class="div_summary">
+
+    <div id="conclusion_text" class="div_text_summary">
+        <p class="text_summary">
+            Votre demande est bien prise en charge.
+            Votre numéro est {{ patient.call_number }}
+        </p>
+    </div>
+
+    <div class="div_qr_plus_buttons">
+
+        <div id="div_qr_code" class="div_qr_code">
+            <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
+        </div>
+
+
+        <div class="div_validation_buttons">
+
+            <div 
+                class="div_validation_one_button">
+                <p class="validation_button">Imprimer</p>
+            </div>
+
+            <div
+                id="prolong_btn"
+                class="div_validation_one_button">
+                <p class="validation_button">Prolonger</p>
+            </div>
+
+            <div 
+                class="div_validation_one_button"
+                hx-get="/patient/cancel_patient"
+                hx-target="#div_buttons_parents">
+                <p class="validation_button">Retour à la page d'accueil</p>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="timer_container">
+        <div id="timer_gauge"></div>
+    </div>
+
+</div>
+
+
+<script>
+    var timerGauge = document.getElementById('timer_gauge');
+    var prolongBtn = document.getElementById('prolong_btn');
+    var timerDuration = 10; // seconds
+    var timer;
+
+    function startTimer() {
+        var startTime = Date.now();
+        clearInterval(timer);
+        timer = setInterval(function() {
+            var elapsedTime = (Date.now() - startTime) / 1000;
+            var remainingTime = timerDuration - elapsedTime;
+            var widthPercent = (remainingTime / timerDuration) * 100;
+            timerGauge.style.width = widthPercent + '%';
+
+            if (remainingTime <= 0) {
+                clearInterval(timer);
+                goToCancelPatient();
+            }
+        }, 1000);
+    }
+
+    function resetTimer() {
+        startTimer();
+    }
+
+    function goToCancelPatient() {
+                htmx.ajax('GET', '/patient/cancel_patient', {
+                    target: '#div_buttons_parents'
+                });
+            }
+
+    prolongBtn.addEventListener('click', function() {
+        resetTimer();
+    });
+
+    startTimer();
+</script>

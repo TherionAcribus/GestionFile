@@ -1,3 +1,15 @@
 <div class="div_text_explanation div_text_explanation_inactive">
     {{page_patient_disable_default_message}}
 </div>
+
+{% if page_patient_structure == "full" %}
+    <script>
+        setTimeout(function() {
+            var element = document.querySelector('.div_text_explanation_inactive');
+            if (element) {
+                element.classList.remove('div_text_explanation_inactive');
+                element.textContent = '{{default_subtitle}}';
+            }
+        }, {{inactivity_timer}} * 1000);
+    </script>
+{% endif %}

@@ -5,17 +5,26 @@
     <title>Enregistrement de la file d'attente</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
     <link rel="stylesheet" href="../static/css/test.css">
+    {% if page_patient_structure == "full" %}
+        <link rel="stylesheet" href="../static/css/patient_full.css">
+    {% elif page_patient_structure == "vertical" %}
+        <link rel="stylesheet" href="../static/css/patient_vertical.css">
+    {% elif page_patient_structure == "horizontal" %}
+        <link rel="stylesheet" href="../static/css/patient_horizontal.css">
+    {% endif %}
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
     <script src="https://cdn.socket.io/4.7.4/socket.io.js"></script>
+
 </head>
 <body>
 
 
     <div id="main">
-        <div id="div_title_area">
+        <div id="div_title_area",>
             {{page_patient_title}}
         </div>
+
 
         <div id="div_buttons_parents"
             hx-get="/patient/patient_buttons"
@@ -24,18 +33,20 @@
             hx-swap="innerHTML">
         </div>
 
-        <div id="div_intermediaire">
-            
-        </div>
-
-        <div id="div_buttons_children">
-            <div class="div_text_explanation">
-                {{page_patient_subtitle}}
+        {% if page_patient_structure == "vertical" or page_patient_structure == "horizontal"%}
+            <div id="div_intermediaire">
+                
             </div>
-        </div>
+        {% endif %}
 
-
+            <div id="div_buttons_children"
+                hx-get="/patient/default_subtitle"
+                hx-trigger="load, refresh_subtitle"
+                hx-target="#div_buttons_children"
+                hx-swap="innerHTML">
+            </div>
     </div>
+
     
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>

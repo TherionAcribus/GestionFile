@@ -488,6 +488,7 @@ def create_new_patient_auto():
 
 # --------  FIn de ADMIN -> Queue ---------
 
+
 @app.route('/admin/update_switch', methods=['POST'])
 def update_switch():
     """ Mise à jour des switches d'options de l'application """
@@ -563,6 +564,7 @@ def update_input():
 @app.route('/admin/update_select', methods=['POST'])
 def update_select():
     """ Mise à jour des selects d'options de l'application """
+    print(request.form)
     key = request.values.get('key')
     value = request.values.get('value')
     try:
@@ -1506,6 +1508,7 @@ def admin_patient():
     buttons = Button.query.all()
 
     return render_template('/admin/patient_page.html', buttons=buttons,
+                            page_patient_structure = app.config['PAGE_PATIENT_STRUCTURE'],
                             page_patient_disable_button = app.config['PAGE_PATIENT_DISABLE_BUTTON'],
                             page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
                             page_patient_title = app.config['PAGE_PATIENT_TITLE'],
@@ -1833,16 +1836,10 @@ def patients_langue(lang):
 
 @app.route('/patient')
 def patients_front_page():
-    page_patient_title = app.config['PAGE_PATIENT_TITLE']
-    page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
     return render_template('patient/patient_front_page.html', 
-                            page_patient_title=page_patient_title, 
-                            page_patient_subtitle=page_patient_subtitle)
-
-
-@app.route('/tests')
-def test():
-    return render_template('patient/test.html')
+                            page_patient_title=app.config['PAGE_PATIENT_TITLE'], 
+                            page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 
 # affiche les boutons
@@ -1850,7 +1847,9 @@ def test():
 def patient_right_page():
     buttons = Button.query.filter_by(is_present = True, parent_button_id = None).all()
     print("BUTTONS", buttons)
-    return render_template('patient/patient_buttons_left.html', buttons=buttons)
+    return render_template('patient/patient_buttons_left.html', 
+                            buttons=buttons,
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 
 @app.route('/patients_submit', methods=['POST'])
@@ -1867,23 +1866,31 @@ def patients_submit():
 
 
 def display_activity_inactive(request):
-    print("display_activity_inactive")
-    print(request.form)
     activity = Activity.query.get(request.form.get('activity_id'))
-    print("activity", activity)
     message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
-    print(activity.inactivity_message)
     if activity.inactivity_message != "":
         message = activity.inactivity_message
     return render_template('patient/activity_inactive.html',
-                            page_patient_disable_default_message=message)
+                            page_patient_disable_default_message=message,
+                            default_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
+                            inactivity_timer=5)
+
+
+@app.route("/patient/default_subtitle")
+def display_default_children_text():
+    page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
+    return render_template('patient/patient_default_subtitle.html',
+                            page_patient_subtitle=page_patient_subtitle)    
 
 
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
     children_buttons = Button.query.filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
     print("children_buttons", children_buttons)
-    return render_template('patient/patient_buttons_left.html', buttons=children_buttons)
+    return render_template('patient/patient_buttons_left.html', 
+                            buttons=children_buttons,
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 
 # affiche la page de validation pour page gauche et droite
@@ -1901,9 +1908,10 @@ def display_validation_after_choice(request):
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
     call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity)
-    image_name_qr = create_qr_code(new_patient)
-    text = f"{call_number}"
+    #new_patient = add_patient(call_number, activity)
+    futur_patient = get_futur_patient(call_number, activity)
+    image_name_qr = create_qr_code(futur_patient)
+    text = f"{activity.name}"
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
     data = None
@@ -1914,16 +1922,44 @@ def left_page_validate_patient(activity):
     return render_template('patient/patient_qr_right_page.html', 
                             image_name_qr=image_name_qr, 
                             text=text,
-                            activity=activity)
+                            activity=activity,
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+
 
 @app.route('/patient/print_and_validate', methods=['POST'])
 def print_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
-    call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity)
+    new_patient = register_patient(activity)
     text = format_ticket_text(new_patient)
     communication("update_patient_app", data={"type": "print", "message": text})
-    return ""
+    return patient_conclusion_page(new_patient)
+
+
+@app.route('/patient/scan_and_validate', methods=['POST'])
+def patient_scan_and_validate():
+    activity = Activity.query.get(request.form.get('activity_id'))
+    new_patient = register_patient(activity)
+    return patient_conclusion_page(new_patient)
+
+
+def register_patient(activity):
+    call_number = get_next_call_number(activity)
+    new_patient = add_patient(call_number, activity)
+    communication("update_patients")
+    return new_patient
+
+
+@app.route('/patient/cancel_patient')
+def cancel_patient():
+    return patient_right_page()
+
+
+@app.route('/patient/conclusion_page')
+def patient_conclusion_page(patient):
+    image_name_qr = f"qr_patient-{patient.id}.png"
+    return render_template('patient/conclusion_page.html',
+                            patient=patient,
+                            image_name_qr=image_name_qr)
 
 
 def format_ticket_text(new_patient):
@@ -1953,6 +1989,20 @@ def add_patient(call_number, activity):
     db.session.add(new_patient)
     db.session.commit()  # Enregistrement des changements dans la base de données
 
+    return new_patient
+
+
+def get_futur_patient(call_number, activity):
+    """ CRéation d'un nouveau patient SANS ajout à la BDD
+    Permet de simuler sa création pour pouvoir générer les infos utiles dans le QR Code"""
+    # Création d'un nouvel objet Patient
+    print('    call_number 2', call_number)
+    new_patient = Patient(
+        call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
+        activity = activity,
+        timestamp=datetime.now(timezone.utc),
+        status='standing'
+    ) 
     return new_patient
 
 
@@ -2005,6 +2055,8 @@ def get_next_category_number(activity):
 
 
 def create_qr_code(patient):
+    print("create_qr_code")
+    print(patient, patient.id)
     if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
         data = f"{adresse}/phone/{patient.id}"
     else :
@@ -2036,6 +2088,7 @@ def create_qr_code(patient):
     img.save(img_path)
 
     return filename
+
 
 
 # ---------------- FIN  PAGE PATIENTS FRONT ----------------
@@ -2627,14 +2680,14 @@ def start_serveo_tunnel_in_thread():
     serveo_thread = threading.Thread(target=start_serveo)
     serveo_thread.start()
 
-
+"""
 @app.before_request
 def log_request_info():
     app.logger.debug('Headers: %s', request.headers)
     app.logger.debug('Body: %s', request.get_data())
     app.logger.debug('Full Path: %s', request.full_path)
     app.logger.debug('URL: %s', request.url)
-
+"""
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
 
 
@@ -2769,6 +2822,7 @@ def load_configuration(app, ConfigOption):
         "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
+        "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),
         "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
         "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
         "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
