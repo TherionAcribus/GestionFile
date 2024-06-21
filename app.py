@@ -277,6 +277,7 @@ class Button(db.Model):
     image_url = db.Column(db.String(100))
     background_color = db.Column(db.String(20))
     text_color = db.Column(db.String(20))
+    order = db.Column(db.Integer, nullable=False, default=0)  # Champ pour l'ordre
 
     # Ajouter une référence directe à Activity
     activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_button_activity_id'))
@@ -1058,7 +1059,7 @@ def add_new_schedule():
 def update_button_presence(activity_id, is_present, app):
     with app.app_context():  # Crée un contexte d'application
         try:
-            buttons = Button.query.filter_by(activity_id=activity_id).all()
+            buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity_id).all()
             for button in buttons:
                 button.is_present = is_present
             db.session.commit()
@@ -1182,7 +1183,7 @@ def disable_buttons_for_activity(activity_id):
     activity = Activity.query.get(activity_id)
     if activity:
         app.logger.info(f"Disabling buttons for activity: {activity.name}")
-        buttons = Button.query.filter_by(activity_id=activity.id).all()
+        buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity.id).all()
         print(buttons, "buttons")
         for button in buttons:
             if app.config["PAGE_PATIENT_DISABLE_BUTTON"]:
@@ -1200,7 +1201,7 @@ def enable_buttons_for_activity(activity_id):
     activity = Activity.query.get(activity_id)
     if activity:
         app.logger.info(f"Enabling buttons for activity: {activity.name}")
-        buttons = Button.query.filter_by(activity_id=activity.id).all()
+        buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity.id).all()
         print(buttons, "buttons")
         for button in buttons:
             print(button)
@@ -1528,15 +1529,20 @@ def admin_patient():
 # affiche le tableau des boutons 
 @app.route('/admin/patient/button_table')
 def display_button_table():
-    buttons = Button.query.all()
+    buttons = Button.query.order_by(Button.order).all()
     activities = Activity.query.all()
     return render_template('admin/patient_page_htmx_buttons_table.html', buttons=buttons, activities = activities)
+
+@app.route('/admin/patient/order_buttons')
+def order_button_table():
+    buttons = Button.query.order_by(Button.order).all()
+    return render_template('admin/patient_page_order_buttons.html', buttons=buttons)
 
 
 # affiche la liste des boutons pour le 
 @app.route('/admin/patient/display_parent_buttons/<int:button_id>', methods=['GET'])
 def display_children_buttons(button_id):
-    buttons = Button.query.filter_by(is_parent=True).all()
+    buttons = Button.query.order_by(Button.order).filter_by(is_parent=True).all()
     button = Button.query.get(button_id)
     return render_template('admin/patient_page_button_display_children.html', buttons=buttons, button=button)
 
@@ -1545,7 +1551,7 @@ def display_children_buttons(button_id):
 @app.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
 def update_button(button_id):
     try:
-        button = Button.query.get(button_id)
+        button = Button.query.order_by(Button.order).get(button_id)
         if button:
             # Récupérer l'ID de l'activité depuis le formulaire
             activity_id = request.form.get('activity')
@@ -1594,6 +1600,18 @@ def update_button(button_id):
             return jsonify(status="error", message=str(e)), 500
 
 
+@app.route('/admin/patient/update_button_order', methods=['POST'])
+def update_button_order():
+    print(request.form)
+    order_data = request.form.getlist('order[]')
+    for index, button_id in enumerate(order_data):
+        print(button_id, index)
+        button = Button.query.order_by(Button.order).get(button_id)
+        print(button)
+        button.order = index
+    db.session.commit()
+    return '', 204  # Réponse sans contenu
+
 
 # affiche la modale pour confirmer la suppression d'un patient
 @app.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
@@ -1606,7 +1624,7 @@ def confirm_delete_button(button_id):
 @app.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
 def delete_button(button_id):
     try:
-        button = Button.query.get(button_id)
+        button = Button.query.order_by(Button.order).get(button_id)
         if not button:
             display_toast(success=False, message="Bouton non trouvé")
             return display_button_table()
@@ -1626,7 +1644,7 @@ def delete_button(button_id):
 @app.route('/upload_image/<int:button_id>', methods=['POST'])
 def upload_image(button_id):
     """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
-    button = Button.query.get(button_id)
+    button = Button.query.order_by(Button.order).get(button_id)
     if 'file' not in request.files:
         return "No file part", 400
     file = request.files['file']
@@ -1647,7 +1665,7 @@ def upload_image(button_id):
 def gallery_button_images(button_id):
     directory = os.path.join(current_app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    button = Button.query.get(button_id)
+    button = Button.query.order_by(Button.order).get(button_id)
     print(images)
     return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
 
@@ -1656,7 +1674,7 @@ def gallery_button_images(button_id):
 def update_button_image_from_gallery():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
-    button = Button.query.get(button_id)
+    button = Button.query.order_by(Button.order).get(button_id)
     print(request.form)
     button.image_url = image_url
     db.session.commit()
@@ -1665,7 +1683,7 @@ def update_button_image_from_gallery():
 
 @app.route("/admin/patient/delete_button_image/<int:button_id>", methods=['GET'])
 def delete_button_image(button_id):
-    button = Button.query.get(button_id)
+    button = Button.query.order_by(Button.order).get(button_id)
     button.image_url = None
     db.session.commit()
     return "<div>Pas d'image</div>"
@@ -1846,7 +1864,7 @@ def patients_front_page():
 # affiche les boutons
 @app.route('/patient/patient_buttons')
 def patient_right_page():
-    buttons = Button.query.filter_by(is_present = True, parent_button_id = None).all()
+    buttons = Button.query.order_by(Button.order).filter_by(is_present = True, parent_button_id = None).all()
     print("BUTTONS", buttons)
     return render_template('patient/patient_buttons_left.html', 
                             buttons=buttons,
@@ -1887,7 +1905,7 @@ def display_default_children_text():
 
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
-    children_buttons = Button.query.filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
+    children_buttons = Button.query.order_by(Button.order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
     print("children_buttons", children_buttons)
     return render_template('patient/patient_buttons_left.html', 
                             buttons=children_buttons,

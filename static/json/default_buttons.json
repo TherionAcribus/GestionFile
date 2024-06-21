@@ -1,5 +1,5 @@
 {
-    "version": "0.2",
+    "version": "0.1",
     "comments": "Version de test",
         "buttons": [
         {
@@ -11,7 +11,8 @@
             "image_url": "prescription.png",
             "is_present": true,
             "is_active": true,
-            "is_parent": false            
+            "is_parent": false,
+            "order": 1            
         },
         {
             "code": "TEST",
@@ -22,7 +23,8 @@
             "image_url": "",
             "is_present": true,
             "is_active": true,
-            "is_parent": false
+            "is_parent": false,
+            "order": 2        
         },
         {
             "code": "VACCIN",
@@ -33,7 +35,8 @@
             "image_url": "vaccin.png",
             "is_present": true,
             "is_active": true,
-            "is_parent": false            
+            "is_parent": false,
+            "order": 3            
         },
         {
             "code": "COLLECT",
@@ -44,7 +47,8 @@
             "image_url": "retrait.png",
             "is_present": true,
             "is_active": true,
-            "is_parent": false
+            "is_parent": false,
+            "order": 4
         },
         {
             "code": "PRIORITY",
@@ -55,7 +59,8 @@
             "image_url": "",
             "is_present": true,
             "is_active": true,
-            "is_parent": false
+            "is_parent": false,
+            "order": 5
         },
         {
             "code": "PARENT",
@@ -66,7 +71,8 @@
             "image_url": "",
             "is_present": true,
             "is_active": true,
-            "is_parent": true
+            "is_parent": true,
+            "order": 6
         },
         {
             "code": "STAFF",
@@ -77,7 +83,8 @@
             "image_url": "",
             "is_present": true,
             "is_active": true,
-            "is_parent": true
+            "is_parent": true,
+            "order": 7
         }
     ]
 }

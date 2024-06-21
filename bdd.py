@@ -80,7 +80,8 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
                     by_user=False,
                     image_url=button_data['image_url'],
                     is_active=button_data['is_active'],
-                    shape=button_data['shape']
+                    shape=button_data['shape'],
+                    order=button_data['order']
                 )
                 db.session.add(new_button)
 
@@ -89,12 +90,9 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
         
         # Mise à jour ou ajout de boutons
         for button_data in data['buttons']:
-            print("maj boutons")
             button = Button.query.filter_by(code=button_data['code']).first()
-            print("button", button)
             # TODO Ne mettre à jour que si n'existe pas
             if button:
-                print("maj boutons")
                 button.is_parent = button_data['is_parent']
                 button.label = button_data['label']
                 button.by_user = False

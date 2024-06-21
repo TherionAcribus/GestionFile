@@ -49,6 +49,19 @@ function submitFile(buttonId) {
 }
 
 
+function sortable(){
+    var el = document.getElementById('list_order_buttons');
+    var sortable = Sortable.create(el, {
+        animation: 150, // ms, animation speed moving items when sorting, `0` — without animation
+        onEnd: function (/**Event*/evt) {
+            var itemEl = evt.item;  // dragged HTMLElement
+            console.log('New index: ' + evt.newIndex); // index of the new position
+            // Vous pouvez ici ajouter une requête pour sauvegarder l'ordre
+        }
+    });
+}
+
+
 // ---------------- ANNOUNCES ----------------
 
 function insertPlaceholder(textareaId, text) {
