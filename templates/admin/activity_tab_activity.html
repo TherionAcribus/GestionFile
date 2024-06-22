@@ -13,3 +13,21 @@
         Ajouter une Activité
 </a>    
 <div id="div_add_activity_form"></div>
+
+<h3>Activité équipier</h3>
+<p>Cette partie permet d'ajouter une "activité" qui correspond à voir un membre de l'équipe. Pour plus de simplicité cette partie est mise à part du tableau principal.</p>
+<div id="div_activity_staff_table"
+    hx-get="/admin/activity/table_staff"
+    hx-trigger="load"
+    hx-target="#div_activity_staff_table"
+    hx-swap="innerHTML">        
+</div>
+
+<!-- Ajout nouvelle activité -->
+<a class="waves-effect waves-light btn"
+        hx-get="/admin/activity/add_staff_form"
+        hx-target="#div_add_activity_form_staff"
+        hx-swap="innerHTML">
+        Ajouter une activité "équipier"
+</a>    
+<div id="div_add_activity_form_staff"></div>

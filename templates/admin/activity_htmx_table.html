@@ -1,6 +1,9 @@
 <table id="staff_table" class="striped">
     <thead>
         <tr>
+            {% if staff %}
+                <th>Membre de l'équipe</th>
+            {% endif %}
             <th>Nom</th>
             <th>Lettre</th>
             <th>Horaires</th>
@@ -10,8 +13,20 @@
         </tr>
     </thead>
     <tbody>
-        {% for activity in activities %}
+        {% for activity in activities %}        
         <tr>
+            {% if staff %}
+            <td>
+                <div class="input-field col s10">   
+                    <select id="staff-{{ activity.id }}">
+                        {% for member in staff %}
+                            <option value="{{member.id}}"
+                                {% if member.id == activity.staff_id %}selected{% endif %}>{{member.name}}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
+            {% endif %}
             <td><input type="text" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
             <td><input type="text" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
             <td>
@@ -44,6 +59,7 @@
                             "message": document.getElementById("message-{{ activity.id }}").value,
                             "notification": document.getElementById("notification-{{ activity.id }}").checked,
                             "schedules": getSelectedOptions("schedules-{{ activity.id }}")
+                            {% if staff %}, "staff_id": document.getElementById("staff-{{ activity.id }}").value{% endif %}
                             }'>
                     Enregistrer
                 </button>

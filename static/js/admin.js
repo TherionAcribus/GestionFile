@@ -113,6 +113,10 @@ eventSource.onmessage = function(event) {
         console.log("delete_add_button_form");
         document.getElementById('div_add_button_form').innerHTML = "";
     }
+    else if (data.action === "delete_add_activity_form_staff"){
+        console.log("delete_add_activity_form_staff");
+        document.getElementById('div_add_activity_form_staff').innerHTML = "";
+    }
 };
 
 

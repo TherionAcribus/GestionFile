@@ -30,7 +30,6 @@ import subprocess
 import threading
 import socket
 
-
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 
@@ -182,6 +181,8 @@ class Activity(db.Model):
     notification = db.Column(db.Boolean, default=False)
     schedules = relationship('ActivitySchedule', secondary='activity_schedule_link', back_populates='activities')
     is_staff = db.Column(db.Boolean, default=False)
+    staff_id = db.Column(db.Integer, db.ForeignKey('pharmacist.id', name='fk_activity_staff_id'), nullable=True)
+    staff = db.relationship('Pharmacist', backref=db.backref('activity', lazy=True))
 
     def __repr__(self):
         return f'<Activity - {self.name}>'
@@ -847,9 +848,21 @@ def activity():
 # affiche le tableau des activités 
 @app.route('/admin/activity/table')
 def display_activity_table():
-    activities = Activity.query.all()
+    activities = Activity.query.filter_by(is_staff=False).all()
     schedules = ActivitySchedule.query.all()
     return render_template('admin/activity_htmx_table.html',
+                            activities=activities,
+                            schedules=schedules)
+    
+    
+# affiche le tableau des activités spécifique pour les membres de l'équipe
+@app.route('/admin/activity/table_staff')
+def display_activity_table_staff():
+    activities = Activity.query.filter_by(is_staff=True).all()
+    schedules = ActivitySchedule.query.all()
+    staff = Pharmacist.query.all()
+    return render_template('admin/activity_htmx_table.html',
+                            staff=staff,
                             activities=activities,
                             schedules=schedules)
 
@@ -874,6 +887,12 @@ def update_activity(activity_id):
         schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
         activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
         update_scheduler_for_activity(activity)
+        
+        if request.form.get("staff_id"):
+            activity.is_staff = True
+            activity.staff = Pharmacist.query.get(int(request.form.get("staff_id")))
+        else:
+            activity.is_staff = False
 
         db.session.commit()
         display_toast(success=True, message="Activité ajoutée avec succès")
@@ -896,18 +915,18 @@ def delete_activity(activity_id):
         activity = Activity.query.get(activity_id)
         if not activity:
             display_toast(success=False, message="Activité non trouvée")
-            return display_activity_table()
+            return return_good_display_activity()
 
         db.session.delete(activity)
         db.session.commit()
         display_toast(success=True, message="Activité supprimée avec succès")
-        return display_activity_table()
+        return return_good_display_activity()
 
     except Exception as e:
         db.session.rollback()
         app.logger.error(str(e))
         display_toast(success=False, message="erreur : " + str(e))
-        return display_activity_table()
+        return return_good_display_activity()
     
 
 # affiche le formulaire pour ajouter un activité
@@ -917,20 +936,33 @@ def add_activity_form():
     return render_template('/admin/activity_add_form.html', schedules=schedules)
 
 
+# affiche le formulaire pour ajouter un activité lié à un membre de l'équipe
+@app.route('/admin/activity/add_staff_form')
+def add_activity_staff_form():
+
+    print(Pharmacist.query.all())
+    return render_template('/admin/activity_add_form.html', 
+                            schedules=ActivitySchedule.query.all(),
+                            staff=Pharmacist.query.all())
+
+
 # enregistre l'activité' dans la Bdd
 @app.route('/admin/activity/add_new_activity', methods=['POST'])
 def add_new_activity():
+    print("ADDD", request.form)
     try:
         name = request.form.get('name')
         letter = request.form.get('letter')
         schedule_ids = request.form.getlist('schedules')
         message = request.form.get('message')
         notification = True if request.form.get('notification') == "true" else False
+        staff_id = request.form.get("staff_id")
 
+        
         if not name:  # Vérifiez que les champs obligatoires sont remplis
             communication("update_admin", data='Nom obligatoire')
-            return display_activity_table()
-
+            return return_good_display_activity(staff_id)
+        
 
         new_activity = Activity(
             name=name,
@@ -938,7 +970,11 @@ def add_new_activity():
             inactivity_message=message,
             notification=notification
         )
-
+        
+        if staff_id:
+            new_activity.is_staff = True
+            new_activity.staff = Pharmacist.query.get(int(staff_id))
+            
         db.session.add(new_activity)
 
         db.session.commit()
@@ -960,15 +996,27 @@ def add_new_activity():
                             hour=schedule.end_time.hour, minute=schedule.end_time.minute,
                             id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
 
-        communication("update_admin", data={"action":"delete_add_activity_form"})
+        print("communication", staff_id)
+        if staff_id:
+            print("staff_id", staff_id)
+            communication("update_admin", data={"action":"delete_add_activity_form_staff"})
+        else:
+            communication("update_admin", data={"action":"delete_add_activity_form"})
 
-        return display_activity_table()
+        return return_good_display_activity(staff_id)
 
     except Exception as e:
         db.session.rollback()
         display_toast(success=False, message="erreur : " + str(e))
-        return display_activity_table()
+        return return_good_display_activity(staff_id)
 
+
+def return_good_display_activity(staff):
+    """ Sert uniquement à retourner le bon affichage entre activité et activité == équipier"""
+    if staff:
+        return display_activity_table_staff()
+    else:
+        return display_activity_table()
 
 # affiche le tableau des plages horaires
 @app.route('/admin/schedule/table')
@@ -1667,7 +1715,7 @@ def add_new_button():
         
         if not label:  # Vérifiez que les champs obligatoires sont remplis
             display_toast(success=False, message="Le nom est obligatoire")
-            return display_activity_table()
+            return display_button_table()
         
 
         db.session.add(new_button)
@@ -2015,7 +2063,6 @@ def left_page_validate_patient(activity):
                             text=text,
                             activity=activity,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
-
 
 @app.route('/patient/print_and_validate', methods=['POST'])
 def print_and_validate():
@@ -2875,7 +2922,8 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
                 new_activity = Activity(
                     name=activity['name'],
                     letter=activity['letter'],
-                    inactivity_message = ""
+                    inactivity_message = "",
+                    is_staff = False
                 )
 
                 # Associer l'horaire à l'activité
@@ -2968,6 +3016,7 @@ if __name__ == "__main__":
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
     
+   
     # creation BDD si besoin et initialise certaines tables (Activités)
     def initialize_data():
         with app.app_context():
@@ -2984,6 +3033,8 @@ if __name__ == "__main__":
             init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
             load_configuration(app, ConfigOption)
             clear_old_patients_table()
+            
+    initialize_data()
 
     print("Starting Flask...")
     app.logger.info(f"Starting Flask on port {port} with debug={debug}")

@@ -1,6 +1,9 @@
 <table id="new_activity_form">
     <thead>
         <tr>
+            {% if staff %}
+                <th>Membre de l'équipe</th>
+            {% endif %}
             <th>Nom</th>
             <th>Lettre</th>
             <th>Horaires</th>
@@ -11,6 +14,17 @@
     </thead>
     <tbody>
         <tr>
+            {% if staff %}
+            <td>
+                <div class="input-field col s10">   
+                    <select id="staff">
+                        {% for member in staff %}
+                            <option value="{{member.id}}">{{member.name}}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
+            {% endif %}
             <td><input type="text" name="name" value="" id="name"></td>
             <td><input type="text" name="letter" value="" id="letter"></td>
             <td>
@@ -36,13 +50,20 @@
             </td>
             <td>
                 <button class="btn" 
-                    hx-target="#div_activity_table"
+                    {% if staff %}
+                        hx-target="#div_activity_staff_table"
+                    {% else %}
+                        hx-target="#div_activity_table"
+                    {% endif %}
                     hx-post="/admin/activity/add_new_activity"
                     hx-vals='js:{"name": document.getElementById("name").value, 
                             "letter": document.getElementById("letter").value,
                             "message": document.getElementById("message").value,
                             "notification": document.getElementById("notification").checked,
-                            "schedules": getSelectedOptions("schedules")
+                            "schedules": getSelectedOptions("schedules"),
+                            {% if staff %}
+                                "staff_id": getSelectedOptions("staff")
+                            {% endif %}
                         }'>
                     Enregistrer
                 </button>
