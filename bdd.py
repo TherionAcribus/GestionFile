@@ -71,7 +71,7 @@ def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
             )
             db.session.add(new_version)
             db.session.commit()
-
+            
             for button_data in data['buttons']:
                 new_button = Button(
                     code=button_data['code'],

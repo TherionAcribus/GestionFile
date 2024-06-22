@@ -87,7 +87,7 @@ eventSource.onmessage = function(event) {
     console.log(typeof(event.data));
     data = JSON.parse(event.data);
     console.log("toqt ?", data);
-    console.log("toqt ?", data.toast);
+    console.log("ACTION", data.action);
     if (data.toast){
         display_toast(data);
     }
@@ -103,11 +103,15 @@ eventSource.onmessage = function(event) {
     else if (data.action=== "delete_add_staff_form"){
         document.getElementById('div_add_staff_form').innerHTML = "";
     }
-    else if (data.action = "delete_add_rule_form"){
+    else if (data.action == "delete_add_rule_form"){
         document.getElementById('div_add_rule_form').innerHTML = "";
     }
-    else if (data.action = "delete_add_counter_form"){
+    else if (data.action == "delete_add_counter_form"){
         document.getElementById('div_add_counter_form').innerHTML = "";
+    }
+    else if (data.action == "delete_add_button_form"){
+        console.log("delete_add_button_form");
+        document.getElementById('div_add_button_form').innerHTML = "";
     }
 };
 

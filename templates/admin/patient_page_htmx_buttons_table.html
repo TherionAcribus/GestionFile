@@ -34,7 +34,7 @@
                         </option>
                         {% for activity in activities %}
                             <option value="{{ activity.id }}" 
-                                            {{ 'selected' if activity.id == button.activity.id else '' }}>{{ activity.name }} </option>
+                                            {{ 'selected' if activity.id == button.activity_id else '' }}>{{ activity.name }} </option>
                         {% endfor %}
                     </select>
                 </div>

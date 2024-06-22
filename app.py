@@ -181,6 +181,7 @@ class Activity(db.Model):
     inactivity_message = db.Column(db.String(255))
     notification = db.Column(db.Boolean, default=False)
     schedules = relationship('ActivitySchedule', secondary='activity_schedule_link', back_populates='activities')
+    is_staff = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
         return f'<Activity - {self.name}>'
@@ -1612,6 +1613,77 @@ def update_button_order():
     db.session.commit()
     return '', 204  # Réponse sans contenu
 
+# affiche le formulaire pour ajouter un membre
+@app.route('/admin/button/add_form')
+def add_button_form():
+    activities = Activity.query.all()
+    return render_template('/admin/patient_button_add_form.html', activities=activities)
+
+@app.route('/admin/patient/add_new_button', methods=['POST'])
+def add_new_button():
+    try:
+        activity_id = request.form.get('activity')
+        
+        # GEstion du cas ou le bouton est un bouton parent
+        if activity_id == "parent_button":
+            is_parent = True
+            activity = None
+        else:
+            is_parent = False
+            if activity_id:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    activity = activity
+                else:
+                    print("Activité non trouvée")
+                    return "Activité non trouvée", 404
+            else:
+                # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
+                activity = None
+                
+        parent_btn_id = request.form.get('parent_btn')
+        if parent_btn_id:
+            parent_button = Button.query.get(parent_btn_id)
+        else:
+            parent_button = None
+                
+        is_present = True if request.form.get('is_present') == "true" else False
+        
+        label = request.form.get('label')
+        
+        # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
+        max_order_button = Button.query.order_by(Button.order.desc()).first()
+        order = max_order_button.order + 1 if max_order_button else 0
+        
+
+        new_button = Button(
+            is_parent=is_parent,
+            activity=activity,
+            label=label,
+            parent_button=parent_button,
+            is_present=is_present,
+            order=order
+        )
+        
+        if not label:  # Vérifiez que les champs obligatoires sont remplis
+            display_toast(success=False, message="Le nom est obligatoire")
+            return display_activity_table()
+        
+
+        db.session.add(new_button)
+        db.session.commit()
+
+        communication("update_admin", data={"action": "delete_add_button_form"})
+        display_toast(success=True, message="Bouton ajouté")
+
+        return display_button_table()
+
+    except Exception as e:
+        db.session.rollback()
+        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.error(e)
+        return display_activity_table()
+
 
 # affiche la modale pour confirmer la suppression d'un patient
 @app.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
@@ -2111,7 +2183,8 @@ def create_qr_code(patient):
 @app.route('/patient/refresh')
 def patient_refresh():
     """ Permet de rafraichir la page des patients pour effectuer des changements """
-    communication("update_page_patient", data={"action": "refresh"})
+    print("patient_refresh")
+    communication("update_page_patient", data={"action": "refresh page"})
     return '', 204
 
 
@@ -2587,6 +2660,7 @@ def events_update_announce():
 
 @app.route('/events/update_page_patient')
 def events_update_page_patients():
+    print("update_page_patient!!!!")
     return Response(event_stream(update_page_patient), content_type='text/event-stream')
 
 @app.route('/events/update_patient_pyside')
@@ -2615,6 +2689,7 @@ def communication(stream, data=None, client_id = None, audio_source=None):
             print("update announce", client)
             client.put(message)
     elif stream == "update_page_patient":
+        print("update page patient", data, update_page_patient)
         for client in update_page_patient:
             print("update page patient", client)
             client.put(json.dumps(data))
@@ -2879,23 +2954,7 @@ def load_configuration(app, ConfigOption):
         scheduler_clear_all_patients()
 
 
-# creation BDD si besoin et initialise certaines tables (Activités)
-with app.app_context():
-    print("Creating database tables...")
-    #if not os.path.exists("database.duckdb"):
-    db.create_all()  # permet de recréer les Bdd si n'existent pas. None = default + config + buttons
-    init_days_of_week_db_from_json(Weekday, db, app)
-    init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
-    init_activity_data_from_json()  # Initialiser les données d'activité si nécessaire
-    init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)  # Initialiser les données d'activité si nécessaire
-    init_update_default_buttons_db_from_json(ConfigVersion, Button, db)  # Init ou Maj des boutons partients
-    init_default_languages_db_from_json(Language, db)
-    init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
-    init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
-    init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
-    load_configuration(app, ConfigOption)
-    clear_old_patients_table()
-    
+  
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     #flask_thread.start()
@@ -2908,6 +2967,23 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
+    
+    # creation BDD si besoin et initialise certaines tables (Activités)
+    def initialize_data():
+        with app.app_context():
+            print("Creating database tables...")
+            db.create_all()  # Comment this if using Flask-Migrate
+            init_days_of_week_db_from_json(Weekday, db, app)
+            init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
+            init_activity_data_from_json()
+            init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)
+            init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
+            init_default_languages_db_from_json(Language, db)
+            init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
+            init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
+            init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
+            load_configuration(app, ConfigOption)
+            clear_old_patients_table()
 
     print("Starting Flask...")
     app.logger.info(f"Starting Flask on port {port} with debug={debug}")

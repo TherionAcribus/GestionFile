@@ -7,7 +7,16 @@
         hx-swap="innerHTML">
     </div>
 
-    
+        <!-- Ajout nouveau bouton -->
+    <a class="waves-effect waves-light btn"
+        hx-get="/admin/button/add_form"
+        hx-target="#div_add_button_form"
+        hx-swap="innerHTML">
+        Ajouter un nouveau bouton
+    </a>    
+    <div id="div_add_button_form"></div>
+
+
     <div id="order_buttons"
         hx-get="/admin/patient/order_buttons"
         hx-target="#order_buttons"

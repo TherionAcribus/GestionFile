@@ -1,0 +1,63 @@
+<table id="staff_table" class="striped">
+    <thead>
+        <tr>
+            <th>Intitulé</th>
+            <th>Présence</th>            
+            <th>Activité</th>
+            <th>Dépendance</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" name="label" id="label"></td>
+            <td>
+                <p>
+                    <label>
+                        <input id="is_present" type="checkbox" checked>
+                        <span></span>
+                    </label>
+                </p>
+            </td>
+            
+            <td>
+                <div class="input-field">
+                    <select id="activity">
+                        <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
+                        <option value="parent_button">BOUTON PARENT</option>
+                        {% for activity in activities %}
+                            <option value="{{ activity.id }}">{{ activity.name }} </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+            </td>
+            <td>
+                <div class="input-field">
+                    <select id="parent">
+                        <option value="" disabled selected>Selectionnez un bouton parent</option>
+                        <option value="parent_button">Aucun bouton parent</option>
+                        {% for button in buttons %}
+                            <option value="{{ button.id }}">{{ button.name }} </option>
+                        {% endfor %}
+                    </select>
+                </div>                
+            </td>            
+
+            <td>
+                <button class="btn" 
+                    hx-target="#div_buttons_table"
+                    hx-post="/admin/patient/add_new_button"
+                    hx-vals='js:{"label": document.getElementById("label").value, 
+                            "is_present": document.getElementById("is_present").checked,
+                            "activity": document.getElementById("activity").value,
+                            "parent_btn": document.getElementById("parent").value, 
+                            }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+
+    </tbody>
+</table>
+
