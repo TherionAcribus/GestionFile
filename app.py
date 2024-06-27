@@ -3112,7 +3112,7 @@ def load_configuration(app, ConfigOption):
         scheduler_clear_all_patients()
 
 
-  
+
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     #flask_thread.start()
@@ -3125,7 +3125,7 @@ if __name__ == "__main__":
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
     
-   
+
     # creation BDD si besoin et initialise certaines tables (Activités)
     def initialize_data():
         with app.app_context():
@@ -3151,11 +3151,4 @@ if __name__ == "__main__":
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
 
     app.logger.info("Starting Flask app...")
-
-
-
-
-
-    
-
 
