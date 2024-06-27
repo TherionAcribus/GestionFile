@@ -3112,7 +3112,6 @@ def load_configuration(app, ConfigOption):
         scheduler_clear_all_patients()
 
 
-
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     #flask_thread.start()
