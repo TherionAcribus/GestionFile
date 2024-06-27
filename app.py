@@ -58,8 +58,8 @@ app.config.from_object(Config())
 app.debug = True
 #socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
 
-app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
-toolbar = DebugToolbarExtension(app)
+#app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
+#toolbar = DebugToolbarExtension(app)
 
 
 
