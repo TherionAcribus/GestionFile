@@ -30,30 +30,11 @@ import subprocess
 import threading
 import socket
 
-import cProfile, pstats, io
-from pyinstrument import Profiler
+
 from flask_debugtoolbar import DebugToolbarExtension
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-
-
-def profiled(f):
-    """ Un décorateur qui utilise cProfile pour profiler une fonction """
-    def inner(*args, **kwargs):
-        profiler = cProfile.Profile()
-        profiler.enable()
-        try:
-            result = f(*args, **kwargs)
-        finally:
-            profiler.disable()
-            s = io.StringIO()
-            sortby = 'cumulative'  # Options: 'cumulative', 'ncalls', 'time'
-            ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
-            ps.print_stats()
-            print(s.getvalue())  # Imprimer les statistiques de profiling dans la console
-        return result
-    return inner
 
 
 class Config:
@@ -81,20 +62,6 @@ app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
 toolbar = DebugToolbarExtension(app)
 
 
-@app.before_request
-def before_request():
-    if "profile" in request.args:
-        g.profiler = Profiler()
-        g.profiler.start()
-
-
-@app.after_request
-def after_request(response):
-    if not hasattr(g, "profiler"):
-        return response
-    g.profiler.stop()
-    output_html = g.profiler.output_html()
-    return make_response(output_html)
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -3153,12 +3120,6 @@ def load_configuration(app, ConfigOption):
 
 if __name__ == "__main__":
 
-    #profiler = cProfile.Profile()
-    #profiler.enable()
-
-    profiler = Profiler()
-    profiler.start()
-
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
@@ -3189,17 +3150,8 @@ if __name__ == "__main__":
 
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
 
-    #profiler.disable()
-    #profiler.dump_stats("profile_stats.prof")
-    profiler.stop()
-
-    profiler.print()
-
     app.logger.info("Starting Flask app...")
-    """with open("profile_stats.txt", "w") as f:
-        stats = pstats.Stats(profiler, stream=f)
-        stats.sort_stats(pstats.SortKey.TIME)
-        stats.print_stats()"""
+
 
 
 
