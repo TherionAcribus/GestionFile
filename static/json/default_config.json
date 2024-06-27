@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.1",
+    "version": "0.2",
     "comments": "Version de test",
         "configurations": {
             "pharmacy_name": "Pharmacie Sainte-Agathe",
@@ -13,6 +13,7 @@
             "announce_sound": true,
             "announce_alert": true,
             "announce_player": "web",
+            "announce_alert_filename": "beep.wav",
             "announce_voice": "fr-fr",
             "announce_title": "Bienvenue à la pharmacie Sainte-Agathe",
             "announce_subtitle": "Merci de vous enregistrer sur la borne à l'entrée",

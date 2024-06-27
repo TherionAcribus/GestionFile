@@ -77,6 +77,25 @@ function insertPlaceholder(textareaId, text) {
     textarea.focus();
 }
 
+// permet de recharger la partie 'lecteur' si l'on modifie le fichier dans "Librairie sonore"
+htmx.on('htmx:afterSwap', function(evt) {
+    // Vérifiez que l'échange concerne bien le contenu de la modale
+    if (evt.detail.target.id === 'modal_display_gallery') {
+        var closeModalButton = document.getElementById('closeModalButton');
+        console.log("Close modal button", closeModalButton);
+
+        if (closeModalButton) {
+            closeModalButton.addEventListener('click', function() {
+                // Déclencher l'événement personnalisé pour HTMX
+                var event = new Event('closeModalEvent');
+                console.log("Close modal event dispatched");
+                document.getElementById('announce_current_signal').dispatchEvent(event);
+            });
+        }
+    }
+    
+});
+
 
 // ---------------- GENERAL ----------------
 

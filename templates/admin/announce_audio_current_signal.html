@@ -1,0 +1,7 @@
+<figure> 
+    <audio controls>
+        <source src="{{ url_for('serve_sound', filename=announce_alert_filename) }}" type="audio/wav">
+        Votre navigateur ne supporte pas l'élément audio.
+    </audio>
+    <figcaption>{{ announce_alert_filename }}</figcaption>
+</figure>

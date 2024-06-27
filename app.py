@@ -63,8 +63,11 @@ class Config:
     SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
+
+   
 
 # A CHANGER POUR ADRESSE DYNAMIQUE
 adresse = "http://localhost:5000"
@@ -1880,6 +1883,55 @@ def announce_page():
                             announce_title=app.config['ANNOUNCE_TITLE'],
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'])
 
+
+
+@app.route('/admin/announce/gallery_audio')
+def gallery_audio():
+    # Lister tous les fichiers wav dans le répertoire SOUND_FOLDER
+    sounds = [f for f in os.listdir("static/audio/signals") if f.endswith('.wav') or f.endswith('.mp3')]
+    print(sounds)
+    return render_template('/admin/announce_audio_gallery.html', sounds=sounds)
+
+
+@app.route('/sounds/<filename>')
+def serve_sound(filename):
+    return send_from_directory("static/audio/signals", filename)
+
+
+@app.route('/admin/announce/audio/current_signal')
+def current_signal():
+    return render_template('/admin/announce_audio_current_signal.html',
+                            announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
+
+
+@app.route('/admin/announce/audio/select_signal/<filename>')
+def select_signal(filename):
+    if filename:
+        app.config['ANNOUNCE_ALERT_FILENAME'] = filename
+        config = ConfigOption.query.filter_by(key='announce_alert_filename').first()
+        print(config)
+        config.value_str = filename
+        db.session.commit()
+    return "", 204
+
+
+def allowed_audio_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_AUDIO_EXTENSIONS"]
+
+
+@app.route('/admin/announce/audio/upload', methods=['POST'])
+def upload_signal_file():
+    if 'file' not in request.files:
+        return redirect(request.url)
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(request.url)
+    if file and allowed_audio_file(file.filename):
+        filename = file.filename
+        file.save(os.path.join("static/audio/signals", filename))
+    return redirect(url_for('gallery_audio'))
+
+
 # -------- fin de ADMIN -> Page Announce  ---------
 
 
@@ -1961,7 +2013,7 @@ def generate_audio_calling(counter_number, next_patient):
     # Sauvegarde du fichier audio
     tts.save(audio_path)
 
-    # Envoi du chemin relatif via Socket.IO
+    # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
     communication("update_audio", audio_source=audio_url)
 
@@ -2645,6 +2697,7 @@ def patients_ongoing():
 
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
+    print(template)
     print("replace_balise_announces", template, patient)
     return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
 
@@ -2818,9 +2871,22 @@ def communication(stream, data=None, client_id = None, audio_source=None):
         if client_id in counter_streams:
             counter_streams[client_id].put(message)
     elif stream == "update_audio":
-        message["data"] = {"audio_url": audio_source}
         # on envoie le son soit vers Pyside (app) soit vers le navigateur (web)
-        if app.config["ANNOUNCE_PLAYER"] == "web":        
+        if app.config["ANNOUNCE_ALERT"]:
+            print("signal")
+            signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
+            audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+            print("audio path", audio_path)
+            print("ddsfsdfs", audio_source)
+            message["data"] = {"audio_url": audio_path}
+            if app.config["ANNOUNCE_PLAYER"] == "web":
+                for client in play_sound_streams:
+                    client.put(json.dumps(message))
+            else:
+                for client in update_screen_app:
+                    client.put(json.dumps(message))
+        message["data"] = {"audio_url": audio_source}
+        if app.config["ANNOUNCE_PLAYER"] == "web":
             for client in play_sound_streams:
                 client.put(json.dumps(message))
         else:
@@ -3034,6 +3100,7 @@ def load_configuration(app, ConfigOption):
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
         "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
+        "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),
         "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
         "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
         "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),

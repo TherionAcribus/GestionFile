@@ -17,19 +17,37 @@ function refresh_calling_list() {
 }
 
 
+const audioQueue = [];
+let isPlaying = false;
+
 const eventSourceSoundCalling = new EventSource("/events/sound_calling");
 eventSourceSoundCalling.onmessage = function(event) {
-    // Utiliser HTMX pour déclencher AUDIO
     console.log("Calling... Audio");
     console.log("Received audio data 1 :", event.data);
     const data = JSON.parse(event.data);
     console.log("Received audio data: 2", data);
 
     let audioUrl = data.data.audio_url;
-    console.log("Playing audio...", audioUrl);
-    playAudio(audioUrl);
+    console.log("Queueing audio...", audioUrl);
+    queueAudio(audioUrl);
 }
 
+function queueAudio(audioUrl) {
+    audioQueue.push(audioUrl);
+    if (!isPlaying) {
+        playNextAudio();
+    }
+}
+
+function playNextAudio() {
+    if (audioQueue.length === 0) {
+        isPlaying = false;
+        return;
+    }
+    isPlaying = true;
+    const nextAudioUrl = audioQueue.shift();
+    playAudio(nextAudioUrl);
+}
 
 function playAudio(audioUrl) {
     const player = document.getElementById('player');
@@ -37,6 +55,11 @@ function playAudio(audioUrl) {
     player.src = audioUrl;
     player.play();
     console.log("Playing audio... DONE");
+
+    player.onended = function() {
+        console.log("Audio ended");
+        playNextAudio();
+    }
 }
 
 

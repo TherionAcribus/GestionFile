@@ -31,6 +31,23 @@
     </label>
 </div>
 
+Choisir le son de l'alerte:
+
+<div id="announce_current_signal"
+        hx-get="/admin/announce/audio/current_signal"
+        hx-target="#announce_current_signal"
+        hx-trigger="load, closeModalEvent"
+        hx-swap="innerHTML">    
+</div>
+
+    <!-- Bouton pour ouvrir la modal -->
+    <button class="btn modal-trigger blue"
+            hx-get="/admin/announce/gallery_audio"
+            hx-target="#modal_display_gallery"
+            hx-trigger="click"
+            data-target="modal_display_gallery">
+        Librairie sonore
+    </button>
 
 <div class="input-field col s12">
     <select
@@ -62,3 +79,7 @@
 
 
 {{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Appel audio pour annoncer le tour d'un patient") }}
+
+<!-- Modal Structure Galerie audio -->
+<div id="modal_display_gallery" class="modal">
+</div>

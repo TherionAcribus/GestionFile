@@ -1,0 +1,31 @@
+<h1>Librairie sonore</h1>
+<ul>
+    {% for sound in sounds %}
+        <li>
+            <audio controls>
+                <source src="{{ url_for('serve_sound', filename=sound) }}" type="audio/wav">
+                Votre navigateur ne supporte pas l'élément audio.
+            </audio>
+            <p>{{ sound }}</p>
+            <button
+                class="select-sound-button"
+                data-sound="{{ sound }}"
+                hx-get="/admin/announce/audio/select_signal/{{ sound }}"
+                hx-target="#invisible"
+            >Selectionner</button>
+        </li>
+    {% endfor %}
+</ul>
+
+<!-- Formulaire de téléchargement -->
+<form id="uploadForm" hx-post="/admin/announce/audio/upload" hx-target="#modal_display_gallery" hx-swap="innerHTML" enctype="multipart/form-data">
+    <label for="file">Ajouter un nouveau son (wav, mp3) :</label>
+    <input type="file" id="file" name="file" accept=".wav, .mp3" required>
+    <button type="submit">uploader</button>
+</form>
+
+<div class="modal-footer">
+    <span id="image_name_field"></span>
+    <a id="closeModalButton" href="#!" class="modal-close waves-effect waves-green btn-flat">Sauver</a>
+</div>
+
