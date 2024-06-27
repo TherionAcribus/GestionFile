@@ -15,5 +15,50 @@
     </label>
 </div>
 
+<div class="switch">
+    <span>Activer une alerte avant de lancer l'appel : </span>
+    <label>
+    Muet
+    <input id="announce_alert" 
+            type="checkbox"
+            {% if announce_alert == True %}checked{% endif %}
+            hx-post="/admin/update_switch"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "announce_alert",
+                        "value": document.getElementById("announce_alert").checked}'>
+    <span class="lever"></span>
+    Activé
+    </label>
+</div>
+
+
+<div class="input-field col s12">
+    <select
+        id="announce_player"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "announce_player", "value": document.getElementById("announce_player").value}'>
+        <option value="" disabled selected>Lecteur audio</option>
+        <option value="app" {% if announce_player == "app" %}selected{% endif %}>Application (recommandé)</option>
+        <option value="web" {% if announce_player == "web" %}selected{% endif %}>Page web (en cas d'échec)</option>
+    </select>
+    <label>Choix du lecteur audio</label>
+</div>
+
+
+<div class="input-field col s12">
+    <select
+        id="announce_voice"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "announce_voice", "value": document.getElementById("announce_voice").value}'>
+        <option value="" disabled selected>Choix de la voix</option>
+        <option value="fr-fr" {% if announce_voice == "fr-fr" %}selected{% endif %}>Français de France</option>
+        <option value="fr-ca" {% if announce_voice == "fr-ca" %}selected{% endif %}>Français du Canada</option>
+    </select>
+    <label>Choix de la voix</label>
+</div>
+
+
 
 {{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Appel audio pour annoncer le tour d'un patient") }}

@@ -15,6 +15,7 @@
 <script>
     document.addEventListener('htmx:afterSettle', function(evt) {
         console.log("Swiper...");
+        console.log("time", "{{ time }}");
         delay_timer = Number("{{ time }}") * 1000;
         announce_infos_transition = "{{announce_infos_transition}}";
         console.log(announce_infos_transition);

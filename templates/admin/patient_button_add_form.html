@@ -37,8 +37,8 @@
                     <select id="parent">
                         <option value="" disabled selected>Selectionnez un bouton parent</option>
                         <option value="parent_button">Aucun bouton parent</option>
-                        {% for button in buttons %}
-                            <option value="{{ button.id }}">{{ button.name }} </option>
+                        {% for button in parent_buttons %}
+                            <option value="{{ button.id }}">{{ button.label }} </option>
                         {% endfor %}
                     </select>
                 </div>                

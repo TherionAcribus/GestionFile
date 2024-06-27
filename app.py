@@ -7,7 +7,7 @@
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
@@ -30,8 +30,31 @@ import subprocess
 import threading
 import socket
 
+import cProfile, pstats, io
+from pyinstrument import Profiler
+from flask_debugtoolbar import DebugToolbarExtension
+
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
+
+
+def profiled(f):
+    """ Un décorateur qui utilise cProfile pour profiler une fonction """
+    def inner(*args, **kwargs):
+        profiler = cProfile.Profile()
+        profiler.enable()
+        try:
+            result = f(*args, **kwargs)
+        finally:
+            profiler.disable()
+            s = io.StringIO()
+            sortby = 'cumulative'  # Options: 'cumulative', 'ncalls', 'time'
+            ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            print(s.getvalue())  # Imprimer les statistiques de profiling dans la console
+        return result
+    return inner
+
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -48,7 +71,27 @@ adresse = "http://localhost:5000"
 
 app = Flask(__name__)
 app.config.from_object(Config())
+app.debug = True
 #socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
+
+app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
+toolbar = DebugToolbarExtension(app)
+
+
+@app.before_request
+def before_request():
+    if "profile" in request.args:
+        g.profiler = Profiler()
+        g.profiler.start()
+
+
+@app.after_request
+def after_request(response):
+    if not hasattr(g, "profiler"):
+        return response
+    g.profiler.stop()
+    output_html = g.profiler.output_html()
+    return make_response(output_html)
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
@@ -1665,7 +1708,10 @@ def update_button_order():
 @app.route('/admin/button/add_form')
 def add_button_form():
     activities = Activity.query.all()
-    return render_template('/admin/patient_button_add_form.html', activities=activities)
+    parent_buttons = Button.query.filter_by(is_parent=True).all()
+    return render_template('/admin/patient_button_add_form.html', 
+                            activities=activities,
+                            parent_buttons=parent_buttons)
 
 @app.route('/admin/patient/add_new_button', methods=['POST'])
 def add_new_button():
@@ -1808,6 +1854,7 @@ def delete_button_image(button_id):
     db.session.commit()
     return "<div>Pas d'image</div>"
 
+
 @app.route("/admin/patient/print_ticket_test")
 def print_ticket_test():
     text = "12345678901234567890123456789012345678901234567890"
@@ -1822,19 +1869,16 @@ def print_ticket_test():
 
 @app.route('/admin/announce')
 def announce_page():
-    announce_sound = app.config['ANNOUNCE_SOUND']
-    announce_call_text = app.config['ANNOUNCE_CALL_TEXT']
-    announce_ongoing_display = app.config['ANNOUNCE_ONGOING_DISPLAY']
-    announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
-    announce_title = app.config['ANNOUNCE_TITLE']
-    announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
     return render_template('/admin/announce.html', 
-                            announce_sound = announce_sound,
-                            announce_call_text=announce_call_text,
-                            announce_ongoing_display=announce_ongoing_display,
-                            announce_ongoing_text=announce_ongoing_text,
-                            announce_title=announce_title,
-                            announce_subtitle=announce_subtitle)
+                            announce_sound = app.config['ANNOUNCE_SOUND'],
+                            announce_alert = app.config['ANNOUNCE_ALERT'],
+                            announce_player = app.config['ANNOUNCE_PLAYER'],
+                            announce_voice = app.config['ANNOUNCE_VOICE'],
+                            announce_call_text=app.config['ANNOUNCE_CALL_TEXT'],
+                            announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
+                            announce_ongoing_text=app.config['ANNOUNCE_ONGOING_TEXT'],
+                            announce_title=app.config['ANNOUNCE_TITLE'],
+                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'])
 
 # -------- fin de ADMIN -> Page Announce  ---------
 
@@ -1883,6 +1927,10 @@ def patient_right_page_default():
 
 
 def generate_audio_calling(counter_number, next_patient):
+
+    # voir pour la possibilité d'utiliser https://cloud.google.com/text-to-speech/ 
+    # en version basique semble pas trop cher
+
     print("SOUND", app.config["ANNOUNCE_SOUND"])
     # Si on ne veux pas de son, on quitte
     if not app.config["ANNOUNCE_SOUND"]:
@@ -1892,7 +1940,15 @@ def generate_audio_calling(counter_number, next_patient):
     text_template = app.config["ANNOUNCE_CALL_SOUND"]
     text = replace_balise_announces(text_template, next_patient)
     print('TEXT', text)
-    tts = gTTS(text, lang='fr', tld='ca')  # Utilisation de gTTS avec langue française
+
+    # choix de la voix
+    if app.config["ANNOUNCE_VOICE"] == "fr-ca":
+        lang = "fr"
+        tld = "ca"
+    elif app.config["ANNOUNCE_VOICE"] == "fr-fr":
+        lang = "fr"
+        tld = "fr"
+    tts = gTTS(text, lang=lang, tld=tld)  # Utilisation de gTTS avec langue française
 
     # Chemin de sauvegarde du fichier audio
     audiofile = f'patient_{next_patient.call_number}.mp3'
@@ -2244,10 +2300,12 @@ def patient_refresh():
 #  On utilise l'ID dans l'URL pour éviter les erreurs (espace dans le nom...)
 @app.route('/counter/<int:counter_id>')
 def counter(counter_id):
+
     print("counter_number", counter_id)
     counter = Counter.query.get(counter_id)
     activities = Activity.query.all()
     # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
+
     if not counter:
         return wrong_counter(counter_id)
     return render_template('counter/counter.html', 
@@ -2471,7 +2529,6 @@ def is_staff_on_counter(counter_id):
     counter = Counter.query.get(counter_id)
     # emet un signal pour provoquer le réaffichage de la liste des activités
     #socketio.emit("trigger_connect_staff", {})
-    print("EMITTTT")
     return render_template('counter/staff_on_counter.html', staff=counter.staff)
 
 
@@ -2554,6 +2611,7 @@ def counter_select_patient(counter_id, patient_id):
 
 @app.route('/display')
 def display():
+    app.logger.debug("start display")
     announce_title = app.config['ANNOUNCE_TITLE'] 
     announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
     announce_ongoing_display = app.config['ANNOUNCE_ONGOING_DISPLAY']
@@ -2603,6 +2661,7 @@ def replace_balise_phone(template, patient):
 
 @app.route('/announce/init_gallery')
 def announce_init_gallery():
+    app.logger.debug("start init gallery")
     image_dir = os.path.join(app.static_folder, "images/annonces")
     images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
     return render_template('announce/gallery.html', images=images,
@@ -2631,13 +2690,8 @@ counter_streams = {}
 update_announce = []
 update_patient_pyside = []
 update_patient_app = []
+update_screen_app = []
 
-def notify_clients(clients):
-    for client in clients:
-        try:
-            client.put(True, timeout=1)
-        except:
-            pass
 
 def event_stream(clients):
     while True:
@@ -2650,35 +2704,46 @@ def event_stream(clients):
                 yield f'data: {message}\n\n'
         except GeneratorExit:
             clients.remove(client)
+    
 
 
 def event_stream_dict(client_id):
+    app.logger.debug("start event event_stream_dict")
     client_queue = counter_streams[client_id]
-    print("client queue", counter_streams)
-    print("client id", client_id)
     try:
         while True:
             try:
-                message = client_queue.get(timeout=30)  # Ajoute un timeout pour éviter le blocage
+                message = client_queue.get(timeout=30)
                 print("message test", message)
                 yield f'data: {message}\n\n'
+                app.logger.debug("close event event_stream_dict")
             except Empty:
                 yield 'data: no-message\n\n'
+                app.logger.debug("close event event_stream_dict")
     except GeneratorExit:
         print("Generator exit, client disconnected")
+        app.logger.debug("close event event_stream_dict")
     finally:
-        if client_id in counter_streams:
-            counter_streams.pop(client_id, None)
+        counter_streams.pop(client_id, None)
         print("Stream closed for client", client_id)
+        app.logger.debug("close event event_stream_dict")
+
 
 @app.route('/events/update_patients')
 def events_update_patients():
     return Response(event_stream(update_patients), content_type='text/event-stream')
 
+
 # pour mettre à jour l'App patient (impressions)
 @app.route('/events/update_patient_app')
 def events_update_patients_app():
     return Response(event_stream(update_patient_app), content_type='text/event-stream')
+
+
+# pour mettre à jour l'App screen (sons)
+@app.route('/events/update_screen_app')
+def events_update_screen_app():
+    return Response(event_stream(update_screen_app), content_type='text/event-stream')
 
 
 @app.route('/events/sound_calling')
@@ -2705,10 +2770,12 @@ def events_update_admin():
 def events_update_announce():
     return Response(event_stream(update_announce), content_type='text/event-stream')
 
+
 @app.route('/events/update_page_patient')
 def events_update_page_patients():
     print("update_page_patient!!!!")
     return Response(event_stream(update_page_patient), content_type='text/event-stream')
+
 
 @app.route('/events/update_patient_pyside')
 def events_update_patient_pyside():
@@ -2752,8 +2819,14 @@ def communication(stream, data=None, client_id = None, audio_source=None):
             counter_streams[client_id].put(message)
     elif stream == "update_audio":
         message["data"] = {"audio_url": audio_source}
-        for client in play_sound_streams:
-            client.put(json.dumps(message))
+        # on envoie le son soit vers Pyside (app) soit vers le navigateur (web)
+        if app.config["ANNOUNCE_PLAYER"] == "web":        
+            for client in play_sound_streams:
+                client.put(json.dumps(message))
+        else:
+            for client in update_screen_app:
+                client.put(json.dumps(message))
+        
 
 
 def create_patients_list_for_pyside():
@@ -2960,6 +3033,9 @@ def load_configuration(app, ConfigOption):
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
+        "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
+        "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
+        "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
         "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
@@ -3009,7 +3085,12 @@ def load_configuration(app, ConfigOption):
         
 
 if __name__ == "__main__":
-    app.logger.info("Starting Flask app...")
+
+    #profiler = cProfile.Profile()
+    #profiler.enable()
+
+    profiler = Profiler()
+    profiler.start()
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))
@@ -3039,7 +3120,19 @@ if __name__ == "__main__":
     print("Starting Flask...")
     app.logger.info(f"Starting Flask on port {port} with debug={debug}")
 
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
+
+    #profiler.disable()
+    #profiler.dump_stats("profile_stats.prof")
+    profiler.stop()
+
+    profiler.print()
+
+    app.logger.info("Starting Flask app...")
+    """with open("profile_stats.txt", "w") as f:
+        stats = pstats.Stats(profiler, stream=f)
+        stats.sort_stats(pstats.SortKey.TIME)
+        stats.print_stats()"""
 
 
 

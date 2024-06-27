@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.2",
+    "version": "0.1",
     "comments": "Version de test",
         "configurations": {
             "pharmacy_name": "Pharmacie Sainte-Agathe",
@@ -11,6 +11,9 @@
             "printer": false,
             "printer_width": 42,
             "announce_sound": true,
+            "announce_alert": true,
+            "announce_player": "web",
+            "announce_voice": "fr-fr",
             "announce_title": "Bienvenue à la pharmacie Sainte-Agathe",
             "announce_subtitle": "Merci de vous enregistrer sur la borne à l'entrée",
             "announce_call_text": "Le patient {N} est invité au comptoir {C}",
