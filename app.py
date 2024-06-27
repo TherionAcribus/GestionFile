@@ -1581,6 +1581,7 @@ def admin_patient():
                             page_patient_qrcode_web_page = app.config['PAGE_PATIENT_QRCODE_WEB_PAGE'],
                             page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'],
                             page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
+                            page_patient_end_timer = app.config['PAGE_PATIENT_END_TIMER'],
                             ticket_header = app.config['TICKET_HEADER'],
                             ticket_message = app.config['TICKET_MESSAGE'],
                             ticket_footer = app.config['TICKET_FOOTER'],
@@ -2088,7 +2089,7 @@ def display_activity_inactive(request):
                             page_patient_disable_default_message=message,
                             default_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
-                            inactivity_timer=5)
+                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"])
 
 
 @app.route("/patient/default_subtitle")
@@ -2124,6 +2125,7 @@ def left_page_validate_patient(activity):
     call_number = get_next_call_number(activity)
     #new_patient = add_patient(call_number, activity)
     futur_patient = get_futur_patient(call_number, activity)
+    print("futur_patient", futur_patient.id)
     image_name_qr = create_qr_code(futur_patient)
     text = f"{activity.name}"
     # rafraichissement des pages display et counter
@@ -2169,10 +2171,12 @@ def cancel_patient():
 
 @app.route('/patient/conclusion_page')
 def patient_conclusion_page(patient):
-    image_name_qr = f"qr_patient-{patient.id}.png"
+    image_name_qr = f"qr_patient-{patient.call_number}.png"
     return render_template('patient/conclusion_page.html',
                             patient=patient,
-                            image_name_qr=image_name_qr)
+                            image_name_qr=image_name_qr,
+                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"]
+                            )
 
 
 def format_ticket_text(new_patient):
@@ -2269,9 +2273,9 @@ def get_next_category_number(activity):
 
 def create_qr_code(patient):
     print("create_qr_code")
-    print(patient, patient.id)
+    print(patient, patient.id, patient.call_number, patient.activity)
     if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
-        data = f"{adresse}/phone/{patient.id}"
+        data = f"{adresse}/phone/{patient.call_number}"
     else :
         template = app.config['PAGE_PATIENT_QRCODE_DATA']
         data = replace_balise_phone(template, patient)
@@ -2290,7 +2294,7 @@ def create_qr_code(patient):
     
     # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
     directory = os.path.join(current_app.static_folder, 'qr_patients')
-    filename = f'qr_patient-{patient.id}.png'
+    filename = f'qr_patient-{patient.call_number}.png'
     img_path = os.path.join(directory, filename)
 
     # Assurer que le répertoire existe
@@ -2308,7 +2312,6 @@ def patient_refresh():
     print("patient_refresh")
     communication("update_page_patient", data={"action": "refresh page"})
     return '', 204
-
 
 
 # ---------------- FIN  PAGE PATIENTS FRONT ----------------
@@ -3086,6 +3089,7 @@ def load_configuration(app, ConfigOption):
         "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
         "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
         "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
+        "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
         "ticket_header": ("TICKET_HEADER", "value_str"),
         "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
         "ticket_message": ("TICKET_MESSAGE", "value_str"),
