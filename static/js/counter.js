@@ -46,16 +46,6 @@ function attachButtonListeners() {
 
 function selectPatient(patientId) {
     console.log("Patient sélectionné :", patientId);
-    // Ajoutez ici plus de logique pour gérer le patient sélectionné
 }
 
-// ces deux fonctions sont appelées via un script dans l'htmx qui affiche le 
-// nom de l'utilisateur lorsqu'il est connecté  ou le nom de personne si 
-// personne n'est connecté (ou erreur)
-function displayButtonLeaveCounter() {
-    document.getElementById('button_leave_counter').style.display = 'block';
-}
 
-function hideButtonLeaveCounter() {
-    document.getElementById('button_leave_counter').style.display = 'none';
-}

@@ -1,29 +1,61 @@
 {% if staff == None %}
     <span id="staff_id" style ="display: none">{{0}}</span>
-    <span class="green-text">
-        Aucun membre de l'équipe n'est assigné à ce comptoir
-    </span>
-    <script>
-        // cache le bouton pour quitter le comptoir
-        hideButtonLeaveCounter();
-    </script>
+    <div class="row">
+        <span class="red-text">
+            Personne
+        </span>
+        {% include "counter/form_staff.html" %}
+    </div>
+    <label>
+        <input id="deconnect" type="checkbox" checked="checked" />
+        <span>Se déconnecter de tous les autres postes</span>
+    </label>
+
 {% elif staff == False %}
     <span id="staff_id" style ="display: none">{{0}}</span>
-    <span class="red-text">
-        Erreur : Ces initiales n'existent pas !
-    </span>
-    <script>
-        // cache le bouton pour quitter le comptoir
-        hideButtonLeaveCounter();
-    </script>
+    <div class="row">
+        <span class="red-text">
+            Erreur : Ces initiales n'existent pas !
+        </span>
+        {% include "counter/form_staff.html" %}
+    </div>
+    <label>
+        <input id="deconnect" type="checkbox" checked="checked" />
+        <span>Se déconnecter de tous les autres postes</span>
+    </label>
+
 {% else %}
-    {{staff.name}} ({{staff.initials}}) 
-    <span id="staff_id" style ="display: none">{{staff.id}}</span>
-    <script>
-        // affiche le bouton pour quitter le comptoir
-        displayButtonLeaveCounter();
-    </script>
+    <div class="row">
+        {{staff.name}}({{staff.initials}})
+        <span id="staff_id" style ="display: none">{{staff.id}}</span>
+
+        <!-- Puour l'instant changer == quitter-->
+        <a tabindex="0" class="btn filled"
+        id="button_leave_counter"
+        hx-post="/counter/remove_staff" 
+        hx-target="#staff_on_counter" 
+        hx-swap="innerHTML"
+        hx-trigger="click"
+        hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML, 
+                    "counter_id": document.getElementById("counter_id").innerHTML}'>
+            <i class="material-icons">loop</i>Changer
+        </a>
+
+        <a tabindex="0" class="btn red filled"
+        id="button_leave_counter"
+        hx-post="/counter/remove_staff" 
+        hx-target="#staff_on_counter" 
+        hx-swap="innerHTML"
+        hx-trigger="click"
+        hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML, 
+                    "counter_id": document.getElementById("counter_id").innerHTML}'>
+            <i class="material-icons">clear</i>Quitter
+        </a>
+
+    </div>
+
 {% endif %}
+
 <script>
     // affiche liste des activités, mais uniquement une fois que l'utilisateur est connecté
     // car on a besoin de récupérer son ID

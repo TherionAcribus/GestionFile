@@ -1,0 +1,27 @@
+<div class="row">
+
+    <div class="s12 m6 input-field"
+        id="div_staff_initial" 
+        hx-post="/counter/update_staff"
+        hx-trigger="keyup[keyCode==13]" 
+        hx-target="#staff_on_counter" 
+        hx-swap="innerHTML"
+        hx-vals='js:{"initials": document.getElementById("staff_initial").value, 
+        "counter_id": document.getElementById("counter_id").innerHTML,
+        "deconnect": document.getElementById("deconnect").checked,}'>
+        <input id="staff_initial" type="text" placeholder=" " maxlength="20">
+        <label for="staff_initial">Initiales</label>
+    </div>
+
+    <button type="button" class="btn filled"
+            hx-post="/counter/update_staff" 
+            hx-target="#staff_on_counter" 
+            hx-swap="innerHTML"
+            hx-trigger="click"
+            hx-vals='js:{"initials": document.getElementById("staff_initial").value, 
+                        "counter_id": document.getElementById("counter_id").innerHTML,
+                        "deconnect": document.getElementById("deconnect").checked,}'>
+        Valider
+    </button>
+
+</div>

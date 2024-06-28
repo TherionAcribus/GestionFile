@@ -62,7 +62,6 @@ app.debug = True
 #toolbar = DebugToolbarExtension(app)
 
 
-
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 db_session = scoped_session(sessionmaker(autocommit=False,
@@ -1673,7 +1672,7 @@ def update_button_order():
         print(button)
         button.order = index
     db.session.commit()
-    return '', 204  # Réponse sans contenu
+    return '', 200  # Réponse sans contenu
 
 # affiche le formulaire pour ajouter un membre
 @app.route('/admin/button/add_form')
@@ -2384,6 +2383,9 @@ def validate_and_call_next(counter_id):
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
+    if isinstance(next_patient, Patient):
+        next_patient = next_patient.to_dict()
+    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient}})
 
     return '', 204  # No content to send back
 
@@ -2533,6 +2535,8 @@ def pause_patient(counter_id, patient_id):
     if current_patient:
         current_patient.status = 'done'
         db.session.commit()
+    
+    communication("update_patients")
 
     #socketio.emit('trigger_patient_calling', {})
     #socketio.emit('trigger_patient_ongoing', {})  
@@ -2669,6 +2673,7 @@ def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     print(template)
     print("replace_balise_announces", template, patient)
+    print("patient.counter.name", patient.counter.staff)
     return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
 
 
@@ -2821,6 +2826,10 @@ def communication(stream, data=None, client_id = None, audio_source=None):
                 if data["type"] == "notification_new_patient":
                     client.put(json.dumps(data))
             app.logger.info("apres")
+    elif stream == "update_counter_pyside":
+        for client in update_patient_pyside:
+            print("up:!!!!", data)
+            client.put(json.dumps(data))
     elif stream == "update_announce":
         for client in update_announce:
             print("update announce", client)
@@ -2843,11 +2852,8 @@ def communication(stream, data=None, client_id = None, audio_source=None):
     elif stream == "update_audio":
         # on envoie le son soit vers Pyside (app) soit vers le navigateur (web)
         if app.config["ANNOUNCE_ALERT"]:
-            print("signal")
             signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
             audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-            print("audio path", audio_path)
-            print("ddsfsdfs", audio_source)
             message["data"] = {"audio_url": audio_path}
             if app.config["ANNOUNCE_PLAYER"] == "web":
                 for client in play_sound_streams:

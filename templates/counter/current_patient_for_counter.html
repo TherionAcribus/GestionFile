@@ -1,7 +1,7 @@
 {% if patient.status == 'calling' %}
-    Patient {{ patient.call_number }} en appel ({{ patient.visit_reason }})
+    Patient {{ patient.call_number }} en appel ({{ patient.activity.name }})
 {% elif patient.status == 'ongoing' %}
-    Patient {{ patient.call_number }} au comptoir ({{ patient.visit_reason }})
+    Patient {{ patient.call_number }} au comptoir ({{ patient.activity.name  }})
 {% else %}
     Aucun patient
 {% endif %}
