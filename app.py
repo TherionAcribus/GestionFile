@@ -115,6 +115,7 @@ class Patient(db.Model):
             "id": self.id,
             "call_number": self.call_number,
             "activity_id": self.activity_id,
+            "activity": self.activity.name,
             "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Format datetime as string
             "status": self.status,
             "counter_id": self.counter_id
@@ -2005,6 +2006,10 @@ def call_specific_patient(counter_id, patient_id):
         communication("update_patients")
         communication("update_counter", client_id=counter_id)
 
+        # counter pyside
+        next_patient_pyside = next_patient.to_dict()
+        communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
+
         generate_audio_calling(counter_id, next_patient)
     else:
         print("Aucun patient trouvé avec l'ID :", patient_id)
@@ -2025,7 +2030,11 @@ def validate_patient(counter_id, patient_id):
         db.session.commit()
 
     communication("update_patients")
-    communication("update_counter", client_id=counter_id)    
+    communication("update_counter", client_id=counter_id)
+
+    if isinstance(current_patient, Patient):
+        current_patient_pyside = current_patient.to_dict()
+    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": current_patient_pyside}})  
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return '', 204  # No content to send back
@@ -2383,9 +2392,10 @@ def validate_and_call_next(counter_id):
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
+    # counter pyside
     if isinstance(next_patient, Patient):
-        next_patient = next_patient.to_dict()
-    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient}})
+        next_patient_pyside = next_patient.to_dict()
+    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
 
     return '', 204  # No content to send back
 
@@ -2537,11 +2547,21 @@ def pause_patient(counter_id, patient_id):
         db.session.commit()
     
     communication("update_patients")
-
-    #socketio.emit('trigger_patient_calling', {})
-    #socketio.emit('trigger_patient_ongoing', {})  
+    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
 
     return '', 204  # No content to send back
+
+
+@app.route('/counter/app/is_patient_on_counter/<int:counter_id>', methods=['GET'])
+def app_is_patient_on_counter(counter_id):
+    """ Renvoie les informations du patient actuel au comptoir (pour le client) pour l'App (démarrage)"""
+    patient = Patient.query.filter(
+        Patient.counter.has(id=counter_id),
+        Patient.status.in_(['ongoing', 'calling'])
+        ).first()
+    print("PATIENT!!!", patient)
+    patient = patient.to_dict() if patient else None
+    return {"counter_id": counter_id, "next_patient": patient }
 
 
 @app.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
@@ -3126,6 +3146,21 @@ def load_configuration(app, ConfigOption):
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     #flask_thread.start()
         
+with app.app_context():
+    print("Creating database tables...")
+    db.create_all()  # Comment this if using Flask-Migrate
+    init_days_of_week_db_from_json(Weekday, db, app)
+    init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
+    init_activity_data_from_json()
+    init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)
+    init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
+    init_default_languages_db_from_json(Language, db)
+    init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
+    init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
+    init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
+    load_configuration(app, ConfigOption)
+    clear_old_patients_table()
+
 
 if __name__ == "__main__":
 
@@ -3137,20 +3172,8 @@ if __name__ == "__main__":
 
     # creation BDD si besoin et initialise certaines tables (Activités)
     def initialize_data():
-        with app.app_context():
-            print("Creating database tables...")
-            db.create_all()  # Comment this if using Flask-Migrate
-            init_days_of_week_db_from_json(Weekday, db, app)
-            init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
-            init_activity_data_from_json()
-            init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)
-            init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
-            init_default_languages_db_from_json(Language, db)
-            init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
-            init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
-            init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
-            load_configuration(app, ConfigOption)
-            clear_old_patients_table()
+        pass
+
             
     initialize_data()
 
