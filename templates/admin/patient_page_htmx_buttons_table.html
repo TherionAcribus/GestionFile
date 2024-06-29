@@ -2,7 +2,6 @@
     <thead>
         <tr>
             <th>Intitulé</th>
-            <th>Anglais</th>
             <th>Présence</th>            
             <th>Activité</th>
             <th>Dépendance</th>
@@ -13,7 +12,6 @@
         {% for button in buttons %}
         <tr>
             <td><input type="text" name="label" value="{{ button.label }}" id="label-{{ button.id }}"></td>
-            <td><input type="text" name="label_en" value="{{ button.label_en }}" id="label_en-{{ button.id }}"></td>
             <td>
                 <p>
                     <label>
@@ -57,8 +55,7 @@
                 <button class="btn" 
                     hx-target="#invisible"
                     hx-post="/admin/patient/button_update/{{ button.id }}"
-                    hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value, 
-                            "label_en": document.getElementById("label_en-{{ button.id }}").value, 
+                    hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value,
                             "is_present": document.getElementById("is_present-{{ button.id }}").checked,
                             "activity": document.getElementById("activity-{{ button.id }}").value,
                             "parent_btn": document.getElementById("parent-{{ button.id }}").value, 

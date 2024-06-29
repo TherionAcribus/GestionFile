@@ -1,4 +1,4 @@
-<h1>Choix de l'ordre des boutons</h1>
+<h3>Choix de l'ordre des boutons</h3>
 <ul id="list_order_buttons" class="list_order_buttons">
     {% for button in buttons %}
     <li class="button-order-item" data-id="{{ button.id }}">
@@ -7,6 +7,7 @@
     {% endfor %}
 </ul>
 <button id="saveOrderButton"
+        class="btn"
         hx-post="/admin/patient/update_button_order"
         hx-target="#invisible"
         hx-vals="js:{'order[]': Array.from(document.querySelectorAll('.button-order-item')).map(item => item.getAttribute('data-id'))}"

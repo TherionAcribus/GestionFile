@@ -6,7 +6,12 @@
     <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
     <a href="#!" 
         class="modal-close waves-effect waves-red btn-flat"
-        hx-get="/admin/activity/delete/{{ activity.id }}"
-        hx-target="#div_activity_table">
+        {% if staff %}
+            hx-get="/admin/activity/delete/staff/{{ activity.id }}"
+            hx-target="#div_activity_staff_table"
+        {% else %}
+            hx-get="/admin/activity/delete/{{ activity.id }}"
+            hx-target="#div_activity_table"
+        {% endif %}>
         Confirmer</a>
     </div>

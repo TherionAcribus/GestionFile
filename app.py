@@ -921,26 +921,37 @@ def confirm_delete_activity(activity_id):
     return render_template('/admin/activity_modal_confirm_delete.html', activity=activity)
 
 
+# affiche la modale pour confirmer la suppression d'une activité quand c'est un membre de l'équipe
+@app.route('/admin/activity/confirm_delete/staff/<int:activity_id>', methods=['GET'])
+def confirm_delete_activity_staff(activity_id):
+    activity = Activity.query.get(activity_id)
+    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity, staff=True)
+
+
 # supprime un membre de l'equipe
 @app.route('/admin/activity/delete/<int:activity_id>', methods=['GET'])
-def delete_activity(activity_id):
+def delete_activity(activity_id, staff=None):
     try:
         activity = Activity.query.get(activity_id)
         if not activity:
             display_toast(success=False, message="Activité non trouvée")
-            return return_good_display_activity()
+            return return_good_display_activity(staff)
 
         db.session.delete(activity)
         db.session.commit()
         display_toast(success=True, message="Activité supprimée avec succès")
-        return return_good_display_activity()
+        return return_good_display_activity(staff)
 
     except Exception as e:
         db.session.rollback()
         app.logger.error(str(e))
         display_toast(success=False, message="erreur : " + str(e))
-        return return_good_display_activity()
-    
+        return return_good_display_activity(staff)
+
+
+@app.route('/admin/activity/delete/staff/<int:activity_id>', methods=['GET'])
+def delete_activity_staff(activity_id, staff=None):
+    return delete_activity(activity_id, staff=True)
 
 # affiche le formulaire pour ajouter un activité
 @app.route('/admin/activity/add_form')
@@ -1027,6 +1038,7 @@ def add_new_activity():
 def return_good_display_activity(staff):
     """ Sert uniquement à retourner le bon affichage entre activité et activité == équipier"""
     if staff:
+        print("staff", staff)
         return display_activity_table_staff()
     else:
         return display_activity_table()
@@ -1646,7 +1658,6 @@ def update_button(button_id):
             button.is_present = is_present
 
             button.label = request.form.get('label', button.label)
-            button.label_en = request.form.get('label_en', button.label_en)
             #button.is_present = request.form.get('is_present', button.is_present)
             
 

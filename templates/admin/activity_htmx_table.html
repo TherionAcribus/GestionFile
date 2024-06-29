@@ -65,7 +65,11 @@
                 </button>
 
                 <button class="btn modal-trigger red"
-                        hx-get="/admin/activity/confirm_delete/{{ activity.id }}"
+                        {% if staff %} 
+                            hx-get="/admin/activity/confirm_delete/staff/{{ activity.id }}"
+                        {% else %}
+                            hx-get="/admin/activity/confirm_delete/{{ activity.id }}"
+                        {% endif %}
                         hx-target="#modal_delete_activity"
                         hx-trigger="click"
                         data-target="modal_delete_activity">
