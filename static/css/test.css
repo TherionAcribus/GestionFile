@@ -24,9 +24,16 @@ html, body {
 }
 
 #div_buttons_parents{
+    position: relative; 
     justify-content:space-around;
     align-items: center;
     background-color: rgb(182, 245, 245);
+}
+
+.cancel_button_container {
+    position: absolute;
+    bottom: 10px; /* Ajustez cette valeur selon vos besoins */
+    right: 10px; /* Ajustez cette valeur selon vos besoins */
 }
 
 #div_buttons_children {
@@ -50,13 +57,42 @@ html, body {
     justify-content: center;
 }
 
-.div_buttons {
+.div_square_bloc_activity{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.div_circle_buttons {
     width: 200px;  /* Largeur fixe */
     height: 200px;
     margin: 10px;
     border-radius: 50%;
     box-shadow: 5px 5px 5px #888888;
     text-align: center;
+}
+
+.div_square_buttons {
+    width: 500px;  /* Largeur fixe */
+    height: 150px;
+    margin: 10px;    
+    border-radius: 5%;
+    box-shadow: 5px 5px 5px #888888;
+    text-align: center;
+    align-items: center;
+}
+
+.grid_square_buttons {
+    display: grid;
+    grid-template-columns: 120px auto; /* La première colonne fait 120px, la seconde prend le reste */
+}
+
+.div_square_bloc_activity {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
 }
 
 .div_button_active {
@@ -67,9 +103,13 @@ html, body {
     background-color:rgb(102, 105, 105);
 }
 
-
 .img_btn {
     height: 200px;
+}
+
+.img_btn_small {
+    height: 100px;
+    margin: 10px;
 }
 
 .img_btn_inactive {
@@ -84,6 +124,11 @@ html, body {
 
 .div_text_button_active{
     color: darkcyan;
+}
+
+.div_text_button_square_active{
+    color: white;
+    font-size: 35px;
 }
 
 .div_text_button_inactive{

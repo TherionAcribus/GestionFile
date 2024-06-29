@@ -1658,8 +1658,8 @@ def update_button(button_id):
             button.is_present = is_present
 
             button.label = request.form.get('label', button.label)
-            #button.is_present = request.form.get('is_present', button.is_present)
-            
+
+            button.shape = request.form.get('shape', button.shape)            
 
             db.session.commit()
             display_toast(success=True, message="Mise à jour effectuée")
@@ -1726,6 +1726,8 @@ def add_new_button():
         is_present = True if request.form.get('is_present') == "true" else False
         
         label = request.form.get('label')
+
+        shape = request.form.get('shape')
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
         max_order_button = Button.query.order_by(Button.order.desc()).first()
@@ -1736,6 +1738,7 @@ def add_new_button():
             is_parent=is_parent,
             activity=activity,
             label=label,
+            shape=shape,
             parent_button=parent_button,
             is_present=is_present,
             order=order
@@ -2081,8 +2084,11 @@ def patients_front_page():
 def patient_right_page():
     buttons = Button.query.order_by(Button.order).filter_by(is_present = True, parent_button_id = None).all()
     print("BUTTONS", buttons)
+    max_length = 2 if buttons[0].shape == "square" else 4
+    print("MAX_LENGTH", max_length)
     return render_template('patient/patient_buttons_left.html', 
                             buttons=buttons,
+                            max_length=max_length,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 
@@ -2117,14 +2123,20 @@ def display_default_children_text():
     return render_template('patient/patient_default_subtitle.html',
                             page_patient_subtitle=page_patient_subtitle)    
 
+@app.route("/patients/cancel_children")
+def cancel_children():
+    return patients_front_page()
 
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
     children_buttons = Button.query.order_by(Button.order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
     print("children_buttons", children_buttons)
+    max_length = 2 if children_buttons[0].shape == "square" else 4
     return render_template('patient/patient_buttons_left.html', 
                             buttons=children_buttons,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+                            max_length=max_length,
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
+                            children=True)
 
 
 # affiche la page de validation pour page gauche et droite

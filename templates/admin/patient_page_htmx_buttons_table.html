@@ -2,7 +2,8 @@
     <thead>
         <tr>
             <th>Intitulé</th>
-            <th>Présence</th>            
+            <th>Présence</th>
+            <th>Forme</th>            
             <th>Activité</th>
             <th>Dépendance</th>
             <th>Actions</th>
@@ -21,6 +22,20 @@
                     <span></span>
                     </label>
                 </p>
+            </td>
+
+            <td>
+                <div class="input-field">
+                    <select id="shape-{{ button.id }}">
+                        <option value="" disabled selected>Forme du bouton</option>
+                        <option value="circle" 
+                            {{ 'selected' if button.shape == "circle" else '' }}>Cercle
+                        </option>
+                        <option value="square" 
+                            {{ 'selected' if button.shape == "square" else '' }}>Rectangle
+                        </option>
+                    </select>
+                </div>
             </td>
             
             <td>
@@ -57,6 +72,7 @@
                     hx-post="/admin/patient/button_update/{{ button.id }}"
                     hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value,
                             "is_present": document.getElementById("is_present-{{ button.id }}").checked,
+                            "shape": document.getElementById("shape-{{ button.id }}").value,
                             "activity": document.getElementById("activity-{{ button.id }}").value,
                             "parent_btn": document.getElementById("parent-{{ button.id }}").value, 
                             }'>
