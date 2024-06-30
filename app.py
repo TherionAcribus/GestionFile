@@ -1845,6 +1845,7 @@ def print_ticket_test():
     text = "12345678901234567890123456789012345678901234567890"
     print(text)
     communication("update_patient_app", data={"type": "print", "message": text})
+    return "", 204
 
 
 # -------- fin de ADMIN -> Page patient  ---------
@@ -2176,7 +2177,9 @@ def left_page_validate_patient(activity):
 def print_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
+    print("new_patient", new_patient)
     text = format_ticket_text(new_patient)
+    print("text", text)
     communication("update_patient_app", data={"type": "print", "message": text})
     return patient_conclusion_page(new_patient)
 
@@ -2211,11 +2214,13 @@ def patient_conclusion_page(patient):
 
 
 def format_ticket_text(new_patient):
+    print("ticket_text", new_patient)
     text_list = [
         app.config['TICKET_HEADER_PRINTER'],
         app.config['TICKET_MESSAGE_PRINTER'],
         app.config['TICKET_FOOTER_PRINTER']
     ]
+    print("text_list", text_list)
     combined_text = "\n".join(text_list)
     combined_text = replace_balise_phone(combined_text, new_patient)
     formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
@@ -2884,7 +2889,9 @@ def communication(stream, data=None, client_id = None, audio_source=None):
             client.put(json.dumps(data))
     elif stream == "update_patient_app":
         print("update patient app", data)
+        print("liste", update_patient_app)
         for client in update_patient_app:
+            print("update patient app 1", client)
             client.put(json.dumps(data))
     elif stream == "update_admin":
         for client in update_admin:
