@@ -48,37 +48,48 @@
     var timerGauge = document.getElementById('timer_gauge');
     var prolongBtn = document.getElementById('prolong_btn');
     var timerDuration = {{page_patient_end_timer}}; // seconds
-    var timer;
+    var startTime;
+    var remainingTime = timerDuration * 1000; // Convert to milliseconds
+    var animationFrame;
+
+    function updateTimerGauge() {
+        var currentTime = Date.now();
+        var elapsedTime = currentTime - startTime;
+        var newRemainingTime = remainingTime - elapsedTime;
+
+        if (newRemainingTime <= 0) {
+            timerGauge.style.width = '0%';
+            cancelAnimationFrame(animationFrame);
+            goToCancelPatient();
+        } else {
+            var widthPercent = (newRemainingTime / (timerDuration * 1000)) * 100;
+            timerGauge.style.width = widthPercent + '%';
+            animationFrame = requestAnimationFrame(updateTimerGauge);
+        }
+    }
 
     function startTimer() {
-        var startTime = Date.now();
-        clearInterval(timer);
-        timer = setInterval(function() {
-            var elapsedTime = (Date.now() - startTime) / 1000;
-            var remainingTime = timerDuration - elapsedTime;
-            var widthPercent = (remainingTime / timerDuration) * 100;
-            timerGauge.style.width = widthPercent + '%';
-
-            if (remainingTime <= 0) {
-                clearInterval(timer);
-                goToCancelPatient();
-            }
-        }, 1000);
+        startTime = Date.now();
+        animationFrame = requestAnimationFrame(updateTimerGauge);
     }
 
     function resetTimer() {
-        startTimer();
+        remainingTime = timerDuration * 1000; // Reset remaining time
+        startTime = Date.now();
+        cancelAnimationFrame(animationFrame);
+        updateTimerGauge();
     }
 
     function goToCancelPatient() {
-                htmx.ajax('GET', '/patient/cancel_patient', {
-                    target: '#div_buttons_parents'
-                });
-            }
+        htmx.ajax('GET', '/patient/cancel_patient', {
+            target: '#div_buttons_parents'
+        });
+    }
 
     prolongBtn.addEventListener('click', function() {
         resetTimer();
     });
 
+    // Ensure timer starts immediately without delay
     startTimer();
 </script>

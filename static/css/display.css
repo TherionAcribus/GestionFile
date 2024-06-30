@@ -10,7 +10,7 @@ html, body {
 }
 
 #div_title_area {
-    height: 15%;
+    height: 17%;
     text-align: center;
     font-size: 50px;
     font-weight: bold;
@@ -19,7 +19,7 @@ html, body {
 }
 
 #div_center{
-    height: 85%;
+    height: 83%;
     display: grid;
     grid-template-columns: 1fr 1fr; /* Deux colonnes de taille égale */
     background-color: rgb(182, 245, 245);
@@ -32,10 +32,10 @@ html, body {
 
 
 #div_pub{
-    background-color: rgb(255, 255, 255);
+    background-color: rgb(182, 245, 245);
 }
 
-#text_title {
+#text_title, #text_subtitle{
     text-align: center;
     margin: auto;
     font-size: 50px;
@@ -43,19 +43,20 @@ html, body {
     color: white; 
     -webkit-text-stroke-color: #000000;
     -webkit-text-stroke-width: 2px;
-    margin-top: 0;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    margin-top: 0px;
+    padding-top: 0px;
+    padding-bottom: 0px;
 }
+
 
 .text_patient_calling, .text_patient_ongoing {
     text-align: center;
     margin: auto;
-    font-size: 30px;
+    font-size: 50px;
     font-weight: 900;
     color: white; 
     -webkit-text-stroke-color: #000000;
-    -webkit-text-stroke-width: 1px;
+    -webkit-text-stroke-width: 2px;
     margin-top: 0;
     padding-top: 10px;
     padding-bottom: 10px;

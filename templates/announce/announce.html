@@ -23,8 +23,8 @@
         <audio id="player" src="" hidden></audio>
 
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-            <h1 onclick="initializeAudio()" id="text_title">{{announce_title}}</h1>
-            <h3 id="text_subtitle">{{announce_subtitle}}</h3>
+            <p id="text_title" onclick="initializeAudio()" id="text_title">{{announce_title}}</p>
+            <p id="text_subtitle">{{announce_subtitle}}</p>
         </div>
 
         <div id="div_center">

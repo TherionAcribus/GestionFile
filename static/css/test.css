@@ -83,6 +83,16 @@ html, body {
     align-items: center;
 }
 
+.div_square_buttons:hover {
+    box-shadow: 0px 0px 0px #888888;
+    scale: 0.95;
+}
+
+.div_circle_buttons:hover {
+    box-shadow: 0px 0px 0px #888888;
+    scale: 0.95;
+}
+
 .grid_square_buttons {
     display: grid;
     grid-template-columns: 120px auto; /* La première colonne fait 120px, la seconde prend le reste */
