@@ -2869,7 +2869,9 @@ def communication(stream, data=None, client_id=None, audio_source=None):
         for client in update_page_patient:
             client.put(json.dumps(data))
     elif stream == "update_patient_app":
+        app.logger.debug(f"update_patient_app: {data} - {update_patient_app}")
         for client in update_patient_app:
+            app.logger.debug(f"client {client}")
             client.put(json.dumps(data))
     elif stream == "update_admin":
         for client in update_admin:
