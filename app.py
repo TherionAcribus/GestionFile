@@ -2768,20 +2768,28 @@ update_patient_pyside = []
 update_patient_app = []
 update_screen_app = []
 
+def add_client(clients_list):
+    client = Queue()
+    clients_list.append(client)
+    app.logger.debug(f"Added new client. Total clients: {len(clients_list)}")
+    return client
+
+def remove_client(clients_list, client):
+    clients_list.remove(client)
+    app.logger.debug(f"Removed client. Total clients: {len(clients_list)}")
 
 def event_stream(clients):
-    while True:
-        client = Queue()
-        clients.append(client)
-        try:
-            while True:
-                message = client.get()
-                print("message", message)
-                yield f'data: {message}\n\n'
-        except GeneratorExit:
-            clients.remove(client)
-    
-
+    client = add_client(clients)
+    try:
+        while True:
+            message = client.get(timeout=30)  # Use timeout to avoid blocking indefinitely
+            app.logger.debug(f"Sending message: {message}")
+            yield f'data: {message}\n\n'
+    except Empty:
+        yield 'data: no-message\n\n'
+    except GeneratorExit:
+        app.logger.debug("Client disconnected, removing client.")
+        remove_client(clients, client)
 
 def event_stream_dict(client_id):
     app.logger.debug("start event event_stream_dict")
@@ -2790,108 +2798,78 @@ def event_stream_dict(client_id):
         while True:
             try:
                 message = client_queue.get(timeout=30)
-                print("message test", message)
+                app.logger.debug(f"message test: {message}")
                 yield f'data: {message}\n\n'
-                app.logger.debug("close event event_stream_dict")
             except Empty:
                 yield 'data: no-message\n\n'
-                app.logger.debug("close event event_stream_dict")
+                app.logger.debug("No message for client.")
     except GeneratorExit:
-        print("Generator exit, client disconnected")
-        app.logger.debug("close event event_stream_dict")
+        app.logger.debug("Generator exit, client disconnected")
     finally:
         counter_streams.pop(client_id, None)
-        print("Stream closed for client", client_id)
-        app.logger.debug("close event event_stream_dict")
-
+        app.logger.debug(f"Stream closed for client {client_id}")
 
 @app.route('/events/update_patients')
 def events_update_patients():
     return Response(event_stream(update_patients), content_type='text/event-stream')
 
-
-# pour mettre à jour l'App patient (impressions)
 @app.route('/events/update_patient_app')
 def events_update_patients_app():
     return Response(event_stream(update_patient_app), content_type='text/event-stream')
 
-
-# pour mettre à jour l'App screen (sons)
 @app.route('/events/update_screen_app')
 def events_update_screen_app():
     return Response(event_stream(update_screen_app), content_type='text/event-stream')
-
 
 @app.route('/events/sound_calling')
 def events_update_sound_calling():
     return Response(event_stream(play_sound_streams), content_type='text/event-stream')
 
-
 @app.route('/events/update_counter/<int:client_id>')
 def events_update_counter(client_id):
-    global counter_streams
-    print("counter id", client_id)
     if client_id not in counter_streams:
         counter_streams[client_id] = Queue()  # Crée une nouvelle Queue si elle n'existe pas
-    print("counter streams", counter_streams)
     return Response(event_stream_dict(client_id), content_type='text/event-stream')
-
 
 @app.route('/events/update_admin')
 def events_update_admin():
     return Response(event_stream(update_admin), content_type='text/event-stream')
 
-
 @app.route('/events/update_announce')
 def events_update_announce():
     return Response(event_stream(update_announce), content_type='text/event-stream')
 
-
 @app.route('/events/update_page_patient')
 def events_update_page_patients():
-    print("update_page_patient!!!!")
     return Response(event_stream(update_page_patient), content_type='text/event-stream')
-
 
 @app.route('/events/update_patient_pyside')
 def events_update_patient_pyside():
     return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
 
-
-def communication(stream, data=None, client_id = None, audio_source=None):
+def communication(stream, data=None, client_id=None, audio_source=None):
     """ Effectue la communication avec les clients """
     message = {"type": stream, "data": ""}
     
-    # SSE
     if stream == "update_patients":
         for client in update_patients:
             client.put(message)
         for client in update_patient_pyside:
             patients = create_patients_list_for_pyside()
             client.put(json.dumps({"type": "patient", "list": patients}))
-            app.logger.info("data", data)
-            if data:
-                if data["type"] == "notification_new_patient":
-                    client.put(json.dumps(data))
-            app.logger.info("apres")
+            if data and data["type"] == "notification_new_patient":
+                client.put(json.dumps(data))
     elif stream == "update_counter_pyside":
         for client in update_patient_pyside:
-            print("up:!!!!", data)
             client.put(json.dumps(data))
     elif stream == "update_announce":
         for client in update_announce:
-            print("update announce", client)
             client.put(message)
     elif stream == "update_page_patient":
-        print("update page patient", data, update_page_patient)
         for client in update_page_patient:
-            print("update page patient", client)
             client.put(json.dumps(data))
     elif stream == "update_patient_app":
-        print("update patient app", data)
-        print("liste", update_patient_app)
         for client in update_patient_app:
-            print("update patient app 1", client)
             client.put(json.dumps(data))
     elif stream == "update_admin":
         for client in update_admin:
@@ -2900,7 +2878,6 @@ def communication(stream, data=None, client_id = None, audio_source=None):
         if client_id in counter_streams:
             counter_streams[client_id].put(message)
     elif stream == "update_audio":
-        # on envoie le son soit vers Pyside (app) soit vers le navigateur (web)
         if app.config["ANNOUNCE_ALERT"]:
             signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
             audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
@@ -2918,8 +2895,6 @@ def communication(stream, data=None, client_id = None, audio_source=None):
         else:
             for client in update_screen_app:
                 client.put(json.dumps(message))
-        
-
 
 def create_patients_list_for_pyside():
     patients = Patient.query.filter_by(status="standing").all()
