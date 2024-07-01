@@ -29,7 +29,7 @@ import logging
 import subprocess
 import threading
 import socket
-
+import pika
 
 from flask_debugtoolbar import DebugToolbarExtension
 
@@ -60,6 +60,18 @@ app.debug = True
 
 #app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
 #toolbar = DebugToolbarExtension(app)
+
+
+@app.route('/send')
+def send_message():
+    url = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/')
+    params = pika.URLParameters(url)
+    connection = pika.BlockingConnection(params)
+    channel = connection.channel()
+    channel.queue_declare(queue='hello')
+    channel.basic_publish(exchange='', routing_key='hello', body='Hello World!')
+    connection.close()
+    return jsonify({"message": "Message sent to RabbitMQ!"})
 
 
 # Configuration de la base de données avec session scoped
