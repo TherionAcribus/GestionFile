@@ -62,24 +62,28 @@ app.debug = True
 #toolbar = DebugToolbarExtension(app)
 
 
-@app.route('/send')
 def send_message():
     url = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
     params = pika.URLParameters(url)
     
+    app.logger.info(f"Connecting to RabbitMQ at {url}")
+    
     # Ajoutez une boucle pour réessayer la connexion à RabbitMQ
-    for _ in range(5):  # Réessayez 5 fois
+    for attempt in range(5):  # Réessayez 5 fois
         try:
+            app.logger.info(f"Attempt {attempt + 1} to connect to RabbitMQ")
             connection = pika.BlockingConnection(params)
             channel = connection.channel()
             channel.queue_declare(queue='hello')
             channel.basic_publish(exchange='', routing_key='hello', body='Hello World!')
             connection.close()
+            app.logger.info("Message sent to RabbitMQ")
             return jsonify({"message": "Message sent to RabbitMQ!"})
         except pika.exceptions.AMQPConnectionError as e:
-            print(f"Connection failed, retrying in 5 seconds... {e}")
+            app.logger.error(f"Connection failed, retrying in 5 seconds... {e}")
             time.sleep(5)  # Attendez 5 secondes avant de réessayer
 
+    app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
     return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
 
 
