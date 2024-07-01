@@ -21,4 +21,4 @@ COPY wait-for-it.sh /wait-for-it.sh
 RUN chmod +x /wait-for-it.sh
 
 # Commande pour exécuter l'application
-CMD ["/wait-for-it.sh", "rabbitmq:5672", "--", "python", "app.py"]
+CMD ["sh", "-c", "python test_connectivity.py && python app.py"]
