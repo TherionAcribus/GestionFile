@@ -86,10 +86,9 @@ def send_message():
     app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
     return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
 
-@app.route('/rabbitmq-status')
+@app.route('/test')
 def rabbitmq_status():
-    url = os.environ.get('RABBITMQ_URL')
-    app.logger.debug(f"Connecting to RabbitMQ at {url}")
+    url = 'amqp://guest:guest@rabbitmq-7yig.onrender.com:5672/'
     params = pika.URLParameters(url)
     
     try:
