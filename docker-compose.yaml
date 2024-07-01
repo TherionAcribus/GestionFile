@@ -12,7 +12,7 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
   
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:latest
     hostname: rabbitmq
     ports:
       - "5672:5672"
