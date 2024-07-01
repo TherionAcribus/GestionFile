@@ -88,7 +88,7 @@ def send_message():
 
 @app.route('/rabbitmq-status')
 def rabbitmq_status():
-    url = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
+    url = os.environ.get('RABBITMQ_URL')
     params = pika.URLParameters(url)
     
     try:
@@ -97,7 +97,6 @@ def rabbitmq_status():
         return jsonify({"status": "RabbitMQ is running"})
     except Exception as e:
         return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
-
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])

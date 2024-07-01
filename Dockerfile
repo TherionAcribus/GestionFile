@@ -11,11 +11,8 @@ RUN pip install -r requirements.txt
 # Copiez le reste de l'application
 COPY . .
 
-# Ajouter un message spécifique pour vérifier que Docker est utilisé
-RUN echo "Building Docker Image"
-
 # Exposez le port sur lequel l'application Flask s'exécute
 EXPOSE 5000
 
-# Commande pour exécuter les scripts de test et l'application Flask
-CMD ["sh", "-c", "python app.py"]
+# Commande pour exécuter l'application Flask
+CMD ["python", "app.py"]
