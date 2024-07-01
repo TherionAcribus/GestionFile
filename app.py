@@ -89,6 +89,7 @@ def send_message():
 @app.route('/rabbitmq-status')
 def rabbitmq_status():
     url = os.environ.get('RABBITMQ_URL')
+    app.logger.debug(f"Connecting to RabbitMQ at {url}")
     params = pika.URLParameters(url)
     
     try:
