@@ -6,8 +6,7 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      - rabbitmq
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
   
@@ -16,7 +15,9 @@ services:
     hostname: rabbitmq
     ports:
       - "5672:5672"
+      - "15672:15672"
     logging:
+      driver: "json-file"
       options:
         max-size: "200k"
         max-file: "10"

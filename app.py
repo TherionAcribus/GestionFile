@@ -86,14 +86,17 @@ def send_message():
     app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
     return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
 
-@app.route('/rabbitmq-logs')
-def rabbitmq_logs():
+@app.route('/rabbitmq-status')
+def rabbitmq_status():
+    url = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
+    params = pika.URLParameters(url)
+    
     try:
-        with open('/var/log/rabbitmq/rabbit@rabbitmq.log', 'r') as log_file:
-            logs = log_file.readlines()
-        return jsonify({"logs": logs[-50:]})  # Affiche les 50 dernières lignes
+        connection = pika.BlockingConnection(params)
+        connection.close()
+        return jsonify({"status": "RabbitMQ is running"})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
 
 
 # Configuration de la base de données avec session scoped
