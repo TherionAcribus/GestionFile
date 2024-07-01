@@ -8,6 +8,7 @@ def test_connection():
     
     for attempt in range(5):
         try:
+            print(f"Attempt {attempt + 1} to connect to RabbitMQ at {url}")
             connection = pika.BlockingConnection(params)
             channel = connection.channel()
             channel.queue_declare(queue='test')
