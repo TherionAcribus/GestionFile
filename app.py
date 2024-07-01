@@ -61,7 +61,7 @@ app.debug = True
 #app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
 #toolbar = DebugToolbarExtension(app)
 
-
+@app.route('/send')
 def send_message():
     url = os.environ.get('RABBITMQ_URL', 'amqp://guest:guest@rabbitmq:5672/')
     params = pika.URLParameters(url)
