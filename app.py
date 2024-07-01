@@ -69,7 +69,7 @@ def send_message():
     app.logger.info(f"Connecting to RabbitMQ at {url}")
     
     # Ajoutez une boucle pour réessayer la connexion à RabbitMQ
-    for attempt in range(5):  # Réessayez 5 fois
+    for attempt in range(5):  # Réessayez 5 fois 
         try:
             app.logger.info(f"Attempt {attempt + 1} to connect to RabbitMQ")
             connection = pika.BlockingConnection(params)

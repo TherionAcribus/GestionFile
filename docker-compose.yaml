@@ -6,11 +6,10 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-    networks:
-      - app-network
   
   rabbitmq:
     image: rabbitmq:3-management
@@ -18,9 +17,8 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmqctl status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
