@@ -6,7 +6,8 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
   
@@ -16,8 +17,19 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - ./test_rabbitmq.sh:/usr/local/bin/test_rabbitmq.sh
+    command: ["sh", "/usr/local/bin/test_rabbitmq.sh"]
     logging:
       driver: "json-file"
       options:
         max-size: "200k"
         max-file: "10"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmqctl status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
