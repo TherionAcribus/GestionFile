@@ -6,6 +6,6 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq-7yig.onrender.com:5672/
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq-7yig:5672/
     command: >
       sh -c "sleep 30 && python app.py"
