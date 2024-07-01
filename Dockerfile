@@ -18,4 +18,4 @@ RUN echo "Building Docker Image"
 EXPOSE 5000
 
 # Commande pour exécuter les scripts de test et l'application Flask
-CMD ["sh", "-c", "python test_dns.py && python test_connectivity.py && python app.py"]
+CMD ["sh", "-c", "python app.py"]

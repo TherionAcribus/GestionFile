@@ -86,6 +86,15 @@ def send_message():
     app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
     return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
 
+@app.route('/rabbitmq-logs')
+def rabbitmq_logs():
+    try:
+        with open('/var/log/rabbitmq/rabbit@rabbitmq.log', 'r') as log_file:
+            logs = log_file.readlines()
+        return jsonify({"logs": logs[-50:]})  # Affiche les 50 dernières lignes
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
