@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Se
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date, time
-from flask_babel import Babel
+#from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
 from flask_apscheduler import APScheduler
@@ -93,7 +93,7 @@ def remove_session(ex=None):
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
-babel = Babel(app)
+#babel = Babel(app)
 
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
@@ -355,14 +355,14 @@ def allowed_image_file(filename):
 
 def get_locale():
     return session.get('lang', request.accept_languages.best_match(['en', 'fr']))
-babel.init_app(app, locale_selector=get_locale)
+#babel.init_app(app, locale_selector=get_locale)
 
 
 @app.before_request
 def set_locale():
     from flask import request
     user_language = request.cookies.get('lang', 'fr')  # Exemple: lire la langue depuis un cookie
-    request.babel_locale = user_language
+    #request.babel_locale = user_language
 
 
 # permet d'avoir le contexte de l'App pour le Scheduler. A utiliser comme décorateur
