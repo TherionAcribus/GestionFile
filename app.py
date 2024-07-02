@@ -36,6 +36,11 @@ from flask_debugtoolbar import DebugToolbarExtension
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 
+# adresse production
+rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
+# adresse developement
+#rabbitMQ_url = 'amqp://guest:guest@127.0.0.1:5672/%2F'
+
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -48,23 +53,50 @@ class Config:
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
 
-   
+
 
 # A CHANGER POUR ADRESSE DYNAMIQUE
 adresse = "http://localhost:5000"
 
 app = Flask(__name__)
+socketio = SocketIO(app, async_mode='eventlet',cors_allowed_origins="*")
 app.config.from_object(Config())
 app.debug = True
+
+
+def callback(ch, method, properties, body):
+    logging.debug(f"Received message: {body}")
+    socketio.emit('new_message', {'data': body.decode()})
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+def consume_rabbitmq(connection, channel):
+    channel.queue_declare(queue='test_queue')
+    channel.basic_consume(queue='test_queue', on_message_callback=callback, auto_ack=False)
+    logging.info("Starting RabbitMQ consumption")
+    while True:
+        connection.process_data_events(time_limit=None)
+
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    message = request.json.get('message', 'Hello from server')
+    try:
+        socketio.emit('new_message', {'data': message})
+        return "Message sent!"
+    except Exception as e:
+        return f"Failed to send message: {e}", 500
+
+#threading.Thread(target=consume_rabbitmq).start()
+#socketio.run(app, host='0.0.0.0', port=5001)
+
 #socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
 
 #app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
 #toolbar = DebugToolbarExtension(app)
 
+
 @app.route('/send')
-def send_message():
-    url = os.environ.get('RABBITMQ_URL', 'amqp://:guest@rabbitmq:5672/')
-    url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
+def send_message_old():
+    url = rabbitMQ_url
     params = pika.URLParameters(url)
     
     app.logger.info(f"Connecting to RabbitMQ at {url}")
@@ -89,7 +121,7 @@ def send_message():
 
 @app.route('/test')
 def rabbitmq_status():
-    url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
+    url = rabbitMQ_url
     params = pika.URLParameters(url)
     
     try:
@@ -104,6 +136,19 @@ engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 db_session = scoped_session(sessionmaker(autocommit=False,
                                         autoflush=False,
                                         bind=engine))
+
+@app.route('/test_local')
+def rabbitmq_status_local():
+    rabbitmq_url = 'amqp://guest:guest@127.0.0.1:5672'
+    params = pika.URLParameters(rabbitmq_url)
+
+    try:
+        connection = pika.BlockingConnection(params)
+        print("Successfully connected to RabbitMQ (local)")
+        connection.close()
+    except Exception as e:
+        print(f"Failed to connect to RabbitMQ (local): {e}")
+    return "", 204
 
 # Gestion du scheduler / CRON
 # Configuration du Scheduler
@@ -3207,6 +3252,12 @@ with app.app_context():
 
 
 if __name__ == "__main__":
+
+    print("Starting RabbitMQ...", rabbitMQ_url)
+    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitMQ_url))
+    channel = connection.channel()
+    threading.Thread(target=consume_rabbitmq, args=(connection, channel), daemon=True).start()
+    socketio.run(app, host='0.0.0.0', port=5000)
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))

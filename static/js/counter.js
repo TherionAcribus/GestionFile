@@ -3,6 +3,55 @@ const counter_id = document.getElementById('counter_id').textContent;
 var eventSource = new EventSource('/events/update_patients');
 var eventSourceforCounter = new EventSource(`/events/update_counter/${counter_id}`);
 
+var socket;
+
+document.addEventListener('DOMContentLoaded', (event) => {
+    socket = io.connect('http://' + document.domain + ':5000');
+
+    socket.on('connect', function() {
+        console.log('WebSocket connected');
+    });
+
+    socket.on('disconnect', function() {
+        console.log('WebSocket disconnected');
+    });
+
+    socket.on('new_message', function(msg) {
+        console.log("Received message:", msg.data);
+        var messages = document.getElementById('messages');
+        if (messages) {
+            var message = document.createElement('div');
+            message.textContent = msg.data;
+            messages.appendChild(message);
+        } else {
+            console.error('Element with ID "messages" not found');
+        }
+    });
+
+    socket.on('connect_error', function(err) {
+        console.error('WebSocket connection error:', err);
+    });
+
+    socket.on('reconnect', function(attempt) {
+        console.log('WebSocket reconnected after', attempt, 'attempts');
+    });
+
+    socket.on('reconnect_attempt', function(attempt) {
+        console.log('WebSocket reconnect attempt', attempt);
+    });
+});
+
+function sendMessage() {
+    fetch('/send_message', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({message: 'Hello from client'}),
+    }).then(response => response.text())
+      .then(data => console.log("Message sent:", data))
+      .catch(error => console.error('Error:', error));
+}
 
 eventSourceforCounter.onmessage = function(event) {
     console.log("Refresh :", event.data);
@@ -11,8 +60,9 @@ eventSourceforCounter.onmessage = function(event) {
 };
 
 
+
 eventSource.onmessage = function(event) {
-    htmx.trigger('#patient_on_queue', 'refresh_queue', {target: "#patient_on_queue"});
+    //htmx.trigger('#patient_on_queue', 'refresh_queue', {target: "#patient_on_queue"});
 };
 
 
