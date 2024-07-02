@@ -30,6 +30,7 @@ import subprocess
 import threading
 import socket
 import pika
+from flask_talisman import Talisman
 
 from flask_debugtoolbar import DebugToolbarExtension
 
@@ -64,6 +65,7 @@ class Config:
 adresse = "http://localhost:5000"
 
 app = Flask(__name__)
+Talisman(app)
 socketio = SocketIO(app, async_mode='eventlet',cors_allowed_origins="*")
 app.config.from_object(Config())
 app.debug = True
