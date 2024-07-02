@@ -24,6 +24,22 @@
 
             </div>
     
+            <div id="div_frame_buttons" class="framed col">
+
+                <div 
+                    id="div_current_patient" 
+                    class="center-align"
+                    hx-trigger="refresh_current_patient, load" 
+                    hx-get="/current_patient_for_counter/{{ counter.id }}" 
+                    hx-swap="innerHTML">
+                </div>
+
+                <div id="button_section" class="row s12 center-align" 
+                hx-trigger="load, refresh_buttons" 
+                hx-get="https://gestionfile.onrender.com/counter/buttons/{{ counter.id }}" 
+                hx-swap="innerHTML">
+           </div>
+
             <div id="div_counter_infos" class="s6">
                 <div id="div_frame_staff" class="framed">
                     <div id="div_counter_number" class="center-align">
