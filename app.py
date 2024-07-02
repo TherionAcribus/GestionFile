@@ -98,7 +98,8 @@ csp = {
     ],
     'connect-src': [
         '\'self\'',
-        'https://gestionfile.onrender.com'
+        'https://gestionfile.onrender.com',
+        'http://gestionfile.onrender.com'
     ]
 }
 
