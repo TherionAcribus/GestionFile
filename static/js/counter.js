@@ -6,7 +6,9 @@ var eventSourceforCounter = new EventSource(`/events/update_counter/${counter_id
 var socket;
 
 document.addEventListener('DOMContentLoaded', (event) => {
-    socket = io.connect('http://' + document.domain + ':5000');
+    var protocol = window.location.protocol;
+    var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
+    socket = io.connect(socketProtocol + document.domain + ':5000');
 
     socket.on('connect', function() {
         console.log('WebSocket connected');
