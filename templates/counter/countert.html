@@ -34,7 +34,11 @@
                     hx-swap="innerHTML">
                 </div>
 
-
+                <div id="button_section" class="row s12 center-align" 
+                    hx-trigger="load, refresh_buttons" 
+                    hx-get="/counter/buttons/{{ counter.id }}" 
+                    hx-swap="innerHTML">
+                </div>
 
             <div id="div_counter_infos" class="s6">
                 <div id="div_frame_staff" class="framed">
