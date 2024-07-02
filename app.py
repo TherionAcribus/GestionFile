@@ -2536,10 +2536,15 @@ def current_patient_for_counter_test(counter_id):
     """ Affiche le patient en cours de traitement pour un comptoir """
     print('counter_number', counter_id)
     patient = Patient.query.filter(
-        Patient.counter_id == counter_id,
-        Patient.status != 'done'
+        Patient.counter_id == counter_id, 
+        Patient.status != "done"
     ).first()
-    print("CURRENT", patient)
+    if not patient:
+        patient_id = None
+        patient_status = None
+    else :
+        patient_id = patient.id
+        patient_status = patient.status
     return render_template('counter/current_patient_for_counter.html', patient=patient)
 
 
