@@ -8,7 +8,7 @@ var socket;
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
     var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
-    socket = io.connect(socketProtocol + document.domain + ':5000');
+    socket = io.connect(socketProtocol + document.domain + ':' + (protocol === 'https:' ? '443' : '5000'));
 
     socket.on('connect', function() {
         console.log('WebSocket connected');
@@ -44,7 +44,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 function sendMessage() {
-    fetch('/send_message', {
+    const url = window.location.protocol + '//' + window.location.host + '/send_message';
+    fetch(url, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

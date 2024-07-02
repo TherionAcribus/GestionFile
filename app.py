@@ -3258,6 +3258,9 @@ with app.app_context():
 
 if __name__ == "__main__":
 
+    context = ('path/to/your/cert.pem', 'path/to/your/key.pem')
+    socketio.run(app, host='0.0.0.0', port=5000, ssl_context=context)
+
     print("Starting RabbitMQ...", rabbitMQ_url)
     connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
