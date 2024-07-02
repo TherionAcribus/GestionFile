@@ -2550,7 +2550,7 @@ def current_patient_for_counter_test(counter_id):
 
 
 
-@app.route('/counter/buttons/<int:counter_id>/')
+@app.route('/counter_buttons/<int:counter_id>/')
 def counter_refresh_buttons(counter_id):
     print('BUTTONS', counter_id)
     patient = Patient.query.filter(
