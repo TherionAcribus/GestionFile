@@ -37,11 +37,15 @@ from bdd import init_update_default_buttons_db_from_json, init_default_options_d
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 
 # adresse production
-rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672/%2F'
+rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
-#rabbitMQ_url = 'amqp://guest:guest@127.0.0.1:5672/%2F'
-rabbitMQ_url = 'localhost'
+rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
+credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
+parameters = pika.ConnectionParameters('rabbitmq-7yig',
+                                   5672,
+                                   '/',
+                                   credentials)
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -3255,7 +3259,7 @@ with app.app_context():
 if __name__ == "__main__":
 
     print("Starting RabbitMQ...", rabbitMQ_url)
-    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitMQ_url))
+    connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
     threading.Thread(target=consume_rabbitmq, args=(connection, channel), daemon=True).start()
     socketio.run(app, host='0.0.0.0', port=5000)
