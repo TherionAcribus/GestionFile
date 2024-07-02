@@ -37,7 +37,7 @@ from bdd import init_update_default_buttons_db_from_json, init_default_options_d
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 
 # adresse production
-rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
+rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672/%2F'
 # adresse developement
 #rabbitMQ_url = 'amqp://guest:guest@127.0.0.1:5672/%2F'
 
