@@ -77,12 +77,14 @@ csp = {
     ],
     'script-src': [
         '\'self\'',
+        '\'unsafe-inline\'',  # Permettre les scripts inline
         'https://cdn.jsdelivr.net',
         'https://unpkg.com',
         'https://cdn.socket.io'
     ],
     'style-src': [
         '\'self\'',
+        '\'unsafe-inline\'',  # Permettre les styles inline
         'https://cdn.jsdelivr.net',
         'https://fonts.googleapis.com'
     ],
