@@ -40,6 +40,7 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672/%2F'
 # adresse developement
 #rabbitMQ_url = 'amqp://guest:guest@127.0.0.1:5672/%2F'
+rabbitMQ_url = 'localhost'
 
 
 class Config:
