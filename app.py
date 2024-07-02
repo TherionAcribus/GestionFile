@@ -2545,7 +2545,7 @@ def current_patient_for_counter_test(counter_id):
     else :
         patient_id = patient.id
         patient_status = patient.status
-    return render_template('counter/current_patient_for_counter.html', patient=patient)
+    return render_template('counter/current_patient_for_counter_test.html', patient=patient)
 
 
 
