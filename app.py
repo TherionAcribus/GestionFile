@@ -2531,7 +2531,7 @@ def current_patient_for_counter(counter_id):
     return render_template('counter/current_patient_for_counter.html', patient=patient)
 
 
-@app.route('/current_patient_for_counter_test/<int:counter_id>')
+@app.route('/buttons_for_counter/<int:counter_id>')
 def current_patient_for_counter_test(counter_id):
     """ Affiche le patient en cours de traitement pour un comptoir """
     print('counter_number', counter_id)
@@ -2545,7 +2545,7 @@ def current_patient_for_counter_test(counter_id):
     else :
         patient_id = patient.id
         patient_status = patient.status
-    return render_template('counter/current_patient_for_counter_test.html', patient=patient, 
+    return render_template('counter/buttons_for_counter.html', patient=patient, 
                             patient_id=patient_id, counter_id=counter_id, patient_status = patient_status)
 
 
