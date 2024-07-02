@@ -65,7 +65,42 @@ class Config:
 adresse = "http://localhost:5000"
 
 app = Flask(__name__)
-Talisman(app)
+
+
+# Configuration CSP
+csp = {
+    'default-src': [
+        '\'self\'', 
+        'https://cdn.jsdelivr.net',
+        'https://fonts.googleapis.com',
+        'https://fonts.gstatic.com'
+    ],
+    'script-src': [
+        '\'self\'',
+        'https://cdn.jsdelivr.net',
+        'https://unpkg.com',
+        'https://cdn.socket.io'
+    ],
+    'style-src': [
+        '\'self\'',
+        'https://cdn.jsdelivr.net',
+        'https://fonts.googleapis.com'
+    ],
+    'img-src': [
+        '\'self\'',
+        'data:'
+    ],
+    'font-src': [
+        '\'self\'',
+        'https://fonts.gstatic.com'
+    ],
+    'connect-src': [
+        '\'self\'',
+        'https://gestionfile.onrender.com'
+    ]
+}
+
+Talisman(app, content_security_policy=csp)
 socketio = SocketIO(app, async_mode='eventlet',cors_allowed_origins="*")
 app.config.from_object(Config())
 app.debug = True
