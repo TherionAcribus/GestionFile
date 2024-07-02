@@ -103,7 +103,7 @@ csp = {
     ]
 }
 
-Talisman(app, content_security_policy=csp)
+#Talisman(app, content_security_policy=csp)
 socketio = SocketIO(app, async_mode='eventlet',cors_allowed_origins="*")
 app.config.from_object(Config())
 app.debug = True
