@@ -30,13 +30,13 @@
                     id="div_current_patient" 
                     class="center-align"
                     hx-trigger="refresh_current_patient, load" 
-                    hx-get="/current_patient_for_counter/{{ counter.id }}" 
+                    hx-get="https://gestionfile.onrender.com/current_patient_for_counter/{{ counter.id }}" 
                     hx-swap="innerHTML">
                 </div>
 
                 <div id="button_section" class="row s12 center-align" 
                     hx-trigger="load, refresh_buttons" 
-                    hx-get="/counter/buttons/{{ counter.id }}" 
+                    hx-get="https://gestionfile.onrender.com/counter/buttons/{{ counter.id }}" 
                     hx-swap="innerHTML">
                 </div>
 
@@ -47,7 +47,7 @@
                     </div>
                     
                     <div id="staff_on_counter" class=""
-                        hx-get="/counter/is_staff_on_counter/{{ counter.id }}"
+                        hx-get="https://gestionfile.onrender.com/counter/is_staff_on_counter/{{ counter.id }}"
                         hx-trigger="load, refresh_staff_on_counter"
                         hx-swap="innerHTML"
                         hx-target="#staff_on_counter"
