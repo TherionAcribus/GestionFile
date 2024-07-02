@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Comptoir {{ counter.name }}</title>
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@materializecss/materialize@2.1.0/dist/css/materialize.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="../static/css/counter.css">
+</head>
+<body>
+
+    <div id="div_main">
+
+        <div id="div_top" class="row">
+
+            <div id="div_buttons" class="s6 col">                
+
+                <div id="div_frame_buttons" class="framed col">
+
+
+                </div>
+
+            </div>
+    
+            <div id="div_counter_infos" class="s6">
+                <div id="div_frame_staff" class="framed">
+                    <div id="div_counter_number" class="center-align">
+                        Comptoir <span style ="display: none" id="counter_id">{{ counter.id }}</span>{{ counter.name }}
+                    </div>
+                    
+                    <div id="staff_on_counter" class=""
+                        hx-get="/counter/is_staff_on_counter/{{ counter.id }}"
+                        hx-trigger="load, refresh_staff_on_counter"
+                        hx-swap="innerHTML"
+                        hx-target="#staff_on_counter"
+                        >
+                        <!-- Staff +  form-->
+                    </div>
+                </div>        
+            </div>
+
+        </div>
+
+    </div>
+    
+
+    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/counter/patients_queue_for_counter/{{ counter.id }}" hx-swap="innerHTML">
+    </div>
+
+
+        <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+        <div id="invisible" style="display:none;"></div>
+        <div id="messages"></div>
+        <button onclick="sendMessage()">Send Message</button>
+
+    <script src="https://unpkg.com/htmx.org"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@materializecss/materialize@2.1.0/dist/js/materialize.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
+    <script src="../static/js/counter.js"></script>
+</body>
+</html>

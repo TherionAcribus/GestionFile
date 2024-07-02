@@ -2442,6 +2442,20 @@ def patient_refresh():
 
 # ---------------- PAGE COUNTER FRONT ----------------
 
+@app.route('/countert/<int:counter_id>')
+def counter_test(counter_id):
+
+    print("counter_number", counter_id)
+    counter = Counter.query.get(counter_id)
+    activities = Activity.query.all()
+    # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
+
+    if not counter:
+        return wrong_counter(counter_id)
+    return render_template('counter/countert.html', 
+                            counter=counter,
+                            activities=activities)
+
 #  On utilise l'ID dans l'URL pour éviter les erreurs (espace dans le nom...)
 @app.route('/counter/<int:counter_id>')
 def counter(counter_id):
