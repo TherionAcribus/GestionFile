@@ -42,11 +42,17 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
-parameters = pika.ConnectionParameters('rabbitmq-7yig',
-                                   5672,
-                                   '/',
-                                   credentials)
+site = "local"
+communication_mode = "websocket"
+
+if site == "production":
+    credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
+    parameters = pika.ConnectionParameters('rabbitmq-7yig',
+                                    5672,
+                                    '/',
+                                    credentials)
+else:
+    parameters = pika.URLParameters('amqp://guest:guest@localhost:5672/%2F')
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -67,43 +73,6 @@ adresse = "http://localhost:5000"
 app = Flask(__name__)
 
 
-# Configuration CSP
-csp = {
-    'default-src': [
-        '\'self\'', 
-        'https://cdn.jsdelivr.net',
-        'https://fonts.googleapis.com',
-        'https://fonts.gstatic.com'
-    ],
-    'script-src': [
-        '\'self\'',
-        '\'unsafe-inline\'',  # Permettre les scripts inline
-        'https://cdn.jsdelivr.net',
-        'https://unpkg.com',
-        'https://cdn.socket.io'
-    ],
-    'style-src': [
-        '\'self\'',
-        '\'unsafe-inline\'',  # Permettre les styles inline
-        'https://cdn.jsdelivr.net',
-        'https://fonts.googleapis.com'
-    ],
-    'img-src': [
-        '\'self\'',
-        'data:'
-    ],
-    'font-src': [
-        '\'self\'',
-        'https://fonts.gstatic.com'
-    ],
-    'connect-src': [
-        '\'self\'',
-        'https://gestionfile.onrender.com',
-        'http://gestionfile.onrender.com'
-    ]
-}
-
-#Talisman(app, content_security_policy=csp)
 socketio = SocketIO(app, async_mode='eventlet',cors_allowed_origins="*")
 app.config.from_object(Config())
 app.debug = True
@@ -164,6 +133,7 @@ def send_message_old():
     app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
     return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
 
+
 @app.route('/test')
 def rabbitmq_status():
     url = rabbitMQ_url
@@ -176,11 +146,13 @@ def rabbitmq_status():
     except Exception as e:
         return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
 
+
 # Configuration de la base de données avec session scoped
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 db_session = scoped_session(sessionmaker(autocommit=False,
                                         autoflush=False,
                                         bind=engine))
+
 
 @app.route('/test_local')
 def rabbitmq_status_local():
@@ -2166,10 +2138,13 @@ def call_specific_patient(counter_id, patient_id):
 @app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
 def validate_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
+    print("validation", patient_id)
     current_patient = Patient.query.get(patient_id)
     if current_patient:
         current_patient.status = 'ongoing'
         db.session.commit()
+
+    communikation("update_patients")
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2522,7 +2497,7 @@ def wrong_counter(counter_id):
 @app.route('/current_patient_for_counter/<int:counter_id>')
 def current_patient_for_counter(counter_id):
     """ Affiche le patient en cours de traitement pour un comptoir """
-    print('counter_number', counter_id)
+    print('counter_number ??', counter_id)
     patient = Patient.query.filter(
         Patient.counter_id == counter_id,
         Patient.status != 'done'
@@ -2546,10 +2521,10 @@ def current_patient_for_counter_test(counter_id):
         patient_id = patient.id
         patient_status = patient.status
     return render_template('counter/buttons_for_counter.html', patient=patient, 
-                            patient_id=patient_id, counter_id=counter_id, patient_status = patient_status)
+                            patient_id=patient_id, counter_id=counter_id, status = patient_status)
 
 
-
+# A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
 @app.route('/counter_buttons/<int:counter_id>/')
 def counter_refresh_buttons(counter_id):
     print('BUTTONS', counter_id)
@@ -2574,9 +2549,12 @@ def validate_and_call_next(counter_id):
     print('validate_and_call_next', counter_id)
 
     validate_current_patient(counter_id)
-
+    print('patient_valide')
     # TODO Prevoir que ne renvoie rien
     next_patient = call_next(counter_id)
+    print("prochain patient")
+
+    communikation("update_patients")
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2734,6 +2712,8 @@ def pause_patient(counter_id, patient_id):
         current_patient.status = 'done'
         db.session.commit()
     
+    communikation("update_patients")
+
     communication("update_patients")
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
 
@@ -2939,7 +2919,9 @@ def remove_client(clients_list, client):
     app.logger.debug(f"Removed client. Total clients: {len(clients_list)}")
 
 def event_stream(clients):
+    return None
     client = add_client(clients)
+    print("client", client)
     try:
         while True:
             message = client.get(timeout=30)  # Use timeout to avoid blocking indefinitely
@@ -2971,6 +2953,7 @@ def event_stream_dict(client_id):
 
 @app.route('/events/update_patients')
 def events_update_patients():
+    print("CONNECT3")
     return Response(event_stream(update_patients), content_type='text/event-stream')
 
 @app.route('/events/update_patient_app')
@@ -3007,8 +2990,39 @@ def events_update_page_patients():
 def events_update_patient_pyside():
     return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
 
+
+def communikation(stream, data=None, client_id=None):
+    """ Effectue la communication avec les clients """
+    print("communikation", communication_mode)
+    #if communication_mode == "websocket":
+    communication_websocket(stream="update_patients")
+
+
+def communication_websocket(stream, data=None, client_id=None):
+    print('communication_websocket')
+    
+    content_type = request.headers.get('Content-Type')
+    print('Content-Type:', content_type)
+    
+    if content_type == 'application/json':
+        message = request.json.get('message', 'patient_update')
+    elif content_type == 'application/x-www-form-urlencoded':
+        message = request.form.get('message', 'patient_update')
+    else:
+        return 'Unsupported Media Type', 415
+
+    try:
+        socketio.emit('update_patient', {'data': message})
+        print("message", message)
+        return "Message sent!"
+    except Exception as e:
+        print("message failed", message)
+        return f"Failed to send message: {e}", 500
+
+
 def communication(stream, data=None, client_id=None, audio_source=None):
     """ Effectue la communication avec les clients """
+    return None
     message = {"type": stream, "data": ""}
     
     if stream == "update_patients":

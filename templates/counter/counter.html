@@ -21,22 +21,17 @@
 
                     <div 
                         id="div_current_patient" 
-                        class="center-align"
+                        class="row s12 center-align" 
                         hx-trigger="refresh_current_patient, load" 
                         hx-get="/current_patient_for_counter/{{ counter.id }}" 
                         hx-swap="innerHTML">
                     </div>
 
-                <div id="button_section" class="row s12 center-align" 
-                    hx-trigger="load, refresh_buttons" 
-                    hx-get="/counter_buttons/{{ counter.id }}" 
-                    hx-swap="innerHTML">
-               </div>
 
                <div 
-               id="div_current_patient" 
+               id="button_section" 
                class="center-align"
-               hx-trigger="refresh_current_patient, load" 
+               hx-trigger="refresh_buttons, load" 
                hx-get="/counter/buttons_for_counter/{{ counter.id }}" 
                hx-swap="innerHTML">
            </div>
@@ -67,7 +62,10 @@
     </div>
     
 
-    <div id="patient_on_queue" hx-trigger="refresh_queue, load" hx-get="/counter/patients_queue_for_counter/{{ counter.id }}" hx-swap="innerHTML">
+    <div id="patient_on_queue" 
+        hx-trigger="refresh_queue, load" 
+        hx-get="/counter/patients_queue_for_counter/{{ counter.id }}" 
+        hx-swap="innerHTML">
     </div>
 
 <!-- Pour l'instant suspendu ....

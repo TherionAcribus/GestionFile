@@ -18,8 +18,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log('WebSocket disconnected');
     });
 
-    socket.on('new_message', function(msg) {
+    socket.on('update_patient', function(msg) {
         console.log("Received message:", msg.data);
+        htmx.trigger('#button_section', 'refresh_buttons', {target: "#button_section"});
+        htmx.trigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});
+        htmx.trigger("#patient_on_queue", 'refresh_queue', {target: "#patient_on_queue"});
         var messages = document.getElementById('messages');
         if (messages) {
             var message = document.createElement('div');
