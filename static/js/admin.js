@@ -1,11 +1,84 @@
+document.addEventListener('DOMContentLoaded', (event) => {
+    var protocol = window.location.protocol;
+    var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
+    var domain = document.domain;
+    var port = protocol === 'https:' ? '443' : '5000';
+    
+    // Connexion au namespace général
+    var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient');
+
+    generalSocket.on('connect', function() {
+        console.log('General WebSocket connected');
+    });
+
+    generalSocket.on('disconnect', function() {
+        console.log('General WebSocket disconnected');
+    });
+
+    generalSocket.on('update', function(msg) {
+        console.log("Received general message:", msg);
+        refresh_queue();
+    });
+
+    generalSocket.on('connect_error', function(err) {
+        console.error('General WebSocket connection error:', err);
+    });
+
+    generalSocket.on('reconnect', function(attempt) {
+        console.log('General WebSocket reconnected after', attempt, 'attempts');
+    });
+
+    generalSocket.on('reconnect_attempt', function(attempt) {
+        console.log('General WebSocket reconnect attempt', attempt);
+    });
+
+    generalSocket.onAny((event, ...args) => {
+        console.log(`General WebSocket Event: ${event}`, args);
+    });
+
+    // Connexion au namespace écran
+    var adminSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_admin');
+
+    adminSocket.on('connect', function() {
+        console.log('Screen WebSocket connected');
+    });
+
+    adminSocket.on('disconnect', function() {
+        console.log('Screen WebSocket disconnected');
+    });
+
+    adminSocket.on('update', function(msg) {
+        console.log("Received screen message:", msg);
+        console.log(msg.data.success)
+        display_toast(msg);
+    });
+
+    adminSocket.on('connect_error', function(err) {
+        console.error('Screen WebSocket connection error:', err);
+    });
+
+    adminSocket.on('reconnect', function(attempt) {
+        console.log('Screen WebSocket reconnected after', attempt, 'attempts');
+    });
+
+    adminSocket.on('reconnect_attempt', function(attempt) {
+        console.log('Screen WebSocket reconnect attempt', attempt);
+    });
+
+    adminSocket.onAny((event, ...args) => {
+        console.log(`Screen WebSocket Event: ${event}`, args);
+    });
+});
+
 
 
 function display_toast(data) {
     console.log('toast', data);
-    if (data.success === true) {
-        M.toast({html: data.message, classes: 'green'});
+    if (data.data.success === true) {
+        console.log('ok');
+        M.toast({html: data.data.message, classes: 'green'});
     } else {
-        M.toast({html: data.message, classes: 'red'});
+        M.toast({html: data.data.message, classes: 'red'});
     }    
 }
 
@@ -16,6 +89,11 @@ var eventSource = new EventSource('/events/update_patients');
 eventSource.onmessage = function(event) {
     htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
 };
+
+
+function refresh_queue(){
+    htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
+}
 
 
 
@@ -100,7 +178,7 @@ htmx.on('htmx:afterSwap', function(evt) {
 // ---------------- GENERAL ----------------
 
 // utiliser pour les communications spécifiques du serveur vers l'admin
-var eventSource = new EventSource('/events/update_admin');
+var eventSource = new EventSource('/events/update_admin_old');
 eventSource.onmessage = function(event) {
     console.log("toqt ?", event.data);
     console.log(typeof(event.data));

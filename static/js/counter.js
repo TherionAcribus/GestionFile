@@ -3,12 +3,14 @@ const counter_id = document.getElementById('counter_id').textContent;
 var eventSource = new EventSource('/events/update_patients');
 var eventSourceforCounter = new EventSource(`/events/update_counter/${counter_id}`);
 
-var socket;
 
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
     var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
-    socket = io.connect(socketProtocol + document.domain + ':' + (protocol === 'https:' ? '443' : '5000'));
+    var domain = document.domain;
+    var port = protocol === 'https:' ? '443' : '5000';
+    
+    var socket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient');
 
     socket.on('connect', function() {
         console.log('WebSocket connected');
@@ -18,7 +20,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log('WebSocket disconnected');
     });
 
-    socket.on('update_patient', function(msg) {
+    socket.on('update', function(msg) {
         console.log("Received message:", msg.data);
         htmx.trigger('#button_section', 'refresh_buttons', {target: "#button_section"});
         htmx.trigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});

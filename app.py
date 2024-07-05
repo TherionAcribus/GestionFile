@@ -42,7 +42,7 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-site = "production"
+site = "local"
 communication_mode = "websocket"
 
 if site == "production":
@@ -78,17 +78,48 @@ app.config.from_object(Config())
 app.debug = True
 
 
-def callback(ch, method, properties, body):
-    logging.debug(f"Received message: {body}")
-    socketio.emit('new_message', {'data': body.decode()})
+def callback_update_patient(ch, method, properties, body):
+    logging.debug(f"Received general message: {body}")
+    socketio.emit('update', {'data': body.decode()}, namespace='/socket_update_patient')
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
-def consume_rabbitmq(connection, channel):
-    channel.queue_declare(queue='test_queue')
-    channel.basic_consume(queue='test_queue', on_message_callback=callback, auto_ack=False)
-    logging.info("Starting RabbitMQ consumption")
+def callback_sound(ch, method, properties, body):
+    logging.debug(f"Received screen message: {body}")
+    socketio.emit('update', {'data': body.decode()}, namespace='/socket_sound')
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
+def consume_rabbitmq(connection, channel, queue_name, callback):
+    channel.queue_declare(queue=queue_name)
+    channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=False)
+    logging.info(f"Starting RabbitMQ consumption on {queue_name}")
     while True:
         connection.process_data_events(time_limit=None)
+
+@socketio.on('connect', namespace='/socket_update_patient')
+def connect_general():
+    logging.info("Client connected to general namespace")
+
+@socketio.on('disconnect', namespace='/socket_update_patient')
+def disconnect_general():
+    logging.info("Client disconnected from general namespace")
+
+@socketio.on('connect', namespace='/socket_sound')
+def connect_screen():
+    logging.info("Client connected to screen namespace")
+
+@socketio.on('disconnect', namespace='/socket_sound')
+def disconnect_screen():
+    logging.info("Client disconnected from screen namespace")
+
+@socketio.on('connect', namespace='/socket_admin')
+def connect_admin():
+    logging.info("Client connected to screen namespace")
+
+@socketio.on('disconnect', namespace='/socket_admin')
+def disconnect_admin():
+    logging.info("Client disconnected from screen namespace")
+
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
@@ -98,6 +129,7 @@ def send_message():
         return "Message sent!"
     except Exception as e:
         return f"Failed to send message: {e}", 500
+
 
 #threading.Thread(target=consume_rabbitmq).start()
 #socketio.run(app, host='0.0.0.0', port=5001)
@@ -574,6 +606,7 @@ def confirm_delete_patient(patient_id):
 # supprime un patient
 @app.route('/admin/queue/delete_patient/<int:patient_id>', methods=['GET'])
 def delete_patient(patient_id):
+    print("id", patient_id)
     try:
         patient = Patient.query.get(patient_id)
         if not patient:
@@ -582,6 +615,7 @@ def delete_patient(patient_id):
         db.session.delete(patient)
         db.session.commit()
         communication("update_patients")
+        communikation("socket_update_patient")
         return display_toast()
 
     except Exception as e:
@@ -595,6 +629,7 @@ def create_new_patient_auto():
     activity = Activity.query.get(request.form.get('activity_id'))
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
+    communikation("socket_update_patient")
     communication("update_patients")
 
     return "", 204
@@ -2097,6 +2132,8 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
+    communikation("socket_sound", data=audio_url)
+
     communication("update_audio", audio_source=audio_url)
 
 
@@ -2144,7 +2181,7 @@ def validate_patient(counter_id, patient_id):
         current_patient.status = 'ongoing'
         db.session.commit()
 
-    communikation("update_patients")
+    communikation("socket_update_patient")
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2554,7 +2591,7 @@ def validate_and_call_next(counter_id):
     next_patient = call_next(counter_id)
     print("prochain patient")
 
-    communikation("update_patients")
+    communikation("socket_update_patient")
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2712,7 +2749,7 @@ def pause_patient(counter_id, patient_id):
         current_patient.status = 'done'
         db.session.commit()
     
-    communikation("update_patients")
+    communikation("socket_update_patient")
 
     communication("update_patients")
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
@@ -2995,28 +3032,24 @@ def communikation(stream, data=None, client_id=None):
     """ Effectue la communication avec les clients """
     print("communikation", communication_mode)
     #if communication_mode == "websocket":
-    communication_websocket(stream="update_patients")
+    communication_websocket(stream=stream, data=data)
 
 
 def communication_websocket(stream, data=None, client_id=None):
     print('communication_websocket')
-    
-    content_type = request.headers.get('Content-Type')
-    print('Content-Type:', content_type)
-    
-    if content_type == 'application/json':
-        message = request.json.get('message', 'patient_update')
-    elif content_type == 'application/x-www-form-urlencoded':
-        message = request.form.get('message', 'patient_update')
-    else:
-        return 'Unsupported Media Type', 415
+    print(stream)
 
+    stream = request.args.get('stream', stream)
+    message = request.args.get('message', data)
+    
     try:
-        socketio.emit('update_patient', {'data': message})
-        print("message", message)
+        namespace = f'/{stream}'
+        socketio.emit('update', {'data': message}, namespace=namespace)
+        print("message:", message)
+        print("namespace:", namespace)
         return "Message sent!"
     except Exception as e:
-        print("message failed", message)
+        print("message failed:", message)
         return f"Failed to send message: {e}", 500
 
 
@@ -3085,7 +3118,8 @@ def display_toast(success=True, message=None):
         message = "Enregistrement effectué"
         
     data = {"toast": True, 'success': success, 'message': message}
-    communication("update_admin", data)
+    communikation("socket_admin", data)
+    return "", 204
     #return f'<script>display_toast({data})</script>'
 
 
@@ -3345,12 +3379,15 @@ with app.app_context():
 
 if __name__ == "__main__":
 
-    socketio.run(app, host='0.0.0.0', port=5000)
 
     print("Starting RabbitMQ...", rabbitMQ_url)
     connection = pika.BlockingConnection(parameters)
     channel = connection.channel()
-    threading.Thread(target=consume_rabbitmq, args=(connection, channel), daemon=True).start()
+    # Start threads for consuming different queues
+    threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_patient', callback_update_patient)).start()
+    threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_sound', callback_sound)).start()
+    threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_sound)).start()
+    
     socketio.run(app, host='0.0.0.0', port=5000)
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
