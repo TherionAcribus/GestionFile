@@ -42,33 +42,33 @@ document.addEventListener('DOMContentLoaded', (event) => {
     var adminSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_admin');
 
     adminSocket.on('connect', function() {
-        console.log('Screen WebSocket connected');
+        console.log('Admin WebSocket connected');
     });
 
     adminSocket.on('disconnect', function() {
-        console.log('Screen WebSocket disconnected');
+        console.log('Admin WebSocket disconnected');
     });
 
     adminSocket.on('update', function(msg) {
-        console.log("Received screen message:", msg);
+        console.log("Received Admin message:", msg);
         console.log(msg.data.success)
         display_toast(msg);
     });
 
     adminSocket.on('connect_error', function(err) {
-        console.error('Screen WebSocket connection error:', err);
+        console.error('Admin WebSocket connection error:', err);
     });
 
     adminSocket.on('reconnect', function(attempt) {
-        console.log('Screen WebSocket reconnected after', attempt, 'attempts');
+        console.log('Admin WebSocket reconnected after', attempt, 'attempts');
     });
 
     adminSocket.on('reconnect_attempt', function(attempt) {
-        console.log('Screen WebSocket reconnect attempt', attempt);
+        console.log('Admin WebSocket reconnect attempt', attempt);
     });
 
     adminSocket.onAny((event, ...args) => {
-        console.log(`Screen WebSocket Event: ${event}`, args);
+        console.log(`Admin WebSocket Event: ${event}`, args);
     });
 });
 
@@ -188,7 +188,7 @@ eventSource.onmessage = function(event) {
     console.log("toqt ?", data);
     console.log("ACTION", data.action);
     if (data.toast){
-        display_toast(data);
+        //display_toast(data);
     }
     else if (event.data === "schedule_tasks_list"){
         htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});

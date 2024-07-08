@@ -729,7 +729,7 @@ def update_input():
     key = request.values.get('key')
     value = request.values.get('value')
     check = request.values.get('check')
-    print(request.form)
+    print("RESQUEST", request.form)
     
     if check:
         if check == "welcome":
@@ -2366,12 +2366,10 @@ def left_page_validate_patient(activity):
     text = f"{activity.name}"
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
-    data = None
-    if activity.notification:
-        data = {"type": "notification_new_patient", "message": f"Demande pour '{activity.name}'"}
     
-    communikation("update_patient", data = data)
-    communication("update_patients", data = data)
+    communikation("update_patient")
+
+    communication("update_patients")
 
     return render_template('patient/patient_qr_right_page.html', 
                             image_name_qr=image_name_qr, 
@@ -2387,6 +2385,8 @@ def print_and_validate():
     text = format_ticket_text(new_patient)
     print("text", text)
 
+    if activity.notification:
+        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
     communikation("app_patient", flag="print", data=text)
     communication("update_patient_app", data={"type": "print", "message": text})
     return patient_conclusion_page(new_patient)
@@ -2396,6 +2396,8 @@ def print_and_validate():
 def patient_scan_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
+    if activity.notification:
+        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
     return patient_conclusion_page(new_patient)
 
 
@@ -3100,16 +3102,15 @@ def events_update_patient_pyside():
 
 def communikation(stream, data=None, flag=None, client_id=None):
     """ Effectue la communication avec les clients """
-    print("communikation", communication_mode)
+    print("communikation", communication_mode, data)
     if communication_mode == "websocket":
         communication_websocket(stream=f"socket_{stream}", data=data)
         if stream == "update_patient":
             patients = create_patients_list_for_pyside()
             #data = json.dumps({"flag": "patient", "data": patients})
             communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
+            communication_websocket(stream="socket_app_counter", data=patients, flag="my_patient")
         elif stream == "update_audio":
-            print("UPUPUP", stream, data, app.config["ANNOUNCE_ALERT"], app.config["ANNOUNCE_PLAYER"])
-            print("hein????")
             if app.config["ANNOUNCE_ALERT"]:
                 signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
                 audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
@@ -3122,6 +3123,7 @@ def communikation(stream, data=None, flag=None, client_id=None):
             else:
                 communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
+            print("basique")
             communication_websocket(stream=f"socket_{stream}", data=data, flag=flag)
     # REFAIRE !!!! 
     elif communication_mode == "rabbitmq":
@@ -3163,8 +3165,8 @@ def communication_rabbitmq(queue, data=None, client_id=None):
     message = data
     try:
         channel.basic_publish(exchange='',
-                              routing_key=queue,
-                              body=message)
+                            routing_key=queue,
+                            body=message)
         print("message:", message)
         print("queue:", queue)
         return "Message sent to RabbitMQ!"
@@ -3238,7 +3240,7 @@ def display_toast(success=True, message=None):
         message = "Enregistrement effectué"
         
     data = {"toast": True, 'success': success, 'message': message}
-    communikation("socket_admin", data)
+    communikation("admin", data)
     return "", 204
     #return f'<script>display_toast({data})</script>'
 
