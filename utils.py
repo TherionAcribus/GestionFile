@@ -74,18 +74,21 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
         'separator': re.compile(r'\[separator\]', re.DOTALL),
     }
 
-    def replace_pattern(pattern, on_command, off_command, text):
+    def replace_pattern(pattern, on_command, off_command, text, adjust_width=True):
         def wrap_and_format(match):
             inner_text = match.group(1)
-            wrapped_text = word_wrap(inner_text, line_width // 2)  # Adjust width for double size
+            width = line_width // 2 if adjust_width else line_width
+            wrapped_text = word_wrap(inner_text, width)
             return f"{on_command}{wrapped_text}{off_command}"
         return pattern.sub(wrap_and_format, text)
 
-    escpos_text = markdown_text
-    escpos_text = replace_pattern(patterns['center'], escpos_commands['center_on'], escpos_commands['center_off'], escpos_text)
+    # Handling new lines explicitly
+    escpos_text = markdown_text.replace('\\n', '\n')
+
+    escpos_text = replace_pattern(patterns['center'], escpos_commands['center_on'], escpos_commands['center_off'], escpos_text, adjust_width=False)
     escpos_text = replace_pattern(patterns['double_size'], escpos_commands['double_size_on'], escpos_commands['double_size_off'], escpos_text)
-    escpos_text = replace_pattern(patterns['bold'], escpos_commands['bold_on'], escpos_commands['bold_off'], escpos_text)
-    escpos_text = replace_pattern(patterns['underline'], escpos_commands['underline_on'], escpos_commands['underline_off'], escpos_text)
+    escpos_text = replace_pattern(patterns['bold'], escpos_commands['bold_on'], escpos_commands['bold_off'], escpos_text, adjust_width=False)
+    escpos_text = replace_pattern(patterns['underline'], escpos_commands['underline_on'], escpos_commands['underline_off'], escpos_text, adjust_width=False)
     escpos_text = patterns['separator'].sub(escpos_commands['separator'], escpos_text)
 
     return escpos_text
