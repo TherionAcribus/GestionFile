@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     
     // Connexion au namespace général
     var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient');
+    console.log("adresse")
+    console.log(socketProtocol + domain + ':' + port + '/socket_update_patient')
 
     generalSocket.on('connect', function() {
         console.log('General WebSocket connected');

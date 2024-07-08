@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     generalSocket.on('connect', function() {
         console.log('General WebSocket connected');
+        console.log(generalSocket.io.uri)
     });
 
     generalSocket.on('disconnect', function() {

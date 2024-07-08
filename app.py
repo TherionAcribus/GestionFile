@@ -7,7 +7,7 @@
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship
@@ -43,7 +43,7 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
 site = "production"
-communication_mode = "websocket"
+communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 if site == "production":
     credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
@@ -73,20 +73,35 @@ adresse = "http://localhost:5000"
 app = Flask(__name__)
 
 
-socketio = SocketIO(app, async_mode='eventlet',cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", logger=True, engineio_logger=True)
 app.config.from_object(Config())
 app.debug = True
 
 
 def callback_update_patient(ch, method, properties, body):
     logging.debug(f"Received general message: {body}")
-    socketio.emit('update', {'data': body.decode()}, namespace='/socket_update_patient')
+    if communication_mode == "websocket":
+        socketio.emit('general_message', {'data': body.decode()}, namespace='/socket_update_patient')
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 def callback_sound(ch, method, properties, body):
     logging.debug(f"Received screen message: {body}")
-    socketio.emit('update', {'data': body.decode()}, namespace='/socket_sound')
+    if communication_mode == "websocket":
+        socketio.emit('update', {'data': body.decode()}, namespace='/socket_sound')
     ch.basic_ack(delivery_tag=method.delivery_tag)
+
+def callback_admin(ch, method, properties, body):
+    logging.debug(f"Received screen message: {body}")
+    if communication_mode == "websocket":
+        socketio.emit('update', {'data': body.decode()}, namespace='/socket_admin')
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+def callback_app_counter(ch, method, properties, body):
+    logging.debug(f"Received screen message: {body}")
+    if communication_mode == "websocket":
+        socketio.emit('update', {'data': body.decode()}, namespace='/socket_app_counter')
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 
 def consume_rabbitmq(connection, channel, queue_name, callback):
@@ -98,7 +113,7 @@ def consume_rabbitmq(connection, channel, queue_name, callback):
 
 @socketio.on('connect', namespace='/socket_update_patient')
 def connect_general():
-    logging.info("Client connected to general namespace")
+    logging.info("Client connected to update patient namespace")
 
 @socketio.on('disconnect', namespace='/socket_update_patient')
 def disconnect_general():
@@ -120,9 +135,26 @@ def connect_admin():
 def disconnect_admin():
     logging.info("Client disconnected from screen namespace")
 
+@socketio.on('connect', namespace='/socket_app_counter')
+def connect_app_counter():
+    logging.info("Client connected to app counter namespace")
+
+@socketio.on('disconnect', namespace='/socket_app_counter')
+def disconnect_app_counter():
+    logging.info("Client disconnected from app counter namespace")
+
+@socketio.on('connect', namespace='/')
+def connect_app():
+    logging.info("Client connected to test namespace")
+
+@socketio.on('disconnect', namespace='/')
+def disconnect_app():
+    logging.info("Client disconnected from test namespace")
+
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
+    print("MESSAGEss")
     message = request.json.get('message', 'Hello from server')
     try:
         socketio.emit('new_message', {'data': message})
@@ -138,6 +170,26 @@ def send_message():
 
 #app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
 #toolbar = DebugToolbarExtension(app)
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return f"""
+    <!doctype html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>404 Not Found</title>
+    </head>
+    <body>
+        <h1>404 Not Found</h1>
+        <p>The requested URL was not found on the server.</p>
+        <p>Error: {e}</p>
+        <p>Request Path: {request.path}</p>
+        <p>Request Method: {request.method}</p>
+        <p>Request Headers: {request.headers}</p>
+    </body>
+    </html>
+    """, 404
 
 
 @app.route('/send')
@@ -558,6 +610,7 @@ def clear_all_patients_from_db():
             db.session.commit()
             app.logger.info("La table Patient a été vidée")
             communication("update_patients")
+            communikation("update_patient")
             return display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
@@ -615,7 +668,7 @@ def delete_patient(patient_id):
         db.session.delete(patient)
         db.session.commit()
         communication("update_patients")
-        communikation("socket_update_patient")
+        communikation("update_patient")
         return display_toast()
 
     except Exception as e:
@@ -629,7 +682,7 @@ def create_new_patient_auto():
     activity = Activity.query.get(request.form.get('activity_id'))
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
-    communikation("socket_update_patient")
+    communikation("update_patient")
     communication("update_patients")
 
     return "", 204
@@ -849,6 +902,7 @@ def clear_old_patients_table():
         # Supprimez ces patients
         old_patients.delete(synchronize_session='fetch')
         db.session.commit()
+        communikation("update_patient")
         communication("update_patients")
         app.logger.info(f"Deleted old patients not from today ({today}).")
     else:
@@ -2154,6 +2208,7 @@ def call_specific_patient(counter_id, patient_id):
         db.session.commit()
 
         # Notifier tous les clients et mettre à jour le comptoir
+        communikation("update_patient")
         communication("update_patients")
         communication("update_counter", client_id=counter_id)
 
@@ -2181,7 +2236,7 @@ def validate_patient(counter_id, patient_id):
         current_patient.status = 'ongoing'
         db.session.commit()
 
-    communikation("socket_update_patient")
+    communikation("update_patient")
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2304,6 +2359,8 @@ def left_page_validate_patient(activity):
     data = None
     if activity.notification:
         data = {"type": "notification_new_patient", "message": f"Demande pour '{activity.name}'"}
+    
+    communikation("update_patient", data = data)
     communication("update_patients", data = data)
 
     return render_template('patient/patient_qr_right_page.html', 
@@ -2319,6 +2376,7 @@ def print_and_validate():
     print("new_patient", new_patient)
     text = format_ticket_text(new_patient)
     print("text", text)
+
     communication("update_patient_app", data={"type": "print", "message": text})
     return patient_conclusion_page(new_patient)
 
@@ -2333,6 +2391,7 @@ def patient_scan_and_validate():
 def register_patient(activity):
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
+    communikation("update_patient")
     communication("update_patients")
     return new_patient
 
@@ -2591,7 +2650,7 @@ def validate_and_call_next(counter_id):
     next_patient = call_next(counter_id)
     print("prochain patient")
 
-    communikation("socket_update_patient")
+    communikation("update_patient")
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2749,7 +2808,7 @@ def pause_patient(counter_id, patient_id):
         current_patient.status = 'done'
         db.session.commit()
     
-    communikation("socket_update_patient")
+    communikation("update_patient")
 
     communication("update_patients")
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
@@ -2849,6 +2908,7 @@ def counter_select_patient(counter_id, patient_id):
     print("counter_select_patient", counter_id, patient_id)
     call_specific_patient(counter_id, patient_id)
 
+    communikation("update_patient")
     communication("update_patients")
     communication("update_counter", client_id=counter_id)    
 
@@ -2988,9 +3048,8 @@ def event_stream_dict(client_id):
         counter_streams.pop(client_id, None)
         app.logger.debug(f"Stream closed for client {client_id}")
 
-@app.route('/events/update_patients')
+"""@app.route('/events/update_patients')
 def events_update_patients():
-    print("CONNECT3")
     return Response(event_stream(update_patients), content_type='text/event-stream')
 
 @app.route('/events/update_patient_app')
@@ -3026,28 +3085,59 @@ def events_update_page_patients():
 @app.route('/events/update_patient_pyside')
 def events_update_patient_pyside():
     return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
-
+"""
 
 def communikation(stream, data=None, client_id=None):
     """ Effectue la communication avec les clients """
     print("communikation", communication_mode)
-    #if communication_mode == "websocket":
-    communication_websocket(stream=stream, data=data)
+    if communication_mode == "websocket":
+        communication_websocket(stream=f"socket_{stream}", data=data)
+        if stream == "update_patient":
+            patients = create_patients_list_for_pyside()
+            data = json.dumps({"type": "patient", "list": patients})
+            communication_websocket(stream="socket_app_counter", data=data)
+    elif communication_mode == "rabbitmq":
+        communication_rabbitmq(queue=f"socket_{stream}", data=data)
+        if stream == "update_patient":
+            patients = create_patients_list_for_pyside()
+            data = json.dumps({"type": "patient", "list": patients})
+            communication_rabbitmq(queue="socket_app_counter", data=data)
 
 
 def communication_websocket(stream, data=None, client_id=None):
     print('communication_websocket')
-    print(stream)
+    print("streamm", stream)
 
-    stream = request.args.get('stream', stream)
-    message = request.args.get('message', data)
-    
+    # Utiliser request.args.get uniquement si dans le contexte de la requête
+    if has_request_context():
+        stream = request.args.get('stream', stream)
+        message = request.args.get('message', data)
+    else:
+        message = data
+
     try:
         namespace = f'/{stream}'
-        socketio.emit('update', {'data': message}, namespace=namespace)
+        socketio.emit('update', {"type": "patient",'list': message}, namespace=namespace)
         print("message:", message)
         print("namespace:", namespace)
         return "Message sent!"
+    except Exception as e:
+        print("message failed:", message)
+        return f"Failed to send message: {e}", 500
+    
+
+def communication_rabbitmq(queue, data=None, client_id=None):
+    print('communication_rabbitmq')
+    print("queue", queue)
+
+    message = data
+    try:
+        channel.basic_publish(exchange='',
+                              routing_key=queue,
+                              body=message)
+        print("message:", message)
+        print("queue:", queue)
+        return "Message sent to RabbitMQ!"
     except Exception as e:
         print("message failed:", message)
         return f"Failed to send message: {e}", 500
@@ -3380,15 +3470,20 @@ with app.app_context():
 if __name__ == "__main__":
 
 
-    print("Starting RabbitMQ...", rabbitMQ_url)
-    connection = pika.BlockingConnection(parameters)
-    channel = connection.channel()
-    # Start threads for consuming different queues
-    threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_patient', callback_update_patient)).start()
-    threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_sound', callback_sound)).start()
-    threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_sound)).start()
+    if communication_mode == "rabbitmq":
+        print("Starting RabbitMQ...", rabbitMQ_url)
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        # Start threads for consuming different queues
+        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_patient', callback_update_patient)).start()
+        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_sound', callback_sound)).start()
+        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_admin)).start()
+        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_app_counter', callback_app_counter)).start()
     
-    socketio.run(app, host='0.0.0.0', port=5000)
+    if communication_mode == "websocket":
+        #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 5000)), app)
+        socketio.run(app, host='0.0.0.0', port=5000)   
+
 
     # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
     port = int(os.environ.get("PORT", 5000))
@@ -3406,7 +3501,7 @@ if __name__ == "__main__":
     print("Starting Flask...")
     app.logger.info(f"Starting Flask on port {port} with debug={debug}")
 
-    app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
+    #app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
 
     app.logger.info("Starting Flask app...")
 
