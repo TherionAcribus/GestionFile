@@ -42,7 +42,7 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-site = "production"
+site = "dev"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 if site == "production":
@@ -102,7 +102,7 @@ def callback_app_counter(ch, method, properties, body):
         socketio.emit('update', {'data': body.decode()}, namespace='/socket_app_counter')
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
-
+# continuer les connexioNs Rabbit
 
 def consume_rabbitmq(connection, channel, queue_name, callback):
     channel.queue_declare(queue=queue_name)
@@ -143,13 +143,14 @@ def connect_app_counter():
 def disconnect_app_counter():
     logging.info("Client disconnected from app counter namespace")
 
-@socketio.on('connect', namespace='/')
-def connect_app():
+@socketio.on('connect', namespace='/socket_app_patient')
+def connect_app_patient():
     logging.info("Client connected to test namespace")
 
-@socketio.on('disconnect', namespace='/')
-def disconnect_app():
+@socketio.on('disconnect', namespace='/socket_app_patient')
+def disconnect_app_patient():
     logging.info("Client disconnected from test namespace")
+
 
 
 @app.route('/send_message', methods=['POST'])
@@ -2032,6 +2033,7 @@ def delete_button_image(button_id):
 def print_ticket_test():
     text = "12345678901234567890123456789012345678901234567890"
     print(text)
+    communikation(stream="app_patient", data=text, type="print")
     communication("update_patient_app", data={"type": "print", "message": text})
     return "", 204
 
@@ -2377,6 +2379,7 @@ def print_and_validate():
     text = format_ticket_text(new_patient)
     print("text", text)
 
+    communikation("app_patient", flag="print", data=text)
     communication("update_patient_app", data={"type": "print", "message": text})
     return patient_conclusion_page(new_patient)
 
@@ -3087,7 +3090,7 @@ def events_update_patient_pyside():
     return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
 """
 
-def communikation(stream, data=None, client_id=None):
+def communikation(stream, data=None, flag=None, client_id=None):
     """ Effectue la communication avec les clients """
     print("communikation", communication_mode)
     if communication_mode == "websocket":
@@ -3095,16 +3098,20 @@ def communikation(stream, data=None, client_id=None):
         if stream == "update_patient":
             patients = create_patients_list_for_pyside()
             data = json.dumps({"type": "patient", "list": patients})
-            communication_websocket(stream="socket_app_counter", data=data)
+            communication_websocket(stream="socket_app_counter", data=data, flag=flag)
+        else:
+            communication_websocket(stream=f"socket_{stream}", data=data, flag=flag)
     elif communication_mode == "rabbitmq":
         communication_rabbitmq(queue=f"socket_{stream}", data=data)
         if stream == "update_patient":
             patients = create_patients_list_for_pyside()
             data = json.dumps({"type": "patient", "list": patients})
             communication_rabbitmq(queue="socket_app_counter", data=data)
+        else:
+            communication_rabbitmq(stream=stream, data=data)
 
 
-def communication_websocket(stream, data=None, client_id=None):
+def communication_websocket(stream, data=None, flag=None, client_id=None):
     print('communication_websocket')
     print("streamm", stream)
 
@@ -3117,7 +3124,7 @@ def communication_websocket(stream, data=None, client_id=None):
 
     try:
         namespace = f'/{stream}'
-        socketio.emit('update', {"type": "patient",'list': message}, namespace=namespace)
+        socketio.emit('update', {"flag": flag, 'data': message}, namespace=namespace)
         print("message:", message)
         print("namespace:", namespace)
         return "Message sent!"
@@ -3468,7 +3475,9 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-
+ 
+    # POUR L'instant RabbitMQ ne fonctionne pas avec Flask-SocketIO
+    # VOir https://github.com/sensibill/socket.io-amqp pour faire le lien
 
     if communication_mode == "rabbitmq":
         print("Starting RabbitMQ...", rabbitMQ_url)
@@ -3479,6 +3488,8 @@ if __name__ == "__main__":
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_sound', callback_sound)).start()
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_admin)).start()
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_app_counter', callback_app_counter)).start()
+        socketio.run(app, host='0.0.0.0', port=5000, debug=True) 
+
     
     if communication_mode == "websocket":
         #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 5000)), app)
