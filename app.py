@@ -42,7 +42,7 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-site = "dev"
+site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 if site == "production":
@@ -149,6 +149,14 @@ def connect_app_patient():
 
 @socketio.on('disconnect', namespace='/socket_app_patient')
 def disconnect_app_patient():
+    logging.info("Client disconnected from test namespace")
+
+@socketio.on('connect', namespace='/socket_app_screen')
+def connect_app_screen():
+    logging.info("Client connected to test namespace")
+
+@socketio.on('disconnect', namespace='/socket_app_screen')
+def disconnect_app_screen():
     logging.info("Client disconnected from test namespace")
 
 
@@ -2188,9 +2196,9 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    communikation("socket_sound", data=audio_url)
+    communikation("update_audio", data=audio_url)
 
-    communication("update_audio", audio_source=audio_url)
+    #communication("update_audio", audio_source=audio_url)
 
 
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
@@ -3099,6 +3107,20 @@ def communikation(stream, data=None, flag=None, client_id=None):
             patients = create_patients_list_for_pyside()
             #data = json.dumps({"flag": "patient", "data": patients})
             communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
+        elif stream == "update_audio":
+            print("UPUPUP", stream, data, app.config["ANNOUNCE_ALERT"], app.config["ANNOUNCE_PLAYER"])
+            print("hein????")
+            if app.config["ANNOUNCE_ALERT"]:
+                signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
+                audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+                if app.config["ANNOUNCE_PLAYER"] == "web":
+                    communication_websocket(stream="socket_sound", data=audio_path)
+                else:
+                    communication_websocket(stream="socket_app_screen", data=data, flag="sound")
+            if app.config["ANNOUNCE_PLAYER"] == "web":
+                communication_websocket(stream="socket_sound", data=data)
+            else:
+                communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
             communication_websocket(stream=f"socket_{stream}", data=data, flag=flag)
     # REFAIRE !!!! 

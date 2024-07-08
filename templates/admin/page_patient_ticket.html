@@ -25,8 +25,8 @@
 
 <h5>Message du ticket</h5>
 
-{{ macros.textbloc_before_call("ticket_header", ticket_header, "En-tête du message") }}
-{{ macros.textbloc_before_call("ticket_message", ticket_message, "Corps du message") }}
-{{ macros.textbloc_before_call("ticket_footer", ticket_footer, "Pied du message") }}
+{{ macros.textbloc_for_printer("ticket_header", ticket_header, "En-tête du message") }}
+{{ macros.textbloc_for_printer("ticket_message", ticket_message, "Corps du message") }}
+{{ macros.textbloc_for_printer("ticket_footer", ticket_footer, "Pied du message") }}
 
 

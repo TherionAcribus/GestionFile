@@ -24,6 +24,16 @@
 </div>
 {% endmacro %}
 
+{% macro balises_for_printer(key) %}
+<div>
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[center][/center]')">Centrer</span>,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[double][/double]')">Double taille</span>,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**Texte en gras**')">Gras</span>,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '__Texte souligné__')">Souligné</span>,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[separator]')">Séparateur</span>
+</div>
+{% endmacro %}
+
 {% macro balises_after_call(key) %}
 <div>
     <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
@@ -71,6 +81,19 @@
     {{ button(key, "before_call") }}
 </div>
 {% endmacro %}
+
+
+{% macro textbloc_for_printer(key, value, label) %}
+<div class="row">
+    <div class="row">
+        {{ textarea(key, value, label) }}
+        {{ balises_before_call(key) }}
+        {{ balises_for_printer(key) }}
+    </div>
+    {{ button(key, "before_call") }}
+</div>
+{% endmacro %}
+
 
 {% macro textbloc_after_call(key, value, label) %}
 <div class="row">
