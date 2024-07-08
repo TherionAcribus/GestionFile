@@ -27,7 +27,8 @@
                 <p class="validation_button">Prolonger</p>
             </div>
 
-            <div 
+            <div
+                id="cancel_btn" 
                 class="div_validation_one_button"
                 hx-get="/patient/cancel_patient"
                 hx-target="#div_buttons_parents">
@@ -47,6 +48,7 @@
 <script>
     var timerGauge = document.getElementById('timer_gauge');
     var prolongBtn = document.getElementById('prolong_btn');
+    var cancelBtn = document.getElementById('cancel_btn');
     var timerDuration = {{page_patient_end_timer}}; // seconds
     var startTime;
     var remainingTime = timerDuration * 1000; // Convert to milliseconds
@@ -86,8 +88,16 @@
         });
     }
 
+    function stopTimer() {
+        cancelAnimationFrame(animationFrame);
+    }
+
     prolongBtn.addEventListener('click', function() {
         resetTimer();
+    });
+
+    cancelBtn.addEventListener('click', function() {
+        stopTimer();
     });
 
     // Ensure timer starts immediately without delay
