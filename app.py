@@ -2033,7 +2033,7 @@ def delete_button_image(button_id):
 def print_ticket_test():
     text = "12345678901234567890123456789012345678901234567890"
     print(text)
-    communikation(stream="app_patient", data=text, type="print")
+    communikation(stream="app_patient", data=text, flag="print")
     communication("update_patient_app", data={"type": "print", "message": text})
     return "", 204
 
@@ -3097,10 +3097,11 @@ def communikation(stream, data=None, flag=None, client_id=None):
         communication_websocket(stream=f"socket_{stream}", data=data)
         if stream == "update_patient":
             patients = create_patients_list_for_pyside()
-            data = json.dumps({"type": "patient", "list": patients})
-            communication_websocket(stream="socket_app_counter", data=data, flag=flag)
+            #data = json.dumps({"flag": "patient", "data": patients})
+            communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
         else:
             communication_websocket(stream=f"socket_{stream}", data=data, flag=flag)
+    # REFAIRE !!!! 
     elif communication_mode == "rabbitmq":
         communication_rabbitmq(queue=f"socket_{stream}", data=data)
         if stream == "update_patient":
