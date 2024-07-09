@@ -3127,7 +3127,7 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
                 if app.config["ANNOUNCE_PLAYER"] == "web":
                     communication_websocket(stream="socket_sound", data=audio_path)
                 else:
-                    communication_websocket(stream="socket_app_screen", data=data, flag="sound")
+                    communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
             if app.config["ANNOUNCE_PLAYER"] == "web":
                 communication_websocket(stream="socket_sound", data=data)
             else:
