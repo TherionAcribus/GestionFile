@@ -53,6 +53,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         receive_audio(msg);
     });
 
+    screenSocket.on('refresh', function(msg) {
+        console.log("Received screen message:", msg);
+        refresh_page();
+    });
+
     screenSocket.on('connect_error', function(err) {
         console.error('Screen WebSocket connection error:', err);
     });

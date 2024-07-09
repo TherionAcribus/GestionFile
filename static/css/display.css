@@ -18,13 +18,19 @@ html, body {
     color: white;
 }
 
-#div_center{
+.div_center{
     height: 83%;
     display: grid;
-    grid-template-columns: 1fr 1fr; /* Deux colonnes de taille égale */
     background-color: rgb(182, 245, 245);
 }
 
+#div_center_divided {
+    grid-template-columns: 1fr 1fr; /* Deux colonnes de taille égale */
+}
+
+#div_center_not_divided {
+    grid-template-columns: 1fr; /* Une seule colonne */
+}
 
 #div_calling{
     background-color: rgba(0, 139, 139, 0.5);

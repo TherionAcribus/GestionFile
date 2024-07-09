@@ -27,7 +27,8 @@
             <p id="text_subtitle">{{announce_subtitle}}</p>
         </div>
 
-        <div id="div_center">
+        <div class="div_center"
+        {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
             <div id="left_side">
                 <div id="div_calling"
                         hx-trigger="refresh_calling, load" 

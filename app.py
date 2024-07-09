@@ -135,6 +135,14 @@ def connect_admin():
 def disconnect_admin():
     logging.info("Client disconnected from screen namespace")
 
+@socketio.on('connect', namespace='/socket_patient')
+def connect_patient():
+    logging.info("Client connected to update patient namespace")
+
+@socketio.on('disconnect', namespace='/socket_patient')
+def disconnect_patient():
+    logging.info("Client disconnected from patient namespace")
+
 @socketio.on('connect', namespace='/socket_app_counter')
 def connect_app_counter():
     logging.info("Client connected to app counter namespace")
@@ -2557,6 +2565,7 @@ def create_qr_code(patient):
 def patient_refresh():
     """ Permet de rafraichir la page des patients pour effectuer des changements """
     print("patient_refresh")
+    communikation("patient", event="refresh")
     communication("update_page_patient", data={"action": "refresh page"})
     return '', 204
 
@@ -2998,6 +3007,7 @@ def announce_init_gallery():
 @app.route('/announce/refresh')
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
+    communikation("sound", event="refresh")
     communication("update_announce")
     return '', 204
 
@@ -3100,7 +3110,7 @@ def events_update_patient_pyside():
     return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
 """
 
-def communikation(stream, data=None, flag=None, client_id=None):
+def communikation(stream, data=None, flag=None, event="update", client_id=None):
     """ Effectue la communication avec les clients """
     print("communikation", communication_mode, data)
     if communication_mode == "websocket":
@@ -3124,7 +3134,7 @@ def communikation(stream, data=None, flag=None, client_id=None):
                 communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
             print("basique")
-            communication_websocket(stream=f"socket_{stream}", data=data, flag=flag)
+            communication_websocket(stream=f"socket_{stream}", data=data, flag=flag, event=event)
     # REFAIRE !!!! 
     elif communication_mode == "rabbitmq":
         communication_rabbitmq(queue=f"socket_{stream}", data=data)
@@ -3136,7 +3146,7 @@ def communikation(stream, data=None, flag=None, client_id=None):
             communication_rabbitmq(stream=stream, data=data)
 
 
-def communication_websocket(stream, data=None, flag=None, client_id=None):
+def communication_websocket(stream, data=None, flag=None, client_id=None, event="update"):
     print('communication_websocket')
     print("streamm", stream)
 
@@ -3149,7 +3159,7 @@ def communication_websocket(stream, data=None, flag=None, client_id=None):
 
     try:
         namespace = f'/{stream}'
-        socketio.emit('update', {"flag": flag, 'data': message}, namespace=namespace)
+        socketio.emit(event, {"flag": flag, 'data': message}, namespace=namespace)
         print("message:", message)
         print("namespace:", namespace)
         return "Message sent!"
