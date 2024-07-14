@@ -23,6 +23,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 import qrcode
 import json
+import markdown2
 import os
 from queue import Queue, Empty
 import logging
@@ -65,10 +66,6 @@ class Config:
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
 
-
-
-# A CHANGER POUR ADRESSE DYNAMIQUE
-adresse = "http://localhost:5000"
 
 app = Flask(__name__)
 
@@ -829,11 +826,10 @@ def check_balises_after_validation(value):
 
 @app.route('/admin/app')
 def admin_app():
-    numbering_by_activity = ConfigOption.query.filter_by(key="numbering_by_activity").first().value_bool
-    announce_sound = ConfigOption.query.filter_by(key="announce_sound").first().value_bool
-    return render_template('/admin/app.html', 
-                            numbering_by_activity = numbering_by_activity, 
-                            announce_sound = announce_sound,
+    return render_template('/admin/app.html',
+                            network_adress = app.config["NETWORK_ADRESS"],
+                            numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
+                            announce_sound = app.config["ANNOUNCE_SOUND"],
                             pharmacy_name = app.config["PHARMACY_NAME"])
 
 
@@ -2149,7 +2145,9 @@ def admin_phone():
         exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
         phone_lines.append(eval(f"phone_line{line}"))
     print("PL", phone_lines)
-    return render_template('/admin/phone.html', 
+    print("CENTER", app.config['PHONE_CENTER'])
+    return render_template('/admin/phone.html',
+                            phone_center = app.config['PHONE_CENTER'], 
                             phone_title=app.config['PHONE_TITLE'],
                             phone_lines=phone_lines)
                             
@@ -2383,6 +2381,7 @@ def left_page_validate_patient(activity):
                             image_name_qr=image_name_qr, 
                             text=text,
                             activity=activity,
+                            futur_patient=futur_patient,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 @app.route('/patient/print_and_validate', methods=['POST'])
@@ -2397,16 +2396,32 @@ def print_and_validate():
         communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
     communikation("app_patient", flag="print", data=text)
     communication("update_patient_app", data={"type": "print", "message": text})
-    return patient_conclusion_page(new_patient)
+    return patient_conclusion_page(new_patient.call_number)
 
+def patient_validate_scan(activity_id):
+    """ Fct appelée lors du scan du QRCode (validation) """
+    activity = Activity.query.get(activity_id)
+    new_patient = register_patient(activity)
+    if activity.notification:
+        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+    return new_patient
+
+@app.route('/patient/scan_already_validate', methods=['POST'])
+def patient_scan_already_validate():
+    """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
+    patient_call_number = request.form.get('patient_call_number')
+    print("already scanned", patient_call_number)
+    return patient_conclusion_page(patient_call_number)
 
 @app.route('/patient/scan_and_validate', methods=['POST'])
 def patient_scan_and_validate():
+    """ Fct appelée si clic sur le bouton de validation """
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
     if activity.notification:
         communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
-    return patient_conclusion_page(new_patient)
+    return patient_conclusion_page(new_patient.call_number)
+
 
 
 def register_patient(activity):
@@ -2423,10 +2438,10 @@ def cancel_patient():
 
 
 @app.route('/patient/conclusion_page')
-def patient_conclusion_page(patient):
-    image_name_qr = f"qr_patient-{patient.call_number}.png"
+def patient_conclusion_page(call_number):
+    image_name_qr = f"qr_patient-{call_number}.png"
     return render_template('patient/conclusion_page.html',
-                            patient=patient,
+                            call_number=call_number,
                             image_name_qr=image_name_qr,
                             page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"]
                             )
@@ -2530,7 +2545,9 @@ def create_qr_code(patient):
     print("create_qr_code")
     print(patient, patient.id, patient.call_number, patient.activity)
     if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
-        data = f"{adresse}/phone/{patient.call_number}"
+        if "SERVER_URL" not in app.config:
+            set_server_url(app, request)
+        data = f"{app.config['SERVER_URL']}/patient/phone/{patient.call_number}/{patient.activity.id}"
     else :
         template = app.config['PAGE_PATIENT_QRCODE_DATA']
         data = replace_balise_phone(template, patient)
@@ -3237,6 +3254,7 @@ def communication(stream, data=None, client_id=None, audio_source=None):
             for client in update_screen_app:
                 client.put(json.dumps(message))
 
+@app.route('/api/patients_list_for_pyside', methods=['GET'])
 def create_patients_list_for_pyside():
     patients = Patient.query.filter_by(status="standing").all()
     patients_list = [{"id": patient.id, "call_number": patient.call_number, "activity_id": patient.activity_id, "activity": patient.activity.name} for patient in patients]
@@ -3266,17 +3284,73 @@ def get_counters():
 
 # ---------------- FONCTIONS Généralistes > Affichage page sur téléphone ---------------- 
 
-@app.route('/phone/<int:patient_id>', methods=['GET'])
-def phone(patient_id):
-    patient = Patient.query.get(patient_id)
+
+@app.route('/patient/phone/<patient_id>/<int:activity_id>', methods=['GET'])
+def phone_patient(patient_id, activity_id):
+    """ 
+    Page pour téléphone appelé lors du scan
+    Affiche la structure puis les infos spécifiques au patient sont chargées lors du ping en htmx
+    On regarde s'il y a un cookie déja placé (par ping). Si c'est le cas et que le numéro est différent c'est qu'il y a un nouvel enregistrement
+    Dans ce cas on efface le cookie, sinon c'est un rafraichissement de la page et donc on le laisse.
+    """
+    app.logger.debug(f"TITLE2 {app.config['PHONE_TITLE']}")
+    if request.cookies.get('patient_call_number') != patient_id:
+        if request.cookies.get('patient_id') != patient_id:
+            response = make_response(render_template('/patient/phone.html', 
+                                                    patient_id=patient_id, 
+                                                    activity_id=activity_id,
+                                                    phone_title=app.config['PHONE_TITLE']))
+            response.set_cookie('patient_id', "", expires=0)
+            response.set_cookie('patient_call_number', "", expires=0)
+            return response
+    return render_template('/patient/phone.html',
+                            phone_title=app.config['PHONE_TITLE'],
+                            patient_id=patient_id, 
+                            activity_id=activity_id)
+
+
+@app.route('/patient/phone/ping', methods=['POST'])
+def phone_patient_ping():
+    """ 
+    Fct qui s'execute une fois que la page phone est chargee.
+    Renvoie la page de confirmation de l'activité
+    Place un cookie pendant 20 minutes. Le but du cookie est de stocker l'id du patient
+    Si le cookie existe, c'est qu'il s,'est déja inscrit et qu'il ne faut pas l'inscrire une seconde fois
+    mais simplement lui réafficher les informations. Cela arrive s'il rafraichit la page.
+    S'il vient à la page phone avec un autre numéro (nouvelle inscription) le cookie est effacé dans la fonction précédente
+    """
+    activity_id = request.form.get('activity_id')
+    # si déja inscrit
+    if request.cookies.get('patient_id'):
+        patient = Patient.query.get(request.cookies.get('patient_id'))
+    # si pas encore inscrit
+    else:
+        patient = patient_validate_scan(activity_id)
+        communikation("patient", event="update_scan_phone")
+    print("update_scan_phone")
+
     phone_lines = []
+
     for line in range(1, 7):
         exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
         exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
         phone_lines.append(eval(f"phone_line{line}"))
-    return render_template('/patient/phone.html', patient=patient,
-                            phone_title=app.config['PHONE_TITLE'],
-                            phone_lines=phone_lines)
+
+    print(phone_lines)
+
+    # Convertir le texte des phone_lines de markdown en HTML
+    phone_lines = [markdown2.markdown(line) for line in phone_lines]
+
+    print(phone_lines)
+
+    response = make_response(render_template('/patient/phone_confirmation.html', 
+                                            patient=patient,
+                                            phone_lines=phone_lines,
+                                            phone_center=app.config['PHONE_CENTER']))
+    response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
+    response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
+    return response
+
 
 
 def start_serveo():
@@ -3427,6 +3501,15 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
         print("La base de données contient déjà des données.")
 
 
+def set_server_url(app, request):
+    # Stockage de l'adresse pour la génération du QR code
+    if request.host_url == "http://127.0.0.1:5000/":
+        server_url = app.config.get('NETWORK_ADRESS')
+    else:
+        server_url = request.host_url
+    app.config['SERVER_URL'] = server_url
+
+
 
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
 def load_configuration(app, ConfigOption):
@@ -3434,6 +3517,7 @@ def load_configuration(app, ConfigOption):
     
     config_mappings = {
         "pharmacy_name": ("PHARMACY_NAME", "value_str"),
+        "network_adress": ("NETWORK_ADRESS", "value_str"),
         "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
         "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
@@ -3469,6 +3553,7 @@ def load_configuration(app, ConfigOption):
         "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
         "ticket_footer": ("TICKET_FOOTER", "value_str"),
         "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
+        "phone_center": ("PHONE_CENTER", "value_bool"),
         "phone_title": ("PHONE_TITLE", "value_str"),
         "phone_line1": ("PHONE_LINE1", "value_str"),
         "phone_line2": ("PHONE_LINE2", "value_str"),
@@ -3483,6 +3568,8 @@ def load_configuration(app, ConfigOption):
         config_option = ConfigOption.query.filter_by(key=key).first()
         if config_option:
             app.config[config_name] = getattr(config_option, value_type)
+
+
 
     # Handling special case for cron_delete_patient_table_activated
     if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):

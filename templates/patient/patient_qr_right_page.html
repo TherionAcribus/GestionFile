@@ -33,6 +33,18 @@
                 hx-vals='{"activity_id": "{{ activity.id }}"}'>
                 <p class="validation_button">Scanner puis valider</p>
             </div>
+
+            <div 
+                id="div_for_scan"
+                hx-trigger="qrcode_is_scanned"
+                hx-post="patient/scan_already_validate"
+                {% if page_patient_structure=="full"%}
+                    hx-target="#div_buttons_parents"
+                {% else %}
+                    hx-target="#div_buttons_children"
+                {% endif %}
+                hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}"}'>
+            </div>
     
             {% if page_patient_structure=="full"%}
                 <div class="div_validation_one_button"

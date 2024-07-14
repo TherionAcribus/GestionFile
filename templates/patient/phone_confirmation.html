@@ -1,0 +1,8 @@
+<div id="div_infos" 
+    {% if phone_center %}    
+        class="text-center"
+    {% endif %}>
+    {% for phone_line in phone_lines %}
+        <p>{{ phone_line | safe }}</p>
+    {% endfor %}
+</div>

@@ -5,22 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Information</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-    <link rel="stylesheet" href="../static/css/phone.css">
+    <link rel="stylesheet" href="../../../static/css/phone.css">
+    <script src="https://unpkg.com/htmx.org@2.0.1" integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/" crossorigin="anonymous"></script>
 </head>
 <body>
+
     <div class="container">
 
         <div id="div_title_area">
-            <h1 id="text_title">Bienvenue à la pharmacie Sainte-Agathe</h1>
+            <h1 id="text_title">{{phone_title}}</h1>
         </div>
-        <div id="div_infos">
-            
-            {% for phone_line in phone_lines %}
-                <p>{{ phone_line }}</p>
-            {% endfor %}
+        <div id="div_infos"
+            hx-trigger="load"
+            hx-post="/patient/phone/ping"
+            hx-swap="outerHTML"
+            hx-vals='{"activity_id": "{{ activity_id }}"}'> 
+
+            <p>En attente de validation pour le numéro {{ patient_id }}</p>
+            <p>Veuillez patienter....</p>
         </div>
     </div>
 
+    <script>
+        window.onbeforeunload = function(event) {
+            // Message displayed to user to prevent refresh/navigation
+            event.preventDefault();
+            return 'Are you sure you want to leave? Changes you made may not be saved.';
+        };
+
+        // Optional: Additional handling for navigation within the app
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('a').forEach(function(link) {
+                link.addEventListener('click', function(event) {
+                    // Custom logic to handle in-app navigation if needed
+                    // For example: Check if the link should be allowed
+                    // event.preventDefault(); // Uncomment to prevent default action
+                });
+            });
+        });
+    </script>
 
 </body>
 </html>

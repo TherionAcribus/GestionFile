@@ -4,9 +4,26 @@
 
 {% block content %}
     <h3>Page "Téléphone patient"</h3>
-    <p>Cette page permet de paramétrer les éléments qui s'affichent sur le téléphone du patient quand celui-ci scanne le QRCode.</p>
+    <p>Cette page permet de paramétrer les éléments qui s'affichent sur le téléphone du patient quand celui-ci scanne le QRCode.<br>
+    Pour la mise en page, utilisez le Markdown.</p>
 
     <div class="row">
+
+        <div class="switch">
+            <span>Centrer tous les textes de la page : </span>
+            <label>
+            Justifier à gauche
+            <input id="phone_center" 
+                    type="checkbox"
+                    {% if phone_center == True %}checked{% endif %}
+                    hx-post="/admin/update_switch"
+                    hx-target="#invisible"
+                    hx-vals='js:{"key": "phone_center",
+                                "value": document.getElementById("phone_center").checked}'>
+            <span class="lever"></span>
+            Centrer
+            </label>
+        </div>
 
         {{ macros.textbloc_before_call("phone_title", phone_title, "Texte en haut de la page (Titre)") }}
 

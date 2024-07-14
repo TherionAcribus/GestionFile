@@ -1,8 +1,9 @@
 {
     "name": "default_config",
-    "version": "0.1",
+    "version": "0.2",
     "comments": "Version de test",
         "configurations": {
+            "network_adress": "http://192.168.86.221:5000",
             "pharmacy_name": "Pharmacie Sainte-Agathe",
             "cron_delete_patient_table_activated": true,
             "algo_activate": true,
@@ -40,6 +41,7 @@
             "ticket_message_printer": "",
             "ticket_footer": "Afin d'améliorer les temps d'attente, l'ordre de passage peut être légèrement différent de l'ordre d'arrivée.",
             "ticket_footer_printer": "",
+            "phone_center": true,
             "phone_title": "Bienvenue à la pharmacie Sainte-Agathe",
             "phone_line1": "Votre numéro d'appel :",
             "phone_line2": "{N}",

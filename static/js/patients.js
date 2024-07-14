@@ -35,6 +35,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_page();
     });
 
+    patientSocket.on('update_scan_phone', function(msg) {
+        console.log("Update Patient:", msg);
+        htmx.trigger('#div_for_scan', 'qrcode_is_scanned');
+    });
+
     patientSocket.on('connect_error', function(err) {
         console.error('Patient WebSocket connection error:', err);
     });
