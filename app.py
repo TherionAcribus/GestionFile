@@ -7,11 +7,12 @@
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch()
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import scoped_session, sessionmaker, relationship
-from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions
+from sqlalchemy.ext.mutable import MutableList
+from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
 from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date, time
@@ -31,9 +32,17 @@ import subprocess
 import threading
 import socket
 import pika
-from flask_talisman import Talisman
+import uuid
+
 
 from flask_debugtoolbar import DebugToolbarExtension
+from flask_security import Security, current_user, auth_required, hash_password, \
+    SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password
+from sqlalchemy.ext.declarative import declarative_base
+from flask_security.forms import LoginForm
+from wtforms import StringField, PasswordField
+from wtforms.validators import DataRequired
+import bcrypt
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
@@ -45,6 +54,7 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
+
 
 if site == "production":
     credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
@@ -60,11 +70,18 @@ class Config:
     SECRET_KEY = 'your_secret_key'
     SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
     SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
+    SQLALCHEMY_DATABASE_URI_USERS = 'sqlite:///instance/userdatabase.db'
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
+    SECURITY_PASSWORD_SALT = os.environ.get("SECURITY_PASSWORD_SALT", '146585145368132386173505678016728509634')
+    SECURITY_REGISTERABLE = True
+    SECURITY_SEND_REGISTER_EMAIL = False
+    SECURITY_POST_LOGIN_VIEW = '/'
+    SECURITY_USER_IDENTITY_ATTRIBUTES = [{"username": {"mapper": uia_username_mapper}}]
+    SECURITY_POST_LOGIN_VIEW = '/admin'
 
 
 app = Flask(__name__)
@@ -287,10 +304,13 @@ logging.basicConfig(level=logging.DEBUG,
 @app.teardown_appcontext
 def remove_session(ex=None):
     db_session.remove()
+    UserSession.remove()
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
 #babel = Babel(app)
+
+
 
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
@@ -540,9 +560,87 @@ class TextTranslation(db.Model):
         db.ForeignKeyConstraint(['language_id'], ['language.id'], name='fk_text_translation_language_id', ondelete='CASCADE'),
     )
 
-
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
+
+# Setup Flask-Security
+user_engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI_USERS'])
+UserSession = scoped_session(sessionmaker(bind=user_engine))
+# Base for user models
+Base = declarative_base()
+Base.query = UserSession.query_property()
+
+
+class RolesUsers(Base):
+    __tablename__ = 'roles_users'
+    id = Column(Integer(), primary_key=True)
+    user_id = Column('user_id', Integer(), ForeignKey('user.id'))
+    role_id = Column('role_id', Integer(), ForeignKey('role.id'))
+
+class Role(Base, RoleMixin):
+    __tablename__ = 'role'
+    id = Column(Integer(), primary_key=True)
+    name = Column(String(80), unique=True)
+    description = Column(String(255))
+    permissions = Column(MutableList.as_mutable(AsaList()), nullable=True)
+
+class User(Base, UserMixin):
+    __tablename__ = 'user'
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), unique=True)
+    username = Column(String(255), unique=True, nullable=True)
+    password = Column(String(255), nullable=False)
+    last_login_at = Column(DateTime())
+    current_login_at = Column(DateTime())
+    last_login_ip = Column(String(100))
+    current_login_ip = Column(String(100))
+    login_count = Column(Integer)
+    active = Column(Boolean())
+    fs_uniquifier = Column(String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    confirmed_at = Column(DateTime())
+    roles = relationship('Role', secondary='roles_users',
+                         backref=backref('users', lazy='dynamic'))
+
+def find_user_by_username(username):
+    session = current_app.extensions['sqlalchemy'].db.session
+    try:
+        return session.query(User).filter_by(username=username).one()
+    except sqlalchemy_exceptions.NoResultFound:
+        return None
+
+
+class ExtendedLoginForm(LoginForm):
+    username = StringField('Username', [DataRequired()])
+    email = None  # Supprimer le champ email
+    password = PasswordField('Password', [DataRequired()])
+
+    def validate(self, **kwargs):
+        print("VALIDATE CALLED")
+        try:
+            self.user = UserSession.query(User).filter_by(username=self.username.data).first()
+            self.ifield = self.username
+            if not self.user:
+                print("User not found", self.username.errors)
+                return False
+            if not verify_and_update_password(self.password.data, self.user):
+                print("Password not found")
+                return False
+            UserSession.add(self.user)  # Assurez-vous que l'utilisateur est attaché à la session
+            UserSession.commit()  # Commit les changements
+            return True
+        except Exception as e:
+            UserSession.rollback()
+            print(f"Error during validation: {str(e)}")
+            return False
+        finally:
+            UserSession.remove()  # Nettoyez la session à la fin
+
+user_datastore = SQLAlchemyUserDatastore(UserSession, User, Role)
+security = Security(app, user_datastore, login_form=ExtendedLoginForm)
+
+@security.context_processor
+def security_context_processor():
+    return dict(db=UserSession)
 
 # Permet de définir le type de fichiers autorisés pour l'ajout d'images
 def allowed_image_file(filename):
@@ -571,8 +669,15 @@ def with_app_context(func):
 
 
 @app.route('/')
+@login_required
 def home():
     return "Bonjour la pharmacie!"
+
+# -------------- SECURITé ---------------------
+
+
+
+# ---------------- Fin Sécurité ----------------------------
 
 
 # --------   ADMIN   ---------
@@ -3583,6 +3688,23 @@ def load_configuration(app, ConfigOption):
 with app.app_context():
     print("Creating database tables...")
     db.create_all()  # Comment this if using Flask-Migrate
+
+    Base.metadata.create_all(user_engine)
+    # Check if the user table is empty and create an admin user if it is
+    user_session = UserSession()
+    if user_session.query(User).count() == 0:
+        admin_role = user_session.query(Role).filter_by(name='admin').first()
+        if not admin_role:
+            admin_role = Role(name='admin', description='Administrator')
+            user_session.add(admin_role)
+            user_session.commit()
+
+        admin_user = User(email='admin', username='admin', password=hash_password('admin'), active=True, confirmed_at=datetime.now())
+        admin_user.roles.append(admin_role)
+        user_session.add(admin_user)
+        user_session.commit()
+    user_session.close()
+
     init_days_of_week_db_from_json(Weekday, db, app)
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()
@@ -3597,7 +3719,7 @@ with app.app_context():
 
 
 if __name__ == "__main__":
- 
+
     # POUR L'instant RabbitMQ ne fonctionne pas avec Flask-SocketIO
     # VOir https://github.com/sensibill/socket.io-amqp pour faire le lien
 
