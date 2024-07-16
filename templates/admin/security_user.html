@@ -1,0 +1,22 @@
+<div id="div_user_table"
+hx-get="/admin/security/table"
+hx-trigger="load"
+hx-target="#div_user_table"
+hx-swap="innerHTML">        
+</div>
+
+<a class="waves-effect waves-light btn"
+hx-get="/admin/security/add_user_form"
+hx-target="#div_add_user_form"
+hx-swap="innerHTML">
+Ajouter un nouvel utilisateur
+</a>    
+<div id="div_add_user_form"></div>
+
+
+<!-- Modal Structure -->
+<div id="modal_delete_user" class="modal">
+</div>
+
+<!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+<div id="invisible" style="display:none;"></div>

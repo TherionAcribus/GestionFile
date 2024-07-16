@@ -1,0 +1,37 @@
+<h3>Gestion des mots de passe</h3>
+
+{{ macros.textarea_full("security_remember_duration", 
+                        security_remember_duration, 
+                        "Duree de conservation du mot de passe (en jours) si activation de 'Se souvenir'") }}
+
+<h3>Pages nécessitants un mot de passe</h3>
+<p>Il est fortement d'activer les mots de passe sur les pages "critiques".</p>
+
+
+{{ macros.switch("security_login_admin", 
+                security_login_admin, 
+                "Mot de passe sur les pages 'Administrateur'", 
+                "Sans mot de passe", 
+                "Avec mot de passe")
+}}
+
+{{ macros.switch("security_login_counter", 
+security_login_counter, 
+                "Mot de passe sur les pages 'Comptoir'", 
+                "Sans mot de passe", 
+                "Avec mot de passe")
+}}
+
+{{ macros.switch("security_login_screen", 
+                security_login_screen, 
+                "Mot de passe sur les pages 'Ecran Announce'", 
+                "Sans mot de passe", 
+                "Avec mot de passe")
+}}
+
+{{ macros.switch("security_login_patient", 
+                security_login_patient, 
+                "Mot de passe sur les pages 'Ecran Patient'", 
+                "Sans mot de passe", 
+                "Avec mot de passe")
+}}

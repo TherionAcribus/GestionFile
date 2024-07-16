@@ -14,8 +14,9 @@ from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, 
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
 from flask_migrate import Migrate
+from flask_mailman import Mail, EmailMessage
 from flask_socketio import SocketIO
-from datetime import datetime, timezone, date, time
+from datetime import datetime, timezone, date, time, timedelta
 #from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
@@ -33,16 +34,17 @@ import threading
 import socket
 import pika
 import uuid
+from urllib.parse import urlparse, urljoin
 
 
 from flask_debugtoolbar import DebugToolbarExtension
 from flask_security import Security, current_user, auth_required, hash_password, \
-    SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password
+    SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
 from sqlalchemy.ext.declarative import declarative_base
-from flask_security.forms import LoginForm
-from wtforms import StringField, PasswordField
+from flask_security.forms import LoginForm, BooleanField
+from wtforms import StringField, PasswordField, HiddenField
 from wtforms.validators import DataRequired
-import bcrypt
+
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
@@ -70,26 +72,38 @@ class Config:
     SECRET_KEY = 'your_secret_key'
     SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
     SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
-    SQLALCHEMY_DATABASE_URI_USERS = 'sqlite:///instance/userdatabase.db'
+    SQLALCHEMY_BINDS = {
+        'users': 'sqlite:///userdatabase.db'
+    }
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
+    # sécurité
     SECURITY_PASSWORD_SALT = os.environ.get("SECURITY_PASSWORD_SALT", '146585145368132386173505678016728509634')
-    SECURITY_REGISTERABLE = True
-    SECURITY_SEND_REGISTER_EMAIL = False
-    SECURITY_POST_LOGIN_VIEW = '/'
+    SECURITY_REGISTERABLE = False
+    SECURITY_RECOVERABLE = True
     SECURITY_USER_IDENTITY_ATTRIBUTES = [{"username": {"mapper": uia_username_mapper}}]
-    SECURITY_POST_LOGIN_VIEW = '/admin'
+    REMEMBER_COOKIE_NAME = 'remember_me'
+    REMEMBER_COOKIE_SECURE = True  # uniquement si HTTPS
+    # mails
+    MAIL_SERVER = "live.smtp.mailtrap.io"
+    MAIL_PORT = 587 
+    MAIL_USE_TLS = True
+    MAIL_USE_SSL = False
+    MAIL_USERNAME = "api"
+    MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
+    MAIL_DEFAULT_SENDER = "hi@demomailtrap.com."
 
 
+    
 app = Flask(__name__)
-
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", logger=True, engineio_logger=True)
 app.config.from_object(Config())
 app.debug = True
+mail = Mail(app)
 
 
 def callback_update_patient(ch, method, properties, body):
@@ -223,6 +237,8 @@ def page_not_found(e):
     """, 404
 
 
+
+
 @app.route('/send')
 def send_message_old():
     url = rabbitMQ_url
@@ -304,7 +320,7 @@ logging.basicConfig(level=logging.DEBUG,
 @app.teardown_appcontext
 def remove_session(ex=None):
     db_session.remove()
-    UserSession.remove()
+    
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
@@ -563,84 +579,82 @@ class TextTranslation(db.Model):
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
-# Setup Flask-Security
-user_engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI_USERS'])
-UserSession = scoped_session(sessionmaker(bind=user_engine))
-# Base for user models
-Base = declarative_base()
-Base.query = UserSession.query_property()
-
-
-class RolesUsers(Base):
-    __tablename__ = 'roles_users'
-    id = Column(Integer(), primary_key=True)
-    user_id = Column('user_id', Integer(), ForeignKey('user.id'))
-    role_id = Column('role_id', Integer(), ForeignKey('role.id'))
-
-class Role(Base, RoleMixin):
-    __tablename__ = 'role'
-    id = Column(Integer(), primary_key=True)
-    name = Column(String(80), unique=True)
-    description = Column(String(255))
-    permissions = Column(MutableList.as_mutable(AsaList()), nullable=True)
-
-class User(Base, UserMixin):
+class User(db.Model, UserMixin):
     __tablename__ = 'user'
-    id = Column(Integer, primary_key=True)
-    email = Column(String(255), unique=True)
-    username = Column(String(255), unique=True, nullable=True)
-    password = Column(String(255), nullable=False)
-    last_login_at = Column(DateTime())
-    current_login_at = Column(DateTime())
-    last_login_ip = Column(String(100))
-    current_login_ip = Column(String(100))
-    login_count = Column(Integer)
-    active = Column(Boolean())
-    fs_uniquifier = Column(String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    confirmed_at = Column(DateTime())
-    roles = relationship('Role', secondary='roles_users',
-                         backref=backref('users', lazy='dynamic'))
+    __bind_key__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True)
+    username = db.Column(db.String(255), unique=True, nullable=True)
+    password = db.Column(db.String(255), nullable=False)
+    last_login_at = db.Column(db.DateTime())
+    current_login_at = db.Column(db.DateTime())
+    last_login_ip = db.Column(db.String(100))
+    current_login_ip = db.Column(db.String(100))
+    login_count = db.Column(db.Integer)
+    active = db.Column(db.Boolean())
+    fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    confirmed_at = db.Column(db.DateTime())
 
-def find_user_by_username(username):
-    session = current_app.extensions['sqlalchemy'].db.session
-    try:
-        return session.query(User).filter_by(username=username).one()
-    except sqlalchemy_exceptions.NoResultFound:
-        return None
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    form = ExtendedLoginForm()
+    
+    # Récupérez 'next' de l'URL ou du formulaire
+    next_url = request.args.get('next') or form.next.data
+    
+    # Assurez-vous que form.next.data est toujours défini
+    form.next.data = next_url
+    
+    if form.validate_on_submit():
+        user = form.user
+        remember = form.remember.data 
+        login_user(user, remember=remember)
+        
+        # Vérifiez si l'URL next est sûre avant de rediriger
+        if not next_url or not is_safe_url(next_url):
+            next_url = url_for('home')
+        
+        return redirect(next_url)
+    
+    return render_template('security/login.html', form=form)
 
 
 class ExtendedLoginForm(LoginForm):
     username = StringField('Username', [DataRequired()])
-    email = None  # Supprimer le champ email
     password = PasswordField('Password', [DataRequired()])
+    remember = BooleanField('Remember Me')
+    email = None
+    next = HiddenField()
 
-    def validate(self, **kwargs):
-        print("VALIDATE CALLED")
-        try:
-            self.user = UserSession.query(User).filter_by(username=self.username.data).first()
-            self.ifield = self.username
-            if not self.user:
-                print("User not found", self.username.errors)
-                return False
-            if not verify_and_update_password(self.password.data, self.user):
-                print("Password not found")
-                return False
-            UserSession.add(self.user)  # Assurez-vous que l'utilisateur est attaché à la session
-            UserSession.commit()  # Commit les changements
-            return True
-        except Exception as e:
-            UserSession.rollback()
-            print(f"Error during validation: {str(e)}")
+    def validate(self, extra_validators=None):
+        print("VALIDATE")
+        self.user = User.query.filter_by(username=self.username.data).first()
+        print(self.user)
+        """if not super(ExtendedLoginForm, self).validate(extra_validators=extra_validators):
+            print("Erreurs de validation:", self.errors)
+            print("TRUC BIZARRE")
+            return False"""
+
+        self.user = User.query.filter_by(username=self.username.data).first()
+        if not self.user:
+            print("Unknown username")
             return False
-        finally:
-            UserSession.remove()  # Nettoyez la session à la fin
 
-user_datastore = SQLAlchemyUserDatastore(UserSession, User, Role)
+        if not verify_and_update_password(self.password.data, self.user):
+            print("Invalid password")
+            return False
+        print("OK !!!!")
+        return home()
+
+user_datastore = SQLAlchemyUserDatastore(db, User, None)
 security = Security(app, user_datastore, login_form=ExtendedLoginForm)
 
-@security.context_processor
-def security_context_processor():
-    return dict(db=UserSession)
+
 
 # Permet de définir le type de fichiers autorisés pour l'ajout d'images
 def allowed_image_file(filename):
@@ -675,16 +689,170 @@ def home():
 
 # -------------- SECURITé ---------------------
 
-
+@app.before_request
+def require_login_for_admin():
+    """ Défini les règles de login """
+    if request.path.startswith('/admin'):
+        if app.config["SECURITY_LOGIN_ADMIN"] and not current_user.is_authenticated:
+            print("SECURITY_LOGIN_ADMIN", request.url)
+            return redirect(url_for('security.login', next=request.url))
+    elif request.path.startswith('/counter'):
+        if app.config["SECURITY_LOGIN_COUNTER"] and not current_user.is_authenticated:
+            return redirect(url_for('security.login', next=request.url))
+    elif request.path.startswith('/display'):
+        if app.config["SECURITY_LOGIN_SCREEN"] and not current_user.is_authenticated:
+            return redirect(url_for('security.login', next=request.url))
+    elif request.path.startswith('/patient'):
+        if app.config["SECURITY_LOGIN_PATIENT"] and not current_user.is_authenticated:
+            return redirect(url_for('security.login', next=request.url))
+        
+    
 
 # ---------------- Fin Sécurité ----------------------------
 
 
 # --------   ADMIN   ---------
+
 @app.route('/admin')
+@login_required
 def admin():
     return render_template('/admin/admin.html')
 
+
+# -------- ADMIN -> Sécurité --------------------
+
+@app.route('/admin/security')
+def admin_security():
+    return render_template('admin/security.html',
+                        security_login_admin=app.config["SECURITY_LOGIN_ADMIN"],
+                        security_login_counter=app.config["SECURITY_LOGIN_COUNTER"],
+                        security_login_screen=app.config["SECURITY_LOGIN_SCREEN"],
+                        security_login_patient=app.config["SECURITY_LOGIN_PATIENT"],
+                        security_remember_duration=app.config["SECURITY_REMEMBER_DURATION"])
+
+@app.route('/admin/security/table')
+def display_security_table():
+    users = User.query.all()
+    return render_template('admin/security_htmx_table.html', users=users)
+
+# affiche le formulaire pour ajouter une regle de l'algo
+@app.route('/admin/security/add_user_form')
+def add_user_form():
+    return render_template('/admin/security_add_user_form.html')
+
+
+@app.route('/admin/security/add_new_user', methods=['POST'])
+def add_new_user():
+    try:
+        username = request.form.get('username')
+        email = request.form.get("email")
+        password1 = request.form.get("password1")
+        password2 = request.form.get("password2")
+
+        if not username:  # Vérifiez que les champs obligatoires sont remplis
+            display_toast(success=False, message="Nom obligatoire")
+            return display_security_table()
+        if not password1 or not password2:
+            display_toast(success=False, message="Les deux champs de mots de passe sont obligatoires")
+            return display_security_table()
+        if password1 != password2:
+            display_toast(success=False, message="Les deux champs de mots de passe doivent être similaires")
+            return display_security_table()
+
+        new_user = User(
+            username = username,
+            email = email,
+            password = hash_password(password1)
+        )
+        db.session.add(new_user)
+        db.session.commit()
+
+        communication('update_admin', data={"action": "delete_add_rule_form"})
+        display_toast(success=True, message="Utilisateur ajouté avec succès")
+
+        return display_security_table()
+
+    except Exception as e:
+        db.session.rollback()
+        display_toast(success=False, message="erreur : " + str(e))
+        print(e)
+        return display_algo_table()
+
+
+@app.route('/admin/security/user_update/<int:user_id>', methods=['POST'])
+def security_update_user(user_id):
+    try:
+        user = User.query.get(user_id)
+        if user:
+            if request.form.get('username') == '':
+                display_toast(success=False, message="Le nom est obligatoire")
+                return ""
+            elif request.form.get("password1") == "" or request.form.get("password2") == "":
+                display_toast(success=False, message="Les deux mots de passe sont obligatoires")
+            elif request.form.get("password1") != request.form.get("password2"):
+                display_toast(success=False, message="Les deux mots de passe doivent être similaires")
+
+            user.username = request.form.get('username', user.username)
+            user.email = request.form.get('email', user.email)
+            user.password = hash_password(request.form.get('password1', user.password))
+            user.active = True
+            user.confirmed_at=datetime.now()
+
+            db.session.commit()
+
+            display_toast(success=True, message="Mise à jour réussie")
+            return ""
+        else:
+            display_toast(success=False, message="Règle introuvable")
+            return ""
+
+    except Exception as e:
+            display_toast(success=False, message="erreur : " + str(e))
+            app.logger.error(e)
+            return jsonify(status="error", message=str(e)), 500
+    
+
+# affiche la modale pour confirmer la suppression d'un membre
+@app.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
+def confirm_delete_user(user_id):
+    user = User.query.get(user_id)
+    return render_template('/admin/security_modal_confirm_delete_user.html', user=user)
+
+
+# supprime une regle de l'algo
+@app.route('/admin/security/delete_user/<int:user_id>', methods=['GET'])
+def delete_user(user_id):
+    print("DELETE")
+    try:
+        user = User.query.get(user_id)
+        if not user:
+            display_toast(success=False, message="Utilisateur non trouvé")
+            return display_security_table()
+
+        db.session.delete(user)
+        db.session.commit()
+
+        display_toast(success=True, message="Utilisateur supprimé")
+        return display_security_table()
+
+    except Exception as e:
+        display_toast(success=False, message="erreur : " + str(e))
+        return display_security_table()  
+    
+
+@app.route('/send_test_email')
+def send_test_email():
+    print("MAIL", mail)
+    msg = EmailMessage(
+        subject="Test Email",
+        body="This is a test email sent from Flask-Mailman.",
+        to=["arggg55@gmail.com"],
+    )
+    msg.send()
+    return "Email sent!"
+
+
+# --------- ADMIN -> fin sécurité -------------
 
 # --------  ADMIN -> Queue ---------
 
@@ -816,6 +984,7 @@ def update_switch():
     """ Mise à jour des switches d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
+    print("key, value", key, value)
     try:
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(key=key).first()
@@ -3666,7 +3835,12 @@ def load_configuration(app, ConfigOption):
         "phone_line4": ("PHONE_LINE4", "value_str"),
         "phone_line5": ("PHONE_LINE5", "value_str"),
         "phone_line6": ("PHONE_LINE6", "value_str"),
-        "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool")        
+        "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
+        "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
+        "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
+        "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
+        "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
+        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
     }
 
     for key, (config_name, value_type) in config_mappings.items():
@@ -3674,12 +3848,12 @@ def load_configuration(app, ConfigOption):
         if config_option:
             app.config[config_name] = getattr(config_option, value_type)
 
-
-
     # Handling special case for cron_delete_patient_table_activated
     if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
         scheduler_clear_all_patients()
 
+    # stockage de la durée de conservation des cookies pour les mots de passe
+    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
 
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
@@ -3687,23 +3861,21 @@ def load_configuration(app, ConfigOption):
         
 with app.app_context():
     print("Creating database tables...")
-    db.create_all()  # Comment this if using Flask-Migrate
-
-    Base.metadata.create_all(user_engine)
+    db.create_all()
+    print("COUNT ADMIN", User.query.count())
     # Check if the user table is empty and create an admin user if it is
-    user_session = UserSession()
-    if user_session.query(User).count() == 0:
-        admin_role = user_session.query(Role).filter_by(name='admin').first()
-        if not admin_role:
-            admin_role = Role(name='admin', description='Administrator')
-            user_session.add(admin_role)
-            user_session.commit()
+    if User.query.count() == 0:
+        print("Creating admin user...")
+        #admin_role = Role.query.filter_by(name='admin').first()
+        #if not admin_role:
+            #admin_role = Role(name='admin', description='Administrator')
+            #db.session.add(admin_role)
+            #db.session.commit()
 
         admin_user = User(email='admin', username='admin', password=hash_password('admin'), active=True, confirmed_at=datetime.now())
-        admin_user.roles.append(admin_role)
-        user_session.add(admin_user)
-        user_session.commit()
-    user_session.close()
+        #admin_user.roles.append(admin_role)
+        db.session.add(admin_user)
+        db.session.commit()
 
     init_days_of_week_db_from_json(Weekday, db, app)
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)

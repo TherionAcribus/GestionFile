@@ -48,6 +48,11 @@
             "phone_line3": "Votre demande :",
             "phone_line4": "{A}",
             "phone_line5": "Afin d'améliorer les temps d'attente, l'ordre de passage peut être légèrement différent de l'ordre d'arrivée.",
-            "phone_line6": "Nous vous appelerons à votre tour."
+            "phone_line6": "Nous vous appelerons à votre tour.",
+            "security_login_admin": true,
+            "security_login_counter": true,
+            "security_login_screen": true,
+            "security_login_patient": true,
+            "security_remember_duration": 30
     }
 }

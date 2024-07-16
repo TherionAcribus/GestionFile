@@ -125,4 +125,20 @@
 </div>
 {% endmacro %}
 
-
+{% macro switch(key, check, label, label_false, label_true) %}
+<div class="switch">
+    <span>{{label}} </span>
+    <label>
+    {{label_false}}
+    <input id="{{key}}" 
+            type="checkbox"
+            {% if check == True %}checked{% endif %}
+            hx-post="/admin/update_switch"
+            hx-target="#invisible"
+            hx-vals='js:{"key": "{{key}}",
+                        "value": document.getElementById("{{key}}").checked}'>
+    <span class="lever"></span>
+    {{label_true}}
+    </label>
+</div>
+{% endmacro %}
