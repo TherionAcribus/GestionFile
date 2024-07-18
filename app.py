@@ -625,9 +625,9 @@ def login():
 
 
 class ExtendedLoginForm(LoginForm):
-    username = StringField('Username', [DataRequired()])
-    password = PasswordField('Password', [DataRequired()])
-    remember = BooleanField('Remember Me')
+    username = StringField('Nom d\'utilisateur', [DataRequired()])
+    password = PasswordField('Mot de passe', [DataRequired()])
+    remember = BooleanField('Se souvenir de moi')
     email = None
     next = HiddenField()
 
@@ -702,7 +702,8 @@ def require_login_for_admin():
     elif request.path.startswith('/display'):
         if app.config["SECURITY_LOGIN_SCREEN"] and not current_user.is_authenticated:
             return redirect(url_for('security.login', next=request.url))
-    elif request.path.startswith('/patient'):
+    # on mets en code sur les pages patients, mais pas patient/phone
+    elif request.path.startswith('/patient') and not request.path.startswith('/patient/phone'):
         if app.config["SECURITY_LOGIN_PATIENT"] and not current_user.is_authenticated:
             return redirect(url_for('security.login', next=request.url))
         
@@ -1011,17 +1012,25 @@ def update_input():
     print("RESQUEST", request.form)
     
     if check:
-        if check == "welcome":
-            authorized_letters = "PDH"
-        elif check == "before_call":
-            authorized_letters = "PDHAN"
-        elif check == "after_call":
-            authorized_letters = "PDHANMC"
-        text_check = validate_and_transform_text(value, authorized_letters)
-        if text_check["success"]:
-            value = text_check["value"]
+        if check == "int":
+            if value.isdigit():
+                value = int(value)
+            else:
+                return display_toast(success=False, message="L'entrée doit être un nombre.")
         else:
-            return display_toast(success=False, message=text_check["value"])
+            if check == "welcome":
+                authorized_letters = "PDH"
+            elif check == "before_call":
+                authorized_letters = "PDHAN"
+            elif check == "after_call":
+                authorized_letters = "PDHANMC"
+            text_check = validate_and_transform_text(value, authorized_letters)
+            
+            if text_check["success"]:
+                value = text_check["value"]
+            else:
+                return display_toast(success=False, message=text_check["value"])
+        
         
     if key.startswith("ticket_"):
         escpos_text = convert_markdown_to_escpos(value)
@@ -1042,7 +1051,10 @@ def update_input():
         config_option = ConfigOption.query.filter_by(key=key).first()        
 
         if config_option:
-            config_option.value_str = value
+            if check == "int":
+                config_option.value_int = value
+            else:
+                config_option.value_str = value
             db.session.commit()
             
             return display_toast(success=True, message="Option mise à jour.")
@@ -2336,10 +2348,14 @@ def announce_page():
                             announce_alert = app.config['ANNOUNCE_ALERT'],
                             announce_player = app.config['ANNOUNCE_PLAYER'],
                             announce_voice = app.config['ANNOUNCE_VOICE'],
+                            anounce_style = app.config['ANNOUNCE_STYLE'],
                             announce_call_text=app.config['ANNOUNCE_CALL_TEXT'],
+                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],
+                            announce_call_text_transition=app.config['ANNOUNCE_CALL_TEXT_TRANSITION'],
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
                             announce_ongoing_text=app.config['ANNOUNCE_ONGOING_TEXT'],
                             announce_title=app.config['ANNOUNCE_TITLE'],
+                            announce_title_size=app.config["ANNOUNCE_TITLE_SIZE"],
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'])
 
 
@@ -2991,7 +3007,9 @@ def validate_current_patient(counter_id):
 def call_next(counter_id):
 
     # CHoix du patient suivant pour un comptoir appelant
-
+    if Patient.query.count() ==  0:
+        return None
+    
     next_patient = algo_choice_next_patient(counter_id)
 
 
@@ -3129,7 +3147,7 @@ def pause_patient(counter_id, patient_id):
     return '', 204  # No content to send back
 
 
-@app.route('/counter/app/is_patient_on_counter/<int:counter_id>', methods=['GET'])
+@app.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
 def app_is_patient_on_counter(counter_id):
     """ Renvoie les informations du patient actuel au comptoir (pour le client) pour l'App (démarrage)"""
     patient = Patient.query.filter(
@@ -3254,7 +3272,9 @@ def patients_calling():
     call_patients = []
     for patient in patients:
         call_patients.append(replace_balise_announces(announce_call_text, patient))
-    return render_template('announce/patients_calling.html', call_patients=call_patients)
+    return render_template('announce/patients_calling.html', 
+                            call_patients=call_patients,
+                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
 
 
 @app.route('/announce/patients_ongoing')
@@ -3798,16 +3818,20 @@ def load_configuration(app, ConfigOption):
         "printer": ("PRINTER", "value_bool"),
         "printer_width": ("PRINTER_WIDTH", "value_int"),
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
+        "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
         "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
         "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),
+        "announce_style": ("ANNOUNCE_STYLE", "value_str"),
         "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
         "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
         "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
         "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
+        "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
+        "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),
         "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),

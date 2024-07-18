@@ -36,16 +36,33 @@
                     <label for="phone_line{{ loop.index }}">Ligne {{ loop.index }}</label>
                 </div>
                 <div>
-                    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{P}')">{P}</span>
                     pour le nom de la pharmacie,  
-                    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</span>
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{N}')">{N}</span>
                     pour le numéro du patient, 
-                    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{A}</span>
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{A}')">{A}</span>
                     pour l'activité, 
-                    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{D}')">{D}</span>
                     pour la date,
-                    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{H}')">{H}</span>
                     pour l'heure.
+                </div>
+
+                <div>
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '#')">#</span>
+                    pour un titre 1,  
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '##')">##</span>
+                    pour un titre 2, 
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '###')">###</span>
+                    pour un titre 3, 
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '*italique*')">*italique*</span>
+                    pour un texte en italique,
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '**gras**')">**gras**</span>
+                    pour un texte en gras,
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '***')">***</span>
+                    pour une séparation,
+                    <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;')">&lt;p align="center"&gt;&lt;/p&gt;</span>
+                    pour centrer un texte. Les autres balises markdown sont également utilisables.
                 </div>
             </div>
             <button

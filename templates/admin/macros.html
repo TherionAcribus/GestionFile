@@ -115,6 +115,16 @@
 </div>
 {% endmacro %}
 
+<!-- Champs texte pour les entiers -->
+{% macro textbloc_int(key, value, label) %}
+<div class="row">
+    <div class="row">
+        {{ textarea(key, value, label) }}
+    </div>
+    {{ button(key, "int") }}
+</div>
+{% endmacro %}
+
 
 {% macro textarea_full(key, value, label) %}
 <div class="row">
@@ -124,6 +134,8 @@
     {{ button(key) }}
 </div>
 {% endmacro %}
+
+
 
 {% macro switch(key, check, label, label_false, label_true) %}
 <div class="switch">
