@@ -55,6 +55,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
         display_toast(msg);
     });
 
+    adminSocket.on("refresh_activity_table", function(msg) {
+        console.log("refresh_activity_table:", msg);
+        refresh_activity_table();
+        refresh_activity_staff_table();
+    })
+
     adminSocket.on('connect_error', function(err) {
         console.error('Admin WebSocket connection error:', err);
     });
@@ -98,8 +104,15 @@ function refresh_queue(){
 }
 
 
+// -------------- ACTIVITY --------------
 
+function refresh_activity_table(){
+    htmx.trigger('#div_activity_table', 'refresh_activity_table', {target: "#div_activity_table"});
+}
 
+function refresh_activity_staff_table(){
+    htmx.trigger('#div_activity_staff_table', 'refresh_activity_staff_table', {target: "#div_activity_staff_table"});
+}
 
 // ---------------- BOUTONS ----------------
 

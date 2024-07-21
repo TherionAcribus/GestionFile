@@ -10,7 +10,7 @@ eventlet.monkey_patch()
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions
+from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
 from flask_migrate import Migrate
@@ -1203,11 +1203,12 @@ def clear_old_patients_table():
         old_patients = Patient.query.filter(Patient.timestamp < today)
         
         # Supprimez ces patients
-        old_patients.delete(synchronize_session='fetch')
-        db.session.commit()
-        communikation("update_patient")
-        communication("update_patients")
-        app.logger.info(f"Deleted old patients not from today ({today}).")
+        if old_patients.count() > 0:
+            old_patients.delete(synchronize_session='fetch')
+            db.session.commit()
+            communikation("update_patient")
+            communication("update_patients")
+            app.logger.info(f"Deleted old patients not from today ({today}).")
     else:
         app.logger.info("Deletion of old patients is disabled.")
 
@@ -1375,6 +1376,8 @@ def display_activity_table_staff():
 @app.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
 def update_activity(activity_id):
     activity = Activity.query.get(activity_id)
+    old_schedules = activity.schedules
+
     if activity:
         if request.form.get('name') == '':
             display_toast(success=False, message="Le nom est obligatoire")
@@ -1392,6 +1395,10 @@ def update_activity(activity_id):
         activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
         update_scheduler_for_activity(activity)
         
+        # Si on a modifier les schedules, on met à jour le bouton
+        if activity.schedules != old_schedules:
+            update_bouton_after_scheduler_changed(activity)
+        
         if request.form.get("staff_id"):
             activity.is_staff = True
             activity.staff = Pharmacist.query.get(int(request.form.get("staff_id")))
@@ -1403,6 +1410,52 @@ def update_activity(activity_id):
         return ""
     else:
         return display_toast(success=False, message="Activité introuvable")
+
+
+def update_bouton_after_scheduler_changed(activity):
+    """ Si on modifie le scheduler d'une activité, il faut vérifier où en est le bouton.
+    Il faut donc éventuellement remettre le bouton en activité ou au contraire le rendre inactif."""
+    # Obtenir l'heure actuelle et le jour actuel
+    current_time = datetime.now().time()
+    current_weekday = datetime.now().strftime('%A')  # Renvoie le jour de la semaine en anglais
+    print(current_weekday, current_time)
+
+    # Charger l'activité avec ses horaires et boutons associés
+    activity = Activity.query.options(
+        joinedload(Activity.schedules).joinedload(ActivitySchedule.weekdays),
+        joinedload(Activity.buttons)
+    ).filter_by(id=activity.id).first()
+
+    if not activity:
+        print(f"Activity with id {activity.id} not found.")
+        return
+
+    # Initialiser le drapeau d'activité à False
+    is_activity_active = False
+
+    # Parcourir les créneaux horaires de l'activité
+    for schedule in activity.schedules:
+        print(schedule)
+        for weekday in schedule.weekdays:
+            print(weekday.english_name)
+            if weekday.english_name.lower() == current_weekday.lower():
+                if schedule.start_time <= current_time <= schedule.end_time:
+                    is_activity_active = True
+                    break
+        if is_activity_active:
+            break
+
+    # Mettre à jour les boutons associés à l'activité
+    for button in activity.buttons:
+        if button.is_active != is_activity_active:
+            button.is_active = is_activity_active
+            db.session.add(button)  # Ajouter le bouton à la session pour la mise à jour
+            display_toast(success=True, message=f"Le bouton '{button.label} 'vient de changer d'activité.")
+
+    db.session.commit()  # Sauvegarder les modifications dans la base de données
+
+    app.logger.info(f"UPDATE BOUTON: Activity {activity.name} is_active={is_activity_active}")
+    
 
 
 # affiche la modale pour confirmer la suppression d'une activité
@@ -1464,7 +1517,6 @@ def add_activity_staff_form():
 # enregistre l'activité' dans la Bdd
 @app.route('/admin/activity/add_new_activity', methods=['POST'])
 def add_new_activity():
-    print("ADDD", request.form)
     try:
         name = request.form.get('name')
         letter = request.form.get('letter')
@@ -1562,6 +1614,18 @@ def update_schedule(schedule_id):
 
             db.session.commit()
             display_toast(success=True, message="Plage horaire mise à jour")
+
+            # Mise à jour des boutons des activités qui dépendent du schedule
+            activities_with_this_schedule = Activity.query.join(activity_schedule_link).filter(
+                activity_schedule_link.c.schedule_id == schedule_id
+            ).all()
+            print("activities_with_this_schedule", activities_with_this_schedule)
+            for activity in activities_with_this_schedule:
+                update_bouton_after_scheduler_changed(activity)
+
+            # mise à jour de la table activité si nouvelle plage horaire
+            communikation("admin", event="refresh_activity_table")
+
             return ""
         else:
             display_toast(success=False, message="Plage horaire introuvable")
@@ -1612,6 +1676,9 @@ def add_new_schedule():
 
         communication("update_admin", data={"action": "delete_add_schedule_form"})
 
+        # mise à jour de la table activité si nouvelle plage horaire
+        communikation("admin", event="refresh_activity_table")
+        
         return display_schedule_table()
 
     except Exception as e:
@@ -1653,6 +1720,9 @@ def delete_schedule(schedule_id):
         db.session.delete(schedule)
         db.session.commit()
         display_toast(success=True, message="Suppression réussie'")
+
+        # mise à jour de la table activité si nouvelle plage horaire
+        communikation("admin", event="refresh_activity_table")
 
         return display_schedule_table()
 
@@ -3894,8 +3964,9 @@ def load_configuration(app, ConfigOption):
             app.config[config_name] = getattr(config_option, value_type)
 
     # Handling special case for cron_delete_patient_table_activated
-    if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
-        scheduler_clear_all_patients()
+    #if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
+    #    scheduler_clear_all_patients()
+    # TODO A Créer seulement si n'existe pas 
 
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
@@ -3932,7 +4003,7 @@ with app.app_context():
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
-    clear_old_patients_table()
+    #clear_old_patients_table()
 
 
 if __name__ == "__main__":
