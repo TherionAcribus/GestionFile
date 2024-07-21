@@ -115,7 +115,7 @@ def callback_update_patient(ch, method, properties, body):
 def callback_sound(ch, method, properties, body):
     logging.debug(f"Received screen message: {body}")
     if communication_mode == "websocket":
-        socketio.emit('update', {'data': body.decode()}, namespace='/socket_sound')
+        socketio.emit('update', {'data': body.decode()}, namespace='/socket_update_screen')
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 def callback_admin(ch, method, properties, body):
@@ -147,11 +147,11 @@ def connect_general():
 def disconnect_general():
     logging.info("Client disconnected from general namespace")
 
-@socketio.on('connect', namespace='/socket_sound')
+@socketio.on('connect', namespace='/socket_update_screen')
 def connect_screen():
     logging.info("Client connected to screen namespace")
 
-@socketio.on('disconnect', namespace='/socket_sound')
+@socketio.on('disconnect', namespace='/socket_update_screen')
 def disconnect_screen():
     logging.info("Client disconnected from screen namespace")
 
@@ -899,6 +899,7 @@ def clear_all_patients_from_db():
             app.logger.info("La table Patient a été vidée")
             communication("update_patients")
             communikation("update_patient")
+            announce_refresh()
             return display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
@@ -924,6 +925,8 @@ def update_patient(patient_id):
             patient.counter = Counter.query.get(counter_id)
 
             db.session.commit()
+
+            announce_refresh()
 
             display_toast(success=True, message="Mise à jour effectuée")
             return ""
@@ -957,6 +960,7 @@ def delete_patient(patient_id):
         db.session.commit()
         communication("update_patients")
         communikation("update_patient")
+        announce_refresh()
         return display_toast()
 
     except Exception as e:
@@ -2515,6 +2519,10 @@ def call_specific_patient(counter_id, patient_id):
 
         # Notifier tous les clients et mettre à jour le comptoir
         communikation("update_patient")
+        text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
+        print("TEXTEEEE", text)
+        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
+
         communication("update_patients")
         communication("update_counter", client_id=counter_id)
 
@@ -2543,6 +2551,7 @@ def validate_patient(counter_id, patient_id):
         db.session.commit()
 
     communikation("update_patient")
+    communikation("update_screen", event="remove_calling", data={"id": patient_id})
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2968,10 +2977,13 @@ def counter_refresh_buttons(counter_id):
     return render_template('/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
 
 
-
 @app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
 def validate_and_call_next(counter_id):
     print('validate_and_call_next', counter_id)
+
+    current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
+    if current_patient:
+        communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
 
     validate_current_patient(counter_id)
     print('patient_valide')
@@ -2980,6 +2992,9 @@ def validate_and_call_next(counter_id):
     print("prochain patient")
 
     communikation("update_patient")
+    
+    text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
+    communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
 
     communication("update_patients")
     communication("update_counter", client_id=counter_id)
@@ -2992,13 +3007,19 @@ def validate_and_call_next(counter_id):
 
 
 def validate_current_patient(counter_id):
-    # si patient actuel 
+
+    current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
+    if current_patient:
+        print("PATATE", current_patient)
+        communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
+    
+    # si patient actuel
     patients_at_counter = Patient.query.filter_by(counter_id=counter_id).all()
     if patients_at_counter :
         print("patient dans le comptoir")
         # Mise à jour du statut pour tous les patients au comptoir
         Patient.query.filter_by(counter_id=counter_id).update({'status': 'done'})
-        db.session.commit()    
+        db.session.commit()        
     else:
         print("pas de patient")
 
@@ -3254,28 +3275,28 @@ def counter_select_patient(counter_id, patient_id):
 @app.route('/display')
 def display():
     app.logger.debug("start display")
-    announce_title = app.config['ANNOUNCE_TITLE'] 
-    announce_subtitle = app.config['ANNOUNCE_SUBTITLE']
-    announce_ongoing_display = app.config['ANNOUNCE_ONGOING_DISPLAY']
+
     return render_template('/announce/announce.html', 
                             current_patients=current_patients,
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
-                            announce_title=announce_title,
-                            announce_subtitle=announce_subtitle,
-                            announce_ongoing_display=announce_ongoing_display)
+                            announce_title=app.config['ANNOUNCE_TITLE'] ,
+                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
+                            call_patients = patient_list_for_init_display(),
+                            announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
+                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'])
 
-
-@app.route('/announce/patients_calling')
-def patients_calling():
+def patient_list_for_init_display():
+    """ Création de la liste de patients pour initialiser l'écran d'annonce"""
     patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
     announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first().value_str
     call_patients = []
     for patient in patients:
-        call_patients.append(replace_balise_announces(announce_call_text, patient))
-    return render_template('announce/patients_calling.html', 
-                            call_patients=call_patients,
-                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
-
+        call_patient = {
+            'id': patient.id,
+            'text': replace_balise_announces(announce_call_text, patient)
+        }
+        call_patients.append(call_patient)
+    return call_patients
 
 @app.route('/announce/patients_ongoing')
 def patients_ongoing():
@@ -3318,7 +3339,7 @@ def announce_init_gallery():
 @app.route('/announce/refresh')
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
-    communikation("sound", event="refresh")
+    communikation("update_screen", event="refresh")
     communication("update_announce")
     return '', 204
 
@@ -3423,7 +3444,7 @@ def events_update_patient_pyside():
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
     """ Effectue la communication avec les clients """
-    print("communikation", communication_mode, data)
+    print("communikation", communication_mode, data, event)
     if communication_mode == "websocket":
         communication_websocket(stream=f"socket_{stream}", data=data)
         if stream == "update_patient":
@@ -3436,11 +3457,11 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
                 signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
                 audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
                 if app.config["ANNOUNCE_PLAYER"] == "web":
-                    communication_websocket(stream="socket_sound", data=audio_path)
+                    communication_websocket(stream="socket_update_screen", data=audio_path)
                 else:
                     communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
             if app.config["ANNOUNCE_PLAYER"] == "web":
-                communication_websocket(stream="socket_sound", data=data)
+                communication_websocket(stream="socket_update_screen", data=data)
             else:
                 communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
@@ -3925,7 +3946,7 @@ if __name__ == "__main__":
         channel = connection.channel()
         # Start threads for consuming different queues
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_patient', callback_update_patient)).start()
-        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_sound', callback_sound)).start()
+        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_screen', callback_sound)).start()
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_admin)).start()
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_app_counter', callback_app_counter)).start()
         socketio.run(app, host='0.0.0.0', port=5000, debug=True) 

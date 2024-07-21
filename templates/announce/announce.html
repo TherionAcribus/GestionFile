@@ -12,9 +12,12 @@
         <!-- Swiper-->
         <link
         rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"
-        />
+        href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/>
         <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+        <!-- Anime JS -->   
+        <script src="../static/js/anime-master/anime.min.js"></script>
+
+
 </head>
 <body>
 
@@ -27,6 +30,7 @@
             <p id="text_subtitle">{{announce_subtitle}}</p>
         </div>
 
+        <!--
         <div class="div_center"
         {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
             <div id="left_side">
@@ -34,8 +38,25 @@
                         hx-trigger="refresh_calling, load" 
                         hx-get="/announce/patients_calling" 
                         hx-swap="innerHTML">
-                    <!-- PATIENT CALLING -->
-                </div>
+PATIENT CALLING 
+                </div>-->
+        <div class="div_center">
+            <div id="left_side">
+                
+                <div id="div_calling">
+                    <ul id="patient_list">
+                        {% for call_patient in call_patients %}
+                            <li 
+                                id="patient-{{call_patient.id}}"
+                                class="text_patient_calling"
+                                {% if announce_call_text_size %}
+                                    style="font-size: {{ announce_call_text_size }}px;"
+                                {% endif %}>
+                                {{ call_patient.text }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>           
 
                 {% if announce_ongoing_display %}
                     <div id="div_ongoing"
@@ -66,13 +87,64 @@
 
     </div>
 
-    <script type="text/javascript">
-
-
-
-
-    </script>
-
 <script src="../static/js/announce.js"></script>
+
+<script type="text/javascript">
+    function animateElement(element, properties, options) {
+        return anime({
+            targets: element,
+            ...properties,
+            ...options
+        }).finished;
+    }
+
+    async function add_calling(msg) {
+        const patient = msg.data;
+        console.log('ADDED', patient)
+        // Créer un nouvel élément <li>
+        const newListItem = document.createElement('li');
+        newListItem.id = 'patient-' + patient.id;
+        newListItem.className = 'text_patient_calling hidden'; // Caché initialement
+        if ({{announce_call_text_size}}) {
+            newListItem.style.fontSize = '{{ announce_call_text_size }}px'; // Taille de texte dynamique
+        }    
+        newListItem.textContent = patient.text;
+
+        // Ajouter le nouvel élément à la liste
+        const patientList = document.getElementById('patient_list');
+        patientList.appendChild(newListItem);
+
+        // Animer l'apparition
+        await animateElement(newListItem, {
+            opacity: [0, 1],
+            translateX: [-50, 0],
+            duration: 500,
+            easing: 'easeOutQuad'
+        }, {
+            begin: () => {
+                newListItem.classList.remove('hidden');
+            }
+        });
+    }
+
+    async function remove_calling(msg) {
+        // Sélectionner l'élément à supprimer
+        console.log('REMOVED', msg)
+        const id = msg.data.id;
+        const listItem = document.getElementById('patient-' + id);
+        if (listItem) {
+            // Animer la disparition
+            await animateElement(listItem, {
+                opacity: [1, 0],
+                translateX: [0, 50],
+                duration: 500,
+                easing: 'easeInQuad'
+            });
+            listItem.remove();
+        }
+    }
+
+</script>
+
 </body>
 </html>

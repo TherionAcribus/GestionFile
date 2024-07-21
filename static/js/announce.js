@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     // Connexion au namespace écran
-    var screenSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_sound');
+    var screenSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_screen');
 
     screenSocket.on('connect', function() {
         console.log('Screen WebSocket connected');
@@ -57,6 +57,27 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log("Received screen message:", msg);
         refresh_page();
     });
+
+    screenSocket.on('add_calling', function(msg) {
+        console.log("Received screen message:", msg);
+        add_calling(msg);
+    });
+
+    screenSocket.on('remove_calling', function(msg) {
+        console.log("Received screen message:", msg);
+        console.log('REMOVED')
+        remove_calling(msg);
+    });
+
+
+    screenSocket.on('add_on_counter', function(msg) {
+        console.log("Received screen message:", msg);
+    });
+
+    screenSocket.on('remove_on_counter', function(msg) {
+        console.log("Received screen message REMOVED:", msg);
+    });
+
 
     screenSocket.on('connect_error', function(err) {
         console.error('Screen WebSocket connection error:', err);
@@ -90,11 +111,12 @@ window.onunload = function() {
 };
 
 
-
 function refresh_calling_list() {
-    htmx.trigger('#div_calling', 'refresh_calling', {target: '#div_calling'});
-    htmx.trigger('#div_ongoing', 'refresh_ongoing', {target: '#div_ongoing'});
+    //htmx.trigger('#div_calling', 'refresh_calling', {target: '#div_calling'});
+    //htmx.trigger('#div_ongoing', 'refresh_ongoing', {target: '#div_ongoing'});
 }
+
+
 
 
 const audioQueue = [];
