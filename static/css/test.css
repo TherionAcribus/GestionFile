@@ -113,6 +113,7 @@ html, body {
     background-color:rgb(102, 105, 105);
 }
 
+
 .img_btn {
     height: 200px;
 }
@@ -143,6 +144,10 @@ html, body {
 
 .div_text_button_inactive{
     color: rgb(102, 105, 105);
+}
+
+.div_square_buttons .div_text_button_inactive {
+    color: white;
 }
 
 .div_summary{
