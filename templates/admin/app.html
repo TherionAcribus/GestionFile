@@ -5,25 +5,13 @@
 {% block content %}
     {% import '/admin/macros.html' as macros %}
     <h3>Application</h3>
-
-    <div>
-        {{numbering_by_activity}}
-        <!-- Switch -->
-        <div class="switch">
-            <span>Mode de numérotation : </span>
-            <label>
-            Numérotation globale
-            <input id="numbering_by_activity" 
-                    type="checkbox"
-                    {% if numbering_by_activity == True %}checked{% endif %}
-                    hx-post="/admin/app/update_numbering_by_activity"
-                    hx-target="#invisible"
-                    hx-vals='js:{"numbering_by_activity": document.getElementById("numbering_by_activity").checked}'>
-            <span class="lever"></span>
-            Par activité
-            </label>
-        </div>
-    </div>  
+    
+    {{ macros.switch("numbering_by_activity", 
+                numbering_by_activity, 
+                "Mode de numérotation : ", 
+                "Numérotation globale", 
+                "Par activité")
+    }}
 
     A METTRE AILLEURS !!!
     {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}

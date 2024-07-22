@@ -117,8 +117,6 @@ function refresh_calling_list() {
 }
 
 
-
-
 const audioQueue = [];
 let isPlaying = false;
 
