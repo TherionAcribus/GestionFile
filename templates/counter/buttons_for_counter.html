@@ -1,7 +1,13 @@
+{% if current_staff != None %}
 <a tabindex="0" class="btn filled icon-left"
     hx-post="{{ url_for('validate_and_call_next', counter_id=counter_id) }}">
     <i class="material-icons">skip_next</i>Suivant
 </a>
+{% else %}
+<a tabindex="0" class="btn filled icon-left disabled">
+    <i class="material-icons">skip_next</i>Suivant
+</a>
+{% endif %}
 
 {% if status == 'calling' %}
 <a tabindex="1" class="btn filled icon-left"

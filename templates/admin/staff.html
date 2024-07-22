@@ -21,10 +21,6 @@
     </a>    
     <div id="div_add_staff_form"></div>
 
-    <!-- Modal Structure -->
-    <div id="modal_delete_staff" class="modal">
-    </div>
-
     <h3>Sauvegarde / Restauration</h3>
 
     <a class='btn' href="{{ url_for('staff_backup') }}">Sauvegarde des données</a>
@@ -33,6 +29,10 @@
         <input type="file" name="file" accept=".json">
         <button class ="btn btn-red" type="submit">Restaurer les données</button>
     </form>
+
+    <!-- Modal Structure -->
+    <div id="modal_delete_staff" class="modal">
+    </div>
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>

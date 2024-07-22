@@ -130,6 +130,12 @@ def callback_app_counter(ch, method, properties, body):
         socketio.emit('update', {'data': body.decode()}, namespace='/socket_app_counter')
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
+def callback_counter(ch, method, properties, body):
+    logging.debug(f"Received counter message: {body}")
+    if communication_mode == "websocket":
+        socketio.emit('update', {'data': body.decode()}, namespace='/socket_counter')
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
 # continuer les connexioNs Rabbit
 
 def consume_rabbitmq(connection, channel, queue_name, callback):
@@ -195,6 +201,13 @@ def connect_app_screen():
 def disconnect_app_screen():
     logging.info("Client disconnected from test namespace")
 
+@socketio.on('connect', namespace='/socket_counter')
+def connect_counter():
+    logging.info("Client connected to counter namespace")
+
+@socketio.on('disconnect', namespace='/socket_counter')
+def disconnect_counter():
+    logging.info("Client disconnected from counter namespace")
 
 
 @app.route('/send_message', methods=['POST'])
@@ -1228,8 +1241,9 @@ def clear_old_patients_table():
 
 # base
 @app.route('/admin/staff')
-def staff():
-    return render_template('/admin/staff.html')
+def staff():    
+    return render_template('/admin/staff.html',
+                            activities = Activity.query.all())
 
 # affiche la table de l'équipe
 @app.route('/admin/staff/table')
@@ -1394,39 +1408,49 @@ def staff_restore():
         try:
             file = request.files['file']
             if file and file.filename.endswith('.json'):
-                backup_data = json.load(file)
-                
-                # Vérification des métadonnées
-                if backup_data.get("name") != "gf_staff" or backup_data.get("type") != "backup":
-                    app.logger.info('Invalid backup file.', 'danger')
-                    return redirect(url_for('staff'))
-                
-                pharmacists_json = backup_data.get("staff", [])
-                
-                for pharmacist_json in pharmacists_json:
-                    activities_ids = pharmacist_json.pop('activities', [])
-                    pharmacist = Pharmacist.query.get(pharmacist_json['id'])
-                    if not pharmacist:
-                        pharmacist = Pharmacist(**pharmacist_json)
-                    else:
-                        pharmacist.from_dict(pharmacist_json)
-                    
-                    pharmacist.activities = []
-                    for activity_id in activities_ids:
-                        activity = Activity.query.get(activity_id)
-                        if activity:
-                            pharmacist.activities.append(activity)
-                    
-                    db.session.add(pharmacist)
-                db.session.commit()
-                app.logger.info('Restoration successful!', 'success')
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+                staff_restore_init(restore=True, file_path=file_path)
+                os.remove(file_path)  # Optionally remove the file after processing
             else:
-                app.logger.info('Invalid file format. Please upload a JSON file.', 'danger')
+                app.logger.error('Invalid file format. Please upload a JSON file.')
         except Exception as e:
             db.session.rollback()
-            app.logger.info(f'An error occurred: {e}', 'danger')
+            app.logger.info(f'An error occurred: {e}')
         return redirect(url_for('staff'))
     return render_template('restore.html')
+
+
+def staff_restore_init(restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+        
+        # Vérification des métadonnées
+        if backup_data.get("name") != "gf_staff" or backup_data.get("type") not in ["backup", "default"]:
+            app.logger.error('Invalid backup file.', 'danger')
+            if restore:
+                return redirect(url_for('staff'))
+        
+        pharmacists_json = backup_data.get("staff", [])
+        
+        for pharmacist_json in pharmacists_json:
+            activities_ids = pharmacist_json.pop('activities', [])
+            pharmacist = Pharmacist.query.get(pharmacist_json['id'])
+            if not pharmacist:
+                pharmacist = Pharmacist(**pharmacist_json)
+            else:
+                pharmacist.from_dict(pharmacist_json)
+            
+            pharmacist.activities = []
+            for activity_id in activities_ids:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    pharmacist.activities.append(activity)
+            
+            db.session.add(pharmacist)
+        db.session.commit()
+        app.logger.info('Restoration successful!', 'success')
+
     
 
 # --------  FIN  de ADMIN -> Staff   ---------
@@ -3112,8 +3136,13 @@ def current_patient_for_counter_test(counter_id):
     else :
         patient_id = patient.id
         patient_status = patient.status
-    return render_template('counter/buttons_for_counter.html', patient=patient, 
-                            patient_id=patient_id, counter_id=counter_id, status = patient_status)
+    return render_template('counter/buttons_for_counter.html', 
+                            patient=patient, 
+                            patient_id=patient_id, 
+                            counter_id=counter_id, 
+                            status = patient_status,
+                            current_staff=Counter.query.get(counter_id).staff  # TODO Utiliser une classe pour stocker ces infos
+                            )
 
 
 # A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
@@ -3168,7 +3197,6 @@ def validate_current_patient(counter_id):
 
     current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
     if current_patient:
-        print("PATATE", current_patient)
         communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
     
     # si patient actuel
@@ -3354,6 +3382,9 @@ def remove_counter_staff():
     counter = Counter.query.get(request.form.get('counter_id')) 
     counter.staff = None
     db.session.commit()
+
+    # mise à jour des boutons
+    communikation("counter", event="update buttons")
     return is_staff_on_counter(request.form.get('counter_id'))
 
 
@@ -3372,6 +3403,8 @@ def update_counter_staff():
         counter.staff = staff
         db.session.commit()
 
+        # mise à jour des boutons
+        communikation("counter", event="update buttons")
         # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
         return is_staff_on_counter(request.form.get('counter_id'))
 
@@ -3379,17 +3412,22 @@ def update_counter_staff():
     # on déconnecte l'utilisateur précedemement connecté
     counter.staff = None
     db.session.commit()
+    # mise à jour des boutons
+    communikation("counter", event="update buttons")
     # on affiche une erreur à la place du nom
     return render_template('counter/staff_on_counter.html', staff=False)
 
 
 def deconnect_staff_from_all_counters(staff):
     """ Déconnecte le membre de l'équipe de tous les comptoirs """
+    print("deconnecte")
     for counter in Counter.query.all():
         if counter.staff == staff:
             counter.staff = None
             db.session.commit()
             #socketio.emit("trigger_disconnect_staff", {})
+            # mise à jour des boutons
+            communikation("counter", event="update buttons")
 
 
 @app.route('/counter/list_of_activities', methods=['POST'])
@@ -3972,7 +4010,7 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
 
 
 def init_staff_data_from_json():
-    json_file='static/json/default_staff.json'    
+    json_file='static/json/default_config.json'    
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
@@ -3981,7 +4019,7 @@ def init_staff_data_from_json():
         app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
 
         if not current_version:
-            pass
+            staff_restore_init(restore=False, file_path="static/json/default_staff.json")
 
 
 def set_server_url(app, request):
