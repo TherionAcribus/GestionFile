@@ -1,0 +1,15 @@
+{
+    "name": "gf_staff",
+    "type": "default",
+    "version": "0.1",
+    "comments": "Version initiale",
+    "staff": [
+        {"id": 1, 
+        "name": "Equipe", 
+        "initials": "EQ", 
+        "language": "", 
+        "is_active": false,
+        "activities": [1, 2, 3, 4, 5, 6],
+        "default": true}
+    ]
+}

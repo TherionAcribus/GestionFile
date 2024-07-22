@@ -54,8 +54,8 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-site = "dev"
-communication_mode = "rabbitmq"  # websocket, sse or rabbitmq
+site = "production"
+communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 
 if site == "production":
@@ -237,8 +237,6 @@ def page_not_found(e):
     """, 404
 
 
-
-
 @app.route('/send')
 def send_message_old():
     url = rabbitMQ_url
@@ -355,6 +353,7 @@ class Patient(db.Model):
         }
     
 
+
 counters_activities = db.Table('counters_activities',
     db.Column('counter_id', db.Integer, db.ForeignKey('counter.id'), primary_key=True),
     db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True)
@@ -387,6 +386,7 @@ class Pharmacist(db.Model):
     initials = db.Column(db.String(10), nullable=False)
     language = db.Column(db.String(20), default=False)
     is_active = db.Column(db.Boolean, default=False)
+    default = db.Column(db.Boolean, default=False)
     activities = db.relationship('Activity', secondary=pharmacists_activities, lazy='subquery',
         backref=db.backref('pharmacists', lazy=True))   
     
@@ -397,6 +397,14 @@ class Pharmacist(db.Model):
 
     def __repr__(self):
         return f'<Pharmacist {self.name}>'
+
+    def from_dict(self, data):
+        """ Utilisé par la restauration de la base de données """
+        for field in data:
+            if field != 'activities':
+                setattr(self, field, data[field])
+        if 'activities' in data:
+            self.activities = [Activity.query.get(id) for id in data['activities']]
 
 
 activity_schedule_weekday = db.Table('activity_schedule_weekday',
@@ -1341,6 +1349,86 @@ def add_new_staff():
         display_toast(success=True, message= "Erreur : " + str(e))
         return display_staff_table()
 
+
+@app.route('/admin/staff/backup', methods=['GET'])
+def staff_backup():
+    try:
+        pharmacists = Pharmacist.query.all()
+        pharmacists_json = [
+            {
+                "id": pharmacist.id,
+                "name": pharmacist.name,
+                "initials": pharmacist.initials,
+                "language": pharmacist.language,
+                "is_active": pharmacist.is_active,
+                "activities": [activity.id for activity in pharmacist.activities]
+            }
+            for pharmacist in pharmacists
+        ]
+        
+        backup_data = {
+            "name": "gf_staff",
+            "type": "backup",
+            "version": "0.1",
+            "comments": "Backup de l'équipe",
+            "staff": pharmacists_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'gf_backup_staff{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        flash(f'An error occurred: {e}', 'danger')
+        return redirect(url_for('index'))
+
+
+@app.route('/admin/staff/restore', methods=['GET', 'POST'])
+def staff_restore():
+    app.logger.info("staff_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                backup_data = json.load(file)
+                
+                # Vérification des métadonnées
+                if backup_data.get("name") != "gf_staff" or backup_data.get("type") != "backup":
+                    app.logger.info('Invalid backup file.', 'danger')
+                    return redirect(url_for('staff'))
+                
+                pharmacists_json = backup_data.get("staff", [])
+                
+                for pharmacist_json in pharmacists_json:
+                    activities_ids = pharmacist_json.pop('activities', [])
+                    pharmacist = Pharmacist.query.get(pharmacist_json['id'])
+                    if not pharmacist:
+                        pharmacist = Pharmacist(**pharmacist_json)
+                    else:
+                        pharmacist.from_dict(pharmacist_json)
+                    
+                    pharmacist.activities = []
+                    for activity_id in activities_ids:
+                        activity = Activity.query.get(activity_id)
+                        if activity:
+                            pharmacist.activities.append(activity)
+                    
+                    db.session.add(pharmacist)
+                db.session.commit()
+                app.logger.info('Restoration successful!', 'success')
+            else:
+                app.logger.info('Invalid file format. Please upload a JSON file.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.info(f'An error occurred: {e}', 'danger')
+        return redirect(url_for('staff'))
+    return render_template('restore.html')
+    
+
 # --------  FIN  de ADMIN -> Staff   ---------
 
 # --------  ADMIN -> Activity  ---------
@@ -1358,8 +1446,8 @@ def display_activity_table():
     return render_template('admin/activity_htmx_table.html',
                             activities=activities,
                             schedules=schedules)
-    
-    
+
+
 # affiche le tableau des activités spécifique pour les membres de l'équipe
 @app.route('/admin/activity/table_staff')
 def display_activity_table_staff():
@@ -3124,9 +3212,6 @@ def algo_choice_next_patient(counter_id):
 
     counter = Counter.query.get(counter_id)
 
-    #priority = Activity.query.get(5)
-    #priority = None
-
     # activités possible par ce pharmacien
     staff_activities = set(activity.id for activity in counter.staff.activities)
 
@@ -3886,6 +3971,19 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
         print("La base de données contient déjà des données.")
 
 
+def init_staff_data_from_json():
+    json_file='static/json/default_staff.json'    
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="staff_version").first()
+    if not current_version or current_version.version != data['version']:
+        app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
+
+        if not current_version:
+            pass
+
+
 def set_server_url(app, request):
     # Stockage de l'adresse pour la génération du QR code
     if request.host_url == "http://127.0.0.1:5000/":
@@ -3996,6 +4094,7 @@ with app.app_context():
     init_days_of_week_db_from_json(Weekday, db, app)
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()
+    init_staff_data_from_json()
     init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
     init_default_languages_db_from_json(Language, db)
