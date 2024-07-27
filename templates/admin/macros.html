@@ -154,3 +154,86 @@
     </label>
 </div>
 {% endmacro %}
+
+
+{% macro save_restore(table) %}
+<h3>Sauvegarde</h3>
+<a class='btn' href="{{ url_for(table + '_backup') }}">Sauvegarder les données</a>
+
+<h3>Restauration</h3>
+<!-- Button to trigger the modal -->
+<a class="btn red modal-trigger" href="#restoreModal">Restaurer les données</a>
+
+<!-- Modal Structure -->
+<div id="restoreModal" class="modal">
+    <div class="modal-content">
+        <h4>Restaurer les données</h4>
+        <form id="restoreForm" action="{{ url_for(table + '_restore') }}" method="post" enctype="multipart/form-data">
+            <div class="file-field input-field">
+                <div class="btn">
+                    <span>Choisir un fichier</span>
+                    <input type="file" name="file" accept=".json" id="fileInput">
+                </div>
+                <div class="file-path-wrapper">
+                    <input class="file-path validate" type="text">
+                </div>
+            </div>
+            <div id="fileContent">
+                <!-- This div will display the metadata -->
+            </div>
+            <div class="">Attention, les données existantesé seront définitivement supprimées !</div>
+            <button class="btn red" type="submit" id="restoreButton" disabled>Restaurer les données</button>
+        </form>
+    </div>
+    <div class="modal-footer">
+        <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var elems = document.querySelectorAll('.modal');
+        var instances = M.Modal.init(elems);
+
+        var fileInput = document.getElementById('fileInput');
+        var restoreButton = document.getElementById('restoreButton');
+        var fileContentDiv = document.getElementById('fileContent');
+
+        fileInput.addEventListener('change', function(event) {
+            var file = event.target.files[0];
+            if (file) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var content = e.target.result;
+                    try {
+                        var jsonContent = JSON.parse(content);
+                        var metadata = {
+                            "name": jsonContent.name,
+                            "type": jsonContent.type,
+                            "version": jsonContent.version,
+                            "timestamp": jsonContent.timestamp,
+                            "comments": jsonContent.comments
+                        };
+                        var metadataContent = `
+                            <div><strong>Name:</strong> ${metadata.name}<br>
+                            <strong>Type:</strong> ${metadata.type}<br>
+                            <strong>Version:</strong> ${metadata.version}<br>
+                            <strong>Timestamp:</strong> ${metadata.timestamp}<br>
+                            <strong>Comments:</strong> ${metadata.comments}</div>
+                        `;
+                        fileContentDiv.innerHTML = metadataContent;
+                        restoreButton.disabled = false; // Enable the button
+                    } catch (error) {
+                        fileContentDiv.innerText = 'Invalid JSON file or missing metadata';
+                        restoreButton.disabled = true; // Disable the button in case of error
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                fileContentDiv.innerText = '';
+                restoreButton.disabled = true; // Disable the button if no file is selected
+            }
+        });
+    });
+</script>
+{% endmacro %}

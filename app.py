@@ -17,6 +17,7 @@ from flask_migrate import Migrate
 from flask_mailman import Mail, EmailMessage
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date, time, timedelta
+import time as tm
 #from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
@@ -227,7 +228,7 @@ def send_message():
 #socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
 
 #app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
-#toolbar = DebugToolbarExtension(app)
+toolbar = DebugToolbarExtension(app)
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -387,6 +388,24 @@ class Counter(db.Model):
     def __repr__(self):
         return f'<Counter {self.name}>'
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "is_active": self.is_active,
+            "non_actions": self.non_actions,
+            "priority_actions": self.priority_actions,
+            "staff_id": self.staff_id,
+            "activities": [activity.id for activity in self.activities]
+        }
+
+    def from_dict(self, data):
+        for field in data:
+            if field != 'activities':
+                setattr(self, field, data[field])
+        if 'activities' in data:
+            self.activities = [Activity.query.get(id) for id in data['activities']]
+
 
 pharmacists_activities = db.Table('pharmacists_activities',
     db.Column('pharmacist_id', db.Integer, db.ForeignKey('pharmacist.id', name='fk_pharmacists_activities_pharmacist_id'), primary_key=True),
@@ -469,6 +488,25 @@ class ActivitySchedule(db.Model):
     end_time = db.Column(db.Time)
     weekdays = relationship('Weekday', secondary='activity_schedule_weekday', back_populates='schedules')
     activities = relationship('Activity', secondary='activity_schedule_link', back_populates='schedules')
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "start_time": self.start_time.strftime("%H:%M:%S") if self.start_time else None,
+            "end_time": self.end_time.strftime("%H:%M:%S") if self.end_time else None,
+            "weekdays": [weekday.id for weekday in self.weekdays],
+            "activities": [activity.id for activity in self.activities]
+        }
+
+    def from_dict(self, data):
+        for field in data:
+            if field not in ['weekdays', 'activities']:
+                setattr(self, field, data[field])
+        if 'weekdays' in data:
+            self.weekdays = [Weekday.query.get(id) for id in data['weekdays']]
+        if 'activities' in data:
+            self.activities = [Activity.query.get(id) for id in data['activities']]
 
     def __repr__(self):
         return f'<ActivitySchedule from {self.start_time} to {self.end_time}>'
@@ -1385,11 +1423,12 @@ def staff_backup():
             "type": "backup",
             "version": "0.1",
             "comments": "Backup de l'équipe",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "staff": pharmacists_json
         }
         
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        backup_filename = f'gf_backup_staff{timestamp}.json'
+        backup_filename = f'gf_backup_staff_{timestamp}.json'
         
         return Response(
             json.dumps(backup_data),
@@ -1427,7 +1466,7 @@ def staff_restore_init(restore, file_path):
         
         # Vérification des métadonnées
         if backup_data.get("name") != "gf_staff" or backup_data.get("type") not in ["backup", "default"]:
-            app.logger.error('Invalid backup file.', 'danger')
+            app.logger.error('Invalid backup file.')
             if restore:
                 return redirect(url_for('staff'))
         
@@ -1959,6 +1998,115 @@ def enable_buttons_for_activity(activity_id):
         db.session.commit()
         communication("update_page_patient", data={"action": "refresh buttons"})
 
+
+@app.route('/admin/schedules/backup', methods=['GET'])
+def schedules_backup():
+    try:
+        schedules = ActivitySchedule.query.all()
+        schedules_json = [
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "start_time": schedule.start_time.strftime("%H:%M:%S") if schedule.start_time else None,
+                "end_time": schedule.end_time.strftime("%H:%M:%S") if schedule.end_time else None,
+                "weekdays": [weekday.id for weekday in schedule.weekdays],
+                "activities": [activity.id for activity in schedule.activities]
+            }
+            for schedule in schedules
+        ]
+        
+        backup_data = {
+            "name": "gf_activity_schedules",
+            "type": "backup",
+            "version": "0.1",
+            "comments": "Backup des plages horaires",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "activity_schedules": schedules_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'backup_activity_schedules_{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        flash(f'An error occurred: {e}', 'danger')
+        return redirect(url_for('activity'))
+    
+
+@app.route('/restore_activity_schedules', methods=['GET', 'POST'])
+def schedules_restore():
+    app.logger.info("staff_restore" + request.method)
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+                print("RESTORE ACTIVITY SCHEDULES", file_path)
+                schedules_restore_init(file_path, is_restore=True)
+                os.remove(file_path)  # Optionally remove the file after processing
+            else:
+                flash('Invalid file format. Please upload a JSON file.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'An error occurred: {e}', 'danger')
+        return redirect(url_for('activity'))
+    return render_template('restore.html')
+
+
+def schedules_restore_init(file_path, is_restore=False):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+        
+        # Vérification des métadonnées
+        if backup_data.get("name") != "gf_activity_schedules" or backup_data.get("type") not in ["backup", "default"]:
+            app.logger.error('Invalid backup file.')
+            if is_restore:
+                return redirect(url_for('index'))
+
+        # Mise à jour de la version si ce n'est pas une restauration
+        if not is_restore:
+            current_version = ConfigVersion.query.filter_by(key="activity_schedule_version").first()
+            if not current_version or current_version.version != backup_data['version']:
+                if not current_version:
+                    new_version = ConfigVersion(key="activity_schedule_version", version=backup_data['version'])
+                    db.session.add(new_version)
+                else:
+                    current_version.version = backup_data['version']
+
+        # Mise à jour des données ActivitySchedule
+        schedules_json = backup_data.get("activity_schedules", [])
+        for schedule_json in schedules_json:
+            print("schedule_json", schedule_json)
+            weekdays_ids = schedule_json.pop('weekdays', [])
+            activities_ids = schedule_json.pop('activities', [])
+            schedule = db.session.get(ActivitySchedule, schedule_json['id'])
+            if not schedule:
+                schedule = ActivitySchedule(**schedule_json)
+            else:
+                schedule.from_dict(schedule_json)
+
+            schedule.weekdays = []
+            for weekday_id in weekdays_ids:
+                weekday = db.session.get(Weekday, weekday_id)
+                if weekday:
+                    schedule.weekdays.append(weekday)
+
+            schedule.activities = []
+            for activity_id in activities_ids:
+                activity = db.session.get(Activity, activity_id)
+                if activity:
+                    schedule.activities.append(activity)
+
+            db.session.add(schedule)
+        db.session.commit()
+        app.logger.info('Restoration successful!')
+
+
 # -------- Fin de ADMIN -> Activity  ---------
 
 
@@ -2247,6 +2395,106 @@ def add_new_counter():
         display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_activity_table()
+
+
+@app.route('/admin/counter/restore', methods=['GET', 'POST'])
+def counter_restore():
+    app.logger.info("counter_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+                counter_restore_init(restore=True, file_path=file_path)
+                os.remove(file_path)  # Optionally remove the file after processing
+            else:
+                app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.info(f'An error occurred: {e}')
+        return redirect(url_for('admin_counter'))
+    return render_template('restore.html')
+
+
+def counter_restore_init(restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+        
+        # Vérification des métadonnées
+        if backup_data.get("name") != "gf_counters" or backup_data.get("type") not in ["backup", "default"]:
+            app.logger.error('Invalid backup file.', 'danger')
+            if restore:
+                return redirect(url_for('index'))
+
+        # Mise à jour de la version si ce n'est pas une restauration
+        if not restore:
+            current_version = ConfigVersion.query.filter_by(key="counter_version").first()
+            if not current_version or current_version.version != backup_data['version']:
+                if not current_version:
+                    new_version = ConfigVersion(key="counter_version", version=backup_data['version'])
+                    db.session.add(new_version)
+                else:
+                    current_version.version = backup_data['version']
+
+        # Mise à jour des données Counter
+        counters_json = backup_data.get("counters", [])
+        for counter_json in counters_json:
+            activities_ids = counter_json.pop('activities', [])
+            counter = Counter.query.get(counter_json['id'])
+            if not counter:
+                counter = Counter(**counter_json)
+            else:
+                counter.from_dict(counter_json)
+
+            counter.activities = []
+            for activity_id in activities_ids:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    counter.activities.append(activity)
+
+            db.session.add(counter)
+        db.session.commit()
+        app.logger.info('Restoration successful!')
+
+
+@app.route('/admin/counter/backup', methods=['GET'])
+def counter_backup():
+    try:
+        counters = Counter.query.all()
+        counters_json = [
+            {
+                "id": counter.id,
+                "name": counter.name,
+                "is_active": counter.is_active,
+                "non_actions": counter.non_actions,
+                "priority_actions": counter.priority_actions,
+                "staff_id": counter.staff_id,
+                "activities": [activity.id for activity in counter.activities]
+            }
+            for counter in counters
+        ]
+        
+        backup_data = {
+            "name": "gf_counters",
+            "type": "backup",
+            "version": "0.1",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "comments": "Version initiale",
+            "counters": counters_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'gf_backup_counters_{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        flash(f'An error occurred: {e}', 'danger')
+        return redirect(url_for('index'))
 
 
 # -------- fin de ADMIN -> Counter  ---------
@@ -2713,13 +2961,13 @@ def call_specific_patient(counter_id, patient_id):
         communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
 
         generate_audio_calling(counter_id, next_patient)
+
+        return jsonify(next_patient.to_dict()), 200  
     else:
         print("Aucun patient trouvé avec l'ID :", patient_id)
     
-    print("next_patient", type(next_patient.id))
-
     # Redirection vers la page du comptoir ou une autre page appropriée
-    return '', 204
+    return "", 200
 
 
 
@@ -2743,7 +2991,7 @@ def validate_patient(counter_id, patient_id):
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": current_patient_pyside}})  
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
-    return '', 204  # No content to send back
+    return jsonify(current_patient.to_dict()), 200  
 
 
 @app.route('/update_patient_status')
@@ -3166,6 +3414,7 @@ def counter_refresh_buttons(counter_id):
 
 @app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
 def validate_and_call_next(counter_id):
+    start_time = tm.time()
     print('validate_and_call_next', counter_id)
 
     current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
@@ -3189,8 +3438,10 @@ def validate_and_call_next(counter_id):
     if isinstance(next_patient, Patient):
         next_patient_pyside = next_patient.to_dict()
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
+    end_time = tm.time()
+    print('validate_and_call_next', end_time - start_time)
 
-    return '', 204  # No content to send back
+    return jsonify(next_patient.to_dict()), 200  
 
 
 def validate_current_patient(counter_id):
@@ -3348,7 +3599,7 @@ def pause_patient(counter_id, patient_id):
     communication("update_patients")
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
 
-    return '', 204  # No content to send back
+    return jsonify({"id": None, "counter_id": counter_id}), 200  
 
 
 @app.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
@@ -3359,8 +3610,11 @@ def app_is_patient_on_counter(counter_id):
         Patient.status.in_(['ongoing', 'calling'])
         ).first()
     print("PATIENT!!!", patient)
-    patient = patient.to_dict() if patient else None
-    return {"counter_id": counter_id, "next_patient": patient }
+    if patient:
+        return jsonify(patient.to_dict()), 200
+    else:
+        return jsonify({"id": None, "counter_id": counter_id}), 200   
+
 
 
 @app.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
@@ -4022,6 +4276,7 @@ def init_staff_data_from_json():
             staff_restore_init(restore=False, file_path="static/json/default_staff.json")
 
 
+
 def set_server_url(app, request):
     # Stockage de l'adresse pour la génération du QR code
     if request.host_url == "http://127.0.0.1:5000/":
@@ -4169,12 +4424,10 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
     debug = os.environ.get("DEBUG", "False") == "True"
-    
 
     # creation BDD si besoin et initialise certaines tables (Activités)
     def initialize_data():
         pass
-
             
     initialize_data()
 

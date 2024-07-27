@@ -21,14 +21,7 @@
     </a>    
     <div id="div_add_staff_form"></div>
 
-    <h3>Sauvegarde / Restauration</h3>
-
-    <a class='btn' href="{{ url_for('staff_backup') }}">Sauvegarde des données</a>
-
-    <form action="{{ url_for('staff_restore') }}" method="post" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".json">
-        <button class ="btn btn-red" type="submit">Restaurer les données</button>
-    </form>
+    {{ macros.save_restore("schedule") }}
 
     <!-- Modal Structure -->
     <div id="modal_delete_staff" class="modal">
