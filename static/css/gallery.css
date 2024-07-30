@@ -1,0 +1,26 @@
+.thumbnail {
+    display: inline-block;
+    margin: 10px;
+    border: 1px solid #ddd;
+    padding: 5px;
+    width: 150px;
+}
+
+.thumbnail img {
+    width: 100%;
+    height: auto;
+}
+
+.thumbnail .details {
+    margin-top: 5px;
+    text-align: center;
+}
+
+.thumbnail .details button {
+    margin-top: 5px;
+    background-color: red;
+    color: white;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+}

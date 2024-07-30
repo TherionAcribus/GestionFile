@@ -1,0 +1,54 @@
+<h4>{{ gallery }}</h4>
+
+<div id="image-list"
+    hx-get="/admin/gallery/images_list/{{ gallery }}"
+    hx-trigger="load"
+    hx-target="#image-list"
+    hx-swap="innerHTML">
+</div>
+
+
+<form 
+    hx-post="{{ url_for('upload_gallery', name=gallery) }}" 
+    hx-target="#image-list"
+    enctype="multipart/form-data">
+    <input id="file-input" type="file" name="photos" multiple>
+    <button id="upload-button" class="btn" disabled type="submit">Mettre en ligne</button>
+</form>
+
+<a href="{{ url_for('delete_gallery', name=gallery) }}" 
+    class="btn red"
+    hx-delete="{{ url_for('delete_gallery', name=gallery) }}" 
+    hx-target="#content" 
+    hx-swap="innerHTML">
+        Supprimer cette galerie
+</a>
+
+<script>
+    // activation du bouton de chargement après le choix des fichiers
+    if (typeof fileInput === 'undefined') {
+        var fileInput = document.getElementById('file-input');
+    }
+
+    if (typeof uploadButton === 'undefined') {
+        var uploadButton = document.getElementById('upload-button');
+    }
+
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) {
+            uploadButton.disabled = false;
+        } else {
+            uploadButton.disabled = true;
+        }
+    });
+
+    // réinitialisation du bouton de chargement après chargement 
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        // Vérifiez si l'événement concerne le formulaire de téléchargement
+        if (evt.detail.target.id === 'image-list') {
+            uploadButton.disabled = true;
+            fileInput.value = ''; // Réinitialiser le champ de fichier
+        }
+    });
+
+</script>

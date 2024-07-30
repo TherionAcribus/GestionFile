@@ -61,6 +61,17 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_activity_staff_table();
     })
 
+    adminSocket.on("display_new_gallery", function(msg) {
+        console.log("display_new_gallery:", msg);
+        document.getElementById("name").value = ""
+        display_new_gallery(msg);
+    })
+
+    adminSocket.on("refresh_gallery_list", function(msg) {
+        console.log("refresh_gallery_list:", msg);
+        refresh_gallery_list(msg);
+    })
+
     adminSocket.on('connect_error', function(err) {
         console.error('Admin WebSocket connection error:', err);
     });
@@ -101,6 +112,26 @@ eventSource.onmessage = function(event) {
 
 function refresh_queue(){
     htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
+}
+
+
+// -------------- GALERIES --------------
+
+function display_new_gallery(data) {
+    console.log(data);
+    
+    // Construire l'URL de la galerie
+    let url = "/admin/gallery/__NAME__".replace('__NAME__', data.data);
+    console.log("URL", url);
+
+    // Utiliser HTMX pour envoyer une requête GET
+    htmx.ajax('GET', url, { target: '#content' });
+}
+
+
+function refresh_gallery_list(data) {
+    console.log(data);
+    htmx.trigger('#galleries_list', 'refresh_gallery_list', {target: "#galleries_list"});
 }
 
 
@@ -232,8 +263,6 @@ eventSource.onmessage = function(event) {
 };
 
 
-
-
 function initSelects() {
     var elems = document.querySelectorAll('select');
     var instances = M.FormSelect.init(elems);
@@ -259,7 +288,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // initialisation du select
     initSelects();
-   
 
 });
 

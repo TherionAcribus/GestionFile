@@ -43,8 +43,9 @@ from flask_security import Security, current_user, auth_required, hash_password,
     SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
 from sqlalchemy.ext.declarative import declarative_base
 from flask_security.forms import LoginForm, BooleanField
-from wtforms import StringField, PasswordField, HiddenField
+from wtforms import StringField, PasswordField, HiddenField, SubmitField, MultipleFileField
 from wtforms.validators import DataRequired
+from flask_wtf import FlaskForm
 
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
@@ -96,6 +97,8 @@ class Config:
     MAIL_USERNAME = "api"
     MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
     MAIL_DEFAULT_SENDER = "hi@demomailtrap.com."
+    # gallery
+    GALLERIES_FOLDER = 'static/galleries'
 
 
     
@@ -228,7 +231,7 @@ def send_message():
 #socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
 
 #app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
-toolbar = DebugToolbarExtension(app)
+#toolbar = DebugToolbarExtension(app)
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -2793,7 +2796,6 @@ def announce_page():
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'])
 
 
-
 @app.route('/admin/announce/gallery_audio')
 def gallery_audio():
     # Lister tous les fichiers wav dans le répertoire SOUND_FOLDER
@@ -2850,12 +2852,145 @@ def upload_signal_file():
 def admin_info():
     announce_infos_display = app.config['ANNOUNCE_INFOS_DISPLAY']
     announce_infos_display_time = app.config['ANNOUNCE_INFOS_DISPLAY_TIME']
-    announce_infos_transition = app.config['ANNOUNCE_INFOS_TRANSITION']
+    announce_infos_transition = app.config['ANNOUNCE_INFOS_TRANSITION']    
     print("announce_infos_transition", announce_infos_transition)
-    return render_template('/admin/info.html', 
+    print('DIR', os.listdir(app.config['GALLERIES_FOLDER']))
+    return render_template('/admin/gallery.html', 
                             announce_infos_display=announce_infos_display,
                             announce_infos_display_time=announce_infos_display_time,
-                            announce_infos_transition=announce_infos_transition)
+                            announce_infos_transition=announce_infos_transition,
+                            galleries = os.listdir(app.config['GALLERIES_FOLDER']))
+
+
+@app.route('/admin/gallery/choose_gallery', methods=['POST'])
+def choose_gallery():
+    print(request.form)
+    gallery_name = request.form.get('gallery_name')
+    checked = request.form.get('checked')
+
+    # Récupérer l'entrée existante ou créer une nouvelle
+    config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
+    if config_option is None:
+        config_option = ConfigOption(key="announce_infos_gallery", value_str=json.dumps([]))
+        db.session.add(config_option)
+
+    # Charger les galeries existantes à partir de la chaîne JSON
+    galleries = json.loads(config_option.value_str)
+
+    message = ""    
+    if checked == "true":
+        message="Galerie selectionnée"
+        if gallery_name not in galleries:
+            galleries.append(gallery_name)
+    else:
+        message="Galerie deselectionnée"
+        if gallery_name in galleries:
+            galleries.remove(gallery_name)            
+
+    # Enregistrer les galeries mises à jour
+    config_option.value_str = json.dumps(galleries)
+    db.session.commit()
+
+    display_toast(success=True, message=message)
+
+    return "", 200
+
+class UploadForm(FlaskForm):
+    photos = MultipleFileField('Upload Images')
+    submit = SubmitField('Upload')
+
+def get_images_with_dates(folder):
+    try:
+        files = os.listdir(folder)
+        images = []
+        for file in files:
+            filepath = os.path.join(folder, file)
+            date = tm.strftime('%Y-%m-%d %H:%M:%S', tm.localtime(os.path.getmtime(filepath)))
+            images.append({'filename': file, 'date': date})
+        return images
+    except FileNotFoundError:
+        print("File not found")
+        return []
+    
+
+@app.route("/admin/gallery/list", methods=['GET'])
+def gallery_list():
+    galleries = os.listdir(app.config['GALLERIES_FOLDER'])
+    config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
+    if config_option:
+        selected_galleries = json.loads(config_option.value_str)
+    else:
+        selected_galleries = []
+    return render_template('admin/gallery_list_galleries.html', 
+                            galleries=galleries,
+                            selected_galleries=selected_galleries)
+
+
+@app.route('/admin/gallery/<name>', methods=['GET', 'POST'])
+def gallery(name):
+    #if request.method == 'POST':
+    #    for file in request.files.getlist('photos'):
+    #        filename = secure_filename(file.filename)
+    #        os.makedirs(os.path.join(app.config['GALLERIES_FOLDER'], name), exist_ok=True)
+    #        file.save(os.path.join(app.config['GALLERIES_FOLDER'], name, filename))
+    #images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    return render_template('/admin/gallery_manage.html', gallery=name)
+
+
+@app.route('/admin/gallery/images_list/<name>', methods=['GET'])
+def gallery_images_list(name):
+    if not name:
+        return "No gallery name provided", 400
+    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    return render_template('admin/gallery_list_images.html', gallery=name, images=images)
+
+
+@app.route('/admin/gallery/upload/<name>', methods=['POST'])
+def upload_gallery(name):
+    print(name)
+    request.files.getlist('photos')
+    for file in request.files.getlist('photos'):
+        print("FILES", file)
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['GALLERIES_FOLDER'], name, filename))
+    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    print("images", images)
+    return render_template('admin/gallery_list_images.html', gallery=name, images=images)
+
+
+@app.route('/admin/gallery/delete_image/<gallery>/<image>', methods=['DELETE'])
+def delete_image(gallery, image):
+    os.remove(os.path.join(app.config['GALLERIES_FOLDER'], gallery, image))
+    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], gallery))
+    return render_template('admin/gallery_list_images.html', gallery=gallery, images=images)
+
+
+@app.route('/admin/gallery/delete_gallery/<name>', methods=['DELETE'])
+def delete_gallery(name):
+    for image in os.listdir(os.path.join(app.config['GALLERIES_FOLDER'], name)):
+        os.remove(os.path.join(app.config['GALLERIES_FOLDER'], name, image))
+    os.rmdir(os.path.join(app.config['GALLERIES_FOLDER'], name))
+
+    communikation("admin", event="refresh_gallery_list")
+
+    return "", 200
+
+
+@app.route('/admin/gallery/create_gallery', methods=['POST'])
+def create_gallery():
+    name = request.form.get('name')
+    if name == "":
+        display_toast(success=False, message="Le nom de la galerie doit être renseigné")
+        return "", 400
+    try:
+        os.makedirs(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    except FileExistsError:
+        display_toast(success=False, message="La galerie doit avoir un nom unique")
+        return "", 400
+    galleries = os.listdir(app.config['GALLERIES_FOLDER'])
+    communikation("admin", event="display_new_gallery", data=name)
+    return render_template('admin/gallery_list_galleries.html', galleries=galleries)
+
 
 
 # --------  Fin ADMIN -> Page INfos ---------
@@ -2878,8 +3013,6 @@ def admin_phone():
 
 
 # --------  Fin ADMIN -> Page Phone ---------
-
-
 
 
 @app.route('/patient_right_page_default')
@@ -3722,7 +3855,7 @@ def counter_select_patient(counter_id, patient_id):
 @app.route('/display')
 def display():
     app.logger.debug("start display")
-
+    # TODO verifier qu'existe
     return render_template('/announce/announce.html', 
                             current_patients=current_patients,
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
@@ -3730,7 +3863,7 @@ def display():
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
                             call_patients = patient_list_for_init_display(),
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
-                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'])
+                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
 
 def patient_list_for_init_display():
     """ Création de la liste de patients pour initialiser l'écran d'annonce"""
@@ -3775,9 +3908,22 @@ def replace_balise_phone(template, patient):
 
 @app.route('/announce/init_gallery')
 def announce_init_gallery():
-    app.logger.debug("start init gallery")
-    image_dir = os.path.join(app.static_folder, "images/annonces")
-    images = [os.path.join("/static/images/annonces", image) for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))]
+    app.logger.debug("Init gallery")
+    
+    # Récupérer la liste des galeries sélectionnées
+    config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
+    if config_option:
+        announce_infos_galleries = json.loads(config_option.value_str)
+    else:
+        announce_infos_galleries = []
+
+    app.logger.debug("announce_infos_galleries : " + str(announce_infos_galleries))
+    
+    images = []
+    for gallery in announce_infos_galleries:
+        image_dir = os.path.join(app.static_folder, "galleries", gallery)
+        images.extend([url_for('static', filename=f"galleries/{gallery}/{image}") for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))])
+    
     return render_template('announce/gallery.html', images=images,
                             time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
                             announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION'])
@@ -4286,11 +4432,10 @@ def set_server_url(app, request):
     app.config['SERVER_URL'] = server_url
 
 
-
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
 def load_configuration(app, ConfigOption):
     app.logger.info("Loading configuration from database")
-    
+
     config_mappings = {
         "pharmacy_name": ("PHARMACY_NAME", "value_str"),
         "network_adress": ("NETWORK_ADRESS", "value_str"),
@@ -4311,6 +4456,7 @@ def load_configuration(app, ConfigOption):
         "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
+        "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
         "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
         "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
         "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),

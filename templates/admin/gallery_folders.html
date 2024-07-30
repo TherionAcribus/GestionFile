@@ -1,0 +1,27 @@
+<h3>Galeries</h3>
+
+<div id="galleries_list"
+    hx-get="/admin/gallery/list"
+    hx-trigger="load, refresh_gallery_list"
+    hx-target="#galleries_list"
+    hx-swap="innerHTML">
+</div>
+
+<form id="create-gallery-form" 
+        hx-post="{{ url_for('create_gallery') }}" 
+        hx-target="#gallery-list" 
+        hx-swap="outerHTML">
+    <input type="text" id="name" name="name" placeholder="Nom de la Galerie">
+    <button class="btn" type="submit">Créer une nouvelle galerie</button>
+</form>
+<div id="content"></div>
+
+<!-- Modale pour afficher l'image en grand -->
+<div id="image-modal" class="modal">
+    <div class="modal-content">
+        <img id="modal-image" src="" alt="Image en grand">
+    </div>
+    <div class="modal-footer">
+        <a href="#!" class="modal-close waves-effect waves-green btn-flat">Fermer</a>
+    </div>
+</div>

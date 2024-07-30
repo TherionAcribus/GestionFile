@@ -36,3 +36,10 @@
     border-style: solid;
     border-width: 1px;
 }
+
+.galleries_list {
+    display: grid;
+    grid-template-columns: max-content 1fr; /* Première colonne prend la taille du contenu le plus grand */
+    grid-row-gap: 5px;
+    grid-column-gap: 10px;
+}

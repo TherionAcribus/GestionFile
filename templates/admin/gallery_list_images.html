@@ -1,0 +1,28 @@
+{% if images | length == 0 %} 
+    <p>Aucune image dans la galerie.</p> 
+{% else %}
+    {% for image in images %}
+        <div class="thumbnail">
+            <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}" alt="{{ image['filename'] }}">
+            <div class="details">
+                <p>{{ image['filename'] }}</p>
+                <p>{{ image['date'] }}</p>
+                <button 
+                    hx-delete="{{ url_for('delete_image', gallery=gallery, image=image['filename']) }}" 
+                    hx-target="#image-list" 
+                    hx-swap="innerHTML">Supprimer</button>
+            </div>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<script>
+    document.querySelectorAll('.thumbnail img').forEach(function(img) {
+            img.addEventListener('click', function() {
+                var modalImage = document.getElementById('modal-image');
+                modalImage.src = this.src;
+                var modal = M.Modal.getInstance(document.getElementById('image-modal'));
+                modal.open();
+            });
+        });
+</script>

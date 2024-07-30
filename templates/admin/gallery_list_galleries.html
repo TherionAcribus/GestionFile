@@ -1,0 +1,28 @@
+<div id="gallery-list" class="galleries_list">
+    {% for gallery in galleries %}
+        <div class="gallery_item">
+            <a class="btn blue" href="{{ url_for('gallery', name=gallery) }}" 
+            hx-get="{{ url_for('gallery', name=gallery) }}" 
+            hx-target="#content">Visualiser {{ gallery }}
+            </a>
+        </div>
+
+        <!-- Pas de macro utilisé car on ne veut pas qu'un True/False -->
+        <div class="switch">
+            <span>Utiliser cette galerie</span>
+            <label>
+            Non
+            <input id="{{ gallery }}" 
+                type="checkbox"
+                {% if gallery in selected_galleries %}checked{% endif %}
+                hx-post="/admin/gallery/choose_gallery"
+                hx-trigger="change"
+                hx-target="#invisible"
+                hx-vals='{"gallery_name": "{{ gallery }}", "checked": this.checked ? "true" : "false"}'>
+            <span class="lever"></span>
+            Oui
+            </label>
+        </div>
+
+    {% endfor %}
+</div>
