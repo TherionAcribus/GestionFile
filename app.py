@@ -2859,6 +2859,7 @@ def admin_info():
                             announce_infos_display=announce_infos_display,
                             announce_infos_display_time=announce_infos_display_time,
                             announce_infos_transition=announce_infos_transition,
+                            announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
                             galleries = os.listdir(app.config['GALLERIES_FOLDER']))
 
 
@@ -3908,9 +3909,10 @@ def replace_balise_phone(template, patient):
 
 @app.route('/announce/init_gallery')
 def announce_init_gallery():
+    """ Création de la liste des images pour la galerie"""
     app.logger.debug("Init gallery")
     
-    # Récupérer la liste des galeries sélectionnées
+    # Récupérer la liste des galeries sélectionnées, si rien on envoie une liste vide
     config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
     if config_option:
         announce_infos_galleries = json.loads(config_option.value_str)
@@ -3923,6 +3925,12 @@ def announce_init_gallery():
     for gallery in announce_infos_galleries:
         image_dir = os.path.join(app.static_folder, "galleries", gallery)
         images.extend([url_for('static', filename=f"galleries/{gallery}/{image}") for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))])
+
+    # Mélange des images si l'option est active
+    if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
+        print(images)
+        images.sort(key=lambda x: os.path.basename(x))
+        print(images)
     
     return render_template('announce/gallery.html', images=images,
                             time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
@@ -4457,6 +4465,7 @@ def load_configuration(app, ConfigOption):
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
         "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
+        "announce_infos_mix_folders": ("ANNOUNCE_INFOS_MIX_FOLDERS", "value_bool"),
         "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
         "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
         "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),

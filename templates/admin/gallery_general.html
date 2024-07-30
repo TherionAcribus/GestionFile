@@ -46,6 +46,15 @@
       </div>
 
 
+    {{ macros.switch("announce_infos_mix_folders", 
+    announce_infos_mix_folders, 
+                "Lecture des dossiers'", 
+                "L'un après l'autre", 
+                "Mélangé")
+    }}
+
+
+    <br>
     <div>
         <button class="btn"
                 hx-get="/announce/refresh"
