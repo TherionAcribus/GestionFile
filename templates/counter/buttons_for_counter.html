@@ -1,6 +1,8 @@
 {% if current_staff != None %}
 <a tabindex="0" class="btn filled icon-left"
-    hx-post="{{ url_for('validate_and_call_next', counter_id=counter_id) }}">
+    hx-post="{{ url_for('validate_and_call_next', counter_id=counter_id) }}"
+    hx-target="#invisible"
+    hx-swap="innerHTML">
     <i class="material-icons">skip_next</i>Suivant
 </a>
 {% else %}
@@ -12,8 +14,8 @@
 {% if status == 'calling' %}
 <a tabindex="1" class="btn filled icon-left"
     hx-post="{{ url_for('validate_patient', counter_id=counter_id, patient_id=patient_id) }}"
-    hx-target="#button_section"
-    hx-swap="outerHTML">
+    hx-target="#invisible"
+    hx-swap="innerHTML">
     <i class="material-icons">check</i>Valider
 </a>
 {% else %}
@@ -25,8 +27,8 @@
 {% if status == 'ongoing' %}
 <a tabindex="2" class="btn filled icon-left"
     hx-post="{{ url_for('pause_patient', counter_id=counter_id, patient_id=patient_id) }}"
-    hx-target="#button_section"
-    hx-swap="outerHTML">
+    hx-target="#invisible"
+    hx-swap="innerHTML">
     <i class="material-icons">pause</i>Pause
 </a>
 {% else %}

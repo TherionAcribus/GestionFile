@@ -2850,15 +2850,12 @@ def upload_signal_file():
 
 @app.route('/admin/info')
 def admin_info():
-    announce_infos_display = app.config['ANNOUNCE_INFOS_DISPLAY']
-    announce_infos_display_time = app.config['ANNOUNCE_INFOS_DISPLAY_TIME']
-    announce_infos_transition = app.config['ANNOUNCE_INFOS_TRANSITION']    
-    print("announce_infos_transition", announce_infos_transition)
-    print('DIR', os.listdir(app.config['GALLERIES_FOLDER']))
     return render_template('/admin/gallery.html', 
-                            announce_infos_display=announce_infos_display,
-                            announce_infos_display_time=announce_infos_display_time,
-                            announce_infos_transition=announce_infos_transition,
+                            announce_infos_display=app.config['ANNOUNCE_INFOS_DISPLAY'],
+                            announce_infos_display_time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
+                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION']   ,
+                            announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
+                            announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
                             announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
                             galleries = os.listdir(app.config['GALLERIES_FOLDER']))
 
@@ -3102,7 +3099,6 @@ def call_specific_patient(counter_id, patient_id):
     
     # Redirection vers la page du comptoir ou une autre page appropriée
     return "", 200
-
 
 
 @app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
@@ -3872,6 +3868,7 @@ def patient_list_for_init_display():
     announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first().value_str
     call_patients = []
     for patient in patients:
+        print("PATATOR", patient)
         call_patient = {
             'id': patient.id,
             'text': replace_balise_announces(announce_call_text, patient)
@@ -3885,6 +3882,7 @@ def patients_ongoing():
     patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
     ongoing_patients = []
     for patient in patients:
+        print("PATATE", patient)
         ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
 
@@ -3934,7 +3932,9 @@ def announce_init_gallery():
     
     return render_template('announce/gallery.html', images=images,
                             time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
-                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION'])
+                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION'],
+                            announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
+                            announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],)
 
 
 @app.route('/announce/refresh')
@@ -4466,6 +4466,8 @@ def load_configuration(app, ConfigOption):
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
         "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
         "announce_infos_mix_folders": ("ANNOUNCE_INFOS_MIX_FOLDERS", "value_bool"),
+        "announce_infos_width": ("ANNOUNCE_INFOS_WIDTH", "value_int"),
+        "announce_infos_height": ("ANNOUNCE_INFOS_HEIGHT", "value_int"),
         "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
         "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
         "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),

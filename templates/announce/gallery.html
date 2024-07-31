@@ -1,5 +1,5 @@
 <!-- Structure de Swiper -->
-<div class="swiper">
+<div class="swiper" style="width: {{announce_infos_width}}px; height: {{announce_infos_height}}px;">
     <div class="swiper-wrapper">
         <!-- Images ajoutées dynamiquement -->
 
@@ -11,14 +11,10 @@
     </div>
 </div>
 
-
 <script>
     document.addEventListener('htmx:afterSettle', function(evt) {
-        console.log("Swiper...");
-        console.log("time", "{{ time }}");
         delay_timer = Number("{{ time }}") * 1000;
         announce_infos_transition = "{{announce_infos_transition}}";
-        console.log(announce_infos_transition);
         if (!window.swiperInstance) {  // Vérifie si l'instance de Swiper existe déjà
         window.swiperInstance = new Swiper('.swiper', {
             loop: true,
