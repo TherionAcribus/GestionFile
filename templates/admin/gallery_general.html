@@ -1,32 +1,13 @@
 
-    <!-- Switch -->
-    <div class="switch">
-        <span>Afficher les images : </span>
-        <label>
-        Non
-        <input id="announce_infos_display" 
-                type="checkbox"
-                {% if announce_infos_display == True %}checked{% endif %}
-                hx-post="/admin/update_switch"
-                hx-target="#invisible"
-                hx-vals='js:{"key": "announce_infos_display",
-                            "value": document.getElementById("announce_infos_display").checked}'>
-        <span class="lever"></span>
-        Oui
-        </label>
-    </div>
 
-    <div>
-        <span>Temps d'affichage des images : </span>
-        <input type="text" name="call_number" value="{{announce_infos_display_time}}" id="announce_infos_display_time">
-        <button
-        class="btn"
-        hx-post="/admin/update_input"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_infos_display_time",
-                    "value": document.getElementById("announce_infos_display_time").value}'>
-                Enregistrer</button>
-    </div>
+    {{ macros.switch("announce_infos_display", 
+    announce_infos_display, 
+                "Afficher les images : '", 
+                "Non", 
+                "Oui")
+    }}
+
+    {{ macros.textbloc_int("announce_infos_display_time", announce_infos_display_time, "Temps d'affichage des images : ") }}
 
     <div class="input-field col s12">
         <select

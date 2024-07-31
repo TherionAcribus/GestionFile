@@ -3860,6 +3860,7 @@ def display():
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
                             call_patients = patient_list_for_init_display(),
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
+                            announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
                             announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
 
 def patient_list_for_init_display():

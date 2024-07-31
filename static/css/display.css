@@ -13,7 +13,6 @@ html, body {
 
 #div_title_area {
     text-align: center;
-    font-size: 50px;
     font-weight: bold;
     background-color:darkcyan;
     color: white;
@@ -48,7 +47,6 @@ html, body {
 #text_title, #text_subtitle{
     text-align: center;
     margin: auto;
-    font-size: 50px;
     font-weight: 900;
     color: white; 
     -webkit-text-stroke-color: #000000;
@@ -122,10 +120,6 @@ html, body {
     object-fit: contain;  /* Assure que l'image s'adapte à son conteneur tout en conservant son ratio */
     display: block;    /* Élimine l'espace supplémentaire en dessous de l'image */
     margin: auto;      /* Centre l'image horizontalement et verticalement */
-}
-
-.swiper {
-
 }
 
 .swiper-slide img {

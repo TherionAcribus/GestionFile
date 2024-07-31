@@ -24,8 +24,16 @@
         <audio id="player" src="" hidden></audio>
 
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-            <p id="text_title" onclick="initializeAudio()" id="text_title">{{announce_title}}</p>
-            <p id="text_subtitle">{{announce_subtitle}}</p>
+            <p id="text_title" onclick="initializeAudio()" id="text_title"
+                {% if announce_title_size %}
+                    style="font-size: {{ announce_title_size }}px;"
+                {% endif %}>
+                {{announce_title}}</p>
+            <p id="text_subtitle"
+                {% if announce_title_size %}
+                    style="font-size: {{ announce_title_size }}px;"
+                {% endif %}>
+                {{announce_subtitle}}</p>
         </div>
 
         <!--

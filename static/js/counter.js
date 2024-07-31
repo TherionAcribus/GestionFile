@@ -77,18 +77,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
 });
 
-function sendMessage() {
-    const url = window.location.protocol + '//' + window.location.host + '/send_message';
-    fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({message: 'Hello from client'}),
-    }).then(response => response.text())
-    .then(data => console.log("Message sent:", data))
-    .catch(error => console.error('Error:', error));
-}
 
 eventSourceforCounter.onmessage = function(event) {
     console.log("Refresh :", event.data);
