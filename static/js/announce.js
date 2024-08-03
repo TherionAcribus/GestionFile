@@ -244,8 +244,8 @@ async function add_calling(msg) {
         }
     });
 
-
 }
+
 
 async function remove_calling(msg) {
     // Sélectionner l'élément à supprimer
@@ -287,7 +287,6 @@ function add_text_up(){
         }
     }
 }
-
 
 
 function remove_text_up(){

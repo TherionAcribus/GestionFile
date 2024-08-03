@@ -18,7 +18,7 @@
                 hx-post="/admin/gallery/choose_gallery"
                 hx-trigger="change"
                 hx-target="#invisible"
-                hx-vals='{"gallery_name": "{{ gallery }}", "checked": this.checked ? "true" : "false"}'>
+                hx-vals='js:{"gallery_name": "{{ gallery }}", "checked": document.getElementById("{{gallery}}").checked }'>
             <span class="lever"></span>
             Oui
             </label>

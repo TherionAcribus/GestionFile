@@ -2866,10 +2866,16 @@ def admin_info():
 
 
 @app.route('/admin/gallery/choose_gallery', methods=['POST'])
-def choose_gallery():
+def choose_gallery(gallery_name="", checked=""):
+    """ 
+    Ajout ou suppression de la galerie via le panel d'admin (POST)
+    Ou lors de la suppression du dossier via le panel admin (arguments de la fonction)    
+    """
+    print("choose_gallery")
     print(request.form)
-    gallery_name = request.form.get('gallery_name')
-    checked = request.form.get('checked')
+    if request.method == 'POST':
+        gallery_name = request.form.get('gallery_name')
+        checked = request.form.get('checked')
 
     # Récupérer l'entrée existante ou créer une nouvelle
     config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
@@ -2880,6 +2886,7 @@ def choose_gallery():
     # Charger les galeries existantes à partir de la chaîne JSON
     galleries = json.loads(config_option.value_str)
 
+    print("CHECK", checked)
     message = ""    
     if checked == "true":
         message="Galerie selectionnée"
@@ -2973,6 +2980,9 @@ def delete_gallery(name):
     for image in os.listdir(os.path.join(app.config['GALLERIES_FOLDER'], name)):
         os.remove(os.path.join(app.config['GALLERIES_FOLDER'], name, image))
     os.rmdir(os.path.join(app.config['GALLERIES_FOLDER'], name))
+
+    # on supprime la selection pour cette galerie si elle est selectionnée
+    choose_gallery(gallery_name=name, checked="false")
 
     communikation("admin", event="refresh_gallery_list")
 
@@ -3931,8 +3941,12 @@ def announce_init_gallery():
     
     images = []
     for gallery in announce_infos_galleries:
-        image_dir = os.path.join(app.static_folder, "galleries", gallery)
-        images.extend([url_for('static', filename=f"galleries/{gallery}/{image}") for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))])
+        try:
+            image_dir = os.path.join(app.static_folder, "galleries", gallery)
+            images.extend([url_for('static', filename=f"galleries/{gallery}/{image}") for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))])
+        except FileNotFoundError:
+            app.logger.error(f"Gallery {gallery} not found")
+
 
     # Mélange des images si l'option est active
     if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
