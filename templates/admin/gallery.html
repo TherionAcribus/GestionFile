@@ -5,25 +5,45 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
 
-    <h3>Galeries</h3>
-    
-    <div class="row">
-        <div class="col s12">
-            <ul class="tabs">
-                <li class="tab col s3"><a class="active" href="#tab_general">Paramètres</a></li>
-                <li class="tab col s3"><a href="#tab_folders">Galeries</a></li>
-            </ul>
-        </div>
-        <div id="tab_general" class="col s12">
-            {% include 'admin/gallery_general.html' %}
-        </div>
-        <div id="tab_folders" class="col s12">
-            {% include 'admin/gallery_folders.html' %} 
-        </div>
+<h3>Galeries</h3>
+
+<div id="galleries_list"
+    hx-get="/admin/gallery/list"
+    hx-trigger="load, refresh_gallery_list"
+    hx-target="#galleries_list"
+    hx-swap="innerHTML">
+</div>
+
+<form id="create-gallery-form" 
+        hx-post="{{ url_for('create_gallery') }}" 
+        hx-target="#gallery-list" 
+        hx-swap="outerHTML">
+    <input type="text" id="name" name="name" placeholder="Nom de la Galerie">
+    <button class="btn" type="submit">Créer une nouvelle galerie</button>
+</form>
+<div id="content"></div>
+
+<!-- Modale pour afficher l'image en grand -->
+<div id="image-modal" class="modal">
+    <div class="modal-content">
+        <img id="modal-image" src="" alt="Image en grand">
     </div>
+    <div class="modal-footer">
+        <a href="#!" class="modal-close waves-effect waves-green btn-flat">Fermer</a>
+    </div>
+</div>
         
+<br>
+<div>
+    <button class="btn red"
+            hx-get="/announce/refresh"
+            hx-target="#invisible"                    
+            >Relancer la page "Annonce"</button>
+</div>
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
+
+
     
 {% endblock %}

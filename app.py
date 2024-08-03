@@ -2798,6 +2798,12 @@ def announce_page():
                             announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
                             announce_text_down_patients=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS'],
                             announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
+                            announce_infos_display=app.config['ANNOUNCE_INFOS_DISPLAY'],
+                            announce_infos_display_time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
+                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION']   ,
+                            announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
+                            announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
+                            announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
                             )
 
 
@@ -2855,13 +2861,7 @@ def upload_signal_file():
 
 @app.route('/admin/info')
 def admin_info():
-    return render_template('/admin/gallery.html', 
-                            announce_infos_display=app.config['ANNOUNCE_INFOS_DISPLAY'],
-                            announce_infos_display_time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
-                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION']   ,
-                            announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
-                            announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
-                            announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
+    return render_template('/admin/gallery.html',
                             galleries = os.listdir(app.config['GALLERIES_FOLDER']))
 
 
