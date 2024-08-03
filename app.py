@@ -1397,7 +1397,10 @@ def add_new_staff():
         communication("update_admin", data={"action": "delete_add_staff_form"})
         display_toast(success=True, message="Membre ajouté avec succès")
 
-        return display_staff_table()
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
+
+        return f"{display_staff_table()}{clear_form_html}"
 
     except Exception as e:
         db.session.rollback()
@@ -1724,7 +1727,10 @@ def add_new_activity():
         else:
             communication("update_admin", data={"action":"delete_add_activity_form"})
 
-        return return_good_display_activity(staff_id)
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
+
+        return f"{return_good_display_activity(staff_id)}{clear_form_html}"
 
     except Exception as e:
         db.session.rollback()
@@ -1833,7 +1839,10 @@ def add_new_schedule():
         # mise à jour de la table activité si nouvelle plage horaire
         communikation("admin", event="refresh_activity_table")
         
-        return display_schedule_table()
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_schedule_form"></div>"""
+
+        return f"{display_schedule_table()}{clear_form_html}"
 
     except Exception as e:
         db.session.rollback()
@@ -2206,7 +2215,10 @@ def add_new_rule():
         communication('update_admin', data={"action": "delete_add_rule_form"})
         display_toast(success=True, message="Règle ajoutée avec succès")
 
-        return display_algo_table()
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_rule_form"></div>"""
+
+        return f"{display_algo_table()}{clear_form_html}"
 
     except Exception as e:
         db.session.rollback()
@@ -2391,7 +2403,11 @@ def add_new_counter():
         communication("update_admin", data={"action": "delete_add_counter_form"})
         display_toast(success=True, message="Comptoir ajouté")
 
-        return display_counter_table()
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_counter_form"></div>"""
+
+        return f"{display_counter_table()}{clear_form_html}"
+
 
     except Exception as e:
         db.session.rollback()
@@ -2670,8 +2686,7 @@ def add_new_button():
         
         if not label:  # Vérifiez que les champs obligatoires sont remplis
             display_toast(success=False, message="Le nom est obligatoire")
-            return display_button_table()
-        
+            return display_button_table()        
 
         db.session.add(new_button)
         db.session.commit()
@@ -2679,7 +2694,11 @@ def add_new_button():
         communication("update_admin", data={"action": "delete_add_button_form"})
         display_toast(success=True, message="Bouton ajouté")
 
-        return display_button_table()
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_button_form"></div>"""
+
+        return f"{display_button_table()}{clear_form_html}"
+
 
     except Exception as e:
         db.session.rollback()
