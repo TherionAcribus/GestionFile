@@ -4,25 +4,47 @@
 
 {{ macros.textbloc_welcome("announce_subtitle", announce_subtitle, "Seconde ligne (Sous-titre)") }}
 
+{{ macros.textbloc_welcome("announce_text_up_patients", announce_text_up_patients, "Texte affiché au dessus des patients appelés") }}
+
+<!-- Select affichage texte up -->
+<div class="input-field col s12">
+    <select
+      id="announce_text_up_patients_display"
+      hx-post="/admin/update_select"
+      hx-target="#invisible"
+      hx-vals='js:{"key": "announce_text_up_patients_display", "value": document.getElementById("announce_text_up_patients_display").value}'>
+      <option value="always" {% if announce_text_up_patients_display == "always" %}selected{% endif %}>Toujours affiché</option>
+      <option value="never" {% if announce_text_up_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
+      <option value="empty" {% if announce_text_up_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
+      <option value="full" {% if announce_text_up_patients_display == "full" %}selected{% endif %}>Affiché si patient(s)</option>
+    </select>
+    <label>Mode d'affichage du texte</label>
+</div>
+
+{{ macros.textbloc_welcome("announce_text_down_patients", announce_text_down_patients, "Texte affiché si aucun patient n'est appelé") }}
+
+<!-- Select affichage texte pas de patient -->
+<div class="input-field col s12">
+    <select
+      id="announce_text_down_patients_display"
+      hx-post="/admin/update_select"
+      hx-target="#invisible"
+      hx-vals='js:{"key": "announce_text_down_patients_display", "value": document.getElementById("announce_text_down_patients_display").value}'>
+      <option value="never" {% if announce_text_down_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
+      <option value="empty" {% if announce_text_down_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
+    </select>
+    <label>Mode d'affichage du texte</label>
+</div>
+
 {{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Texte pour annoncer le tour d'un patient") }}
 
 {{ macros.textbloc_int("announce_call_text_size", announce_call_text_size, "Taille du texte pour annoncer le tour d'un patient") }}
 
-    <!-- Switch -->
-    <div class="switch">
-        <span>Afficher les patients au comptoir : </span>
-        <label>
-        Masquer
-        <input id="announce_ongoing_display" 
-                type="checkbox"
-                {% if announce_ongoing_display == True %}checked{% endif %}
-                hx-post="/admin/update_switch"
-                hx-target="#invisible"
-                hx-vals='js:{"key": "announce_ongoing_display",
-                            "value": document.getElementById("announce_ongoing_display").checked}'>
-        <span class="lever"></span>
-        Afficher
-        </label>
-    </div>
+{{ macros.switch("announce_ongoing_display", 
+    announce_ongoing_display,
+    "Afficher les patients au comptoir : '", 
+    "Masquer", 
+    "Afficher")
+}}
 
 {{ macros.textbloc_after_call("announce_ongoing_text", announce_ongoing_text, "Texte pour indiquer qu'un patient est au comptoir") }}

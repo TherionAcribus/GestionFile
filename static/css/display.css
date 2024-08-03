@@ -39,6 +39,32 @@ html, body {
     background-color: rgba(0, 139, 139, 0.5);
 }
 
+#div_display_text_up{
+    text-align: center;
+    margin: auto;
+    font-size: 50px;
+    font-weight: 900;
+    color: white; 
+    background-color:darkcyan;
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 2px;
+    margin-top: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+#div_display_text_down{
+    text-align: center;
+    margin: auto;
+    font-size: 50px;
+    font-weight: 900;
+    color: white; 
+    -webkit-text-stroke-color: #000000;
+    -webkit-text-stroke-width: 2px;
+    margin-top: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
 
 #div_pub{
     background-color: rgb(182, 245, 245);

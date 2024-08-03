@@ -2793,7 +2793,12 @@ def announce_page():
                             announce_ongoing_text=app.config['ANNOUNCE_ONGOING_TEXT'],
                             announce_title=app.config['ANNOUNCE_TITLE'],
                             announce_title_size=app.config["ANNOUNCE_TITLE_SIZE"],
-                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'])
+                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
+                            announce_text_up_patients=app.config['ANNOUNCE_TEXT_UP_PATIENTS'],
+                            announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
+                            announce_text_down_patients=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS'],
+                            announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
+                            )
 
 
 @app.route('/admin/announce/gallery_audio')
@@ -3858,6 +3863,10 @@ def display():
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
                             announce_title=app.config['ANNOUNCE_TITLE'] ,
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
+                            announce_text_up_patients=app.config['ANNOUNCE_TEXT_UP_PATIENTS'],
+                            announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
+                            announce_text_down_patients=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS'],
+                            announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
                             call_patients = patient_list_for_init_display(),
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
                             announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
@@ -4456,6 +4465,10 @@ def load_configuration(app, ConfigOption):
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
         "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
+        "announce_text_up_patients": ("ANNOUNCE_TEXT_UP_PATIENTS", "value_str"),
+        "announce_text_up_patients_display": ("ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY", "value_str"),
+        "announce_text_down_patients": ("ANNOUNCE_TEXT_DOWN_PATIENTS", "value_str"),
+        "announce_text_down_patients_display": ("ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY", "value_str"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
         "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
         "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),

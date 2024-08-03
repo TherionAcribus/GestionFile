@@ -23,6 +23,14 @@
 
         <audio id="player" src="" hidden></audio>
 
+        <div hidden>
+            <span id="announce_call_text_size">{{announce_call_text_size}}</span>
+            <span id="announce_text_up_patients">{{announce_text_up_patients}}</span>
+            <span id="announce_text_up_patients_display">{{announce_text_up_patients_display}}</span>
+            <span id="announce_text_down_patients">{{announce_text_down_patients}}</span>
+            <span id="announce_text_down_patients_display">{{announce_text_down_patients_display}}</span>
+        </div>
+
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
             <p id="text_title" onclick="initializeAudio()" id="text_title"
                 {% if announce_title_size %}
@@ -50,6 +58,16 @@
             {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
             <div id="left_side">
                 
+
+                <div id="div_display_text_up"
+                    {% if announce_text_up_patients == "" or announce_text_up_patients_display == "never" %} 
+                        style="display: none;" 
+                    {% endif %}
+                >
+                    {{announce_text_up_patients}}
+                </div>
+
+
                 <div id="div_calling">
                     <ul id="patient_list">
                         {% for call_patient in call_patients %}
@@ -63,7 +81,14 @@
                             </li>
                         {% endfor %}
                     </ul>
-                </div>           
+                </div>
+                
+                <div id="div_display_text_down"
+                    {% if announce_text_down_patients == "" or announce_text_down_patients_display == "never" %} 
+                        style="display: none;" 
+                    {% endif %}                >
+                    {{announce_text_down_patients}}
+                </div>
 
                 {% if announce_ongoing_display %}
                     <div id="div_ongoing"
@@ -97,62 +122,6 @@
 
 <script src="../static/js/announce.js"></script>
 
-<script type="text/javascript">
-    function animateElement(element, properties, options) {
-        return anime({
-            targets: element,
-            ...properties,
-            ...options
-        }).finished;
-    }
-
-    async function add_calling(msg) {
-        const patient = msg.data;
-        console.log('ADDED', patient)
-        // Créer un nouvel élément <li>
-        const newListItem = document.createElement('li');
-        newListItem.id = 'patient-' + patient.id;
-        newListItem.className = 'text_patient_calling hidden'; // Caché initialement
-        if ({{announce_call_text_size}}) {
-            newListItem.style.fontSize = '{{ announce_call_text_size }}px'; // Taille de texte dynamique
-        }    
-        newListItem.textContent = patient.text;
-
-        // Ajouter le nouvel élément à la liste
-        const patientList = document.getElementById('patient_list');
-        patientList.appendChild(newListItem);
-
-        // Animer l'apparition
-        await animateElement(newListItem, {
-            opacity: [0, 1],
-            translateX: [-50, 0],
-            duration: 500,
-            easing: 'easeOutQuad'
-        }, {
-            begin: () => {
-                newListItem.classList.remove('hidden');
-            }
-        });
-    }
-
-    async function remove_calling(msg) {
-        // Sélectionner l'élément à supprimer
-        console.log('REMOVED', msg)
-        const id = msg.data.id;
-        const listItem = document.getElementById('patient-' + id);
-        if (listItem) {
-            // Animer la disparition
-            await animateElement(listItem, {
-                opacity: [1, 0],
-                translateX: [0, 50],
-                duration: 500,
-                easing: 'easeInQuad'
-            });
-            listItem.remove();
-        }
-    }
-
-</script>
 
 </body>
 </html>
