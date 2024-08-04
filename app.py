@@ -4678,7 +4678,7 @@ with app.app_context():
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
-    #clear_old_patients_table()
+    clear_old_patients_table()
 
 
 if __name__ == "__main__":
