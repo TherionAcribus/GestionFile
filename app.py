@@ -46,7 +46,7 @@ from flask_security.forms import LoginForm, BooleanField
 from wtforms import StringField, PasswordField, HiddenField, SubmitField, MultipleFileField
 from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
-
+import jwt
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
@@ -441,6 +441,18 @@ class Pharmacist(db.Model):
         if 'activities' in data:
             self.activities = [Activity.query.get(id) for id in data['activities']]
 
+    def to_dict(self):
+        """ Convertit l'objet en dictionnaire pour faciliter la sauvegarde en JSON """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "initials": self.initials,
+            "language": self.language,
+            "is_active": self.is_active,
+            "default": self.default,
+            "activities": [activity.id for activity in self.activities]
+        }
+
 
 activity_schedule_weekday = db.Table('activity_schedule_weekday',
     db.Column('schedule_id', db.Integer, db.ForeignKey('activity_schedules.id'), primary_key=True),
@@ -665,7 +677,7 @@ def is_safe_url(target):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = ExtendedLoginForm()
-    
+    print("LOGIN!!")
     # Récupérez 'next' de l'URL ou du formulaire
     next_url = request.args.get('next') or form.next.data
     
@@ -751,9 +763,36 @@ def home():
 
 # -------------- SECURITé ---------------------
 
+def generate_app_token():
+    expiration = datetime.utcnow() + timedelta(days=1)  # Le token expire après 1 jour
+    return jwt.encode({"exp": expiration}, app.config["SECRET_KEY"], algorithm="HS256")
+
+def verify_app_token(token):
+    try:
+        jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+        return True
+    except jwt.ExpiredSignatureError:
+        return False
+    except jwt.InvalidTokenError:
+        return False
+
+@app.route('/api/get_app_token', methods=['POST'])
+def get_app_token():
+    # Ici, vous devriez implémenter une vérification des credentials de l'application
+    # Par exemple, vérifier un secret partagé ou des identifiants spécifiques à l'application
+    if request.form.get('app_secret') == 'votre_secret_app':
+        token = generate_app_token()
+        return jsonify({"token": token})
+    else:
+        return jsonify({"error": "Unauthorized"}), 401
+
 @app.before_request
 def require_login_for_admin():
     """ Défini les règles de login """
+
+    app_token = request.headers.get('X-App-Token')
+    is_valid_app_request = app_token and verify_app_token(app_token)
+
     if request.path.startswith('/admin'):
         if app.config["SECURITY_LOGIN_ADMIN"] and not current_user.is_authenticated:
             print("SECURITY_LOGIN_ADMIN", request.url)
@@ -768,6 +807,12 @@ def require_login_for_admin():
     elif request.path.startswith('/patient') and not request.path.startswith('/patient/phone'):
         if app.config["SECURITY_LOGIN_PATIENT"] and not current_user.is_authenticated:
             return redirect(url_for('security.login', next=request.url))
+    elif request.path.startswith('/app'):
+        if app.config["SECURITY_LOGIN_COUNTER"] and not (current_user.is_authenticated or is_valid_app_request):
+            if is_valid_app_request:
+                return jsonify({"error": "Unauthorized"}), 401
+            else:
+                return redirect(url_for('security.login', next=request.url))
         
     
 
@@ -3795,7 +3840,26 @@ def is_staff_on_counter(counter_id):
     return render_template('counter/staff_on_counter.html', staff=counter.staff)
 
 
+@app.route('/api/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
+def api_is_staff_on_counter(counter_id):
+    counter = Counter.query.get(counter_id)
+    if counter.staff:
+        print("counter", counter.staff)
+        return jsonify({"staff": counter.staff.to_dict()}), 200
+    else:
+        return "", 204 
+
+
+@app.route('/app/counter/remove_staff', methods=['POST'])
+def app_remove_counter_staff():
+    print("deconnction")
+    remove_counter_staff()
+    return '', 200
+
 @app.route('/counter/remove_staff', methods=['POST'])
+def web_remove_counter_staff():
+    return remove_counter_staff()
+
 def remove_counter_staff():
     counter = Counter.query.get(request.form.get('counter_id')) 
     counter.staff = None
@@ -3805,16 +3869,25 @@ def remove_counter_staff():
     communikation("counter", event="update buttons")
     return is_staff_on_counter(request.form.get('counter_id'))
 
+@app.route('/app/counter/update_staff', methods=['POST'])
+def app_update_counter_staff():
+    return update_counter_staff()
 
 @app.route('/counter/update_staff', methods=['POST'])
+def web_update_counter_staff():
+    return update_counter_staff()
+
 def update_counter_staff():
+    print("RECONNEXION ")
     print(request.form)
     counter = Counter.query.get(request.form.get('counter_id'))  
     initials = request.form.get('initials')
+    # la demande vient elle de l'App en mode réduit ?
+    app = request.form.get("app") == "True"
     staff = Pharmacist.query.filter(func.lower(Pharmacist.initials) == func.lower(initials)).first()
     if staff:
         # si demande de déconnexion
-        if request.form.get('deconnect') == "true":
+        if request.form.get('deconnect').lower() == "true":
             # deconnexion de tous les postes
             deconnect_staff_from_all_counters(staff)
         # Ajout du membre de l'équipe au comptoir        
@@ -3824,7 +3897,10 @@ def update_counter_staff():
         # mise à jour des boutons
         communikation("counter", event="update buttons")
         # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
-        return is_staff_on_counter(request.form.get('counter_id'))
+        if app:
+            return api_is_staff_on_counter(request.form.get('counter_id'))
+        else:
+            return is_staff_on_counter(request.form.get('counter_id'))
 
     # Si les initiales ne correspondent à rien
     # on déconnecte l'utilisateur précedemement connecté
@@ -3833,7 +3909,10 @@ def update_counter_staff():
     # mise à jour des boutons
     communikation("counter", event="update buttons")
     # on affiche une erreur à la place du nom
-    return render_template('counter/staff_on_counter.html', staff=False)
+    if app:
+        return "", 204
+    else:
+        return render_template('counter/staff_on_counter.html', staff=False)
 
 
 def deconnect_staff_from_all_counters(staff):
