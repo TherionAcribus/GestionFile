@@ -149,6 +149,7 @@ def consume_rabbitmq(connection, channel, queue_name, callback):
     while True:
         connection.process_data_events(time_limit=None)
 
+
 @socketio.on('connect', namespace='/socket_update_patient')
 def connect_general():
     logging.info("Client connected to update patient namespace")
@@ -2774,7 +2775,7 @@ def delete_button(button_id):
         display_toast(success=True, message="Bouton supprimé")
 
         communikation("admin", event="refresh_button_order")
-        
+
         return display_button_table()
 
     except Exception as e:
