@@ -2738,6 +2738,7 @@ def add_new_button():
 
         communication("update_admin", data={"action": "delete_add_button_form"})
         display_toast(success=True, message="Bouton ajouté")
+        communikation("admin", event="refresh_button_order")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_button_form"></div>"""
@@ -2771,6 +2772,9 @@ def delete_button(button_id):
         db.session.delete(button)
         db.session.commit()
         display_toast(success=True, message="Bouton supprimé")
+
+        communikation("admin", event="refresh_button_order")
+        
         return display_button_table()
 
     except Exception as e:

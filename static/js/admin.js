@@ -51,7 +51,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     adminSocket.on('update', function(msg) {
         console.log("Received Admin message:", msg);
-        console.log(msg.data.success)
         display_toast(msg);
     });
 
@@ -59,6 +58,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log("refresh_activity_table:", msg);
         refresh_activity_table();
         refresh_activity_staff_table();
+    })
+
+    adminSocket.on("refresh_button_order", function(msg) {
+        console.log("refresh_button_order:", msg);
+        refresh_button_order();
     })
 
     adminSocket.on("display_new_gallery", function(msg) {
@@ -170,6 +174,10 @@ function submitFile(buttonId) {
     } else {
         console.log('No file selected.');
     }
+}
+
+function refresh_button_order(){
+    htmx.trigger('#order_buttons', 'refresh_buttons_order', {target: "#order_buttons"});
 }
 
 

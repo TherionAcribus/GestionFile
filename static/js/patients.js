@@ -1,15 +1,27 @@
 var eventSource = new EventSource('/events/update_page_patient');
 
 eventSource.onmessage = function(event) {
-    console.log(event.data);
-    var data = JSON.parse(event.data);
-
-    if (event.data == "refresh buttons") {
+    // SOLUTION TEMPORAIRE PASSANT PAR SSE LE TEMPS DE TROUVER UNE SOLUTION AVEC WEBSOCKET
+    console.log(event);
+    //var data = JSON.parse(event.data);
+    console.log("TRIGGER1")
+    // on laisse du temps pour les commit soient faits
+    setTimeout(function() {
+        console.log("TRIGGER2")
         htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
-    } else if (data.action == "refresh page") {
-        console.log("Refresh activities...");
-        refresh_page();        
-    }
+
+        // Fermez la connexion après avoir reçu un message
+        //eventSource.close();
+    }, 10000); // 2000 millisecondes = 2 secondes
+
+    eventSource = new EventSource('/events/update_page_patient');
+
+    //if (event.data == "refresh buttons") {
+    //    htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
+    //} else if (data.action == "refresh page") {
+    //    console.log("Refresh activities...");
+    ///    refresh_page();        
+    //}
 };
 
 
@@ -35,6 +47,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_page();
     });
 
+    patientSocket.on('refresh_buttons', function(msg) {
+        console.log("Received Patient message:", msg);
+        refresh_buttons();
+    });
+
     patientSocket.on('update_scan_phone', function(msg) {
         console.log("Update Patient:", msg);
         htmx.trigger('#div_for_scan', 'qrcode_is_scanned');
@@ -58,10 +75,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 
-
 // refresh page pour appliquer les modifications
 function refresh_page() {
     console.log("Refresh page...");
     eventSource.close(); // Ferme la connexion SSE
     window.location.reload();
+}
+
+function refresh_buttons(){
+    htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
 }
