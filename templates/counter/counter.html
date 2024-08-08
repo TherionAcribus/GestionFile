@@ -61,6 +61,21 @@
 
     </div>
     
+    <div class="switch">
+        <span>Appel automatique des patients</span>
+        <label>
+        Non
+        <input id="switch_auto_calling" 
+                type="checkbox"
+
+                hx-post="/counter/update_switch_auto_calling"
+                hx-target="#invisible"
+                hx-vals='js:{"value": document.getElementById("switch_auto_calling").checked,
+                            "counter_id": {{ counter.id }}}'>
+        <span class="lever"></span>
+        Oui
+        </label>
+    </div>    
 
     <div id="patient_on_queue" 
         hx-trigger="refresh_queue, load" 
@@ -80,7 +95,7 @@
 
         <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
         <div id="invisible" style="display:none;"></div>
-        <div id="messages"></div>
+        <div style="display:none;" id="messages"></div>
 
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>

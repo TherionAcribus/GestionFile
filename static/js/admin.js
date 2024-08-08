@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     generalSocket.on('update', function(msg) {
-        console.log("Received general message:", msg);
+        console.log("Received general message:", msg.flag);
         refresh_queue();
     });
 

@@ -6,7 +6,7 @@
 
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
-eventlet.monkey_patch()
+eventlet.monkey_patch(thread=True, time=True)
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash
 import duckdb
 from flask_sqlalchemy import SQLAlchemy
@@ -58,7 +58,6 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
-
 
 if site == "production":
     credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
@@ -343,7 +342,6 @@ migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
 #babel = Babel(app)
 
 
-
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.Integer, nullable=False)
@@ -371,7 +369,6 @@ class Patient(db.Model):
         }
     
 
-
 counters_activities = db.Table('counters_activities',
     db.Column('counter_id', db.Integer, db.ForeignKey('counter.id'), primary_key=True),
     db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True)
@@ -388,6 +385,7 @@ class Counter(db.Model):
     # Ajouter une référence à un membre de l'équipe
     staff_id = db.Column(db.Integer, db.ForeignKey('pharmacist.id', name='fk_counter_staff_id'))
     staff = db.relationship('Pharmacist', backref=db.backref('counter', lazy=True))
+    auto_calling = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
         return f'<Counter {self.name}>'
@@ -2035,8 +2033,8 @@ def disable_buttons_for_activity(activity_id):
             else:
                 button.is_present = False
         db.session.commit()
-        communication("update_page_patient", data={"action": "refresh buttons"})
-        
+        #communication("update_page_patient", data={"action": "refresh buttons"})
+        #communikation("patient", event="refresh")
 
 
 @with_app_context
@@ -2054,7 +2052,9 @@ def enable_buttons_for_activity(activity_id):
             button.is_active = True
             button.is_present = True
         db.session.commit()
-        communication("update_page_patient", data={"action": "refresh buttons"})
+        # TODO trouver une solution pour APSCHEDULER + Websocket -> Celery ???
+        #communication("update_page_patient", data={"action": "refresh buttons"})
+        #communikation("patient", event="refresh")
 
 
 @app.route('/admin/schedules/backup', methods=['GET'])
@@ -3141,7 +3141,8 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    communikation("update_audio", data=audio_url)
+    print("URL", audio_url)
+    communikation("update_audio", event="audio", data=audio_url)
 
     #communication("update_audio", audio_source=audio_url)
 
@@ -3161,6 +3162,10 @@ def call_specific_patient(counter_id, patient_id):
         next_patient.status = 'calling'
         next_patient.counter_id = counter_id
         db.session.commit()
+
+        print("Bientot actif")
+        # mise à jour du comptoir:
+        counter_become_active(counter_id)
 
         # Notifier tous les clients et mettre à jour le comptoir
         communikation("update_patient")
@@ -3366,13 +3371,33 @@ def patient_scan_and_validate():
     return patient_conclusion_page(new_patient.call_number)
 
 
-
 def register_patient(activity):
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
+
+    
+    auto_calling()
+
     communikation("update_patient")
     communication("update_patients")
     return new_patient
+
+@with_app_context
+def auto_calling():
+    # si il y a des comptoirs en appel automatique on lance l'appel automatique
+    print("AUTO CALLING")
+    print(app.config["AUTO_CALLING"])
+    if len(app.config["AUTO_CALLING"]) > 0:
+        counters = db.session.query(Counter).filter(
+            Counter.id.in_(current_app.config["AUTO_CALLING"]),
+            Counter.is_active == False
+        ).all()
+
+        for counter in counters:
+            print(counter, counter.to_dict())
+            if not counter.is_active:
+                print('LETS GO', counter)
+                call_next(int(counter.id))
 
 
 @app.route('/patient/cancel_patient')
@@ -3607,6 +3632,29 @@ def current_patient_for_counter_test(counter_id):
                             )
 
 
+@app.route('/counter/update_switch_auto_calling', methods=['POST'])
+def update_switch_auto_calling():
+    counter_id = request.values.get('counter_id')
+    value = request.values.get('value')
+    try:
+        # MAJ BDD
+        counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
+        if counter:
+            counter.auto_calling = True if value == "true" else False
+            db.session.commit()
+            # MAJ app.Config
+            if value == "true":
+                app.config["AUTO_CALLING"].append(counter.id)
+            elif value == "false":
+                app.config["AUTO_CALLING"].remove(counter.id)
+        else:
+            app.logger.error("Counter not found")
+    except Exception as e:
+        app.logger.error(f'Erreur: {e}')
+    return "", 204
+
+
+
 # A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
 @app.route('/counter_buttons/<int:counter_id>/')
 def counter_refresh_buttons(counter_id):
@@ -3639,6 +3687,13 @@ def validate_and_call_next(counter_id):
     print('patient_valide')
     # TODO Prevoir que ne renvoie rien
     next_patient = call_next(counter_id)
+
+    # si pas de patient suivant, le comptoir devient inactif
+    if not next_patient:
+        counter_become_inactive(counter_id)
+    else:
+        counter_become_active(counter_id)
+
     print("prochain patient")
 
     communikation("update_patient")
@@ -3683,7 +3738,6 @@ def call_next(counter_id):
         return None
     
     next_patient = algo_choice_next_patient(counter_id)
-
 
     if next_patient:
         # Met à jour le statut du patient
@@ -3807,6 +3861,9 @@ def pause_patient(counter_id, patient_id):
     if current_patient:
         current_patient.status = 'done'
         db.session.commit()
+
+    # le comptoir devient inactif
+    counter_become_inactive(counter_id)
     
     communikation("update_patient")
 
@@ -3814,6 +3871,21 @@ def pause_patient(counter_id, patient_id):
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
 
     return jsonify({"id": None, "counter_id": counter_id}), 200  
+
+def counter_become_inactive(counter_id):
+    counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
+    counter.is_active = False
+    db.session.commit()
+
+
+def counter_become_active(counter_id):
+    print("counter_become_activ")
+    counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
+    print(counter, counter.is_active)
+    if not counter.is_active:
+        print('change')
+        counter.is_active = True
+        db.session.commit()
 
 
 @app.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
@@ -4014,8 +4086,14 @@ def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     print(template)
     print("replace_balise_announces", template, patient)
-    print("patient.counter.name", patient.counter.staff)
-    return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
+    try:
+        if patient.counter.staff.name:
+            return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
+        else:
+            template = "Patient {N} : {C}"
+            return template.format(N=patient.call_number, C=patient.counter.name)
+    except AttributeError:
+        return f"Erreur {patient.call_number}. Demandez à notre personnel"
 
 
 def replace_balise_phone(template, patient):
@@ -4174,22 +4252,27 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
     """ Effectue la communication avec les clients """
     print("communikation", communication_mode, data, event)
     if communication_mode == "websocket":
-        communication_websocket(stream=f"socket_{stream}", data=data)
+        #communication_websocket(stream=f"socket_{stream}", data=data)
         if stream == "update_patient":
+            print("UPDATE:::")
             patients = create_patients_list_for_pyside()
             #data = json.dumps({"flag": "patient", "data": patients})
             communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
             communication_websocket(stream="socket_app_counter", data=patients, flag="my_patient")
+            communication_websocket(stream="socket_update_patient", data=patients)
         elif stream == "update_audio":
+            print("update_audio ...", app.config["ANNOUNCE_ALERT"])
             if app.config["ANNOUNCE_ALERT"]:
                 signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
                 audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+                print("ANNOUNCE_PLAYER", app.config["ANNOUNCE_PLAYER"])
                 if app.config["ANNOUNCE_PLAYER"] == "web":
-                    communication_websocket(stream="socket_update_screen", data=audio_path)
+                    print("websouns", audio_path)
+                    communication_websocket(stream="socket_update_screen", event="audio", data=audio_path)
                 else:
                     communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
             if app.config["ANNOUNCE_PLAYER"] == "web":
-                communication_websocket(stream="socket_update_screen", data=data)
+                communication_websocket(stream="socket_update_screen", data=data, event="audio")
             else:
                 communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
@@ -4649,6 +4732,13 @@ def load_configuration(app, ConfigOption):
 
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
+
+    # auto_calling 
+    auto_calling = []
+    for counter in Counter.query.all():
+        if counter.auto_calling:
+            auto_calling.append(counter.id)
+    app.config["AUTO_CALLING"] = auto_calling
 
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))

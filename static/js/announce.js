@@ -48,8 +48,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log('Screen WebSocket disconnected');
     });
 
-    screenSocket.on('update', function(msg) {
-        console.log("Received screen message:", msg);
+    screenSocket.on('audio', function(msg) {
+        console.log("Received sound message:", msg);
         receive_audio(msg);
     });
 
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     screenSocket.onAny((event, ...args) => {
-        console.log(`Screen WebSocket Event: ${event}`, args);
+        console.log(`Screen WebSocket Event Any: ${event}`, args);
     });
 });
 
@@ -116,21 +116,8 @@ function refresh_calling_list() {
     //htmx.trigger('#div_ongoing', 'refresh_ongoing', {target: '#div_ongoing'});
 }
 
-
 const audioQueue = [];
 let isPlaying = false;
-
-const eventSourceSoundCalling = new EventSource("/events/sound_calling");
-eventSourceSoundCalling.onmessage = function(event) {
-    console.log("Calling... Audio");
-    console.log("Received audio data 1 :", event.data);
-    const data = JSON.parse(event.data);
-    console.log("Received audio data: 2", data);
-
-    let audioUrl = data.data.audio_url;
-    console.log("Queueing audio...", audioUrl);
-    queueAudio(audioUrl);
-}
 
 function receive_audio(msg) {
     console.log("Received audio data :", msg);
@@ -147,6 +134,7 @@ function queueAudio(audioUrl) {
 }
 
 function playNextAudio() {
+    console.log("Playing next audio...", audioQueue);
     if (audioQueue.length === 0) {
         isPlaying = false;
         return;
