@@ -67,7 +67,7 @@
         Non
         <input id="switch_auto_calling" 
                 type="checkbox"
-
+                {% if auto_calling %} checked {% endif %}
                 hx-post="/counter/update_switch_auto_calling"
                 hx-target="#invisible"
                 hx-vals='js:{"value": document.getElementById("switch_auto_calling").checked,

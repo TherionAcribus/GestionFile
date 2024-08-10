@@ -3587,7 +3587,8 @@ def counter(counter_id):
         return wrong_counter(counter_id)
     return render_template('counter/counter.html', 
                             counter=counter,
-                            activities=activities)
+                            activities=activities,
+                            auto_calling=counter.auto_calling)
 
 
 # si le comptoir n'existe pas -> page avec liste des comptoirs
@@ -3925,6 +3926,35 @@ def api_is_staff_on_counter(counter_id):
         return jsonify({"staff": counter.staff.to_dict()}), 200
     else:
         return "", 204 
+
+
+@app.route('/app/counter/auto_calling', methods=['POST'])
+def app_auto_calling():
+    print("COUNTER AUTOCALLING", request.values)
+    counter_id = request.form.get('counter_id')
+    print("COUNTER ID", counter_id)
+    counter = Counter.query.get(counter_id)
+
+    if request.form.get('action') is None:
+        return jsonify({"status": counter.auto_calling}), 200 # 
+
+    auto_calling_action = True if request.form.get('action') == "activate" else False
+    print("COUNTER AUTOCALLING", request.values)
+    counter = Counter.query.get(counter_id)
+    print("counter", counter.auto_calling)
+    try:
+        counter.auto_calling = auto_calling_action
+        db.session.commit()
+        # MAJ app.Config
+        if auto_calling_action:
+            app.config["AUTO_CALLING"].append(counter.id)
+        else:
+            app.config["AUTO_CALLING"].remove(counter.id)
+
+        return jsonify({"status": counter.auto_calling}), 200 # 
+    except Exception as e:
+        app.logger.error(f'Erreur: {e}')
+        return e, 500
 
 
 @app.route('/app/counter/remove_staff', methods=['POST'])
