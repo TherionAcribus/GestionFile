@@ -1,0 +1,15 @@
+<div
+    hx-get="/counter/paper_add/{% if add_paper %}0{% else %}1{% endif %}"
+    hx-trigger="click"
+    hx-target="#div_paper_add"
+    hx-swap="innerHTML"
+    hx-encoding="multipart/form-data"
+    >
+    {% if add_paper %}
+        <img src="{{ url_for('static', filename='images/paper_add.png') }}" alt="Ajouter du papier">
+        Le papier de l'imprimante est à changer. Indiquez que vous l'avez fait.
+    {% else %}
+        <img src="{{ url_for('static', filename='images/paper.png') }}" alt="Indiquez qu'il faut changer le papier">
+        Indiquez qu'il faut changer le papier de l'imprimante.
+    {% endif %}
+</div>

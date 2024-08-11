@@ -3587,8 +3587,7 @@ def counter(counter_id):
         return wrong_counter(counter_id)
     return render_template('counter/counter.html', 
                             counter=counter,
-                            activities=activities,
-                            auto_calling=counter.auto_calling)
+                            activities=activities)
 
 
 # si le comptoir n'existe pas -> page avec liste des comptoirs
@@ -3633,6 +3632,13 @@ def current_patient_for_counter_test(counter_id):
                             )
 
 
+@app.route('/counter/switch_auto_calling/<int:counter_id>')
+def switch_auto_calling(counter_id):
+    counter = Counter.query.get(counter_id)
+    return render_template('counter/switch_auto_calling.html',
+                            counter=counter,
+                            auto_calling=counter.auto_calling)
+
 @app.route('/counter/update_switch_auto_calling', methods=['POST'])
 def update_switch_auto_calling():
     counter_id = request.values.get('counter_id')
@@ -3648,6 +3654,7 @@ def update_switch_auto_calling():
                 app.config["AUTO_CALLING"].append(counter.id)
             elif value == "false":
                 app.config["AUTO_CALLING"].remove(counter.id)
+            communikation("app_counter", event="change_auto_calling", data={"counter_id": counter_id, "value": value})
         else:
             app.logger.error("Counter not found")
     except Exception as e:
@@ -3951,6 +3958,8 @@ def app_auto_calling():
         else:
             app.config["AUTO_CALLING"].remove(counter.id)
 
+        communikation("counter", event="refresh_auto_calling")
+
         return jsonify({"status": counter.auto_calling}), 200 # 
     except Exception as e:
         app.logger.error(f'Erreur: {e}')
@@ -4062,6 +4071,45 @@ def counter_select_patient(counter_id, patient_id):
     communication("update_counter", client_id=counter_id)    
 
     return '', 204
+
+
+@app.route("/app/counter/paper_add", methods=['POST'])
+def app_paper_add():
+    if request.form.get('action') is None:
+        return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
+    else:
+        add_paper_action = True if request.form.get('action') == "activate" else False
+        try:
+            config_option = ConfigOption.query.filter_by(key="add_paper").first()
+            config_option.value_bool = add_paper_action
+            db.session.commit()
+            app.config["ADD_PAPER"] = add_paper_action
+
+            communikation("counter", event="paper")
+            communikation("app_counter", event="paper")
+
+        except Exception as e:
+            print(e)
+
+
+@app.route("/counter/paper_add")
+def counter_paper_add():
+    return render_template('counter/paper_add.html',
+                            add_paper=app.config["ADD_PAPER"])
+
+@app.route("/counter/paper_add/<int:add_paper>", methods=['GET'])
+def action_add_paper(add_paper):
+    try:
+        print("action_add_paper", add_paper)
+        config_option = ConfigOption.query.filter_by(key="add_paper").first()
+        config_option.value_bool = add_paper
+        db.session.commit()
+        app.config["ADD_PAPER"] = add_paper
+        communikation("counter", event="paper")
+        communikation("app_counter", event="paper")
+        return counter_paper_add()
+    except Exception as e:
+        print(e)
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
 
@@ -4692,6 +4740,7 @@ def load_configuration(app, ConfigOption):
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
         "printer": ("PRINTER", "value_bool"),
         "printer_width": ("PRINTER_WIDTH", "value_int"),
+        "add_paper": ("ADD_PAPER", "value_bool"),
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
         "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
@@ -4804,7 +4853,7 @@ with app.app_context():
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
     clear_old_patients_table()
-
+    #clear_counter_table()
 
 if __name__ == "__main__":
 

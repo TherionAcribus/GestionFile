@@ -61,21 +61,19 @@
 
     </div>
     
-    <div class="switch">
-        <span>Appel automatique des patients</span>
-        <label>
-        Non
-        <input id="switch_auto_calling" 
-                type="checkbox"
-                {% if auto_calling %} checked {% endif %}
-                hx-post="/counter/update_switch_auto_calling"
-                hx-target="#invisible"
-                hx-vals='js:{"value": document.getElementById("switch_auto_calling").checked,
-                            "counter_id": {{ counter.id }}}'>
-        <span class="lever"></span>
-        Oui
-        </label>
-    </div>    
+    <div id="div_switch_auto_calling"
+        hx-get="/counter/switch_auto_calling/{{ counter.id }}"
+        hx-trigger="load, refresh_switch_auto_calling"
+        hx-swap="innerHTML"
+        >
+    </div>
+
+    <div id="div_paper_add"
+        hx-get="/counter/paper_add"
+        hx-trigger="load, refresh_paper_add"
+        hx-swap="innerHTML"
+        >
+    </div>
 
     <div id="patient_on_queue" 
         hx-trigger="refresh_queue, load" 

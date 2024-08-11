@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.1",
+    "version": "0.2",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
@@ -11,6 +11,7 @@
             "numbering_by_activity": true,
             "printer": false,
             "printer_width": 42,
+            "add_paper": false,
             "announce_sound": true,
             "announce_alert": true,
             "announce_player": "web",

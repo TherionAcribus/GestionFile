@@ -75,6 +75,16 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_buttons();
     });
 
+    counterSocket.on('paper', function() {
+        console.log('PAPER', );
+        refresh_paper();
+    });
+
+    counterSocket.on('refresh_auto_calling', function() {
+        console.log('AUTOCALLING', );
+        refresh_auto_calling();
+    });
+
 });
 
 
@@ -98,6 +108,16 @@ function refresh_buttons(){
     console.log("Refresh buttons");
     safeTrigger('#button_section', 'refresh_buttons', {target: "#button_section"});
     console.log("Refresh buttons DONE");
+}
+
+function refresh_paper(){
+    console.log("Refresh paper");
+    safeTrigger('#div_paper_add', 'refresh_paper_add', {target: "#div_paper_add"});
+}
+
+function refresh_auto_calling(){
+    console.log("Refresh autocalling");
+    safeTrigger('#div_switch_auto_calling', 'refresh_switch_auto_calling', {target: "#div_switch_auto_calling"});
 }
 
 eventSource.onmessage = function(event) {
