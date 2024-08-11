@@ -318,7 +318,6 @@ def clear_counter_table(db, Counter, Patient):
         .having(db.func.count(db.case((Patient.status != 'done', 1))) == 0)
         .all()
     )
-    print(f"Comptoirs sans patients : {counters_without_patients}")
 
     # Mets à jour le champ is_active pour ces comptoirs
     for counter in counters_without_patients:

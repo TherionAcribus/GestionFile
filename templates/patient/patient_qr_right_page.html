@@ -70,3 +70,19 @@
     </div>
 
 </div>
+
+<script>
+    // Fonction qui permet de désactiver les boutons de validation pour éviter double validation
+    function disableButtons(button) {
+        // Désactive le bouton cliqué
+        button.style.pointerEvents = 'none';
+        button.style.opacity = '0.6';
+    
+        // Désactive tous les boutons de validation
+        const buttons = document.querySelectorAll('.div_validation_one_button');
+        buttons.forEach(function(btn) {
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.6';
+        });
+    }
+    </script>
