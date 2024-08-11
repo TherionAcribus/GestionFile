@@ -305,3 +305,24 @@ def update_version(db, ConfigVersion, key, version, comments):
     db.session.commit()
 
 
+def clear_counter_table(db, Counter, Patient):
+    """ 
+    Repasse tous les comptoirs qui n'ont pas de patients en inactif 
+    Utile au rédémarrage du serveur pour nettoyé la base de données si des patients ont été supprime
+    Egalement lors de la suppression / mise à jour manuelle d'un patient via l'interface admin
+    """
+    # Identifie les comptoirs sans patients
+    counters_without_patients = (
+        Counter.query.outerjoin(Patient)
+        .group_by(Counter.id)
+        .having(db.func.count(db.case((Patient.status != 'done', 1))) == 0)
+        .all()
+    )
+    print(f"Comptoirs sans patients : {counters_without_patients}")
+
+    # Mets à jour le champ is_active pour ces comptoirs
+    for counter in counters_without_patients:
+        counter.is_active = False
+
+    # Enregistre les modifications dans la base de données
+    db.session.commit()

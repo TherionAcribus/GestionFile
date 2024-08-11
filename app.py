@@ -48,7 +48,7 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 
 # adresse production
@@ -1006,6 +1006,7 @@ def clear_all_patients_from_db():
             communication("update_patients")
             communikation("update_patient")
             announce_refresh()
+            clear_counter_table(db, Counter, Patient)
             return display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
@@ -1031,6 +1032,8 @@ def update_patient(patient_id):
             patient.counter = Counter.query.get(counter_id)
 
             db.session.commit()
+
+            clear_counter_table(db, Counter, Patient)
 
             announce_refresh()
 
@@ -1067,6 +1070,7 @@ def delete_patient(patient_id):
         communication("update_patients")
         communikation("update_patient")
         announce_refresh()
+        clear_counter_table(db, Counter, Patient)
         return display_toast()
 
     except Exception as e:
@@ -3398,6 +3402,9 @@ def auto_calling():
             if not counter.is_active:
                 print('LETS GO', counter)
                 call_next(int(counter.id))
+                counter.is_active = True
+                db.session.commit()
+                break
 
 
 @app.route('/patient/cancel_patient')
@@ -4853,7 +4860,7 @@ with app.app_context():
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration(app, ConfigOption)
     clear_old_patients_table()
-    #clear_counter_table()
+    clear_counter_table(db, Counter, Patient)
 
 if __name__ == "__main__":
 
