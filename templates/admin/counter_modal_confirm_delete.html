@@ -1,12 +1,12 @@
 <div class="modal-content">
-    <h4>Suppression d'une activité</h4>
+    <h4>Suppression d'un comptoir</h4>
     <p>Vous vous appretez à supprimer le comptoir {{counter.name}} définitivement. Confirmez-vous la suppression ? </p>
     </div>
     <div class="modal-footer">
     <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
     <a href="#!" 
         class="modal-close waves-effect waves-red btn-flat"
-        hx-get="/admin/activity/delete/{{ counter.id }}"
+        hx-get="/admin/counter/delete/{{ counter.id }}"
         hx-target="#div_counter_table">
         Confirmer</a>
     </div>

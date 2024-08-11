@@ -1,6 +1,6 @@
 {
     "name": "default_config",
-    "version": "0.2",
+    "version": "0.1",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
@@ -38,6 +38,7 @@
             "announce_infos_mix_folders": true,
             "announce_infos_width": 800,
             "announce_infos_height": 800,
+            "counter_order": "order",
             "page_patient_structure": "full",
             "page_patient_disable_button": true,
             "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",

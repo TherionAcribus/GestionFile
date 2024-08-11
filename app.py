@@ -36,6 +36,7 @@ import socket
 import pika
 import uuid
 from urllib.parse import urlparse, urljoin
+import random
 
 
 from flask_debugtoolbar import DebugToolbarExtension
@@ -386,6 +387,7 @@ class Counter(db.Model):
     staff_id = db.Column(db.Integer, db.ForeignKey('pharmacist.id', name='fk_counter_staff_id'))
     staff = db.relationship('Pharmacist', backref=db.backref('counter', lazy=True))
     auto_calling = db.Column(db.Boolean, default=False)
+    order = db.Column(db.Integer)  # Champ pour l'ordre
 
     def __repr__(self):
         return f'<Counter {self.name}>'
@@ -598,7 +600,7 @@ class Button(db.Model):
     image_url = db.Column(db.String(100))
     background_color = db.Column(db.String(20))
     text_color = db.Column(db.String(20))
-    order = db.Column(db.Integer, nullable=False, default=0)  # Champ pour l'ordre
+    order = db.Column(db.Integer, nullable=False, default=1)  # Champ pour l'ordre
 
     # Ajouter une référence directe à Activity
     activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_button_activity_id'))
@@ -2347,7 +2349,8 @@ def update_algo_rule(rule_id):
 # page de base
 @app.route('/admin/counter')
 def admin_counter():
-    return render_template('/admin/counter.html')
+    return render_template('/admin/counter.html',
+                            counter_order = app.config['COUNTER_ORDER'])
 
 
 # affiche le tableau des counters 
@@ -2401,7 +2404,7 @@ def confirm_delete_counter(counter_id):
 @app.route('/admin/counter/delete/<int:counter_id>', methods=['GET'])
 def delete_counter(counter_id):
     try:
-        counter = Pharmacist.query.get(counter_id)
+        counter = Counter.query.get(counter_id)
         if not counter:
             display_toast(success=False, message="Comptoir introuvable")
             return display_counter_table()
@@ -2410,6 +2413,8 @@ def delete_counter(counter_id):
         db.session.commit()
 
         display_toast(success=True, message="Comptoir supprimé")
+        communikation("admin", event="refresh_counter_order")
+
         return display_counter_table()
 
     except Exception as e:
@@ -2435,9 +2440,14 @@ def add_new_counter():
         if not name:  # Vérifiez que les champs obligatoires sont remplis
             display_toast(success=False, message="Le nom est obligatoire")
             return display_activity_table()
+        
+        # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
+        max_order_counter = Counter.query.order_by(Counter.order.desc()).first()
+        order = max_order_counter.order + 1 if max_order_counter else 0
 
         new_counter = Counter(
             name=name,
+            order=order
         )
         db.session.add(new_counter)
         db.session.commit()
@@ -2452,6 +2462,7 @@ def add_new_counter():
 
         communication("update_admin", data={"action": "delete_add_counter_form"})
         display_toast(success=True, message="Comptoir ajouté")
+        communikation("admin", event="refresh_counter_order")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_counter_form"></div>"""
@@ -2464,6 +2475,28 @@ def add_new_counter():
         display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_activity_table()
+
+
+@app.route('/admin/counter/order_counter')
+def order_counter_table():
+    counters = Counter.query.order_by(Counter.order).all()
+    return render_template('admin/counter_order_counters.html', counters=counters)
+
+
+@app.route('/admin/counter/update_counter_order', methods=['POST'])
+def update_counter_order():
+    try:
+        order_data = request.form.getlist('order[]')
+        for index, counter_id in enumerate(order_data):
+            print(counter_id, index)
+            counter = Counter.query.order_by(Counter.order).get(counter_id)
+            print(counter)
+            counter.order = index
+        db.session.commit()
+        display_toast(success=True, message="Ordre mis à jour")
+        return '', 200  # Réponse sans contenu
+    except Exception as e:
+        display_toast(success=False, message=f"Erreur: {e}")
 
 
 @app.route('/admin/counter/restore', methods=['GET', 'POST'])
@@ -2666,15 +2699,19 @@ def update_button(button_id):
 
 @app.route('/admin/patient/update_button_order', methods=['POST'])
 def update_button_order():
-    print(request.form)
-    order_data = request.form.getlist('order[]')
-    for index, button_id in enumerate(order_data):
-        print(button_id, index)
-        button = Button.query.order_by(Button.order).get(button_id)
-        print(button)
-        button.order = index
-    db.session.commit()
-    return '', 200  # Réponse sans contenu
+    try:
+        order_data = request.form.getlist('order[]')
+        for index, button_id in enumerate(order_data):
+            print(button_id, index)
+            button = Button.query.order_by(Button.order).get(button_id)
+            print(button)
+            button.order = index
+        db.session.commit()
+        display_toast(success=True, message="Ordre mis à jour")
+        return '', 200  # Réponse sans contenu
+    except Exception as e:
+        display_toast(success=False, message=f"Erreur: {e}")
+
 
 # affiche le formulaire pour ajouter un membre
 @app.route('/admin/button/add_form')
@@ -3389,23 +3426,26 @@ def register_patient(activity):
 @with_app_context
 def auto_calling():
     # si il y a des comptoirs en appel automatique on lance l'appel automatique
-    print("AUTO CALLING")
+
     print(app.config["AUTO_CALLING"])
     if len(app.config["AUTO_CALLING"]) > 0:
         counters = db.session.query(Counter).filter(
             Counter.id.in_(current_app.config["AUTO_CALLING"]),
-            Counter.is_active == False
+            Counter.is_active == False,
+            Counter.staff_id != None
         ).all()
 
+        if app.config["COUNTER_ORDER"] == "order":
+            counters = sorted(counters, key=lambda x: x.order)
+        elif app.config["COUNTER_ORDER"] == "random":
+            random.shuffle(counters)
+
         for counter in counters:
-            print(counter, counter.to_dict())
             if not counter.is_active:
-                print('LETS GO', counter)
                 call_next(int(counter.id))
                 counter.is_active = True
                 db.session.commit()
                 break
-
 
 @app.route('/patient/cancel_patient')
 def cancel_patient():
@@ -4774,6 +4814,7 @@ def load_configuration(app, ConfigOption):
         "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
+        "counter_order": ("COUNTER_ORDER", "value_str"),
         "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),
         "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
         "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
@@ -4861,6 +4902,7 @@ with app.app_context():
     load_configuration(app, ConfigOption)
     clear_old_patients_table()
     clear_counter_table(db, Counter, Patient)
+
 
 if __name__ == "__main__":
 

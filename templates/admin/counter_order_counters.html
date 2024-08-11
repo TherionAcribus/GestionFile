@@ -1,0 +1,19 @@
+<h3>Choix des comptoirs</h3>
+<p>Glissez-déposez les comptoirs dans l'ordre souhaite</p>
+<ul id="list_order_buttons" class="list_order_buttons">
+    {% for counter in counters %}
+    <li class="button-order-item" data-id="{{ counter.id }}">
+        {{ counter.name }}
+    </li>
+    {% endfor %}
+</ul>
+<button id="saveOrderCounterButton"
+        class="btn"
+        hx-post="/admin/counter/update_counter_order"
+        hx-target="#invisible"
+        hx-vals="js:{'order[]': Array.from(document.querySelectorAll('.button-order-item')).map(item => item.getAttribute('data-id'))}"
+        >Sauvegarder l'ordre</button>
+
+<script>
+    sortable();
+</script>

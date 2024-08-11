@@ -65,6 +65,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_button_order();
     })
 
+    adminSocket.on("refresh_counter_order", function(msg) {
+        console.log("refresh_counter_order:", msg);
+        refresh_counter_order();
+    })
+
     adminSocket.on("display_new_gallery", function(msg) {
         console.log("display_new_gallery:", msg);
         document.getElementById("name").value = ""
@@ -191,6 +196,12 @@ function sortable(){
             // Vous pouvez ici ajouter une requête pour sauvegarder l'ordre
         }
     });
+}
+
+// ---------------- COUNTERS ----------------
+
+function refresh_counter_order(){
+    htmx.trigger('#order_counters', 'refresh_counter_order', {target: "#order_counters"});
 }
 
 

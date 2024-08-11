@@ -12,7 +12,7 @@
         hx-swap="innerHTML">        
     </div>
 
-    <!-- Ajout nouveau membre -->
+    <!-- Ajout nouveau comptoir-->
     <a class="waves-effect waves-light btn"
         hx-get="/admin/counter/add_form"
         hx-target="#div_add_counter_form"
@@ -20,6 +20,26 @@
     Ajouter un comptoir
     </a>    
     <div id="div_add_counter_form"></div>
+
+    <div class="input-field col s12">
+        <select
+          id="counter_order_mode"
+          hx-post="/admin/update_select"
+          hx-target="#invisible"
+          hx-vals='js:{"key": "counter_order", "value": document.getElementById("counter_order_mode").value}'>
+          <option value="" disabled selected>Choix de l'ordre pour les appels automatiques</option>
+          <option value="order" {% if counter_order == "order" %}selected{% endif %}>Ordre ci-dessous</option>
+          <option value="random" {% if counter_order == "random" %}selected{% endif %}>Aléatoire</option>
+        </select>
+        <label>Ordre</label>
+      </div>
+
+    <div id="order_counters"
+        hx-get="/admin/counter/order_counter"
+        hx-target="#order_counters"
+        hx-trigger="load, refresh_counter_order"
+        hx-swap="innerHTML">
+    </div>
 
     {{ macros.save_restore("counter") }}
 
