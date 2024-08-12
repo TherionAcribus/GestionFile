@@ -52,6 +52,7 @@ import jwt
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 from routes.init_restore_backup import backup_config_all
+from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -681,6 +682,7 @@ def is_safe_url(target):
     app.add_url_rule('/admin/backup/config', 'backup_config_all', backup_config_all(ConfigOption, ConfigVersion))
 """
 
+# TEMPORAIRE
 @app.route('//admin/backup/config', methods=['GET'])
 def route_backup_config_all():
     return backup_config_all(ConfigOption, ConfigVersion)
@@ -1955,6 +1957,8 @@ def delete_schedule(schedule_id):
         return display_schedule_table()
 
 
+
+
 def update_scheduler_for_activity(activity):
     # Supprimer les anciens jobs pour cette activité
     job_id_disable_prefix = f"disable_{activity.name}_"
@@ -2033,44 +2037,6 @@ def update_scheduler_for_activity(activity):
                 minute=schedule.end_time.minute
             )
             print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
-
-
-@with_app_context
-def disable_buttons_for_activity(activity_id):
-    # Logique pour désactiver les boutons pour une activité donnée
-    activity = Activity.query.get(activity_id)
-    if activity:
-        app.logger.info(f"Disabling buttons for activity: {activity.name}")
-        buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity.id).all()
-        print(buttons, "buttons")
-        for button in buttons:
-            if app.config["PAGE_PATIENT_DISABLE_BUTTON"]:
-                button.is_active = False
-            else:
-                button.is_present = False
-        db.session.commit()
-        #communication("update_page_patient", data={"action": "refresh buttons"})
-        #communikation("patient", event="refresh")
-
-
-@with_app_context
-def enable_buttons_for_activity(activity_id):
-    # Logique pour activer les boutons pour une activité donnée
-    activity = Activity.query.get(activity_id)
-    if activity:
-        app.logger.info(f"Enabling buttons for activity: {activity.name}")
-        buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity.id).all()
-        print(buttons, "buttons")
-        for button in buttons:
-            print(button)
-            # ici on ne regarde pas si on veut que le bouton soit grisé ou non
-            # on réactive tout pour être sûr que le bouton est présent (ex: gère le fait qu'on a changé de mode en cours de programme)
-            button.is_active = True
-            button.is_present = True
-        db.session.commit()
-        # TODO trouver une solution pour APSCHEDULER + Websocket -> Celery ???
-        #communication("update_page_patient", data={"action": "refresh buttons"})
-        #communikation("patient", event="refresh")
 
 
 @app.route('/admin/schedules/backup', methods=['GET'])
