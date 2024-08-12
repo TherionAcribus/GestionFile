@@ -136,7 +136,6 @@
 {% endmacro %}
 
 
-
 {% macro switch(key, check, label, label_false, label_true) %}
 <div class="switch">
     <span>{{label}} </span>
@@ -156,7 +155,7 @@
 {% endmacro %}
 
 
-{% macro save_restore(table) %}
+{% macro save_restore(table, json_tag) %}
 <h3>Sauvegarde</h3>
 <a class='btn' href="{{ url_for(table + '_backup') }}">Sauvegarder les données</a>
 
@@ -168,6 +167,7 @@
 <div id="restoreModal" class="modal">
     <div class="modal-content">
         <h4>Restaurer les données</h4>
+        <div style="display:none;" id="json_tag">{{ json_tag }}</div>
         <form id="restoreForm" action="{{ url_for(table + '_restore') }}" method="post" enctype="multipart/form-data">
             <div class="file-field input-field">
                 <div class="btn">
@@ -181,7 +181,7 @@
             <div id="fileContent">
                 <!-- This div will display the metadata -->
             </div>
-            <div class="">Attention, les données existantesé seront définitivement supprimées !</div>
+            <div class="">Attention, les données existantes seront définitivement supprimées !</div>
             <button class="btn red" type="submit" id="restoreButton" disabled>Restaurer les données</button>
         </form>
     </div>
@@ -198,6 +198,7 @@
         var fileInput = document.getElementById('fileInput');
         var restoreButton = document.getElementById('restoreButton');
         var fileContentDiv = document.getElementById('fileContent');
+        var json_tag = document.getElementById('json_tag').textContent;
 
         fileInput.addEventListener('change', function(event) {
             var file = event.target.files[0];
@@ -221,8 +222,18 @@
                             <strong>Timestamp:</strong> ${metadata.timestamp}<br>
                             <strong>Comments:</strong> ${metadata.comments}</div>
                         `;
-                        fileContentDiv.innerHTML = metadataContent;
-                        restoreButton.disabled = false; // Enable the button
+                        if (json_tag != jsonContent.name) {
+                            metadataContentBadContent = `
+                            <div><strong>Erreur de fichier !</strong><br>
+                            Vous utiliser un fichier de type <strong>${jsonContent.name}</strong>
+                            mais vous devait prendre un fichier de type <strong>${json_tag}</strong><br>
+                        `;
+                            fileContentDiv.innerHTML = metadataContentBadContent;
+                        } else {
+                            fileContentDiv.innerHTML = metadataContent;
+                            restoreButton.disabled = false; // Enable the button
+                        }
+
                     } catch (error) {
                         fileContentDiv.innerText = 'Invalid JSON file or missing metadata';
                         restoreButton.disabled = true; // Disable the button in case of error

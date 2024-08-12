@@ -8,38 +8,34 @@ def init_default_options_db_from_json(db, ConfigVersion, ConfigOption):
     load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False)
     
 def restore_config_table_from_json(db, ConfigVersion, ConfigOption, request):
-    print("Restauration de la table CONFIG")
+    current_app.logger("Restauration de la table CONFIG")
     if request.method == 'POST':
         try:
             file = request.files['file']
             if file and file.filename.endswith('.json'):
-                json_file = os.path.join('static/json', file.filename)
+                json_file = os.path.join('static/tmp', file.filename)
                 file.save(json_file)
-                print("RESTORE CONFIG", json_file)
                 load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=True)
-                os.remove(json_file)  # Optionally remove the file after processing
+                os.remove(json_file)
+                # rechargement du "cache"
                 current_app.load_configuration()
+                current_app.display_toast(success=True, message="Restauration reussie")
             else:
                 current_app.logger.error('Invalid file format. Please upload a JSON file.')
         except Exception as e:
             db.session.rollback()
+            os.remove(json_file)
             current_app.logger.info(f'An error occurred: {e}')
-        return redirect(url_for('staff'))
-    return "", 200
-    
-    return "", 200
+            current_app.display_toast(success=False, message=e)
+        return "", 200
+    return "", 200    
 
-    load_config_table_from_json(app, json_file, restore=False)
-    
 # Mise à jour ou initialisation des options par défaut
 def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False):
-    print("START!!!")
     with current_app.app_context():
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            print(data)
             current_version = ConfigVersion.query.filter_by(key="config_version").first()
-            print(current_version)
 
             if not current_version or current_version.version != data['version'] or restore:
                 if current_version:
@@ -50,7 +46,6 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
                     new_version = ConfigVersion(key="config_version", version=data['version'])
                     db.session.add(new_version)
 
-                print("CONFIGURATIONS", data['configurations'])
                 for key, value in data['configurations'].items():
                     config_option = ConfigOption.query.filter_by(key=key).first()
                     

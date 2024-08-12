@@ -4971,6 +4971,7 @@ with app.app_context():
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
+app.display_toast = display_toast
 
 
 if __name__ == "__main__":
