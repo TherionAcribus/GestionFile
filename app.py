@@ -37,7 +37,8 @@ import pika
 import uuid
 from urllib.parse import urlparse, urljoin
 import random
-
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 
 from flask_debugtoolbar import DebugToolbarExtension
 from flask_security import Security, current_user, auth_required, hash_password, \
@@ -103,7 +104,6 @@ class Config:
     GALLERIES_FOLDER = 'static/galleries'
 
 
-    
 app = Flask(__name__)
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*") #, logger=True, engineio_logger=True
@@ -1240,11 +1240,14 @@ def check_balises_after_validation(value):
 
 @app.route('/admin/app')
 def admin_app():
+    token_info, authorized = get_spotify_token()
+    spotify_connected = authorized
     return render_template('/admin/app.html',
                             network_adress = app.config["NETWORK_ADRESS"],
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],
-                            pharmacy_name = app.config["PHARMACY_NAME"])
+                            pharmacy_name = app.config["PHARMACY_NAME"],
+                            spotify_connected=spotify_connected)
 
 
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
@@ -1268,8 +1271,85 @@ def update_numbering_by_activity():
             return jsonify(status="error", message=str(e)), 500
     
 
+
+@app.route('/spotify/login')
+def spotify_login():
+    sp_oauth = SpotifyOAuth(client_id='408201cea7e0402e866a164db94fdee9',
+                            client_secret='445281ca3fc14bc0ad0e079ac1fad3cc',
+                            redirect_uri=url_for('spotify_callback', _external=True),
+                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
+
+    auth_url = sp_oauth.get_authorize_url()
+    return redirect(auth_url)
+
+@app.route('/spotify/logout')
+def spotify_logout():
+    session.pop('token_info', None)
+    return redirect(url_for('admin_app'))
+
+@app.route('/spotify/callback')
+def spotify_callback():
+    sp_oauth = SpotifyOAuth(client_id='408201cea7e0402e866a164db94fdee9',
+                            client_secret='445281ca3fc14bc0ad0e079ac1fad3cc',
+                            redirect_uri=url_for('spotify_callback', _external=True),
+                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
+
+    session['token_info'], authorized = get_spotify_token()
+    session.modified = True
+    if not authorized:
+        token_info = sp_oauth.get_access_token(request.args['code'])
+        session['token_info'] = token_info
+
+    return redirect(url_for('admin_app'))
+
+def get_spotify_token():
+    token_info = session.get('token_info', None)
+    if not token_info:
+        return None, False
+
+    now = int(tm.time())
+    is_token_expired = token_info['expires_at'] - now < 60
+
+    if is_token_expired:
+        sp_oauth = SpotifyOAuth(client_id='VOTRE_CLIENT_ID',
+                                client_secret='VOTRE_CLIENT_SECRET',
+                                redirect_uri=url_for('spotify_callback', _external=True),
+                                scope='user-library-read user-read-playback-state user-modify-playback-state')
+        token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+
+    return token_info, True
+
+@app.route('/play_playlist', methods=['POST'])
+def play_playlist():
+    token_info, authorized = get_spotify_token()
+    if not authorized:
+        return redirect(url_for('spotify_login'))
+
+    sp = spotipy.Spotify(auth=token_info['access_token'])
+    playlist_uri = request.form['playlist_uri']
+
+    # Envoie la commande à la page "announce" via WebSocket ou un autre mécanisme
+    communikation("update_audio", 
+                    event="spotify", 
+                    data={'playlist_uri': playlist_uri, 'access_token': token_info['access_token']})
+
+    #socketio.emit('play_playlist', {'playlist_uri': playlist_uri}, namespace='/announce')
+
+    return redirect(url_for('admin_music'))
+
 # --------  FIn ADMIN -> App  ---------
 
+@app.route('/admin/music')
+def admin_music():
+    token_info, authorized = get_spotify_token()
+    spotify_connected = authorized
+    if spotify_connected:
+        sp = spotipy.Spotify(auth=token_info['access_token'])
+        playlists = sp.current_user_playlists()
+
+        return render_template('/admin/music.html',
+                                spotify_connected=spotify_connected, 
+                                playlists=playlists['items'])
 
 
 # --------  ADMIN -> DataBase  ---------
@@ -4362,20 +4442,25 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
             communication_websocket(stream="socket_app_counter", data=patients, flag="my_patient")
             communication_websocket(stream="socket_update_patient", data=patients)
         elif stream == "update_audio":
-            print("update_audio ...", app.config["ANNOUNCE_ALERT"])
-            if app.config["ANNOUNCE_ALERT"]:
-                signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
-                audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-                print("ANNOUNCE_PLAYER", app.config["ANNOUNCE_PLAYER"])
-                if app.config["ANNOUNCE_PLAYER"] == "web":
-                    print("websouns", audio_path)
-                    communication_websocket(stream="socket_update_screen", event="audio", data=audio_path)
-                else:
-                    communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
-            if app.config["ANNOUNCE_PLAYER"] == "web":
-                communication_websocket(stream="socket_update_screen", data=data, event="audio")
+
+            if event == "spotify":
+                print("spotify!")
+                communication_websocket(stream="socket_update_screen", data=data, flag=flag, event=event)
+            
             else:
-                communication_websocket(stream="socket_app_screen", data=data, flag="sound")
+                if app.config["ANNOUNCE_ALERT"]:
+                    signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
+                    audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+                    print("ANNOUNCE_PLAYER", app.config["ANNOUNCE_PLAYER"])
+                    if app.config["ANNOUNCE_PLAYER"] == "web":
+                        print("websouns", audio_path)
+                        communication_websocket(stream="socket_update_screen", event="audio", data=audio_path)
+                    else:
+                        communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
+                if app.config["ANNOUNCE_PLAYER"] == "web":
+                    communication_websocket(stream="socket_update_screen", data=data, event="audio")
+                else:
+                    communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
             print("basique")
             communication_websocket(stream=f"socket_{stream}", data=data, flag=flag, event=event)
