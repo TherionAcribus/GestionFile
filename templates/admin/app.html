@@ -6,20 +6,24 @@
     {% import '/admin/macros.html' as macros %}
     <h3>Application</h3>
     
-    {{ macros.switch("numbering_by_activity", 
-                numbering_by_activity, 
-                "Mode de numérotation : ", 
-                "Numérotation globale", 
-                "Par activité")
-    }}
-
-    A METTRE AILLEURS !!!
-    {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}
-
-    {{ macros.textarea_full("network_adress", network_adress, "Adresse du serveur sur le réseau (si fonctionnement en local)") }}
-
-    A FAIRE !!! 
-    <div>Ajouter bouton redémarrage du serveur</div>
+    <div class="row">
+        <div class="col s12">
+            <ul class="tabs">
+                <li class="tab col s3"><a class="active" href="#tab_general">Général</a></li>
+                <li class="tab col s3"><a href="#tab_sound">Musique</a></li>
+                <li class="tab col s3"><a href="#tab_backups">Sauvegardes</a></li>
+            </ul>
+        </div>
+        <div id="tab_general" class="col s12">
+            {% include 'admin/app_general.html' %}
+        </div>
+        <div id="tab_sound" class="col s12">
+            {% include 'admin/app_music.html' %}
+        </div>
+        <div id="tab_backups" class="col s12">
+            {% include 'admin/app_backups.html' %}
+        </div>
+    </div>
 
         <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
         <div id="invisible" style="display:none;"></div>

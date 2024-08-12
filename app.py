@@ -683,8 +683,11 @@ def is_safe_url(target):
 """
 
 # TEMPORAIRE
-@app.route('//admin/backup/config', methods=['GET'])
-def route_backup_config_all():
+@app.route('/admin/backup/config', methods=['GET'])
+def config_all_route_backup():
+    return backup_config_all(ConfigOption, ConfigVersion)
+@app.route('/admin/restore/config', methods=['GET'])
+def config_all_route_restore():
     return backup_config_all(ConfigOption, ConfigVersion)
 
 @app.route('/login', methods=['GET', 'POST'])
