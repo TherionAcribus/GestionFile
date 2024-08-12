@@ -688,7 +688,7 @@ def config_all_route_backup():
     return backup_config_all(ConfigOption, ConfigVersion)
 @app.route('/admin/restore/config', methods=['POST'])
 def config_all_route_restore():
-    return restore_config_table_from_json(app, request)
+    return restore_config_table_from_json(db, ConfigVersion, ConfigOption, request)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1243,15 +1243,15 @@ def check_balises_after_validation(value):
 
 @app.route('/admin/app')
 def admin_app():
-    token_info, authorized = get_spotify_token()
-    spotify_connected = authorized
+    #token_info, authorized = get_spotify_token()
+    #spotify_connected = authorized
     return render_template('/admin/app.html',
                             network_adress = app.config["NETWORK_ADRESS"],
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],
                             pharmacy_name = app.config["PHARMACY_NAME"],
-                            spotify_connected=spotify_connected)
-
+                            #spotify_connected=spotify_connected
+    )
 
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
 def update_numbering_by_activity():
@@ -1306,6 +1306,7 @@ def spotify_callback():
     return redirect(url_for('admin_app'))
 
 def get_spotify_token():
+
     token_info = session.get('token_info', None)
     if not token_info:
         return None, False
@@ -4840,7 +4841,7 @@ def set_server_url(app, request):
 
 
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
-def load_configuration(app, ConfigOption):
+def load_configuration():
     app.logger.info("Loading configuration from database")
 
     config_mappings = {
@@ -4934,6 +4935,7 @@ def load_configuration(app, ConfigOption):
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     #flask_thread.start()
+
         
 with app.app_context():
     app.logger.info("Creating database tables")
@@ -4957,15 +4959,18 @@ with app.app_context():
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()
     init_staff_data_from_json()
-    init_default_options_db_from_json(ConfigVersion, ConfigOption)
+    init_default_options_db_from_json(db, ConfigVersion, ConfigOption)
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
     init_default_languages_db_from_json(Language, db)
     init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
-    load_configuration(app, ConfigOption)
+    load_configuration()
     clear_old_patients_table()
     clear_counter_table(db, Counter, Patient)
+
+# Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
+app.load_configuration = load_configuration
 
 
 if __name__ == "__main__":
