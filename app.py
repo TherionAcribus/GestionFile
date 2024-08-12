@@ -50,7 +50,7 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 from routes.init_restore_backup import backup_config_all
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
@@ -686,9 +686,9 @@ def is_safe_url(target):
 @app.route('/admin/backup/config', methods=['GET'])
 def config_all_route_backup():
     return backup_config_all(ConfigOption, ConfigVersion)
-@app.route('/admin/restore/config', methods=['GET'])
+@app.route('/admin/restore/config', methods=['POST'])
 def config_all_route_restore():
-    return backup_config_all(ConfigOption, ConfigVersion)
+    return restore_config_table_from_json(app, request)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -4957,7 +4957,7 @@ with app.app_context():
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()
     init_staff_data_from_json()
-    init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption)
+    init_default_options_db_from_json(ConfigVersion, ConfigOption)
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
     init_default_languages_db_from_json(Language, db)
     init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)

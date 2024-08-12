@@ -1,11 +1,39 @@
 import json
 import os
 from datetime import datetime, time
+from flask import redirect, url_for, render_template, current_app
 
-# Mise à jour ou initialisation des options par défaut
-def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
+def init_default_options_db_from_json(ConfigVersion, ConfigOption):
     json_file='static/json/default_config.json'
-    with app.app_context():        
+    load_config_table_from_json(json_file, ConfigVersion, ConfigOption, restore=False)
+    
+def restore_config_table_from_json(app, request):
+    print("Restauration de la table CONFIG")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+                print("RESTORE CONFIG", file_path)
+                #load_config_table_from_json(app, file_path=file_path, retore=True)
+                os.remove(file_path)  # Optionally remove the file after processing
+            else:
+                app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            app.db.session.rollback()
+            app.logger.info(f'An error occurred: {e}')
+        return redirect(url_for('staff'))
+    return "", 200
+    
+    return "", 200
+
+    load_config_table_from_json(app, json_file, restore=False)
+    
+# Mise à jour ou initialisation des options par défaut
+def load_config_table_from_json(json_file, ConfigVersion, ConfigOption, restore=False):
+    json_file='static/json/default_config.json'
+    with current_app.app_context():        
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             # version stockée dans la table de version
@@ -15,19 +43,19 @@ def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
             if not current_version or current_version.version != data['version']:
                 # pas à jour on update la ligne
                 if current_version:
-                    app.logger.info(f"Mise à jour de la table CONFIG : {current_version} vers {data['version']}")
+                    current_app.logger.info(f"Mise à jour de la table CONFIG : {current_version} vers {data['version']}")
                     current_version.version = data['version']
                 # N'existe pas on l'ajoute
                 else:
-                    app.logger.info(f"Ajout de la table CONFIG : {data['version']}")
+                    current_app.logger.info(f"Ajout de la table CONFIG : {data['version']}")
                     new_version = ConfigVersion(key="config_version", version=data['version'])
-                    db.session.add(new_version)
+                    current_app.db.session.add(new_version)
 
                 # Dans les 2 cas, on met à jour uniquement ce qui n'existe pas
                 for key, value in data['configurations'].items():
                     config_option = ConfigOption.query.filter_by(key=key).first()
-                    if not config_option:  
-                        app.logger.info(f"Création de {key}")
+                    if not config_option or restore:
+                        current_app.logger.info(f"Création de {key}")
                         new_option = ConfigOption(
                             key=key,
                             value_str=value if isinstance(value, str) and len(value) < 200 else None,
@@ -35,11 +63,9 @@ def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
                             value_bool=value if isinstance(value, bool) else None,
                             value_text=value if isinstance(value, str) and len(value) >= 200 else None
                         )
-                        db.session.add(new_option)
-                db.session.commit()
-                app.logger.info("Table CONFIG mise à jour")
-
-
+                        current_app.db.session.add(new_option)
+                current_app.db.session.commit()
+                current_app.logger.info("Table CONFIG mise à jour")
 
 
 
