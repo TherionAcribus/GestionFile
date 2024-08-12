@@ -1,0 +1,26 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Spotify{% endblock %}
+
+{% block content %}
+
+{% if playlists %}
+<ul>
+    {% for playlist in playlists %}
+        <li>
+            <a href="{{ playlist['external_urls']['spotify'] }}" target="_blank">
+                {{ playlist['name'] }} ({{ playlist['tracks']['total'] }} chansons)
+            </a>
+            <!-- Bouton de lecture -->
+            <form action="{{ url_for('play_playlist') }}" method="post" style="display:inline;">
+                <input type="hidden" name="playlist_uri" value="{{ playlist['uri'] }}">
+                <button type="submit" class="btn btn-primary">Lire sur l'annonce</button>
+            </form>
+        </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>Vous n'avez aucune playlist.</p>
+{% endif %}
+
+{% endblock %}

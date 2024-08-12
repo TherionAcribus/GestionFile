@@ -51,6 +51,7 @@ import jwt
 
 from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
+from routes.init_restore_backup import backup_config_all
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -104,10 +105,11 @@ class Config:
     
 app = Flask(__name__)
 
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*", logger=True, engineio_logger=True)
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*") #, logger=True, engineio_logger=True
 app.config.from_object(Config())
 app.debug = True
 mail = Mail(app)
+
 
 
 def callback_update_patient(ch, method, properties, body):
@@ -295,11 +297,11 @@ def rabbitmq_status():
 
 
 # Configuration de la base de données avec session scoped
-engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
+"""engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 db_session = scoped_session(sessionmaker(autocommit=False,
                                         autoflush=False,
                                         bind=engine))
-
+"""
 
 @app.route('/test_local')
 def rabbitmq_status_local():
@@ -332,11 +334,11 @@ scheduler.start()
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
-
+"""
 @app.teardown_appcontext
 def remove_session(ex=None):
     db_session.remove()
-    
+    """
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
@@ -674,6 +676,14 @@ def is_safe_url(target):
     ref_url = urlparse(request.host_url)
     test_url = urlparse(urljoin(request.host_url, target))
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+"""with app.app_context():
+    app.add_url_rule('/admin/backup/config', 'backup_config_all', backup_config_all(ConfigOption, ConfigVersion))
+"""
+
+@app.route('//admin/backup/config', methods=['GET'])
+def route_backup_config_all():
+    return backup_config_all(ConfigOption, ConfigVersion)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -4872,12 +4882,12 @@ def load_configuration(app, ConfigOption):
     #flask_thread.start()
         
 with app.app_context():
-    print("Creating database tables...")
+    app.logger.info("Creating database tables")
     db.create_all()
-    print("COUNT ADMIN", User.query.count())
     # Check if the user table is empty and create an admin user if it is
+
     if User.query.count() == 0:
-        print("Creating admin user...")
+        app.logger.info("Creating admin user...")
         #admin_role = Role.query.filter_by(name='admin').first()
         #if not admin_role:
             #admin_role = Role(name='admin', description='Administrator')

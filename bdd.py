@@ -8,17 +8,18 @@ def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
     with app.app_context():        
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
+            # version stockée dans la table de version
             current_version = ConfigVersion.query.filter_by(key="config_version").first()
 
             # si la version n'est pas à jour ou n'existe pas
             if not current_version or current_version.version != data['version']:
                 # pas à jour on update la ligne
                 if current_version:
-                    print("Mise à jour des options par défaut")
+                    app.logger.info(f"Mise à jour de la table CONFIG : {current_version} vers {data['version']}")
                     current_version.version = data['version']
                 # N'existe pas on l'ajoute
                 else:
-                    print("Création des options par défaut")
+                    app.logger.info(f"Ajout de la table CONFIG : {data['version']}")
                     new_version = ConfigVersion(key="config_version", version=data['version'])
                     db.session.add(new_version)
 
@@ -26,7 +27,7 @@ def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
                 for key, value in data['configurations'].items():
                     config_option = ConfigOption.query.filter_by(key=key).first()
                     if not config_option:  
-                        print("Création ", key)
+                        app.logger.info(f"Création de {key}")
                         new_option = ConfigOption(
                             key=key,
                             value_str=value if isinstance(value, str) and len(value) < 200 else None,
@@ -36,7 +37,9 @@ def init_default_options_db_from_json(app, db, ConfigVersion, ConfigOption):
                         )
                         db.session.add(new_option)
                 db.session.commit()
-                print("Base de données des options mise à jour")
+                app.logger.info("Table CONFIG mise à jour")
+
+
 
 
 
