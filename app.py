@@ -52,9 +52,9 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules
+from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
@@ -532,7 +532,7 @@ class ActivitySchedule(db.Model):
             self.weekdays = [Weekday.query.get(id) for id in data['weekdays']]
         if 'activities' in data:
             self.activities = [Activity.query.get(id) for id in data['activities']]
-            
+
     def __repr__(self):
         return f'<ActivitySchedule from {self.start_time} to {self.end_time}>'
     
@@ -723,6 +723,16 @@ app.add_url_rule('/admin/schedules/backup', 'backup_schedules',
 app.add_url_rule('/admin/schedules/restore', 'restore_schedules', 
                 partial(restore_schedules, db, ConfigVersion, ActivitySchedule, Activity, Weekday, request), 
                 methods=['GET', 'POST'])
+
+app.add_url_rule('/admin/algorules/backup', 'backup_algorules', 
+                partial(backup_algorules, AlgoRule, ConfigVersion), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/algorules/restore', 'restore_algorules', 
+                partial(restore_algorules, db, ConfigVersion, AlgoRule, request), 
+                methods=['GET', 'POST'])
+
+
 
 
 @app.route('/login', methods=['GET', 'POST'])

@@ -313,6 +313,101 @@ def schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, d
         current_app.logger.info('Restoration successful!')
 
 
+# REGLES DE L'ALGORITHME
+
+def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
+    json_file = 'static/json/default_algo_rules.json'
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="algo_rules_version").first()
+    if not current_version or current_version.version != data['version']:
+        current_app.logger.info(f"Mise à jour de la table ALGO_RULES : {current_version} vers {data['version']}")
+
+        if not current_version:
+            algo_rule_restore_init(AlgoRule, db, restore=False, file_path=json_file)
+
+
+def restore_algorules(db, ConfigVersion, AlgoRule, request):
+    current_app.logger.info("algo_rule_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    backup_data = json.load(file)
+                    if backup_data.get("name") != "gf_algo_rules" or backup_data.get("type") not in ["backup", "default"]:
+                        current_app.logger.error('Invalid backup file.')
+                        return "", 200
+
+                # Effacer la table avant de la réinitialiser avec le nouveau fichier
+                db.session.query(AlgoRule).delete()
+                db.session.commit()
+                print("Effacement de la table ALGO_RULES")
+
+                algo_rule_restore_init(AlgoRule, db, restore=True, file_path=file_path)
+                os.remove(file_path)
+
+                current_app.display_toast(success=True, message="Restauration réussie")
+            else:
+                current_app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            db.session.rollback()
+            os.remove(file_path)
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+        return redirect(url_for('admin_algo'))
+    return render_template('restore.html')
+
+
+def algo_rule_restore_init(AlgoRule, db, restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+
+        algo_rules_json = backup_data.get("algo_rules", [])
+
+        with db.session.no_autoflush:  # Empêche l'autoflush pendant que nous travaillons sur les objets
+            for rule_json in algo_rules_json:
+                start_time_obj = datetime.strptime(rule_json['start_time'], '%H:%M:%S').time()
+                end_time_obj = datetime.strptime(rule_json['end_time'], '%H:%M:%S').time()
+
+                rule = AlgoRule.query.get(rule_json['id'])
+
+                if not rule:
+                    rule = AlgoRule(
+                        name=rule_json['name'],
+                        activity_id=rule_json['activity_id'],
+                        priority_level=rule_json['priority_level'],
+                        min_patients=rule_json['min_patients'],
+                        max_patients=rule_json['max_patients'],
+                        max_overtaken=rule_json['max_overtaken'],
+                        start_time=start_time_obj,
+                        end_time=end_time_obj,
+                        days_of_week=rule_json['days_of_week']
+                    )
+                    db.session.add(rule)
+                else:
+                    rule.name = rule_json['name']
+                    rule.activity_id = rule_json['activity_id']
+                    rule.priority_level = rule_json['priority_level']
+                    rule.min_patients = rule_json['min_patients']
+                    rule.max_patients = rule_json['max_patients']
+                    rule.max_overtaken = rule_json['max_overtaken']
+                    rule.start_time = start_time_obj
+                    rule.end_time = end_time_obj
+                    rule.days_of_week = rule_json['days_of_week']
+
+        try:
+            db.session.commit()
+            current_app.logger.info('AlgoRule restoration successful!')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+            raise
+
+
 
 def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
     """ Mise à jour de la BDD des boutons par defaut. Init """
@@ -486,40 +581,6 @@ def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
         db.session.commit()
         print("Database updated to version:", data['version'])
 
-
-def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
-
-    json_file = 'static/json/default_algo_rules.json'
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    current_version = ConfigVersion.query.filter_by(key="algo_rules_version").first()
-    if not current_version or current_version.version != data['version']:
-        print(f"Mise à jour de algo_rules : {current_version} vers {data['version']}")
-        
-        # pour l'instant pas prévu de pouvoir modifier la structure. A voir si besoin un jour
-        if not current_version:
-            for rule in data['rules']:
-                start_time_obj = datetime.strptime(rule['start_time'], '%H:%M').time()
-                end_time_obj = datetime.strptime(rule['end_time'], '%H:%M').time()
-
-                new_rule = AlgoRule(
-                    name=rule['name'],
-                    activity_id=rule['activity_id'],
-                    priority_level=rule['priority_level'],
-                    min_patients=rule['min_patients'],
-                    max_patients=rule['max_patients'],
-                    max_overtaken=rule['max_overtaken'],
-                    start_time=start_time_obj,
-                    end_time=end_time_obj,
-                    days_of_week=rule['days_of_the_week']
-                )
-                db.session.add(new_rule)
-
-            db.session.commit()
-            update_version(db, ConfigVersion, 'algo_rules_version', data['version'], data['comments'])
-        
-        print("Algo_rules bien mis à jour !")
 
 
 def init_days_of_week_db_from_json(Weekday, db, app):

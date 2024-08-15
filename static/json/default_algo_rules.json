@@ -1,6 +1,8 @@
 {
-    "name": "algo_rules",
+    "name": "gf_algorythm_rules",
+    "type": "default",
     "version": "0.1",
+    "timestamp": "2024-08-12 14:35:26",
     "comments": "Version de test",
     "rules": [
     {

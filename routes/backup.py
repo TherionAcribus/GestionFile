@@ -153,3 +153,49 @@ def backup_schedules(ActivitySchedule, ConfigVersion):
         )
     except Exception as e:
         return redirect(url_for('activity'))
+    
+
+def backup_algorules(AlgoRule, ConfigVersion):
+    try:
+        # Récupération de toutes les règles d'algorithme
+        algo_rules = AlgoRule.query.all()
+        algo_rules_json = [
+            {
+                "id": rule.id,
+                "name": rule.name,
+                "description": rule.description,
+                "activity_id": rule.activity_id,
+                "min_patients": rule.min_patients,
+                "max_patients": rule.max_patients,
+                "max_overtaken": rule.max_overtaken,
+                "start_time": rule.start_time.strftime("%H:%M:%S"),
+                "end_time": rule.end_time.strftime("%H:%M:%S"),
+                "days_of_week": rule.days_of_week,
+                "priority_level": rule.priority_level
+            }
+            for rule in algo_rules
+        ]
+        
+        # Création des données de sauvegarde
+        backup_data = {
+            "name": "gf_algo_rules",
+            "type": "backup",
+            "version": "0.1",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "comments": "Backup des règles d'algorithme",
+            "algo_rules": algo_rules_json
+        }
+        
+        # Génération du nom de fichier avec timestamp
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'gf_backup_algo_rules_{timestamp}.json'
+        
+        # Retourner la réponse avec le fichier JSON
+        return Response(
+            json.dumps(backup_data, indent=4, ensure_ascii=False),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        print(e)
+        return redirect(url_for('index'))
