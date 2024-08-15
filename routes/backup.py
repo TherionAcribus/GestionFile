@@ -199,3 +199,88 @@ def backup_algorules(AlgoRule, ConfigVersion):
     except Exception as e:
         print(e)
         return redirect(url_for('index'))
+    
+
+def backup_activities(Activity, ConfigVersion):
+    try:
+        activities = Activity.query.all()
+        activities_json = [
+            {
+                "id": activity.id,
+                "name": activity.name,
+                "letter": activity.letter,
+                "inactivity_message": activity.inactivity_message,
+                "notification": activity.notification,
+                "is_staff": activity.is_staff,
+                "staff_id": activity.staff_id,
+                "schedules": [schedule.id for schedule in activity.schedules]
+            }
+            for activity in activities
+        ]
+        
+        backup_data = {
+            "name": "gf_activities",
+            "type": "backup",
+            "version": "0.1",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "comments": "Backup des activités",
+            "activities": activities_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'gf_backup_activities_{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data, indent=4, ensure_ascii=False),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        print(e)
+        return redirect(url_for('index'))
+    
+    
+def backup_buttons(Button, ConfigVersion):
+    try:
+        buttons = Button.query.all()
+        buttons_json = [
+            {
+                "id": button.id,
+                "by_user": button.by_user,
+                "code": button.code,
+                "is_parent": button.is_parent,
+                "label": button.label,
+                "label_en": button.label_en,
+                "is_active": button.is_active,
+                "is_present": button.is_present,
+                "shape": button.shape,
+                "image_url": button.image_url,
+                "background_color": button.background_color,
+                "text_color": button.text_color,
+                "order": button.order,
+                "activity_id": button.activity_id,
+                "parent_button_id": button.parent_button_id
+            }
+            for button in buttons
+        ]
+        
+        backup_data = {
+            "name": "gf_buttons",
+            "type": "backup",
+            "version": "0.1",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "comments": "Backup des boutons",
+            "buttons": buttons_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'gf_backup_buttons_{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data, indent=4, ensure_ascii=False),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        print(e)
+        return redirect(url_for('index'))

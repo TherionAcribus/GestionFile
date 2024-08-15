@@ -313,6 +313,102 @@ def schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, d
         current_app.logger.info('Restoration successful!')
 
 
+# ACTIVITIES 
+
+def init_default_activities_db_from_json(ConfigVersion, Activity, ActivitySchedule, db):
+    json_file = 'static/json/default_activities.json'
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="activities_version").first()
+    if not current_version or current_version.version != data['version']:
+        if not current_version:
+            new_version = ConfigVersion(key="activities_version", version=data['version'], comments=data['comments'])
+            db.session.add(new_version)
+        else:
+            current_version.version = data['version']
+        current_app.logger.info(f"Mise à jour de la table ACTIVITIES : {current_version} vers {data['version']}")
+
+        if not current_version:
+            activity_restore_init(Activity, ActivitySchedule, db, restore=False, file_path=json_file)
+
+
+def restore_activities(db, ConfigVersion, Activity, ActivitySchedule, request):
+    current_app.logger.info("activity_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    backup_data = json.load(file)
+                    if backup_data.get("name") != "gf_activities" or backup_data.get("type") not in ["backup", "default"]:
+                        current_app.logger.error('Invalid backup file.')
+                        return "", 200
+
+                # Effacer la table avant de la réinitialiser avec le nouveau fichier
+                db.session.query(Activity).delete()
+                db.session.commit()
+                print("Effacement de la table ACTIVITIES")
+
+                activity_restore_init(Activity, ActivitySchedule, db, restore=True, file_path=file_path)
+                os.remove(file_path)
+
+                current_app.display_toast(success=True, message="Restauration réussie")
+            else:
+                current_app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            db.session.rollback()
+            os.remove(file_path)
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+        return redirect(url_for('admin_activity'))
+    return render_template('restore.html')
+
+
+def activity_restore_init(Activity, ActivitySchedule, db, restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+
+        activities_json = backup_data.get("activities", [])
+
+        with db.session.no_autoflush:  # Empêche l'autoflush pendant que nous travaillons sur les objets
+            for activity_json in activities_json:
+                schedules_ids = activity_json.pop('schedules', [])
+                activity = Activity.query.get(activity_json['id'])
+
+                if not activity:
+                    activity = Activity(**activity_json)
+                    db.session.add(activity)
+                    db.session.flush()  # Flush pour obtenir l'ID avant d'ajouter des relations
+                else:
+                    activity.name = activity_json['name']
+                    activity.letter = activity_json['letter']
+                    activity.inactivity_message = activity_json['inactivity_message']
+                    activity.notification = activity_json['notification']
+                    activity.is_staff = activity_json['is_staff']
+                    activity.staff_id = activity_json['staff_id']
+
+                # Effacer les horaires existants
+                activity.schedules = []
+
+                # Ajouter les nouveaux horaires
+                for schedule_id in schedules_ids:
+                    schedule = ActivitySchedule.query.get(schedule_id)
+                    if schedule and schedule not in activity.schedules:
+                        activity.schedules.append(schedule)
+
+        try:
+            db.session.commit()
+            current_app.logger.info('Activity restoration successful!')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+            raise
+
+
+
 # REGLES DE L'ALGORITHME
 
 def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
@@ -408,75 +504,96 @@ def algo_rule_restore_init(AlgoRule, db, restore, file_path):
             raise
 
 
+# BOUTONS 
 
-def init_update_default_buttons_db_from_json(ConfigVersion, Button, db):
-    """ Mise à jour de la BDD des boutons par defaut. Init """
-
-    print("MAJ Boutons")
-    json_file='static/json/default_buttons.json'
+def init_default_buttons_db_from_json(ConfigVersion, Button, Activity, db):
+    json_file = 'static/json/default_buttons.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    print("DATA", data)
-    print("DATA VERSION", data['version'])
 
     current_version = ConfigVersion.query.filter_by(key="buttons_version").first()
-    #print("Current version:", current_version.version)
-    print("Data version:", data['version'])
     if not current_version or current_version.version != data['version']:
-        # Mise à jour de la version
-        # TODO Parcourir les éléments pour mettre à jour les boutons !!! 
-        # TODO Quid de la Migration  !!!
-        if current_version:
-            print ("Updating version")
-            current_version.version = data['version']
-        else:
-            print ("Adding version")
-            new_version = ConfigVersion(
-                key="buttons_version", 
-                version=data['version'],
-                comments=data['comments'],
-                # TODO plutôt utiliser la date du json (à ajouter)
-                date=datetime.now()
-            )
-            db.session.add(new_version)
-            db.session.commit()
-            
-            for button_data in data['buttons']:
-                new_button = Button(
-                    code=button_data['code'],
-                    is_parent=button_data['is_parent'],
-                    label=button_data['label'],
-                    by_user=False,
-                    image_url=button_data['image_url'],
-                    is_active=button_data['is_active'],
-                    shape=button_data['shape'],
-                    order=button_data['order']
-                )
-                db.session.add(new_button)
+        current_app.logger.info(f"Mise à jour de la table BUTTONS : {current_version} vers {data['version']}")
 
-            db.session.commit()
+        if not current_version:
+            button_restore_init(Button, Activity, db, restore=False, file_path=json_file)
 
-        
-        # Mise à jour ou ajout de boutons
-        for button_data in data['buttons']:
-            button = Button.query.filter_by(code=button_data['code']).first()
-            # TODO Ne mettre à jour que si n'existe pas
-            if button:
-                button.is_parent = button_data['is_parent']
-                button.label = button_data['label']
-                button.by_user = False
-                button.code = button_data['code']
-                button.image_url = button_data['image_url']
-                button.is_active = button_data['is_active']
-                button.shape = button_data['shape']
+
+def restore_buttons(db, ConfigVersion, Button, Activity, request):
+    current_app.logger.info("button_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    backup_data = json.load(file)
+                    if backup_data.get("name") != "gf_buttons" or backup_data.get("type") not in ["backup", "default"]:
+                        current_app.logger.error('Invalid backup file.')
+                        return "", 200
+
+                # Effacer la table avant de la réinitialiser avec le nouveau fichier
+                db.session.query(Button).delete()
+                db.session.commit()
+                print("Effacement de la table BUTTONS")
+
+                button_restore_init(Button, Activity, db, restore=True, file_path=file_path)
+                os.remove(file_path)
+
+                current_app.display_toast(success=True, message="Restauration réussie")
             else:
-                #new_button = Button(**button_data)
-                #db.session.add(new_button)
-                pass
-        
-        db.session.commit()
-        print("Database updated to version:", data['version'])
+                current_app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            db.session.rollback()
+            os.remove(file_path)
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+        return redirect(url_for('admin_patient'))
+    return render_template('restore.html')
 
+
+def button_restore_init(Button, Activity, db, restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+
+        buttons_json = backup_data.get("buttons", [])
+
+        with db.session.no_autoflush:  # Empêche l'autoflush pendant que nous travaillons sur les objets
+            for button_json in buttons_json:
+                button = Button.query.get(button_json['id'])
+
+                if not button:
+                    button = Button(**button_json)
+                    db.session.add(button)
+                    db.session.flush()  # Flush pour obtenir l'ID avant d'ajouter des relations
+                else:
+                    button.by_user = button_json['by_user']
+                    button.code = button_json['code']
+                    button.is_parent = button_json['is_parent']
+                    button.label = button_json['label']
+                    button.label_en = button_json['label_en']
+                    button.is_active = button_json['is_active']
+                    button.is_present = button_json['is_present']
+                    button.shape = button_json['shape']
+                    button.image_url = button_json['image_url']
+                    button.background_color = button_json['background_color']
+                    button.text_color = button_json['text_color']
+                    button.order = button_json['order']
+                    button.activity_id = button_json['activity_id']
+                    button.parent_button_id = button_json['parent_button_id']
+
+        try:
+            db.session.commit()
+            current_app.logger.info('Button restoration successful!')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+            raise
+
+
+
+# A TRIER 
 
 
 def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db):

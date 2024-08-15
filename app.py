@@ -52,9 +52,9 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules
+from bdd import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules
+from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
@@ -724,12 +724,29 @@ app.add_url_rule('/admin/schedules/restore', 'restore_schedules',
                 partial(restore_schedules, db, ConfigVersion, ActivitySchedule, Activity, Weekday, request), 
                 methods=['GET', 'POST'])
 
+app.add_url_rule('/admin/activities/backup', 'backup_activities', 
+                partial(backup_activities, Activity, ConfigVersion), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/activities/restore', 'restore_activities', 
+                partial(restore_activities, db, ConfigVersion, Activity, ActivitySchedule, request), 
+                methods=['GET', 'POST'])
+
+
 app.add_url_rule('/admin/algorules/backup', 'backup_algorules', 
                 partial(backup_algorules, AlgoRule, ConfigVersion), 
                 methods=['GET'])
 
 app.add_url_rule('/admin/algorules/restore', 'restore_algorules', 
                 partial(restore_algorules, db, ConfigVersion, AlgoRule, request), 
+                methods=['GET', 'POST'])
+
+app.add_url_rule('/admin/buttons/backup', 'backup_buttons', 
+                partial(backup_buttons, Button, ConfigVersion), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/buttons/restore', 'restore_buttons', 
+                partial(restore_buttons, db, ConfigVersion, Button, Activity, request), 
                 methods=['GET', 'POST'])
 
 
@@ -1324,8 +1341,8 @@ def update_numbering_by_activity():
 
 def spotify_authorized():
     print("spotify_authorized", app.config["MUSIC_SPOTIFY_USER"], app.config["MUSIC_SPOTIFY_KEY"])
-    return SpotifyOAuth(client_id='5d80f2058a9b4b27923b7eb21148e44a',
-                            client_secret='2e7c30694a0942808a39660c7f02cd7a',
+    return SpotifyOAuth(client_id='',
+                            client_secret='',
                             redirect_uri=url_for('spotify_callback', _external=True),
                             scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
 
@@ -1334,8 +1351,8 @@ def spotify_authorized():
 def spotify_login():
     clear_spotify_tokens()
     sp_oauth = sp_oauth = SpotifyOAuth(
-        client_id='5d80f2058a9b4b27923b7eb21148e44a',
-        client_secret='2e7c30694a0942808a39660c7f02cd7a',
+        client_id='',
+        client_secret='',
         redirect_uri=url_for('spotify_callback', _external=True),
         scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
@@ -1356,8 +1373,8 @@ def spotify_logout():
 @app.route('/spotify/callback')
 def spotify_callback():
     sp_oauth = sp_oauth = SpotifyOAuth(
-        client_id='5d80f2058a9b4b27923b7eb21148e44a',
-        client_secret='2e7c30694a0942808a39660c7f02cd7a',
+        client_id='',
+        client_secret='',
         redirect_uri=url_for('spotify_callback', _external=True),
         scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
@@ -1386,8 +1403,8 @@ def get_spotify_token():
     if is_token_expired:
         try:
             sp_oauth = SpotifyOAuth(
-        client_id='5d80f2058a9b4b27923b7eb21148e44a',
-        client_secret='2e7c30694a0942808a39660c7f02cd7a',
+        client_id='',
+        client_secret='',
         redirect_uri=url_for('spotify_callback', _external=True),
         scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
@@ -1651,18 +1668,13 @@ def add_new_staff():
 
 
 
-
-
-
-
-
 # --------  FIN  de ADMIN -> Staff   ---------
 
 # --------  ADMIN -> Activity  ---------
 
 # page de base
 @app.route('/admin/activity')
-def activity():
+def admin_activity():
     return render_template('/admin/activity.html')
 
 # affiche le tableau des activités 
@@ -4593,49 +4605,6 @@ def format_time(value):
     return value.strftime('%H:%M') if value else ''
 
 
-def init_activity_data_from_json(json_file='static/json/activities.json'):
-    print("Initialisation de la base de données...")
-    # Vérifier si la table est vide
-    if Activity.query.first() is None:
-        # Charger les activités depuis le fichier JSON
-        if os.path.exists(json_file):
-            with open(json_file, 'r', encoding='utf-8') as f:
-                activities = json.load(f)
-
-            # Charger tous les horaires existants pour éviter de multiples requêtes dans la boucle
-            schedules = {sched.id: sched for sched in ActivitySchedule.query.all()}
-
-            # Ajouter chaque activité à la base de données
-            for activity in activities:
-                new_activity = Activity(
-                    name=activity['name'],
-                    letter=activity['letter'],
-                    inactivity_message = "",
-                    is_staff = False
-                )
-
-                # Associer l'horaire à l'activité
-                schedule_id = activity.get('schedule')
-                if schedule_id and schedule_id in schedules:
-                    new_activity.schedules.append(schedules[schedule_id])
-                else:
-                    print(f"Aucun horaire trouvé pour l'ID {schedule_id}, vérifiez que l'horaire existe.")
-
-                db.session.add(new_activity)
-
-            # Valider les changements
-            db.session.commit()
-            print("Base de données initialisée avec des activités prédéfinies.")
-
-        else:
-            print(f"Fichier {json_file} introuvable.")
-    else:
-        print("La base de données contient déjà des données.")
-
-
-
-
-
 def set_server_url(app, request):
     # Stockage de l'adresse pour la génération du QR code
     if request.host_url == "http://127.0.0.1:5000/":
@@ -4765,11 +4734,11 @@ with app.app_context():
 
     init_days_of_week_db_from_json(Weekday, db, app)
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
-    init_activity_data_from_json()
+    init_default_activities_db_from_json(ConfigVersion, Activity, ActivitySchedule, db)
     init_counters_data_from_json(ConfigVersion, Counter, Activity, db)  # a verifier
     init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db)
     init_default_options_db_from_json(db, ConfigVersion, ConfigOption)
-    init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
+    init_default_buttons_db_from_json(ConfigVersion, Button, Activity, db)
     init_default_languages_db_from_json(Language, db)
     init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
     init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)

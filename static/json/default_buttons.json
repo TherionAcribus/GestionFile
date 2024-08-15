@@ -1,6 +1,9 @@
 {
+    "name": "gf_buttons",
+    "type": "default",
     "version": "0.1",
-    "comments": "Version de test",
+    "timestamp": "2024-08-12 14:35:26",
+    "comments": "Version initiale",
         "buttons": [
         {
             "code": "ORDO",
