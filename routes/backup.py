@@ -313,5 +313,7 @@ def backup_databases():
                 else:
                     return f"Database file {db_name} not found at {db_path}", 404
 
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+
     zip_buffer.seek(0)
-    return send_file(zip_buffer, as_attachment=True, download_name='backup_databases.zip')
+    return send_file(zip_buffer, as_attachment=True, download_name=f'backup_databases_{timestamp}.zip')

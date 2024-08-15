@@ -596,7 +596,9 @@ def button_restore_init(Button, Activity, db, restore, file_path):
 # DATABASE
 
 def restore_databases(request):
-    file = request.files.get('backup_zip')
+    file = request.files.get('file')
+    print("file",request.files)
+    print("file",file)
     
     if file:
         # Charger le fichier ZIP en mémoire
@@ -623,6 +625,8 @@ def restore_databases(request):
                             target.write(source.read())
                     else:
                         return f"Database file {db_name} not found in the ZIP", 400
+                    
+            current_app.load_configuration()
 
         return "All databases restored successfully"
     else:

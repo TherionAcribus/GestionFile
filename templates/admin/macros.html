@@ -213,6 +213,7 @@
             var file = event.target.files[0];
             if (file) {
                 if (isDatabase && file.name.endsWith('.zip')) {
+                    // Just indicate that a ZIP file was selected and enable the restore button
                     fileContentDiv.innerHTML = `<div><strong>Fichier ZIP sélectionné :</strong> ${file.name}</div>`;
                     restoreButton.disabled = false; // Enable the button
                 } else if (!isDatabase && file.name.endsWith('.json')) {
