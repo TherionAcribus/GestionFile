@@ -591,6 +591,21 @@ def button_restore_init(Button, Activity, db, restore, file_path):
             current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
             raise
 
+# DATABASE
+
+def restore_databases(request):
+    file = request.files['backup_file']
+    
+    if file:
+        backup_path = 'your_database.db'
+        file.save(backup_path)
+        
+        # Vous pouvez inclure ici des vérifications supplémentaires avant de restaurer
+        
+        return "Database restored successfully"
+    else:
+        return "No file uploaded", 400
+
 
 
 # A TRIER 

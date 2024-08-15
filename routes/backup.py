@@ -1,7 +1,10 @@
 import json
+import zipfile
+import os
 #from app import ConfigOption, ConfigVersion
 from datetime import datetime
-from flask import redirect, url_for, Response, current_app
+from flask import redirect, url_for, Response, current_app, send_file
+from io import BytesIO
 
 
 def backup_config_all(ConfigOption, ConfigVersion):
@@ -239,7 +242,7 @@ def backup_activities(Activity, ConfigVersion):
         print(e)
         return redirect(url_for('index'))
     
-    
+
 def backup_buttons(Button, ConfigVersion):
     try:
         buttons = Button.query.all()
@@ -284,3 +287,31 @@ def backup_buttons(Button, ConfigVersion):
     except Exception as e:
         print(e)
         return redirect(url_for('index'))
+    
+
+def backup_databases():
+    # Préparer un fichier ZIP en mémoire
+    zip_buffer = BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+        # Liste des bases de données
+        databases = {
+            'queuedatabase.db': current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', ''),
+            'queueschedulerdatabase.db': current_app.config.get('SQLALCHEMY_DATABASE_URI_SCHEDULER', '').replace('sqlite:///', ''),
+            'userdatabase.db': current_app.config['SQLALCHEMY_BINDS']['users'].replace('sqlite:///', '')
+        }
+
+        for db_name, db_path in databases.items():
+            if db_path:  # Vérifier que le chemin n'est pas vide
+                # Éviter la duplication de "instance" dans le chemin
+                if not db_path.startswith('instance/'):
+                    db_path = os.path.join(current_app.instance_path, db_path)
+                
+                if os.path.exists(db_path):
+                    # Ajouter chaque base de données au fichier ZIP
+                    zip_file.write(db_path, arcname=db_name)
+                else:
+                    return f"Database file {db_name} not found at {db_path}", 404
+
+    zip_buffer.seek(0)
+    return send_file(zip_buffer, as_attachment=True, download_name='backup_databases.zip')

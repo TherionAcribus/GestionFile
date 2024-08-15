@@ -52,9 +52,9 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons
+from bdd import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons
+from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
@@ -691,6 +691,14 @@ def is_safe_url(target):
 # ROUTES 
 
 # Sauvegardes / Restaurations
+
+app.add_url_rule('/admin/database/backup', 'backup_databases', 
+                partial(backup_databases), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/database/restore', 'restore_databases', 
+                partial(restore_databases, request), 
+                methods=['GET', 'POST'])
 
 app.add_url_rule('/admin/backup/config', 'backup_config_all', 
                 partial(backup_config_all, ConfigOption, ConfigVersion), 
