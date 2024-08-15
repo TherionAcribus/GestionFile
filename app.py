@@ -52,9 +52,9 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-from routes.backup import backup_config_all, backup_staff
+from routes.backup import backup_config_all, backup_staff, backup_counters
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
@@ -697,11 +697,19 @@ app.add_url_rule('/admin/restore/config', 'restore_config_all',
                 methods=['POST'])
 
 app.add_url_rule('/admin/staff/backup', 'backup_staff', 
-                partial(backup_staff, Pharmacist), 
+                partial(backup_staff, Pharmacist, ConfigVersion), 
                 methods=['GET'])
 
 app.add_url_rule('/admin/staff/restore', 'restore_staff', 
                 partial(restore_staff, db, ConfigVersion, Pharmacist, Activity, request), 
+                methods=['GET', 'POST'])
+
+app.add_url_rule('/admin/counter/backup', 'backup_counter', 
+                partial(backup_counters, Counter, ConfigVersion), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/counter/restore', 'restore_counter', 
+                partial(restore_counters, db, ConfigVersion, Counter, Activity, request), 
                 methods=['GET', 'POST'])
 
 
@@ -2542,104 +2550,8 @@ def update_counter_order():
         display_toast(success=False, message=f"Erreur: {e}")
 
 
-@app.route('/admin/counter/restore', methods=['GET', 'POST'])
-def counter_restore():
-    app.logger.info("counter_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-                counter_restore_init(restore=True, file_path=file_path)
-                os.remove(file_path)  # Optionally remove the file after processing
-            else:
-                app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            app.logger.info(f'An error occurred: {e}')
-        return redirect(url_for('admin_counter'))
-    return render_template('restore.html')
 
 
-def counter_restore_init(restore, file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        backup_data = json.load(file)
-        
-        # Vérification des métadonnées
-        if backup_data.get("name") != "gf_counters" or backup_data.get("type") not in ["backup", "default"]:
-            app.logger.error('Invalid backup file.', 'danger')
-            if restore:
-                return redirect(url_for('index'))
-
-        # Mise à jour de la version si ce n'est pas une restauration
-        if not restore:
-            current_version = ConfigVersion.query.filter_by(key="counter_version").first()
-            if not current_version or current_version.version != backup_data['version']:
-                if not current_version:
-                    new_version = ConfigVersion(key="counter_version", version=backup_data['version'])
-                    db.session.add(new_version)
-                else:
-                    current_version.version = backup_data['version']
-
-        # Mise à jour des données Counter
-        counters_json = backup_data.get("counters", [])
-        for counter_json in counters_json:
-            activities_ids = counter_json.pop('activities', [])
-            counter = Counter.query.get(counter_json['id'])
-            if not counter:
-                counter = Counter(**counter_json)
-            else:
-                counter.from_dict(counter_json)
-
-            counter.activities = []
-            for activity_id in activities_ids:
-                activity = Activity.query.get(activity_id)
-                if activity:
-                    counter.activities.append(activity)
-
-            db.session.add(counter)
-        db.session.commit()
-        app.logger.info('Restoration successful!')
-
-
-@app.route('/admin/counter/backup', methods=['GET'])
-def counter_backup():
-    try:
-        counters = Counter.query.all()
-        counters_json = [
-            {
-                "id": counter.id,
-                "name": counter.name,
-                "is_active": counter.is_active,
-                "non_actions": counter.non_actions,
-                "priority_actions": counter.priority_actions,
-                "staff_id": counter.staff_id,
-                "activities": [activity.id for activity in counter.activities]
-            }
-            for counter in counters
-        ]
-        
-        backup_data = {
-            "name": "gf_counters",
-            "type": "backup",
-            "version": "0.1",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "comments": "Version initiale",
-            "counters": counters_json
-        }
-        
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        backup_filename = f'gf_backup_counters_{timestamp}.json'
-        
-        return Response(
-            json.dumps(backup_data),
-            mimetype='application/json',
-            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
-        )
-    except Exception as e:
-        flash(f'An error occurred: {e}', 'danger')
-        return redirect(url_for('index'))
 
 
 # -------- fin de ADMIN -> Counter  ---------

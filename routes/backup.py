@@ -43,7 +43,7 @@ def backup_config_all(ConfigOption, ConfigVersion):
         return redirect(url_for('admin'))
     
     
-def backup_staff(Pharmacist):
+def backup_staff(Pharmacist, ConfigVersion):
     try:
         pharmacists = Pharmacist.query.all()
         pharmacists_json = [
@@ -76,4 +76,44 @@ def backup_staff(Pharmacist):
             headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
         )
     except Exception as e:
+        return redirect(url_for('index'))
+    
+
+
+def backup_counters(Counter, ConfigVersion):
+    try:
+        counters = Counter.query.all()
+        counters_json = [
+            {
+                "id": counter.id,
+                "name": counter.name,
+                "is_active": counter.is_active,
+                "non_actions": counter.non_actions,
+                "priority_actions": counter.priority_actions,
+                "staff_id": counter.staff_id,
+                "activities": [activity.id for activity in counter.activities],
+                "order": counter.order
+            }
+            for counter in counters
+        ]
+        
+        backup_data = {
+            "name": "gf_counters",
+            "type": "backup",
+            "version": "0.1",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "comments": "Backup des comptoirs",
+            "counters": counters_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'gf_backup_counters_{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        print(e)
         return redirect(url_for('index'))

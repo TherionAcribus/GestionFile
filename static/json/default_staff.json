@@ -2,6 +2,7 @@
     "name": "gf_staff",
     "type": "default",
     "version": "0.1",
+    "timestamp": "2024-08-12 14:35:26",
     "comments": "Version initiale",
     "staff": [
         {"id": 1, 

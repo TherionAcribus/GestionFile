@@ -1,0 +1,21 @@
+{
+    "name": "gf_counter",
+    "type": "default",
+    "version": "0.1",
+    "timestamp": "2024-08-12 14:35:26",
+    "comments": "Version initiale",
+    "counters": [
+        {"id": 1, 
+        "name": "A",
+        "order": 1
+        },
+        {"id": 2,   
+        "name": "B",
+        "order": 2
+        },
+        {"id": 3,
+        "name": "C",
+        "order": 3
+        }
+    ]
+}

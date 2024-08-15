@@ -75,7 +75,7 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
 # TABLE EQUIPE 
 
 def init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db):
-    json_file='static/json/default_config.json'    
+    json_file='static/json/default_staff.json'    
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
@@ -156,6 +156,90 @@ def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
             current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
             raise
 
+
+# COMPTOIRS
+
+def init_counters_data_from_json(ConfigVersion, Counter, Activity, db):
+    json_file='static/json/default_counter.json'    
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="counters_version").first()
+    if not current_version or current_version.version != data['version']:
+        current_app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
+
+        if not current_version:
+            counter_restore_init(Counter, Activity, db, restore=False, file_path="static/json/default_counter.json")
+
+
+def restore_counters(db, ConfigVersion, Counter, Activity, request):
+    current_app.logger.info("counter_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    backup_data = json.load(file)
+                    if backup_data.get("name") != "gf_counters" or backup_data.get("type") not in ["backup", "default"]:
+                        current_app.logger.error('Invalid backup file.')
+                        return "", 200
+                    
+                # on efface la table puis on l'initialise avec le nouveau fichier
+                db.session.query(Counter).delete()
+                db.session.commit()
+                print("effacement de la table")
+
+                counter_restore_init(Counter, Activity, ConfigVersion, db, restore=True, file_path=file_path)
+                os.remove(file_path)  
+
+                current_app.display_toast(success=True, message="Restauration reussie")
+            else:
+                current_app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            db.session.rollback()
+            os.remove(file_path)  
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+        return redirect(url_for('admin_counter'))
+    return render_template('restore.html')
+
+
+def counter_restore_init(Counter, Activity, ConfigVersion, db, restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+
+        counters_json = backup_data.get("counters", [])
+
+        with db.session.no_autoflush:  # Empêche l'autoflush pendant que nous travaillons sur les objets
+            for counter_json in counters_json:
+                activities_ids = counter_json.pop('activities', [])
+                counter = Counter.query.get(counter_json['id'])
+
+                if not counter:
+                    counter = Counter(**counter_json)
+                    db.session.add(counter)  # Ajouter le nouveau comptoir à la session
+                    db.session.flush()  # Flush pour obtenir l'ID avant d'ajouter des relations
+                else:
+                    counter.from_dict(counter_json)
+
+                # Effacer les activités existantes
+                counter.activities = []
+
+                # Ajouter les nouvelles activités, en vérifiant les doublons
+                for activity_id in activities_ids:
+                    activity = Activity.query.get(activity_id)
+                    if activity and activity not in counter.activities:
+                        counter.activities.append(activity)
+
+        try:
+            db.session.commit()
+            current_app.logger.info('Counter restoration successful!')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+            raise
 
 
 
