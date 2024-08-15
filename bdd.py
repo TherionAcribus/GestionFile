@@ -1,7 +1,9 @@
 import json
 import os
+import zipfile
 from datetime import datetime, time
 from flask import redirect, url_for, render_template, current_app
+from io import BytesIO
 
 # CONFIGURATION DE L'APP
 
@@ -594,18 +596,37 @@ def button_restore_init(Button, Activity, db, restore, file_path):
 # DATABASE
 
 def restore_databases(request):
-    file = request.files['backup_file']
+    file = request.files.get('backup_zip')
     
     if file:
-        backup_path = 'your_database.db'
-        file.save(backup_path)
-        
-        # Vous pouvez inclure ici des vérifications supplémentaires avant de restaurer
-        
-        return "Database restored successfully"
+        # Charger le fichier ZIP en mémoire
+        zip_buffer = BytesIO(file.read())
+
+        with zipfile.ZipFile(zip_buffer, 'r') as zip_file:
+            # Liste des bases de données avec leurs chemins
+            databases = {
+                'queuedatabase.db': current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', ''),
+                'queueschedulerdatabase.db': current_app.config.get('SQLALCHEMY_DATABASE_URI_SCHEDULER', '').replace('sqlite:///', ''),
+                'userdatabase.db': current_app.config['SQLALCHEMY_BINDS']['users'].replace('sqlite:///', '')
+            }
+
+            for db_name, db_path in databases.items():
+                if db_path:  # Vérifier que le chemin n'est pas vide
+                    # Éviter la duplication de "instance" dans le chemin
+                    if not db_path.startswith('instance/'):
+                        db_path = os.path.join(current_app.instance_path, db_path)
+
+                    # Vérifier que le fichier ZIP contient bien la base de données
+                    if db_name in zip_file.namelist():
+                        # Extraire et remplacer la base de données existante
+                        with zip_file.open(db_name) as source, open(db_path, 'wb') as target:
+                            target.write(source.read())
+                    else:
+                        return f"Database file {db_name} not found in the ZIP", 400
+
+        return "All databases restored successfully"
     else:
         return "No file uploaded", 400
-
 
 
 # A TRIER 
