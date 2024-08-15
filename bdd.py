@@ -3,12 +3,14 @@ import os
 from datetime import datetime, time
 from flask import redirect, url_for, render_template, current_app
 
+# CONFIGURATION DE L'APP
+
 def init_default_options_db_from_json(db, ConfigVersion, ConfigOption):
     json_file='static/json/default_config.json'
     load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False)
     
 def restore_config_table_from_json(db, ConfigVersion, ConfigOption, request):
-    current_app.logger("Restauration de la table CONFIG")
+    current_app.logger.info("Restauration de la table CONFIG")
     if request.method == 'POST':
         try:
             file = request.files['file']
@@ -27,8 +29,8 @@ def restore_config_table_from_json(db, ConfigVersion, ConfigOption, request):
             os.remove(json_file)
             current_app.logger.info(f'An error occurred: {e}')
             current_app.display_toast(success=False, message=e)
-        return "", 200
-    return "", 200    
+        return redirect(url_for('admin_app'))
+    return redirect(url_for('admin_app'))  
 
 # Mise à jour ou initialisation des options par défaut
 def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False):
@@ -69,6 +71,91 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
 
                 db.session.commit()
                 current_app.logger.info("Table CONFIG mise à jour")
+
+# TABLE EQUIPE 
+
+def init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db):
+    json_file='static/json/default_config.json'    
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    current_version = ConfigVersion.query.filter_by(key="staff_version").first()
+    if not current_version or current_version.version != data['version']:
+        current_app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
+
+        if not current_version:
+            staff_restore_init(Pharmacist, Activity, db, restore=False, file_path="static/json/default_staff.json")
+
+
+def restore_staff(db, ConfigVersion, Pharmacist, Activity, request):    
+    current_app.logger.info("staff_restore")
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+                
+                # on s'assure que le fichier est bien un fichier gérant le staff
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    backup_data = json.load(file)
+                    if backup_data.get("name") != "gf_staff" or backup_data.get("type") not in ["backup", "default"]:
+                        current_app.logger.error('Invalid backup file.')
+                        return "", 200
+                
+                # on efface la table puis on l'initialise avec le nouveau fichier
+                db.session.query(Pharmacist).delete()
+                db.session.commit()
+                print("effacement de la table")
+                
+                staff_restore_init(Pharmacist, Activity, db, restore=True, file_path=file_path)
+                os.remove(file_path)  # Optionally remove the file after processing
+                
+                print("rechargement du cache")
+                current_app.display_toast(success=True, message="Restauration reussie")
+                
+            else:
+                current_app.logger.error('Invalid file format. Please upload a JSON file.')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+        return redirect(url_for('staff'))
+    return render_template('restore.html')
+
+
+def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+
+        pharmacists_json = backup_data.get("staff", [])
+
+        for pharmacist_json in pharmacists_json:
+            activities_ids = pharmacist_json.pop('activities', [])
+            pharmacist = Pharmacist.query.get(pharmacist_json['id'])
+
+            if not pharmacist:
+                pharmacist = Pharmacist(**pharmacist_json)
+                db.session.add(pharmacist)  # Ajouter le nouveau pharmacien à la session
+                db.session.flush()  # Flush pour obtenir l'ID avant d'ajouter des relations
+            else:
+                pharmacist.from_dict(pharmacist_json)
+
+            pharmacist.activities = []  # Vider les activités actuelles
+
+            for activity_id in activities_ids:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    if activity not in pharmacist.activities:  # Vérifier si la relation existe déjà
+                        pharmacist.activities.append(activity)
+
+        try:
+            db.session.commit()
+            current_app.logger.info('Restoration successful!')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
+            raise
+
 
 
 

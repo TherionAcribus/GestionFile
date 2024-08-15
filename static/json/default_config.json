@@ -1,8 +1,8 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.1",
-    "timestamp": "2024-08-12 11:31:26",
+    "version": "0.2",
+    "timestamp": "2024-08-12 14:35:26",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
@@ -41,6 +41,9 @@
             "announce_infos_width": 800,
             "announce_infos_height": 800,
             "counter_order": "order",
+            "music_spotify": false,
+            "music_spotify_user": "your spotify user",
+            "music_spotify_key": "your spotify key",
             "page_patient_structure": "full",
             "page_patient_disable_button": true,
             "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",

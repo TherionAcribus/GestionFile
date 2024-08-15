@@ -11,16 +11,32 @@
             <a href="{{ playlist['external_urls']['spotify'] }}" target="_blank">
                 {{ playlist['name'] }} ({{ playlist['tracks']['total'] }} chansons)
             </a>
-            <!-- Bouton de lecture -->
-            <form action="{{ url_for('play_playlist') }}" method="post" style="display:inline;">
-                <input type="hidden" name="playlist_uri" value="{{ playlist['uri'] }}">
-                <button type="submit" class="btn btn-primary">Lire sur l'annonce</button>
-            </form>
+            <div>
+                <!-- Bouton pour lecture dans l'ordre -->
+                <button class="btn"
+                        hx-post="{{ url_for('play_playlist') }}"
+                        hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "false"}'
+                        hx-target="#invisible">
+                        Lire dans l'ordre
+                </button>
+
+                <!-- Bouton pour lecture aléatoire -->
+                <button class="btn"
+                hx-post="{{ url_for('play_playlist') }}"
+                hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "true"}'
+                hx-target="#invisible">
+                Aléatoire
+        </button>
+            </div>
         </li>
     {% endfor %}
 </ul>
 {% else %}
 <p>Vous n'avez aucune playlist.</p>
 {% endif %}
+
+
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+    <div id="invisible" style="display:none;"></div>
 
 {% endblock %}

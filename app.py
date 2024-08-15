@@ -38,7 +38,9 @@ import uuid
 from urllib.parse import urlparse, urljoin
 import random
 import spotipy
-from spotipy.oauth2 import SpotifyOAuth
+from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
+
+from functools import partial
 
 from flask_debugtoolbar import DebugToolbarExtension
 from flask_security import Security, current_user, auth_required, hash_password, \
@@ -50,9 +52,9 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-from routes.init_restore_backup import backup_config_all
+from routes.backup import backup_config_all, backup_staff
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
@@ -682,13 +684,27 @@ def is_safe_url(target):
     app.add_url_rule('/admin/backup/config', 'backup_config_all', backup_config_all(ConfigOption, ConfigVersion))
 """
 
-# TEMPORAIRE
-@app.route('/admin/backup/config', methods=['GET'])
-def config_all_route_backup():
-    return backup_config_all(ConfigOption, ConfigVersion)
-@app.route('/admin/restore/config', methods=['POST'])
-def config_all_route_restore():
-    return restore_config_table_from_json(db, ConfigVersion, ConfigOption, request)
+# ROUTES 
+
+# Sauvegardes / Restaurations
+
+app.add_url_rule('/admin/backup/config', 'backup_config_all', 
+                partial(backup_config_all, ConfigOption, ConfigVersion), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/restore/config', 'restore_config_all', 
+                partial(restore_config_table_from_json, db, ConfigVersion, ConfigOption, request), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/staff/backup', 'backup_staff', 
+                partial(backup_staff, Pharmacist), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/staff/restore', 'restore_staff', 
+                partial(restore_staff, db, ConfigVersion, Pharmacist, Activity, request), 
+                methods=['GET', 'POST'])
+
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1243,14 +1259,17 @@ def check_balises_after_validation(value):
 
 @app.route('/admin/app')
 def admin_app():
-    #token_info, authorized = get_spotify_token()
-    #spotify_connected = authorized
+    token_info, authorized = get_spotify_token()
+    spotify_connected = authorized
     return render_template('/admin/app.html',
                             network_adress = app.config["NETWORK_ADRESS"],
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],
                             pharmacy_name = app.config["PHARMACY_NAME"],
-                            #spotify_connected=spotify_connected
+                            music_spotify = app.config["MUSIC_SPOTIFY"],
+                            music_spotify_user = app.config["MUSIC_SPOTIFY_USER"],
+                            music_spotify_key = app.config["MUSIC_SPOTIFY_KEY"],
+                            spotify_connected=spotify_connected
     )
 
 @app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
@@ -1274,54 +1293,87 @@ def update_numbering_by_activity():
             return jsonify(status="error", message=str(e)), 500
     
 
+def spotify_authorized():
+    print("spotify_authorized", app.config["MUSIC_SPOTIFY_USER"], app.config["MUSIC_SPOTIFY_KEY"])
+    return SpotifyOAuth(client_id='5d80f2058a9b4b27923b7eb21148e44a',
+                            client_secret='2e7c30694a0942808a39660c7f02cd7a',
+                            redirect_uri=url_for('spotify_callback', _external=True),
+                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
+
 
 @app.route('/spotify/login')
 def spotify_login():
-    sp_oauth = SpotifyOAuth(client_id='408201cea7e0402e866a164db94fdee9',
-                            client_secret='445281ca3fc14bc0ad0e079ac1fad3cc',
-                            redirect_uri=url_for('spotify_callback', _external=True),
-                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
+    clear_spotify_tokens()
+    sp_oauth = sp_oauth = SpotifyOAuth(
+        client_id='5d80f2058a9b4b27923b7eb21148e44a',
+        client_secret='2e7c30694a0942808a39660c7f02cd7a',
+        redirect_uri=url_for('spotify_callback', _external=True),
+        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
+    )
 
     auth_url = sp_oauth.get_authorize_url()
     return redirect(auth_url)
 
+def clear_spotify_tokens():
+    # Supprimez les informations de token de la session
+    session.pop('token_info', None)
+    session.modified = True
+
 @app.route('/spotify/logout')
 def spotify_logout():
-    session.pop('token_info', None)
+    clear_spotify_tokens()
     return redirect(url_for('admin_app'))
 
 @app.route('/spotify/callback')
 def spotify_callback():
-    sp_oauth = SpotifyOAuth(client_id='408201cea7e0402e866a164db94fdee9',
-                            client_secret='445281ca3fc14bc0ad0e079ac1fad3cc',
-                            redirect_uri=url_for('spotify_callback', _external=True),
-                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
+    sp_oauth = sp_oauth = SpotifyOAuth(
+        client_id='5d80f2058a9b4b27923b7eb21148e44a',
+        client_secret='2e7c30694a0942808a39660c7f02cd7a',
+        redirect_uri=url_for('spotify_callback', _external=True),
+        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
+    )
 
-    session['token_info'], authorized = get_spotify_token()
-    session.modified = True
-    if not authorized:
-        token_info = sp_oauth.get_access_token(request.args['code'])
+    try:
+        token_info = sp_oauth.get_cached_token()
+
         session['token_info'] = token_info
+        session.modified = True
+    except SpotifyOauthError as e:
+        print(f"Error obtaining token: {e}")
+        clear_spotify_tokens()  # Supprimez les anciens tokens
+        # Afficher une page d'erreur ou rediriger vers une page différente pour interrompre la boucle
+        return redirect(url_for('error_page'))  # Remplacez 'error_page' par une page d'erreur appropriée
 
     return redirect(url_for('admin_app'))
 
 def get_spotify_token():
-
     token_info = session.get('token_info', None)
     if not token_info:
         return None, False
 
-    now = int(tm.time())
+    now = int(time.time())
     is_token_expired = token_info['expires_at'] - now < 60
 
     if is_token_expired:
-        sp_oauth = SpotifyOAuth(client_id='VOTRE_CLIENT_ID',
-                                client_secret='VOTRE_CLIENT_SECRET',
-                                redirect_uri=url_for('spotify_callback', _external=True),
-                                scope='user-library-read user-read-playback-state user-modify-playback-state')
-        token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+        try:
+            sp_oauth = SpotifyOAuth(
+        client_id='5d80f2058a9b4b27923b7eb21148e44a',
+        client_secret='2e7c30694a0942808a39660c7f02cd7a',
+        redirect_uri=url_for('spotify_callback', _external=True),
+        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
+    )
+            token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
+            session['token_info'] = token_info
+        except SpotifyOauthError as e:
+            print(f"Error refreshing token: {e}")
+            clear_spotify_tokens()
+            return None, False
 
     return token_info, True
+
+@app.route('/error')
+def error_page():
+    return "Une erreur s'est produite avec votre authentification Spotify. Veuillez essayer de vous reconnecter.", 400
 
 @app.route('/play_playlist', methods=['POST'])
 def play_playlist():
@@ -1329,13 +1381,23 @@ def play_playlist():
     if not authorized:
         return redirect(url_for('spotify_login'))
 
+    print("PLAYLISTES")
+    print(request.values)
     sp = spotipy.Spotify(auth=token_info['access_token'])
     playlist_uri = request.form['playlist_uri']
+    shuffle = request.form.get('shuffle') == 'true'  # Vérifie si la checkbox est cochée
+
+    print("PLAYLIST_URI", playlist_uri)
+    print("SHUFFLE", shuffle)
 
     # Envoie la commande à la page "announce" via WebSocket ou un autre mécanisme
     communikation("update_audio", 
                     event="spotify", 
-                    data={'playlist_uri': playlist_uri, 'access_token': token_info['access_token']})
+                    data={
+                        'playlist_uri': playlist_uri, 
+                        'access_token': token_info['access_token'],
+                        'shuffle': shuffle  # Ajoute l'option shuffle dans les données
+                    })
 
     #socketio.emit('play_playlist', {'playlist_uri': playlist_uri}, namespace='/announce')
 
@@ -1355,6 +1417,10 @@ def admin_music():
                                 spotify_connected=spotify_connected, 
                                 playlists=playlists['items'])
 
+    else:
+        return render_template('/admin/music.html',
+                                spotify_connected=spotify_connected, 
+                                playlists=[])
 
 # --------  ADMIN -> DataBase  ---------
 
@@ -1554,95 +1620,12 @@ def add_new_staff():
         return display_staff_table()
 
 
-@app.route('/admin/staff/backup', methods=['GET'])
-def staff_backup():
-    try:
-        pharmacists = Pharmacist.query.all()
-        pharmacists_json = [
-            {
-                "id": pharmacist.id,
-                "name": pharmacist.name,
-                "initials": pharmacist.initials,
-                "language": pharmacist.language,
-                "is_active": pharmacist.is_active,
-                "activities": [activity.id for activity in pharmacist.activities]
-            }
-            for pharmacist in pharmacists
-        ]
-        
-        backup_data = {
-            "name": "gf_staff",
-            "type": "backup",
-            "version": "0.1",
-            "comments": "Backup de l'équipe",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "staff": pharmacists_json
-        }
-        
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        backup_filename = f'gf_backup_staff_{timestamp}.json'
-        
-        return Response(
-            json.dumps(backup_data),
-            mimetype='application/json',
-            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
-        )
-    except Exception as e:
-        flash(f'An error occurred: {e}', 'danger')
-        return redirect(url_for('index'))
 
 
-@app.route('/admin/staff/restore', methods=['GET', 'POST'])
-def staff_restore():
-    app.logger.info("staff_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-                staff_restore_init(restore=True, file_path=file_path)
-                os.remove(file_path)  # Optionally remove the file after processing
-            else:
-                app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            app.logger.info(f'An error occurred: {e}')
-        return redirect(url_for('staff'))
-    return render_template('restore.html')
 
 
-def staff_restore_init(restore, file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        backup_data = json.load(file)
-        
-        # Vérification des métadonnées
-        if backup_data.get("name") != "gf_staff" or backup_data.get("type") not in ["backup", "default"]:
-            app.logger.error('Invalid backup file.')
-            if restore:
-                return redirect(url_for('staff'))
-        
-        pharmacists_json = backup_data.get("staff", [])
-        
-        for pharmacist_json in pharmacists_json:
-            activities_ids = pharmacist_json.pop('activities', [])
-            pharmacist = Pharmacist.query.get(pharmacist_json['id'])
-            if not pharmacist:
-                pharmacist = Pharmacist(**pharmacist_json)
-            else:
-                pharmacist.from_dict(pharmacist_json)
-            
-            pharmacist.activities = []
-            for activity_id in activities_ids:
-                activity = Activity.query.get(activity_id)
-                if activity:
-                    pharmacist.activities.append(activity)
-            
-            db.session.add(pharmacist)
-        db.session.commit()
-        app.logger.info('Restoration successful!', 'success')
 
-    
+
 
 # --------  FIN  de ADMIN -> Staff   ---------
 
@@ -4817,17 +4800,6 @@ def init_activity_data_from_json(json_file='static/json/activities.json'):
         print("La base de données contient déjà des données.")
 
 
-def init_staff_data_from_json():
-    json_file='static/json/default_config.json'    
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    current_version = ConfigVersion.query.filter_by(key="staff_version").first()
-    if not current_version or current_version.version != data['version']:
-        app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
-
-        if not current_version:
-            staff_restore_init(restore=False, file_path="static/json/default_staff.json")
 
 
 
@@ -4880,6 +4852,9 @@ def load_configuration():
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
         "counter_order": ("COUNTER_ORDER", "value_str"),
+        "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),
+        "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
+        "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
         "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),
         "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
         "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
@@ -4958,7 +4933,7 @@ with app.app_context():
     init_days_of_week_db_from_json(Weekday, db, app)
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()
-    init_staff_data_from_json()
+    init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db)
     init_default_options_db_from_json(db, ConfigVersion, ConfigOption)
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)
     init_default_languages_db_from_json(Language, db)

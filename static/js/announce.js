@@ -53,6 +53,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         receive_audio(msg);
     });
 
+    screenSocket.on('spotify', function(msg) {
+        console.log("Received spotify message:", msg);
+        receive_spotify_playlist_old(msg);
+    });
+
     screenSocket.on('refresh', function(msg) {
         console.log("Received screen message:", msg);
         refresh_page();
@@ -179,6 +184,233 @@ function requestPermissions() {
                 }
             });
         }
+
+
+        function receive_spotify_playlist(msg){
+            console.log("Received spotify data:", msg);
+            const playlistUri = msg.data.playlist_uri;
+            const accessToken = msg.data.access_token;
+        
+            console.log("checkTokenValidity(accessToken)");
+            checkTokenValidity(accessToken);
+        
+            getSpotifyDevices(accessToken);
+        
+            if (msg.data.shuffle) {
+            // Activer le mode shuffle avant de lire la playlist
+            setShuffleMode(accessToken, "654b698ab877883de7666432f88bbb9e9de05725", true)
+                .then(() => {
+                    playSpotifyPlaylistOnDevice(accessToken, "654b698ab877883de7666432f88bbb9e9de05725", playlistUri);
+                })
+                .catch(error => {
+                    console.error('Error setting shuffle mode:', error);
+                });
+        }
+
+    }
+
+
+// Fonction pour activer ou désactiver le mode shuffle
+function setShuffleMode(accessToken, deviceId, shuffle) {
+    return fetch(`https://api.spotify.com/v1/me/player/shuffle?state=${shuffle}&device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        },
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(errorData => {
+                console.error('Error setting shuffle mode:', errorData);
+                throw new Error(errorData.error.message);
+            });
+        } else {
+            console.log(`Shuffle mode set to ${shuffle ? 'on' : 'off'}`);
+        }
+    });
+}
+
+
+function getSpotifyDevices(accessToken) {
+    fetch('https://api.spotify.com/v1/me/player/devices', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${accessToken}`
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Available devices:', data.devices);
+        // Affiche les appareils disponibles avec leurs IDs
+        data.devices.forEach(device => {
+            console.log(`Device Name: ${device.name}, Device ID: ${device.id}`);
+        });
+    })
+    .catch(error => {
+        console.error('Error fetching devices:', error);
+    });
+}
+
+
+function playSpotifyPlaylistOnDevice(accessToken, deviceId, playlistUri) {
+    fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ context_uri: playlistUri }),
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        },
+    })
+    .then(response => {
+        if (response.ok) {
+            console.log('Playback started successfully');
+        } else {
+            return response.json().then(errorData => {
+                console.error('Error starting playback:', errorData);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Fetch error:', error);
+    });
+}
+
+
+        function receive_spotify_playlist_old(msg) {
+
+
+
+            console.log("Received spotify data:", msg);
+            const playlistUri = msg.data.playlist_uri;
+            const accessToken = msg.data.access_token;
+
+            console.log("checkTokenValidity(accessToken)");
+            checkTokenValidity(accessToken);
+
+
+            fetch('https://api.spotify.com/v1/me', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Token is working with the general API');
+                } else {
+                    console.error('Error with the token on general API:', response.status, response.statusText);
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+            });
+
+        
+            // Log du token et de l'URI de la playlist
+            console.log("Playlist URI:", playlistUri);
+            console.log("Access Token:", accessToken);
+        
+            
+            // Créer un lecteur Spotify Web API
+            var player = new Spotify.Player({
+                name: 'PharmaFile Player',
+                getOAuthToken: cb => { 
+                    console.log("Providing access token to Spotify Player");
+                    cb(accessToken);  // Utilisation du token ici
+                }
+            });
+        
+            // Connexion au lecteur
+            player.connect().then(success => {
+                if (success) {
+                    console.log('The Web Playback SDK successfully connected to Spotify!');
+                } else {
+                    console.error('Failed to connect the Web Playback SDK');
+                }
+            }).catch(error => {
+                console.error('Error during player connection:', error);
+            });
+        
+            // Écouter l'événement "ready"
+            player.addListener('ready', ({ device_id }) => {
+                console.log('Player is ready with Device ID:', device_id);
+
+                checkTokenValidity(accessToken);
+                console.log('Authorization Header:', `Bearer ${accessToken}`);
+        
+                // Démarre la lecture de la playlist sur le device connecté
+                console.log('Starting playback for playlist:', playlistUri);
+                fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ context_uri: playlistUri }),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Playback started successfully');
+                    } else {
+                        return response.json().then(errorData => {
+                            console.error('Error starting playback:', errorData);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch error:', error);
+                });
+            });
+        
+            // Écouter l'événement "not_ready"
+            player.addListener('not_ready', ({ device_id }) => {
+                console.warn('Device ID has gone offline:', device_id);
+            });
+        
+            // Gérer les erreurs du lecteur
+            player.addListener('initialization_error', ({ message }) => {
+                console.error('Initialization Error:', message);
+            });
+        
+            player.addListener('authentication_error', ({ message }) => {
+                console.error('Authentication Error:', message);
+            });
+        
+            player.addListener('account_error', ({ message }) => {
+                console.error('Account Error:', message);
+            });
+        
+            player.addListener('playback_error', ({ message }) => {
+                console.error('Playback Error:', message);
+            });
+        }
+
+        function checkTokenValidity(accessToken) {
+            return fetch('https://api.spotify.com/v1/me', {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Token is valid');
+                    return true;
+                } else if (response.status === 401) {
+                    console.error('Token is invalid or expired');
+                    return false;
+                } else {
+                    console.error('Unexpected error:', response.status);
+                    return false;
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                return false;
+            });
+        }
+
 
 const announce_call_text_size = document.getElementById('announce_call_text_size').textContent;
 const announce_text_up_patients = document.getElementById('announce_text_up_patients').textContent;

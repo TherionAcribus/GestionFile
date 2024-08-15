@@ -157,7 +157,7 @@
 
 {% macro save_restore(table, json_tag) %}
 <h3>Sauvegarde</h3>
-<a class='btn' href="{{ url_for(table + '_backup') }}">Sauvegarder les données</a>
+<a class='btn' href="{{ url_for('backup_' + table) }}">Sauvegarder les données</a>
 
 <h3>Restauration</h3>
 <!-- Button to trigger the modal -->
@@ -168,7 +168,7 @@
     <div class="modal-content">
         <h4>Restaurer les données</h4>
         <div style="display:none;" id="json_tag">{{ json_tag }}</div>
-        <form id="restoreForm" action="{{ url_for(table + '_restore') }}" method="post" enctype="multipart/form-data">
+        <form id="restoreForm" action="{{ url_for('restore_' + table) }}" method="post" enctype="multipart/form-data">
             <div class="file-field input-field">
                 <div class="btn">
                     <span>Choisir un fichier</span>
