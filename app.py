@@ -52,9 +52,9 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters
+from bdd import init_update_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
-from routes.backup import backup_config_all, backup_staff, backup_counters
+from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 
 # adresse production
@@ -522,13 +522,17 @@ class ActivitySchedule(db.Model):
 
     def from_dict(self, data):
         for field in data:
-            if field not in ['weekdays', 'activities']:
+            if field == 'start_time':
+                self.start_time = datetime.strptime(data[field], "%H:%M:%S").time() if data[field] else None
+            elif field == 'end_time':
+                self.end_time = datetime.strptime(data[field], "%H:%M:%S").time() if data[field] else None
+            elif field not in ['weekdays', 'activities']:
                 setattr(self, field, data[field])
         if 'weekdays' in data:
             self.weekdays = [Weekday.query.get(id) for id in data['weekdays']]
         if 'activities' in data:
             self.activities = [Activity.query.get(id) for id in data['activities']]
-
+            
     def __repr__(self):
         return f'<ActivitySchedule from {self.start_time} to {self.end_time}>'
     
@@ -712,6 +716,13 @@ app.add_url_rule('/admin/counter/restore', 'restore_counter',
                 partial(restore_counters, db, ConfigVersion, Counter, Activity, request), 
                 methods=['GET', 'POST'])
 
+app.add_url_rule('/admin/schedules/backup', 'backup_schedules', 
+                partial(backup_schedules, ActivitySchedule, ConfigVersion), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/schedules/restore', 'restore_schedules', 
+                partial(restore_schedules, db, ConfigVersion, ActivitySchedule, Activity, Weekday, request), 
+                methods=['GET', 'POST'])
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -2114,112 +2125,12 @@ def update_scheduler_for_activity(activity):
             print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
 
 
-@app.route('/admin/schedules/backup', methods=['GET'])
-def schedules_backup():
-    try:
-        schedules = ActivitySchedule.query.all()
-        schedules_json = [
-            {
-                "id": schedule.id,
-                "name": schedule.name,
-                "start_time": schedule.start_time.strftime("%H:%M:%S") if schedule.start_time else None,
-                "end_time": schedule.end_time.strftime("%H:%M:%S") if schedule.end_time else None,
-                "weekdays": [weekday.id for weekday in schedule.weekdays],
-                "activities": [activity.id for activity in schedule.activities]
-            }
-            for schedule in schedules
-        ]
-        
-        backup_data = {
-            "name": "gf_activity_schedules",
-            "type": "backup",
-            "version": "0.1",
-            "comments": "Backup des plages horaires",
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "activity_schedules": schedules_json
-        }
-        
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        backup_filename = f'backup_activity_schedules_{timestamp}.json'
-        
-        return Response(
-            json.dumps(backup_data),
-            mimetype='application/json',
-            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
-        )
-    except Exception as e:
-        flash(f'An error occurred: {e}', 'danger')
-        return redirect(url_for('activity'))
-    
-
-@app.route('/restore_activity_schedules', methods=['GET', 'POST'])
-def schedules_restore():
-    app.logger.info("staff_restore" + request.method)
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-                print("RESTORE ACTIVITY SCHEDULES", file_path)
-                schedules_restore_init(file_path, is_restore=True)
-                os.remove(file_path)  # Optionally remove the file after processing
-            else:
-                flash('Invalid file format. Please upload a JSON file.', 'danger')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'An error occurred: {e}', 'danger')
-        return redirect(url_for('activity'))
-    return render_template('restore.html')
 
 
-def schedules_restore_init(file_path, is_restore=False):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        backup_data = json.load(file)
-        
-        # Vérification des métadonnées
-        if backup_data.get("name") != "gf_activity_schedules" or backup_data.get("type") not in ["backup", "default"]:
-            app.logger.error('Invalid backup file.')
-            if is_restore:
-                return redirect(url_for('index'))
 
-        # Mise à jour de la version si ce n'est pas une restauration
-        if not is_restore:
-            current_version = ConfigVersion.query.filter_by(key="activity_schedule_version").first()
-            if not current_version or current_version.version != backup_data['version']:
-                if not current_version:
-                    new_version = ConfigVersion(key="activity_schedule_version", version=backup_data['version'])
-                    db.session.add(new_version)
-                else:
-                    current_version.version = backup_data['version']
 
-        # Mise à jour des données ActivitySchedule
-        schedules_json = backup_data.get("activity_schedules", [])
-        for schedule_json in schedules_json:
-            print("schedule_json", schedule_json)
-            weekdays_ids = schedule_json.pop('weekdays', [])
-            activities_ids = schedule_json.pop('activities', [])
-            schedule = db.session.get(ActivitySchedule, schedule_json['id'])
-            if not schedule:
-                schedule = ActivitySchedule(**schedule_json)
-            else:
-                schedule.from_dict(schedule_json)
 
-            schedule.weekdays = []
-            for weekday_id in weekdays_ids:
-                weekday = db.session.get(Weekday, weekday_id)
-                if weekday:
-                    schedule.weekdays.append(weekday)
 
-            schedule.activities = []
-            for activity_id in activities_ids:
-                activity = db.session.get(Activity, activity_id)
-                if activity:
-                    schedule.activities.append(activity)
-
-            db.session.add(schedule)
-        db.session.commit()
-        app.logger.info('Restoration successful!')
 
 
 # -------- Fin de ADMIN -> Activity  ---------
@@ -4845,6 +4756,7 @@ with app.app_context():
     init_days_of_week_db_from_json(Weekday, db, app)
     init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
     init_activity_data_from_json()
+    init_counters_data_from_json(ConfigVersion, Counter, Activity, db)  # a verifier
     init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db)
     init_default_options_db_from_json(db, ConfigVersion, ConfigOption)
     init_update_default_buttons_db_from_json(ConfigVersion, Button, db)

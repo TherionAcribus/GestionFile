@@ -160,7 +160,7 @@ def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
 # COMPTOIRS
 
 def init_counters_data_from_json(ConfigVersion, Counter, Activity, db):
-    json_file='static/json/default_counter.json'    
+    json_file='static/json/default_counters.json'    
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
@@ -169,7 +169,7 @@ def init_counters_data_from_json(ConfigVersion, Counter, Activity, db):
         current_app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
 
         if not current_version:
-            counter_restore_init(Counter, Activity, db, restore=False, file_path="static/json/default_counter.json")
+            counter_restore_init(Counter, Activity, ConfigVersion, db, restore=False, file_path=json_file)
 
 
 def restore_counters(db, ConfigVersion, Counter, Activity, request):
@@ -240,6 +240,77 @@ def counter_restore_init(Counter, Activity, ConfigVersion, db, restore, file_pat
             db.session.rollback()
             current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
             raise
+
+
+# ACTIVITIES SCHEDULES
+
+def restore_schedules(db, ConfigVersion, ActivitySchedule, Activity, Weekday, request):
+    current_app.logger.info("staff_restore" + request.method)
+    if request.method == 'POST':
+        try:
+            file = request.files['file']
+            if file and file.filename.endswith('.json'):
+                file_path = os.path.join('static/json', file.filename)
+                file.save(file_path)
+                print("RESTORE ACTIVITY SCHEDULES", file_path)
+                schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, db, file_path, is_restore=True)
+                os.remove(file_path)  # Optionally remove the file after processing
+            else:
+                print('Invalid file format. Please upload a JSON file.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            print(f'An error occurred: {e}', 'danger')
+        return redirect(url_for('activity'))
+    return render_template('restore.html')
+
+
+def schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, db, file_path, is_restore=False):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        backup_data = json.load(file)
+        
+        # Vérification des métadonnées
+        if backup_data.get("name") != "gf_activity_schedules" or backup_data.get("type") not in ["backup", "default"]:
+            current_app.logger.error('Invalid backup file.')
+            if is_restore:
+                return redirect(url_for('index'))
+
+        # Mise à jour de la version si ce n'est pas une restauration
+        if not is_restore:
+            current_version = ConfigVersion.query.filter_by(key="activity_schedule_version").first()
+            if not current_version or current_version.version != backup_data['version']:
+                if not current_version:
+                    new_version = ConfigVersion(key="activity_schedule_version", version=backup_data['version'])
+                    db.session.add(new_version)
+                else:
+                    current_version.version = backup_data['version']
+
+        # Mise à jour des données ActivitySchedule
+        schedules_json = backup_data.get("activity_schedules", [])
+        for schedule_json in schedules_json:
+            print("schedule_json", schedule_json)
+            weekdays_ids = schedule_json.pop('weekdays', [])
+            activities_ids = schedule_json.pop('activities', [])
+            schedule = db.session.get(ActivitySchedule, schedule_json['id'])
+            if not schedule:
+                schedule = ActivitySchedule(**schedule_json)
+            else:
+                schedule.from_dict(schedule_json)
+
+            schedule.weekdays = []
+            for weekday_id in weekdays_ids:
+                weekday = db.session.get(Weekday, weekday_id)
+                if weekday:
+                    schedule.weekdays.append(weekday)
+
+            schedule.activities = []
+            for activity_id in activities_ids:
+                activity = db.session.get(Activity, activity_id)
+                if activity:
+                    schedule.activities.append(activity)
+
+            db.session.add(schedule)
+        db.session.commit()
+        current_app.logger.info('Restoration successful!')
 
 
 

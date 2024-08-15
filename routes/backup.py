@@ -117,3 +117,39 @@ def backup_counters(Counter, ConfigVersion):
     except Exception as e:
         print(e)
         return redirect(url_for('index'))
+    
+
+def backup_schedules(ActivitySchedule, ConfigVersion):
+    try:
+        schedules = ActivitySchedule.query.all()
+        schedules_json = [
+            {
+                "id": schedule.id,
+                "name": schedule.name,
+                "start_time": schedule.start_time.strftime("%H:%M:%S") if schedule.start_time else None,
+                "end_time": schedule.end_time.strftime("%H:%M:%S") if schedule.end_time else None,
+                "weekdays": [weekday.id for weekday in schedule.weekdays],
+                "activities": [activity.id for activity in schedule.activities]
+            }
+            for schedule in schedules
+        ]
+        
+        backup_data = {
+            "name": "gf_activity_schedules",
+            "type": "backup",
+            "version": "0.1",
+            "comments": "Backup des plages horaires",
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "activity_schedules": schedules_json
+        }
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        backup_filename = f'backup_activity_schedules_{timestamp}.json'
+        
+        return Response(
+            json.dumps(backup_data),
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
+        )
+    except Exception as e:
+        return redirect(url_for('activity'))
