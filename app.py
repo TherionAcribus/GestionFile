@@ -40,6 +40,7 @@ import random
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 
+
 from functools import partial
 
 from flask_debugtoolbar import DebugToolbarExtension
@@ -112,8 +113,6 @@ socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*") #, log
 app.config.from_object(Config())
 app.debug = True
 mail = Mail(app)
-
-
 
 def callback_update_patient(ch, method, properties, body):
     logging.debug(f"Received general message: {body}")
@@ -327,6 +326,7 @@ class ConfigScheduler:
         'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI_SCHEDULER'])  
     }
     SCHEDULER_API_ENABLED = True  # Permet d'activer l'API pour interroger le scheduler
+
 app.config.from_object(ConfigScheduler())
 scheduler = APScheduler()
 scheduler.init_app(app)
@@ -1349,8 +1349,8 @@ def update_numbering_by_activity():
 
 def spotify_authorized():
     print("spotify_authorized", app.config["MUSIC_SPOTIFY_USER"], app.config["MUSIC_SPOTIFY_KEY"])
-    return SpotifyOAuth(client_id='',
-                            client_secret='',
+    return SpotifyOAuth(client_id=app.config["MUSIC_SPOTIFY_USER"],
+                            client_secret=app.config["MUSIC_SPOTIFY_KEY"],
                             redirect_uri=url_for('spotify_callback', _external=True),
                             scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
 
@@ -1358,9 +1358,10 @@ def spotify_authorized():
 @app.route('/spotify/login')
 def spotify_login():
     clear_spotify_tokens()
-    sp_oauth = sp_oauth = SpotifyOAuth(
-        client_id='',
-        client_secret='',
+    spotify_authorized()
+    sp_oauth = SpotifyOAuth(
+        client_id=app.config["MUSIC_SPOTIFY_USER"],
+        client_secret=app.config["MUSIC_SPOTIFY_KEY"],
         redirect_uri=url_for('spotify_callback', _external=True),
         scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
@@ -1378,11 +1379,11 @@ def spotify_logout():
     clear_spotify_tokens()
     return redirect(url_for('admin_app'))
 
-@app.route('/spotify/callback')
-def spotify_callback():
-    sp_oauth = sp_oauth = SpotifyOAuth(
-        client_id='',
-        client_secret='',
+@app.route('/spotify/callbacke')
+def spotify_callbacke():
+    sp_oauth = SpotifyOAuth(
+        client_id=app.config["MUSIC_SPOTIFY_USER"],
+        client_secret=app.config["MUSIC_SPOTIFY_KEY"],
         redirect_uri=url_for('spotify_callback', _external=True),
         scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
@@ -1400,6 +1401,7 @@ def spotify_callback():
 
     return redirect(url_for('admin_app'))
 
+
 def get_spotify_token():
     token_info = session.get('token_info', None)
     if not token_info:
@@ -1411,8 +1413,8 @@ def get_spotify_token():
     if is_token_expired:
         try:
             sp_oauth = SpotifyOAuth(
-        client_id='',
-        client_secret='',
+        client_id=app.config["MUSIC_SPOTIFY_USER"],
+        client_secret=app.config["MUSIC_SPOTIFY_KEY"],
         redirect_uri=url_for('spotify_callback', _external=True),
         scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
@@ -1459,8 +1461,9 @@ def play_playlist():
 
 # --------  FIn ADMIN -> App  ---------
 
-@app.route('/admin/music')
-def admin_music():
+
+    
+"""
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
     if spotify_connected:
@@ -1475,6 +1478,7 @@ def admin_music():
         return render_template('/admin/music.html',
                                 spotify_connected=spotify_connected, 
                                 playlists=[])
+"""
 
 # --------  ADMIN -> DataBase  ---------
 
