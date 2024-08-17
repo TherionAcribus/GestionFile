@@ -13,7 +13,7 @@
     </div>
 
     <!-- Ajout nouveau comptoir-->
-    <a class="waves-effect waves-light btn"
+    <a class="btn btn-primary"
         hx-get="/admin/counter/add_form"
         hx-target="#div_add_counter_form"
         hx-swap="innerHTML">
@@ -42,10 +42,6 @@
     </div>
 
     {{ macros.save_restore("counter", 'gf_counters') }}
-
-    <!-- Modal Structure -->
-    <div id="modal_delete_counter" class="modal">
-    </div>
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>

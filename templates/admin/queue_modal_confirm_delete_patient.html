@@ -1,12 +1,10 @@
-<div class="modal-content">
-    <h4>Suppression d'un patient</h4>
-    <p>Vous vous appretez à supprimer le patient {{patient.call_number}} définitivement. Confirmez-vous la suppression ? </p>
-    </div>
-    <div class="modal-footer">
-    <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
-    <a href="#!" 
-        class="modal-close waves-effect waves-red btn-flat"
-        hx-get="/admin/queue/delete_patient/{{patient.id}}"
-        hx-target="#invisible">
-        Confirmer</a>
-    </div>
+<p>Vous vous appretez à supprimer le patient {{patient.call_number}} définitivement. Confirmez-vous la suppression ? </p>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <button type="button" class="btn btn-danger"
+    hx-get="/admin/queue/delete_patient/{{patient.id}}"
+    hx-target="#invisible"
+    data-bs-dismiss="modal"
+    >Supprimer</button>
+</div>

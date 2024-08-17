@@ -8,7 +8,7 @@
     </div>
 
         <!-- Ajout nouveau bouton -->
-    <a class="waves-effect waves-light btn"
+    <a class="btn btn-primary"
         hx-get="/admin/button/add_form"
         hx-target="#div_add_button_form"
         hx-swap="innerHTML">
@@ -26,11 +26,12 @@
 
     {{ macros.save_restore("buttons", 'gf_buttons') }}
 
-    <!-- Modal Structure Confirm Delete-->
-    <div id="modal_delete_button" class="modal">
-    </div>
-
     
-    <!-- Modal Structure Galerie-->
-    <div id="modal_display_gallery" class="modal">
+<!-- Modal Structure Galerie-->
+<div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalGalleryLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <!-- Le contenu de la modale sera chargé ici par HTMX -->
+        </div>
     </div>
+</div>

@@ -18,32 +18,37 @@
         hx-post="{{ url_for('create_gallery') }}" 
         hx-target="#gallery-list" 
         hx-swap="outerHTML">
-    <input type="text" id="name" name="name" placeholder="Nom de la Galerie">
-    <button class="btn" type="submit">Créer une nouvelle galerie</button>
+    <div class="mb-3">
+        <label for="name" class="form-label">Nom de la Galerie</label>
+        <input type="text" class="form-control" id="name" name="name" placeholder="Nom de la Galerie">
+    </div>
+    <button class="btn btn-primary" type="submit">Créer une nouvelle galerie</button>
 </form>
 <div id="content"></div>
 
 <!-- Modale pour afficher l'image en grand -->
-<div id="image-modal" class="modal">
-    <div class="modal-content">
-        <img id="modal-image" src="" alt="Image en grand">
-    </div>
-    <div class="modal-footer">
-        <a href="#!" class="modal-close waves-effect waves-green btn-flat">Fermer</a>
+<div class="modal fade" id="image-modal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-body">
+                <img id="modal-image" class="img-fluid" src="" alt="Image en grand">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
     </div>
 </div>
         
 <br>
 <div>
-    <button class="btn red"
+    <button class="btn btn-danger"
             hx-get="/announce/refresh"
             hx-target="#invisible"                    
             >Relancer la page "Annonce"</button>
 </div>
 
-    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
-    <div id="invisible" style="display:none;"></div>
+<!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés -->
+<div id="invisible" style="display:none;"></div>
 
-
-    
 {% endblock %}

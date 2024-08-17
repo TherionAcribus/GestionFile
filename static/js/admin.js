@@ -102,14 +102,37 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
 function display_toast(data) {
     console.log('toast', data);
-    if (data.data.success === true) {
-        console.log('ok');
-        M.toast({html: data.data.message, classes: 'green'});
-    } else {
-        M.toast({html: data.data.message, classes: 'red'});
-    }    
-}
 
+    // Déterminez la classe à utiliser pour le toast (success ou error)
+    let toastClass = data.data.success === true ? 'bg-success text-white' : 'bg-danger text-white';
+
+    // Créez le contenu HTML pour le toast
+    let toastHTML = `
+        <div class="toast align-items-center ${toastClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${data.data.message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+
+    // Ajoutez le toast au conteneur des toasts
+    let toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toastContainer';
+        toastContainer.classList.add('toast-container', 'position-fixed', 'top-0', 'end-0', 'p-3');
+        document.body.appendChild(toastContainer);
+    }
+    toastContainer.innerHTML = toastHTML;
+
+    // Initialisez le toast
+    let toastElement = toastContainer.querySelector('.toast');
+    let toast = new bootstrap.Toast(toastElement);
+    toast.show();
+}
 
 // -------------- QUEUE  --------------
 
@@ -123,6 +146,18 @@ function refresh_queue(){
     htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
 }
 
+$(document).ready(function() {
+    $('#select_patient_filter').select2({
+    placeholder: "Patients à afficher",
+    allowClear: true
+        });
+    });
+    window.addEventListener("DOMContentLoaded", (e) => {
+        $('select').on('select2:select select2:unselect', function (e) {
+            // Déclencher manuellement l'événement change pour HTMX
+            $(this).closest('select').get(0).dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
 
 // -------------- GALERIES --------------
 
@@ -282,31 +317,11 @@ eventSource.onmessage = function(event) {
 };
 
 
-function initSelects() {
-    var elems = document.querySelectorAll('select');
-    var instances = M.FormSelect.init(elems);
-}
-
-// réinitialisation des selects, seulement une fois l'htmx chargé
-document.body.addEventListener('htmx:afterSwap', function(event) {
-    initSelects();
-});
-
 document.addEventListener('DOMContentLoaded', function() {
-    // initialisation de la sidenav
-    var elems = document.querySelectorAll('.sidenav');
-    var instances = M.Sidenav.init(elems, {draggable: false});
 
     // initialisation du modal
-    var elems = document.querySelectorAll('.modal');
-    var instances = M.Modal.init(elems);
-
-    // initialisation des tabs
-    var elems = document.querySelectorAll('.tabs');
-    var instance = M.Tabs.init(elems);
-
-    // initialisation du select
-    initSelects();
-
+    var modal = new bootstrap.Modal(document.getElementById('modal_delete'), {
+        keyboard: false
+    });
 });
 

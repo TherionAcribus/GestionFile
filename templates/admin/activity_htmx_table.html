@@ -18,7 +18,7 @@
             {% if staff %}
             <td>
                 <div class="input-field col s10">   
-                    <select id="staff-{{ activity.id }}">
+                    <select class="form-select" id="staff-{{ activity.id }}">
                         {% for member in staff %}
                             <option value="{{member.id}}"
                                 {% if member.id == activity.staff_id %}selected{% endif %}>{{member.name}}</option>
@@ -27,20 +27,22 @@
                 </div>
             </td>
             {% endif %}
-            <td><input type="text" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
-            <td><input type="text" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
+            <td><input type="text" class="form-control" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
             <td>
-                <div class="input-field col s10">   
-                    <select multiple id="schedules-{{ activity.id }}">
+                <div class="mb-3 col-10">
+                    <select class="form-select" multiple id="schedules-{{ activity.id }}">
                         {% for schedule in schedules %}
                             <option value="{{schedule.id}}"
-                                    {% if schedule in activity.schedules %}selected{% endif %}>{{schedule.name}}</option>
+                                    {% if schedule in activity.schedules %}selected{% endif %}>
+                                {{schedule.name}}
+                            </option>
                         {% endfor %}
                     </select>
                 </div>
             </td>
             <td>
-                <input type="text" name="message" value="{{ activity.inactivity_message }}" id="message-{{ activity.id }}">
+                <input type="text" class="form-control" name="message" value="{{ activity.inactivity_message }}" id="message-{{ activity.id }}">
             </td>
             <td>
                 <p>
@@ -51,7 +53,7 @@
                 </p>
             </td>
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary" 
                     hx-target="#invisible"
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
@@ -64,19 +66,30 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
+                <button class="btn btn-danger"
                         {% if staff %} 
                             hx-get="/admin/activity/confirm_delete/staff/{{ activity.id }}"
                         {% else %}
                             hx-get="/admin/activity/confirm_delete/{{ activity.id }}"
                         {% endif %}
-                        hx-target="#modal_delete_activity"
+                        hx-target="#modal-htmx"
                         hx-trigger="click"
-                        data-target="modal_delete_activity">
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
                     Supprimer
                 </button>
             </td>
         </tr>
+
+        <script>
+            $(document).ready(function() {
+            $('#schedules-{{ activity.id }}').select2({
+            placeholder: "Choisissez les horaires",
+            allowClear: true
+                });
+            });
+        </script>
+
         {% endfor %}
     </tbody>
 </table>
@@ -94,4 +107,5 @@
     }
     return selectedValues;
 }
+
 </script>

@@ -2,15 +2,14 @@
 
     {{ macros.switch("announce_infos_display", 
     announce_infos_display, 
-                "Afficher les images : '", 
-                "Non", 
-                "Oui")
+                "Afficher les images'")
     }}
 
     {{ macros.textbloc_int("announce_infos_display_time", announce_infos_display_time, "Temps d'affichage des images : ") }}
 
     <div class="input-field col s12">
         <select
+          class="form-select"
           id="announce_infos_transition"
           hx-post="/admin/update_select"
           hx-target="#invisible"
@@ -29,9 +28,7 @@
 
     {{ macros.switch("announce_infos_mix_folders", 
     announce_infos_mix_folders, 
-                "Lecture des dossiers'", 
-                "L'un après l'autre", 
-                "Mélangé")
+                "Lecture mélangée des dossiers'")
     }}
 
     {{ macros.textbloc_int("announce_infos_height", announce_infos_height, "Hauteur de la galerie en px") }}

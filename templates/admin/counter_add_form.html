@@ -7,26 +7,17 @@
     </thead>
     <tbody>
         <tr>
-            <td><input type="text" name="name" value="" id="name"></td>
-            <td>
-                <!-- Affichage des checkboxes pour chaque activité -->
-                {% for counter in counters %}
-                <label>
-                    <input class="counter" type="checkbox" name="counter" checked="checked"  value="{{ counter.id }}" />
-                    <span>{{ counter.name }}</span>
-                </label>
-                {% endfor %}
-            </td>
+            <td><input type="text" name="name" class="form-control" value="" id="name"></td>
             <td>
                 {% for activity in activities %}
                 <label>
-                    <input class="activities" type="checkbox" name="activities" checked="checked"  value="{{ activity.id }}" />
-                    <span>{{ activity.name }}</span>
+                    <input class="activities form-check-input" type="checkbox" name="activities" checked="checked"  value="{{ activity.id }}" />
+                    <span class="form-check-label">{{ activity.name }}</span>
                 </label>
                 {% endfor %}
             </td>
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary" 
                     hx-target="#div_counter_table"
                     hx-post="/admin/counter/add_new_counter"
                     hx-include=".activities"

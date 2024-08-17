@@ -13,7 +13,7 @@
             </a>
             <div>
                 <!-- Bouton pour lecture dans l'ordre -->
-                <button class="btn"
+                <button class=btn btn-primary
                         hx-post="{{ url_for('play_playlist') }}"
                         hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "false"}'
                         hx-target="#invisible">
@@ -21,7 +21,7 @@
                 </button>
 
                 <!-- Bouton pour lecture aléatoire -->
-                <button class="btn"
+                <button class=btn btn-primary
                 hx-post="{{ url_for('play_playlist') }}"
                 hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "true"}'
                 hx-target="#invisible">

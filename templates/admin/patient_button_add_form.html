@@ -11,11 +11,11 @@
     </thead>
     <tbody>
         <tr>
-            <td><input type="text" name="label" id="label"></td>
+            <td><input type="text" class="form-control" name="label" id="label"></td>
             <td>
                 <p>
                     <label>
-                        <input id="is_present" type="checkbox" checked>
+                        <input id="is_present" type="checkbox" class="form-check-input" checked>
                         <span></span>
                     </label>
                 </p>
@@ -23,7 +23,7 @@
 
             <td>
                 <div class="input-field">
-                    <select id="shape">
+                    <select class="form-select" id="shape">
                         <option value="" disabled selected>Forme du bouton</option>
                         <option value="circle" selected>Cercle</option>
                         <option value="square">Rectangle
@@ -34,7 +34,7 @@
             
             <td>
                 <div class="input-field">
-                    <select id="activity">
+                    <select class="form-control" id="activity">
                         <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
                         <option value="parent_button">BOUTON PARENT</option>
                         {% for activity in activities %}
@@ -46,7 +46,7 @@
             </td>
             <td>
                 <div class="input-field">
-                    <select id="parent">
+                    <select class="form-control" id="parent">
                         <option value="" disabled selected>Selectionnez un bouton parent</option>
                         <option value="parent_button">Aucun bouton parent</option>
                         {% for button in parent_buttons %}
@@ -57,7 +57,7 @@
             </td>            
 
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#div_buttons_table"
                     hx-post="/admin/patient/add_new_button"
                     hx-vals='js:{"label": document.getElementById("label").value, 

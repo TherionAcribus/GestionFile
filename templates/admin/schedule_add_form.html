@@ -9,9 +9,9 @@
     </thead>
     <tbody>
         <tr>
-            <td><input type="text" name="name_schedule" value="" id="name_schedule"></td>
-            <td><input type="text" name="start_time" value="00:00" id="start_time"></td>
-            <td><input type="text" name="start_time" value="23:59" id="end_time"></td>
+            <td><input type="text" class="form-control" name="name_schedule" value="" id="name_schedule"></td>
+            <td><input type="text" class="form-control" name="start_time" value="00:00" id="start_time"></td>
+            <td><input type="text" class="form-control" name="start_time" value="23:59" id="end_time"></td>
 
             <td>
                 <div class="input-field col">   
@@ -25,7 +25,7 @@
             </td>
 
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#div_schedule_table"
                     hx-post="/admin/schedule/add_new_schedule"
                     hx-vals='js:{"name_schedule": document.getElementById("name_schedule").value, 

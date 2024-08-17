@@ -5,40 +5,44 @@
 {% block content %}
     <h3>Page "Annonce"</h3>
 
-    
     <div class="row">
-        <div class="col s12">
-            <ul class="tabs">
-                <li class="tab col s3"><a class="active" href="#tab_visual">Visuel</a></li>
-                <li class="tab col s3"><a href="#tab_audio">Audio</a></li>
-                <li class="tab col s3"><a href="#tab_gallery">Galerie</a></li>
+        <div class="col-12">
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs" id="announceTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="visual-tab" data-bs-toggle="tab" data-bs-target="#tab_visual" type="button" role="tab" aria-controls="tab_visual" aria-selected="true">Visuel</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="false">Audio</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#tab_gallery" type="button" role="tab" aria-controls="tab_gallery" aria-selected="false">Galerie</button>
+                </li>
             </ul>
-        </div>
-        <div id="tab_visual" class="col s12">
-            {% include 'admin/announce_visual.html' %}
-        </div>
-        <div id="tab_audio" class="col s12">
-            {% include 'admin/announce_audio.html' %}
-        </div>
-        <div id="tab_gallery" class="col s12">
-            {% include 'admin/announce_gallery.html' %}
+
+            <!-- Tab content -->
+            <div class="tab-content" id="announceTabContent">
+                <div class="tab-pane fade show active" id="tab_visual" role="tabpanel" aria-labelledby="visual-tab">
+                    {% include 'admin/announce_visual.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_audio" role="tabpanel" aria-labelledby="audio-tab">
+                    {% include 'admin/announce_audio.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_gallery" role="tabpanel" aria-labelledby="gallery-tab">
+                    {% include 'admin/announce_gallery.html' %}
+                </div>
+            </div>
         </div>
     </div>
 
+    <div>
+        <button class="btn btn-danger"
+                hx-get="/announce/refresh"
+                hx-target="#invisible">Relancer la page "Annonce"
+        </button>
+    </div>
 
-        <div>
-            <button class="btn red"
-                    hx-get="/announce/refresh"
-                    hx-target="#invisible"                    
-                    >Relancer la page "Annonce"
-            </button>
-        </div>
-
-
-    </div>  
-
-        <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
-        <div id="invisible" style="display:none;"></div>
-
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés -->
+    <div id="invisible" style="display:none;"></div>
 
 {% endblock %}

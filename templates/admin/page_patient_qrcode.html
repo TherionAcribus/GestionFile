@@ -17,21 +17,17 @@
     </label>
 </div>
 
-<div class="switch">
-    <span>Le QrCode affiche des valeurs brutes ou une page web</span>
-    <label>
-    Valeurs brutes
-    <input id="page_patient_qrcode_web_page" 
-            type="checkbox"
-            {% if page_patient_qrcode_web_page == True %}checked{% endif %}
-            hx-post="/admin/update_switch"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "page_patient_qrcode_web_page",
-                        "value": document.getElementById("page_patient_qrcode_web_page").checked}'>
-    <span class="lever"></span>
-    Page web
-    </label>
-</div>
+{{ macros.switch("page_patient_display_qrcode", 
+            page_patient_display_qrcode, 
+            "Afficher le Qr Code")
+}}
+
+
+{{ macros.switch("page_patient_qrcode_web_page", 
+            page_patient_qrcode_web_page, 
+            "Le QrCode affiche affiche une adresse web (sinon des données brutes)")
+}}
+
 <p>Il n'est pour l'instant pas possible d'afficher une page web si le serveur tourne sur un serveur local.</p>
 
 <h5>Données brutes</h5>

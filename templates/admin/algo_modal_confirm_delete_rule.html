@@ -1,12 +1,10 @@
-<div class="modal-content">
-    <h4>Suppression d'une règle de l'algorithme</h4>
-    <p>Vous vous appretez à supprimer la règle {{rule.name}} définitivement. Confirmez-vous la suppression ? </p>
-    </div>
-    <div class="modal-footer">
-    <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
-    <a href="#!" 
-        class="modal-close waves-effect waves-red btn-flat"
-        hx-get="/admin/algo/delete_rule/{{ rule.id }}"
-        hx-target="#div_algo_table">
-        Confirmer</a>
-    </div>
+<p>Vous vous appretez à supprimer la règle {{rule.name}} définitivement. Confirmez-vous la suppression ? </p>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <button type="button" class="btn btn-danger"
+    hx-get="/admin/algo/delete_rule/{{ rule.id }}"
+    hx-target="#div_algo_table"
+    data-bs-dismiss="modal"
+    >Supprimer</button>
+</div>

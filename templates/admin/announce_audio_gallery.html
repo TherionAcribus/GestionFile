@@ -1,31 +1,42 @@
-<h1>Librairie sonore</h1>
-<ul>
-    {% for sound in sounds %}
-        <li>
-            <audio controls>
-                <source src="{{ url_for('serve_sound', filename=sound) }}" type="audio/wav">
-                Votre navigateur ne supporte pas l'élément audio.
-            </audio>
-            <p>{{ sound }}</p>
-            <button
-                class="select-sound-button"
-                data-sound="{{ sound }}"
-                hx-get="/admin/announce/audio/select_signal/{{ sound }}"
-                hx-target="#invisible"
-            >Selectionner</button>
-        </li>
-    {% endfor %}
-</ul>
+<div class="modal-header">
+    <h5 class="modal-title">Librairie sonore</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body">
+    REFAIRE LA LIBRAIRIE > Annulation ne sert à rien > Faire passer sauvegarde via bouton Sauver au lieu selectionner
+    <ul>
+        {% for sound in sounds %}
+            <li>
+                <audio controls>
+                    <source src="{{ url_for('serve_sound', filename=sound) }}" type="audio/wav">
+                    Votre navigateur ne supporte pas l'élément audio.
+                </audio>
+                <p>{{ sound }}</p>
+                <button
+                    class="select-sound-button btn btn-primary"
+                    data-sound="{{ sound }}"
+                    hx-get="/admin/announce/audio/select_signal/{{ sound }}"
+                    hx-target="#invisible"
+                >Selectionner</button>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
 
 <!-- Formulaire de téléchargement -->
 <form id="uploadForm" hx-post="/admin/announce/audio/upload" hx-target="#modal_display_gallery" hx-swap="innerHTML" enctype="multipart/form-data">
     <label for="file">Ajouter un nouveau son (wav, mp3) :</label>
     <input type="file" id="file" name="file" accept=".wav, .mp3" required>
-    <button type="submit">uploader</button>
+    <button type="submit" class="btn btn-primary">uploader</button>
 </form>
 
 <div class="modal-footer">
-    <span id="image_name_field"></span>
-    <a id="closeModalButton" href="#!" class="modal-close waves-effect waves-green btn-flat">Sauver</a>
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <button 
+        class="btn btn-primary" id="closeModalButton" 
+        href="#!"
+        data-bs-dismiss="modal"
+        >
+        Sauver</button>
 </div>
 

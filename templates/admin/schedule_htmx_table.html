@@ -10,9 +10,9 @@
     <tbody>
         {% for schedule in schedules %}
         <tr>
-            <td><input type="text" name="name" value="{{ schedule.name }}" id="name_schedule-{{ schedule.id }}"></td>
-            <td><input type="text" name="start_time" value="{{ schedule.start_time }}" id="start_time-{{ schedule.id }}"></td>
-            <td><input type="text" name="start_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ schedule.name }}" id="name_schedule-{{ schedule.id }}"></td>
+            <td><input type="text" class="form-control" name="start_time" value="{{ schedule.start_time }}" id="start_time-{{ schedule.id }}"></td>
+            <td><input type="text" class="form-control" name="end_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}"></td>
             <td>
                 <div class="input-field col">   
                     <select multiple id="weekdays-{{ schedule.id }}">
@@ -24,7 +24,7 @@
                 </div>
             </td>
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#invisible"
                     hx-post="/admin/schedule/schedule_update/{{ schedule.id }}"
                     hx-vals='js:{"name_schedule": document.getElementById("name_schedule-{{ schedule.id }}").value,
@@ -35,15 +35,25 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
+                <button class="btn btn-danger"
                         hx-get="/admin/schedule/confirm_delete/{{ schedule.id }}"
-                        hx-target="#modal_delete_schedule"
+                        hx-target="#modal-htmx"
                         hx-trigger="click"
-                        data-target="modal_delete_schedule">
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
                     Supprimer
                 </button>
             </td>
         </tr>
+
+        <script>
+            $(document).ready(function() {
+            $('#weekdays-{{ schedule.id }}').select2({
+            placeholder: "Choisissez les horaires",
+            allowClear: true
+                });
+            });
+        </script>
         {% endfor %}
     </tbody>
 </table>

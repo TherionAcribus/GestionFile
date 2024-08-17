@@ -41,16 +41,19 @@ Choisir le son de l'alerte:
 </div>
 
     <!-- Bouton pour ouvrir la modal -->
-    <button class="btn modal-trigger blue"
-            hx-get="/admin/announce/gallery_audio"
-            hx-target="#modal_display_gallery"
-            hx-trigger="click"
-            data-target="modal_display_gallery">
-        Librairie sonore
+    <button 
+        class="btn btn-primary"
+        hx-get="/admin/announce/gallery_audio"
+        hx-target="#modal_display_gallery .modal-content"
+        hx-trigger="click"
+        data-bs-toggle="modal"
+        data-bs-target="#modal_display_gallery">
+    Librairie sonore
     </button>
 
 <div class="input-field col s12">
     <select
+        class="form-select"
         id="announce_player"
         hx-post="/admin/update_select"
         hx-target="#invisible"
@@ -65,6 +68,7 @@ Choisir le son de l'alerte:
 
 <div class="input-field col s12">
     <select
+        class="form-select"
         id="announce_voice"
         hx-post="/admin/update_select"
         hx-target="#invisible"
@@ -81,5 +85,10 @@ Choisir le son de l'alerte:
 {{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Appel audio pour annoncer le tour d'un patient") }}
 
 <!-- Modal Structure Galerie audio -->
-<div id="modal_display_gallery" class="modal">
+<div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <!-- Le contenu de la modale sera chargé ici par HTMX -->
+        </div>
+    </div>
 </div>

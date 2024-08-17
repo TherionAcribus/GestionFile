@@ -13,11 +13,11 @@
     hx-target="#image-list"
     enctype="multipart/form-data">
     <input id="file-input" type="file" name="photos" multiple>
-    <button id="upload-button" class="btn" disabled type="submit">Mettre en ligne</button>
+    <button id="upload-button" class="btn btn-primary"disabled type="submit">Mettre en ligne</button>
 </form>
 
 <a href="{{ url_for('delete_gallery', name=gallery) }}" 
-    class="btn red"
+    class="btn btn-danger"
     hx-delete="{{ url_for('delete_gallery', name=gallery) }}" 
     hx-target="#content" 
     hx-swap="innerHTML">

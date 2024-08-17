@@ -9,6 +9,7 @@
 <!-- Select affichage texte up -->
 <div class="input-field col s12">
     <select
+      class="form-select"
       id="announce_text_up_patients_display"
       hx-post="/admin/update_select"
       hx-target="#invisible"
@@ -26,6 +27,7 @@
 <!-- Select affichage texte pas de patient -->
 <div class="input-field col s12">
     <select
+      class="form-select"
       id="announce_text_down_patients_display"
       hx-post="/admin/update_select"
       hx-target="#invisible"
@@ -42,9 +44,7 @@
 
 {{ macros.switch("announce_ongoing_display", 
     announce_ongoing_display,
-    "Afficher les patients au comptoir : '", 
-    "Masquer", 
-    "Afficher")
+    "Afficher les patients au comptoir'")
 }}
 
 {{ macros.textbloc_after_call("announce_ongoing_text", announce_ongoing_text, "Texte pour indiquer qu'un patient est au comptoir") }}

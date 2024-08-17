@@ -9,21 +9,11 @@
 
     <div class="row">
 
-        <div class="switch">
-            <span>Centrer tous les textes de la page : </span>
-            <label>
-            Justifier à gauche
-            <input id="phone_center" 
-                    type="checkbox"
-                    {% if phone_center == True %}checked{% endif %}
-                    hx-post="/admin/update_switch"
-                    hx-target="#invisible"
-                    hx-vals='js:{"key": "phone_center",
-                                "value": document.getElementById("phone_center").checked}'>
-            <span class="lever"></span>
-            Centrer
-            </label>
-        </div>
+        {{ macros.switch("phone_center", 
+            phone_center, 
+            "Centrer tous les textes de la page")
+        }}
+
 
         {{ macros.textbloc_before_call("phone_title", phone_title, "Texte en haut de la page (Titre)") }}
 
@@ -31,9 +21,9 @@
         {% for phone_line in phone_lines %}
         <div class="row">
             <div class="row">
-                <div class="input-field col s12">
-                    <textarea id="phone_line{{ loop.index }}" class="materialize-textarea">{{ phone_line }}</textarea>
+                <div class="col-12">
                     <label for="phone_line{{ loop.index }}">Ligne {{ loop.index }}</label>
+                    <textarea id="phone_line{{ loop.index }}" class="form-control">{{ phone_line }}</textarea>
                 </div>
                 <div>
                     <span class="variables_calling" onclick="insertPlaceholder('phone_line{{ loop.index }}', '{P}')">{P}</span>
@@ -66,7 +56,7 @@
                 </div>
             </div>
             <button
-                class="btn"
+                class="btn btn-primary"
                 hx-post="/admin/update_input"
                 hx-target="#invisible"
                 hx-vals='js:{"key": "phone_line{{ loop.index }}",

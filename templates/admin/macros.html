@@ -1,12 +1,13 @@
 {% macro button(key, check) %}
 <button
-    class="btn"
+    class="btn btn-primary"
     hx-post="/admin/update_input"
     hx-target="#invisible"
     hx-vals='js:{"key": "{{ key }}", 
             "value": document.getElementById("{{ key }}").value,
-            "check": "{{ check }}"}''>
-    Enregistrer</button>
+            "check": "{{ check }}"}'>
+    Enregistrer
+</button>
 {% endmacro %}
 
 {% macro balises_before_call(key) %}
@@ -65,9 +66,9 @@
 
 
 {% macro textarea(key, value, label) %}
-<div class="input-field col s12">
-    <textarea id="{{ key }}" class="materialize-textarea">{{ value }}</textarea>
-    <label for="{{ key }}">{{label}}</label>
+<div class="mb-3">
+    <label for="{{ key }}" class="form-label">{{label}}</label>
+    <textarea id="{{ key }}" class="form-control" rows="3">{{ value }}</textarea>
 </div>
 {% endmacro %}
 
@@ -117,10 +118,8 @@
 
 <!-- Champs texte pour les entiers -->
 {% macro textbloc_int(key, value, label) %}
-<div class="row">
-    <div class="row">
-        {{ textarea(key, value, label) }}
-    </div>
+<div class="mb-3 d-flex">
+    {{ input_field(key, value, label) }}
     {{ button(key, "int") }}
 </div>
 {% endmacro %}
@@ -136,69 +135,92 @@
 {% endmacro %}
 
 
-{% macro switch(key, check, label, label_false, label_true) %}
-<div class="switch">
-    <span>{{label}} </span>
-    <label>
-    {{label_false}}
-    <input id="{{key}}" 
-            type="checkbox"
-            {% if check == True %}checked{% endif %}
-            hx-post="/admin/update_switch"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "{{key}}",
+{% macro input_field(key, value, label) %}
+<div class="flex-grow-1 me-2">
+    <label for="{{ key }}" class="form-label">{{label}}</label>
+    <input type="text" id="{{ key }}" class="form-control" value="{{ value }}">
+</div>
+{% endmacro %}
+
+
+{% macro switch(key, check, label) %}
+<div class="form-check form-switch">
+    <input class="form-check-input" 
+           type="checkbox" 
+           id="{{key}}"
+           {% if check == True %}checked{% endif %}
+           hx-post="/admin/update_switch"
+           hx-target="#invisible"
+           hx-vals='js:{"key": "{{key}}",
                         "value": document.getElementById("{{key}}").checked}'>
-    <span class="lever"></span>
-    {{label_true}}
-    </label>
+    <label class="form-check-label" for="{{key}}">{{label}}</label>
+</div>
+{% endmacro %}
+
+{% macro modal_delete() %}
+<div class="modal fade" id="modal_delete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteabel">Confirmation de la suppression</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modal-htmx">
+                <!-- Le contenu de la modale est chargé dynamiquement ici : body + footer -->
+            </div>
+
+        </div>
+    </div>
 </div>
 {% endmacro %}
 
 
 {% macro save_restore(table, json_tag) %}
 <h3>Sauvegarde</h3>
-<a class='btn' href="{{ url_for('backup_' + table) }}">Sauvegarder les données</a>
+<a class='btn btn-primary' href="{{ url_for('backup_' + table) }}">Sauvegarder les données</a>
 
 <h3>Restauration</h3>
 <!-- Button to trigger the modal -->
-<a class="btn red modal-trigger" href="#restoreModal_{{ table }}">Restaurer les données</a>
+<button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#restoreModal_{{ table }}">Restaurer les données</button>
 
 <!-- Modal Structure -->
-<div id="restoreModal_{{ table }}" class="modal">
-    <div class="modal-content">
-        <h4>Restaurer les données</h4>
-        <div style="display:none;" id="json_tag_{{ table }}">{{ json_tag }}</div>
-        <form id="restoreForm_{{ table }}" action="{{ url_for('restore_' + table) }}" method="post" enctype="multipart/form-data">
-            <div class="file-field input-field">
-                <div class="btn">
-                    <span>Choisir un fichier</span>
-                    <input type="file" name="file" id="fileInput_{{ table }}"
-                        {% if table == "databases" %}
-                            accept=".zip"
-                        {% else %}
-                            accept=".json" 
-                        {% endif %}>
-                </div>
-                <div class="file-path-wrapper">
-                    <input class="file-path validate" type="text">
-                </div>
+<div class="modal fade" id="restoreModal_{{ table }}" tabindex="-1" aria-labelledby="restoreModalLabel_{{ table }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="restoreModalLabel_{{ table }}">Restaurer les données</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div id="fileContent_{{ table }}">
-                <!-- This div will display the metadata -->
+            <div class="modal-body">
+                <div style="display:none;" id="json_tag_{{ table }}">{{ json_tag }}</div>
+                <form id="restoreForm_{{ table }}" action="{{ url_for('restore_' + table) }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="fileInput_{{ table }}" class="form-label">Choisir un fichier</label>
+                        <input class="form-control" type="file" name="file" id="fileInput_{{ table }}"
+                            {% if table == "databases" %}
+                                accept=".zip"
+                            {% else %}
+                                accept=".json" 
+                            {% endif %}>
+                    </div>
+                    <div id="fileContent_{{ table }}">
+                        <!-- This div will display the metadata -->
+                    </div>
+                    <div class="alert alert-warning">Attention, les données existantes seront définitivement supprimées !</div>
+                    <button class="btn btn-danger" type="submit" id="restoreButton_{{ table }}" disabled>Restaurer les données</button>
+                </form>
             </div>
-            <div class="">Attention, les données existantes seront définitivement supprimées !</div>
-            <button class="btn red" type="submit" id="restoreButton_{{ table }}" disabled>Restaurer les données</button>
-        </form>
-    </div>
-    <div class="modal-footer">
-        <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         var elems = document.querySelectorAll('.modal');
-        M.Modal.init(elems);
+        //M.Modal.init(elems);
 
         initRestoreForm('{{ table }}', '{{ table }}' === 'databases');
     });

@@ -15,10 +15,10 @@
     <tbody>
         {% for rule in rules %}
         <tr>
-            <td><input type="text" value="{{ rule.name }}" id="name-{{ rule.id }}"></td>
+            <td><input type="text" class="form-control" value="{{ rule.name }}" id="name-{{ rule.id }}"></td>
             <td>
                 <div class="input-field">
-                <select id="activity-{{ rule.id }}">               
+                <select class="form-select" id="activity-{{ rule.id }}">               
                     {% for activity in activities %}
                         <option value="{{ activity.id }}" {{ 'selected' if activity.id == rule.activity.id else '' }}>{{ activity.name }} </option>
                     {% endfor %}
@@ -27,7 +27,7 @@
             </td>
             <td>
                 <div class="input-field">
-                <select id="priority_level-{{ rule.id }}">               
+                <select class="form-select" id="priority_level-{{ rule.id }}">               
                     {% for number in [1, 2, 3, 4, 5] %}
                         <option value="{{ number }}" {{ 'selected' if number == rule.priority_level else '' }}>{{ number }} </option>
                     {% endfor %}
@@ -35,19 +35,19 @@
                 </div>
             </td>
             <td>
-                <input type="text" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}">
+                <input type="text" class="form-control" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}">
             </td>
             <td>
-                <input type="text" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}">
+                <input type="text" class="form-control" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}">
             </td>
             <td>
-                <input type="text" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}">
+                <input type="text" class="form-control" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}">
             </td>
-            <td><input type="time" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}"></td>
-            <td><input type="time" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}"></td>
+            <td><input type="time" class="form-control" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}"></td>
+            <td><input type="time" class="form-control" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}"></td>
 
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#invisible"
                     hx-post="/admin/algo/rule_update/{{ rule.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ rule.id }}").value,
@@ -62,11 +62,12 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
+                <button class="btn btn-danger"
                     hx-get="/admin/algo/confirm_delete_rule/{{ rule.id }}"
-                    hx-target="#modal_delete_algo"
+                    hx-target="#modal-htmx"
                     hx-trigger="click"
-                    data-target="modal_delete_algo">
+                    data-bs-target="#modal_delete"
+                    data-bs-toggle="modal">
                 Supprimer
                 </button>
             </td>

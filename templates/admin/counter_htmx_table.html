@@ -8,26 +8,20 @@
     <tbody>
         {% for counter in counters %}
         <tr>
-            <td><input type="text" name="name" value="{{ counter.name }}" id="name-{{ counter.id }}"></td>
+            <td><input type="text" name="name" class="form-control" value="{{ counter.name }}" id="name-{{ counter.id }}"></td>
                             <!-- Affichage des checkboxes pour chaque activité -->
             <td>
                 <!-- Affichage des checkboxes pour chaque activité -->
                 {% for activity in activities %}
-                {% if activity in counter.activities %}
-                    <label>
-                        <input class="activities-{{ counter.id }}" type="checkbox" name="activities" value="{{ activity.id }}" checked />
-                        <span>{{ activity.name }}</span>
-                    </label>
-                {% else %}
-                    <label>
-                        <input class="activities-{{ counter.id }}" type="checkbox" name="activities" value="{{ activity.id }}" />
-                        <span>{{ activity.name }}</span>
-                    </label>
-                {% endif %}
+                    <span>
+                        <input class="activities-{{ counter.id }} form-check-input" type="checkbox" name="activities" value="{{ activity.id }}" 
+                                {% if activity in counter.activities %} checked {% endif %} />
+                        <span class="form-check-label">{{ activity.name }}</span>
+                    </span>
                 {% endfor %}
             </td>
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary" 
                     hx-target="#invisible"
                     hx-include=".activities-{{ counter.id }}"
                     hx-post="/admin/counter/counter_update/{{ counter.id }}"
@@ -36,11 +30,12 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
+                <button class="btn btn-danger"
                         hx-get="/admin/counter/confirm_delete/{{ counter.id }}"
-                        hx-target="#modal_delete_counter"
+                        hx-target="#modal-htmx"
                         hx-trigger="click"
-                        data-target="modal_delete_counter">
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
                     Supprimer
                 </button>
             </td>

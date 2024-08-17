@@ -11,27 +11,21 @@
     <tbody>
         {% for member in staff %}
         <tr>
-            <td><input type="text" name="name" value="{{ member.name }}" id="name-{{ member.id }}"></td>
-            <td><input type="text" name="initials" value="{{ member.initials }}" id="initials-{{ member.id }}"></td>
-            <td><input type="text" name="language" value="{{ member.language }}" id="language-{{ member.id }}"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ member.name }}" id="name-{{ member.id }}"></td>
+            <td><input type="text" class="form-control" name="initials" value="{{ member.initials }}" id="initials-{{ member.id }}"></td>
+            <td><input type="text" class="form-control" name="language" value="{{ member.language }}" id="language-{{ member.id }}"></td>
             <td>
                 <!-- Affichage des checkboxes pour chaque activité -->
-                {% for activity in activities %}
-                {% if activity in member.activities %}
-                    <label>
-                        <input class="activities-{{ member.id }}" type="checkbox" name="activities" value="{{ activity.id }}" checked />
-                        <span>{{ activity.name }}</span>
-                    </label>
-                {% else %}
-                    <label>
-                        <input class="activities-{{ member.id }}" type="checkbox" name="activities" value="{{ activity.id }}" />
-                        <span>{{ activity.name }}</span>
-                    </label>
-                {% endif %}
+                {% for activity in activities %}                
+                <span>
+                    <input class="activities-{{ member.id }} form-check-input" type="checkbox" name="activities" value="{{ activity.id }}" 
+                        {% if activity in member.activities %} checked {% endif %} />
+                    <span class="form-check-label">{{ activity.name }}</span>
+                </span>
             {% endfor %}
             </td>
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#invisible"
                     hx-include=".activities-{{ member.id }}"
                     hx-post="/admin/staff/member_update/{{ member.id }}"
@@ -42,13 +36,15 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
-                        hx-get="/admin/staff/confirm_delete/{{ member.id }}"
-                        hx-target="#modal_delete_staff"
-                        hx-trigger="click"
-                        data-target="modal_delete_staff">
+                <button class="btn btn-danger"
+                    hx-get="/admin/staff/confirm_delete/{{ member.id }}"
+                    hx-target="#modal-htmx"
+                    hx-trigger="click"
+                    data-bs-target="#modal_delete"
+                    data-bs-toggle="modal">
                     Supprimer
                 </button>
+
             </td>
         </tr>
         {% endfor %}

@@ -1,4 +1,4 @@
-<button class="btn 
+<button class="btn btn-primary
             {% if algo_activated %}disabled{% endif %}"
         hx-get="/admin/algo/toggle_activation?action=activate"
         hx-target="#div_buttons_activate_algo"
@@ -7,7 +7,7 @@
     >Activer l'Algorithme
 </button>
 
-<button class="btn red
+<button class="btn btn-danger
             {% if not algo_activated %}disabled{% endif %}"
         hx-get="/admin/algo/toggle_activation?action=deactivate"
         hx-target="#div_buttons_activate_algo"

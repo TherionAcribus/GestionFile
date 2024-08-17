@@ -13,7 +13,7 @@
     </div>
 
     <!-- Ajout nouveau membre -->
-    <a class="waves-effect waves-light btn"
+    <a class="btn btn-primary"
         hx-get="/admin/staff/add_form"
         hx-target="#div_add_staff_form"
         hx-swap="innerHTML">
@@ -22,10 +22,6 @@
     <div id="div_add_staff_form"></div>
 
     {{ macros.save_restore("staff", "gf_staff") }}
-
-    <!-- Modal Structure -->
-    <div id="modal_delete_staff" class="modal">
-    </div>
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>

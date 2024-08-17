@@ -12,11 +12,12 @@
     <tbody>
         {% for button in buttons %}
         <tr>
-            <td><input type="text" name="label" value="{{ button.label }}" id="label-{{ button.id }}"></td>
+            <td><input type="text" class="form-control" name="label" value="{{ button.label }}" id="label-{{ button.id }}"></td>
             <td>
                 <p>
                     <label>
                         <input 
+                        class="form-check-input"
                         id="is_present-{{ button.id }}" 
                         type="checkbox" {{ 'checked' if button.is_present == True else '' }}>
                     <span></span>
@@ -26,7 +27,7 @@
 
             <td>
                 <div class="input-field">
-                    <select id="shape-{{ button.id }}">
+                    <select class="form-select" id="shape-{{ button.id }}">
                         <option value="" disabled selected>Forme du bouton</option>
                         <option value="circle" 
                             {{ 'selected' if button.shape == "circle" else '' }}>Cercle
@@ -40,7 +41,7 @@
             
             <td>
                 <div class="input-field">
-                    <select id="activity-{{ button.id }}">
+                    <select class="form-select" id="activity-{{ button.id }}">
                         <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
                         <option value="parent_button" 
                                 {{ 'selected' if button.is_parent == True else '' }}>BOUTON PARENT
@@ -67,7 +68,7 @@
             
 
             <td>
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#invisible"
                     hx-post="/admin/patient/button_update/{{ button.id }}"
                     hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value,
@@ -79,11 +80,12 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
+                <button class="btn btn-danger"
                         hx-get="/admin/patient/confirm_delete_button/{{ button.id }}"
-                        hx-target="#modal_delete_button"
+                        hx-target="#modal-htmx"
                         hx-trigger="click"
-                        data-target="modal_delete_button">
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
                     Supprimer
                 </button>
             </td>
@@ -102,18 +104,19 @@
             <td>
 
                     <!-- Bouton pour ouvrir la modal -->
-                    <button class="btn modal-trigger blue"
+                    <button class="btn btn-primary"
                     hx-get="/admin/patient/gallery_button_images/{{ button.id }}"
-                    hx-target="#modal_display_gallery"
+                    hx-target="#modal_display_gallery .modal-content"
                     hx-trigger="click"
-                    data-target="modal_display_gallery">
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal_display_gallery">
                 Galerie
             </button>
             </td>
 
             <td>
                 {% if button.image_url %}
-                    <button class="btn red"
+                    <button class="btn btn-danger"
                         hx-get="/admin/patient/delete_button_image/{{ button.id }}"
                         hx-target="#button-image-{{ button.id }}"
                         hx-swap="innerHTML"

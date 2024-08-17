@@ -1,17 +1,18 @@
-<div class="modal-content">
-    <h4>Suppression d'une activité</h4>
-    <p>Vous vous appretez à supprimer {{activity.name}} définitivement. Confirmez-vous la suppression ? </p>
-    </div>
-    <div class="modal-footer">
-    <a href="#!" class="modal-close waves-effect waves-green btn-flat">Annuler</a>
-    <a href="#!" 
-        class="modal-close waves-effect waves-red btn-flat"
-        {% if staff %}
-            hx-get="/admin/activity/delete/staff/{{ activity.id }}"
-            hx-target="#div_activity_staff_table"
-        {% else %}
-            hx-get="/admin/activity/delete/{{ activity.id }}"
-            hx-target="#div_activity_table"
-        {% endif %}>
-        Confirmer</a>
-    </div>
+<p>Vous vous appretez à supprimer {{activity.name}} définitivement. 
+<br> Confirmez-vous la suppression ? </p>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <button type="button" class="btn btn-danger"
+    {% if staff %}
+        hx-get="/admin/activity/delete/staff/{{ activity.id }}"
+        hx-target="#div_activity_staff_table"
+    {% else %}
+        hx-get="/admin/activity/delete/{{ activity.id }}"
+        hx-target="#div_activity_table"
+    {% endif %}
+    hx-target="#div_counter_table"
+    data-bs-dismiss="modal"
+    >Supprimer</button>
+</div>
+

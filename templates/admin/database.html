@@ -5,22 +5,10 @@
 {% block content %}
     <h3>Base de données</h3>
 
-    <!-- Switch -->
-    <div class="switch">
-        <span>Vider automatiquement la table des patients une fois par jour : </span>
-        <label>
-        Non
-        <input id="cron_delete_patient_table_activated" 
-                type="checkbox"
-                {% if cron_delete_patient_table_activated == True %}checked{% endif %}
-                hx-post="/admin/update_switch"
-                hx-target="#invisible"
-                hx-vals='js:{"key": "cron_delete_patient_table_activated",
-                            "value": document.getElementById("cron_delete_patient_table_activated").checked}'>
-        <span class="lever"></span>
-        Oui
-        </label>
-    </div>
+    {{ macros.switch("cron_delete_patient_table_activated", 
+            cron_delete_patient_table_activated, 
+            "Vider automatiquement la table des patients une fois par jour")
+    }}
 
     <div id="div_schedule_tasks_list"
         hx-get="/admin/database/schedule_tasks_list"

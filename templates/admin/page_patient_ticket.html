@@ -1,25 +1,14 @@
-<btn class="btn"
+<btn class=btn btn-primary
     hx-get="/admin/patient/print_ticket_test"
     hx-target="#invisible"
     >
     Tester l'imprimante
 </btn>
 
-<div class="switch">
-    <span>Masquer ou Afficher la possibilité d'imprimer le ticket</span>
-    <label>
-    Masquer
-    <input id="page_patient_print_ticket_display" 
-            type="checkbox"
-            {% if page_patient_print_ticket_display == True %}checked{% endif %}
-            hx-post="/admin/update_switch"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "page_patient_print_ticket_display",
-                        "value": document.getElementById("page_patient_print_ticket_display").checked}'>
-    <span class="lever"></span>
-    Afficher
-    </label>
-</div>
+{{ macros.switch("page_patient_print_ticket_display", 
+            page_patient_print_ticket_display, 
+            "Afficher la possibilité d'imprimer le ticket")
+}}
 
 {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
 

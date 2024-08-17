@@ -2393,6 +2393,7 @@ def update_counter(counter_id):
 @app.route('/admin/counter/confirm_delete/<int:counter_id>', methods=['GET'])
 def confirm_delete_counter(counter_id):
     counter = Counter.query.get(counter_id)
+    print("counter", counter)
     return render_template('/admin/counter_modal_confirm_delete.html', counter=counter)
 
 

@@ -6,7 +6,7 @@
     <h3>File d'attente</h3>
 
     <button 
-        class="btn modal-trigger red"
+        class="btn btn-danger"
         hx-get="/admin/database/confirm_delete_patient_table"
         hx-target="#modal_delete_queue"
         hx-trigger="click"
@@ -16,18 +16,21 @@
     </button>
 
     <!-- Select patient filter  -->
-    <div class="input-field col s12">
+    <div class="input-field">
         <select multiple
+            class="form-select"
             id="select_patient_filter"
             hx-post="/admin/queue/table"
             hx-target="#div_queue_table"
             hx-swap="innerHTML"
-            hx-vals='js:{"ongoing": document.getElementById("ongoing").selected,
-                        "standing": document.getElementById("standing").selected,
-                        "calling": document.getElementById("calling").selected,
-                        "done": document.getElementById("done").selected}'
-            >
-            <option value="" disabled selected>Affichage : </option>
+            hx-trigger="change"
+            hx-vals='js:{
+                "ongoing": $("#select_patient_filter").val().includes("ongoing"),
+                "standing": $("#select_patient_filter").val().includes("standing"),
+                "calling": $("#select_patient_filter").val().includes("calling"),
+                "done": $("#select_patient_filter").val().includes("done")
+            }'
+        >
             <option id="ongoing" selected value="ongoing">En cours</option>
             <option id="standing" selected value="standing">En attente</option>
             <option id="calling" selected value="calling">Appelé</option>
@@ -52,7 +55,7 @@
     
     <div class="input-field row s12">
         <div class="col s4">
-            <select 
+            <select class="form-select"
                 id="create_new_patient_auto">
                 <option value="" disabled selected>Choisir un motif</option>
                 {% for activity in activities %}
@@ -63,7 +66,7 @@
         </div>
         <div class="col s4">
             <button
-                class ="btn"
+                class="btn btn-primary"
                 hx-post="/admin/queue/create_new_patient_auto"
                 hx-target="#invisible"
                 hx-trigger="click"
@@ -82,5 +85,9 @@
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
-        
+
+    <script>
+
+    </script>
+
 {% endblock %}

@@ -11,10 +11,10 @@
     <tbody>
         {% for patient in patients %}
         <tr>
-            <td><input type="text" name="call_number" value="{{ patient.call_number }}" id="call_number-{{ patient.id }}"></td>
+            <td><input type="text" class="form-control" name="call_number" value="{{ patient.call_number }}" id="call_number-{{ patient.id }}"></td>
             <td>
                 <div class="input-field">
-                <select id="activity-{{ patient.id }}">               
+                <select class="form-select" id="activity-{{ patient.id }}">               
                     {% for activity in activities %}
                     <option value="{{ activity.id }}" {{ 'selected' if activity.id == patient.activity.id else '' }}>{{ activity.name }} </option>
                     {% endfor %}
@@ -24,7 +24,7 @@
             <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>
                 <div class="input-field">
-                <select id="status-{{ patient.id }}">               
+                <select class="form-select" id="status-{{ patient.id }}">               
                     {% for status in status_list %}
                         <option value="{{ status }}" {{ 'selected' if status == patient.status else '' }}>{{ status }}</option>
                     {% endfor %}
@@ -33,7 +33,7 @@
             </td>
             <td>
                 <div class="input-field">
-                <select id="counter-{{ patient.id }}"> 
+                <select class="form-select" id="counter-{{ patient.id }}"> 
                     <option value="None">None</option>              
                     {% for counter in counters %}
                         <option value="{{ counter.id }}" {{ 'selected' if counter.id == patient.counter.id else '' }}>{{ counter.name }} </option>
@@ -43,7 +43,7 @@
             </td>
             <td>
 
-                <button class="btn" 
+                <button class="btn btn-primary"
                     hx-target="#invisible"
                     hx-post="/admin/queue/patient_update/{{ patient.id }}"
                     hx-vals='js:{"call_number": document.getElementById("call_number-{{ patient.id }}").value,
@@ -54,11 +54,12 @@
                     Enregistrer
                 </button>
 
-                <button class="btn modal-trigger red"
+                <button class="btn btn-danger"
                         hx-get="/admin/queue/confirm_delete_patient/{{ patient.id }}"
-                        hx-target="#modal_delete_queue"
+                        hx-target="#modal-htmx"
                         hx-trigger="click"
-                        data-target="modal_delete_queue">
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
                     Supprimer
                 </button>
             </td>

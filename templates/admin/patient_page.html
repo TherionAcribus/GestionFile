@@ -5,54 +5,49 @@
 {% block content %}
     <h3>Page patient</h3>
 
-    <!--
     <div class="row">
-        <div class="input-field col s6">
-          <input placeholder="Titre" id="input_title" type="text" class="validate" value="{{ title_page }}"">
-          <label for="input_title">Titre</label>
-        </div>
-    </div>
-
-    <div>
-        <a href="#!" 
-            class="modal-close waves-effect waves-red btn">
-            Enregistrer les changements</a>
-    </div>
-    -->
-
-    <div class="row">
-        <div class="col s12">
-            <ul class="tabs">
-                <li class="tab col s3"><a class="active" href="#visual">Textes</a></li>
-                <li class="tab col s3"><a href="#tab_buttons">Boutons</a></li>
-                <li class="tab col s3"><a href="#tab_ticket">Ticket</a></li>
-                <li class="tab col s3"><a href="#tab_qrcode">QR Code</a></li>
+        <div class="col-12">
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs" id="patientTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#visual" type="button" role="tab" aria-controls="visual" aria-selected="true">Textes</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="buttons-tab" data-bs-toggle="tab" data-bs-target="#tab_buttons" type="button" role="tab" aria-controls="tab_buttons" aria-selected="false">Boutons</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="ticket-tab" data-bs-toggle="tab" data-bs-target="#tab_ticket" type="button" role="tab" aria-controls="tab_ticket" aria-selected="false">Ticket</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="qrcode-tab" data-bs-toggle="tab" data-bs-target="#tab_qrcode" type="button" role="tab" aria-controls="tab_qrcode" aria-selected="false">QR Code</button>
+                </li>
             </ul>
-        </div>
-        <div id="visual" class="col s12">
-            {% include 'admin/page_patient_page.html' %}
-        </div>
-        <div id="tab_buttons" class="col s12">
-            {% include 'admin/page_patient_buttons.html' %}
-        </div>
-        <div id="tab_ticket" class="col s12">
-            {% include 'admin/page_patient_ticket.html' %}
-        </div>
-        <div id="tab_qrcode" class="col s12">
-            {% include 'admin/page_patient_qrcode.html' %}
+
+            <!-- Tab content -->
+            <div class="tab-content" id="patientTabContent">
+                <div class="tab-pane fade show active" id="visual" role="tabpanel" aria-labelledby="text-tab">
+                    {% include 'admin/page_patient_page.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_buttons" role="tabpanel" aria-labelledby="buttons-tab">
+                    {% include 'admin/page_patient_buttons.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_ticket" role="tabpanel" aria-labelledby="ticket-tab">
+                    {% include 'admin/page_patient_ticket.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_qrcode" role="tabpanel" aria-labelledby="qrcode-tab">
+                    {% include 'admin/page_patient_qrcode.html' %}
+                </div>
+            </div>
         </div>
     </div>
 
     <div>
-        <button class="btn red"
+        <button class="btn btn-danger"
                 hx-get="/patient/refresh"
-                hx-target="#invisible"                    
-                >Relancer la page "Patient"
+                hx-target="#invisible">Relancer la page "Patient"
         </button>
-        Assurez que la page ne soit pas en cours d'utilisation !
+        <p>Assurez-vous que la page ne soit pas en cours d'utilisation !</p>
     </div>
-
-        
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
