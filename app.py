@@ -53,10 +53,11 @@ from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
 
-from bdd import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
+from bdd import init_database
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -65,6 +66,8 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
+
+database = "mysql"
 
 if site == "production":
     credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
@@ -78,11 +81,29 @@ else:
 class Config:
     SCHEDULER_API_ENABLED = True
     SECRET_KEY = 'your_secret_key'
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
-    SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
-    SQLALCHEMY_BINDS = {
-        'users': 'sqlite:///userdatabase.db'
-    }
+
+    if database == "mysql":
+        USER = 'admin'
+        PASSWORD = '1Licornecornue'
+        HOST = 'localhost'
+        DB_NAME = 'queuedatabase'
+
+        # MySQL Configuration
+        SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{USER}:{PASSWORD}@{HOST}/{DB_NAME}'
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{USER}:{PASSWORD}@{HOST}/queueschedulerdatabase'
+        # SQLALCHEMY_BINDS configuration to include MySQL
+        SQLALCHEMY_BINDS = {
+            'users': f'mysql+pymysql://{USER}:{PASSWORD}@{HOST}/userdatabase'
+        }
+            # Config MySQL
+
+    elif database == "sqlite":
+        SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
+        SQLALCHEMY_BINDS = {
+            'users': 'sqlite:///userdatabase.db'
+        }
+
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
@@ -327,11 +348,6 @@ class ConfigScheduler:
     }
     SCHEDULER_API_ENABLED = True  # Permet d'activer l'API pour interroger le scheduler
 
-app.config.from_object(ConfigScheduler())
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()
-
 
 # Pour le logging
 logging.basicConfig(level=logging.DEBUG,
@@ -493,6 +509,15 @@ class Activity(db.Model):
 
     def __repr__(self):
         return f'<Activity - {self.name}>'
+
+    def from_dict(self, data):
+        for field in data:
+            if field == 'schedules':
+                self.schedules = [ActivitySchedule.query.get(schedule_id) for schedule_id in data[field]]
+            elif field == 'staff_id':
+                self.staff_id = data[field] if data[field] else None
+            else:
+                setattr(self, field, data[field])
     
 
 # Table d'association pour la relation many-to-many
@@ -627,6 +652,20 @@ class Button(db.Model):
     def __repr__(self):
         return f'<Button {self.label}>'
     
+    def from_dict(self, data, session):
+        for field, value in data.items():
+            if field == 'activity_id':
+                if value is not None:
+                    self.activity = session.get(Activity, value)
+                else:
+                    self.activity = None
+            elif field == 'parent_button_id':
+                if value is not None:
+                    self.parent_button = session.get(Button, value)
+                else:
+                    self.parent_button = None
+            elif hasattr(self, field):
+                setattr(self, field, value)
 
 class Language(db.Model):
     __tablename__ = 'language'
@@ -4728,8 +4767,9 @@ def load_configuration():
 
         
 with app.app_context():
-    app.logger.info("Creating database tables")
-    db.create_all()
+
+    init_database(database, db)
+
     # Check if the user table is empty and create an admin user if it is
 
     if User.query.count() == 0:
@@ -4759,6 +4799,11 @@ with app.app_context():
     load_configuration()
     clear_old_patients_table()
     clear_counter_table(db, Counter, Patient)
+
+app.config.from_object(ConfigScheduler())
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
