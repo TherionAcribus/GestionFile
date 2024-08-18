@@ -79,6 +79,7 @@ def backup_staff(Pharmacist, ConfigVersion):
             headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
         )
     except Exception as e:
+        current_app.logger.error(f'An error occurred: {e}', exc_info=True)
         return redirect(url_for('index'))
     
 
@@ -155,6 +156,7 @@ def backup_schedules(ActivitySchedule, ConfigVersion):
             headers={'Content-Disposition': f'attachment;filename={backup_filename}'}
         )
     except Exception as e:
+        current_app.logger.error(f'An error occurred: {e}', exc_info=True)
         return redirect(url_for('activity'))
     
 
