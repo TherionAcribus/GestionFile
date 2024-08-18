@@ -70,6 +70,9 @@ communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 database = "mysql"
 
+# A mettre dans la BDD ?
+status_list = ['ongoing', 'standing', 'done', 'calling']
+
 if site == "production":
     credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
     parameters = pika.ConnectionParameters('rabbitmq-7yig',
@@ -84,17 +87,17 @@ class Config:
     SECRET_KEY = 'your_secret_key'
 
     if database == "mysql":
-        USER = 'admin'
-        PASSWORD = '1Licornecornue'
+        MYSQL_USER = 'admin'
+        MYSQL_PASSWORD = '1Licornecornue'
         HOST = 'localhost'
         DB_NAME = 'queuedatabase'
 
         # MySQL Configuration
-        SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{USER}:{PASSWORD}@{HOST}/{DB_NAME}'
-        SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{USER}:{PASSWORD}@{HOST}/queueschedulerdatabase'
+        SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
         # SQLALCHEMY_BINDS configuration to include MySQL
         SQLALCHEMY_BINDS = {
-            'users': f'mysql+pymysql://{USER}:{PASSWORD}@{HOST}/userdatabase'
+            'users': f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/userdatabase'
         }
             # Config MySQL
 
@@ -378,11 +381,11 @@ def is_safe_url(target):
 # Sauvegardes / Restaurations
 
 app.add_url_rule('/admin/database/backup', 'backup_databases', 
-                partial(backup_databases), 
+                partial(backup_databases, database), 
                 methods=['GET'])
 
 app.add_url_rule('/admin/database/restore', 'restore_databases', 
-                partial(restore_databases, request), 
+                partial(restore_databases, request, database), 
                 methods=['GET', 'POST'])
 
 app.add_url_rule('/admin/backup/config', 'backup_config_all', 

@@ -1,5 +1,6 @@
 import json
 import zipfile
+import mysql.connector
 import os
 #from app import ConfigOption, ConfigVersion
 from datetime import datetime
@@ -291,7 +292,16 @@ def backup_buttons(Button, ConfigVersion):
         return redirect(url_for('index'))
     
 
-def backup_databases():
+def backup_databases(database):
+    if database == "sqlite":
+        return backup_sqlite()
+    elif database == "mysql":
+        return backup_mysql()
+
+def backup_sqlite():
+    """ Sauvegarde des bases de données SQLite via Python pour être indépendant de la machine sur lequel tourne l'App. 
+    Le plus performant reste quand même de faire un dump """
+
     # Préparer un fichier ZIP en mémoire
     zip_buffer = BytesIO()
 
@@ -319,3 +329,54 @@ def backup_databases():
 
     zip_buffer.seek(0)
     return send_file(zip_buffer, as_attachment=True, download_name=f'backup_databases_{timestamp}.zip')
+
+def backup_mysql():
+    dbs_to_backup = ['queuedatabase', 'queueschedulerdatabase', 'userdatabase']
+
+    connection = mysql.connector.connect(
+        host='localhost',
+        user=current_app.config["MYSQL_USER"],
+        password=current_app.config["MYSQL_PASSWORD"],
+    )
+    cursor = connection.cursor()
+
+    zip_buffer = BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+        for db_name in dbs_to_backup:
+            buffer = backup_database(db_name, cursor)
+            buffer.seek(0)
+            zip_file.writestr(f"{db_name}.sql", buffer.read())
+
+    zip_buffer.seek(0)
+    cursor.close()
+    connection.close()
+
+    return send_file(zip_buffer, as_attachment=True, download_name='backup_databases.zip')
+
+
+def backup_database(db_name, cursor):
+    buffer = BytesIO()
+    cursor.execute(f"SHOW TABLES FROM {db_name}")
+    tables = cursor.fetchall()
+
+    for table in tables:
+        table_name = table[0]
+        cursor.execute(f"SHOW CREATE TABLE {db_name}.{table_name}")
+        create_table_sql = cursor.fetchone()[1] + ";\n\n"
+        buffer.write(create_table_sql.encode('utf-8'))
+
+        cursor.execute(f"SELECT * FROM {db_name}.{table_name}")
+        rows = cursor.fetchall()
+        if rows:
+            columns = [desc[0] for desc in cursor.description]
+            columns_str = ', '.join(columns)
+            buffer.write(f"INSERT INTO {table_name} ({columns_str}) VALUES\n".encode('utf-8'))
+
+            for row in rows:
+                values_str = ', '.join(["'{}'".format(str(value).replace("'", "\\'")) if value is not None else 'NULL' for value in row])
+                buffer.write(f"({values_str}),\n".encode('utf-8'))
+            buffer.seek(buffer.tell() - 2)  # Remove the last comma
+            buffer.write(";\n\n".encode('utf-8'))
+
+    return buffer

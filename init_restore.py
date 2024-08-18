@@ -1,6 +1,7 @@
 import json
 import os
 import zipfile
+import mysql.connector
 from datetime import datetime, time
 from flask import redirect, url_for, render_template, current_app
 from io import BytesIO
@@ -592,11 +593,16 @@ def restore_button(button_json, Button, Activity, db):
 
 # DATABASE
 
-def restore_databases(request):
-    file = request.files.get('file')
-    print("file",request.files)
-    print("file",file)
+def restore_databases(request, database):
     
+    if database == "sqlite":
+        restore_sqlite(request)
+    elif database == "mysql":
+        restore_mysql(request)
+
+
+def restore_sqlite(request):
+    file = request.files.get('file')
     if file:
         # Charger le fichier ZIP en mémoire
         zip_buffer = BytesIO(file.read())
@@ -628,6 +634,57 @@ def restore_databases(request):
         return "All databases restored successfully"
     else:
         return "No file uploaded", 400
+
+
+def restore_mysql(request):
+    file = request.files.get('file')
+    if file and file.filename.endswith('.zip'):
+        zip_buffer = BytesIO(file.read())
+
+        connection = mysql.connector.connect(
+            host='localhost',
+            user=current_app.config["MYSQL_USER"],
+            password=current_app.config["MYSQL_PASSWORD"],
+        )
+        cursor = connection.cursor()
+
+        with zipfile.ZipFile(zip_buffer, 'r') as zip_file:
+            for sql_file in zip_file.namelist():
+                db_name = sql_file.replace('.sql', '')
+                sql_content = zip_file.read(sql_file)
+                restore_mysql_database(db_name, sql_content, cursor)
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return "All databases restored successfully"
+    else:
+        return "No file uploaded", 400
+    
+
+def restore_mysql_database(db_name, sql_content, cursor):
+    # Sélectionner la base de données avant de restaurer
+    cursor.execute(f"USE {db_name}")
+    
+    # Désactiver les vérifications des clés étrangères
+    cursor.execute("SET FOREIGN_KEY_CHECKS=0;")
+    
+    # Supprimer les tables existantes
+    cursor.execute("SHOW TABLES")
+    tables = cursor.fetchall()
+    for table in tables:
+        cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
+    
+    # Diviser le contenu du fichier SQL en statements individuels
+    statements = sql_content.decode('utf-8').split(';')
+    for statement in statements:
+        statement = statement.strip()
+        if statement:
+            cursor.execute(statement)
+    
+    # Réactiver les vérifications des clés étrangères
+    cursor.execute("SET FOREIGN_KEY_CHECKS=1;")
 
 
 # A TRIER 
@@ -665,8 +722,6 @@ def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation
         
         db.session.commit()
         print("Database updated to version:", data['version'])
-
-
 
 
 def init_default_languages_db_from_json(Language, db):

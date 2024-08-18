@@ -343,8 +343,6 @@ class TextTranslation(db.Model):
         db.ForeignKeyConstraint(['language_id'], ['language.id'], name='fk_text_translation_language_id', ondelete='CASCADE'),
     )
 
-# A mettre dans la BDD ?
-status_list = ['ongoing', 'standing', 'done', 'calling']
 
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
