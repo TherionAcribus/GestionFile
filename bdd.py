@@ -1,9 +1,4 @@
-from flask import current_app
 import pymysql
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 
 def init_database(database, db):
     if database == "mysql":
@@ -15,8 +10,7 @@ def init_database(database, db):
         db.create_all()
 
     elif database == "sqlite":
-        db.create_all()
-    
+        db.create_all()    
 
 def create_database_if_not_exists(engine_url, database_name):
     """ Création des BDD MYSQL si elles n'existent pas"""

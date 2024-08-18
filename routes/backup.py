@@ -157,7 +157,7 @@ def backup_schedules(ActivitySchedule, ConfigVersion):
         )
     except Exception as e:
         current_app.logger.error(f'An error occurred: {e}', exc_info=True)
-        return redirect(url_for('activity'))
+        return redirect(url_for('activity')) 
     
 
 def backup_algorules(AlgoRule, ConfigVersion):
