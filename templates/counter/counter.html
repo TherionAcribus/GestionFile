@@ -76,6 +76,14 @@
         >
     </div>
 
+    <div id="relaunch_call"
+        hx-get="/counter/relaunch_patient_call/{{ counter.id }}" 
+        hx-targer="#invisible"
+        hx-swap="innerHTML">
+        <i class="medium material-icons">notifications</i> Relancer l'appel
+    </div>
+
+
     <div id="patient_on_queue" 
         hx-trigger="refresh_queue, load" 
         hx-get="/counter/patients_queue_for_counter/{{ counter.id }}" 

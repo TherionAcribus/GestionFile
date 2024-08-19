@@ -1,4 +1,4 @@
-from flask import render_template, request, jsonify,current_app as app
+from flask import render_template, request, jsonify, url_for, current_app as app
 from sqlalchemy import func
 
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
@@ -33,12 +33,15 @@ def app_paper_add():
 
             app.communikation("counter", event="paper")
             app.communikation("app_counter", event="paper")
+        
+            return "", 200
 
         except Exception as e:
             print(e)
 
 def app_update_counter_staff():
     return update_counter_staff()
+
 
 def web_update_counter_staff():
     return update_counter_staff()
@@ -198,7 +201,14 @@ def counter_select_patient(counter_id, patient_id):
     """ Appeler lors du choix d'un patient spécifique au comptoir """
     print("counter_select_patient", counter_id, patient_id)
     app.call_specific_patient(counter_id, patient_id)
+    app.communikation("update_patient")
+    return '', 204
 
-    app.communikation("update_patient") 
-
+def relaunch_patient_call(counter_id):
+    print("relaunch_patient_call", counter_id)
+    patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
+    audiofile = f'patient_{patient.call_number}.mp3'
+    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
+    app.communikation("update_audio", event="audio", data=audio_url)
+    print("relaunch_patient_call", audio_url)
     return '', 204

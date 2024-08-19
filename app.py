@@ -57,7 +57,7 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
-from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient 
+from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -500,6 +500,13 @@ app.add_url_rule("/counter/select_patient/<int:counter_id>/<int:patient_id>", 'c
                 partial(counter_select_patient), 
                 methods=['GET'])
 
+app.add_url_rule("/counter/relaunch_patient_call/<int:counter_id>", 'relaunch_patient_call_web', 
+                partial(relaunch_patient_call), 
+                methods=['GET'])
+
+app.add_url_rule("/app/counter/relaunch_patient_call/<int:counter_id>", 'relaunch_patient_call_app', 
+                partial(relaunch_patient_call), 
+                methods=['GET', 'POST'])
 
 
 
