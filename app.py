@@ -54,11 +54,12 @@ import jwt
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
-from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos
+from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
 from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call
+from python.announce import display, patients_ongoing, announce_init_gallery, announce_refresh, replace_balise_announces
 from python.admin.admin import admin_admin
 
 # adresse production
@@ -510,7 +511,26 @@ app.add_url_rule("/app/counter/relaunch_patient_call/<int:counter_id>", 'relaunc
                 partial(relaunch_patient_call), 
                 methods=['GET', 'POST'])
 
+# ANNOUNCES
+
+app.add_url_rule("/display", view_func=display)
+
+app.add_url_rule('/announce/patients_ongoing', view_func=patients_ongoing)
+
+app.add_url_rule('/announce/init_gallery', view_func=announce_init_gallery)
+
+app.add_url_rule('/announce/refresh', view_func=announce_refresh)
+
+
+
+
+
+
+# ADMIN -> OPTIONS
+
 app.add_url_rule("/admin/admin_options", view_func=admin_admin)
+
+
 
 
 
@@ -3634,115 +3654,7 @@ def counter_become_active(counter_id):
 # ---------------- PAGE AnnoNces FRONT ----------------
 
 
-@app.route('/display')
-def display():
-    app.logger.debug("start display")
-    # TODO verifier qu'existe
-    return render_template('/announce/announce.html', 
-                            current_patients=current_patients,
-                            announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
-                            announce_title=app.config['ANNOUNCE_TITLE'] ,
-                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
-                            announce_text_up_patients=app.config['ANNOUNCE_TEXT_UP_PATIENTS'],
-                            announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
-                            announce_text_down_patients=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS'],
-                            announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
-                            call_patients = patient_list_for_init_display(),
-                            announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
-                            announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
-                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
 
-def patient_list_for_init_display():
-    """ Création de la liste de patients pour initialiser l'écran d'annonce"""
-    patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
-    announce_call_text = ConfigOption.query.filter_by(config_key="announce_call_text").first().value_str
-    call_patients = []
-    for patient in patients:
-        print("PATATOR", patient)
-        call_patient = {
-            'id': patient.id,
-            'text': replace_balise_announces(announce_call_text, patient)
-        }
-        call_patients.append(call_patient)
-    return call_patients
-
-@app.route('/announce/patients_ongoing')
-def patients_ongoing():
-    announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
-    patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
-    ongoing_patients = []
-    for patient in patients:
-        print("PATATE", patient)
-        ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
-    return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
-
-
-def replace_balise_announces(template, patient):
-    """ Remplace les balises dans les textes d'annonces (texte et son)"""
-    print(template)
-    print("replace_balise_announces", template, patient)
-    try:
-        if patient.counter.staff.name:
-            return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
-        else:
-            template = "Patient {N} : {C}"
-            return template.format(N=patient.call_number, C=patient.counter.name)
-    except AttributeError:
-        return f"Erreur {patient.call_number}. Demandez à notre personnel"
-
-
-def replace_balise_phone(template, patient):
-    """ Remplace les balises dans les textes d'annonces (texte et son)"""
-    print("replace_balise_announces", template, patient)
-    return template.format(P=app.config["PHARMACY_NAME"],
-                            N=patient.call_number, 
-                            A=patient.activity.name, 
-                            D=date.today().strftime("%d/%m/%y"),
-                            H=datetime.now().strftime("%H:%M"))
-
-
-@app.route('/announce/init_gallery')
-def announce_init_gallery():
-    """ Création de la liste des images pour la galerie"""
-    app.logger.debug("Init gallery")
-    
-    # Récupérer la liste des galeries sélectionnées, si rien on envoie une liste vide
-    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
-    if config_option:
-        announce_infos_galleries = json.loads(config_option.value_str)
-    else:
-        announce_infos_galleries = []
-
-    app.logger.debug("announce_infos_galleries : " + str(announce_infos_galleries))
-    
-    images = []
-    for gallery in announce_infos_galleries:
-        try:
-            image_dir = os.path.join(app.static_folder, "galleries", gallery)
-            images.extend([url_for('static', filename=f"galleries/{gallery}/{image}") for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))])
-        except FileNotFoundError:
-            app.logger.error(f"Gallery {gallery} not found")
-
-
-    # Mélange des images si l'option est active
-    if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
-        print(images)
-        images.sort(key=lambda x: os.path.basename(x))
-        print(images)
-    
-    return render_template('announce/gallery.html', images=images,
-                            time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
-                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION'],
-                            announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
-                            announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],)
-
-
-@app.route('/announce/refresh')
-def announce_refresh():
-    """ Permet de rafraichir la page des annonces pour appliquer les changements """
-    communikation("update_screen", event="refresh")
-    communication("update_announce")
-    return '', 204
 
 # ---------------- FIN  PAGE AnnoNces FRONT ----------------
 
@@ -4116,11 +4028,11 @@ def log_request_info():
 """
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
 
-
+# A PRIORI NE SERT PLUS A RIEN
 @app.route('/current_patients')
 def current_patients():
     # Supposons que vous vouliez afficher les patients dont le statut est "au comptoir"
-    patients = Patient.query.filter_by(status='au comptoir').all()
+    patients = Patient.query.filter_by(status='ongoing').all()
     print(patients)
     return render_template('htmx/update_patients.html', patients=patients)
 

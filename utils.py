@@ -93,3 +93,26 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
 
     return escpos_text
 
+
+def replace_balise_announces(template, patient):
+    """ Remplace les balises dans les textes d'annonces (texte et son)"""
+    print(template)
+    print("replace_balise_announces", template, patient)
+    try:
+        if patient.counter.staff.name:
+            return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
+        else:
+            template = "Patient {N} : {C}"
+            return template.format(N=patient.call_number, C=patient.counter.name)
+    except AttributeError:
+        return f"Erreur {patient.call_number}. Demandez à notre personnel"
+
+
+def replace_balise_phone(template, patient):
+    """ Remplace les balises dans les textes d'annonces (texte et son)"""
+    print("replace_balise_announces", template, patient)
+    return template.format(P=app.config["PHARMACY_NAME"],
+                            N=patient.call_number, 
+                            A=patient.activity.name, 
+                            D=date.today().strftime("%d/%m/%y"),
+                            H=datetime.now().strftime("%H:%M"))
