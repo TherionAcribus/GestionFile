@@ -1,5 +1,3 @@
-# TODO : on load comptoir verfier si on est en train de servir ou appeler qq (pb rechargement de page)
-# POSSIBLE : laisser vide si comptoires vides et affichage uniquement si tous les comptoirs occupés
 # TODO : Affichage d'un message en etranger si patient etranger "on going"
 # TODO : Si choix langue en etranger -> Diriger vers comptoir en etranger
 # TODO : Bouton Help ?
@@ -59,6 +57,7 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
+from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient 
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -444,6 +443,63 @@ app.add_url_rule('/admin/buttons/backup', 'backup_buttons',
 app.add_url_rule('/admin/buttons/restore', 'restore_buttons', 
                 partial(restore_buttons, db, ConfigVersion, Button, Activity, request), 
                 methods=['GET', 'POST'])
+
+# COMPTOIR
+
+app.add_url_rule("/counter/paper_add", view_func=counter_paper_add)
+
+app.add_url_rule('/counter/paper_add/<int:add_paper>', 'action_add_paper', 
+                partial(action_add_paper), 
+                methods=['GET'])
+
+app.add_url_rule('/app/counter/paper_add', 'app_paper_add', 
+                partial(app_paper_add), 
+                methods=['POST'])
+
+app.add_url_rule('/counter/update_staff', 'web_update_counter_staff', 
+                partial(web_update_counter_staff), 
+                methods=['POST'])
+
+app.add_url_rule('/app/counter/update_staff', 'app_update_counter_staff', 
+                partial(app_update_counter_staff), 
+                methods=['POST'])
+
+app.add_url_rule('/counter/is_staff_on_counter/<int:counter_id>', 'is_staff_on_counter', 
+                partial(is_staff_on_counter), 
+                methods=['GET'])
+
+app.add_url_rule('/api/counter/is_staff_on_counter/<int:counter_id>', 'api_is_staff_on_counter', 
+                partial(api_is_staff_on_counter), 
+                methods=['GET'])
+
+app.add_url_rule('/api/counter/is_patient_on_counter/<int:counter_id>', 'app_is_patient_on_counter', 
+                partial(app_is_patient_on_counter), 
+                methods=['GET'])
+
+app.add_url_rule('/counter/patients_queue_for_counter/<int:counter_id>', 'patients_queue_for_counter', 
+                partial(patients_queue_for_counter), 
+                methods=['GET'])
+
+app.add_url_rule('/app/counter/auto_calling', 'app_auto_calling', 
+                partial(app_auto_calling), 
+                methods=['POST'])
+
+app.add_url_rule('/app/counter/remove_staff', 'app_remove_counter_staff', 
+                partial(app_remove_counter_staff), 
+                methods=['POST'])
+
+app.add_url_rule('/counter/remove_staff', 'web_remove_counter_staff', 
+                partial(web_remove_counter_staff), 
+                methods=['POST'])
+
+app.add_url_rule('/counter/list_of_activities', 'list_of_activities', 
+                partial(list_of_activities), 
+                methods=['POST'])
+
+app.add_url_rule("/counter/select_patient/<int:counter_id>/<int:patient_id>", 'counter_select_patient', 
+                partial(counter_select_patient), 
+                methods=['GET'])
+
 
 
 
@@ -3546,220 +3602,13 @@ def counter_become_active(counter_id):
         db.session.commit()
 
 
-@app.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
-def app_is_patient_on_counter(counter_id):
-    """ Renvoie les informations du patient actuel au comptoir (pour le client) pour l'App (démarrage)"""
-    patient = Patient.query.filter(
-        Patient.counter.has(id=counter_id),
-        Patient.status.in_(['ongoing', 'calling'])
-        ).first()
-    print("PATIENT!!!", patient)
-    if patient:
-        return jsonify(patient.to_dict()), 200
-    else:
-        return jsonify({"id": None, "counter_id": counter_id}), 200   
 
 
 
-@app.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
-def patients_queue_for_counter(counter_id):
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
-    return render_template('/counter/patients_queue_for_counter.html', patients=patients, counter_id=counter_id)
 
 
-@app.route('/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
-def is_staff_on_counter(counter_id):
-    counter = Counter.query.get(counter_id)
-    # emet un signal pour provoquer le réaffichage de la liste des activités
-    #socketio.emit("trigger_connect_staff", {})
-    return render_template('counter/staff_on_counter.html', staff=counter.staff)
 
 
-@app.route('/api/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
-def api_is_staff_on_counter(counter_id):
-    counter = Counter.query.get(counter_id)
-    if counter.staff:
-        print("counter", counter.staff)
-        return jsonify({"staff": counter.staff.to_dict()}), 200
-    else:
-        return "", 204 
-
-
-@app.route('/app/counter/auto_calling', methods=['POST'])
-def app_auto_calling():
-    print("COUNTER AUTOCALLING", request.values)
-    counter_id = request.form.get('counter_id')
-    print("COUNTER ID", counter_id)
-    counter = Counter.query.get(counter_id)
-
-    if request.form.get('action') is None:
-        return jsonify({"status": counter.auto_calling}), 200 # 
-
-    auto_calling_action = True if request.form.get('action') == "activate" else False
-    print("COUNTER AUTOCALLING", request.values)
-    counter = Counter.query.get(counter_id)
-    print("counter", counter.auto_calling)
-    try:
-        counter.auto_calling = auto_calling_action
-        db.session.commit()
-        # MAJ app.Config
-        if auto_calling_action:
-            app.config["AUTO_CALLING"].append(counter.id)
-        else:
-            app.config["AUTO_CALLING"].remove(counter.id)
-
-        communikation("counter", event="refresh_auto_calling")
-
-        return jsonify({"status": counter.auto_calling}), 200 # 
-    except Exception as e:
-        app.logger.error(f'Erreur: {e}')
-        return e, 500
-
-
-@app.route('/app/counter/remove_staff', methods=['POST'])
-def app_remove_counter_staff():
-    print("deconnction")
-    remove_counter_staff()
-    return '', 200
-
-@app.route('/counter/remove_staff', methods=['POST'])
-def web_remove_counter_staff():
-    return remove_counter_staff()
-
-def remove_counter_staff():
-    counter = Counter.query.get(request.form.get('counter_id')) 
-    counter.staff = None
-    db.session.commit()
-
-    # mise à jour des boutons
-    communikation("counter", event="update buttons")
-    return is_staff_on_counter(request.form.get('counter_id'))
-
-@app.route('/app/counter/update_staff', methods=['POST'])
-def app_update_counter_staff():
-    return update_counter_staff()
-
-@app.route('/counter/update_staff', methods=['POST'])
-def web_update_counter_staff():
-    return update_counter_staff()
-
-def update_counter_staff():
-    print("RECONNEXION ")
-    print(request.form)
-    counter = Counter.query.get(request.form.get('counter_id'))  
-    initials = request.form.get('initials')
-    # la demande vient elle de l'App en mode réduit ?
-    app = request.form.get("app") == "True"
-    staff = Pharmacist.query.filter(func.lower(Pharmacist.initials) == func.lower(initials)).first()
-    if staff:
-        # si demande de déconnexion
-        if request.form.get('deconnect').lower() == "true":
-            # deconnexion de tous les postes
-            deconnect_staff_from_all_counters(staff)
-        # Ajout du membre de l'équipe au comptoir        
-        counter.staff = staff
-        db.session.commit()
-
-        # mise à jour des boutons
-        communikation("counter", event="update buttons")
-        # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
-        if app:
-            return api_is_staff_on_counter(request.form.get('counter_id'))
-        else:
-            return is_staff_on_counter(request.form.get('counter_id'))
-
-    # Si les initiales ne correspondent à rien
-    # on déconnecte l'utilisateur précedemement connecté
-    counter.staff = None
-    db.session.commit()
-    # mise à jour des boutons
-    communikation("counter", event="update buttons")
-    # on affiche une erreur à la place du nom
-    if app:
-        return "", 204
-    else:
-        return render_template('counter/staff_on_counter.html', staff=False)
-
-
-def deconnect_staff_from_all_counters(staff):
-    """ Déconnecte le membre de l'équipe de tous les comptoirs """
-    print("deconnecte")
-    for counter in Counter.query.all():
-        if counter.staff == staff:
-            counter.staff = None
-            db.session.commit()
-            #socketio.emit("trigger_disconnect_staff", {})
-            # mise à jour des boutons
-            communikation("counter", event="update buttons")
-
-
-@app.route('/counter/list_of_activities', methods=['POST'])
-def list_of_activities():
-    activities = Activity.query.all()
-    staff_id = request.form.get('staff_id')
-    if staff_id == "0":
-        # TODO Créer un user "Anonyme" ????
-        # si personne au comptoir, on affiche toutes les activités
-        staff_activities_ids = [activity.id for activity in activities]
-
-    else:     
-        staff = Pharmacist.query.get(staff_id)
-        # on renvoie les activités du membre de l'équipe pour les cocher dans la liste
-        staff_activities_ids = [activity.id for activity in staff.activities]
-
-    return render_template('counter/counter_list_of_activities.html', activities=activities, staff_activities_ids=staff_activities_ids)
-
-
-@app.route("/counter/select_patient/<int:counter_id>/<int:patient_id>", methods=['GET'])
-def counter_select_patient(counter_id, patient_id):
-    """ Appeler lors du choix d'un patient spécifique au comptoir """
-    print("counter_select_patient", counter_id, patient_id)
-    call_specific_patient(counter_id, patient_id)
-
-    communikation("update_patient")
-    communication("update_patients")
-    communication("update_counter", client_id=counter_id)    
-
-    return '', 204
-
-
-@app.route("/app/counter/paper_add", methods=['POST'])
-def app_paper_add():
-    if request.form.get('action') is None:
-        return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
-    else:
-        add_paper_action = True if request.form.get('action') == "activate" else False
-        try:
-            config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
-            config_option.value_bool = add_paper_action
-            db.session.commit()
-            app.config["ADD_PAPER"] = add_paper_action
-
-            communikation("counter", event="paper")
-            communikation("app_counter", event="paper")
-
-        except Exception as e:
-            print(e)
-
-
-@app.route("/counter/paper_add")
-def counter_paper_add():
-    return render_template('counter/paper_add.html',
-                            add_paper=app.config["ADD_PAPER"])
-
-@app.route("/counter/paper_add/<int:add_paper>", methods=['GET'])
-def action_add_paper(add_paper):
-    try:
-        print("action_add_paper", add_paper)
-        config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
-        config_option.value_bool = add_paper
-        db.session.commit()
-        app.config["ADD_PAPER"] = add_paper
-        communikation("counter", event="paper")
-        communikation("app_counter", event="paper")
-        return counter_paper_add()
-    except Exception as e:
-        print(e)
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
 
@@ -4472,6 +4321,8 @@ scheduler.start()
 app.load_configuration = load_configuration
 app.display_toast = display_toast
 app.logout_all = logout_all
+app.communikation = communikation
+app.call_specific_patient = call_specific_patient
 
 
 if __name__ == "__main__":
