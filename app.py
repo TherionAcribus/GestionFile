@@ -12,6 +12,7 @@ from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, 
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
 from flask_migrate import Migrate
+from flask.signals import request_started
 from flask_mailman import Mail, EmailMessage
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date, time, timedelta
@@ -58,6 +59,7 @@ from routes.backup import backup_config_all, backup_staff, backup_counters, back
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
 from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call
+from python.admin.admin import admin_admin
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -507,6 +509,8 @@ app.add_url_rule("/counter/relaunch_patient_call/<int:counter_id>", 'relaunch_pa
 app.add_url_rule("/app/counter/relaunch_patient_call/<int:counter_id>", 'relaunch_patient_call_app', 
                 partial(relaunch_patient_call), 
                 methods=['GET', 'POST'])
+
+app.add_url_rule("/admin/admin_options", view_func=admin_admin)
 
 
 
@@ -1046,7 +1050,8 @@ def update_select():
         app.config[key.upper()] = value
         if config_option:
             config_option.value_str = value
-            db.session.commit()            
+            db.session.commit()
+            call_function_with_select(key, value)         
             return display_toast(success=True)
         else:
             return display_toast(success=False, message="Option non trouvée.")
@@ -1054,6 +1059,12 @@ def update_select():
             print(e)
             return display_toast(success=False, message=str(e))
 
+
+def call_function_with_select(key, value):
+    """ Permet d'effectuer une action lors de l'activation d'un select en plus de la sauvegarde"""
+    # pour les couleurs, on met la page à jour. Pas possible en js direct, car rechargement trop rapide et on garde donc l'ancienne couleur sur la page
+    if key == "admin_colors":
+        communikation("admin", event="refresh_colors")
 
 def call_function_with_switch(key, value):
     """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde"""
@@ -4198,6 +4209,7 @@ def load_configuration():
         "printer": ("PRINTER", "value_bool"),
         "printer_width": ("PRINTER_WIDTH", "value_int"),
         "add_paper": ("ADD_PAPER", "value_bool"),
+        "admin_colors": ("ADMIN_COLORS", "value_str"),
         "announce_title": ("ANNOUNCE_TITLE", "value_str"),
         "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
@@ -4280,11 +4292,20 @@ def load_configuration():
             auto_calling.append(counter.id)
     app.config["AUTO_CALLING"] = auto_calling
 
+
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
     #flask_thread.start()
 
-        
+# Chargement des couleurs pour pouvoir les passer dans la session pour être envoyé à base.html
+def load_colors(sender, **extra):
+    # Cette fonction sera appelée avant chaque requête
+    if 'admin_colors' not in session or session['admin_colors'] != app.config['ADMIN_COLORS']:
+        session['admin_colors'] = app.config['ADMIN_COLORS']
+# Connecter le signal request_started à la fonction load_configuration
+request_started.connect(load_colors, app)
+
+
 with app.app_context():
 
     init_database(database, db)

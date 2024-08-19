@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_counter_order();
     })
 
+    adminSocket.on("refresh_colors", function(msg) {
+        console.log("refresh_colors:", msg);
+        refresh_page();
+    })
+
     adminSocket.on("display_new_gallery", function(msg) {
         console.log("display_new_gallery:", msg);
         document.getElementById("name").value = ""
@@ -237,6 +242,13 @@ function sortable(){
 
 function refresh_counter_order(){
     htmx.trigger('#order_counters', 'refresh_counter_order', {target: "#order_counters"});
+}
+
+
+// ---------------- ANNOUNCES ----------------
+
+function refresh_page(){
+    location.reload();
 }
 
 

@@ -1,8 +1,8 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.2",
-    "timestamp": "2024-08-12 14:35:26",
+    "version": "0.1",
+    "timestamp": "2024-08-19 16:35:26",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
@@ -14,6 +14,7 @@
             "printer": false,
             "printer_width": 42,
             "add_paper": false,
+            "admin_colors": "slate",
             "announce_sound": true,
             "announce_alert": true,
             "announce_player": "web",
