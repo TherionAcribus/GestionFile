@@ -40,7 +40,7 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
     with current_app.app_context():
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            current_version = ConfigVersion.query.filter_by(key="config_version").first()
+            current_version = ConfigVersion.query.filter_by(config_key="config_version").first()
 
             if not current_version or current_version.version != data['version'] or restore:
                 if current_version:
@@ -48,11 +48,11 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
                     current_version.version = data['version']
                 else:
                     current_app.logger.info(f"Ajout de la version CONFIG : {data['version']}")
-                    new_version = ConfigVersion(key="config_version", version=data['version'])
+                    new_version = ConfigVersion(config_key="config_version", version=data['version'])
                     db.session.add(new_version)
 
                 for key, value in data['configurations'].items():
-                    config_option = ConfigOption.query.filter_by(key=key).first()
+                    config_option = ConfigOption.query.filter_by(config_key=key).first()
                     
                     if config_option:
                         if restore:
@@ -64,7 +64,7 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
                     else:
                         current_app.logger.info(f"Création de {key}")
                         new_option = ConfigOption(
-                            key=key,
+                            config_key=key,
                             value_str=value if isinstance(value, str) and len(value) < 200 else None,
                             value_int=value if isinstance(value, int) else None,
                             value_bool=value if isinstance(value, bool) else None,
@@ -82,7 +82,7 @@ def init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db):
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    current_version = ConfigVersion.query.filter_by(key="staff_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="staff_version").first()
     if not current_version or current_version.version != data['version']:
         current_app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
 
@@ -168,7 +168,7 @@ def init_counters_data_from_json(ConfigVersion, Counter, Activity, db):
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    current_version = ConfigVersion.query.filter_by(key="counters_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="counters_version").first()
     if not current_version or current_version.version != data['version']:
         current_app.logger.info(f"Mise à jour de la table STAFF : {current_version} vers {data['version']}")
         create_version_number(ConfigVersion, data, db, key="counters_version")
@@ -280,7 +280,7 @@ def schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, d
 
         # Mise à jour de la version si ce n'est pas une restauration
         if not is_restore:
-            current_version = ConfigVersion.query.filter_by(key="activity_schedule_version").first()
+            current_version = ConfigVersion.query.filter_by(config_key="activity_schedule_version").first()
             if not current_version or current_version.version != backup_data['version']:
                 if not current_version:
                     new_version = ConfigVersion(key="activity_schedule_version", version=backup_data['version'])
@@ -324,7 +324,7 @@ def init_default_activities_db_from_json(ConfigVersion, Activity, ActivitySchedu
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    current_version = ConfigVersion.query.filter_by(key="activities_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="activities_version").first()
     if not current_version or current_version.version != data['version']:
         if not current_version:
             create_version_number(ConfigVersion, data, db, key="activities_version")
@@ -414,7 +414,7 @@ def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    current_version = ConfigVersion.query.filter_by(key="algo_rules_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="algo_rules_version").first()
     if not current_version or current_version.version != data['version']:
         current_app.logger.info(f"Mise à jour de la table ALGO_RULES : {current_version} vers {data['version']}")
 
@@ -510,7 +510,7 @@ def init_default_buttons_db_from_json(ConfigVersion, Button, Activity, db):
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    current_version = ConfigVersion.query.filter_by(key="buttons_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="buttons_version").first()
     if not current_version or current_version.version != data['version']:
         current_app.logger.info(f"Mise à jour de la table BUTTONS : {current_version} vers {data['version']}")
 
@@ -597,8 +597,10 @@ def restore_databases(request, database):
     
     if database == "sqlite":
         restore_sqlite(request)
+        return "", 200
     elif database == "mysql":
         restore_mysql(request)
+        return "", 200
 
 
 def restore_sqlite(request):
@@ -638,6 +640,9 @@ def restore_sqlite(request):
 
 def restore_mysql(request):
     file = request.files.get('file')
+
+    current_app.logout_all()
+
     if file and file.filename.endswith('.zip'):
         zip_buffer = BytesIO(file.read())
 
@@ -650,41 +655,56 @@ def restore_mysql(request):
 
         with zipfile.ZipFile(zip_buffer, 'r') as zip_file:
             for sql_file in zip_file.namelist():
-                db_name = sql_file.replace('.sql', '')
+                db_name = sql_file.replace('.sql', '')                    
                 sql_content = zip_file.read(sql_file)
-                restore_mysql_database(db_name, sql_content, cursor)
+                restore_mysql_database(db_name, sql_content, cursor, connection)
         
         connection.commit()
         cursor.close()
         connection.close()
 
-        return "All databases restored successfully"
+        return "All databases restored successfully", 200
     else:
         return "No file uploaded", 400
     
 
-def restore_mysql_database(db_name, sql_content, cursor):
+def restore_mysql_database(db_name, sql_content, cursor, connection):
+    print(f"Starting restoration of database {db_name}")
+    
     # Sélectionner la base de données avant de restaurer
     cursor.execute(f"USE {db_name}")
     
     # Désactiver les vérifications des clés étrangères
     cursor.execute("SET FOREIGN_KEY_CHECKS=0;")
-    
+    connection.commit()
+
     # Supprimer les tables existantes
     cursor.execute("SHOW TABLES")
     tables = cursor.fetchall()
     for table in tables:
+        print(f"TABLE TO DROP {table}")
         cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
+        connection.commit()  # Commit after each table drop
     
     # Diviser le contenu du fichier SQL en statements individuels
     statements = sql_content.decode('utf-8').split(';')
     for statement in statements:
         statement = statement.strip()
         if statement:
-            cursor.execute(statement)
+            print(f"STATEMENT {statement[:50]}...")  # Print first 50 chars to avoid long output
+            try:
+                cursor.execute(statement)
+                connection.commit()  # Commit after each statement
+            except Exception as e:
+                print(f"Error executing statement: {e}")
     
     # Réactiver les vérifications des clés étrangères
     cursor.execute("SET FOREIGN_KEY_CHECKS=1;")
+    connection.commit()
+
+    print(f"Database {db_name} restored successfully")
+
+    return True
 
 
 # A TRIER 
@@ -695,7 +715,7 @@ def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    current_version = ConfigVersion.query.filter_by(key="translations_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="translations_version").first()
     if not current_version or current_version.version != data['version']:
         if current_version:
             current_version.version = data['version']
@@ -704,7 +724,7 @@ def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation
         
         texts_data = data["texts"]
         for key, translations in texts_data.items():
-            text = Text.query.filter_by(key=key).first()
+            text = Text.query.filter_by(text_key=key).first()
             if text:
                 for lang_code, translation in translations.items():
                     language = Language.query.filter_by(code=lang_code).first()
@@ -760,7 +780,7 @@ def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
 
     print("DATA VERSION", data['version'])
 
-    current_version = ConfigVersion.query.filter_by(key="texts_version").first()
+    current_version = ConfigVersion.query.filter_by(config_key="texts_version").first()
     print("Data version:", data['version'])
     if not current_version or current_version.version != data['version']:
         # Mise à jour de la version
@@ -771,9 +791,9 @@ def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
 
         # Mise à jour ou ajout de textes
         for text_data in data['texts']:
-            text = Text.query.filter_by(key=text_data['key']).first()
+            text = Text.query.filter_by(text_key=text_data['key']).first()
             if not text:
-                new_text = Text(key=text_data['key'])
+                new_text = Text(text_key=text_data['key'])
                 db.session.add(new_text)
             else:
                 text.text = text_data['value']
@@ -853,7 +873,7 @@ def clear_counter_table(db, Counter, Patient):
 def create_version_number(ConfigVersion, data, db, key):
     """ Ajoute une entrée dans Confiversion lors de la création de la table """
     new_version = ConfigVersion(
-    key=key,
+    config_key=key,
     version=data['version'],
     comments=data['comments'],
     date=datetime.now())

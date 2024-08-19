@@ -447,11 +447,27 @@ app.add_url_rule('/admin/buttons/restore', 'restore_buttons',
 
 
 
+@app.route('/logout_all')
+def logout_all():
+    """ Déconnexion de tous les utilisateurs 
+    Cela permet de restaurer la base de données User """
+    app.logger.info("Logout all users")
+    # Supprimer toutes les sessions
+    if os.path.exists('flask_session'):
+        for filename in os.listdir('flask_session'):
+            file_path = os.path.join('flask_session', filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(e)    
+    
+    return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     form = ExtendedLoginForm()
-    print("LOGIN!!")
     # Récupérez 'next' de l'URL ou du formulaire
     next_url = request.args.get('next') or form.next.data
     
@@ -877,7 +893,7 @@ def update_switch():
     print("key, value", key, value)
     try:
         # MAJ BDD
-        config_option = ConfigOption.query.filter_by(key=key).first()
+        config_option = ConfigOption.query.filter_by(config_key=key).first()
         # MAJ Config
         app.config[key.upper()] = True if value == "true" else False
         if config_option:
@@ -926,7 +942,7 @@ def update_input():
         print("escpos_text", escpos_text)
         key_printer = key + "_printer"
         app.config[key_printer.upper()] = escpos_text
-        config_option = ConfigOption.query.filter_by(key=key_printer).first()
+        config_option = ConfigOption.query.filter_by(config_key=key_printer).first()
         if config_option:
             print("escpos_text2", escpos_text)
             config_option.value_str = escpos_text
@@ -937,7 +953,7 @@ def update_input():
         app.config[key.upper()] = value
 
         # MAJ BDD
-        config_option = ConfigOption.query.filter_by(key=key).first()        
+        config_option = ConfigOption.query.filter_by(config_key=key).first()        
 
         if config_option:
             if check == "int":
@@ -962,7 +978,7 @@ def update_select():
     value = request.values.get('value')
     try:
         # MAJ BDD
-        config_option = ConfigOption.query.filter_by(key=key).first()        
+        config_option = ConfigOption.query.filter_by(config_key=key).first()        
         # MAJ Config
         app.config[key.upper()] = value
         if config_option:
@@ -1020,7 +1036,7 @@ def update_numbering_by_activity():
     try:
         # Récupérer la valeur du checkbox à partir de la requête
         new_value = request.values.get('numbering_by_activity')
-        config_option = ConfigOption.query.filter_by(key="numbering_by_activity").first()
+        config_option = ConfigOption.query.filter_by(config_key="numbering_by_activity").first()
         if config_option:
             config_option.value_bool = True if new_value == "true" else False
             db.session.commit()
@@ -1765,8 +1781,6 @@ def delete_schedule(schedule_id):
         return display_schedule_table()
 
 
-
-
 def update_scheduler_for_activity(activity):
     # Supprimer les anciens jobs pour cette activité
     job_id_disable_prefix = f"disable_{activity.name}_"
@@ -1886,7 +1900,7 @@ def toggle_activation():
     is_activated = action == 'activate'
     
     app.config['ALGO_IS_ACTIVATED'] = is_activated
-    algo_activated = ConfigOption.query.filter_by(key="algo_activate").first()
+    algo_activated = ConfigOption.query.filter_by(config_key="algo_activate").first()
     algo_activated.value_bool = is_activated
     db.session.commit()
 
@@ -1900,7 +1914,7 @@ def change_overtaken_limit():
 
     app.config['ALGO_OVERTAKEN_LIMIT'] = overtaken_limit
     try:
-        algo_overtaken_limit = ConfigOption.query.filter_by(key="algo_overtaken_limit").first()
+        algo_overtaken_limit = ConfigOption.query.filter_by(config_key="algo_overtaken_limit").first()
         algo_overtaken_limit.value_int = overtaken_limit
         db.session.commit()
         return display_toast()
@@ -2128,11 +2142,11 @@ def add_new_counter():
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
         max_order_counter = Counter.query.order_by(Counter.order.desc()).first()
-        order = max_order_counter.order + 1 if max_order_counter else 0
+        sort_order = max_order_counter.order + 1 if max_order_counter else 0
 
         new_counter = Counter(
             name=name,
-            order=order
+            sort_order=sort_order
         )
         db.session.add(new_counter)
         db.session.commit()
@@ -2164,7 +2178,7 @@ def add_new_counter():
 
 @app.route('/admin/counter/order_counter')
 def order_counter_table():
-    counters = Counter.query.order_by(Counter.order).all()
+    counters = Counter.query.order_by(Counter.sort_order).all()
     return render_template('admin/counter_order_counters.html', counters=counters)
 
 
@@ -2174,9 +2188,9 @@ def update_counter_order():
         order_data = request.form.getlist('order[]')
         for index, counter_id in enumerate(order_data):
             print(counter_id, index)
-            counter = Counter.query.order_by(Counter.order).get(counter_id)
+            counter = Counter.query.order_by(Counter.sort_order).get(counter_id)
             print(counter)
-            counter.order = index
+            counter.sort_order = index
         db.session.commit()
         display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
@@ -2216,20 +2230,20 @@ def admin_patient():
 # affiche le tableau des boutons 
 @app.route('/admin/patient/button_table')
 def display_button_table():
-    buttons = Button.query.order_by(Button.order).all()
+    buttons = Button.query.order_by(Button.sort_order).all()
     activities = Activity.query.all()
     return render_template('admin/patient_page_htmx_buttons_table.html', buttons=buttons, activities = activities)
 
 @app.route('/admin/patient/order_buttons')
 def order_button_table():
-    buttons = Button.query.order_by(Button.order).all()
+    buttons = Button.query.order_by(Button.sort_order).all()
     return render_template('admin/patient_page_order_buttons.html', buttons=buttons)
 
 
 # affiche la liste des boutons pour le 
 @app.route('/admin/patient/display_parent_buttons/<int:button_id>', methods=['GET'])
 def display_children_buttons(button_id):
-    buttons = Button.query.order_by(Button.order).filter_by(is_parent=True).all()
+    buttons = Button.query.order_by(Button.sort_order).filter_by(is_parent=True).all()
     button = Button.query.get(button_id)
     return render_template('admin/patient_page_button_display_children.html', buttons=buttons, button=button)
 
@@ -2238,7 +2252,7 @@ def display_children_buttons(button_id):
 @app.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
 def update_button(button_id):
     try:
-        button = Button.query.order_by(Button.order).get(button_id)
+        button = Button.query.order_by(Button.sort_order).get(button_id)
         if button:
             # Récupérer l'ID de l'activité depuis le formulaire
             activity_id = request.form.get('activity')
@@ -2292,9 +2306,9 @@ def update_button_order():
         order_data = request.form.getlist('order[]')
         for index, button_id in enumerate(order_data):
             print(button_id, index)
-            button = Button.query.order_by(Button.order).get(button_id)
+            button = Button.query.order_by(Button.sort_order).get(button_id)
             print(button)
-            button.order = index
+            button.sort_order = index
         db.session.commit()
         display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
@@ -2346,8 +2360,8 @@ def add_new_button():
         shape = request.form.get('shape')
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
-        max_order_button = Button.query.order_by(Button.order.desc()).first()
-        order = max_order_button.order + 1 if max_order_button else 0
+        max_order_button = Button.query.order_by(Button.sort_order.desc()).first()
+        sort_order = max_order_button.order + 1 if max_order_button else 0
         
 
         new_button = Button(
@@ -2357,7 +2371,7 @@ def add_new_button():
             shape=shape,
             parent_button=parent_button,
             is_present=is_present,
-            order=order
+            sort_order=sort_order
         )
         
         if not label:  # Vérifiez que les champs obligatoires sont remplis
@@ -2395,7 +2409,7 @@ def confirm_delete_button(button_id):
 @app.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
 def delete_button(button_id):
     try:
-        button = Button.query.order_by(Button.order).get(button_id)
+        button = Button.query.order_by(Button.sort_order).get(button_id)
         if not button:
             display_toast(success=False, message="Bouton non trouvé")
             return display_button_table()
@@ -2418,7 +2432,7 @@ def delete_button(button_id):
 @app.route('/upload_image/<int:button_id>', methods=['POST'])
 def upload_image(button_id):
     """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
-    button = Button.query.order_by(Button.order).get(button_id)
+    button = Button.query.order_by(Button.sort_order).get(button_id)
     if 'file' not in request.files:
         return "No file part", 400
     file = request.files['file']
@@ -2439,7 +2453,7 @@ def upload_image(button_id):
 def gallery_button_images(button_id):
     directory = os.path.join(current_app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    button = Button.query.order_by(Button.order).get(button_id)
+    button = Button.query.order_by(Button.sort_order).get(button_id)
     print(images)
     return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
 
@@ -2448,7 +2462,7 @@ def gallery_button_images(button_id):
 def update_button_image_from_gallery():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
-    button = Button.query.order_by(Button.order).get(button_id)
+    button = Button.query.order_by(Button.sort_order).get(button_id)
     print(request.form)
     button.image_url = image_url
     db.session.commit()
@@ -2457,7 +2471,7 @@ def update_button_image_from_gallery():
 
 @app.route("/admin/patient/delete_button_image/<int:button_id>", methods=['GET'])
 def delete_button_image(button_id):
-    button = Button.query.order_by(Button.order).get(button_id)
+    button = Button.query.order_by(Button.sort_order).get(button_id)
     button.image_url = None
     db.session.commit()
     return "<div>Pas d'image</div>"
@@ -2529,7 +2543,7 @@ def current_signal():
 def select_signal(filename):
     if filename:
         app.config['ANNOUNCE_ALERT_FILENAME'] = filename
-        config = ConfigOption.query.filter_by(key='announce_alert_filename').first()
+        config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
         print(config)
         config.value_str = filename
         db.session.commit()
@@ -2577,9 +2591,9 @@ def choose_gallery(gallery_name="", checked=""):
         checked = request.form.get('checked')
 
     # Récupérer l'entrée existante ou créer une nouvelle
-    config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
+    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
     if config_option is None:
-        config_option = ConfigOption(key="announce_infos_gallery", value_str=json.dumps([]))
+        config_option = ConfigOption(config_key="announce_infos_gallery", value_str=json.dumps([]))
         db.session.add(config_option)
 
     # Charger les galeries existantes à partir de la chaîne JSON
@@ -2625,7 +2639,7 @@ def get_images_with_dates(folder):
 @app.route("/admin/gallery/list", methods=['GET'])
 def gallery_list():
     galleries = os.listdir(app.config['GALLERIES_FOLDER'])
-    config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
+    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
     if config_option:
         selected_galleries = json.loads(config_option.value_str)
     else:
@@ -2871,7 +2885,7 @@ def patients_front_page():
 # affiche les boutons
 @app.route('/patient/patient_buttons')
 def patient_right_page():
-    buttons = Button.query.order_by(Button.order).filter_by(is_present = True, parent_button_id = None).all()
+    buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
     print("BUTTONS", buttons)
     max_length = 2 if buttons[0].shape == "square" else 4
     print("MAX_LENGTH", max_length)
@@ -2918,7 +2932,7 @@ def cancel_children():
 
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
-    children_buttons = Button.query.order_by(Button.order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
+    children_buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
     print("children_buttons", children_buttons)
     max_length = 2 if children_buttons[0].shape == "square" else 4
     return render_template('patient/patient_buttons_left.html', 
@@ -3716,7 +3730,7 @@ def app_paper_add():
     else:
         add_paper_action = True if request.form.get('action') == "activate" else False
         try:
-            config_option = ConfigOption.query.filter_by(key="add_paper").first()
+            config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
             config_option.value_bool = add_paper_action
             db.session.commit()
             app.config["ADD_PAPER"] = add_paper_action
@@ -3737,7 +3751,7 @@ def counter_paper_add():
 def action_add_paper(add_paper):
     try:
         print("action_add_paper", add_paper)
-        config_option = ConfigOption.query.filter_by(key="add_paper").first()
+        config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
         config_option.value_bool = add_paper
         db.session.commit()
         app.config["ADD_PAPER"] = add_paper
@@ -3774,7 +3788,7 @@ def display():
 def patient_list_for_init_display():
     """ Création de la liste de patients pour initialiser l'écran d'annonce"""
     patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
-    announce_call_text = ConfigOption.query.filter_by(key="announce_call_text").first().value_str
+    announce_call_text = ConfigOption.query.filter_by(config_key="announce_call_text").first().value_str
     call_patients = []
     for patient in patients:
         print("PATATOR", patient)
@@ -3826,7 +3840,7 @@ def announce_init_gallery():
     app.logger.debug("Init gallery")
     
     # Récupérer la liste des galeries sélectionnées, si rien on envoie une liste vide
-    config_option = ConfigOption.query.filter_by(key="announce_infos_gallery").first()
+    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
     if config_option:
         announce_infos_galleries = json.loads(config_option.value_str)
     else:
@@ -4391,7 +4405,7 @@ def load_configuration():
     }
 
     for key, (config_name, value_type) in config_mappings.items():
-        config_option = ConfigOption.query.filter_by(key=key).first()
+        config_option = ConfigOption.query.filter_by(config_key=key).first()
         if config_option:
             app.config[config_name] = getattr(config_option, value_type)
 
@@ -4457,6 +4471,7 @@ scheduler.start()
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
 app.display_toast = display_toast
+app.logout_all = logout_all
 
 
 if __name__ == "__main__":

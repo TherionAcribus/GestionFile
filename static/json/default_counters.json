@@ -7,15 +7,15 @@
     "counters": [
         {"id": 1, 
         "name": "A",
-        "order": 1
+        "sort_order": 1
         },
         {"id": 2,   
         "name": "B",
-        "order": 2
+        "sort_order": 2
         },
         {"id": 3,
         "name": "C",
-        "order": 3
+        "sort_order": 3
         }
     ]
 }

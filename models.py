@@ -51,7 +51,7 @@ class Counter(db.Model):
     staff_id = db.Column(db.Integer, db.ForeignKey('pharmacist.id', name='fk_counter_staff_id'))
     staff = db.relationship('Pharmacist', backref=db.backref('counter', lazy=True))
     auto_calling = db.Column(db.Boolean, default=False)
-    order = db.Column(db.Integer)  # Champ pour l'ordre
+    sort_order = db.Column(db.Integer)  # Champ pour l'ordre
 
     def __repr__(self):
         return f'<Counter {self.name}>'
@@ -87,7 +87,6 @@ class Pharmacist(db.Model):
     initials = db.Column(db.String(10), nullable=False)
     language = db.Column(db.String(20), default=False)
     is_active = db.Column(db.Boolean, default=False)
-    default = db.Column(db.Boolean, default=False)
     activities = db.relationship('Activity', secondary=pharmacists_activities, lazy='subquery',
         backref=db.backref('pharmacists', lazy=True))   
     
@@ -115,7 +114,6 @@ class Pharmacist(db.Model):
             "initials": self.initials,
             "language": self.language,
             "is_active": self.is_active,
-            "default": self.default,
             "activities": [activity.id for activity in self.activities]
         }
 
@@ -241,20 +239,19 @@ class AlgoRule(db.Model):
 
 class ConfigOption(db.Model):
     id = db.Column(db.Integer, Sequence('config_option_id_seq'), primary_key=True)
-    key = db.Column(db.String(50), unique=True, nullable=False)
+    config_key = db.Column(db.String(50), unique=True, nullable=False)
     value_str = db.Column(db.String(200))  # Pour les chaînes de caractères
     value_int = db.Column(db.Integer)     # Pour les entiers
     value_bool = db.Column(db.Boolean)    # Pour les valeurs booléennes
     value_text = db.Column(db.Text)       # Pour les très longues chaînes
 
     def __repr__(self):
-        return f'<ConfigOption {self.key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
-
+        return f'<ConfigOption {self.config_key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
 
 
 class ConfigVersion(db.Model):
     id = db.Column(db.Integer, Sequence('config_version_id_seq'), primary_key=True)
-    key = db.Column(db.String(50), unique=True, nullable=False)
+    config_key = db.Column(db.String(50), unique=True, nullable=False)
     version = db.Column(db.String(50), nullable=False)
     comments = db.Column(db.Text)
     date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -278,7 +275,7 @@ class Button(db.Model):
     image_url = db.Column(db.String(100))
     background_color = db.Column(db.String(20))
     text_color = db.Column(db.String(20))
-    order = db.Column(db.Integer, nullable=False, default=1)  # Champ pour l'ordre
+    sort_order = db.Column(db.Integer, nullable=False, default=1)  # Champ pour l'ordre
 
     # Ajouter une référence directe à Activity
     activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_button_activity_id'))
@@ -325,10 +322,10 @@ class Language(db.Model):
 class Text(db.Model):
     __tablename__ = 'text'
     id = db.Column(db.Integer, primary_key=True)
-    key = db.Column(db.String(100), nullable=False, unique=True)
+    text_key = db.Column(db.String(100), nullable=False, unique=True)
 
     __table_args__ = (
-        db.UniqueConstraint('key', name='uq_text_key'),
+        db.UniqueConstraint('text_key', name='uq_text_key'),
     )
 
 class TextTranslation(db.Model):
