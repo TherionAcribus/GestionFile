@@ -1814,7 +1814,7 @@ def add_new_schedule():
 def update_button_presence(activity_id, is_present, app):
     with app.app_context():  # Crée un contexte d'application
         try:
-            buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity_id).all()
+            buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity_id).all()
             for button in buttons:
                 button.is_present = is_present
             db.session.commit()
@@ -2435,7 +2435,7 @@ def add_new_button():
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
         max_order_button = Button.query.order_by(Button.sort_order.desc()).first()
-        sort_order = max_order_button.order + 1 if max_order_button else 0
+        sort_order = max_order_button.sort_order + 1 if max_order_button else 0
         
 
         new_button = Button(

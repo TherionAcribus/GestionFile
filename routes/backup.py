@@ -263,7 +263,7 @@ def backup_buttons(Button, ConfigVersion):
                 "image_url": button.image_url,
                 "background_color": button.background_color,
                 "text_color": button.text_color,
-                "order": button.order,
+                "order": button.sort_order,
                 "activity_id": button.activity_id,
                 "parent_button_id": button.parent_button_id
             }

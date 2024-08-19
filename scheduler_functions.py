@@ -17,7 +17,7 @@ def disable_buttons_for_activity(activity_id):
     activity = Activity.query.get(activity_id)
     if activity:
         current_app.logger.info(f"Disabling buttons for activity: {activity.name}")
-        buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity.id).all()
+        buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity.id).all()
         print(buttons, "buttons")
         for button in buttons:
             if current_app.config["PAGE_PATIENT_DISABLE_BUTTON"]:
@@ -36,7 +36,7 @@ def enable_buttons_for_activity(activity_id):
     activity = Activity.query.get(activity_id)
     if activity:
         current_app.logger.info(f"Enabling buttons for activity: {activity.name}")
-        buttons = Button.query.order_by(Button.order).filter_by(activity_id=activity.id).all()
+        buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity.id).all()
         print(buttons, "buttons")
         for button in buttons:
             print(button)
