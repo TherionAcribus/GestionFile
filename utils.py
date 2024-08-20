@@ -1,5 +1,6 @@
 import re
-from datetime import datetime
+from datetime import datetime, date
+from flask import current_app as app
 
 
 def validate_and_transform_text(user_input, allowed_letters):

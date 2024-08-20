@@ -15,12 +15,3 @@
     margin-top: 5px;
     text-align: center;
 }
-
-.thumbnail .details button {
-    margin-top: 5px;
-    background-color: red;
-    color: white;
-    border: none;
-    padding: 5px;
-    cursor: pointer;
-}
