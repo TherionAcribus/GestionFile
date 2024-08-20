@@ -61,6 +61,7 @@ from bdd import init_database
 from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call
 from python.announce import display, patients_ongoing, announce_init_gallery, announce_refresh, replace_balise_announces
 from python.admin.admin import admin_admin
+from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -514,22 +515,62 @@ app.add_url_rule("/app/counter/relaunch_patient_call/<int:counter_id>", 'relaunc
 # ANNOUNCES
 
 app.add_url_rule("/display", view_func=display)
-
 app.add_url_rule('/announce/patients_ongoing', view_func=patients_ongoing)
-
 app.add_url_rule('/announce/init_gallery', view_func=announce_init_gallery)
-
 app.add_url_rule('/announce/refresh', view_func=announce_refresh)
-
-
-
-
-
 
 # ADMIN -> OPTIONS
 
 app.add_url_rule("/admin/admin_options", view_func=admin_admin)
 
+
+# ADMIN -> PATIENT
+
+app.add_url_rule("/admin/patient", view_func=admin_patient)
+app.add_url_rule("/admin/patient/button_table", view_func=display_button_table)
+app.add_url_rule('/admin/patient/order_buttons', view_func=order_button_table)
+app.add_url_rule('/admin/button/add_form', view_func=add_button_form)
+app.add_url_rule("/admin/patient/print_ticket_test", view_func=print_ticket_test)
+
+app.add_url_rule('/admin/patient/display_parent_buttons/<int:button_id>', 'display_children_buttons', 
+                partial(display_children_buttons), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/patient/button_update/<int:button_id>', 'update_button', 
+                partial(update_button), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/patient/update_button_order', 'update_button_order', 
+                partial(update_button_order), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/patient/add_new_button', 'add_new_button', 
+                partial(add_new_button), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/patient/confirm_delete_button/<int:button_id>', 'confirm_delete_button', 
+                partial(confirm_delete_button), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/patient/delete_button/<int:button_id>', 'delete_button', 
+                partial(delete_button), 
+                methods=['GET'])
+
+app.add_url_rule('/upload_image/<int:button_id>', 'upload_image', 
+                partial(upload_image), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/patient/gallery_button_images/<int:button_id>', 'gallery_button_images', 
+                partial(gallery_button_images), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/patient/update_button_image_from_gallery', 'update_button_image_from_gallery', 
+                partial(update_button_image_from_gallery), 
+                methods=['POST'])
+
+app.add_url_rule("/admin/patient/delete_button_image/<int:button_id>", 'delete_button_image', 
+                partial(delete_button_image), 
+                methods=['GET'])
 
 
 
@@ -607,10 +648,7 @@ security = Security(app, user_datastore, login_form=ExtendedLoginForm)
 
 
 
-# Permet de définir le type de fichiers autorisés pour l'ajout d'images
-def allowed_image_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
+
 
 
 def get_locale():
@@ -2299,285 +2337,6 @@ def update_counter_order():
 # -------- fin de ADMIN -> Counter  ---------
 
 # --------  ADMIN -> Page patient  ---------
-@app.route('/admin/patient')
-def admin_patient():
-    buttons = Button.query.all()
-
-    return render_template('/admin/patient_page.html', buttons=buttons,
-                            page_patient_structure = app.config['PAGE_PATIENT_STRUCTURE'],
-                            page_patient_disable_button = app.config['PAGE_PATIENT_DISABLE_BUTTON'],
-                            page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
-                            page_patient_title = app.config['PAGE_PATIENT_TITLE'],
-                            page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'],
-                            page_patient_display_qrcode = app.config['PAGE_PATIENT_QRCODE_DISPLAY'],
-                            page_patient_qrcode_web_page = app.config['PAGE_PATIENT_QRCODE_WEB_PAGE'],
-                            page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'],
-                            page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
-                            page_patient_end_timer = app.config['PAGE_PATIENT_END_TIMER'],
-                            ticket_header = app.config['TICKET_HEADER'],
-                            ticket_message = app.config['TICKET_MESSAGE'],
-                            ticket_footer = app.config['TICKET_FOOTER'],
-                            printer_width = app.config['PRINTER_WIDTH']
-                            )
-
-
-# affiche le tableau des boutons 
-@app.route('/admin/patient/button_table')
-def display_button_table():
-    buttons = Button.query.order_by(Button.sort_order).all()
-    activities = Activity.query.all()
-    return render_template('admin/patient_page_htmx_buttons_table.html', buttons=buttons, activities = activities)
-
-@app.route('/admin/patient/order_buttons')
-def order_button_table():
-    buttons = Button.query.order_by(Button.sort_order).all()
-    return render_template('admin/patient_page_order_buttons.html', buttons=buttons)
-
-
-# affiche la liste des boutons pour le 
-@app.route('/admin/patient/display_parent_buttons/<int:button_id>', methods=['GET'])
-def display_children_buttons(button_id):
-    buttons = Button.query.order_by(Button.sort_order).filter_by(is_parent=True).all()
-    button = Button.query.get(button_id)
-    return render_template('admin/patient_page_button_display_children.html', buttons=buttons, button=button)
-
-
-# mise à jour des informations d'un bouton
-@app.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
-def update_button(button_id):
-    try:
-        button = Button.query.order_by(Button.sort_order).get(button_id)
-        if button:
-            # Récupérer l'ID de l'activité depuis le formulaire
-            activity_id = request.form.get('activity')
-            # GEstion du cas ou le bouton est un bouton parent
-            if activity_id == "parent_button":
-                button.is_parent = True
-                button.activity = None
-            else:
-                # Récupérer l'instance de l'activité correspondante
-                if activity_id:
-                    activity = Activity.query.get(activity_id)
-                    if activity:
-                        button.activity = activity
-                        button.is_parent = False
-                    else:
-                        print("Activité non trouvée")
-                        return "Activité non trouvée", 404
-                else:
-                    # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
-                    button.activity = None
-            
-            parent_btn_id = request.form.get('parent_btn')
-            if parent_btn_id:
-                parent_button = Button.query.get(parent_btn_id)
-                if parent_button:
-                    button.parent_button = parent_button
-
-            is_present = True if request.form.get('is_present') == "true" else False
-            button.is_present = is_present
-
-            button.label = request.form.get('label', button.label)
-
-            button.shape = request.form.get('shape', button.shape)            
-
-            db.session.commit()
-            display_toast(success=True, message="Mise à jour effectuée")
-            return ""
-        else:
-            display_toast(success=False, message="Membre de l'équipe introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
-
-
-@app.route('/admin/patient/update_button_order', methods=['POST'])
-def update_button_order():
-    try:
-        order_data = request.form.getlist('order[]')
-        for index, button_id in enumerate(order_data):
-            print(button_id, index)
-            button = Button.query.order_by(Button.sort_order).get(button_id)
-            print(button)
-            button.sort_order = index
-        db.session.commit()
-        display_toast(success=True, message="Ordre mis à jour")
-        return '', 200  # Réponse sans contenu
-    except Exception as e:
-        display_toast(success=False, message=f"Erreur: {e}")
-
-
-# affiche le formulaire pour ajouter un membre
-@app.route('/admin/button/add_form')
-def add_button_form():
-    activities = Activity.query.all()
-    parent_buttons = Button.query.filter_by(is_parent=True).all()
-    return render_template('/admin/patient_button_add_form.html', 
-                            activities=activities,
-                            parent_buttons=parent_buttons)
-
-@app.route('/admin/patient/add_new_button', methods=['POST'])
-def add_new_button():
-    try:
-        activity_id = request.form.get('activity')
-        
-        # GEstion du cas ou le bouton est un bouton parent
-        if activity_id == "parent_button":
-            is_parent = True
-            activity = None
-        else:
-            is_parent = False
-            if activity_id:
-                activity = Activity.query.get(activity_id)
-                if activity:
-                    activity = activity
-                else:
-                    print("Activité non trouvée")
-                    return "Activité non trouvée", 404
-            else:
-                # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
-                activity = None
-                
-        parent_btn_id = request.form.get('parent_btn')
-        if parent_btn_id:
-            parent_button = Button.query.get(parent_btn_id)
-        else:
-            parent_button = None
-                
-        is_present = True if request.form.get('is_present') == "true" else False
-        
-        label = request.form.get('label')
-
-        shape = request.form.get('shape')
-        
-        # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
-        max_order_button = Button.query.order_by(Button.sort_order.desc()).first()
-        sort_order = max_order_button.sort_order + 1 if max_order_button else 0
-        
-
-        new_button = Button(
-            is_parent=is_parent,
-            activity=activity,
-            label=label,
-            shape=shape,
-            parent_button=parent_button,
-            is_present=is_present,
-            sort_order=sort_order
-        )
-        
-        if not label:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Le nom est obligatoire")
-            return display_button_table()        
-
-        db.session.add(new_button)
-        db.session.commit()
-
-        communication("update_admin", data={"action": "delete_add_button_form"})
-        display_toast(success=True, message="Bouton ajouté")
-        communikation("admin", event="refresh_button_order")
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_button_form"></div>"""
-
-        return f"{display_button_table()}{clear_form_html}"
-
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
-        return display_activity_table()
-
-
-# affiche la modale pour confirmer la suppression d'un patient
-@app.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
-def confirm_delete_button(button_id):
-    button = Button.query.get(button_id)
-    return render_template('/admin/patient_page_button_modal_confirm_delete.html', button=button)
-
-
-# supprime un bouton
-@app.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
-def delete_button(button_id):
-    try:
-        button = Button.query.order_by(Button.sort_order).get(button_id)
-        if not button:
-            display_toast(success=False, message="Bouton non trouvé")
-            return display_button_table()
-
-        db.session.delete(button)
-        db.session.commit()
-        display_toast(success=True, message="Bouton supprimé")
-
-        communikation("admin", event="refresh_button_order")
-
-        return display_button_table()
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
-        return display_button_table()
-
-
-@app.route('/upload_image/<int:button_id>', methods=['POST'])
-def upload_image(button_id):
-    """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
-    button = Button.query.order_by(Button.sort_order).get(button_id)
-    if 'file' not in request.files:
-        return "No file part", 400
-    file = request.files['file']
-    if file.filename == '':
-        return "No selected file", 400
-    if file and allowed_image_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.static_folder, 'images/buttons',  filename)
-        file.save(file_path)
-        button.image_url = filename
-        db.session.commit()
-        # Retour à la page admin/patient
-        return redirect("/admin/patient", code=302)
-    return "Invalid file", 400
-
-
-@app.route('/admin/patient/gallery_button_images/<int:button_id>', methods=['GET'])
-def gallery_button_images(button_id):
-    directory = os.path.join(current_app.static_folder, 'images/buttons')
-    images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    button = Button.query.order_by(Button.sort_order).get(button_id)
-    print(images)
-    return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
-
-
-@app.route('/admin/patient/update_button_image_from_gallery', methods=['POST'])
-def update_button_image_from_gallery():
-    button_id = request.form.get('button_id')
-    image_url = request.form.get('image')
-    button = Button.query.order_by(Button.sort_order).get(button_id)
-    print(request.form)
-    button.image_url = image_url
-    db.session.commit()
-    return """<img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">"""
-
-
-@app.route("/admin/patient/delete_button_image/<int:button_id>", methods=['GET'])
-def delete_button_image(button_id):
-    button = Button.query.order_by(Button.sort_order).get(button_id)
-    button.image_url = None
-    db.session.commit()
-    return "<div>Pas d'image</div>"
-
-
-@app.route("/admin/patient/print_ticket_test")
-def print_ticket_test():
-    text = "12345678901234567890123456789012345678901234567890"
-    print(text)
-    communikation(stream="app_patient", data=text, flag="print")
-    communication("update_patient_app", data={"type": "print", "message": text})
-    return "", 204
 
 
 # -------- fin de ADMIN -> Page patient  ---------
