@@ -1,4 +1,4 @@
-<table id="staff_table" class="striped">
+<table id="staff_table" class="table">
     <thead>
         <tr>
             <th>Intitulé</th>
@@ -11,7 +11,7 @@
     </thead>
     <tbody>
         {% for button in buttons %}
-        <tr>
+        <tr class="{% if loop.index0 % 2 == 0 %}table-secondary{% endif %}">
             <td><input type="text" class="form-control" name="label" value="{{ button.label }}" id="label-{{ button.id }}"></td>
             <td>
                 <p>
@@ -91,7 +91,7 @@
             </td>
         </tr>
 
-        <tr>
+        <tr class="{% if loop.index0 % 2 == 0 %}table-secondary{% endif %}">
             <td>
                 <div id="button-image-{{ button.id }}">
                     {% if button.image_url %}
@@ -125,8 +125,10 @@
                     </button>
                 {% endif %}
             </td>
+            <td></td>
+            <td></td>
+            <td></td> 
         </tr>
-
         {% endfor %}
     </tbody>
 </table>

@@ -5,23 +5,24 @@
 {% block content %}
     <h3>Admin</h3>
 
-    <td>
-        <div class="input-field">
-            <select class="form-select"
-            id="admin_colors"
-            hx-post="/admin/update_select"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "admin_colors", "value": document.getElementById("admin_colors").value}'
-            onchange="changeTheme()">
-                <option value="" disabled selected>Palette de couleurs</option>
-                {% for theme in themes %}
-                <option value="{{ theme }}" 
-                    {{ 'selected' if admin_colors == theme else '' }}>
-                    {{ theme.capitalize() }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-    </td>
+    <h4>Choix de la palette de couleurs</h4>
+    <div class="input-field">
+        <select class="form-select"
+        id="admin_colors"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "admin_colors", "value": document.getElementById("admin_colors").value}'
+        onchange="changeTheme()">
+            <option value="" disabled selected>Palette de couleurs</option>
+            {% for theme in themes %}
+            <option value="{{ theme }}" 
+                {{ 'selected' if admin_colors == theme else '' }}>
+                {{ theme.capitalize() }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <p>Les palettes de couleurs sont issues de <a href="https://bootswatch.com/" target="_blank">Bootswatch</a></p>
+
     
 {% endblock %}
