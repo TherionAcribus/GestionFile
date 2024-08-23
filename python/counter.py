@@ -15,7 +15,7 @@ def action_add_paper(add_paper):
         db.session.commit()
         app.config["ADD_PAPER"] = add_paper
         app.communikation("counter", event="paper")
-        app.communikation("app_counter", event="paper")
+        app.communikation("app_counter", data={"add_paper": add_paper}, event="paper")
         return counter_paper_add()
     except Exception as e:
         print(e)
@@ -25,14 +25,15 @@ def app_paper_add():
         return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
     else:
         add_paper_action = True if request.form.get('action') == "activate" else False
+        print("app_paper_add", add_paper_action)
         try:
             config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
             config_option.value_bool = add_paper_action
             db.session.commit()
             app.config["ADD_PAPER"] = add_paper_action
 
-            app.communikation("counter", event="paper")
-            app.communikation("app_counter", event="paper")
+            #app.communikation("counter", event="paper")
+            app.communikation("app_counter", {"add_paper": add_paper_action}, event="paper")
         
             return "", 200
 
@@ -129,7 +130,6 @@ def app_is_patient_on_counter(counter_id):
         Patient.counter.has(id=counter_id),
         Patient.status.in_(['ongoing', 'calling'])
         ).first()
-    print("PATIENT!!!", patient)
     if patient:
         return jsonify(patient.to_dict()), 200
     else:
@@ -163,12 +163,20 @@ def app_auto_calling():
         else:
             app.config["AUTO_CALLING"].remove(counter.id)
 
-        app.communikation("counter", event="refresh_auto_calling")
+        app.communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_action})
 
         return jsonify({"status": counter.auto_calling}), 200 # 
     except Exception as e:
         app.logger.error(f'Erreur: {e}')
         return e, 500
+    
+
+def app_init_app():
+    """ Fonction d'initialisation de l'application pour récupérer les infos utiles en une seule requete """
+    counter_id = request.form.get('counter_id')
+    counter = Counter.query.get(counter_id)
+    return jsonify({"autocalling": counter.auto_calling,
+                    "add_paper": app.config["ADD_PAPER"]}), 200
 
 
 def app_remove_counter_staff():

@@ -58,7 +58,7 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
-from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call
+from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call, app_init_app
 from python.announce import display, patients_ongoing, announce_init_gallery, announce_refresh, replace_balise_announces
 from python.admin.admin import admin_admin
 from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
@@ -486,6 +486,10 @@ app.add_url_rule('/counter/patients_queue_for_counter/<int:counter_id>', 'patien
 
 app.add_url_rule('/app/counter/auto_calling', 'app_auto_calling', 
                 partial(app_auto_calling), 
+                methods=['POST'])
+
+app.add_url_rule('/app/counter/init_app', 'app_init_app', 
+                partial(app_init_app), 
                 methods=['POST'])
 
 app.add_url_rule('/app/counter/remove_staff', 'app_remove_counter_staff', 
@@ -997,11 +1001,18 @@ def delete_patient(patient_id):
 # TODO PREVOIR "NONE" pour Activité ou équivalent 
 @app.route('/admin/queue/create_new_patient_auto', methods=['POST'])
 def create_new_patient_auto():
+
+    print("create_new_patient_auto", request.form)
+    if request.form.get('activity_id') == "":
+        display_toast(success=False, message="Veuillez choisir un motif")
+        return "", 204
+    
     activity = Activity.query.get(request.form.get('activity_id'))
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
+
+    print("new_patient", activity)
     communikation("update_patient")
-    communication("update_patients")
 
     return "", 204
 
@@ -3157,7 +3168,7 @@ def update_switch_auto_calling():
                 app.config["AUTO_CALLING"].append(counter.id)
             elif value == "false":
                 app.config["AUTO_CALLING"].remove(counter.id)
-            communikation("app_counter", event="change_auto_calling", data={"counter_id": counter_id, "value": value})
+            communikation("app_counter", event="change_auto_calling", data={"counter_id": counter_id, "autocalling": counter.auto_calling})
         else:
             app.logger.error("Counter not found")
     except Exception as e:
@@ -3516,6 +3527,7 @@ def events_update_patient_pyside():
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
     """ Effectue la communication avec les clients """
+    print(f"communikation called with stream={stream}, data={data}, flag={flag}, event={event}, client_id={client_id}")
     print("communikation", communication_mode, data, event)
     if communication_mode == "websocket":
         #communication_websocket(stream=f"socket_{stream}", data=data)
@@ -3563,6 +3575,8 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
 def communication_websocket(stream, data=None, flag=None, client_id=None, event="update"):
     print('communication_websocket')
     print("streamm", stream)
+    print("data", data)
+    print("event", event)
 
     # Utiliser request.args.get uniquement si dans le contexte de la requête
     if has_request_context():
