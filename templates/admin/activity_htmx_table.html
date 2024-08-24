@@ -8,6 +8,7 @@
             <th>Lettre</th>
             <th>Horaires</th>
             <th>Message si inactivité</th>
+            <th>Message spécifique</th>
             <th>Notification</th>
             <th>Actions</th>
         </tr>
@@ -42,12 +43,15 @@
                 </div>
             </td>
             <td>
-                <input type="text" class="form-control" name="message" value="{{ activity.inactivity_message }}" id="message-{{ activity.id }}">
+                <input type="text" class="form-control" name="inactivity_message" value="{{ activity.inactivity_message }}" id="inactivity_message-{{ activity.id }}">
+            </td>
+            <td>
+                <input type="text" class="form-control" name="specific_message" value="{{ activity.specific_message }}" id="specific_message-{{ activity.id }}">
             </td>
             <td>
                 <p>
                     <label>
-                        <input id ="notification-{{ activity.id }}" type="checkbox" {% if activity.notification %}checked{% endif %}>
+                        <input id ="notification-{{ activity.id }}" class="form-check-input" type="checkbox" {% if activity.notification %}checked{% endif %}>
                         <span></span>
                     </label>
                 </p>
@@ -58,7 +62,8 @@
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
                             "letter": document.getElementById("letter-{{ activity.id }}").value,
-                            "message": document.getElementById("message-{{ activity.id }}").value,
+                            "inactivity_message": document.getElementById("inactivity_message-{{ activity.id }}").value,
+                            "specific_message": document.getElementById("specific_message-{{ activity.id }}").value,
                             "notification": document.getElementById("notification-{{ activity.id }}").checked,
                             "schedules": getSelectedOptions("schedules-{{ activity.id }}")
                             {% if staff %}, "staff_id": document.getElementById("staff-{{ activity.id }}").value{% endif %}

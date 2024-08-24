@@ -8,6 +8,7 @@
             <th>Lettre</th>
             <th>Horaires</th>
             <th>Message si inactivité</th>
+            <th>Message spécifique</th>
             <th>Notification</th>
             <th>Actions</th>
         </tr>
@@ -17,7 +18,7 @@
             {% if staff %}
             <td>
                 <div class="input-field col s10">   
-                    <select id="staff">
+                    <select class="form-select" id="staff">
                         {% for member in staff %}
                             <option value="{{member.id}}">{{member.name}}</option>
                         {% endfor %}
@@ -25,11 +26,11 @@
                 </div>
             </td>
             {% endif %}
-            <td><input type="text" name="name" value="" id="name"></td>
-            <td><input type="text" name="letter" value="" id="letter"></td>
+            <td><input type="text" class="form-control" name="name" value="" id="name"></td>
+            <td><input type="text" class="form-control" name="letter" value="" id="letter"></td>
             <td>
-                <div class="input-field col s12">   
-                    <select multiple id="schedules">
+                <div class="mb-3 col-10">   
+                    <select class="form-select" multiple id="schedules">
                         {% for schedule in schedules %}
                             <option value="{{schedule.id}}"
                                     {% if schedule.id == 1 %}selected{% endif %}>{{schedule.name}}</option>
@@ -38,12 +39,15 @@
                 </div>
             </td>
             <td>
-                <input type="text" name="message" id="message">
+                <input type="text" class="form-control" name="inactivity_message" id="inactivity_message">
+            </td>
+            <td>
+                <input type="text" class="form-control" name="specific_message" id="specific_message">
             </td>
             <td>
                 <p>
                     <label>
-                        <input id ="notification" type="checkbox">
+                        <input id ="notification" class="form-check-input" type="checkbox">
                         <span></span>
                     </label>
                 </p>
@@ -58,7 +62,8 @@
                     hx-post="/admin/activity/add_new_activity"
                     hx-vals='js:{"name": document.getElementById("name").value, 
                             "letter": document.getElementById("letter").value,
-                            "message": document.getElementById("message").value,
+                            "inactivity_message": document.getElementById("inactivity_message").value,
+                            "specific_message": document.getElementById("specific_message").value,
                             "notification": document.getElementById("notification").checked,
                             "schedules": getSelectedOptions("schedules"),
                             {% if staff %}

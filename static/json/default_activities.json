@@ -2,7 +2,7 @@
     "name": "gf_activities",
     "type": "default",
     "version": "0.1",
-    "timestamp": "2024-08-12 14:35:26",
+    "timestamp": "2024-08-24 14:35:26",
     "comments": "Version initiale",
     "activities":
         [
@@ -12,6 +12,7 @@
                 "letter": "T",
                 "schedule": 1,
                 "inactivity_message": "",
+                "specific_message": "Pour la sécurité de notre personnel, merci de mettre un masque.",
                 "notification": false, 
                 "is_staff": false,
                 "staff_id": ""
@@ -22,6 +23,7 @@
                 "letter": "T",
                 "schedule": 1,
                 "inactivity_message": "",
+                "specific_message": "",
                 "notification": false, 
                 "is_staff": false,
                 "staff_id": ""
@@ -32,6 +34,7 @@
                 "letter": "T",
                 "schedule": 1,
                 "inactivity_message": "",
+                "specific_message": "",
                 "notification": false, 
                 "is_staff": false,
                 "staff_id": ""
@@ -42,6 +45,7 @@
                 "letter": "O",
                 "schedule": 1,
                 "inactivity_message": "",
+                "specific_message": "",
                 "notification": false, 
                 "is_staff": false,
                 "staff_id": ""
@@ -52,6 +56,7 @@
                 "letter": "R",
                 "schedule": 1,
                 "inactivity_message": "",
+                "specific_message": "",
                 "notification": false, 
                 "is_staff": false,
                 "staff_id": ""
@@ -62,6 +67,18 @@
                 "letter": "P",
                 "schedule": 1,
                 "inactivity_message": "",
+                "specific_message": "",
+                "notification": false, 
+                "is_staff": false,
+                "staff_id": ""
+            },
+            {   
+                "id": 7,
+                "name": "vaccination",
+                "letter": "V",
+                "schedule": 1,
+                "inactivity_message": "",
+                "specific_message": "",
                 "notification": false, 
                 "is_staff": false,
                 "staff_id": ""

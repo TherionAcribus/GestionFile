@@ -134,7 +134,7 @@ class Weekday(db.Model):
 
     def __repr__(self):
         return f'<Weekday {self.name}>'
-    
+
 
 
 class Activity(db.Model):
@@ -142,7 +142,8 @@ class Activity(db.Model):
     id = db.Column(db.Integer, Sequence('activity_id_seq'), primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     letter = db.Column(db.String(1), nullable=False)
-    inactivity_message = db.Column(db.String(255))
+    inactivity_message = db.Column(db.String(255), default="")
+    specific_message = db.Column(db.String(255), default="")
     notification = db.Column(db.Boolean, default=False)
     schedules = relationship('ActivitySchedule', secondary='activity_schedule_link', back_populates='activities')
     is_staff = db.Column(db.Boolean, default=False)
@@ -160,7 +161,7 @@ class Activity(db.Model):
                 self.staff_id = data[field] if data[field] else None
             else:
                 setattr(self, field, data[field])
-    
+
 
 # Table d'association pour la relation many-to-many
 activity_schedule_link = db.Table('activity_schedule_link',

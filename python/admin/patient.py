@@ -15,12 +15,15 @@ def admin_patient():
                             page_patient_display_qrcode = app.config['PAGE_PATIENT_QRCODE_DISPLAY'],
                             page_patient_qrcode_web_page = app.config['PAGE_PATIENT_QRCODE_WEB_PAGE'],
                             page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'],
+                            page_patient_qrcode_display_specific_message = app.config['PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE'],
                             page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
                             page_patient_end_timer = app.config['PAGE_PATIENT_END_TIMER'],
+                            page_patient_display_specific_message = app.config['PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE'],
                             ticket_header = app.config['TICKET_HEADER'],
                             ticket_message = app.config['TICKET_MESSAGE'],
                             ticket_footer = app.config['TICKET_FOOTER'],
-                            printer_width = app.config['PRINTER_WIDTH']
+                            printer_width = app.config['PRINTER_WIDTH'],
+                            ticket_display_specific_message = app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'],
                             )
 
 

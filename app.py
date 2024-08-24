@@ -433,7 +433,6 @@ app.add_url_rule('/admin/activities/restore', 'restore_activities',
                 partial(restore_activities, db, ConfigVersion, Activity, ActivitySchedule, request), 
                 methods=['GET', 'POST'])
 
-
 app.add_url_rule('/admin/algorules/backup', 'backup_algorules', 
                 partial(backup_algorules, AlgoRule, ConfigVersion), 
                 methods=['GET'])
@@ -1466,7 +1465,8 @@ def update_activity(activity_id):
             return ""
         activity.name = request.form.get('name', activity.name)
         activity.letter = request.form.get('letter', activity.letter)
-        activity.inactivity_message = request.form.get('message', activity.inactivity_message)
+        activity.inactivity_message = request.form.get('inactivity_message', activity.inactivity_message)
+        activity.specific_message = request.form.get('specific_message', activity.specific_message)
         activity.notification = True if request.form.get('notification', activity.notification) == "true" else False
 
         # Mettre à jour les horaires
@@ -1600,7 +1600,8 @@ def add_new_activity():
         name = request.form.get('name')
         letter = request.form.get('letter')
         schedule_ids = request.form.getlist('schedules')
-        message = request.form.get('message')
+        inactivity_message = request.form.get('inactivity_message')
+        specific_message = request.form.get('specific_message')
         notification = True if request.form.get('notification') == "true" else False
         staff_id = request.form.get("staff_id")
 
@@ -1613,7 +1614,8 @@ def add_new_activity():
         new_activity = Activity(
             name=name,
             letter=letter,
-            inactivity_message=message,
+            inactivity_message=inactivity_message,
+            specific_message=specific_message,
             notification=notification
         )
         
@@ -2491,7 +2493,8 @@ def admin_phone():
     return render_template('/admin/phone.html',
                             phone_center = app.config['PHONE_CENTER'], 
                             phone_title=app.config['PHONE_TITLE'],
-                            phone_lines=phone_lines)
+                            phone_lines=phone_lines,
+                            phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'])
                             
 
 
@@ -2646,10 +2649,19 @@ def patient_right_page():
     print("BUTTONS", buttons)
     max_length = 2 if buttons[0].shape == "square" else 4
     print("MAX_LENGTH", max_length)
-    return render_template('patient/patient_buttons_left.html', 
+
+    buttons_content = render_template('patient/patient_buttons_left.html', 
                             buttons=buttons,
                             max_length=max_length,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+    
+    subtitle_content = render_template(
+        'patient/patient_default_subtitle.html', 
+        page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
+    )
+    
+    return f"{buttons_content}{subtitle_content}"
+
 
 
 @app.route('/patients_submit', methods=['POST'])
@@ -2681,7 +2693,7 @@ def display_activity_inactive(request):
 def display_default_children_text():
     page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
     return render_template('patient/patient_default_subtitle.html',
-                            page_patient_subtitle=page_patient_subtitle)    
+                            page_patient_subtitle=page_patient_subtitle)
 
 @app.route("/patients/cancel_children")
 def cancel_children():
@@ -2710,6 +2722,8 @@ def display_validation_after_choice(request):
         #socketio.emit('trigger_valide_activity', {'activity': activity.id})
         return left_page_validate_patient(activity)
     
+    app.logger.error("Le bouton ne possède pas d'activité")
+    
 
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
@@ -2724,21 +2738,31 @@ def left_page_validate_patient(activity):
     
     communikation("update_patient")
 
-    communication("update_patients")
-
-    return render_template('patient/patient_qr_right_page.html', 
+    main_content = render_template('patient/patient_qr_right_page.html', 
                             image_name_qr=image_name_qr, 
                             text=text,
                             activity=activity,
                             futur_patient=futur_patient,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+    
+    # si on veut afficher un message specifique (et qu'il existe). Retourné via oob-swap
+    if app.config["PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE"] and activity.specific_message != "":
+        subtitle_content = render_template(
+        'patient/patient_default_subtitle.html', 
+        page_patient_subtitle=activity.specific_message
+        )
+
+        return f"{main_content}{subtitle_content}"
+    
+    return main_content
+
 
 @app.route('/patient/print_and_validate', methods=['POST'])
 def print_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
     print("new_patient", new_patient)
-    text = format_ticket_text(new_patient)
+    text = format_ticket_text(new_patient, activity)
     print("text", text)
 
     if activity.notification:
@@ -2822,19 +2846,21 @@ def patient_conclusion_page(call_number):
                             )
 
 
-def format_ticket_text(new_patient):
+def format_ticket_text(new_patient, activity):
     print("ticket_text", new_patient)
+    print(app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
     text_list = [
         app.config['TICKET_HEADER_PRINTER'],
         app.config['TICKET_MESSAGE_PRINTER'],
         app.config['TICKET_FOOTER_PRINTER']
     ]
+    #if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
+    #    text_list.append(activity.specific_message)
     print("text_list", text_list)
     combined_text = "\n".join(text_list)
     combined_text = replace_balise_phone(combined_text, new_patient)
     formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
     return formatted_text
-    
 
 
 def get_futur_patient(call_number, activity):
@@ -2867,16 +2893,9 @@ def create_qr_code(patient):
         data = f"{app.config['SERVER_URL']}/patient/phone/{patient.call_number}/{patient.activity.id}"
     else :
         template = app.config['PAGE_PATIENT_QRCODE_DATA']
+        if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
+            template = template + "\n" + patient.activity.specific_message
         data = replace_balise_phone(template, patient)
-    """patient_info = {
-            "id": patient.id,
-            "patient_number": patient.call_number,
-            "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "reason": patient.activity.name
-    }
-        
-    # Convertir les données en chaîne JSON
-    data = json.dumps(patient_info)"""
 
     # Générer le QR Code
     img = qrcode.make(data)
@@ -2898,9 +2917,7 @@ def create_qr_code(patient):
 @app.route('/patient/refresh')
 def patient_refresh():
     """ Permet de rafraichir la page des patients pour effectuer des changements """
-    print("patient_refresh")
     communikation("patient", event="refresh")
-    communication("update_page_patient", data={"action": "refresh page"})
     return '', 204
 
 
@@ -3009,7 +3026,6 @@ def update_switch_auto_calling():
     except Exception as e:
         app.logger.error(f'Erreur: {e}')
     return "", 204
-
 
 
 # A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
@@ -3592,6 +3608,8 @@ def phone_patient_ping():
     response = make_response(render_template('/patient/phone_confirmation.html', 
                                             patient=patient,
                                             phone_lines=phone_lines,
+                                            specific_message= Activity.query.get(activity_id).specific_message,
+                                            phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'],
                                             phone_center=app.config['PHONE_CENTER']))
     response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
     response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
@@ -3768,14 +3786,17 @@ def load_configuration():
         "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
         "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
         "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
+        "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
         "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
+        "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "ticket_header": ("TICKET_HEADER", "value_str"),
         "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
         "ticket_message": ("TICKET_MESSAGE", "value_str"),
         "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
         "ticket_footer": ("TICKET_FOOTER", "value_str"),
         "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
+        "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "phone_center": ("PHONE_CENTER", "value_bool"),
         "phone_title": ("PHONE_TITLE", "value_str"),
         "phone_line1": ("PHONE_LINE1", "value_str"),
@@ -3784,6 +3805,7 @@ def load_configuration():
         "phone_line4": ("PHONE_LINE4", "value_str"),
         "phone_line5": ("PHONE_LINE5", "value_str"),
         "phone_line6": ("PHONE_LINE6", "value_str"),
+        "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
         "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
         "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),

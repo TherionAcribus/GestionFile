@@ -1,6 +1,6 @@
 from flask import current_app as app
 from datetime import datetime, timezone, date
-from models import Patient, Activity, Counter, db
+from models import Patient, db
 
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
@@ -17,7 +17,6 @@ def add_patient(call_number, activity):
     db.session.commit()  # Enregistrement des changements dans la base de données
 
     return new_patient
-
 
 def get_next_call_number(activity):
     """ Récupérer le numéro d'appel en fonction de la méthode choisie"""

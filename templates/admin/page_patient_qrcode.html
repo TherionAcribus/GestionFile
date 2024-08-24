@@ -33,3 +33,8 @@
 <h5>Données brutes</h5>
 
 {{ macros.textbloc_before_call("page_patient_qrcode_data", page_patient_qrcode_data, "Données à afficher") }}
+
+{{ macros.switch("page_patient_qrcode_display_specific_message", 
+                page_patient_qrcode_display_specific_message, 
+                "Afficher le message spécifique à l'activité dans le QRCode")
+}}

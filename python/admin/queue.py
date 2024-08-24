@@ -117,7 +117,6 @@ def delete_patient(patient_id):
 
 
 def create_new_patient_auto():
-
     if request.form.get('activity_id') == "":
         app.display_toast(success=False, message="Veuillez choisir un motif")
         return "", 204

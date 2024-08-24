@@ -2,7 +2,12 @@
     {% if phone_center %}    
         class="text-center"
     {% endif %}>
+    
     {% for phone_line in phone_lines %}
         <p>{{ phone_line | safe }}</p>
     {% endfor %}
+
+    {% if phone_display_specific_message %}
+        <p>{{ specific_message | safe }}</p>
+    {% endif %}
 </div>
