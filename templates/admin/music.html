@@ -22,7 +22,7 @@
 
                 <!-- Bouton pour lecture aléatoire -->
                 <button class=btn btn-primary
-                hx-post="{{ url_for('play_playlist') }}"
+                hx-post="{{ url_for('shuffle_playlist') }}"
                 hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "true"}'
                 hx-target="#invisible">
                 Aléatoire
