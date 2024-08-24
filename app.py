@@ -58,10 +58,12 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
+from python.engine import add_patient, get_next_call_number
 from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call, app_init_app
 from python.announce import display, patients_ongoing, announce_init_gallery, announce_refresh, replace_balise_announces
 from python.admin.admin import admin_admin
 from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
+from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -577,6 +579,36 @@ app.add_url_rule("/admin/patient/delete_button_image/<int:button_id>", 'delete_b
                 methods=['GET'])
 
 
+# ADMIN -> QUEUE
+
+app.add_url_rule("/admin/queue", view_func=admin_queue)
+app.add_url_rule('/admin/database/clear_all_patients', view_func=clear_all_patients_from_db)
+
+app.add_url_rule('/admin/queue/table', 'display_queue_table', 
+                partial(display_queue_table), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/database/confirm_delete_patient_table', 'confirm_delete_patient_table', 
+                partial(confirm_delete_patient_table), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/queue/patient_update/<int:patient_id>', 'update_patient', 
+                partial(update_patient), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/queue/confirm_delete_patient/<int:patient_id>', 'confirm_delete_patient', 
+                partial(confirm_delete_patient), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/queue/delete_patient/<int:patient_id>', 'delete_patient', 
+                partial(delete_patient), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/queue/create_new_patient_auto', 'create_new_patient_auto', 
+                partial(create_new_patient_auto), 
+                methods=['POST'])
+
+
 
 
 @app.route('/logout_all')
@@ -880,145 +912,6 @@ def send_test_email():
 
 
 # --------- ADMIN -> fin sécurité -------------
-
-# --------  ADMIN -> Queue ---------
-
-@app.route('/admin/queue')
-def queue():
-    activities = Activity.query.all()
-    return render_template('admin/queue.html', activities=activities)
-
-
-# affiche le tableau des patients
-@app.route('/admin/queue/table', methods=['POST'])
-def display_queue_table():
-    # Récupération des statuts en une liste pour tri ultérieur
-    filters = [status for status, value in request.form.items() if value == 'true']
-    print("Filters received:", filters)
-
-    # Filtrage des patients en fonction des statuts sélectionnés
-    if filters:
-        patients = Patient.query.filter(Patient.status.in_(filters)).all()
-    else:
-        patients = Patient.query.all()
-
-    return render_template('admin/queue_htmx_table.html', 
-                            patients=patients, 
-                            activities=Activity.query.all(), 
-                            status_list=status_list,
-                            counters=Counter.query.all())
-
-
-# affiche la modale pour confirmer la suppression de toute la table patient
-@app.route('/admin/database/confirm_delete_patient_table', methods=['GET'])
-def confirm_delete_patient_table():
-    return render_template('/admin/queue_modal_confirm_delete.html')
-
-
-@app.route('/admin/database/clear_all_patients')
-def clear_all_patients_from_db():
-    print("Suppression de la table Patient")
-    with app.app_context():  # Nécessaire pour pouvoir effacer la table via le CRON
-        try:
-            db.session.query(Patient).delete()
-            db.session.commit()
-            app.logger.info("La table Patient a été vidée")
-            communication("update_patients")
-            communikation("update_patient")
-            announce_refresh()
-            clear_counter_table(db, Counter, Patient)
-            return display_toast(message="La table Patient a été vidée")
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(str(e))
-            return display_toast(success = False, message=str(e))
-
-
-# mise à jour des informations d'un patient
-@app.route('/admin/queue/patient_update/<int:patient_id>', methods=['POST'])
-def update_patient(patient_id):
-    try:
-        patient = Patient.query.get(patient_id)
-        if patient:
-            print(request.form)
-            if request.form.get('call_number') == '':
-                display_toast(success = False, message="Un numéro d'appel est obligatoire")
-                return ""
-            patient.call_number = request.form.get('call_number', patient.call_number)
-            patient.status = request.form.get('status', patient.status)
-            activity_id = request.form.get('activity_id', patient.activity)
-            patient.activity = Activity.query.get(activity_id)
-            counter_id = request.form.get('counter_id', patient.counter)
-            patient.counter = Counter.query.get(counter_id)
-
-            db.session.commit()
-
-            clear_counter_table(db, Counter, Patient)
-
-            announce_refresh()
-
-            display_toast(success=True, message="Mise à jour effectuée")
-            return ""
-        else:
-            display_toast(success = False, message="Membre de l'équipe introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success = False, message=str(e))
-            app.logger(e)
-            return jsonify(status="error", message=str(e)), 500
-
-
-# affiche la modale pour confirmer la suppression d'un patient particulier
-@app.route('/admin/queue/confirm_delete_patient/<int:patient_id>', methods=['GET'])
-def confirm_delete_patient(patient_id):
-    patient = Patient.query.get(patient_id)
-    return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient)
-
-
-# supprime un patient
-@app.route('/admin/queue/delete_patient/<int:patient_id>', methods=['GET'])
-def delete_patient(patient_id):
-    print("id", patient_id)
-    try:
-        patient = Patient.query.get(patient_id)
-        if not patient:
-            return display_toast(success=False, message="Patient introuvable")
-
-        db.session.delete(patient)
-        db.session.commit()
-        communication("update_patients")
-        communikation("update_patient")
-        announce_refresh()
-        clear_counter_table(db, Counter, Patient)
-        return display_toast()
-
-    except Exception as e:
-        app.logger(e)
-        return display_toast(success=False, message=str(e))
-
-
-# TODO PREVOIR "NONE" pour Activité ou équivalent 
-@app.route('/admin/queue/create_new_patient_auto', methods=['POST'])
-def create_new_patient_auto():
-
-    print("create_new_patient_auto", request.form)
-    if request.form.get('activity_id') == "":
-        display_toast(success=False, message="Veuillez choisir un motif")
-        return "", 204
-    
-    activity = Activity.query.get(request.form.get('activity_id'))
-    call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity)
-
-    print("new_patient", activity)
-    communikation("update_patient")
-
-    return "", 204
-
-
-
-# --------  FIn de ADMIN -> Queue ---------
 
 
 @app.route('/admin/update_switch', methods=['POST'])
@@ -2944,23 +2837,6 @@ def format_ticket_text(new_patient):
     
 
 
-def add_patient(call_number, activity):
-    """ CRéation d'un nouveau patient et ajout à la BDD"""
-    # Création d'un nouvel objet Patient
-    print('    call_number 2', call_number)
-    new_patient = Patient(
-        call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
-        activity = activity,
-        timestamp=datetime.now(timezone.utc),
-        status='standing'
-    )    
-    # Ajout à la base de données
-    db.session.add(new_patient)
-    db.session.commit()  # Enregistrement des changements dans la base de données
-
-    return new_patient
-
-
 def get_futur_patient(call_number, activity):
     """ CRéation d'un nouveau patient SANS ajout à la BDD
     Permet de simuler sa création pour pouvoir générer les infos utiles dans le QR Code"""
@@ -2980,47 +2856,6 @@ def list_patients_standing():
     patients_standing = Patient.query.filter_by(status='standing').all()
     patients_data = [patient.to_dict() for patient in patients_standing]
     return patients_data
-
-
-def get_next_call_number(activity):
-    """ Récupérer le numéro d'appel en fonction de la méthode choisie"""
-    numbering_by_activity = app.config.get('NUMBERING_BY_ACTIVITY', False)
-    if numbering_by_activity:
-        call_number = get_next_category_number(activity)
-    else:
-        call_number = get_next_call_number_simple()
-    print("call_number", call_number)
-    return call_number
-
-
-def get_next_call_number_simple():
-    # Obtenir le dernier patient enregistré aujourd'hui
-    # BUG Connu : Si on passe de simple à par activité puis retour à simple -> repart à 1
-    last_patient_today = Patient.query.filter(db.func.date(Patient.timestamp) == date.today()).order_by(Patient.id.desc()).first()
-    if last_patient_today:
-        if str(last_patient_today.call_number).isdigit():
-            print(last_patient_today.call_number, type(last_patient_today.call_number))
-            return last_patient_today.call_number + 1
-        return 1
-    return 1  # Réinitialiser le compteur si aucun patient n'a été enregistré aujourd'hui
-
-
-# Générer le numéro d'appel en fonction de l'activité
-def get_next_category_number(activity):
-    # on utilise le code prévu de l'activité. Plusieurs activités peuvent avoir la même lettre
-    letter_prefix = activity.letter
-    today = date.today()
-
-    # Compter combien de patients sont déjà enregistrés aujourd'hui avec le même préfixe de lettre
-    today_count = Patient.query.filter(
-        db.func.date(Patient.timestamp) == today,
-        db.func.substr(Patient.call_number, 1, 1) == letter_prefix
-    ).count()
-
-    # Le prochain numéro sera le nombre actuel + 1
-    next_number = today_count + 1
-
-    return f"{letter_prefix}-{next_number}"
 
 
 def create_qr_code(patient):
