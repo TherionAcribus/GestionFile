@@ -1088,21 +1088,34 @@ def update_numbering_by_activity():
 
 def spotify_authorized():
     print("spotify_authorized", app.config["MUSIC_SPOTIFY_USER"], app.config["MUSIC_SPOTIFY_KEY"])
-    return SpotifyOAuth(client_id=app.config["MUSIC_SPOTIFY_USER"],
-                            client_secret=app.config["MUSIC_SPOTIFY_KEY"],
+    return SpotifyOAuth(client_id="d061eca61b9b475dbffc3a15c57d6b5e",
+                            client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
                             redirect_uri=url_for('spotify_callback', _external=True),
-                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
-
+                            scope='user-library-read')
 
 @app.route('/spotify/login')
 def spotify_login():
-    clear_spotify_tokens()
+    # Initialiser le flux OAuth
+    sp_oauth = SpotifyOAuth(
+        client_id="d061eca61b9b475dbffc3a15c57d6b5e",
+        client_secret="401f14a3f95e4c7fad1c525dfed3c808",
+        redirect_uri=url_for('spotify_callback', _external=True),
+        scope="user-library-read"
+    )
+    auth_url = sp_oauth.get_authorize_url()
+    # Rediriger l'utilisateur vers l'URL d'autorisation
+    return redirect(auth_url)
+
+
+@app.route('/spotify/login2')
+def spotify_login32():
+    #clear_spotify_tokens()
     spotify_authorized()
     sp_oauth = SpotifyOAuth(
-        client_id=app.config["MUSIC_SPOTIFY_USER"],
-        client_secret=app.config["MUSIC_SPOTIFY_KEY"],
+        client_id="d061eca61b9b475dbffc3a15c57d6b5e",
+        client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
         redirect_uri=url_for('spotify_callback', _external=True),
-        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
+        scope='user-library-read'
     )
 
     auth_url = sp_oauth.get_authorize_url()
@@ -1118,27 +1131,49 @@ def spotify_logout():
     clear_spotify_tokens()
     return redirect(url_for('admin_app'))
 
-@app.route('/spotify/callbacke')
-def spotify_callbacke():
+@app.route('/spotify/callback')
+def spotify_callback():
+    # Réinitialiser le flux OAuth pour s'assurer que l'URI de redirection est correct
     sp_oauth = SpotifyOAuth(
-        client_id=app.config["MUSIC_SPOTIFY_USER"],
-        client_secret=app.config["MUSIC_SPOTIFY_KEY"],
+        client_id="d061eca61b9b475dbffc3a15c57d6b5e",
+        client_secret="401f14a3f95e4c7fad1c525dfed3c808",
         redirect_uri=url_for('spotify_callback', _external=True),
-        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
+        scope='user-library-read'
     )
 
-    try:
-        token_info = sp_oauth.get_cached_token()
+    # Obtenir le code de l'URL de redirection
+    code = request.args.get('code')
 
+    try:
+        # Echanger le code contre un token d'accès
+        token_info = sp_oauth.get_access_token(code)
+        # Stocker le token dans la session
         session['token_info'] = token_info
         session.modified = True
     except SpotifyOauthError as e:
         print(f"Error obtaining token: {e}")
-        clear_spotify_tokens()  # Supprimez les anciens tokens
-        # Afficher une page d'erreur ou rediriger vers une page différente pour interrompre la boucle
-        return redirect(url_for('error_page'))  # Remplacez 'error_page' par une page d'erreur appropriée
+        return redirect(url_for('error_page'))
 
-    return redirect(url_for('admin_app'))
+    return redirect(url_for('admin_app'))  # Rediriger vers votre page d'administration ou autre
+
+
+@app.route('/show_saved_tracks')
+def show_saved_tracks():
+    token_info = session.get('token_info', None)
+    if not token_info:
+        # Rediriger vers l'authentification si le token n'est pas présent
+        return redirect(url_for('spotify_login'))
+
+    # Utiliser spotipy.Spotify pour créer un objet client
+    sp = spotipy.Spotify(auth=token_info['access_token'])
+    results = sp.current_user_saved_tracks()
+    tracks = []
+    for idx, item in enumerate(results['items']):
+        track = item['track']
+        tracks.append(f"{idx}: {track['artists'][0]['name']} – {track['name']}")
+
+    # Retourne les pistes en HTML
+    return "<br>".join(tracks)
 
 
 def get_spotify_token():
@@ -1146,22 +1181,22 @@ def get_spotify_token():
     if not token_info:
         return None, False
 
-    now = int(time.time())
+    now = int(tm.time())
     is_token_expired = token_info['expires_at'] - now < 60
 
     if is_token_expired:
         try:
             sp_oauth = SpotifyOAuth(
-        client_id=app.config["MUSIC_SPOTIFY_USER"],
-        client_secret=app.config["MUSIC_SPOTIFY_KEY"],
+        client_id = "d061eca61b9b475dbffc3a15c57d6b5e",
+        client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
         redirect_uri=url_for('spotify_callback', _external=True),
-        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
+        scope='user-library-read'
     )
             token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
             session['token_info'] = token_info
         except SpotifyOauthError as e:
             print(f"Error refreshing token: {e}")
-            clear_spotify_tokens()
+            #clear_spotify_tokens()
             return None, False
 
     return token_info, True
@@ -1201,10 +1236,11 @@ def play_playlist():
 # --------  FIn ADMIN -> App  ---------
 
 
-    
-"""
+@app.route('/admin/music')
+def admin_music():
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
+    print("spotify", spotify_connected)
     if spotify_connected:
         sp = spotipy.Spotify(auth=token_info['access_token'])
         playlists = sp.current_user_playlists()
@@ -1217,7 +1253,7 @@ def play_playlist():
         return render_template('/admin/music.html',
                                 spotify_connected=spotify_connected, 
                                 playlists=[])
-"""
+
 
 # --------  ADMIN -> DataBase  ---------
 
