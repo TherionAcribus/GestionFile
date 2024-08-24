@@ -279,8 +279,6 @@ function playSpotifyPlaylistOnDevice(accessToken, deviceId, playlistUri) {
 
         function receive_spotify_playlist_old(msg) {
 
-
-
             console.log("Received spotify data:", msg);
             const playlistUri = msg.data.playlist_uri;
             const accessToken = msg.data.access_token;

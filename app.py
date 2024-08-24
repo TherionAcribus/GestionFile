@@ -1091,7 +1091,7 @@ def spotify_authorized():
     return SpotifyOAuth(client_id="d061eca61b9b475dbffc3a15c57d6b5e",
                             client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
                             redirect_uri=url_for('spotify_callback', _external=True),
-                            scope='user-library-read')
+                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
 
 @app.route('/spotify/login')
 def spotify_login():
@@ -1100,26 +1100,12 @@ def spotify_login():
         client_id="d061eca61b9b475dbffc3a15c57d6b5e",
         client_secret="401f14a3f95e4c7fad1c525dfed3c808",
         redirect_uri=url_for('spotify_callback', _external=True),
-        scope="user-library-read"
+        scope="user-library-read user-read-playback-state user-modify-playback-state streaming"
     )
     auth_url = sp_oauth.get_authorize_url()
     # Rediriger l'utilisateur vers l'URL d'autorisation
     return redirect(auth_url)
 
-
-@app.route('/spotify/login2')
-def spotify_login32():
-    #clear_spotify_tokens()
-    spotify_authorized()
-    sp_oauth = SpotifyOAuth(
-        client_id="d061eca61b9b475dbffc3a15c57d6b5e",
-        client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
-        redirect_uri=url_for('spotify_callback', _external=True),
-        scope='user-library-read'
-    )
-
-    auth_url = sp_oauth.get_authorize_url()
-    return redirect(auth_url)
 
 def clear_spotify_tokens():
     # Supprimez les informations de token de la session
@@ -1138,7 +1124,7 @@ def spotify_callback():
         client_id="d061eca61b9b475dbffc3a15c57d6b5e",
         client_secret="401f14a3f95e4c7fad1c525dfed3c808",
         redirect_uri=url_for('spotify_callback', _external=True),
-        scope='user-library-read'
+        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
 
     # Obtenir le code de l'URL de redirection
@@ -1190,7 +1176,7 @@ def get_spotify_token():
         client_id = "d061eca61b9b475dbffc3a15c57d6b5e",
         client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
         redirect_uri=url_for('spotify_callback', _external=True),
-        scope='user-library-read'
+        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
     )
             token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
             session['token_info'] = token_info
