@@ -6,7 +6,6 @@
 import eventlet
 eventlet.monkey_patch(thread=True, time=True)
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash
-import duckdb
 
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
 from sqlalchemy.ext.mutable import MutableList
@@ -133,8 +132,9 @@ class Config:
     MAIL_USERNAME = "api"
     MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
     MAIL_DEFAULT_SENDER = "hi@demomailtrap.com."
-    # gallery
     GALLERIES_FOLDER = 'static/galleries'
+    # music
+    IS_PLAYING_SPOTIFY = False
 
 
 app = Flask(__name__)
@@ -695,10 +695,6 @@ user_datastore = SQLAlchemyUserDatastore(db, User, None)
 security = Security(app, user_datastore, login_form=ExtendedLoginForm)
 
 
-
-
-
-
 def get_locale():
     return session.get('lang', request.accept_languages.best_match(['en', 'fr']))
 #babel.init_app(app, locale_selector=get_locale)
@@ -1075,6 +1071,9 @@ def admin_app():
                             music_spotify = app.config["MUSIC_SPOTIFY"],
                             music_spotify_user = app.config["MUSIC_SPOTIFY_USER"],
                             music_spotify_key = app.config["MUSIC_SPOTIFY_KEY"],
+                            music_volume = app.config["MUSIC_VOLUME"],
+                            music_announce_volume = app.config["MUSIC_ANNOUNCE_VOLUME"],
+                            music_announce_action = app.config["MUSIC_ANNOUNCE_ACTION"],
                             spotify_connected=spotify_connected
     )
 
@@ -1202,32 +1201,56 @@ def get_spotify_token():
 def error_page():
     return "Une erreur s'est produite avec votre authentification Spotify. Veuillez essayer de vous reconnecter.", 400
 
-@app.route('/shuffle_playlist', methods=['POST'])
-def shuffle_playlist():
+def get_spotipy():
     token_info, authorized = get_spotify_token()
     if not authorized:
         return redirect(url_for('spotify_login'))
     
-    sp = spotipy.Spotify(auth=token_info['access_token'])
+    return spotipy.Spotify(auth=token_info['access_token'])
+
+@app.route('/spotify/shuffle_playlist', methods=['GET'])
+def shuffle_playlist():
+    sp = get_spotipy()
     sp.shuffle(state=True)
+    return '', 204
 
 
-@app.route('/play_playlist', methods=['POST'])
+@app.route('/spotify/pause_music', methods=['GET'])
+def pause_music():
+    sp = get_spotipy()
+    sp.pause_playback()
+    return '', 204
+
+@app.route('/spotify/resume_music', methods=['GET'])
+def resume_music():
+    sp = get_spotipy()
+    sp.start_playback()
+    return '', 204
+
+@app.route('/spotify/next_track', methods=['GET'])
+def next_track():
+    sp = get_spotipy()
+    sp.next_track()
+    return '', 204
+
+@app.route('/spotify/previous_track', methods=['GET'])
+def previous_track():
+    sp = get_spotipy()
+    sp.previous_track()
+    return '', 204
+
+@app.route('/spotify/play_playlist', methods=['POST'])
 def play_playlist():
-    token_info, authorized = get_spotify_token()
-    if not authorized:
-        return redirect(url_for('spotify_login'))
-
-    print("PLAYLISTES")
-    print(request.values)
-    sp = spotipy.Spotify(auth=token_info['access_token'])
+    sp = get_spotipy()
     playlist_uri = request.form['playlist_uri']
     shuffle = request.form.get('shuffle') == 'true'  # Vérifie si la checkbox est cochée
 
     print("PLAYLIST_URI", playlist_uri)
     print("SHUFFLE", shuffle)
 
-    #sp.shuffle(state=shuffle)
+    sp.start_playback(context_uri=playlist_uri)
+
+    app.config["IS_PLAYING_SPOTIFY"] = True
 
     print("current")
     print(sp.current_playback())
@@ -1236,13 +1259,13 @@ def play_playlist():
     print('END SHUFFLE')
 
     # Envoie la commande à la page "announce" via WebSocket ou un autre mécanisme
-    communikation("update_audio", 
+    """communikation("update_audio", 
                     event="spotify", 
                     data={
                         'playlist_uri': playlist_uri, 
                         'access_token': token_info['access_token'],
                         'shuffle': shuffle  # Ajoute l'option shuffle dans les données
-                    })
+                    })"""
 
     #socketio.emit('play_playlist', {'playlist_uri': playlist_uri}, namespace='/announce')
 
@@ -2597,6 +2620,9 @@ def generate_audio_calling(counter_number, next_patient):
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
     print("URL", audio_url)
+    
+    #pause_music()
+
     communikation("update_audio", event="audio", data=audio_url)
 
     #communication("update_audio", audio_source=audio_url)
@@ -2618,7 +2644,6 @@ def call_specific_patient(counter_id, patient_id):
         next_patient.counter_id = counter_id
         db.session.commit()
 
-        print("Bientot actif")
         # mise à jour du comptoir:
         counter_become_active(counter_id)
 
@@ -3826,7 +3851,10 @@ def load_configuration():
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
         "counter_order": ("COUNTER_ORDER", "value_str"),
-        "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),
+        "music_volume": ("MUSIC_VOLUME", "value_int"),
+        "music_announce_volume": ("MUSIC_ANNOUNCE_VOLUME", "value_int"),
+        "music_announce_action": ("MUSIC_ANNOUNCE_ACTION", "value_str"),
+        "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),        
         "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
         "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
         "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),

@@ -1,8 +1,8 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.1",
-    "timestamp": "2024-08-24 16:35:26",
+    "version": "0.2",
+    "timestamp": "2024-08-26 16:35:26",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
@@ -42,6 +42,9 @@
             "announce_infos_width": 800,
             "announce_infos_height": 800,
             "counter_order": "order",
+            "music_volume": 50,
+            "music_announce_volume": 20,
+            "music_announce_action": "pause",
             "music_spotify": false,
             "music_spotify_user": "your spotify user",
             "music_spotify_key": "your spotify key",

@@ -7,6 +7,25 @@
             "Connexion à Spotify'")
 }}
 
+{{ macros.textbloc_int("music_volume", music_volume, "Volume de la musique") }}
+
+<p>Que faire avec la musique pendant les annonces:</p>
+<div class="input-field">
+    <select class="form-select"
+    id="music_announce_action"
+    hx-post="/admin/update_select"
+    hx-target="#invisible"
+    hx-vals='js:{"key": "music_announce_action", "value": document.getElementById("music_announce_action").value}'
+    >
+        <option value="" disabled selected>Que faire ?</option>
+        <option value="pause" {% if music_announce_action == "pause" %} selected {% endif %}>Mettre la musique en pause</option>
+        <option value="down" {% if music_announce_action == "down" %} selected {% endif %}>Baisser le son</option>
+        <option value="nothing" {% if music_announce_action == "nothing" %} selected {% endif %}>Ne rien faire</option>
+    </select>
+</div>
+
+{{ macros.textbloc_int("music_announce_volume", music_announce_volume, "Volume de la musique pendant les annonces") }}
+
 {{ macros.textarea_full("music_spotify_user", music_spotify_user, "ID de l'utilisateur de Spotify") }}
 
 {{ macros.textarea_full("music_spotify_key", music_spotify_key, "Clef de l'utilisateur de Spotify") }}
