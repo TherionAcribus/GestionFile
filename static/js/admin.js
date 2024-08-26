@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_counter_order();
     })
 
+    adminSocket.on("refresh_sound", function(msg) {
+        console.log("refresh_sound:", msg);
+        refresh_sound();
+    })
+
     adminSocket.on("refresh_colors", function(msg) {
         console.log("refresh_colors:", msg);
         refresh_page();
@@ -249,6 +254,10 @@ function refresh_counter_order(){
 
 function refresh_page(){
     location.reload();
+}
+
+function refresh_sound(){
+    htmx.trigger('#announce_current_signal', 'refresh_sound', {target: "#announce_current_signal"});
 }
 
 

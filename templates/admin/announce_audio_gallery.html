@@ -2,41 +2,63 @@
     <h5 class="modal-title">Librairie sonore</h5>
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
+
 <div class="modal-body">
-    REFAIRE LA LIBRAIRIE > Annulation ne sert à rien > Faire passer sauvegarde via bouton Sauver au lieu selectionner
-    <ul>
-        {% for sound in sounds %}
-            <li>
-                <audio controls>
-                    <source src="{{ url_for('serve_sound', filename=sound) }}" type="audio/wav">
-                    Votre navigateur ne supporte pas l'élément audio.
-                </audio>
-                <p>{{ sound }}</p>
-                <button
-                    class="select-sound-button btn btn-primary"
-                    data-sound="{{ sound }}"
-                    hx-get="/admin/announce/audio/select_signal/{{ sound }}"
-                    hx-target="#invisible"
-                >Selectionner</button>
-            </li>
-        {% endfor %}
-    </ul>
+    <span id="selected_sound" class="hidden">{{announce_alert_filename}}</span>
+    <div
+        id="modal_display_gallery_list"
+        hx-get="/admin/announce/audio/gallery_list"
+        hx-target="#modal_display_gallery_list"
+        hx-trigger="load"
+        >
+    </div>
 </div>
 
 <!-- Formulaire de téléchargement -->
-<form id="uploadForm" hx-post="/admin/announce/audio/upload" hx-target="#modal_display_gallery" hx-swap="innerHTML" enctype="multipart/form-data">
+<div id="uploadForm" hx-target="#modal_display_gallery" hx-swap="innerHTML" enctype="multipart/form-data">
     <label for="file">Ajouter un nouveau son (wav, mp3) :</label>
     <input type="file" id="file" name="file" accept=".wav, .mp3" required>
-    <button type="submit" class="btn btn-primary">uploader</button>
-</form>
+
+    <button 
+        class="btn btn-primary"
+        hx-post="/admin/announce/audio/upload"
+        hx-target="#modal_display_gallery_list"
+        hx-encoding="multipart/form-data"
+        hx-include="#file"
+    >Uploader</button>
+</div>
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
     <button 
         class="btn btn-primary" id="closeModalButton" 
         href="#!"
+        hx-post="/admin/announce/audio/save_selected_sound"
+        hx-vals='js:{"selected_sound": document.getElementById("selected_sound").innerText}'
+        hx-target="#invisible"
+        data-bs-target="#modal_display_gallery"
         data-bs-dismiss="modal"
-        >
+    >
         Sauver</button>
 </div>
 
+<script>
+    function selectSound(button) {
+        // D'abord, désélectionner tous les éléments
+
+        document.querySelectorAll(".sound-item").forEach(function(item) {
+            item.classList.remove("bg-secondary");
+            item.classList.remove("bg-secondary-subtle");
+        });
+
+        // Ensuite, sélectionner l'élément parent de ce bouton
+        const li = button.closest("li");
+        li.classList.add("bg-secondary");
+
+        // mise à jour du span pour le nom du fichier
+        document.getElementById("selected_sound").innerText = button.name;
+    }
+
+
+    
+</script>

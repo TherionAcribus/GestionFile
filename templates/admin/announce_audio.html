@@ -36,7 +36,7 @@ Choisir le son de l'alerte:
 <div id="announce_current_signal"
         hx-get="/admin/announce/audio/current_signal"
         hx-target="#announce_current_signal"
-        hx-trigger="load, closeModalEvent"
+        hx-trigger="load, refresh_sound"
         hx-swap="innerHTML">    
 </div>
 
@@ -79,8 +79,6 @@ Choisir le son de l'alerte:
     </select>
     <label>Choix de la voix</label>
 </div>
-
-
 
 {{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Appel audio pour annoncer le tour d'un patient") }}
 

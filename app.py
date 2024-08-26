@@ -2403,17 +2403,41 @@ def announce_page():
 
 
 @app.route('/admin/announce/gallery_audio')
-def gallery_audio():
+def gallery_audio():    
+    return render_template('/admin/announce_audio_gallery.html',
+                            announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
+
+
+@app.route("/admin/announce/audio/gallery_list", methods=["GET", "DELETE"])
+def gallery_audio_list():
+    # il faut garder la methode DELETE car appeler par delete/<sound_filename> pour réafficher la galerie
     # Lister tous les fichiers wav dans le répertoire SOUND_FOLDER
     sounds = [f for f in os.listdir("static/audio/signals") if f.endswith('.wav') or f.endswith('.mp3')]
-    print(sounds)
-    return render_template('/admin/announce_audio_gallery.html', sounds=sounds)
-
+    print("sounds", sounds)
+    return render_template("admin/announce_audio_gallery_list.html",
+                            announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],
+                            sounds=sounds)
 
 @app.route('/sounds/<filename>')
 def serve_sound(filename):
     return send_from_directory("static/audio/signals", filename)
 
+@app.route("/admin/announce/audio/delete/<sound_filename>", methods=["DELETE"])
+def delete_sound(sound_filename):
+    sound_path = os.path.join("static/audio/signals", sound_filename)    
+    try:
+        # Vérifier si le fichier existe avant de le supprimer
+        if os.path.exists(sound_path):
+            os.remove(sound_path)
+            app.logger.info(f"Son supprimé : {sound_filename}")
+            return redirect (url_for('gallery_audio_list'))
+        else:
+            app.logger.error(f"Fichier non trouvé : {sound_filename}")
+            display_toast(success=False, message="Fichier non trouvé")
+            return "Fichier non trouvé", 404
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la suppression du fichier : {str(e)}")
+        return "Erreur lors de la suppression du fichier", 500
 
 @app.route('/admin/announce/audio/current_signal')
 def current_signal():
@@ -2421,14 +2445,19 @@ def current_signal():
                             announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
 
 
-@app.route('/admin/announce/audio/select_signal/<filename>')
-def select_signal(filename):
+@app.route('/admin/announce/audio/save_selected_sound', methods=['POST'])
+def select_signal():
+    print(request.values)
+    filename = request.form.get('selected_sound')
     if filename:
         app.config['ANNOUNCE_ALERT_FILENAME'] = filename
         config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
         print(config)
         config.value_str = filename
         db.session.commit()
+
+        communikation("admin", event="refresh_sound")
+
     return "", 204
 
 
@@ -2446,7 +2475,8 @@ def upload_signal_file():
     if file and allowed_audio_file(file.filename):
         filename = file.filename
         file.save(os.path.join("static/audio/signals", filename))
-    return redirect(url_for('gallery_audio'))
+    
+    return redirect(url_for('gallery_audio_list'))
 
 
 # -------- fin de ADMIN -> Page Announce  ---------

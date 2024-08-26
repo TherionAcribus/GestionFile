@@ -1,0 +1,28 @@
+<ul style="list-style: none;">
+    {% for sound in sounds %}
+        <li id="sound-item-{{ loop.index }}" 
+            {% if sound == announce_alert_filename %}    
+                class="sound-item bg-secondary-subtle"
+            {% else %}
+                class="sound-item"
+            {% endif %}                    
+            data-sound="{{ sound }}">
+            <audio controls class="me-3">
+                <source src="{{ url_for('serve_sound', filename=sound) }}" type="audio/wav">
+                Votre navigateur ne supporte pas l'élément audio.
+            </audio>
+            <p class="mb-0">{{ sound }}</p>
+            <button
+                class="select-sound-button btn btn-primary"
+                name="{{sound}}"
+                onclick="selectSound(this)"
+            >Sélectionner</button>
+            <button
+                class="delete-sound-button btn btn-danger"
+                name="{{ sound }}"
+                hx-delete="{{ url_for('delete_sound', sound_filename=sound) }}"
+                hx-target="#modal_display_gallery_list"
+        >Supprimer</button>
+        </li>
+    {% endfor %}
+</ul>
