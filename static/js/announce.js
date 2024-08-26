@@ -166,7 +166,7 @@ function playAudio(audioUrl) {
 }
 
 function pauseMusicOnSpotify() {
-    fetch('/spotify/pause_music', {
+    fetch('/spotify/start_announce', {
         method: 'GET',
     })
     .then(response => {
@@ -185,7 +185,7 @@ function pauseMusicOnSpotify() {
 
 
 function resumeMusicOnSpotify() {
-    fetch('/spotify/resume_music', {
+    fetch('/spotify/stop_announce', {
         method: 'GET',
     })
     .then(response => {
@@ -201,7 +201,6 @@ function resumeMusicOnSpotify() {
         console.error('Error while resuming music:', error);
     });
 }
-
 
 
 function initializeAudio() {

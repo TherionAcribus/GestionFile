@@ -1214,7 +1214,6 @@ def shuffle_playlist():
     sp.shuffle(state=True)
     return '', 204
 
-
 @app.route('/spotify/pause_music', methods=['GET'])
 def pause_music():
     sp = get_spotipy()
@@ -1238,6 +1237,25 @@ def previous_track():
     sp = get_spotipy()
     sp.previous_track()
     return '', 204
+
+@app.route('/spotify/set_volume/<int:volume>', methods=['GET'])
+def set_volume(volume):
+    sp = get_spotipy()
+    sp.volume(volume)
+
+@app.route('/spotify/start_announce', methods=['GET'])
+def start_announce_music():
+    if app.config["MUSIC_ANNOUNCE_ACTION"] == "pause":
+        pause_music()
+    elif app.config["MUSIC_ANNOUNCE_ACTION"] == "down":
+        set_volume(app.config["MUSIC_ANNOUNCE_VOLUME"])
+
+@app.route('/spotify/stop_announce', methods=['GET'])
+def stop_announce_music():
+    if app.config["MUSIC_ANNOUNCE_ACTION"] == "pause":
+        resume_music()
+    elif app.config["MUSIC_ANNOUNCE_ACTION"] == "down":
+        set_volume(app.config["MUSIC_VOLUME"])
 
 @app.route('/spotify/play_playlist', methods=['POST'])
 def play_playlist():
