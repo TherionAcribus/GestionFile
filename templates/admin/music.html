@@ -4,83 +4,87 @@
 
 {% block content %}
 
-{% if playlists %}
-<div class="d-flex flex-wrap">
-    {% for playlist in playlists %}
-        <div class="card m-2" style="width: 18rem;">
-            {% if playlist['images'] %}
-                <img src="{{ playlist['images'][0]['url'] }}" alt="{{ playlist['name'] }} Cover" style="width: 18rem; height: auto;">
-            {% endif %}
-            <div class="card-body">
-            <a href="{{ playlist['external_urls']['spotify'] }}" target="_blank">
-                <h5 class="card-title">{{ playlist['name'] }}</h5>
-            </a>
-            <p class="card-text">({{ playlist['tracks']['total'] }} chansons)</p>
-            <a href="#" class="btn btn-primary"
-                hx-post="{{ url_for('play_playlist') }}"
-                hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "false"}'
-                hx-target="#invisible"
-            >Jouer</a>
+{% if spotify_connected %}
+
+    {% if playlists %}
+    <div class="d-flex flex-wrap">
+        {% for playlist in playlists %}
+            <div class="card m-2" style="width: 18rem;">
+                {% if playlist['images'] %}
+                    <img src="{{ playlist['images'][0]['url'] }}" alt="{{ playlist['name'] }} Cover" style="width: 18rem; height: auto;">
+                {% endif %}
+                <div class="card-body">
+                <a href="{{ playlist['external_urls']['spotify'] }}" target="_blank">
+                    <h5 class="card-title">{{ playlist['name'] }}</h5>
+                </a>
+                <p class="card-text">({{ playlist['tracks']['total'] }} chansons)</p>
+                <a href="#" class="btn btn-primary"
+                    hx-post="{{ url_for('play_playlist') }}"
+                    hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "false"}'
+                    hx-target="#invisible"
+                >Jouer</a>
+                </div>
             </div>
-        </div>
-    {% endfor %}
-</div>
+        {% endfor %}
+    </div>
 
-<!-- Music Controller Section -->
-<div class="music-controller fixed-bottom bg-light p-3">
-    <div class="d-flex justify-content-between align-items-center">
-        <!-- Current Playing Track Info -->
-        <div id="current-track-info">
-            <strong id="current-track-name">Aucun morceau en cours</strong>
-            <p id="current-track-artist"></p>
-        </div>
+    <!-- Music Controller Section -->
+    <div class="music-controller fixed-bottom bg-light p-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <!-- Current Playing Track Info -->
+            <div id="current-track-info">
+                <strong id="current-track-name">Aucun morceau en cours</strong>
+                <p id="current-track-artist"></p>
+            </div>
 
-        <!-- Music Controls -->
-        <div class="music-controls">
-            <button class="btn btn-secondary"
-                hx-get="/spotify/previous_track"
-                hx-target="#invisible"
-            >
-                <i class="bi bi-skip-backward-fill"></i>
-            </button>
-            <button class="btn btn-secondary"
-                hx-get="/spotify/pause_music"
-                hx-target="#invisible"
-            >
-            <i class="bi bi-pause-circle-fill"></i>
-            </button>
-            <button class="btn btn-secondary"
-                hx-get="/spotify/next_track"
-                hx-target="#invisible"
-            >
-                <i class="bi bi-skip-forward-fill"></i>
-            </button>
-            <button class="btn btn-secondary"
-                hx-get="/spotify/shuffle"
-                hx-target="#invisible"
-            >
-                <i class="bi bi-shuffle"></i>
-            </button>
-        </div>
+            <!-- Music Controls -->
+            <div class="music-controls">
+                <button class="btn btn-secondary"
+                    hx-get="/spotify/previous_track"
+                    hx-target="#invisible"
+                >
+                    <i class="bi bi-skip-backward-fill"></i>
+                </button>
+                <button class="btn btn-secondary"
+                    hx-get="/spotify/pause_music"
+                    hx-target="#invisible"
+                >
+                <i class="bi bi-pause-circle-fill"></i>
+                </button>
+                <button class="btn btn-secondary"
+                    hx-get="/spotify/next_track"
+                    hx-target="#invisible"
+                >
+                    <i class="bi bi-skip-forward-fill"></i>
+                </button>
+                <button class="btn btn-secondary"
+                    hx-get="/spotify/shuffle"
+                    hx-target="#invisible"
+                >
+                    <i class="bi bi-shuffle"></i>
+                </button>
+            </div>
 
-        <!-- Volume Control -->
-        <div class="volume-control">
-            <label for="volume-slider">Volume</label>
-            <input type="range" id="volume-slider" min="0" max="100" step="1" value="50" onchange="changeVolume(this.value)">
+            <!-- Volume Control -->
+            <div class="volume-control">
+                <label for="volume-slider">Volume</label>
+                <input type="range" id="volume-slider" min="0" max="100" step="1" value={{music_volume}}
+                        hx-post="/spotify/change_volume"
+                        hx-trigger="change"
+                        hx-target="#invisible"
+                        hx-vals="js:{'volume': document.getElementById('volume-slider').value}">
+            </div>
+
         </div>
     </div>
-</div>
+
+    {% else %}
+    <p>Vous n'avez aucune playlist.</p>
+    {% endif %}
 
 {% else %}
-<p>Vous n'avez aucune playlist.</p>
+    Vous n'êtes pas connecté à Spotify.
 {% endif %}
-
-<!-- Bouton pour lecture aléatoire -->
-<button class="btn btn-primary"
-    hx-post="{{ url_for('shuffle_playlist') }}"
-    hx-target="#invisible">
-    Aléatoire
-</button>
 
 {% endblock %}
 

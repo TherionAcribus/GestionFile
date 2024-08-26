@@ -16,6 +16,7 @@ from flask_mailman import Mail, EmailMessage
 from flask_socketio import SocketIO
 from datetime import datetime, timezone, date, time, timedelta
 import time as tm
+from functools import wraps
 #from flask_babel import Babel
 from gtts import gTTS
 from werkzeug.utils import secure_filename
@@ -1208,40 +1209,77 @@ def get_spotipy():
     
     return spotipy.Spotify(auth=token_info['access_token'])
 
-@app.route('/spotify/shuffle_playlist', methods=['GET'])
+def spotify_exception_handler(func):
+    """ Décoration qui permet de gérer les erreurs de Spotify"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except spotipy.exceptions.SpotifyException as e:
+            app.logger.error(f"Failed during Spotify operation in function {func.__name__}: {e}")
+            display_toast(success=False, message="Error :" + str(e))
+            # Retourner une réponse d'erreur standardisée
+            return '', 500  # Code 500 pour une erreur serveur
+    return wrapper
+
+@app.route('/spotify/shuffle', methods=['GET'])
+@spotify_exception_handler
 def shuffle_playlist():
     sp = get_spotipy()
     sp.shuffle(state=True)
     return '', 204
 
 @app.route('/spotify/pause_music', methods=['GET'])
+@spotify_exception_handler
 def pause_music():
     sp = get_spotipy()
     sp.pause_playback()
     return '', 204
 
 @app.route('/spotify/resume_music', methods=['GET'])
+@spotify_exception_handler
 def resume_music():
     sp = get_spotipy()
     sp.start_playback()
     return '', 204
 
 @app.route('/spotify/next_track', methods=['GET'])
+@spotify_exception_handler
 def next_track():
     sp = get_spotipy()
     sp.next_track()
     return '', 204
 
 @app.route('/spotify/previous_track', methods=['GET'])
+@spotify_exception_handler
 def previous_track():
     sp = get_spotipy()
     sp.previous_track()
     return '', 204
 
-@app.route('/spotify/set_volume/<int:volume>', methods=['GET'])
+
+@app.route('/spotify/change_volume', methods=['POST'])
+def change_volume():
+    """ Fonction appelée lorsque l'on change la valeur du slider de volume dans le lecteur 
+    Enregistre la nouvelle valeur dans la BDD et change le volume du lecteur """
+    volume = int(request.values.get('volume'))
+    
+    # change le volume dans la BDD
+    config_option = ConfigOption.query.filter_by(config_key="music_volume").first()
+    if config_option:
+        config_option.value_int = volume
+        db.session.commit()
+
+    # change le volume tout de suite
+    set_volume(volume)
+
+    return '', 204
+
+@spotify_exception_handler
 def set_volume(volume):
     sp = get_spotipy()
     sp.volume(volume)
+    return '', 204
 
 @app.route('/spotify/start_announce', methods=['GET'])
 def start_announce_music():
@@ -1258,23 +1296,14 @@ def stop_announce_music():
         set_volume(app.config["MUSIC_VOLUME"])
 
 @app.route('/spotify/play_playlist', methods=['POST'])
+@spotify_exception_handler
 def play_playlist():
     sp = get_spotipy()
     playlist_uri = request.form['playlist_uri']
-    shuffle = request.form.get('shuffle') == 'true'  # Vérifie si la checkbox est cochée
-
-    print("PLAYLIST_URI", playlist_uri)
-    print("SHUFFLE", shuffle)
 
     sp.start_playback(context_uri=playlist_uri)
 
     app.config["IS_PLAYING_SPOTIFY"] = True
-
-    print("current")
-    print(sp.current_playback())
-    print("end_current")
-
-    print('END SHUFFLE')
 
     # Envoie la commande à la page "announce" via WebSocket ou un autre mécanisme
     """communikation("update_audio", 
@@ -1302,12 +1331,14 @@ def admin_music():
         playlists = sp.current_user_playlists()
 
         return render_template('/admin/music.html',
-                                spotify_connected=spotify_connected, 
+                                spotify_connected=spotify_connected,
+                                music_volume = app.config["MUSIC_VOLUME"],
                                 playlists=playlists['items'])
 
     else:
         return render_template('/admin/music.html',
-                                spotify_connected=spotify_connected, 
+                                spotify_connected=spotify_connected,
+                                music_volume = app.config["MUSIC_VOLUME"],
                                 playlists=[])
 
 
