@@ -65,6 +65,7 @@ from python.announce import display, patients_ongoing, announce_init_gallery, an
 from python.admin.admin import admin_admin
 from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
 from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
+from python.admin.staff import admin_staff, display_staff_table, add_staff_form, update_member, confirm_delete, delete_staff, add_new_staff
 
 load_dotenv() 
 
@@ -625,6 +626,26 @@ app.add_url_rule('/admin/queue/create_new_patient_auto', 'create_new_patient_aut
                 partial(create_new_patient_auto), 
                 methods=['POST'])
 
+# ADMIN -> STAFF
+app.add_url_rule("/admin/staff", view_func=admin_staff)
+app.add_url_rule('/admin/staff/table', view_func=display_staff_table)
+app.add_url_rule('/admin/staff/add_form', view_func=add_staff_form)
+
+app.add_url_rule('/admin/staff/member_update/<int:member_id>', 'update_member', 
+                partial(update_member), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/staff/confirm_delete/<int:member_id>', 'confirm_delete', 
+                partial(confirm_delete), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/staff/delete/<int:member_id>', 'delete_staff', 
+                partial(delete_staff), 
+                methods=['GET'])
+
+app.add_url_rule('/admin/staff/add_new_staff', 'add_new_staff', 
+                partial(add_new_staff), 
+                methods=['POST'])
 
 
 
@@ -1440,134 +1461,6 @@ def clear_old_patients_table():
 
 # --------  ADMIN -> Staff   ---------
 
-# base
-@app.route('/admin/staff')
-def staff():    
-    return render_template('/admin/staff.html',
-                            activities = Activity.query.all())
-
-# affiche la table de l'équipe
-@app.route('/admin/staff/table')
-def display_staff_table():
-    staff = Pharmacist.query.all()
-    activities = Activity.query.all()
-    return render_template('admin/staff_htmx_table.html', staff=staff, activities=activities)
-
-
-# mise à jour des informations d'un membre
-@app.route('/admin/staff/member_update/<int:member_id>', methods=['POST'])
-def update_member(member_id):
-    try:
-        member = Pharmacist.query.get(member_id)
-        if member:
-            if request.form.get('name') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return ""
-            if request.form.get('initials') == '':
-                display_toast(success=False, message="Les initiales sont obligatoires")
-                return ""
-            member.name = request.form.get('name', member.name)
-            member.initials = request.form.get('initials', member.initials)
-            member.language = request.form.get('language', member.language)
-            activities_ids = request.form.getlist('activities')
-
-            # Suppression des activités ajoutées pour éviter les erreur de duplication
-            activities_ids = request.form.getlist('activities')
-            new_activities = Activity.query.filter(Activity.id.in_(activities_ids)).all()
-
-            # Clear existing activities and add the new ones
-            member.activities = new_activities
-
-            db.session.commit()
-            display_toast(success=True, message="Mise à jour réussie")
-            return ""
-        else:
-            display_toast(success=False, message="Membre de l'équipe introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success=False, message="Erreur : " + str(e))
-            return jsonify(status="error", message=str(e)), 500
-
-
-# affiche la modale pour confirmer la suppression d'un membre
-@app.route('/admin/staff/confirm_delete/<int:member_id>', methods=['GET'])
-def confirm_delete(member_id):
-    staff = Pharmacist.query.get(member_id)
-    return render_template('/admin/staff_modal_confirm_delete.html', staff=staff)
-
-
-# supprime un membre de l'equipe
-@app.route('/admin/staff/delete/<int:member_id>', methods=['GET'])
-def delete_staff(member_id):
-    try:
-        member = Pharmacist.query.get(member_id)
-        if not member:
-            display_toast(success=False, message="Membre de l'équipe non trouvé")
-            return display_staff_table()
-
-        db.session.delete(member)
-        db.session.commit()
-        display_toast(success=True, message="Suppression réussie")
-        return display_staff_table()
-
-    except Exception as e:
-        display_toast(success=False, message="Erreur : " + str(e))
-        return display_staff_table()
-    
-
-# affiche le formulaire pour ajouter un membre
-@app.route('/admin/staff/add_form')
-def add_staff_form():
-    activities = Activity.query.all()
-    return render_template('/admin/staff_add_form.html', activities=activities)
-
-
-# enregistre le membre dans la Bdd
-@app.route('/admin/staff/add_new_staff', methods=['POST'])
-def add_new_staff():
-    try:
-        name = request.form.get('name')
-        initials = request.form.get('initials')
-        language = request.form.get('language')
-        activities_ids = request.form.getlist('activities')
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
-            return display_staff_table()
-        if not initials:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Initiales obligatoires")
-            return display_staff_table()
-
-        new_staff = Pharmacist(
-            name=name,
-            initials=initials,
-            language=language,
-        )
-        db.session.add(new_staff)
-        db.session.commit()
-
-        # Associer les activités sélectionnées avec le nouveau pharmacien
-        for activity_id in activities_ids:
-            activity = Activity.query.get(int(activity_id))
-            if activity:
-                new_staff.activities.append(activity)
-        db.session.commit()
-
-        communication("update_admin", data={"action": "delete_add_staff_form"})
-        display_toast(success=True, message="Membre ajouté avec succès")
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
-
-        return f"{display_staff_table()}{clear_form_html}"
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=True, message= "Erreur : " + str(e))
-        return display_staff_table()
-
-
 # --------  FIN  de ADMIN -> Staff   ---------
 
 # --------  ADMIN -> Activity  ---------
@@ -1626,7 +1519,7 @@ def update_activity(activity_id):
         # Si on a modifier les schedules, on met à jour le bouton
         if activity.schedules != old_schedules:
             update_bouton_after_scheduler_changed(activity)
-        
+
         if request.form.get("staff_id"):
             activity.is_staff = True
             activity.staff = Pharmacist.query.get(int(request.form.get("staff_id")))
@@ -1683,7 +1576,6 @@ def update_bouton_after_scheduler_changed(activity):
     db.session.commit()  # Sauvegarder les modifications dans la base de données
 
     app.logger.info(f"UPDATE BOUTON: Activity {activity.name} is_active={is_activity_active}")
-    
 
 
 # affiche la modale pour confirmer la suppression d'une activité
@@ -1758,7 +1650,6 @@ def add_new_activity():
         if not name:  # Vérifiez que les champs obligatoires sont remplis
             communication("update_admin", data='Nom obligatoire')
             return return_good_display_activity(staff_id)
-        
 
         new_activity = Activity(
             name=name,
