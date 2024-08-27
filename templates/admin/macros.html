@@ -124,6 +124,15 @@
 </div>
 {% endmacro %}
 
+<!-- Champs texte pour les heures -->
+{% macro textbloc_hour(key, value, label) %}
+<div class="flex-grow-1 me-2">
+    <label for="{{ key }}" class="form-label">{{label}}</label>
+    <input type="time" id="{{ key }}" class="form-control" value="{{ value }}">
+</div>
+{{ button(key) }}
+{% endmacro %}
+
 
 {% macro textarea_full(key, value, label) %}
 <div class="row">

@@ -1,4 +1,5 @@
 from functools import wraps
+from flask import current_app as app
 
 def with_app_context(f):
     @wraps(f)
@@ -25,6 +26,7 @@ def disable_buttons_for_activity(activity_id):
             else:
                 button.is_present = False
         db.session.commit()
+        app.communikation("patient", event="refresh")
 
 
 @with_app_context
@@ -47,4 +49,4 @@ def enable_buttons_for_activity(activity_id):
         db.session.commit()
         # TODO trouver une solution pour APSCHEDULER + Websocket -> Celery ???
         #communication("update_page_patient", data={"action": "refresh buttons"})
-        #communikation("patient", event="refresh")
+        app.communikation("patient", event="refresh")

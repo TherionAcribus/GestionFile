@@ -91,6 +91,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_gallery_list(msg);
     })
 
+    adminSocket.on("refresh_schedule_tasks_list", function(msg) {
+        console.log("refresh_schedule_tasks_list:", msg);
+        refresh_schedule_tasks_list(msg);
+    })
+
     adminSocket.on('connect_error', function(err) {
         console.error('Admin WebSocket connection error:', err);
     });
@@ -294,6 +299,14 @@ htmx.on('htmx:afterSwap', function(evt) {
     }
     
 });
+
+
+// ---------------- TASKS ----------------
+
+function refresh_schedule_tasks_list(data) {
+    console.log(data);
+    htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
+}
 
 
 // ---------------- GENERAL ----------------

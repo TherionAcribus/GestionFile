@@ -133,10 +133,10 @@ class Config:
     MAIL_USERNAME = "api"
     MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
     MAIL_DEFAULT_SENDER = "hi@demomailtrap.com."
+
     GALLERIES_FOLDER = 'static/galleries'
     # music
     IS_PLAYING_SPOTIFY = False
-
 
 app = Flask(__name__)
 
@@ -952,8 +952,7 @@ def update_input():
     key = request.values.get('key')
     value = request.values.get('value')
     check = request.values.get('check')
-    print("RESQUEST", request.form)
-    
+
     if check:
         if check == "int":
             if value.isdigit():
@@ -973,8 +972,7 @@ def update_input():
                 value = text_check["value"]
             else:
                 return display_toast(success=False, message=text_check["value"])
-        
-        
+
     if key.startswith("ticket_"):
         escpos_text = convert_markdown_to_escpos(value)
         print("escpos_text", escpos_text)
@@ -999,14 +997,27 @@ def update_input():
             else:
                 config_option.value_str = value
             db.session.commit()
-            
-            return display_toast(success=True, message="Option mise à jour.")
+
+            # pour les actions à faire après un changement
+            special_functions_with_input(key)
+
+            display_toast(success=True, message="Option mise à jour.")
+
+            return "", 204
         else:
-            return display_toast(success=False, message="Option non trouvée.")
+            display_toast(success=False, message="Option non trouvée.")
+            return "", 204
+
     except Exception as e:
-            print(e)
+            app.logger.error(e)
             return display_toast(success=False, message=str(e))
 
+
+def special_functions_with_input(key):
+    if key == "cron_delete_patient_table_hour":
+        remove_scheduler_clear_all_patients()
+        scheduler_clear_all_patients()
+        communikation("admin", event="refresh_schedule_tasks_list")
 
 @app.route('/admin/update_select', methods=['POST'])
 def update_select():
@@ -1049,13 +1060,13 @@ def call_function_with_switch(key, value):
 def check_balises_before_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
     print("call_function_with_input", value)
-    
+
     #return validate_and_transform_text_for_before_validation(value)
 
 def check_balises_after_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
     print("call_function_with_input", value)
-    
+
     #return validate_and_transform_text_for_after_validation(value)
 
 # --------  ADMIN -> App  ---------
@@ -1346,10 +1357,9 @@ def admin_music():
 
 @app.route('/admin/database')
 def admin_database():
-    cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"]
     return render_template('/admin/database.html',
-                        cron_delete_patient_table_activated = cron_delete_patient_table_activated)
-
+                        cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
+                        cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],)
 
 @app.route("/admin/database/schedule_tasks_list")
 def display_schedule_tasks_list():
@@ -1365,22 +1375,37 @@ def display_schedule_tasks_list():
 
 def scheduler_clear_all_patients():
     # vide la table patient à minuit
+    job_id = 'Clear Patient Table'
+
+    # Vérifier si le job existe déjà
+    if scheduler.get_job(job_id):
+        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
+        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
+
     try:
-        scheduler.add_job(id='Clear Patient Table', func=clear_all_patients_from_db, trigger='cron', hour=00, minute=00)
-        app.logger.info("Job 'Clear Patient Table' successfully added.")
-        communication("update_admin", data="schedule_tasks_list")
+        hour=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[0])
+        minute=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
+        scheduler.add_job(id=job_id, 
+                        func=clear_all_patients_job, 
+                        trigger='cron', 
+                        hour=hour, 
+                        minute=minute)
+        app.logger.info(f"Job '{job_id}' successfully added.")
         return True
     except Exception as e:
-        app.logger.error(f"Failed to add job 'Clear Patient Table': {e}")
+        app.logger.error(f"Failed to add job '{job_id}': {e}")
         return False
 
+def clear_all_patients_job():
+    """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
+    with app.app_context():
+        clear_all_patients_from_db()
 
 def remove_scheduler_clear_all_patients():
     try:
         # Supprime le job à l'aide de son id
         scheduler.remove_job('Clear Patient Table')
         app.logger.info("Job 'Clear Patient Table' successfully removed.")
-        communication("update_admin", data="schedule_tasks_list")
         return True
     except Exception as e:
         app.logger.error(f"Failed to remove job 'Clear Patient Table': {e}")
@@ -1401,7 +1426,6 @@ def clear_old_patients_table():
             old_patients.delete(synchronize_session='fetch')
             db.session.commit()
             communikation("update_patient")
-            communication("update_patients")
             app.logger.info(f"Deleted old patients not from today ({today}).")
     else:
         app.logger.info("Deletion of old patients is disabled.")
@@ -1538,8 +1562,6 @@ def add_new_staff():
         db.session.rollback()
         display_toast(success=True, message= "Erreur : " + str(e))
         return display_staff_table()
-
-
 
 
 # --------  FIN  de ADMIN -> Staff   ---------
@@ -2003,7 +2025,7 @@ def update_scheduler_for_activity(activity):
 
             scheduler.add_job(
                 id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
-                func='app:enable_buttons_for_activity',
+                func='app:enable_buttons_for_activity_task',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=day,
@@ -2012,7 +2034,7 @@ def update_scheduler_for_activity(activity):
             )
             scheduler.add_job(
                 id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
-                func='app:disable_buttons_for_activity',
+                func='app:disable_buttons_for_activity_task',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=day,
@@ -2021,14 +2043,13 @@ def update_scheduler_for_activity(activity):
             )
             print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
 
+def disable_buttons_for_activity_task(activity_id):
+    with app.app_context():
+        disable_buttons_for_activity(activity_id)
 
-
-
-
-
-
-
-
+def enable_buttons_for_activity_task(activity_id):
+    with app.app_context():
+        enable_buttons_for_activity(activity_id)
 
 # -------- Fin de ADMIN -> Activity  ---------
 
@@ -2426,6 +2447,10 @@ def serve_sound(filename):
 def delete_sound(sound_filename):
     sound_path = os.path.join("static/audio/signals", sound_filename)    
     try:
+        # on empeche de supprimer le son en cours d'utilisation
+        if sound_filename == app.config["ANNOUNCE_ALERT_FILENAME"]:
+            display_toast(success=False, message="Impossible de supprimer le son courant. Selectionner un autre son et valider avant de supprimer celui-ci.")
+            return "", 204
         # Vérifier si le fichier existe avant de le supprimer
         if os.path.exists(sound_path):
             os.remove(sound_path)
@@ -3965,6 +3990,7 @@ def load_configuration():
         "phone_line6": ("PHONE_LINE6", "value_str"),
         "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
+        "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
         "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
         "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
         "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
@@ -3978,9 +4004,8 @@ def load_configuration():
             app.config[config_name] = getattr(config_option, value_type)
 
     # Handling special case for cron_delete_patient_table_activated
-    #if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
-    #    scheduler_clear_all_patients()
-    # TODO A Créer seulement si n'existe pas 
+    if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
+        scheduler_clear_all_patients()
 
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
@@ -4005,6 +4030,10 @@ def load_colors(sender, **extra):
 # Connecter le signal request_started à la fonction load_configuration
 request_started.connect(load_colors, app)
 
+app.config.from_object(ConfigScheduler())
+scheduler = APScheduler()
+scheduler.init_app(app)
+scheduler.start()
 
 with app.app_context():
 
@@ -4039,11 +4068,6 @@ with app.app_context():
     load_configuration()
     clear_old_patients_table()
     clear_counter_table(db, Counter, Patient)
-
-app.config.from_object(ConfigScheduler())
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration

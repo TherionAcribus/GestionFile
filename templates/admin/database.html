@@ -10,6 +10,11 @@
             "Vider automatiquement la table des patients une fois par jour")
     }}
 
+    {{ macros.textbloc_hour("cron_delete_patient_table_hour", 
+            cron_delete_patient_table_hour, 
+            "Heure de la suppression")
+    }}
+
     <div id="div_schedule_tasks_list"
         hx-get="/admin/database/schedule_tasks_list"
         hx-trigger="load, refresh_schedule_tasks_list"

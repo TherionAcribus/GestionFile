@@ -1,13 +1,14 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.2",
+    "version": "0.1",
     "timestamp": "2024-08-26 16:35:26",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
             "pharmacy_name": "Pharmacie Sainte-Agathe",
             "cron_delete_patient_table_activated": true,
+            "cron_delete_patient_table_hour": "00:00",
             "algo_activate": true,
             "algo_overtaken_limit": 3,
             "numbering_by_activity": true,
