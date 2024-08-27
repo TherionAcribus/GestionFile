@@ -51,6 +51,7 @@ from wtforms import StringField, PasswordField, HiddenField, SubmitField, Multip
 from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
 import jwt
+from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
@@ -64,6 +65,8 @@ from python.announce import display, patients_ongoing, announce_init_gallery, an
 from python.admin.admin import admin_admin
 from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
 from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
+
+load_dotenv() 
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -92,11 +95,12 @@ class Config:
     SECRET_KEY = 'your_secret_key'
 
     if database == "mysql":
-        MYSQL_USER = 'admin'
-        MYSQL_PASSWORD = '1Licornecornue'
-        HOST = 'localhost'
-        DB_NAME = 'queuedatabase'
 
+        MYSQL_USER = os.getenv('MYSQL_USER')
+        MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
+        HOST = os.getenv('MYSQL_HOST')
+        DB_NAME = os.getenv('MYSQL_DATABASE')
+        
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
         SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
