@@ -82,7 +82,7 @@ database = "mysql"
 
 def get_parameter(name):
     """ Récupération des paramètres pour AWS"""
-    ssm = boto3.client('ssm', region_name='eu-west-3a')  
+    ssm = boto3.client('ssm', region_name='eu-west-3')  
     response = ssm.get_parameter(Name=name, WithDecryption=True)
     return response['Parameter']['Value']
 
