@@ -33,6 +33,7 @@ import subprocess
 import threading
 import socket
 import pika
+import boto3
 
 from urllib.parse import urlparse, urljoin
 import random
@@ -67,17 +68,23 @@ from python.admin.patient import admin_patient, display_button_table, order_butt
 from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
 from python.admin.staff import admin_staff, display_staff_table, add_staff_form, update_member, confirm_delete, delete_staff, add_new_staff
 
-load_dotenv() 
+load_dotenv()
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-site = "production"
+site = "aws"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 database = "mysql"
+
+def get_parameter(name):
+    """ Récupération des paramètres pour AWS"""
+    ssm = boto3.client('ssm', region_name='us-east-1')  # Remplacez 'us-east-1' par votre région AWS
+    response = ssm.get_parameter(Name=name, WithDecryption=True)
+    return response['Parameter']['Value']
 
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
@@ -97,10 +104,18 @@ class Config:
 
     if database == "mysql":
 
-        MYSQL_USER = os.getenv('MYSQL_USER')
-        MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
-        HOST = os.getenv('MYSQL_HOST')
-        DB_NAME = os.getenv('MYSQL_DATABASE')
+        if site=="aws":
+            MYSQL_USER = get_parameter('MYSQL_USER')
+            MYSQL_PASSWORD = get_parameter('MYSQL_PASSWORD')
+            HOST = get_parameter('MYSQL_HOST')
+            DB_NAME = get_parameter('MYSQL_DATABASE')
+
+        else:
+
+            MYSQL_USER = os.getenv('MYSQL_USER')
+            MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
+            HOST = os.getenv('MYSQL_HOST')
+            DB_NAME = os.getenv('MYSQL_DATABASE')
         
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
@@ -646,7 +661,6 @@ app.add_url_rule('/admin/staff/delete/<int:member_id>', 'delete_staff',
 app.add_url_rule('/admin/staff/add_new_staff', 'add_new_staff', 
                 partial(add_new_staff), 
                 methods=['POST'])
-
 
 
 @app.route('/logout_all')
