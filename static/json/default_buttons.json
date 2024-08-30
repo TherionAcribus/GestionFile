@@ -40,23 +40,6 @@
             "parent_button_id": null  
         },
         {
-            "id": 3,
-            "by_user": false,
-            "code": "VACCIN",
-            "is_parent": false,
-            "label": "Vaccination",
-            "label_en": "None",
-            "is_active": true,
-            "is_present": true,
-            "shape": "circle",
-            "image_url": "vaccin.png",
-            "background_color": null,
-            "text_color": null,
-            "sort_order": 3,
-            "activity_id": 10,
-            "parent_button_id": null
-        },
-        {
             "id": 4,
             "by_user": false,
             "code": "COLLECT",
