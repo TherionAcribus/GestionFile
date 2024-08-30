@@ -68,7 +68,6 @@ from python.admin.patient import admin_patient, display_button_table, order_butt
 from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
 from python.admin.staff import admin_staff, display_staff_table, add_staff_form, update_member, confirm_delete, delete_staff, add_new_staff
 
-load_dotenv()
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -78,6 +77,7 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
+load_dotenv()
 database = "mysql"
 
 def get_parameter(name):
