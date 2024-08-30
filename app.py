@@ -75,7 +75,7 @@ rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
 # adresse developement
 rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 
-site = "aws"
+site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 database = "mysql"
