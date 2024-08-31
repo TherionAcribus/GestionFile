@@ -1,0 +1,32 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Traduction{% endblock %}
+
+{% block content %}
+    <h3>Traductions</h3>
+    
+    <div class="row">
+        <div class="col-12">
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs" id="translationsTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="languages-tab" data-bs-toggle="tab" data-bs-target="#tab_languages" type="button" role="tab" aria-controls="tab_languages" aria-selected="true">Langues</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="texts-tab" data-bs-toggle="tab" data-bs-target="#tab_texts" type="button" role="tab" aria-controls="tab_texts" aria-selected="false">Textes</button>
+                </li>
+            </ul>
+
+            <!-- Tab content -->
+            <div class="tab-content" id="securityTabContent">
+                <div class="tab-pane fade show active" id="tab_languages" role="tabpanel" aria-labelledby="languages-tab">
+                    {% include 'admin/translations_tab_languages.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_texts" role="tabpanel" aria-labelledby="texts-tab">
+                    {% include 'admin/translations_tab_texts.html' %}       
+                </div>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}

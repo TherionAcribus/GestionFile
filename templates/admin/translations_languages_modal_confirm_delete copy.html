@@ -1,0 +1,12 @@
+<p>Vous vous appretez à supprimer {{language.name}} définitivement. 
+<br> Confirmez-vous la suppression ? </p>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <button type="button" class="btn btn-danger"
+    hx-get="/admin/languages/delete/{{ language.id }}"
+    hx-target="#div_languages_table"
+    data-bs-dismiss="modal"
+    >Supprimer</button>
+</div>
+

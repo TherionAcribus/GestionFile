@@ -1,0 +1,27 @@
+<table id="new_language_form">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Nom</th>
+            <th>Nom traduit</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" class="form-control" maxlength="2" name="code" value="" id="code"></td>
+            <td><input type="text" class="form-control" name="name" value="" id="name"></td>
+            <td><input type="text" class="form-control" name="translation" value="" id="translation"></td>
+            <td>
+                <button class="btn btn-primary"
+                    hx-target="#div_languages_table"
+                    hx-post="/admin/languages/add_new_language"
+                    hx-vals='js:{"code": document.getElementById("code").value, 
+                            "name": document.getElementById("name").value,
+                            "translation": document.getElementById("translation").value    
+                        }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+    </tbody>
+</table>

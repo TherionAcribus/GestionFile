@@ -2,11 +2,11 @@
     {
         "code": "fr",
         "name": "Français",
-        "traduction": "Français"
+        "translation": "Français"
     },
     {
         "code": "en",
         "name": "Anglais",
-        "traduction": "English"
+        "translation": "English"
     }
 ]

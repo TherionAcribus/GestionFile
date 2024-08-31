@@ -1,0 +1,15 @@
+<div id="div_languages_table"
+    hx-get="/admin/languages/table"
+    hx-trigger="load, refresh_languages_table"
+    hx-target="#div_languages_table"
+    hx-swap="innerHTML">        
+</div>
+
+<!-- Ajout nouvelle activité -->
+<a class="btn btn-primary"
+        hx-get="/admin/languages/add_form"
+        hx-target="#div_add_language_form"
+        hx-swap="innerHTML">
+        Ajouter une langue
+</a>    
+<div id="div_add_language_form"></div>

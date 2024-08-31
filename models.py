@@ -314,7 +314,7 @@ class Language(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(2), nullable=False, unique=True)
     name = db.Column(db.String(50), nullable=False)
-    traduction = db.Column(db.String(50), nullable=False)
+    translation = db.Column(db.String(50), nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint('code', name='uq_language_code'),

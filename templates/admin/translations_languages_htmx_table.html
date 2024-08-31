@@ -1,0 +1,40 @@
+<table id="staff_table" class="striped">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Nom</th>
+            <th>Nom traduit</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for language in languages %}        
+        <tr>
+            <td><input type="text" class="form-control" maxlength="2" name="code" value="{{ language.code }}" id="code-{{ language.id }}"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ language.name }}" id="name-{{ language.id }}"></td>
+            <td><input type="text" class="form-control" name="translation" value="{{ language.translation }}" id="translation-{{ language.id }}"></td>
+            <td>
+                <button class="btn btn-primary" 
+                    hx-target="#invisible"
+                    hx-post="/admin/languages/language_update/{{ language.id }}"
+                    hx-vals='js:{"code": document.getElementById("code-{{ language.id }}").value, 
+                            "name": document.getElementById("name-{{ language.id }}").value,
+                            "translation": document.getElementById("translation-{{ language.id }}").value,
+                            }'>
+                    Enregistrer
+                </button>
+
+                <button class="btn btn-danger"
+                        hx-get="/admin/languages/confirm_delete/{{ language.id }}"
+                        hx-target="#modal-htmx"
+                        hx-trigger="click"
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
+                    Supprimer
+                </button>
+            </td>
+        </tr>
+
+
+        {% endfor %}
+    </tbody>
+</table>
