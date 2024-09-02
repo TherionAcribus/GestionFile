@@ -125,11 +125,12 @@ def add_new_language():
         return display_languages_table()
     
 
-def insert_translation_if_not_exists(table_name, column_name, row_id, language_code, text):
+def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, language_code, text):
     """Insert a translation if it doesn't already exist in the Translation table."""
     existing_translation = Translation.query.filter_by(
         table_name=table_name,
         column_name=column_name,
+        key_name=key_name,
         row_id=row_id,
         language_code=language_code
     ).first()
@@ -138,6 +139,7 @@ def insert_translation_if_not_exists(table_name, column_name, row_id, language_c
         translation = Translation(
             table_name=table_name,
             column_name=column_name,
+            key_name=key_name,
             row_id=row_id,
             language_code=language_code,
             translated_text=text
@@ -167,6 +169,7 @@ def translations_collect():
                 if insert_translation_if_not_exists(
                     table_name='ConfigOption',
                     column_name='value_str',
+                    key_name=row.config_key,
                     row_id=row.id,
                     language_code=default_language_code,
                     text=row.value_str
@@ -177,6 +180,7 @@ def translations_collect():
                 if insert_translation_if_not_exists(
                     table_name='ConfigOption',
                     column_name='value_text',
+                    key_name=row.config_key,
                     row_id=row.id,
                     language_code=default_language_code,
                     text=row.value_text
@@ -189,6 +193,7 @@ def translations_collect():
         if insert_translation_if_not_exists(
             table_name='Button',
             column_name='label',
+            key_name="",
             row_id=row.id,
             language_code=default_language_code,
             text=row.label
@@ -203,6 +208,7 @@ def translations_collect():
                 table_name='Activity',
                 column_name='inactivity_message',
                 row_id=row.id,
+                key_name="",
                 language_code=default_language_code,
                 text=row.inactivity_message
             ):
@@ -212,6 +218,7 @@ def translations_collect():
             if insert_translation_if_not_exists(
                 table_name='Activity',
                 column_name='specific_message',
+                key_name="",
                 row_id=row.id,
                 language_code=default_language_code,
                 text=row.specific_message
@@ -242,24 +249,32 @@ def change_language_target():
 
     # Dictionnaires pour stocker les traductions associées par clé unique
     button_translations = {}
+    activity_translations = {}
     config_option_translations = {}
 
     # Créer des dictionnaires séparés avec les textes en français
     for ref in references:
-        key = (ref.table_name, ref.column_name, ref.row_id)
+        key = (ref.table_name, ref.column_name, ref.row_id, ref.key_name)
         if ref.table_name == 'Button':
             button_translations[key] = {'fr': ref.translated_text, 'target': None}
+        elif ref.table_name == 'Activity':
+            activity_translations[key] = {'fr': ref.translated_text, 'target': None}
         elif ref.table_name == 'ConfigOption':
             config_option_translations[key] = {'fr': ref.translated_text, 'target': None}
 
     # Ajouter les traductions de la langue cible
     for trans in translations:
-        key = (trans.table_name, trans.column_name, trans.row_id)
+        key = (trans.table_name, trans.column_name, trans.row_id, trans.key_name)
         if trans.table_name == 'Button':
             if key in button_translations:
                 button_translations[key]['target'] = trans.translated_text
             else:
                 button_translations[key] = {'fr': None, 'target': trans.translated_text}
+        elif trans.table_name == 'Activity':
+            if key in activity_translations:
+                activity_translations[key]['target'] = trans.translated_text
+            else:
+                activity_translations[key] = {'fr': None, 'target': trans.translated_text}
         elif trans.table_name == 'ConfigOption':
             if key in config_option_translations:
                 config_option_translations[key]['target'] = trans.translated_text
@@ -269,6 +284,7 @@ def change_language_target():
     return render_template("admin/translations_texts_list.html",
                             language_code=language_code,
                             button_translations=button_translations,
+                            activity_translations=activity_translations,
                             config_option_translations=config_option_translations)
 
 
@@ -281,7 +297,7 @@ def save_translations():
     for key, value in request.form.items():
         print("key", key)
         if key.startswith("translation|"):
-            _, table_name, column_name, row_id = key.split('|')
+            _, table_name, column_name, row_id, key_name = key.split('|')
             row_id = int(row_id)
             
             # Rechercher la traduction existante ou en créer une nouvelle
@@ -289,6 +305,7 @@ def save_translations():
                 table_name=table_name,
                 column_name=column_name,
                 row_id=row_id,
+                key_name=key_name,
                 language_code=language_code
             ).first()
 
@@ -301,6 +318,7 @@ def save_translations():
                     table_name=table_name,
                     column_name=column_name,
                     row_id=row_id,
+                    key_name=key_name,
                     language_code=language_code,
                     translated_text=value
                 )

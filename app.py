@@ -54,7 +54,7 @@ from flask_wtf import FlaskForm
 import jwt
 from dotenv import load_dotenv
 
-from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link
+from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
@@ -2756,19 +2756,55 @@ def patients_langue(lang):
 
 @app.route('/patient')
 def patients_front_page():
+
+    language_code = request.args.get('language_code')
+    
+    print("language_code START", language_code)
+    # définition 
+    if language_code != None or language_code == "fr":
+        session['language_code'] = "fr"
+    else:
+        session['language_code'] = language_code
+
+    if language_code != "fr":
+        page_patient_title = get_text_translation("page_patient_title", language_code)
+        page_patient_subtitle =get_text_translation("page_patient_subtitle", language_code)
+    else:
+        page_patient_title=app.config['PAGE_PATIENT_TITLE']
+        page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE']
+
     return render_template('patient/patient_front_page.html', 
-                            page_patient_title=app.config['PAGE_PATIENT_TITLE'], 
-                            page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
+                            page_patient_title=page_patient_title,
+                            page_patient_subtitle=page_patient_subtitle,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
+def get_text_translation(key_name, language_code):
+    print("key_name", key_name, "language_code", language_code)
+    try:
+        return db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
+    except AttributeError:
+        app.logger.error(f"Translation not found for key: {key_name}, language: {language_code}")
+        return "Erreur"
+
+@app.route('/patient/change_language/<language_code>')
+def change_language(language_code):
+    print("BEFORE", language_code)
+    # Enregistrer le code de la langue dans la session
+    return redirect(url_for('patients_front_page', language_code=language_code))  
 
 # affiche les boutons
 @app.route('/patient/patient_buttons')
 def patient_right_page():
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
-    print("BUTTONS", buttons)
+
+    language_code = session.get('language_code', 'fr')
+    if language_code != "fr":
+        buttons = get_buttons_translation(buttons, language_code)
+        page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)
+    else:
+        page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']    
+
     max_length = 2 if buttons[0].shape == "square" else 4
-    print("MAX_LENGTH", max_length)
 
     buttons_content = render_template('patient/patient_buttons_left.html', 
                             buttons=buttons,
@@ -2777,12 +2813,24 @@ def patient_right_page():
     
     subtitle_content = render_template(
         'patient/patient_default_subtitle.html', 
-        page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
+        page_patient_subtitle=page_patient_subtitle,
     )
     
     return f"{buttons_content}{subtitle_content}"
 
-
+def get_buttons_translation(buttons, language_code):
+    for button in buttons:
+            # Récupérer la traduction du label du bouton
+            translation = Translation.query.filter_by(
+                table_name='Button',
+                row_id=button.id,
+                language_code=language_code
+            ).first()
+            
+            # Si une traduction existe, mettre à jour le label du bouton
+            if translation.translated_text != "":
+                button.label = translation.translated_text
+    return buttons
 
 @app.route('/patients_submit', methods=['POST'])
 def patients_submit():
@@ -2799,19 +2847,33 @@ def patients_submit():
 
 def display_activity_inactive(request):
     activity = Activity.query.get(request.form.get('activity_id'))
-    message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
-    if activity.inactivity_message != "":
-        message = activity.inactivity_message
+    
+    language_code = session.get('language_code', 'fr')
+    if language_code != "fr":
+        default_subtitle = get_text_translation("page_patient_subtitle", language_code)
+    else:
+        default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
+
+        message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
+        if activity.inactivity_message != "":
+            message = activity.inactivity_message
+
     return render_template('patient/activity_inactive.html',
                             page_patient_disable_default_message=message,
-                            default_subtitle=app.config['PAGE_PATIENT_SUBTITLE'],
+                            default_subtitle=default_subtitle,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"])
 
 
 @app.route("/patient/default_subtitle")
 def display_default_children_text():
-    page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
+        
+    language_code = session.get('language_code', 'fr')
+    if language_code != "fr":
+        page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)
+    else:
+        page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'] 
+
     return render_template('patient/patient_default_subtitle.html',
                             page_patient_subtitle=page_patient_subtitle)
 
@@ -2822,6 +2884,11 @@ def cancel_children():
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
     children_buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
+    
+    language_code = session.get('language_code', 'fr')
+    if language_code != "fr":
+        children_buttons = get_buttons_translation(children_buttons, language_code)
+
     print("children_buttons", children_buttons)
     max_length = 2 if children_buttons[0].shape == "square" else 4
     return render_template('patient/patient_buttons_left.html', 
@@ -2829,7 +2896,6 @@ def display_children_buttons_for_right_page(request):
                             max_length=max_length,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             children=True)
-
 
 # affiche la page de validation pour page gauche et droite
 def display_validation_after_choice(request):

@@ -44,7 +44,18 @@
                 hx-target="#div_buttons_children"
                 hx-swap="innerHTML">
             </div>
+
+        <!-- Sélecteur de langue avec des drapeaux -->
+        <div class="language-selector">
+            <!-- Remplacer les liens des images par les chemins vers vos images de drapeaux -->
+            <img src="../static/images/pays/france.png" alt="Français" hx-get="/patient/change_language/fr" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
+            <img src="../static/images/pays/etats-unis.png" alt="Anglais" hx-get="/patient/change_language/en" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
+            <img src="../static/images/pays/allemagne.png" alt="Espagnol" hx-get="/patient/change_language/ge" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
+        </div>
+
     </div>
+
+
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
     <script src="../static/js/patients.js"></script>

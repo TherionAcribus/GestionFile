@@ -316,7 +316,8 @@ class Language(db.Model):
     code = db.Column(db.String(2), nullable=False, unique=True)
     name = db.Column(db.String(50), nullable=False)
     translation = db.Column(db.String(50), nullable=False)
-
+    is_active = db.Column(db.Boolean, default=True)
+    
     __table_args__ = (
         db.UniqueConstraint('code', name='uq_language_code'),
     )
@@ -346,6 +347,7 @@ class Translation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     table_name = db.Column(db.String(50), nullable=False)  # Le nom de la table d'origine
     column_name = db.Column(db.String(50), nullable=False)  # Le nom de la colonne d'origine
+    key_name = db.Column(db.String(50), nullable=True)
     row_id = db.Column(db.Integer, nullable=False)  # L'ID de la ligne d'origine
     language_code = db.Column(db.String(5), nullable=False)  # Code de la langue (ex: 'en', 'fr')
     translated_text = db.Column(db.Text, nullable=False, default="")  # Le texte traduit
