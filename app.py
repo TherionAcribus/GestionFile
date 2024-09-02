@@ -4058,7 +4058,7 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 scheduler.start()
 
-"""with app.app_context():
+with app.app_context():
 
     init_database(database, db)
 
@@ -4090,7 +4090,7 @@ scheduler.start()
     init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
     load_configuration()
     clear_old_patients_table()
-    clear_counter_table(db, Counter, Patient)"""
+    clear_counter_table(db, Counter, Patient)
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
