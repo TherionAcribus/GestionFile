@@ -67,7 +67,7 @@ from python.admin.admin import admin_admin
 from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
 from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
 from python.admin.staff import admin_staff, display_staff_table, add_staff_form, update_member, confirm_delete, delete_staff, add_new_staff
-from python.admin.translation import admin_translation, display_languages_table, update_language, add_language_form, add_new_language, confirm_delete_language, delete_language
+from python.admin.translation import admin_translation, display_languages_table, update_language, add_language_form, add_new_language, confirm_delete_language, delete_language, translations_collect, change_language_target, save_translations
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -666,6 +666,8 @@ app.add_url_rule('/admin/staff/add_new_staff', 'add_new_staff',
 app.add_url_rule("/admin/translations", view_func=admin_translation)
 app.add_url_rule('/admin/languages/table', view_func=display_languages_table)
 app.add_url_rule('/admin/languages/add_form', view_func=add_language_form)
+app.add_url_rule('/admin/translations/collect', view_func=translations_collect)
+
 
 app.add_url_rule('/admin/languages/language_update/<int:language_id>', 'update_language', 
                 partial(update_language), 
@@ -682,6 +684,15 @@ app.add_url_rule('/admin/languages/confirm_delete/<int:language_id>', 'confirm_d
 app.add_url_rule('/admin/languages/delete/<int:language_id>', 'delete_language', 
                 partial(delete_language), 
                 methods=['GET'])
+
+app.add_url_rule('/admin/translations/change_language_target', 'change_language_target', 
+                partial(change_language_target), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/translations/save_translations', 'save_translations', 
+                partial(save_translations), 
+                methods=['POST'])
+                
 
 @app.route('/logout_all')
 def logout_all():

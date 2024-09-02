@@ -1,1 +1,27 @@
+<h4>Choix de la langue</h4>
+<div class="input-field">
+    <select class="form-select"
+    id="language_target"
+    hx-trigger="change"
+    hx-post="/admin/translations/change_language_target"
+    hx-target="#translations_list"
+    hx-vals='js:{"language_code": document.getElementById("language_target").value}'
+    >
+        <option value="" disabled selected>Choix de la langue cible</option>
+        {% for language in languages %}
+        <option value="{{ language.code }}">
+            {{ language.name.capitalize() }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+
+<div id="translations_list"></div>
+
+<btn
+    class="btn btn-primary"
+    hx-get="translations/collect"
+    hx-target="#invisible">
+    Mettre les textes à jour
+</btn>
 

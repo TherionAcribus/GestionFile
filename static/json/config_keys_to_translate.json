@@ -1,0 +1,26 @@
+{   
+    "name": "config keys to translate",
+    "comments": "Liste les textes de ConfigOptions à traduire",
+    "version": "0.1",
+    "timestamp": "2024-08-31 14:35:26",
+    "config_keys_to_translate": [
+        "page_patient_disable_default_message",
+        "page_patient_title",
+        "page_patient_subtitle",
+        "page_patient_qrcode_data",
+        "ticket_header",
+        "ticket_message",
+        "ticket_footer",
+        "phone_title",
+        "phone_line1",
+        "phone_line2",
+        "phone_line3",
+        "phone_line4",
+        "phone_line5",
+        "phone_line6",
+        "announce_call_sound",
+        "announce_ongoing_text",
+        "announce_call_text",
+        "announce_text_down_patients"
+    ]
+}

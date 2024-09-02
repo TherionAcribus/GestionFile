@@ -309,6 +309,7 @@ class Button(db.Model):
             elif hasattr(self, field):
                 setattr(self, field, value)
 
+
 class Language(db.Model):
     __tablename__ = 'language'
     id = db.Column(db.Integer, primary_key=True)
@@ -341,6 +342,20 @@ class TextTranslation(db.Model):
         db.ForeignKeyConstraint(['language_id'], ['language.id'], name='fk_text_translation_language_id', ondelete='CASCADE'),
     )
 
+class Translation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    table_name = db.Column(db.String(50), nullable=False)  # Le nom de la table d'origine
+    column_name = db.Column(db.String(50), nullable=False)  # Le nom de la colonne d'origine
+    row_id = db.Column(db.Integer, nullable=False)  # L'ID de la ligne d'origine
+    language_code = db.Column(db.String(5), nullable=False)  # Code de la langue (ex: 'en', 'fr')
+    translated_text = db.Column(db.Text, nullable=False, default="")  # Le texte traduit
+
+    __table_args__ = (
+        UniqueConstraint('table_name', 'column_name', 'row_id', 'language_code', name='uq_translation'),
+    )
+
+    def __repr__(self):
+        return f"<Translation {self.language_code}: {self.translated_text[:20]}>"
 
 class User(db.Model, UserMixin):
     __tablename__ = 'user'

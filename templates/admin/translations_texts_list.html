@@ -1,0 +1,33 @@
+{{translations_dict}}
+
+<!-- Section pour les textes liés aux boutons -->
+<h2>Traductions des Boutons</h2>
+<form method="post" hx-post="/admin/translations/save_translations" hx-target="#invisible" hx-swap="innerHTML">
+    <input type="hidden" name="language_code" value="{{ language_code }}">
+    <div id="button_translations">
+        {% for key, texts in button_translations.items() %}
+            <div>
+                {{ texts['fr'] }}
+                <input type="text" name="translation|{{ key[0] }}|{{ key[1] }}|{{ key[2] }}" 
+                        value="{{ texts['target'] or '' }}" />
+            </div>
+        {% endfor %}
+    </div>
+    <button type="submit">Enregistrer les traductions des boutons</button>
+</form>
+
+<!-- Section pour les textes liés aux ConfigOption -->
+<h2>Traductions des ConfigOption</h2>
+<form method="post" hx-post="/admin/translations/save_translations" hx-target="#invisible" hx-swap="innerHTML">
+    <input type="hidden" name="language_code" value="{{ language_code }}">
+    <div id="config_option_translations">
+        {% for key, texts in config_option_translations.items() %}
+            <div>
+                {{ texts['fr'] }}
+                <input type="text" name="translation|{{ key[0] }}|{{ key[1] }}|{{ key[2] }}" 
+                        value="{{ texts['target'] or '' }}" />
+            </div>
+        {% endfor %}
+    </div>
+    <button type="submit">Enregistrer les traductions des ConfigOption</button>
+</form>
