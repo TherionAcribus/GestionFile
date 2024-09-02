@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_counter_order();
     })
 
+    adminSocket.on("refresh_languages_order", function(msg) {
+        console.log("refresh_languages_order:", msg);
+        refresh_languages_order();
+    })
+
     adminSocket.on("refresh_sound", function(msg) {
         console.log("refresh_sound:", msg);
         refresh_sound();
@@ -252,6 +257,12 @@ function sortable(){
 
 function refresh_counter_order(){
     htmx.trigger('#order_counters', 'refresh_counter_order', {target: "#order_counters"});
+}
+
+// ---------------- TRANSLATIONS ----------------
+
+function refresh_languages_order(){
+    htmx.trigger('#order_languages', 'refresh_languages_order', {target: "#order_languages"});
 }
 
 

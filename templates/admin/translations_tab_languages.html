@@ -13,3 +13,10 @@
         Ajouter une langue
 </a>    
 <div id="div_add_language_form"></div>
+
+<div id="order_languages"
+    hx-get="/admin/languages/order_languages"
+    hx-target="#order_languages"
+    hx-trigger="load, refresh_languages_order"
+    hx-swap="innerHTML">
+</div>

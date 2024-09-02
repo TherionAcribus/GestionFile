@@ -5,3 +5,4 @@ __pycache__/
 static/audio/annonces/*.*
 static/qr_patients/*.*
 .env
+out/*.*

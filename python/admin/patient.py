@@ -1,7 +1,7 @@
 import os
 from flask import request, render_template, redirect, jsonify, current_app as app
 from werkzeug.utils import secure_filename
-from models import Button, Activity, db
+from models import Button, Activity, Language, db
 
 def admin_patient():
     buttons = Button.query.all()
@@ -19,6 +19,7 @@ def admin_patient():
                             page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
                             page_patient_end_timer = app.config['PAGE_PATIENT_END_TIMER'],
                             page_patient_display_specific_message = app.config['PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE'],
+                            page_patient_display_translations=app.config['PAGE_PATIENT_DISPLAY_TRANSLATIONS'],
                             ticket_header = app.config['TICKET_HEADER'],
                             ticket_message = app.config['TICKET_MESSAGE'],
                             ticket_footer = app.config['TICKET_FOOTER'],

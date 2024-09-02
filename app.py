@@ -67,7 +67,7 @@ from python.admin.admin import admin_admin
 from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
 from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
 from python.admin.staff import admin_staff, display_staff_table, add_staff_form, update_member, confirm_delete, delete_staff, add_new_staff
-from python.admin.translation import admin_translation, display_languages_table, update_language, add_language_form, add_new_language, confirm_delete_language, delete_language, translations_collect, change_language_target, save_translations
+from python.admin.translation import admin_translation, display_languages_table, update_language, add_language_form, add_new_language, confirm_delete_language, delete_language, translations_collect, change_language_target, save_translations, upload_flag_image, order_languages_table, update_languages_order
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -134,7 +134,7 @@ class Config:
         }
 
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
     AUDIO_FOLDER = '/static/audio'
     BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
@@ -155,6 +155,7 @@ class Config:
     MAIL_DEFAULT_SENDER = "hi@demomailtrap.com."
 
     GALLERIES_FOLDER = 'static/galleries'
+    FLAG_FOLDER = 'static/images/flags'
     # music
     IS_PLAYING_SPOTIFY = False
 
@@ -401,10 +402,10 @@ logging.basicConfig(level=logging.DEBUG,
 def remove_session(ex=None):
     db_session.remove()
     """
+
 db.init_app(app) 
 migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
 #babel = Babel(app)
-
 
 def is_safe_url(target):
     ref_url = urlparse(request.host_url)
@@ -667,10 +668,14 @@ app.add_url_rule("/admin/translations", view_func=admin_translation)
 app.add_url_rule('/admin/languages/table', view_func=display_languages_table)
 app.add_url_rule('/admin/languages/add_form', view_func=add_language_form)
 app.add_url_rule('/admin/translations/collect', view_func=translations_collect)
-
+app.add_url_rule('/admin/languages/order_languages', view_func=order_languages_table)
 
 app.add_url_rule('/admin/languages/language_update/<int:language_id>', 'update_language', 
                 partial(update_language), 
+                methods=['POST'])
+
+app.add_url_rule('/admin/languages/upload_flag_image', 'upload_flag_image', 
+                partial(upload_flag_image), 
                 methods=['POST'])
 
 app.add_url_rule('/admin/languages/add_new_language', 'add_new_language', 
@@ -692,7 +697,11 @@ app.add_url_rule('/admin/translations/change_language_target', 'change_language_
 app.add_url_rule('/admin/translations/save_translations', 'save_translations', 
                 partial(save_translations), 
                 methods=['POST'])
-                
+
+app.add_url_rule('/admin/languages/update_languages_order', 'update_languages_order', 
+                partial(update_languages_order), 
+                methods=['POST'])
+
 
 @app.route('/logout_all')
 def logout_all():
@@ -2263,8 +2272,8 @@ def add_new_counter():
             return display_activity_table()
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
-        max_order_counter = Counter.query.order_by(Counter.order.desc()).first()
-        sort_order = max_order_counter.order + 1 if max_order_counter else 0
+        max_order_counter = Counter.query.order_by(Counter.sort_order.desc()).first()
+        sort_order = max_order_counter.sort_order + 1 if max_order_counter else 0
 
         new_counter = Counter(
             name=name,
@@ -2283,7 +2292,7 @@ def add_new_counter():
 
         communication("update_admin", data={"action": "delete_add_counter_form"})
         display_toast(success=True, message="Comptoir ajouté")
-        communikation("admin", event="refresh_counter_order")
+        
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_counter_form"></div>"""
@@ -2429,6 +2438,9 @@ def select_signal():
 def allowed_audio_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_AUDIO_EXTENSIONS"]
 
+def allowed_image_file(filename):
+    """Vérifie si le fichier a une extension autorisée."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_IMAGE_EXTENSIONS"]
 
 @app.route('/admin/announce/audio/upload', methods=['POST'])
 def upload_signal_file():
@@ -2756,13 +2768,16 @@ def patients_langue(lang):
 
 @app.route('/patient')
 def patients_front_page():
-
     language_code = request.args.get('language_code')
-    
+
+    languages = db.session.query(Language).filter_by(is_active = True).all()
+    print("languages_list", languages)
+
     print("language_code START", language_code)
-    # définition 
-    if language_code != None or language_code == "fr":
+    # définition de la langue
+    if language_code is None or language_code == "fr":
         session['language_code'] = "fr"
+        language_code = "fr"
     else:
         session['language_code'] = language_code
 
@@ -2773,9 +2788,11 @@ def patients_front_page():
         page_patient_title=app.config['PAGE_PATIENT_TITLE']
         page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE']
 
-    return render_template('patient/patient_front_page.html', 
+    return render_template('patient/patient_front_page.html',
+                            languages=languages,
                             page_patient_title=page_patient_title,
                             page_patient_subtitle=page_patient_subtitle,
+                            page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 def get_text_translation(key_name, language_code):
@@ -2788,7 +2805,6 @@ def get_text_translation(key_name, language_code):
 
 @app.route('/patient/change_language/<language_code>')
 def change_language(language_code):
-    print("BEFORE", language_code)
     # Enregistrer le code de la langue dans la session
     return redirect(url_for('patients_front_page', language_code=language_code))  
 
@@ -3979,6 +3995,7 @@ def load_configuration():
         "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
         "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
         "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
         "ticket_header": ("TICKET_HEADER", "value_str"),
         "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
         "ticket_message": ("TICKET_MESSAGE", "value_str"),
@@ -4081,6 +4098,7 @@ app.display_toast = display_toast
 app.logout_all = logout_all
 app.communikation = communikation
 app.call_specific_patient = call_specific_patient
+app.allowed_image_file = allowed_image_file
 
 
 if __name__ == "__main__":

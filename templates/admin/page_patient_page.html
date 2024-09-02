@@ -21,6 +21,10 @@
                 "Griser les boutons si l'activité n'est pas en cours (sinon effacer)")
 }}
 
+{{ macros.switch("page_patient_display_translations", 
+                page_patient_display_translations, 
+                "Afficher le choix de la langue")
+}}
 
 {{ macros.textbloc_int("page_patient_end_timer", page_patient_end_timer, "Temps avant le retour à l'accueil en s")}}
 

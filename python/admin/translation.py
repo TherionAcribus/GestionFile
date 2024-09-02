@@ -1,6 +1,8 @@
 import json
-from flask import render_template, request, jsonify, current_app as app
+import os
+from flask import render_template, request, jsonify, url_for, current_app as app
 from models import ConfigOption, Button, Activity, Language, Translation, db
+from werkzeug.utils import secure_filename
 
 def admin_translation():
     languages = Language.query.all()
@@ -17,10 +19,13 @@ def display_languages_table():
 def update_language(language_id):
     try:
         language = Language.query.get(language_id)
+        print("language", language)
+        print("request.form", request.form)
         if language:
             code =  request.form.get('code', language.code)
             name = request.form.get('name', language.name)
             translation = request.form.get('translation', language.translation)
+            is_active = True if request.form.get('is_active', language.is_active) == "true" else False
             if code == '':
                 app.display_toast(success=False, message="Le code est obligatoire")
                 return "", 204
@@ -44,6 +49,16 @@ def update_language(language_id):
             language.code = code
             language.name = name
             language.translation = translation
+            language.is_active = is_active
+
+            # Gestion du téléchargement de l'image
+            print("request.files", request.files)
+            # Mise à jour de l'URL de l'image si elle a été changée
+            image_url = request.form.get('image_url')
+            print("image_url", image_url)
+            if image_url:
+                language.flag_url = image_url.split('/')[-1]  # Extraire le nom du fichier depuis l'URL
+
 
             db.session.commit()
             app.display_toast(success=True, message="Mise à jour réussie")
@@ -73,6 +88,9 @@ def delete_language(language_id):
         db.session.delete(language)
         db.session.commit()
         app.display_toast(success=True, message="Suppression réussie")
+
+        app.communikation("admin", event="refresh_languages_order")
+
         return display_languages_table()
 
     except Exception as e:
@@ -90,6 +108,16 @@ def add_new_language():
         code = request.form.get('code')
         name = request.form.get('name')
         translation = request.form.get('translation')
+        is_active = True if request.form.get('is_active') == "true" else False
+        image_url = request.form.get('image_url')
+        if image_url:
+            flag_url = image_url.split('/')[-1]  # Extraire le nom du fichier depuis l'URL
+        else:
+            flag_url = None
+
+        # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
+        max_order = Language.query.order_by(Language.sort_order.desc()).first()
+        sort_order = max_order.sort_order + 1 if max_order else 0
 
         if not code:  # Vérifiez que les champs obligatoires sont remplis
             app.display_toast(success=False, message="Code obligatoire")
@@ -103,14 +131,20 @@ def add_new_language():
         if not translation:  # Vérifiez que les champs obligatoires sont remplis
             app.display_toast(success=False, message="Traduction obligatoire")
             return display_languages_table()
+        
 
         new_language = Language(
             code=code,
             translation=translation,
             name=name,
+            is_active=is_active,
+            flag_url=flag_url,
+            sort_order=sort_order
         )
         db.session.add(new_language)
         db.session.commit()
+
+        app.communikation("admin", event="refresh_languages_order")
 
         app.display_toast(success=True, message="Langue ajoutée avec succès")
 
@@ -124,6 +158,40 @@ def add_new_language():
         app.display_toast(success=False, message= "Erreur : " + str(e))
         return display_languages_table()
     
+
+def upload_flag_image():
+    if 'file' not in request.files:
+        return {"error": "No file part"}, 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return {"error": "No selected file"}, 400
+    
+    if file and app.allowed_image_file(file.filename):
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['FLAG_FOLDER'], filename))
+        return {"url": url_for('static', filename='images/pays/' + filename)}
+    
+    return {"error": "Invalid file type"}, 400  
+
+
+def order_languages_table():
+    languages = Language.query.order_by(Language.sort_order).all()
+    return render_template('admin/translations_languages_order.html', languages=languages)
+
+
+def update_languages_order():
+    try:
+        order_data = request.form.getlist('order[]')
+        for index, counter_id in enumerate(order_data):
+            languages = Language.query.order_by(Language.sort_order).get(counter_id)
+            languages.sort_order = index
+        db.session.commit()
+        app.display_toast(success=True, message="Ordre mis à jour")
+        return '', 200  # Réponse sans contenu
+    except Exception as e:
+        app.display_toast(success=False, message=f"Erreur: {e}")
+
 
 def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, language_code, text):
     """Insert a translation if it doesn't already exist in the Translation table."""

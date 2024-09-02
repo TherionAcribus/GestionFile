@@ -1,0 +1,82 @@
+<table id="new_language_form">
+    <thead>
+        <tr>
+            <th>Code</th>
+            <th>Nom</th>
+            <th>Nom traduit</th>
+            <th>Utilisée</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><input type="text" class="form-control" maxlength="2" name="code" value="" id="code"></td>
+            <td><input type="text" class="form-control" name="name" value="" id="name"></td>
+            <td><input type="text" class="form-control" name="translation" value="" id="translation"></td>
+            <td>
+                <label>
+                    <input id ="is_active" class="form-check-input" type="checkbox" checked>
+                    <span></span>
+                </label>
+            </td>
+            <td>
+                <!-- Afficher l'image du drapeau -->
+                <img src="{{ url_for('static', filename='images/flags/' ~ 'none.png') }}" width="30">
+                <!-- Champ pour télécharger une nouvelle image -->
+                <input type="file" name="flag_url" id="flag_url" accept="image/*">
+                <!-- Champ caché pour stocker l'URL de l'image -->
+                <input type="hidden" name="image_url" id="image_url" value="{{ url_for('static', filename='images/flags/' ~ flag_url) }}">
+            </td>
+            <td>
+                <button class="btn btn-primary"
+                    hx-target="#div_languages_table"
+                    hx-post="/admin/languages/add_new_language"
+                    hx-vals='js:{"code": document.getElementById("code").value, 
+                            "name": document.getElementById("name").value,
+                            "translation": document.getElementById("translation").value,
+                            "image_url": document.getElementById("image_url").value,
+                            is_active: document.getElementById("is_active").checked
+                        }'>
+                    Enregistrer
+                </button>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<script>
+    document.querySelectorAll('input[type="file"]').forEach(input => {
+        input.addEventListener('change', function() {
+            let formData = new FormData();
+            formData.append('file', this.files[0]);
+            
+            fetch('/admin/languages/upload_flag_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.url) {
+                    // Mettre à jour l'URL de l'image dans le formulaire
+                    const imageUrlInput = document.getElementById('image_url');
+                    imageUrlInput.value = data.url;
+                    
+                    // Mettre à jour l'image affichée
+                    const imgElement = this.closest('td').querySelector('img');
+                    if (imgElement) {
+                        imgElement.src = data.url;
+                    } else {
+                        const newImg = document.createElement('img');
+                        newImg.src = data.url;
+                        newImg.width = 30;
+                        this.closest('td').prepend(newImg);
+                    }
+                } else {
+                    alert("Erreur lors du téléchargement de l'image : " + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+            });
+        });
+    });
+    </script>

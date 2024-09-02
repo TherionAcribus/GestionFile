@@ -4,6 +4,9 @@
             <th>Code</th>
             <th>Nom</th>
             <th>Nom traduit</th>
+            <th>Utilisée</th>
+            <th>Drapeau</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -12,6 +15,17 @@
             <td><input type="text" class="form-control" maxlength="2" name="code" value="{{ language.code }}" id="code-{{ language.id }}"></td>
             <td><input type="text" class="form-control" name="name" value="{{ language.name }}" id="name-{{ language.id }}"></td>
             <td><input type="text" class="form-control" name="translation" value="{{ language.translation }}" id="translation-{{ language.id }}"></td>
+            <td><input id ="is_active-{{ language.id }}" class="form-check-input" type="checkbox" {% if language.is_active %}checked{% endif %}></td>
+            <td>
+                <!-- Afficher l'image du drapeau -->
+                {% if language.flag_url %}
+                    <img src="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}" alt="{{ language.name }}" width="30">
+                {% endif %}
+                <!-- Champ pour télécharger une nouvelle image -->
+                <input type="file" name="flag_url" id="flag_url-{{ language.id }}" accept="image/*">
+                <!-- Champ caché pour stocker l'URL de l'image -->
+                <input type="hidden" name="image_url" id="image_url-{{ language.id }}" value="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}">
+            </td>
             <td>
                 <button class="btn btn-primary" 
                     hx-target="#invisible"
@@ -19,6 +33,8 @@
                     hx-vals='js:{"code": document.getElementById("code-{{ language.id }}").value, 
                             "name": document.getElementById("name-{{ language.id }}").value,
                             "translation": document.getElementById("translation-{{ language.id }}").value,
+                            "is_active": document.getElementById("is_active-{{ language.id }}").checked,
+                            "image_url": document.getElementById("image_url-{{ language.id }}").value
                             }'>
                     Enregistrer
                 </button>
@@ -38,3 +54,42 @@
         {% endfor %}
     </tbody>
 </table>
+
+
+<script>
+    document.querySelectorAll('input[type="file"]').forEach(input => {
+        input.addEventListener('change', function() {
+            let formData = new FormData();
+            formData.append('file', this.files[0]);
+            
+            fetch('/admin/languages/upload_flag_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.url) {
+                    // Mettre à jour l'URL de l'image dans le formulaire
+                    const imageUrlInput = document.getElementById('image_url-' + this.id.split('-')[1]);
+                    imageUrlInput.value = data.url;
+                    
+                    // Mettre à jour l'image affichée
+                    const imgElement = this.closest('td').querySelector('img');
+                    if (imgElement) {
+                        imgElement.src = data.url;
+                    } else {
+                        const newImg = document.createElement('img');
+                        newImg.src = data.url;
+                        newImg.width = 30;
+                        this.closest('td').prepend(newImg);
+                    }
+                } else {
+                    alert("Erreur lors du téléchargement de l'image : " + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+            });
+        });
+    });
+    </script>

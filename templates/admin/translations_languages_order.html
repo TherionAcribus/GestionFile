@@ -1,0 +1,19 @@
+<h3>Ordre des Langues</h3>
+<p>Glissez-déposez les langues dans l'ordre souhaite</p>
+<ul id="list_order_buttons" class="list-group">
+    {% for language in languages %}
+    <li class="button-order-item list-group-item" data-id="{{ language.id }}">
+        {{ language.name }}
+    </li>
+    {% endfor %}
+</ul>
+<button id="saveOrderCounterButton"
+        class="btn btn-primary"
+        hx-post="/admin/languages/update_languages_order"
+        hx-target="#invisible"
+        hx-vals="js:{'order[]': Array.from(document.querySelectorAll('.button-order-item')).map(item => item.getAttribute('data-id'))}"
+        >Sauvegarder l'ordre</button>
+
+<script>
+    sortable();
+</script>

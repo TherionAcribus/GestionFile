@@ -317,7 +317,9 @@ class Language(db.Model):
     name = db.Column(db.String(50), nullable=False)
     translation = db.Column(db.String(50), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    
+    flag_url = db.Column(db.String(100))
+    sort_order = db.Column(db.Integer)  # Champ pour l'ordre
+
     __table_args__ = (
         db.UniqueConstraint('code', name='uq_language_code'),
     )
