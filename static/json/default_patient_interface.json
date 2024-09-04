@@ -1,0 +1,33 @@
+{
+    "name": "gf_interface",
+    "type": "default",
+    "version": "0.1",
+    "timestamp": "2024-09-03 14:35:26",
+    "comments": "Version initiale",
+    "counters": [
+        {"id": 1, 
+        "text_key": "validate_print",
+        "text_value": "Imprimer et valider"
+        },
+        {"id": 2,   
+        "text_key": "validate_scan",
+        "text_value": "Scanner puis valider"
+        },
+        {"id": 3,
+        "text_key": "validate_cancel",
+        "text_value": "Annuler"
+        },
+        {"id": 4,
+        "text_key": "done_print",
+        "text_value": "Imprimer"
+        },
+        {"id": 5,
+        "text_key": "done_extend",
+        "text_value": "Prolonger"
+        },
+        {"id": 6,
+        "text_key": "done_back",
+        "text_value": "Retour à la page d'accueil"
+        }
+    ]
+}

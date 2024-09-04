@@ -2,8 +2,7 @@
 
     <div id="conclusion_text" class="div_text_summary">
         <p class="text_summary">
-            Votre demande est bien prise en charge.
-            Votre numéro est {{ call_number }}
+            {{page_patient_confirmation_message}}
         </p>
     </div>
 
@@ -13,18 +12,17 @@
             <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
         </div>
 
-
         <div class="div_validation_buttons">
 
             <div 
                 class="div_validation_one_button">
-                <p class="validation_button">Imprimer</p>
+                <p class="validation_button">{{page_patient_interface_done_print}}</p>
             </div>
 
             <div
                 id="prolong_btn"
                 class="div_validation_one_button">
-                <p class="validation_button">Prolonger</p>
+                <p class="validation_button">{{page_patient_interface_done_extend}}</p>
             </div>
 
             <div
@@ -32,7 +30,7 @@
                 class="div_validation_one_button"
                 hx-get="/patient/cancel_patient"
                 hx-target="#div_buttons_parents">
-                <p class="validation_button">Retour à la page d'accueil</p>
+                <p class="validation_button">{{page_patient_interface_done_back}}</p>
             </div>
 
         </div>

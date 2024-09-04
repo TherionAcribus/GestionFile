@@ -19,10 +19,12 @@
 </head>
 <body>
 
-
     <div id="main">
-        <div id="div_title_area",>
-            {{page_patient_title}}
+        <div id="div_title_area"
+            hx-get="/patient/patient_title"
+            hx-trigger="load, refresh_title"
+            hx-target="#div_title_area"
+            hx-swap="innerHTML">
         </div>
 
         <div id="div_buttons_parents"

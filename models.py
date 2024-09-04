@@ -328,6 +328,7 @@ class Text(db.Model):
     __tablename__ = 'text'
     id = db.Column(db.Integer, primary_key=True)
     text_key = db.Column(db.String(100), nullable=False, unique=True)
+    text_value = db.Column(db.Text, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint('text_key', name='uq_text_key'),
@@ -360,6 +361,12 @@ class Translation(db.Model):
 
     def __repr__(self):
         return f"<Translation {self.language_code}: {self.translated_text[:20]}>"
+
+class TextInterface(db.Model):
+    __tablename__ = 'text_interface'
+    id = db.Column(db.Integer, primary_key=True)
+    text_id = db.Column(db.String(50), nullable=False)
+    value = db.Column(db.Text, nullable=False)
 
 class User(db.Model, UserMixin):
     __tablename__ = 'user'

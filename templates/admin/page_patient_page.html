@@ -15,6 +15,7 @@
     </select>
 </div>
 
+<h5>Textes de la page d'accueil</h5>
 
 {{ macros.switch("page_patient_disable_button", 
                 page_patient_disable_button, 
@@ -68,3 +69,11 @@
                 page_patient_display_specific_message, 
                 "Afficher le message spécifique à l'activité dans le pied de page")
 }}
+
+<h5>Texte de la page de validation</h5>
+
+{{ macros.textbloc_before_call("page_patient_validation_message", page_patient_validation_message, "Texte avant la validation du patient. Ne pas utiliser {N} !")}}
+
+<h5>Texte de la page de confirmation</h5>
+
+{{ macros.textbloc_before_call("page_patient_confirmation_message", page_patient_confirmation_message, "Texte après la validation du patient")}}

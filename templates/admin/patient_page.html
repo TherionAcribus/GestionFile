@@ -21,6 +21,9 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="qrcode-tab" data-bs-toggle="tab" data-bs-target="#tab_qrcode" type="button" role="tab" aria-controls="tab_qrcode" aria-selected="false">QR Code</button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="qrcode-tab" data-bs-toggle="tab" data-bs-target="#tab_interface" type="button" role="tab" aria-controls="tab_interface" aria-selected="false">Interface</button>
+                </li>
             </ul>
 
             <!-- Tab content -->
@@ -36,6 +39,9 @@
                 </div>
                 <div class="tab-pane fade" id="tab_qrcode" role="tabpanel" aria-labelledby="qrcode-tab">
                     {% include 'admin/page_patient_qrcode.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_interface" role="tabpanel" aria-labelledby="interface-tab">
+                    {% include 'admin/page_patient_interface.html' %}
                 </div>
             </div>
         </div>

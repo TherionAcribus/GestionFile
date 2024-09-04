@@ -2,12 +2,14 @@
     "name": "config keys to translate",
     "comments": "Liste les textes de ConfigOptions à traduire",
     "version": "0.1",
-    "timestamp": "2024-08-31 14:35:26",
+    "timestamp": "2024-09-03 14:35:26",
     "config_keys_to_translate": [
         "page_patient_disable_default_message",
         "page_patient_title",
         "page_patient_subtitle",
         "page_patient_qrcode_data",
+        "page_patient_validation_message",
+        "page_patient_confirmation_message",
         "ticket_header",
         "ticket_message",
         "ticket_footer",
@@ -21,6 +23,12 @@
         "announce_call_sound",
         "announce_ongoing_text",
         "announce_call_text",
-        "announce_text_down_patients"
+        "announce_text_down_patients",
+        "page_patient_interface_validate_print",
+        "page_patient_interface_validate_scan",
+        "page_patient_interface_validate_cancel",
+        "page_patient_interface_done_print",
+        "page_patient_interface_done_extend",
+        "page_patient_interface_done_back"
     ]
 }

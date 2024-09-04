@@ -52,6 +52,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_buttons();
     });
 
+    patientSocket.on('refresh_title', function(msg) {
+        console.log("Received Patient message:", msg);
+        refresh_title();
+    });    
+
     patientSocket.on('update_scan_phone', function(msg) {
         console.log("Update Patient:", msg);
         htmx.trigger('#div_for_scan', 'qrcode_is_scanned');
@@ -85,3 +90,8 @@ function refresh_page() {
 function refresh_buttons(){
     htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
 }
+
+function refresh_title(){
+    htmx.trigger('#div_title_area', 'refresh_title', {target: "#div_title_area"});
+}
+

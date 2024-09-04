@@ -1,6 +1,6 @@
 <div id="div_confirmation" class="div_summary">
     <div id="div_call_number" class="div_text_summary">
-        <p id="text_call_number" class="text_summary">Vous avez choisi : {{ text | capitalize }}</p>
+        <p id="text_call_number" class="text_summary">{{page_patient_validation_message}}</p>
     </div>
 
     <div class="div_qr_plus_buttons">
@@ -20,7 +20,7 @@
                     hx-target="#div_buttons_children"
                 {% endif %}
                 >
-                <p class="validation_button">Imprimer et valider</p>
+                <p class="validation_button">{{page_patient_interface_validate_print}}</p>
             </div>
     
             <div class="div_validation_one_button"
@@ -31,7 +31,7 @@
                     hx-target="#div_buttons_children"
                 {% endif %}
                 hx-vals='{"activity_id": "{{ activity.id }}"}'>
-                <p class="validation_button">Scanner puis valider</p>
+                <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
             </div>
 
             <div 
@@ -50,7 +50,7 @@
                 <div class="div_validation_one_button"
                     hx-get="patient/patient_buttons"
                     hx-target="#div_buttons_parents">
-                    <p class="validation_button">Annuler</p>
+                    <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
                 </div>
             {% else %}
                 <div class="div_validation_one_button"
@@ -60,7 +60,7 @@
                         hx-get="patient/default_subtitle"
                         hx-target="#div_buttons_children"
                         hx-swap="innerHTML">
-                        <p class="validation_button">Annuler</p>
+                        <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
                     </div>
                 </div>
             {% endif %}

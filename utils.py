@@ -106,7 +106,7 @@ def replace_balise_announces(template, patient):
             template = "Patient {N} : {C}"
             return template.format(N=patient.call_number, C=patient.counter.name)
     except AttributeError:
-        return f"Erreur {patient.call_number}. Demandez à notre personnel"
+        return f"Erreur! Demandez à notre personnel"
 
 
 def replace_balise_phone(template, patient):

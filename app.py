@@ -2770,6 +2770,8 @@ def patients_langue(lang):
 def patients_front_page():
     language_code = request.args.get('language_code')
 
+    print("language_code", language_code)
+
     languages = db.session.query(Language).filter_by(is_active = True).all()
     print("languages_list", languages)
 
@@ -2781,32 +2783,46 @@ def patients_front_page():
     else:
         session['language_code'] = language_code
 
-    if language_code != "fr":
-        page_patient_title = get_text_translation("page_patient_title", language_code)
-        page_patient_subtitle =get_text_translation("page_patient_subtitle", language_code)
-    else:
-        page_patient_title=app.config['PAGE_PATIENT_TITLE']
-        page_patient_subtitle=app.config['PAGE_PATIENT_SUBTITLE']
-
     return render_template('patient/patient_front_page.html',
                             languages=languages,
-                            page_patient_title=page_patient_title,
-                            page_patient_subtitle=page_patient_subtitle,
                             page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 def get_text_translation(key_name, language_code):
     print("key_name", key_name, "language_code", language_code)
     try:
-        return db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
+        translation = db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
+        if translation == "":
+            translation = app.config[key_name.upper()]
+        return translation
     except AttributeError:
         app.logger.error(f"Translation not found for key: {key_name}, language: {language_code}")
         return "Erreur"
 
+def choose_text_translation(key):
+    language_code = session.get('language_code', 'fr')
+    if language_code == "fr":
+        text = app.config[key.upper()]
+    else:
+        text = get_text_translation(key, language_code)
+    return text
+
 @app.route('/patient/change_language/<language_code>')
 def change_language(language_code):
     # Enregistrer le code de la langue dans la session
-    return redirect(url_for('patients_front_page', language_code=language_code))  
+    return redirect(url_for('patients_front_page', language_code=language_code))
+
+@app.route('/patient/patient_title')
+def patient_display_title():
+    print("DISPLAY")
+    language_code = session.get('language_code', 'fr')
+    if language_code != "fr":
+        print("en ANGLAIS")
+        page_patient_title = get_text_translation("page_patient_title", language_code)
+    else:
+        print("en FR")
+        page_patient_title=app.config['PAGE_PATIENT_TITLE']
+    return f"<p>{page_patient_title}</p>"
 
 # affiche les boutons
 @app.route('/patient/patient_buttons')
@@ -2831,6 +2847,8 @@ def patient_right_page():
         'patient/patient_default_subtitle.html', 
         page_patient_subtitle=page_patient_subtitle,
     )
+    
+    communikation("patient", event="refresh_title")
     
     return f"{buttons_content}{subtitle_content}"
 
@@ -2895,7 +2913,8 @@ def display_default_children_text():
 
 @app.route("/patients/cancel_children")
 def cancel_children():
-    return patients_front_page()
+    print("cancel_children")
+    return redirect(url_for('patients_front_page', language_code="fr"))  
 
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
@@ -2940,12 +2959,21 @@ def left_page_validate_patient(activity):
     
     communikation("update_patient")
 
+    page_patient_validation_message = choose_text_translation("page_patient_validation_message")
+    page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
+    print(page_patient_validation_message)
+
     main_content = render_template('patient/patient_qr_right_page.html', 
                             image_name_qr=image_name_qr, 
                             text=text,
                             activity=activity,
                             futur_patient=futur_patient,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+                            page_patient_validation_message=page_patient_validation_message,
+                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
+                            page_patient_interface_validate_print=choose_text_translation("page_patient_interface_validate_print"),
+                            page_patient_interface_validate_scan=choose_text_translation("page_patient_interface_validate_scan"),
+                            page_patient_interface_validate_cancel=choose_text_translation("page_patient_interface_validate_cancel"),
+                            )
     
     # si on veut afficher un message specifique (et qu'il existe). Retourné via oob-swap
     if app.config["PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE"] and activity.specific_message != "":
@@ -3001,7 +3029,6 @@ def patient_scan_and_validate():
 def register_patient(activity):
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
-
     
     auto_calling()
 
@@ -3035,18 +3062,27 @@ def auto_calling():
 
 @app.route('/patient/cancel_patient')
 def cancel_patient():
+    session['language_code'] = "fr"
     return patient_right_page()
 
 
 @app.route('/patient/conclusion_page')
 def patient_conclusion_page(call_number):
-    image_name_qr = f"qr_patient-{call_number}.png"
+    image_name_qr = f"qr_patient-{call_number}.png" 
+
+    patient = Patient.query.filter_by(call_number=call_number).first()
+    page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
+    page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
+
     return render_template('patient/conclusion_page.html',
                             call_number=call_number,
                             image_name_qr=image_name_qr,
-                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"]
+                            page_patient_confirmation_message=page_patient_confirmation_message,
+                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
+                            page_patient_interface_done_print = choose_text_translation("page_patient_interface_done_print"),
+                            page_patient_interface_done_extend = choose_text_translation("page_patient_interface_done_extend"),
+                            page_patient_interface_done_back = choose_text_translation("page_patient_interface_done_back")
                             )
-
 
 def format_ticket_text(new_patient, activity):
     print("ticket_text", new_patient)
@@ -3988,6 +4024,8 @@ def load_configuration():
         "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
         "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
         "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
+        "page_patient_validation_message": ("PAGE_PATIENT_VALIDATION_MESSAGE", "value_str"),
+        "page_patient_confirmation_message": ("PAGE_PATIENT_CONFIRMATION_MESSAGE", "value_str"),
         "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
         "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
         "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
@@ -3996,6 +4034,12 @@ def load_configuration():
         "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
         "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
+        "page_patient_interface_validate_print": ("PAGE_PATIENT_INTERFACE_VALIDATE_PRINT", "value_str"),
+        "page_patient_interface_validate_scan": ("PAGE_PATIENT_INTERFACE_VALIDATE_SCAN", "value_str"),
+        "page_patient_interface_validate_cancel": ("PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL", "value_str"),
+        "page_patient_interface_done_print": ("PAGE_PATIENT_INTERFACE_DONE_PRINT", "value_str"),
+        "page_patient_interface_done_extend": ("PAGE_PATIENT_INTERFACE_DONE_EXTEND", "value_str"),
+        "page_patient_interface_done_back": ("PAGE_PATIENT_INTERFACE_DONE_BACK", "value_str"),
         "ticket_header": ("TICKET_HEADER", "value_str"),
         "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
         "ticket_message": ("TICKET_MESSAGE", "value_str"),

@@ -12,6 +12,8 @@ def admin_patient():
                             page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
                             page_patient_title = app.config['PAGE_PATIENT_TITLE'],
                             page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'],
+                            page_patient_confirmation_message = app.config['PAGE_PATIENT_CONFIRMATION_MESSAGE'],
+                            page_patient_validation_message = app.config['PAGE_PATIENT_VALIDATION_MESSAGE'],
                             page_patient_display_qrcode = app.config['PAGE_PATIENT_QRCODE_DISPLAY'],
                             page_patient_qrcode_web_page = app.config['PAGE_PATIENT_QRCODE_WEB_PAGE'],
                             page_patient_qrcode_data = app.config['PAGE_PATIENT_QRCODE_DATA'],
@@ -25,6 +27,12 @@ def admin_patient():
                             ticket_footer = app.config['TICKET_FOOTER'],
                             printer_width = app.config['PRINTER_WIDTH'],
                             ticket_display_specific_message = app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'],
+                            page_patient_interface_validate_print = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_PRINT'],
+                            page_patient_interface_validate_scan = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_SCAN'],
+                            page_patient_interface_validate_cancel = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL'],
+                            page_patient_interface_done_print = app.config['PAGE_PATIENT_INTERFACE_DONE_PRINT'],
+                            page_patient_interface_done_extend = app.config['PAGE_PATIENT_INTERFACE_DONE_EXTEND'],
+                            page_patient_interface_done_back = app.config['PAGE_PATIENT_INTERFACE_DONE_BACK'], 
                             )
 
 
