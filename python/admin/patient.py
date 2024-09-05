@@ -59,9 +59,19 @@ def display_children_buttons(button_id):
 def update_button(button_id):
     try:
         button = Button.query.order_by(Button.sort_order).get(button_id)
+
+        is_present = True if request.form.get('is_present') == "true" else False
+        label = request.form.get('label', button.label)
+        shape = request.form.get('shape', button.shape)
+        parent_btn_id = request.form.get('parent_btn')
+        activity_id = request.form.get('activity')
+
+        if activity_id == "":
+            app.display_toast(success=False, message="L'activité est obligatoire")
+            app.logger.info("L'activité est obligatoire")
+            return ""
+
         if button:
-            # Récupérer l'ID de l'activité depuis le formulaire
-            activity_id = request.form.get('activity')
             # GEstion du cas ou le bouton est un bouton parent
             if activity_id == "parent_button":
                 button.is_parent = True
@@ -74,24 +84,21 @@ def update_button(button_id):
                         button.activity = activity
                         button.is_parent = False
                     else:
-                        print("Activité non trouvée")
+                        app.display_toast(success=False, message="L'activité est introuvable")
+                        app.logger.info("L'activité est introuvable")
                         return "Activité non trouvée", 404
                 else:
                     # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
-                    button.activity = None
-            
-            parent_btn_id = request.form.get('parent_btn')
+                    button.activity = None            
+
             if parent_btn_id:
                 parent_button = Button.query.get(parent_btn_id)
                 if parent_button:
                     button.parent_button = parent_button
 
-            is_present = True if request.form.get('is_present') == "true" else False
             button.is_present = is_present
-
-            button.label = request.form.get('label', button.label)
-
-            button.shape = request.form.get('shape', button.shape)            
+            button.label = label
+            button.shape = shape      
 
             db.session.commit()
             app.display_toast(success=True, message="Mise à jour effectuée")
@@ -132,6 +139,15 @@ def add_button_form():
 def add_new_button():
     try:
         activity_id = request.form.get('activity')
+        print("Activité", activity_id)
+        parent_btn_id = request.form.get('parent_btn')
+        is_present = True if request.form.get('is_present') == "true" else False
+        label = request.form.get('label')
+        shape = request.form.get('shape')
+
+        if activity_id == "":
+            app.display_toast(success=False, message="L'activité est obligatoire")
+            return ""
         
         # GEstion du cas ou le bouton est un bouton parent
         if activity_id == "parent_button":
@@ -144,23 +160,18 @@ def add_new_button():
                 if activity:
                     activity = activity
                 else:
-                    print("Activité non trouvée")
+                    app.display_toast(success=False, message="Activité non trouvée")
+                    app.logger.error("Activité non trouvée")
                     return "Activité non trouvée", 404
             else:
                 # Si aucun ID d'activité n'est fourni, on peut décider de mettre l'attribut à None
                 activity = None
                 
-        parent_btn_id = request.form.get('parent_btn')
         if parent_btn_id:
             parent_button = Button.query.get(parent_btn_id)
         else:
             parent_button = None
-                
-        is_present = True if request.form.get('is_present') == "true" else False
-        
-        label = request.form.get('label')
 
-        shape = request.form.get('shape')
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
         max_order_button = Button.query.order_by(Button.sort_order.desc()).first()
