@@ -1,7 +1,7 @@
 import os
 from flask import request, render_template, redirect, jsonify, current_app as app
 from werkzeug.utils import secure_filename
-from models import Button, Activity, Language, db
+from models import Button, Activity, db
 
 def admin_patient():
     buttons = Button.query.all()

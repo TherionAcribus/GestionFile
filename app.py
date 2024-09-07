@@ -56,7 +56,7 @@ from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
-from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone
+from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
@@ -1510,6 +1510,25 @@ def clear_old_patients_table():
         app.logger.info("Deletion of old patients is disabled.")
 
 
+def clear_announces_call():
+    """ Permet de vider le dossier static/audio/annonces des vieux fichiers audio """
+    announce_folder = os.path.join(os.getcwd(), 'static/audio/annonces/')
+    
+    # Vérifie si le répertoire existe
+    if os.path.exists(announce_folder):
+        # Parcours tous les fichiers dans le répertoire
+        for fichier in os.listdir(announce_folder):
+            fichier_complet = os.path.join(announce_folder, fichier)
+            # Vérifie si c'est un fichier (et non un sous-répertoire)
+            if os.path.isfile(fichier_complet):
+                os.remove(fichier_complet)  # Supprime le fichier
+        display_toast(success=True, message="Tous les fichiers audio ont été supprimés.")
+        return "", 200
+    else:
+        display_toast(success=False, message="Le répertoire n'existe pas.")
+        return "", 200
+
+
 # --------  FIn ADMIN -> DataBase  ---------
 
 
@@ -2643,7 +2662,6 @@ def generate_audio_calling(counter_number, next_patient):
     # voir pour la possibilité d'utiliser https://cloud.google.com/text-to-speech/ 
     # en version basique semble pas trop cher
 
-    print("SOUND", app.config["ANNOUNCE_SOUND"])
     # Si on ne veux pas de son, on quitte
     if not app.config["ANNOUNCE_SOUND"]:
         return
@@ -2651,7 +2669,6 @@ def generate_audio_calling(counter_number, next_patient):
     # Texte pour la synthèse vocale
     text_template = app.config["ANNOUNCE_CALL_SOUND"]
     text = replace_balise_announces(text_template, next_patient)
-    print('TEXT', text)
 
     # choix de la voix
     if app.config["ANNOUNCE_VOICE"] == "fr-ca":
@@ -2675,10 +2692,7 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    print("URL", audio_url)
     
-    #pause_music()
-
     communikation("update_audio", event="audio", data=audio_url)
 
     #communication("update_audio", audio_source=audio_url)
@@ -2763,7 +2777,6 @@ def patients_langue(lang):
     return render_template('patients.html', cache=False)
 
 
-
 # ---------------- PAGE PATIENT FRONT ----------------
 
 @app.route('/patient')
@@ -2788,24 +2801,7 @@ def patients_front_page():
                             page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
-def get_text_translation(key_name, language_code):
-    print("key_name", key_name, "language_code", language_code)
-    try:
-        translation = db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
-        if translation == "":
-            translation = app.config[key_name.upper()]
-        return translation
-    except AttributeError:
-        app.logger.error(f"Translation not found for key: {key_name}, language: {language_code}")
-        return "Erreur"
 
-def choose_text_translation(key):
-    language_code = session.get('language_code', 'fr')
-    if language_code == "fr":
-        text = app.config[key.upper()]
-    else:
-        text = get_text_translation(key, language_code)
-    return text
 
 @app.route('/patient/change_language/<language_code>')
 def change_language(language_code):
@@ -2814,33 +2810,33 @@ def change_language(language_code):
 
 @app.route('/patient/patient_title')
 def patient_display_title():
-    print("DISPLAY")
-    language_code = session.get('language_code', 'fr')
-    if language_code != "fr":
-        print("en ANGLAIS")
-        page_patient_title = get_text_translation("page_patient_title", language_code)
-    else:
-        print("en FR")
-        page_patient_title=app.config['PAGE_PATIENT_TITLE']
-    return f"<p>{page_patient_title}</p>"
+    return f'<p>{choose_text_translation("page_patient_title")}</p>'
+
+@app.route('/patient/patient_cancel')
+def patient_cancel():
+    session["language_code"] = "fr"
+    return patient_right_page()
 
 # affiche les boutons
 @app.route('/patient/patient_buttons')
 def patient_right_page():
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
-
+    
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         buttons = get_buttons_translation(buttons, language_code)
         page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)
+        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)
     else:
-        page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']    
+        page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
+        page_patient_interface_validate_cancel = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL']
 
     max_length = 2 if buttons[0].shape == "square" else 4
 
     buttons_content = render_template('patient/patient_buttons_left.html', 
                             buttons=buttons,
                             max_length=max_length,
+                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
     
     subtitle_content = render_template(
@@ -2852,19 +2848,7 @@ def patient_right_page():
     
     return f"{buttons_content}{subtitle_content}"
 
-def get_buttons_translation(buttons, language_code):
-    for button in buttons:
-            # Récupérer la traduction du label du bouton
-            translation = Translation.query.filter_by(
-                table_name='Button',
-                row_id=button.id,
-                language_code=language_code
-            ).first()
-            
-            # Si une traduction existe, mettre à jour le label du bouton
-            if translation.translated_text != "":
-                button.label = translation.translated_text
-    return buttons
+
 
 @app.route('/patients_submit', methods=['POST'])
 def patients_submit():
@@ -2900,21 +2884,15 @@ def display_activity_inactive(request):
 
 
 @app.route("/patient/default_subtitle")
-def display_default_children_text():
-        
-    language_code = session.get('language_code', 'fr')
-    if language_code != "fr":
-        page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)
-    else:
-        page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE'] 
+def display_default_children_text():   
 
     return render_template('patient/patient_default_subtitle.html',
-                            page_patient_subtitle=page_patient_subtitle)
+                            page_patient_subtitle=choose_text_translation("page_patient_subtitle"))
 
-@app.route("/patients/cancel_children")
+""""@app.route("/patients/cancel_children")
 def cancel_children():
     print("cancel_children")
-    return redirect(url_for('patients_front_page', language_code="fr"))  
+    return redirect(url_for('patients_front_page', language_code="fr"))  """
 
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
@@ -2923,11 +2901,14 @@ def display_children_buttons_for_right_page(request):
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         children_buttons = get_buttons_translation(children_buttons, language_code)
+        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)
+    else:
+        page_patient_interface_validate_cancel = app.config["PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL"]
 
-    print("children_buttons", children_buttons)
     max_length = 2 if children_buttons[0].shape == "square" else 4
     return render_template('patient/patient_buttons_left.html', 
                             buttons=children_buttons,
+                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             max_length=max_length,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             children=True)

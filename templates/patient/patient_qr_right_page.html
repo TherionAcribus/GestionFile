@@ -48,13 +48,13 @@
     
             {% if page_patient_structure=="full"%}
                 <div class="div_validation_one_button"
-                    hx-get="patient/patient_buttons"
+                    hx-get="/patient/patient_cancel"
                     hx-target="#div_buttons_parents">
                     <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
                 </div>
             {% else %}
                 <div class="div_validation_one_button"
-                    hx-get="patient/patient_buttons"
+                    hx-get="/patient/patient_cancel"
                     hx-target="#div_buttons_parents">
                     <div id="second_action"
                         hx-get="patient/default_subtitle"

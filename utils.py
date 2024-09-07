@@ -1,6 +1,7 @@
 import re
 from datetime import datetime, date
-from flask import current_app as app
+from flask import session, current_app as app
+from models import Button, Translation, db
 
 
 def validate_and_transform_text(user_input, allowed_letters):
@@ -110,10 +111,48 @@ def replace_balise_announces(template, patient):
 
 
 def replace_balise_phone(template, patient):
-    """ Remplace les balises dans les textes d'annonces (texte et son)"""
-    print("replace_balise_announces", template, patient)
+    """ Remplace les balises dans les textes d'annonces (texte et son)
+    Pour le nom de l'activité, on reprend le nom du bouton pour plus de cohérence"""
+    button = Button.query.filter_by(activity_id=patient.activity_id).first()
+    if session.get('language_code') != "fr":        
+        button = get_buttons_translation([button], session.get('language_code'))[0]
     return template.format(P=app.config["PHARMACY_NAME"],
                             N=patient.call_number, 
-                            A=patient.activity.name, 
+                            A=button.label, 
                             D=date.today().strftime("%d/%m/%y"),
                             H=datetime.now().strftime("%H:%M"))
+
+
+def get_buttons_translation(buttons, language_code):
+    for button in buttons:
+            # Récupérer la traduction du label du bouton
+            translation = Translation.query.filter_by(
+                table_name='Button',
+                row_id=button.id,
+                language_code=language_code
+            ).first()
+            
+            # Si une traduction existe, mettre à jour le label du bouton
+            if translation.translated_text != "":
+                button.label = translation.translated_text
+    return buttons
+
+
+def get_text_translation(key_name, language_code):
+    print("key_name", key_name, "language_code", language_code)
+    try:
+        translation = db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
+        if translation == "":
+            translation = app.config[key_name.upper()]
+        return translation
+    except AttributeError:
+        app.logger.error(f"Translation not found for key: {key_name}, language: {language_code}")
+        return "Erreur"
+
+def choose_text_translation(key):
+    language_code = session.get('language_code', 'fr')
+    if language_code == "fr":
+        text = app.config[key.upper()]
+    else:
+        text = get_text_translation(key, language_code)
+    return text

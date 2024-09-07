@@ -1,16 +1,16 @@
 <div class="grid-item div_square_bloc_activity"
-    hx-get="/patients/cancel_children" 
-    {% if page_patient_structure == "full" %}
-    hx-target="#div_buttons_parents"
-    {% else %}
-    hx-target="#div_buttons_children"
-    {% endif %}>
+        hx-get="/patient/patient_cancel" 
+        {% if page_patient_structure == "full" %}
+        hx-target="#div_buttons_parents"
+        {% else %}
+        hx-target="#div_buttons_children"
+        {% endif %}>
 
         <div class="div_square_buttons div_button_active grid_square_buttons">
                 <img class="img_btn_small img_btn_active" 
                         src='/static/images/buttons/default/cancel.png'>
                 <div class="div_text_button div_text_button_square_active ">
-                        <p>Annuler</p>
+                        <p>{{page_patient_interface_validate_cancel}}</p>
                 </div>
         </div>
 </div>
