@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.4",
+    "version": "0.5",
     "timestamp": "2024-09-04 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -9,6 +9,8 @@
             "pharmacy_name": "Pharmacie Sainte-Agathe",
             "cron_delete_patient_table_activated": true,
             "cron_delete_patient_table_hour": "00:00",
+            "cron_delete_announce_calls_activated": true,
+            "cron_delete_announce_calls_hour": "00:00",
             "algo_activate": true,
             "algo_overtaken_limit": 3,
             "numbering_by_activity": true,

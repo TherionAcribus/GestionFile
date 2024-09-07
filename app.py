@@ -1097,6 +1097,11 @@ def special_functions_with_input(key):
         remove_scheduler_clear_all_patients()
         scheduler_clear_all_patients()
         communikation("admin", event="refresh_schedule_tasks_list")
+    if key == "cron_delete_announce_calls_hour":
+        remove_scheduler_clear_announce_calls()
+        scheduler_clear_announce_calls()
+        communikation("admin", event="refresh_schedule_tasks_list")
+
 
 @app.route('/admin/update_select', methods=['POST'])
 def update_select():
@@ -1438,7 +1443,9 @@ def admin_music():
 def admin_database():
     return render_template('/admin/database.html',
                         cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
-                        cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],)
+                        cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],
+                        cron_delete_announce_calls_activated=app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"],
+                        cron_delete_announce_calls_hour=app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"])
 
 @app.route("/admin/database/schedule_tasks_list")
 def display_schedule_tasks_list():
@@ -1453,7 +1460,7 @@ def display_schedule_tasks_list():
 
 
 def scheduler_clear_all_patients():
-    # vide la table patient à minuit
+    # vide la table patient
     job_id = 'Clear Patient Table'
 
     # Vérifier si le job existe déjà
@@ -1474,6 +1481,41 @@ def scheduler_clear_all_patients():
     except Exception as e:
         app.logger.error(f"Failed to add job '{job_id}': {e}")
         return False
+
+def scheduler_clear_announce_calls():
+    # vide la table patient
+    job_id = 'Clear Announce Calls'
+
+    # Vérifier si le job existe déjà
+    if scheduler.get_job(job_id):
+        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
+        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
+
+    try:
+        hour=int(app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
+        minute=int(app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[1])
+        scheduler.add_job(id=job_id, 
+                        func=clear_announce_calls_job, 
+                        trigger='cron', 
+                        hour=hour, 
+                        minute=minute)
+        app.logger.info(f"Job '{job_id}' successfully added.")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to add job '{job_id}': {e}")
+        return False
+
+
+def remove_scheduler_clear_announce_calls():
+    try:
+        # Supprime le job à l'aide de son id
+        scheduler.remove_job('Clear Announce Calls')
+        app.logger.info("Job 'Clear Announce Calls' successfully removed.")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to remove job 'Clear Announce Calls': {e}")
+        return False
+
 
 def clear_all_patients_job():
     """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
@@ -1509,6 +1551,10 @@ def clear_old_patients_table():
     else:
         app.logger.info("Deletion of old patients is disabled.")
 
+def clear_announce_calls_job():
+    """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
+    with app.app_context():
+        clear_announces_call()
 
 def clear_announces_call():
     """ Permet de vider le dossier static/audio/annonces des vieux fichiers audio """
@@ -4039,6 +4085,8 @@ def load_configuration():
         "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
         "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
+        "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
+        "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
         "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
         "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
         "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),

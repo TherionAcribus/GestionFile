@@ -5,6 +5,8 @@
 {% block content %}
     <h3>Base de données</h3>
 
+    <h5>Liste des patients</h5>
+
     {{ macros.switch("cron_delete_patient_table_activated", 
             cron_delete_patient_table_activated, 
             "Vider automatiquement la table des patients une fois par jour")
@@ -13,6 +15,19 @@
     {{ macros.textbloc_hour("cron_delete_patient_table_hour", 
             cron_delete_patient_table_hour, 
             "Heure de la suppression")
+    }}
+
+
+    <h5>Répertoire des sons</h5>
+
+    {{ macros.switch("cron_delete_announce_calls_activated", 
+        cron_delete_announce_calls_activated, 
+        "Vider automatiquement le répertoire contenant les sons une fois par jour")
+    }}
+
+    {{ macros.textbloc_hour("cron_delete_announce_calls_hour", 
+        cron_delete_announce_calls_hour, 
+        "Heure de la suppression")
     }}
 
     <div id="div_schedule_tasks_list"
