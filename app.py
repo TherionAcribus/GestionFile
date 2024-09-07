@@ -2831,7 +2831,7 @@ def patients_front_page():
 
     print("language_code", language_code)
 
-    languages = db.session.query(Language).filter_by(is_active = True).all()
+    languages = db.session.query(Language).filter_by(is_active = True).order_by(Language.sort_order).all()
     print("languages_list", languages)
 
     print("language_code START", language_code)
