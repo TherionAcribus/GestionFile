@@ -11,10 +11,17 @@
         hx-get="/admin/staff/dashboard"
         hx-trigger="load">        
     </div>
+
     <div id="queue_dashboard"
         hx-get="/admin/queue/dashboard"
         hx-trigger="load, refresh_queue_patient">
 </div>
+
+<div id="player_dashboard"
+    hx-get="/admin/music/dashboard"
+    hx-trigger="load">
+</div>
+
 </div>
 
 {% endblock %}

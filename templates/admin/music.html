@@ -4,87 +4,32 @@
 
 {% block content %}
 
-{% if spotify_connected %}
+<h3>Musique</h3>
+    
+<div class="row">
+    <div class="col-12">
+        <!-- Nav tabs -->
+        <ul class="nav nav-tabs" id="securityTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="player-tab" data-bs-toggle="tab" data-bs-target="#tab_player" type="button" role="tab" aria-controls="tab_player" aria-selected="true">Lecture</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="options-tab" data-bs-toggle="tab" data-bs-target="#tab_options" type="button" role="tab" aria-controls="tab_options" aria-selected="false">Options</button>
+            </li>
+        </ul>
 
-    {% if playlists %}
-    <div class="d-flex flex-wrap">
-        {% for playlist in playlists %}
-            <div class="card m-2" style="width: 18rem;">
-                {% if playlist['images'] %}
-                    <img src="{{ playlist['images'][0]['url'] }}" alt="{{ playlist['name'] }} Cover" style="width: 18rem; height: auto;">
-                {% endif %}
-                <div class="card-body">
-                <a href="{{ playlist['external_urls']['spotify'] }}" target="_blank">
-                    <h5 class="card-title">{{ playlist['name'] }}</h5>
-                </a>
-                <p class="card-text">({{ playlist['tracks']['total'] }} chansons)</p>
-                <a href="#" class="btn btn-primary"
-                    hx-post="{{ url_for('play_playlist') }}"
-                    hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "false"}'
-                    hx-target="#invisible"
-                >Jouer</a>
-                </div>
+        <!-- Tab content -->
+        <div class="tab-content" id="securityTabContent">
+            <div class="tab-pane fade show active" id="tab_player" role="tabpanel" aria-labelledby="player-tab">
+                {% include 'admin/music_playlists.html' %}
             </div>
-        {% endfor %}
-    </div>
-
-    <!-- Music Controller Section -->
-    <div class="music-controller fixed-bottom bg-light p-3">
-        <div class="d-flex justify-content-between align-items-center">
-            <!-- Current Playing Track Info -->
-            <div id="current-track-info">
-                <strong id="current-track-name">Aucun morceau en cours</strong>
-                <p id="current-track-artist"></p>
+            <div class="tab-pane fade" id="tab_options" role="tabpanel" aria-labelledby="options-tab">
+                {% include 'admin/music_options.html' %}       
             </div>
-
-            <!-- Music Controls -->
-            <div class="music-controls">
-                <button class="btn btn-secondary"
-                    hx-get="/spotify/previous_track"
-                    hx-target="#invisible"
-                >
-                    <i class="bi bi-skip-backward-fill"></i>
-                </button>
-                <button class="btn btn-secondary"
-                    hx-get="/spotify/pause_music"
-                    hx-target="#invisible"
-                >
-                <i class="bi bi-pause-circle-fill"></i>
-                </button>
-                <button class="btn btn-secondary"
-                    hx-get="/spotify/next_track"
-                    hx-target="#invisible"
-                >
-                    <i class="bi bi-skip-forward-fill"></i>
-                </button>
-                <button class="btn btn-secondary"
-                    hx-get="/spotify/shuffle"
-                    hx-target="#invisible"
-                >
-                    <i class="bi bi-shuffle"></i>
-                </button>
-            </div>
-
-            <!-- Volume Control -->
-            <div class="volume-control">
-                <label for="volume-slider">Volume</label>
-                <input type="range" id="volume-slider" min="0" max="100" step="1" value={{music_volume}}
-                        hx-post="/spotify/change_volume"
-                        hx-trigger="change"
-                        hx-target="#invisible"
-                        hx-vals="js:{'volume': document.getElementById('volume-slider').value}">
-            </div>
-
         </div>
     </div>
+</div>
 
-    {% else %}
-    <p>Vous n'avez aucune playlist.</p>
-    {% endif %}
-
-{% else %}
-    Vous n'êtes pas connecté à Spotify.
-{% endif %}
 
 {% endblock %}
 

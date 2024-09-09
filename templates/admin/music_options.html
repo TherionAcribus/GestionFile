@@ -33,7 +33,7 @@
 {% if spotify_connected %}
     <p>Vous êtes connecté à Spotify</p>
     <!-- Ajoutez ici des fonctionnalités supplémentaires pour Spotify -->
-    <a href="{{ url_for('spotify_logout') }}" class="btn btn-secondary">Se déconnecter de Spotify</a>
+    <a href="{{ url_for('admin_music.spotify_logout') }}" class="btn btn-secondary">Se déconnecter de Spotify</a>
 {% else %}
-    <a href="{{ url_for('spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
+    <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
 {% endif %}

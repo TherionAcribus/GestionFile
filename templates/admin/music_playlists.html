@@ -1,0 +1,38 @@
+{% if spotify_connected %}
+
+    {% if playlists %}
+    <div class="d-flex flex-wrap">
+        {% for playlist in playlists %}
+            <div class="card m-2" style="width: 18rem;">
+                {% if playlist['images'] %}
+                    <img src="{{ playlist['images'][0]['url'] }}" alt="{{ playlist['name'] }} Cover" style="width: 18rem; height: auto;">
+                {% endif %}
+                <div class="card-body">
+                <a href="{{ playlist['external_urls']['spotify'] }}" target="_blank">
+                    <h5 class="card-title">{{ playlist['name'] }}</h5>
+                </a>
+                <p class="card-text">({{ playlist['tracks']['total'] }} chansons)</p>
+                <a href="#" class="btn btn-primary"
+                    hx-post="{{ url_for('admin_music.play_playlist') }}"
+                    hx-vals='{"playlist_uri": "{{ playlist["uri"] }}", "shuffle": "false"}'
+                    hx-target="#invisible"
+                >Jouer</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Music Controller Section -->
+    <div class="music-controller fixed-bottom bg-light p-3">
+        <div class="d-flex justify-content-between align-items-center">
+            {% include 'admin/music_player.html' %}
+        </div>
+    </div>
+
+    {% else %}
+    <p>Vous n'avez aucune playlist.</p>
+    {% endif %}
+
+{% else %}
+    Vous n'êtes pas connecté à Spotify.
+{% endif %}
