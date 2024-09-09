@@ -209,6 +209,9 @@ function refresh_gallery_list(data) {
     htmx.trigger('#galleries_list', 'refresh_gallery_list', {target: "#galleries_list"});
 }
 
+// -------------- GALERIES --------------
+
+
 
 // -------------- ACTIVITY --------------
 

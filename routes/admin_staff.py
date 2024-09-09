@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app as app
-from models import Pharmacist, Activity, db
+from models import Pharmacist, Activity, DashboardCard, db
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
 
@@ -147,5 +147,8 @@ def add_new_staff():
 def dashboard_staff():
     print("dashboard staff")
     staffs = Pharmacist.query.all()
-    return render_template('/admin/dashboard_staff.html', staffs=staffs)
+    dashboardcard = DashboardCard.query.filter_by(name="staff").first()
+    return render_template('/admin/dashboard_staff.html', 
+                            staffs=staffs,
+                            dashboardcard=dashboardcard)
 

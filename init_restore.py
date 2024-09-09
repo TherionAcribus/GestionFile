@@ -6,7 +6,7 @@ from datetime import datetime, time
 from flask import redirect, url_for, render_template, current_app
 from io import BytesIO
 
-from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient
+from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, DashboardCard
 
 # CONFIGURATION DE L'APP
 
@@ -803,6 +803,36 @@ def init_or_update_default_texts_db_from_json():
         db.session.commit()
         print("Database updated to version:", data['version'])
 
+
+def init_default_dashboard_db_from_json():
+    json_file = 'static/json/default_dashboard.json'
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    print("DATA VERSION", data['version'])
+
+    current_version = ConfigVersion.query.filter_by(config_key="dashboard_version").first()
+    print("Data version:", data['version'])
+    if not current_version or current_version.version != data['version']:
+        # Mise à jour de la version
+        if current_version:
+            current_version.version = data['version']
+        else:
+            create_version_number(ConfigVersion, data, db, key="dashboard_version")
+
+        # Mise à jour ou ajout de textes
+        for dashboard_data in data['dashboard']:
+            dashboard_card = DashboardCard.query.filter_by(id=dashboard_data['id']).first()
+            if not dashboard_card:
+                new_dashboard_card = DashboardCard(name=dashboard_data['name'],
+                                                    visible=dashboard_data['visible'],
+                                                    position=dashboard_data['position'],
+                                                    size=dashboard_data['size'],
+                                                    color=dashboard_data['color'])
+                db.session.add(new_dashboard_card)
+
+        db.session.commit()
+        print("Database updated to version:", data['version'])
 
 
 def init_days_of_week_db_from_json():

@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app as app
-from models import Patient, Activity, Counter, db
+from models import Patient, Activity, Counter, DashboardCard, db
 from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
 from routes.announce import announce_refresh
@@ -143,4 +143,7 @@ def create_new_patient_auto():
 @admin_queue_bp.route('/admin/queue/dashboard')
 def dashboard_queue():
     patients = Patient.query.filter(Patient.status != "done").all()
-    return render_template('/admin/dashboard_queue.html', patients=patients)
+    dashboardcard = DashboardCard.query.filter_by(name="queue").first()
+    return render_template('/admin/dashboard_queue.html', 
+                            patients=patients, 
+                            dashboardcard=dashboardcard)

@@ -1,0 +1,33 @@
+{
+    "name": "gf_dashboard",
+    "type": "default",
+    "version": "0.1",
+    "timestamp": "2024-09-09 14:35:26",
+    "comments": "Version initiale",
+    "dashboard": [
+        {"id": 1, 
+        "name": "staff",
+        "visible": true,
+        "position": 1,
+        "size": "col-md-6",
+        "color": "bg-primary", 
+        "htmx_triggers": {}
+        },
+        {"id": 2, 
+        "name": "queue",
+        "visible": true,
+        "position": 2,
+        "size": "col-md-6",
+        "color": "bg-primary", 
+        "htmx_triggers": {}
+        },
+        {"id": 3, 
+        "name": "player",
+        "visible": true,
+        "position": 3,
+        "size": "col-md-6",
+        "color": "bg-primary",
+        "htmx_triggers": {}
+        }
+    ]
+}

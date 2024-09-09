@@ -4,24 +4,25 @@
 
 {% block content %}
 
-<div id="dashboard"></div>
-    <div class="card" id="card-spotify">Lecteur Spotify</div>
-    <div class="card" id="card-alerts">Alertes</div>
-    <div id="staff_dashboard"
-        hx-get="/admin/staff/dashboard"
-        hx-trigger="load">        
-    </div>
 
-    <div id="queue_dashboard"
-        hx-get="/admin/queue/dashboard"
-        hx-trigger="load, refresh_queue_patient">
-</div>
 
-<div id="player_dashboard"
-    hx-get="/admin/music/dashboard"
+<div id="div_select_dashboard"
+    hx-get="/admin/dashboard/display_select"
     hx-trigger="load">
 </div>
 
+
+<div id="dashboard" class="container">
+    <div class="row">
+
+        {% for dashboardcard in dashboardcards %}
+            {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
+            {% with dashboardcard = dashboardcard %}
+                {% include template_name %}
+            {% endwith %}
+        {% endfor %}
+
+    </div>
 </div>
 
 {% endblock %}

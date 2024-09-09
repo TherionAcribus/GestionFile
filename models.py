@@ -4,6 +4,7 @@ from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from flask_security import UserMixin
+from sqlalchemy.dialects.mysql import JSON
 
 db = SQLAlchemy()
 
@@ -383,3 +384,18 @@ class User(db.Model, UserMixin):
     active = db.Column(db.Boolean())
     fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     confirmed_at = db.Column(db.DateTime())
+
+
+class DashboardCard(db.Model):
+    __tablename__ = 'dashboard_cards'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    visible = db.Column(db.Boolean, default=True)
+    position = db.Column(db.Integer, nullable=False)  # Pour gérer l'ordre des cards
+    size = db.Column(db.String(20), nullable=False, default='col-md-6')  # Taille avec classes Bootstrap
+    color = db.Column(db.String(20), default='bg-white')  # Couleur de fond
+    settings = db.Column(JSON)  # Champ JSON pour des réglages spécifiques à chaque card
+
+    def __repr__(self):
+        return f'<DashboardCard {self.name}>'

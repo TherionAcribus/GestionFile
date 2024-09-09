@@ -3,7 +3,7 @@ import time as tm
 from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, session, current_app as app
-from models import db, ConfigOption
+from models import db, ConfigOption, DashboardCard
 
 admin_music_bp = Blueprint('admin_music', __name__)
 
@@ -335,6 +335,7 @@ def get_spotify_current_track_info():
 @admin_music_bp.route('/admin/music/dashboard')
 def dashboard_music():
     track_infos = get_spotify_current_track_info()
-
+    dashboardcard = DashboardCard.query.filter_by(name="player").first()
     return render_template('/admin/dashboard_player.html', 
-                            track_infos=track_infos)
+                            track_infos=track_infos,
+                            dashboardcard=dashboardcard)

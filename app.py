@@ -52,7 +52,7 @@ import jwt
 from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
@@ -74,6 +74,7 @@ from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
 from routes.admin_security import admin_security_bp
 from routes.admin_music import admin_music_bp
+from routes.admin_dashboard import admin_dashboard_bp
 from routes.announce import announce_bp
 from routes.patient import patient_bp, patient_validate_scan
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
@@ -504,6 +505,7 @@ def start_fonctions(app):
     init_or_update_default_texts_db_from_json()
     #init_update_default_translations_db_from_json()
     init_default_algo_rules_db_from_json()
+    init_default_dashboard_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
     clear_counter_table()
@@ -548,6 +550,7 @@ def create_app():
     app.register_blueprint(patient_bp, url_prefix='')
     app.register_blueprint(pyside_bp, url_prefix='')
     app.register_blueprint(admin_music_bp, url_prefix='')
+    app.register_blueprint(admin_dashboard_bp, url_prefix='')
 
     return app
 
@@ -998,10 +1001,7 @@ def require_login_for_admin():
 
 # --------   ADMIN   ---------
 
-@app.route('/admin')
-@login_required
-def admin():
-    return render_template('/admin/admin.html')
+
 
 
 # -------- ADMIN -> Sécurité --------------------
