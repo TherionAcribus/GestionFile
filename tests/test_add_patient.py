@@ -5,6 +5,15 @@ from dotenv import load_dotenv
 import os
 import re
 
+"""
+Test affichage du numéro d'appel sur la page patient
+Test d'enregistrement dans la base de donnée du patient
+## TODO
+Test sur bouton avec boutons enfants
+Test affichage QRcode avec bonne info
+Test affichage intermédiaire (activité)
+"""
+
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
 
