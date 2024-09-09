@@ -1398,16 +1398,16 @@ def set_volume(volume):
 @app.route('/spotify/start_announce', methods=['GET'])
 def start_announce_music():
     if app.config["MUSIC_ANNOUNCE_ACTION"] == "pause":
-        pause_music()
+        return pause_music()
     elif app.config["MUSIC_ANNOUNCE_ACTION"] == "down":
-        set_volume(app.config["MUSIC_ANNOUNCE_VOLUME"])
+        return set_volume(app.config["MUSIC_ANNOUNCE_VOLUME"])
 
 @app.route('/spotify/stop_announce', methods=['GET'])
 def stop_announce_music():
     if app.config["MUSIC_ANNOUNCE_ACTION"] == "pause":
-        resume_music()
+        return resume_music()
     elif app.config["MUSIC_ANNOUNCE_ACTION"] == "down":
-        set_volume(app.config["MUSIC_VOLUME"])
+        return set_volume(app.config["MUSIC_VOLUME"])
 
 @app.route('/spotify/play_playlist', methods=['POST'])
 @spotify_exception_handler

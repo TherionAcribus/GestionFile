@@ -9,6 +9,8 @@ import re
 Test affichage du numéro d'appel sur la page patient
 Test d'enregistrement dans la base de donnée du patient
 ## TODO
+Test imprimer
+Test annuler
 Test sur bouton avec boutons enfants
 Test affichage QRcode avec bonne info
 Test affichage intermédiaire (activité)

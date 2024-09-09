@@ -15,7 +15,7 @@
 </div>
 
 <form id="create-gallery-form" 
-        hx-post="{{ url_for('create_gallery') }}" 
+        hx-post="{{ url_for('admin_gallery.create_gallery') }}" 
         hx-target="#gallery-list" 
         hx-swap="outerHTML">
     <div class="mb-3">

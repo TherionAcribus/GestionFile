@@ -206,7 +206,6 @@ def print_and_validate():
     if activity.notification:
         app.communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
     app.communikation("app_patient", flag="print", data=text)
-    app.communication("update_patient_app", data={"type": "print", "message": text})
     return patient_conclusion_page(new_patient.call_number)
 
 def patient_validate_scan(activity_id):

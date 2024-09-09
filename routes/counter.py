@@ -9,9 +9,14 @@ def counter_paper_add():
     return render_template('counter/paper_add.html',
                             add_paper=app.config["ADD_PAPER"])
 
+@counter_bp.route('app/counter/paper_add', methods=['POST'])
+def app_counter_paper_add():
+    action = False if request.form.get("action") == "deactivate" else True
+    return action_add_paper(action)
 
 @counter_bp.route('/counter/paper_add/<int:add_paper>', methods=['GET'])
 def action_add_paper(add_paper):
+    print("action_add_paper", add_paper)
     try:
         print("action_add_paper", add_paper)
         config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
