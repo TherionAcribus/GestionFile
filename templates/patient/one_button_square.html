@@ -1,4 +1,4 @@
-<div class="grid-item div_square_bloc_activity"
+<div class="grid-item div_square_bloc_activity" id="{{ button.activity.name | replace(' ', '_') }}"
                 hx-post="/patients_submit" 
                 hx-vals='{"activity_id": "{{ button.activity.id }}",
                         "is_parent": "{{ button.is_parent }}",

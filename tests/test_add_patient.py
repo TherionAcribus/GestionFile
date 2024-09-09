@@ -1,45 +1,106 @@
-from playwright.sync_api import sync_playwright
+import pytest
+from playwright.sync_api import Page
+import mysql.connector
+from dotenv import load_dotenv
+import os
+import re
 
-def test_vaccination_button():
-    with sync_playwright() as p:
-        # Lance le navigateur Chromium
-        browser = p.chromium.launch(headless=False)  # Mettre headless=True pour le mode sans interface
-        page = browser.new_page()
+# Charger les variables d'environnement depuis le fichier .env
+load_dotenv()
 
-        # Ouvre la page http://127.0.0.1:5000/patient
-        page.goto("http://127.0.0.1:5000/patient")
+@pytest.fixture(scope="session")
+def browser(playwright):
+    """Lancer un navigateur une seule fois pour tous les tests."""
+    browser = playwright.chromium.launch(headless=False)
+    yield browser
+    browser.close()
 
-        page.fill('input[name="username"]', 'admin')  # Remplace 'test_user' par un nom d'utilisateur valide
-        # Saisir le mot de passe
-        page.fill('input[name="password"]', 'admin')  # Remplace 'password123' par le mot de passe valide
+@pytest.fixture(scope="session")
+def page(browser):
+    """Ouvre une nouvelle page et se connecte une seule fois pour tous les tests."""
+    page = browser.new_page()
 
-        # Soumettre le formulaire en cliquant sur le bouton "Login"
-        page.click('input[type="submit"][value="Login"]')
+    # Se connecter une seule fois
+    page.goto("http://127.0.0.1:5000/patient")
 
-        # Attendre la redirection vers la page /patient après la connexion
-        page.wait_for_url("http://127.0.0.1:5000/patient")
+    # Attendre que le formulaire de login soit présent
+    page.wait_for_selector('input[name="username"]')
 
-        # Cliquer sur le bouton "Vaccination" (ciblage basé sur l'attribut hx-post)
-        page.click('div[hx-post="/patients_submit"]')
+    # Remplir le formulaire de login
+    page.fill('input[name="username"]', 'admin')
+    page.fill('input[name="password"]', 'admin')
 
-        # Attendre la redirection ou le chargement de la nouvelle page après le clic sur Vaccination
-        page.wait_for_selector('div[hx-post="patient/scan_and_validate"]')
+    # Soumettre le formulaire en cliquant sur le bouton "Login"
+    page.click('input[type="submit"][value="Login"]')
 
-        # Cliquer sur le bouton "Scanner puis valider" (ciblage basé sur l'attribut hx-post)
-        page.click('div[hx-post="patient/scan_and_validate"]')
+    # Vérifier si la redirection vers /patient a eu lieu
+    page.wait_for_url("http://127.0.0.1:5000/patient")
 
-        # Attendre que le texte dans la balise <p class="text_summary"> apparaisse
-        page.wait_for_selector('p.text_summary')
+    yield page  # La page est maintenant prête à être utilisée pour tous les tests
 
-        # Récupérer le contenu de la balise <p class="text_summary">
-        text_summary = page.inner_text('p.text_summary')
-        print('TS', text_summary)
+@pytest.fixture
+def db_connection():
+    """Connexion à la base de données MySQL en utilisant les informations du fichier .env."""
+    conn = mysql.connector.connect(
+        host=os.getenv("MYSQL_HOST"),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_DATABASE")
+    )
+    yield conn
+    conn.close()
 
-        # Vérifier que le texte contient la partie fixe "Votre demande est bien prise en charge"
-        assert "Votre demande est bien prise en charge" in text_summary
+def click_button(page: Page, button_id: str):
+    """Fonction pour cliquer sur un bouton en utilisant son ID."""
+    page.wait_for_selector(f'#{button_id}')  # Attendre que le bouton soit visible
+    page.click(f'#{button_id}')
 
-        browser.close()
+    # Attendre le chargement de la nouvelle page après le clic
+    page.wait_for_selector('div[hx-post="patient/scan_and_validate"]')
 
-# Lancer le test avec pytest
-if __name__ == "__main__":
-    test_vaccination_button()
+    # Cliquer sur le bouton "Scanner puis valider"
+    page.click('div[hx-post="patient/scan_and_validate"]')
+
+    # Attendre que le texte de confirmation apparaisse
+    page.wait_for_selector("#conclusion_text")
+
+    # Récupérer le texte de confirmation
+    text_summary = page.inner_text("#conclusion_text")
+    print(f'Texte de confirmation : {text_summary}')
+
+    # Vérifier que le texte de confirmation contient "Votre demande est bien prise en charge"
+    assert "Votre demande est bien prise en charge" in text_summary
+
+    # Extraire le code d'appel avec une expression régulière (ex : O-22, T-1, B-34)
+    match = re.search(r'[A-Z]-\d+', text_summary)
+    if match:
+        call_number = match.group(0)
+        print(f"Numéro d'appel trouvé : {call_number}")
+        return call_number
+    else:
+        raise ValueError("Numéro d'appel non trouvé dans le texte de confirmation.")
+
+def check_patient_in_db(conn, call_number: str):
+    """Vérifie si un patient est enregistré dans la base de données avec le call_number."""
+    cursor = conn.cursor()
+    query = "SELECT * FROM patient WHERE call_number = %s"
+    cursor.execute(query, (call_number,))
+    result = cursor.fetchone()
+    cursor.close()
+
+    # Si le résultat n'est pas None, cela signifie que le patient est bien enregistré
+    assert result is not None, f"Le patient avec le call_number {call_number} n'a pas été trouvé dans la base de données."
+
+@pytest.mark.parametrize("button_id", ["ordonnances", "retrait_de_commande"])
+def test_button_click(page: Page, button_id: str):
+    """Test pour cliquer sur différents boutons en utilisant leur ID."""
+    click_button(page, button_id)
+
+@pytest.mark.parametrize("button_id", ["ordonnances", "retrait_de_commande"])
+def test_patient_in_db(page: Page, db_connection, button_id: str):
+    """Test pour vérifier que le patient est bien enregistré après l'interaction avec le bouton."""
+    # Récupérer le code d'appel après avoir cliqué sur le bouton
+    call_number = click_button(page, button_id)
+
+    # Vérifier que le patient est bien enregistré dans la base de données avec le code d'appel extrait
+    check_patient_in_db(db_connection, call_number)

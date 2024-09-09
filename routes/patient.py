@@ -30,11 +30,10 @@ def patients_front_page():
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 
-
 @patient_bp.route('/patient/change_language/<language_code>')
 def change_language(language_code):
     # Enregistrer le code de la langue dans la session
-    return redirect(url_for('patients_front_page', language_code=language_code))
+    return redirect(url_for('patient.patients_front_page', language_code=language_code))
 
 @patient_bp.route('/patient/patient_title')
 def patient_display_title():
