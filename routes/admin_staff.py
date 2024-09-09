@@ -1,18 +1,23 @@
-from flask import render_template, request, jsonify, current_app as app
+from flask import Blueprint, render_template, request, jsonify, current_app as app
 from models import Pharmacist, Activity, db
 
+admin_staff_bp = Blueprint('admin_staff', __name__)
+
 # base
+@admin_staff_bp.route('/admin/staff')
 def admin_staff():    
     return render_template('/admin/staff.html',
                             activities = Activity.query.all())
 
 # affiche la table de l'équipe
+@admin_staff_bp.route('/admin/staff/table')
 def display_staff_table():
     staff = Pharmacist.query.all()
     activities = Activity.query.all()
     return render_template('admin/staff_htmx_table.html', staff=staff, activities=activities)
 
 # mise à jour des informations d'un membre
+@admin_staff_bp.route('/admin/staff/member_update/<int:member_id>', methods=['POST'])
 def update_member(member_id):
     try:
         member = Pharmacist.query.get(member_id)
@@ -59,12 +64,14 @@ def update_member(member_id):
 
 
 # affiche la modale pour confirmer la suppression d'un membre
+@admin_staff_bp.route('/admin/staff/confirm_delete/<int:member_id>', methods=['GET'])
 def confirm_delete(member_id):
     staff = Pharmacist.query.get(member_id)
     return render_template('/admin/staff_modal_confirm_delete.html', staff=staff)
 
 
 # supprime un membre de l'equipe
+@admin_staff_bp.route('/admin/staff/delete/<int:member_id>', methods=['GET'])
 def delete_staff(member_id):
     try:
         member = Pharmacist.query.get(member_id)
@@ -83,12 +90,14 @@ def delete_staff(member_id):
     
 
 # affiche le formulaire pour ajouter un membre
+@admin_staff_bp.route('/admin/staff/add_form')
 def add_staff_form():
     activities = Activity.query.all()
     return render_template('/admin/staff_add_form.html', activities=activities)
 
 
 # enregistre le membre dans la Bdd
+@admin_staff_bp.route('/admin/staff/add_new_staff', methods=['POST'])
 def add_new_staff():
     try:
         name = request.form.get('name')

@@ -1,12 +1,16 @@
-from flask import render_template, request, jsonify, url_for, current_app as app
+from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from sqlalchemy import func
-
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
 
+counter_bp = Blueprint('counter', __name__)
+
+@counter_bp.route('/counter/paper_add')
 def counter_paper_add():
     return render_template('counter/paper_add.html',
                             add_paper=app.config["ADD_PAPER"])
 
+
+@counter_bp.route('/counter/paper_add/<int:add_paper>', methods=['GET'])
 def action_add_paper(add_paper):
     try:
         print("action_add_paper", add_paper)
@@ -20,6 +24,8 @@ def action_add_paper(add_paper):
     except Exception as e:
         print(e)
 
+
+@counter_bp.route('/counter/paper_add', methods=['POST'])
 def app_paper_add():
     if request.form.get('action') is None:
         return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
@@ -40,10 +46,13 @@ def app_paper_add():
         except Exception as e:
             print(e)
 
+
+@counter_bp.route('/app/counter/update_staff', methods=['POST'])
 def app_update_counter_staff():
     return update_counter_staff()
 
 
+@counter_bp.route('/counter/update_staff', methods=['POST'])
 def web_update_counter_staff():
     return update_counter_staff()
 
@@ -86,6 +95,7 @@ def update_counter_staff():
         return render_template('counter/staff_on_counter.html', staff=False)
 
 
+@counter_bp.route('/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
 def is_staff_on_counter(counter_id):
     counter = Counter.query.get(counter_id)
     # emet un signal pour provoquer le réaffichage de la liste des activités
@@ -93,6 +103,7 @@ def is_staff_on_counter(counter_id):
     return render_template('counter/staff_on_counter.html', staff=counter.staff)
 
 
+@counter_bp.route('/api/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
 def api_is_staff_on_counter(counter_id):
     counter = Counter.query.get(counter_id)
     if counter.staff:
@@ -124,6 +135,7 @@ def deconnect_staff_from_all_counters(staff):
             app.communikation("counter", event="update buttons")
 
 
+@counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
 def app_is_patient_on_counter(counter_id):
     """ Renvoie les informations du patient actuel au comptoir (pour le client) pour l'App (démarrage)"""
     patient = Patient.query.filter(
@@ -136,11 +148,13 @@ def app_is_patient_on_counter(counter_id):
         return jsonify({"id": None, "counter_id": counter_id}), 200   
 
 
+@counter_bp.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
 def patients_queue_for_counter(counter_id):
     patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
     return render_template('/counter/patients_queue_for_counter.html', patients=patients, counter_id=counter_id)
 
 
+@counter_bp.route('/app/counter/auto_calling', methods=['POST'])
 def app_auto_calling():
     print("COUNTER AUTOCALLING", request.values)
     counter_id = request.form.get('counter_id')
@@ -171,6 +185,7 @@ def app_auto_calling():
         return e, 500
     
 
+@counter_bp.route('/app/counter/init_app', methods=['POST'])
 def app_init_app():
     """ Fonction d'initialisation de l'application pour récupérer les infos utiles en une seule requete """
     counter_id = request.form.get('counter_id')
@@ -179,16 +194,20 @@ def app_init_app():
                     "add_paper": app.config["ADD_PAPER"]}), 200
 
 
+@counter_bp.route('/app/counter/remove_staff', methods=['POST'])
 def app_remove_counter_staff():
     print("deconnction")
     remove_counter_staff()
     return '', 200
 
 
+@counter_bp.route('/counter/remove_staff', methods=['POST'])
 def web_remove_counter_staff():
     return remove_counter_staff()
 
 
+
+@counter_bp.route('/counter/list_of_activities', methods=['POST'])
 def list_of_activities():
     activities = Activity.query.all()
     staff_id = request.form.get('staff_id')
@@ -205,6 +224,7 @@ def list_of_activities():
     return render_template('counter/counter_list_of_activities.html', activities=activities, staff_activities_ids=staff_activities_ids)
 
 
+@counter_bp.route('/counter/select_patient/<int:counter_id>/<int:patient_id>', methods=['GET'])
 def counter_select_patient(counter_id, patient_id):
     """ Appeler lors du choix d'un patient spécifique au comptoir """
     print("counter_select_patient", counter_id, patient_id)
@@ -212,11 +232,11 @@ def counter_select_patient(counter_id, patient_id):
     app.communikation("update_patient")
     return '', 204
 
+
+@counter_bp.route('/counter/relaunch_patient_call/<int:counter_id>', methods=['GET'])
 def relaunch_patient_call(counter_id):
-    print("relaunch_patient_call", counter_id)
     patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
     audiofile = f'patient_{patient.call_number}.mp3'
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
     app.communikation("update_audio", event="audio", data=audio_url)
-    print("relaunch_patient_call", audio_url)
     return '', 204

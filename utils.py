@@ -112,7 +112,7 @@ def replace_balise_announces(template, patient):
 
 def replace_balise_phone(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)
-    Pour le nom de l'activité, on reprend le nom du bouton pour plus de cohérence"""
+    Pour le nom de l'activité, on reprend le nom du bouton pour plus de o"""
     button = Button.query.filter_by(activity_id=patient.activity_id).first()
     if session.get('language_code') != "fr":        
         button = get_buttons_translation([button], session.get('language_code'))[0]
@@ -156,3 +156,23 @@ def choose_text_translation(key):
     else:
         text = get_text_translation(key, language_code)
     return text
+
+
+
+def format_ticket_text(new_patient, activity):
+    print("ticket_text", new_patient)
+    print(app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
+    text_list = [
+        app.config['TICKET_HEADER_PRINTER'],
+        app.config['TICKET_MESSAGE_PRINTER'],
+        app.config['TICKET_FOOTER_PRINTER']
+    ]
+    #if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
+    #    text_list.append(activity.specific_message)
+    print("text_list", text_list)
+    combined_text = "\n".join(text_list)
+    combined_text = replace_balise_phone(combined_text, new_patient)
+    formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
+    return formatted_text
+
+

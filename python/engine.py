@@ -56,3 +56,26 @@ def get_next_category_number(activity):
     next_number = today_count + 1
 
     return f"{letter_prefix}-{next_number}"
+
+def get_futur_patient(call_number, activity):
+    """ CRéation d'un nouveau patient SANS ajout à la BDD
+    Permet de simuler sa création pour pouvoir générer les infos utiles dans le QR Code"""
+    # Création d'un nouvel objet Patient
+    print('    call_number 2', call_number)
+    new_patient = Patient(
+        call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
+        activity = activity,
+        timestamp=datetime.now(timezone.utc),
+        status='standing'
+    ) 
+    return new_patient
+
+
+def register_patient(activity):
+    call_number = get_next_call_number(activity)
+    new_patient = add_patient(call_number, activity)
+    
+    app.auto_calling()
+
+    app.communikation("update_patient")
+    return new_patient

@@ -1,14 +1,20 @@
 import json
 import os
-from flask import render_template, request, jsonify, url_for, current_app as app
+from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from models import ConfigOption, Button, Activity, Language, Translation, db
 from werkzeug.utils import secure_filename
 
+admin_translation_bp = Blueprint('admin_translation', __name__)
+
+
+@admin_translation_bp.route('/admin/translations')
 def admin_translation():
     languages = Language.query.all()
     return render_template('/admin/translations.html',
                             languages=languages)
 
+
+@admin_translation_bp.route('/admin/languages/table')
 def display_languages_table():
     languages = Language.query.all()
     print("Llanguages", languages)
@@ -16,6 +22,7 @@ def display_languages_table():
                             languages=languages)
 
 
+@admin_translation_bp.route('/admin/languages/language_update/<int:language_id>', methods=['POST'])
 def update_language(language_id):
     try:
         language = Language.query.get(language_id)
@@ -72,12 +79,14 @@ def update_language(language_id):
         return jsonify(status="error", message=str(e)), 500
 
 
+@admin_translation_bp.route('/admin/languages/confirm_delete/<int:language_id>', methods=['GET'])
 def confirm_delete_language(language_id):
     language = Language.query.get(language_id)
     return render_template('/admin/translations_languages_modal_confirm_delete copy.html', language=language)
 
 
 # supprime un membre de l'equipe
+@admin_translation_bp.route('/admin/languages/delete/<int:language_id>', methods=['GET'])
 def delete_language(language_id):
     try:
         language = Language.query.get(language_id)
@@ -99,10 +108,12 @@ def delete_language(language_id):
     
 
 # affiche le formulaire pour ajouter un membre
+@admin_translation_bp.route('/admin/languages/add_form')
 def add_language_form():
     return render_template('/admin/translations_language_add_form.html')
 
 # enregistre le membre dans la Bdd
+@admin_translation_bp.route('/admin/languages/add_new_language', methods=['POST'])
 def add_new_language():
     try:
         code = request.form.get('code')
@@ -158,7 +169,7 @@ def add_new_language():
         app.display_toast(success=False, message= "Erreur : " + str(e))
         return display_languages_table()
     
-
+@admin_translation_bp.route('/admin/languages/upload_flag_image', methods=['POST'])
 def upload_flag_image():
     if 'file' not in request.files:
         return {"error": "No file part"}, 400
@@ -175,11 +186,13 @@ def upload_flag_image():
     return {"error": "Invalid file type"}, 400  
 
 
+@admin_translation_bp.route('/admin/languages/order_languages')
 def order_languages_table():
     languages = Language.query.order_by(Language.sort_order).all()
     return render_template('admin/translations_languages_order.html', languages=languages)
 
 
+@admin_translation_bp.route('/admin/languages/update_languages_order', methods=['POST'])
 def update_languages_order():
     try:
         order_data = request.form.getlist('order[]')
@@ -217,7 +230,7 @@ def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, 
 
     return False  # Aucune nouvelle traduction insérée
 
-
+@admin_translation_bp.route('/admin/translations/collect', methods=['GET'])
 def translations_collect():
     # Définir la langue par défaut (vous pouvez adapter selon vos besoins)
     default_language_code = 'fr'
@@ -307,6 +320,8 @@ def load_config_keys_to_translate():
         data = json.load(file)
         return data.get('config_keys_to_translate', [])
     
+
+@admin_translation_bp.route('/admin/translations/change_language_target', methods=['POST'])
 def change_language_target():
     language_code = request.form.get("language_code")
     
@@ -356,6 +371,7 @@ def change_language_target():
                             config_option_translations=config_option_translations)
 
 
+@admin_translation_bp.route('/admin/translations/save_translations', methods=['POST'])
 def save_translations():
     print(request.form.get("language_code"))
     print("items", request.form.items())

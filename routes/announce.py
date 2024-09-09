@@ -1,11 +1,13 @@
 import os
 import json
-from flask import render_template, url_for, current_app as app
-from datetime import datetime, date
+from flask import Blueprint, render_template, url_for, current_app as app
 from models import Patient, ConfigOption
+from utils import replace_balise_announces
 
-from utils import replace_balise_announces, replace_balise_phone
+announce_bp = Blueprint('announce', __name__)
 
+
+@announce_bp.route('/display')
 def display():
     app.logger.debug("start display")
     # TODO verifier qu'existe
@@ -23,6 +25,7 @@ def display():
                             announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
                             announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
 
+
 def patient_list_for_init_display():
     """ Création de la liste de patients pour initialiser l'écran d'annonce"""
     patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
@@ -38,6 +41,7 @@ def patient_list_for_init_display():
     return call_patients
 
 
+@announce_bp.route('/announce/patients_ongoing')
 def patients_ongoing():
     announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
     patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
@@ -47,7 +51,7 @@ def patients_ongoing():
         ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
 
-
+@announce_bp.route('/announce/init_gallery')
 def announce_init_gallery():
     """ Création de la liste des images pour la galerie"""
     app.logger.debug("Init gallery")
@@ -82,9 +86,8 @@ def announce_init_gallery():
                             announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
                             announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],)
 
-
+@announce_bp.route('/announce/refresh')
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
     app.communikation("update_screen", event="refresh")
-    app.communication("update_announce")
     return '', 204

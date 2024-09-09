@@ -19,11 +19,11 @@ import time as tm
 from functools import wraps
 #from flask_babel import Babel
 from gtts import gTTS
-from werkzeug.utils import secure_filename
+
 from flask_apscheduler import APScheduler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-import qrcode
+
 import json
 import markdown2
 import os
@@ -48,26 +48,37 @@ from flask_security import Security, current_user, auth_required, hash_password,
     SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
 from sqlalchemy.ext.declarative import declarative_base
 from flask_security.forms import LoginForm, BooleanField
-from wtforms import StringField, PasswordField, HiddenField, SubmitField, MultipleFileField
+from wtforms import StringField, PasswordField, HiddenField
 from wtforms.validators import DataRequired
-from flask_wtf import FlaskForm
+
 import jwt
 from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
-from routes.backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
+from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
 from bdd import init_database
-from python.engine import add_patient, get_next_call_number
-from python.counter import counter_paper_add, action_add_paper, app_paper_add, web_update_counter_staff, app_update_counter_staff, is_staff_on_counter, api_is_staff_on_counter, app_is_patient_on_counter, patients_queue_for_counter, app_auto_calling, app_remove_counter_staff, web_remove_counter_staff, list_of_activities, counter_select_patient, relaunch_patient_call, app_init_app
-from python.announce import display, patients_ongoing, announce_init_gallery, announce_refresh, replace_balise_announces
-from python.admin.admin import admin_admin
-from python.admin.patient import admin_patient, display_button_table, order_button_table, add_button_form, print_ticket_test, display_children_buttons, update_button, update_button_order, add_new_button, confirm_delete_button, delete_button, upload_image, gallery_button_images, update_button_image_from_gallery, delete_button_image
-from python.admin.queue import admin_queue, clear_all_patients_from_db, display_queue_table, confirm_delete_patient_table, update_patient, confirm_delete_patient, delete_patient, create_new_patient_auto
-from python.admin.staff import admin_staff, display_staff_table, add_staff_form, update_member, confirm_delete, delete_staff, add_new_staff
-from python.admin.translation import admin_translation, display_languages_table, update_language, add_language_form, add_new_language, confirm_delete_language, delete_language, translations_collect, change_language_target, save_translations, upload_flag_image, order_languages_table, update_languages_order
+
+
+from routes.counter import counter_bp
+from routes.admin_announce import admin_announce_bp
+from routes.admin_counter import admin_counter_bp
+from routes.admin_activity import admin_activity_bp
+from routes.admin_algo import admin_algo_bp
+from routes.admin_gallery import admin_gallery_bp
+from routes.admin_phone import admin_phone_bp
+from routes.admin_staff import admin_staff_bp
+from routes.admin_patient import admin_patient_bp
+from routes.admin_queue import admin_queue_bp, clear_all_patients_from_db
+from routes.admin_translation import admin_translation_bp
+from routes.admin_options import admin_options_bp
+from routes.admin_schedule import admin_schedule_bp
+from routes.admin_security import admin_security_bp
+from routes.announce import announce_bp
+from routes.patient import patient_bp, patient_validate_scan
+from routes.pyside import pyside_bp, create_patients_list_for_pyside
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -133,6 +144,10 @@ class Config:
             'users': 'sqlite:///userdatabase.db'
         }
 
+    # Scheduler
+    SCHEDULER_API_ENABLED = True
+    JOBS = []
+
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
@@ -159,12 +174,386 @@ class Config:
     # music
     IS_PLAYING_SPOTIFY = False
 
-app = Flask(__name__)
+scheduler = APScheduler()
+mail = Mail()
 
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*") #, logger=True, engineio_logger=True
-app.config.from_object(Config())
-app.debug = True
-mail = Mail(app)
+def communikation(stream, data=None, flag=None, event="update", client_id=None):
+    """ Effectue la communication avec les clients """
+    print(f"communikation called with stream={stream}, data={data}, flag={flag}, event={event}, client_id={client_id}")
+    print("communikation", communication_mode, data, event)
+    if communication_mode == "websocket":
+        #communication_websocket(stream=f"socket_{stream}", data=data)
+        if stream == "update_patient":
+            print("UPDATE:::")
+            patients = create_patients_list_for_pyside()
+            #data = json.dumps({"flag": "patient", "data": patients})
+            communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
+            communication_websocket(stream="socket_app_counter", data=patients, flag="my_patient")
+            communication_websocket(stream="socket_update_patient", data=patients)
+        elif stream == "update_audio":
+
+            if event == "spotify":
+                print("spotify!")
+                communication_websocket(stream="socket_update_screen", data=data, flag=flag, event=event)
+            
+            else:
+                if app.config["ANNOUNCE_ALERT"]:
+                    signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
+                    audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+                    print("ANNOUNCE_PLAYER", app.config["ANNOUNCE_PLAYER"])
+                    if app.config["ANNOUNCE_PLAYER"] == "web":
+                        print("websouns", audio_path)
+                        communication_websocket(stream="socket_update_screen", event="audio", data=audio_path)
+                    else:
+                        communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
+                if app.config["ANNOUNCE_PLAYER"] == "web":
+                    communication_websocket(stream="socket_update_screen", data=data, event="audio")
+                else:
+                    communication_websocket(stream="socket_app_screen", data=data, flag="sound")
+        else:
+            print("basique")
+            communication_websocket(stream=f"socket_{stream}", data=data, flag=flag, event=event)
+    # REFAIRE !!!! 
+    elif communication_mode == "rabbitmq":
+        communication_rabbitmq(queue=f"socket_{stream}", data=data)
+        if stream == "update_patient":
+            patients = create_patients_list_for_pyside()
+            data = json.dumps({"type": "patient", "list": patients})
+            communication_rabbitmq(queue="socket_app_counter", data=data)
+        else:
+            communication_rabbitmq(stream=stream, data=data)
+
+
+def communication_websocket(stream, data=None, flag=None, client_id=None, event="update"):
+    print('communication_websocket')
+    print("streamm", stream)
+    print("data", data)
+    print("event", event)
+
+    # Utiliser request.args.get uniquement si dans le contexte de la requête
+    if has_request_context():
+        stream = request.args.get('stream', stream)
+        message = request.args.get('message', data)
+    else:
+        message = data
+
+    try:
+        namespace = f'/{stream}'
+        socketio.emit(event, {"flag": flag, 'data': message}, namespace=namespace)
+        print("message:", message)
+        print("namespace:", namespace)
+        return "Message sent!"
+    except Exception as e:
+        print("message failed:", message)
+        return f"Failed to send message: {e}", 500
+    
+
+def communication_rabbitmq(queue, data=None, client_id=None):
+
+    message = data
+    try:
+        channel.basic_publish(exchange='',
+                            routing_key=queue,
+                            body=message)
+        print("message:", message)
+        print("queue:", queue)
+        return "Message sent to RabbitMQ!"
+    except Exception as e:
+        print("message failed:", message)
+        return f"Failed to send message: {e}", 500
+
+# TODO A SUPPRIMER
+def communication(stream, data=None, client_id=None, audio_source=None):
+    """ Effectue la communication avec les clients """
+    return None
+    message = {"type": stream, "data": ""}
+    
+    if stream == "update_patients":
+        for client in update_patients:
+            client.put(message)
+        for client in update_patient_pyside:
+            patients = create_patients_list_for_pyside()
+            client.put(json.dumps({"type": "patient", "list": patients}))
+            if data and data["type"] == "notification_new_patient":
+                client.put(json.dumps(data))
+    elif stream == "update_counter_pyside":
+        for client in update_patient_pyside:
+            client.put(json.dumps(data))
+    elif stream == "update_announce":
+        for client in update_announce:
+            client.put(message)
+    elif stream == "update_page_patient":
+        for client in update_page_patient:
+            client.put(json.dumps(data))
+    elif stream == "update_patient_app":
+        app.logger.debug(f"update_patient_app: {data} - {update_patient_app}")
+        for client in update_patient_app:
+            app.logger.debug(f"client {client}")
+            client.put(json.dumps(data))
+    elif stream == "update_admin":
+        for client in update_admin:
+            client.put(json.dumps(data))
+    elif stream == "update_counter":
+        if client_id in counter_streams:
+            counter_streams[client_id].put(message)
+    elif stream == "update_audio":
+        if app.config["ANNOUNCE_ALERT"]:
+            signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
+            audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+            message["data"] = {"audio_url": audio_path}
+            if app.config["ANNOUNCE_PLAYER"] == "web":
+                for client in play_sound_streams:
+                    client.put(json.dumps(message))
+            else:
+                for client in update_screen_app:
+                    client.put(json.dumps(message))
+        message["data"] = {"audio_url": audio_source}
+        if app.config["ANNOUNCE_PLAYER"] == "web":
+            for client in play_sound_streams:
+                client.put(json.dumps(message))
+        else:
+            for client in update_screen_app:
+                client.put(json.dumps(message))
+
+
+def clear_old_patients_table(app):
+    # Vérifie si la fonctionnalité est activée dans la configuration
+    if app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
+        # Obtenez la date actuelle en UTC
+        today = datetime.now(timezone.utc).date()
+        
+        # Construisez la requête pour trouver tous les patients dont la date est antérieure à aujourd'hui
+        old_patients = Patient.query.filter(Patient.timestamp < today)
+        
+        # Supprimez ces patients
+        if old_patients.count() > 0:
+            old_patients.delete(synchronize_session='fetch')
+            db.session.commit()
+            communikation("update_patient")
+            app.logger.info(f"Deleted old patients not from today ({today}).")
+    else:
+        app.logger.info("Deletion of old patients is disabled.")
+
+def scheduler_clear_all_patients(app):
+    # vide la table patient
+    job_id = 'Clear Patient Table'
+
+    # Vérifier si le job existe déjà
+    if scheduler.get_job(job_id):
+        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
+        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
+
+    try:
+        hour=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[0])
+        minute=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
+        scheduler.add_job(id=job_id, 
+                        func=clear_all_patients_job, 
+                        trigger='cron', 
+                        hour=hour, 
+                        minute=minute)
+        app.logger.info(f"Job '{job_id}' successfully added.")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to add job '{job_id}': {e}")
+        return False
+
+# Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
+def load_configuration(app):
+    app.logger.info("Loading configuration from database")
+
+    config_mappings = {
+        "pharmacy_name": ("PHARMACY_NAME", "value_str"),
+        "network_adress": ("NETWORK_ADRESS", "value_str"),
+        "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
+        "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
+        "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
+        "printer": ("PRINTER", "value_bool"),
+        "printer_width": ("PRINTER_WIDTH", "value_int"),
+        "add_paper": ("ADD_PAPER", "value_bool"),
+        "admin_colors": ("ADMIN_COLORS", "value_str"),
+        "announce_title": ("ANNOUNCE_TITLE", "value_str"),
+        "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
+        "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
+        "announce_text_up_patients": ("ANNOUNCE_TEXT_UP_PATIENTS", "value_str"),
+        "announce_text_up_patients_display": ("ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY", "value_str"),
+        "announce_text_down_patients": ("ANNOUNCE_TEXT_DOWN_PATIENTS", "value_str"),
+        "announce_text_down_patients_display": ("ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY", "value_str"),
+        "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
+        "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
+        "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),
+        "announce_style": ("ANNOUNCE_STYLE", "value_str"),
+        "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
+        "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
+        "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
+        "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
+        "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
+        "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
+        "announce_infos_mix_folders": ("ANNOUNCE_INFOS_MIX_FOLDERS", "value_bool"),
+        "announce_infos_width": ("ANNOUNCE_INFOS_WIDTH", "value_int"),
+        "announce_infos_height": ("ANNOUNCE_INFOS_HEIGHT", "value_int"),
+        "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
+        "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
+        "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),
+        "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
+        "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
+        "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
+        "counter_order": ("COUNTER_ORDER", "value_str"),
+        "music_volume": ("MUSIC_VOLUME", "value_int"),
+        "music_announce_volume": ("MUSIC_ANNOUNCE_VOLUME", "value_int"),
+        "music_announce_action": ("MUSIC_ANNOUNCE_ACTION", "value_str"),
+        "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),        
+        "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
+        "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
+        "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),
+        "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
+        "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
+        "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
+        "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
+        "page_patient_validation_message": ("PAGE_PATIENT_VALIDATION_MESSAGE", "value_str"),
+        "page_patient_confirmation_message": ("PAGE_PATIENT_CONFIRMATION_MESSAGE", "value_str"),
+        "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
+        "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
+        "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
+        "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
+        "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
+        "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
+        "page_patient_interface_validate_print": ("PAGE_PATIENT_INTERFACE_VALIDATE_PRINT", "value_str"),
+        "page_patient_interface_validate_scan": ("PAGE_PATIENT_INTERFACE_VALIDATE_SCAN", "value_str"),
+        "page_patient_interface_validate_cancel": ("PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL", "value_str"),
+        "page_patient_interface_done_print": ("PAGE_PATIENT_INTERFACE_DONE_PRINT", "value_str"),
+        "page_patient_interface_done_extend": ("PAGE_PATIENT_INTERFACE_DONE_EXTEND", "value_str"),
+        "page_patient_interface_done_back": ("PAGE_PATIENT_INTERFACE_DONE_BACK", "value_str"),
+        "ticket_header": ("TICKET_HEADER", "value_str"),
+        "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
+        "ticket_message": ("TICKET_MESSAGE", "value_str"),
+        "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
+        "ticket_footer": ("TICKET_FOOTER", "value_str"),
+        "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
+        "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "phone_center": ("PHONE_CENTER", "value_bool"),
+        "phone_title": ("PHONE_TITLE", "value_str"),
+        "phone_line1": ("PHONE_LINE1", "value_str"),
+        "phone_line2": ("PHONE_LINE2", "value_str"),
+        "phone_line3": ("PHONE_LINE3", "value_str"),
+        "phone_line4": ("PHONE_LINE4", "value_str"),
+        "phone_line5": ("PHONE_LINE5", "value_str"),
+        "phone_line6": ("PHONE_LINE6", "value_str"),
+        "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
+        "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
+        "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
+        "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
+        "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
+        "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
+        "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
+        "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
+        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
+    }
+
+    for key, (config_name, value_type) in config_mappings.items():
+        config_option = ConfigOption.query.filter_by(config_key=key).first()
+        if config_option:
+            app.config[config_name] = getattr(config_option, value_type)
+
+    # Handling special case for cron_delete_patient_table_activated
+    if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
+        scheduler_clear_all_patients(app)
+
+    # stockage de la durée de conservation des cookies pour les mots de passe
+    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
+
+    # auto_calling 
+    auto_calling = []
+    for counter in Counter.query.all():
+        if counter.auto_calling:
+            auto_calling.append(counter.id)
+    app.config["AUTO_CALLING"] = auto_calling
+
+    #start_serveo_tunnel_in_thread()
+    #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
+    #flask_thread.start()
+
+
+def start_fonctions(app):
+
+    init_database(database, db)
+
+    # Check if the user table is empty and create an admin user if it is
+
+    if User.query.count() == 0:
+        app.logger.info("Creating admin user...")
+        #admin_role = Role.query.filter_by(name='admin').first()
+        #if not admin_role:
+            #admin_role = Role(name='admin', description='Administrator')
+            #db.session.add(admin_role)
+            #db.session.commit()
+
+        admin_user = User(email='admin', username='admin', password=hash_password('admin'), active=True, confirmed_at=datetime.now())
+        #admin_user.roles.append(admin_role)
+        db.session.add(admin_user)
+        db.session.commit()
+
+    init_days_of_week_db_from_json()
+    init_activity_schedules_db_from_json()
+    init_default_activities_db_from_json()
+    init_counters_data_from_json()  # a verifier
+    init_staff_data_from_json()
+    init_default_options_db_from_json()
+    init_default_buttons_db_from_json()
+    init_default_languages_db_from_json()
+    init_or_update_default_texts_db_from_json()
+    #init_update_default_translations_db_from_json()
+    init_default_algo_rules_db_from_json()
+    load_configuration(app)
+    clear_old_patients_table(app)
+    clear_counter_table()
+
+
+def create_app():
+    app = Flask(__name__)
+    #, logger=True, engineio_logger=True
+    app.config.from_object(Config())
+    app.debug = True
+    mail = Mail(app)
+
+    # Pour le logging
+    logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
+
+    db.init_app(app) 
+    migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
+    #babel = Babel(app)
+    
+    scheduler.init_app(app)
+    scheduler.start()
+
+    with app.app_context():
+        start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
+
+    app.register_blueprint(admin_announce_bp, url_prefix='')
+    app.register_blueprint(admin_counter_bp, url_prefix='')
+    app.register_blueprint(admin_activity_bp, url_prefix='')
+    app.register_blueprint(admin_algo_bp, url_prefix='')
+    app.register_blueprint(admin_gallery_bp, url_prefix='')
+    app.register_blueprint(admin_phone_bp, url_prefix='')
+    app.register_blueprint(admin_staff_bp, url_prefix='')
+    app.register_blueprint(admin_patient_bp, url_prefix='')
+    app.register_blueprint(admin_queue_bp, url_prefix='')
+    app.register_blueprint(admin_translation_bp, url_prefix='')
+    app.register_blueprint(admin_options_bp, url_prefix='')
+    app.register_blueprint(counter_bp, url_prefix='')
+    app.register_blueprint(admin_schedule_bp, url_prefix='')
+    app.register_blueprint(admin_security_bp, url_prefix='')
+    app.register_blueprint(announce_bp, url_prefix='')
+    app.register_blueprint(patient_bp, url_prefix='')
+    app.register_blueprint(pyside_bp, url_prefix='')
+
+    return app
+
+app = create_app()
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 def callback_update_patient(ch, method, properties, body):
     logging.debug(f"Received general message: {body}")
@@ -383,29 +772,7 @@ def rabbitmq_status_local():
         print(f"Failed to connect to RabbitMQ (local): {e}")
     return "", 204
 
-# Gestion du scheduler / CRON
-# Configuration du Scheduler
-class ConfigScheduler:
-    JOBS = []
-    SCHEDULER_JOBSTORES = {
-        'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI_SCHEDULER'])  
-    }
-    SCHEDULER_API_ENABLED = True  # Permet d'activer l'API pour interroger le scheduler
 
-
-# Pour le logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
-
-"""
-@app.teardown_appcontext
-def remove_session(ex=None):
-    db_session.remove()
-    """
-
-db.init_app(app) 
-migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
-#babel = Babel(app)
 
 def is_safe_url(target):
     ref_url = urlparse(request.host_url)
@@ -484,223 +851,6 @@ app.add_url_rule('/admin/buttons/restore', 'restore_buttons',
                 partial(restore_buttons, db, ConfigVersion, Button, Activity, request), 
                 methods=['GET', 'POST'])
 
-# COMPTOIR
-
-app.add_url_rule("/counter/paper_add", view_func=counter_paper_add)
-
-app.add_url_rule('/counter/paper_add/<int:add_paper>', 'action_add_paper', 
-                partial(action_add_paper), 
-                methods=['GET'])
-
-app.add_url_rule('/app/counter/paper_add', 'app_paper_add', 
-                partial(app_paper_add), 
-                methods=['POST'])
-
-app.add_url_rule('/counter/update_staff', 'web_update_counter_staff', 
-                partial(web_update_counter_staff), 
-                methods=['POST'])
-
-app.add_url_rule('/app/counter/update_staff', 'app_update_counter_staff', 
-                partial(app_update_counter_staff), 
-                methods=['POST'])
-
-app.add_url_rule('/counter/is_staff_on_counter/<int:counter_id>', 'is_staff_on_counter', 
-                partial(is_staff_on_counter), 
-                methods=['GET'])
-
-app.add_url_rule('/api/counter/is_staff_on_counter/<int:counter_id>', 'api_is_staff_on_counter', 
-                partial(api_is_staff_on_counter), 
-                methods=['GET'])
-
-app.add_url_rule('/api/counter/is_patient_on_counter/<int:counter_id>', 'app_is_patient_on_counter', 
-                partial(app_is_patient_on_counter), 
-                methods=['GET'])
-
-app.add_url_rule('/counter/patients_queue_for_counter/<int:counter_id>', 'patients_queue_for_counter', 
-                partial(patients_queue_for_counter), 
-                methods=['GET'])
-
-app.add_url_rule('/app/counter/auto_calling', 'app_auto_calling', 
-                partial(app_auto_calling), 
-                methods=['POST'])
-
-app.add_url_rule('/app/counter/init_app', 'app_init_app', 
-                partial(app_init_app), 
-                methods=['POST'])
-
-app.add_url_rule('/app/counter/remove_staff', 'app_remove_counter_staff', 
-                partial(app_remove_counter_staff), 
-                methods=['POST'])
-
-app.add_url_rule('/counter/remove_staff', 'web_remove_counter_staff', 
-                partial(web_remove_counter_staff), 
-                methods=['POST'])
-
-app.add_url_rule('/counter/list_of_activities', 'list_of_activities', 
-                partial(list_of_activities), 
-                methods=['POST'])
-
-app.add_url_rule("/counter/select_patient/<int:counter_id>/<int:patient_id>", 'counter_select_patient', 
-                partial(counter_select_patient), 
-                methods=['GET'])
-
-app.add_url_rule("/counter/relaunch_patient_call/<int:counter_id>", 'relaunch_patient_call_web', 
-                partial(relaunch_patient_call), 
-                methods=['GET'])
-
-app.add_url_rule("/app/counter/relaunch_patient_call/<int:counter_id>", 'relaunch_patient_call_app', 
-                partial(relaunch_patient_call), 
-                methods=['GET', 'POST'])
-
-# ANNOUNCES
-
-app.add_url_rule("/display", view_func=display)
-app.add_url_rule('/announce/patients_ongoing', view_func=patients_ongoing)
-app.add_url_rule('/announce/init_gallery', view_func=announce_init_gallery)
-app.add_url_rule('/announce/refresh', view_func=announce_refresh)
-
-# ADMIN -> OPTIONS
-
-app.add_url_rule("/admin/admin_options", view_func=admin_admin)
-
-
-# ADMIN -> PATIENT
-
-app.add_url_rule("/admin/patient", view_func=admin_patient)
-app.add_url_rule("/admin/patient/button_table", view_func=display_button_table)
-app.add_url_rule('/admin/patient/order_buttons', view_func=order_button_table)
-app.add_url_rule('/admin/button/add_form', view_func=add_button_form)
-app.add_url_rule("/admin/patient/print_ticket_test", view_func=print_ticket_test)
-
-app.add_url_rule('/admin/patient/display_parent_buttons/<int:button_id>', 'display_children_buttons', 
-                partial(display_children_buttons), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/patient/button_update/<int:button_id>', 'update_button', 
-                partial(update_button), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/patient/update_button_order', 'update_button_order', 
-                partial(update_button_order), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/patient/add_new_button', 'add_new_button', 
-                partial(add_new_button), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/patient/confirm_delete_button/<int:button_id>', 'confirm_delete_button', 
-                partial(confirm_delete_button), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/patient/delete_button/<int:button_id>', 'delete_button', 
-                partial(delete_button), 
-                methods=['GET'])
-
-app.add_url_rule('/upload_image/<int:button_id>', 'upload_image', 
-                partial(upload_image), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/patient/gallery_button_images/<int:button_id>', 'gallery_button_images', 
-                partial(gallery_button_images), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/patient/update_button_image_from_gallery', 'update_button_image_from_gallery', 
-                partial(update_button_image_from_gallery), 
-                methods=['POST'])
-
-app.add_url_rule("/admin/patient/delete_button_image/<int:button_id>", 'delete_button_image', 
-                partial(delete_button_image), 
-                methods=['GET'])
-
-
-# ADMIN -> QUEUE
-
-app.add_url_rule("/admin/queue", view_func=admin_queue)
-app.add_url_rule('/admin/database/clear_all_patients', view_func=clear_all_patients_from_db)
-
-app.add_url_rule('/admin/queue/table', 'display_queue_table', 
-                partial(display_queue_table), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/database/confirm_delete_patient_table', 'confirm_delete_patient_table', 
-                partial(confirm_delete_patient_table), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/queue/patient_update/<int:patient_id>', 'update_patient', 
-                partial(update_patient), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/queue/confirm_delete_patient/<int:patient_id>', 'confirm_delete_patient', 
-                partial(confirm_delete_patient), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/queue/delete_patient/<int:patient_id>', 'delete_patient', 
-                partial(delete_patient), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/queue/create_new_patient_auto', 'create_new_patient_auto', 
-                partial(create_new_patient_auto), 
-                methods=['POST'])
-
-# ADMIN -> STAFF
-app.add_url_rule("/admin/staff", view_func=admin_staff)
-app.add_url_rule('/admin/staff/table', view_func=display_staff_table)
-app.add_url_rule('/admin/staff/add_form', view_func=add_staff_form)
-
-app.add_url_rule('/admin/staff/member_update/<int:member_id>', 'update_member', 
-                partial(update_member), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/staff/confirm_delete/<int:member_id>', 'confirm_delete', 
-                partial(confirm_delete), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/staff/delete/<int:member_id>', 'delete_staff', 
-                partial(delete_staff), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/staff/add_new_staff', 'add_new_staff', 
-                partial(add_new_staff), 
-                methods=['POST'])
-
-# ADMIN -> TRANSLATIONS
-app.add_url_rule("/admin/translations", view_func=admin_translation)
-app.add_url_rule('/admin/languages/table', view_func=display_languages_table)
-app.add_url_rule('/admin/languages/add_form', view_func=add_language_form)
-app.add_url_rule('/admin/translations/collect', view_func=translations_collect)
-app.add_url_rule('/admin/languages/order_languages', view_func=order_languages_table)
-
-app.add_url_rule('/admin/languages/language_update/<int:language_id>', 'update_language', 
-                partial(update_language), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/languages/upload_flag_image', 'upload_flag_image', 
-                partial(upload_flag_image), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/languages/add_new_language', 'add_new_language', 
-                partial(add_new_language), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/languages/confirm_delete/<int:language_id>', 'confirm_delete_language', 
-                partial(confirm_delete_language), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/languages/delete/<int:language_id>', 'delete_language', 
-                partial(delete_language), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/translations/change_language_target', 'change_language_target', 
-                partial(change_language_target), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/translations/save_translations', 'save_translations', 
-                partial(save_translations), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/languages/update_languages_order', 'update_languages_order', 
-                partial(update_languages_order), 
-                methods=['POST'])
 
 
 @app.route('/logout_all')
@@ -867,137 +1017,6 @@ def admin():
 
 
 # -------- ADMIN -> Sécurité --------------------
-
-@app.route('/admin/security')
-def admin_security():
-    return render_template('admin/security.html',
-                        security_login_admin=app.config["SECURITY_LOGIN_ADMIN"],
-                        security_login_counter=app.config["SECURITY_LOGIN_COUNTER"],
-                        security_login_screen=app.config["SECURITY_LOGIN_SCREEN"],
-                        security_login_patient=app.config["SECURITY_LOGIN_PATIENT"],
-                        security_remember_duration=app.config["SECURITY_REMEMBER_DURATION"])
-
-@app.route('/admin/security/table')
-def display_security_table():
-    users = User.query.all()
-    return render_template('admin/security_htmx_table.html', users=users)
-
-# affiche le formulaire pour ajouter une regle de l'algo
-@app.route('/admin/security/add_user_form')
-def add_user_form():
-    return render_template('/admin/security_add_user_form.html')
-
-
-@app.route('/admin/security/add_new_user', methods=['POST'])
-def add_new_user():
-    try:
-        username = request.form.get('username')
-        email = request.form.get("email")
-        password1 = request.form.get("password1")
-        password2 = request.form.get("password2")
-
-        if not username:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
-            return display_security_table()
-        if not password1 or not password2:
-            display_toast(success=False, message="Les deux champs de mots de passe sont obligatoires")
-            return display_security_table()
-        if password1 != password2:
-            display_toast(success=False, message="Les deux champs de mots de passe doivent être similaires")
-            return display_security_table()
-
-        new_user = User(
-            username = username,
-            email = email,
-            password = hash_password(password1)
-        )
-        db.session.add(new_user)
-        db.session.commit()
-
-        communication('update_admin', data={"action": "delete_add_rule_form"})
-        display_toast(success=True, message="Utilisateur ajouté avec succès")
-
-        return display_security_table()
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        print(e)
-        return display_algo_table()
-
-
-@app.route('/admin/security/user_update/<int:user_id>', methods=['POST'])
-def security_update_user(user_id):
-    try:
-        user = User.query.get(user_id)
-        if user:
-            if request.form.get('username') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return ""
-            elif request.form.get("password1") == "" or request.form.get("password2") == "":
-                display_toast(success=False, message="Les deux mots de passe sont obligatoires")
-            elif request.form.get("password1") != request.form.get("password2"):
-                display_toast(success=False, message="Les deux mots de passe doivent être similaires")
-
-            user.username = request.form.get('username', user.username)
-            user.email = request.form.get('email', user.email)
-            user.password = hash_password(request.form.get('password1', user.password))
-            user.active = True
-            user.confirmed_at=datetime.now()
-
-            db.session.commit()
-
-            display_toast(success=True, message="Mise à jour réussie")
-            return ""
-        else:
-            display_toast(success=False, message="Règle introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
-    
-
-# affiche la modale pour confirmer la suppression d'un membre
-@app.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
-def confirm_delete_user(user_id):
-    user = User.query.get(user_id)
-    return render_template('/admin/security_modal_confirm_delete_user.html', user=user)
-
-
-# supprime une regle de l'algo
-@app.route('/admin/security/delete_user/<int:user_id>', methods=['GET'])
-def delete_user(user_id):
-    print("DELETE")
-    try:
-        user = User.query.get(user_id)
-        if not user:
-            display_toast(success=False, message="Utilisateur non trouvé")
-            return display_security_table()
-
-        db.session.delete(user)
-        db.session.commit()
-
-        display_toast(success=True, message="Utilisateur supprimé")
-        return display_security_table()
-
-    except Exception as e:
-        display_toast(success=False, message="erreur : " + str(e))
-        return display_security_table()  
-    
-
-@app.route('/send_test_email')
-def send_test_email():
-    print("MAIL", mail)
-    msg = EmailMessage(
-        subject="Test Email",
-        body="This is a test email sent from Flask-Mailman.",
-        to=["arggg55@gmail.com"],
-    )
-    msg.send()
-    return "Email sent!"
-
 
 # --------- ADMIN -> fin sécurité -------------
 
@@ -1459,28 +1478,7 @@ def display_schedule_tasks_list():
                         jobs_info=jobs_info)
 
 
-def scheduler_clear_all_patients():
-    # vide la table patient
-    job_id = 'Clear Patient Table'
 
-    # Vérifier si le job existe déjà
-    if scheduler.get_job(job_id):
-        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
-        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
-
-    try:
-        hour=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[0])
-        minute=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
-        scheduler.add_job(id=job_id, 
-                        func=clear_all_patients_job, 
-                        trigger='cron', 
-                        hour=hour, 
-                        minute=minute)
-        app.logger.info(f"Job '{job_id}' successfully added.")
-        return True
-    except Exception as e:
-        app.logger.error(f"Failed to add job '{job_id}': {e}")
-        return False
 
 def scheduler_clear_announce_calls():
     # vide la table patient
@@ -1533,23 +1531,7 @@ def remove_scheduler_clear_all_patients():
         return False
 
 
-def clear_old_patients_table():
-    # Vérifie si la fonctionnalité est activée dans la configuration
-    if app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
-        # Obtenez la date actuelle en UTC
-        today = datetime.now(timezone.utc).date()
-        
-        # Construisez la requête pour trouver tous les patients dont la date est antérieure à aujourd'hui
-        old_patients = Patient.query.filter(Patient.timestamp < today)
-        
-        # Supprimez ces patients
-        if old_patients.count() > 0:
-            old_patients.delete(synchronize_session='fetch')
-            db.session.commit()
-            communikation("update_patient")
-            app.logger.info(f"Deleted old patients not from today ({today}).")
-    else:
-        app.logger.info("Deletion of old patients is disabled.")
+
 
 def clear_announce_calls_job():
     """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
@@ -1584,478 +1566,7 @@ def clear_announces_call():
 
 # --------  ADMIN -> Activity  ---------
 
-# page de base
-@app.route('/admin/activity')
-def admin_activity():
-    return render_template('/admin/activity.html')
 
-# affiche le tableau des activités 
-@app.route('/admin/activity/table')
-def display_activity_table():
-    activities = Activity.query.filter_by(is_staff=False).all()
-    schedules = ActivitySchedule.query.all()
-    return render_template('admin/activity_htmx_table.html',
-                            activities=activities,
-                            schedules=schedules)
-
-
-# affiche le tableau des activités spécifique pour les membres de l'équipe
-@app.route('/admin/activity/table_staff')
-def display_activity_table_staff():
-    activities = Activity.query.filter_by(is_staff=True).all()
-    schedules = ActivitySchedule.query.all()
-    staff = Pharmacist.query.all()
-    return render_template('admin/activity_htmx_table.html',
-                            staff=staff,
-                            activities=activities,
-                            schedules=schedules)
-
-
-# mise à jour des informations d'une activité 
-@app.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
-def update_activity(activity_id):
-    activity = Activity.query.get(activity_id)
-    old_schedules = activity.schedules
-
-    if activity:
-        if request.form.get('name') == '':
-            display_toast(success=False, message="Le nom est obligatoire")
-            return ""
-        if request.form.get('letter') == '':
-            display_toast(success=False, message="La lettre est obligatoire")
-            return ""
-        activity.name = request.form.get('name', activity.name)
-        activity.letter = request.form.get('letter', activity.letter)
-        activity.inactivity_message = request.form.get('inactivity_message', activity.inactivity_message)
-        activity.specific_message = request.form.get('specific_message', activity.specific_message)
-        activity.notification = True if request.form.get('notification', activity.notification) == "true" else False
-
-        # Mettre à jour les horaires
-        schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
-        activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
-        update_scheduler_for_activity(activity)
-        
-        # Si on a modifier les schedules, on met à jour le bouton
-        if activity.schedules != old_schedules:
-            update_bouton_after_scheduler_changed(activity)
-
-        if request.form.get("staff_id"):
-            activity.is_staff = True
-            activity.staff = Pharmacist.query.get(int(request.form.get("staff_id")))
-        else:
-            activity.is_staff = False
-
-        db.session.commit()
-        display_toast(success=True, message="Activité ajoutée avec succès")
-        return ""
-    else:
-        return display_toast(success=False, message="Activité introuvable")
-
-
-def update_bouton_after_scheduler_changed(activity):
-    """ Si on modifie le scheduler d'une activité, il faut vérifier où en est le bouton.
-    Il faut donc éventuellement remettre le bouton en activité ou au contraire le rendre inactif."""
-    # Obtenir l'heure actuelle et le jour actuel
-    current_time = datetime.now().time()
-    current_weekday = datetime.now().strftime('%A')  # Renvoie le jour de la semaine en anglais
-    print(current_weekday, current_time)
-
-    # Charger l'activité avec ses horaires et boutons associés
-    activity = Activity.query.options(
-        joinedload(Activity.schedules).joinedload(ActivitySchedule.weekdays),
-        joinedload(Activity.buttons)
-    ).filter_by(id=activity.id).first()
-
-    if not activity:
-        print(f"Activity with id {activity.id} not found.")
-        return
-
-    # Initialiser le drapeau d'activité à False
-    is_activity_active = False
-
-    # Parcourir les créneaux horaires de l'activité
-    for schedule in activity.schedules:
-        print(schedule)
-        for weekday in schedule.weekdays:
-            print(weekday.english_name)
-            if weekday.english_name.lower() == current_weekday.lower():
-                if schedule.start_time <= current_time <= schedule.end_time:
-                    is_activity_active = True
-                    break
-        if is_activity_active:
-            break
-
-    # Mettre à jour les boutons associés à l'activité
-    for button in activity.buttons:
-        if button.is_active != is_activity_active:
-            button.is_active = is_activity_active
-            db.session.add(button)  # Ajouter le bouton à la session pour la mise à jour
-            display_toast(success=True, message=f"Le bouton '{button.label} 'vient de changer d'activité.")
-
-    db.session.commit()  # Sauvegarder les modifications dans la base de données
-
-    app.logger.info(f"UPDATE BOUTON: Activity {activity.name} is_active={is_activity_active}")
-
-
-# affiche la modale pour confirmer la suppression d'une activité
-@app.route('/admin/activity/confirm_delete/<int:activity_id>', methods=['GET'])
-def confirm_delete_activity(activity_id):
-    activity = Activity.query.get(activity_id)
-    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity)
-
-
-# affiche la modale pour confirmer la suppression d'une activité quand c'est un membre de l'équipe
-@app.route('/admin/activity/confirm_delete/staff/<int:activity_id>', methods=['GET'])
-def confirm_delete_activity_staff(activity_id):
-    activity = Activity.query.get(activity_id)
-    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity, staff=True)
-
-
-# supprime un membre de l'equipe
-@app.route('/admin/activity/delete/<int:activity_id>', methods=['GET'])
-def delete_activity(activity_id, staff=None):
-    try:
-        activity = Activity.query.get(activity_id)
-        if not activity:
-            display_toast(success=False, message="Activité non trouvée")
-            return return_good_display_activity(staff)
-
-        db.session.delete(activity)
-        db.session.commit()
-        display_toast(success=True, message="Activité supprimée avec succès")
-        return return_good_display_activity(staff)
-
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(str(e))
-        display_toast(success=False, message="erreur : " + str(e))
-        return return_good_display_activity(staff)
-
-
-@app.route('/admin/activity/delete/staff/<int:activity_id>', methods=['GET'])
-def delete_activity_staff(activity_id, staff=None):
-    return delete_activity(activity_id, staff=True)
-
-# affiche le formulaire pour ajouter un activité
-@app.route('/admin/activity/add_form')
-def add_activity_form():
-    schedules = ActivitySchedule.query.all()
-    return render_template('/admin/activity_add_form.html', schedules=schedules)
-
-
-# affiche le formulaire pour ajouter un activité lié à un membre de l'équipe
-@app.route('/admin/activity/add_staff_form')
-def add_activity_staff_form():
-
-    print(Pharmacist.query.all())
-    return render_template('/admin/activity_add_form.html', 
-                            schedules=ActivitySchedule.query.all(),
-                            staff=Pharmacist.query.all())
-
-
-# enregistre l'activité' dans la Bdd
-@app.route('/admin/activity/add_new_activity', methods=['POST'])
-def add_new_activity():
-    try:
-        name = request.form.get('name')
-        letter = request.form.get('letter')
-        schedule_ids = request.form.getlist('schedules')
-        inactivity_message = request.form.get('inactivity_message')
-        specific_message = request.form.get('specific_message')
-        notification = True if request.form.get('notification') == "true" else False
-        staff_id = request.form.get("staff_id")
-
-        
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            communication("update_admin", data='Nom obligatoire')
-            return return_good_display_activity(staff_id)
-
-        new_activity = Activity(
-            name=name,
-            letter=letter,
-            inactivity_message=inactivity_message,
-            specific_message=specific_message,
-            notification=notification
-        )
-        
-        if staff_id:
-            new_activity.is_staff = True
-            new_activity.staff = Pharmacist.query.get(int(staff_id))
-            
-        db.session.add(new_activity)
-
-        db.session.commit()
-
-        for schedule_id in schedule_ids:
-            schedule = ActivitySchedule.query.get(int(schedule_id))
-            if schedule:
-                new_activity.schedules.append(schedule)
-        db.session.commit()
-
-        for schedule_id in schedule_ids:
-            schedule = ActivitySchedule.query.get(int(schedule_id))
-            scheduler.add_job(func=update_button_presence, args=[new_activity.id, True, app],
-                            trigger="cron", day_of_week='mon-sun', 
-                            hour=schedule.start_time.hour, minute=schedule.start_time.minute,
-                            id=f'activate_activity{new_activity.id}_schedule{schedule.id}')
-            scheduler.add_job(func=update_button_presence, args=[new_activity.id, False, app],
-                            trigger="cron", day_of_week='mon-sun', 
-                            hour=schedule.end_time.hour, minute=schedule.end_time.minute,
-                            id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
-
-        print("communication", staff_id)
-        if staff_id:
-            print("staff_id", staff_id)
-            communication("update_admin", data={"action":"delete_add_activity_form_staff"})
-        else:
-            communication("update_admin", data={"action":"delete_add_activity_form"})
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
-
-        return f"{return_good_display_activity(staff_id)}{clear_form_html}"
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        return return_good_display_activity(staff_id)
-
-
-def return_good_display_activity(staff):
-    """ Sert uniquement à retourner le bon affichage entre activité et activité == équipier"""
-    if staff:
-        print("staff", staff)
-        return display_activity_table_staff()
-    else:
-        return display_activity_table()
-
-# affiche le tableau des plages horaires
-@app.route('/admin/schedule/table')
-def display_schedule_table():
-    schedules = ActivitySchedule.query.all()
-    weekdays = Weekday.query.all()
-    return render_template('admin/schedule_htmx_table.html',
-                            schedules=schedules,
-                            weekdays=weekdays)
-
-
-# mise à jour des informations d'une activité 
-@app.route('/admin/schedule/schedule_update/<int:schedule_id>', methods=['POST'])
-def update_schedule(schedule_id):
-    try:
-        schedule = ActivitySchedule.query.get(schedule_id)
-        if schedule:
-            schedule.name = request.form.get('name_schedule', schedule.name)
-            start_time_str = request.form.get('start_time')
-            end_time_str = request.form.get('end_time')
-            schedule.start_time = parse_time(start_time_str) if start_time_str else schedule.start_time
-            schedule.end_time = parse_time(end_time_str) if end_time_str else schedule.end_time
-
-            # Mettre à jour les horaires
-            weekdays_ids = request.form.getlist('weekdays')  # Cela devrait retourner une liste de IDs
-            schedule.weekdays = [Weekday.query.get(int(id)) for id in weekdays_ids]
-
-            db.session.commit()
-            display_toast(success=True, message="Plage horaire mise à jour")
-
-            # Mise à jour des boutons des activités qui dépendent du schedule
-            activities_with_this_schedule = Activity.query.join(activity_schedule_link).filter(
-                activity_schedule_link.c.schedule_id == schedule_id
-            ).all()
-            print("activities_with_this_schedule", activities_with_this_schedule)
-            for activity in activities_with_this_schedule:
-                update_bouton_after_scheduler_changed(activity)
-
-            # mise à jour de la table activité si nouvelle plage horaire
-            communikation("admin", event="refresh_activity_table")
-
-            return ""
-        else:
-            display_toast(success=False, message="Plage horaire introuvable")
-            return ""
-
-    except Exception as e:
-        app.logger.error(str(e))
-        display_toast(success = False, message=str(e))
-        return ""
-
-
-# affiche le formulaire pour ajouter un activité
-@app.route('/admin/schedule/add_form')
-def add_schedule_form():
-    weekdays = Weekday.query.all()
-    return render_template('/admin/schedule_add_form.html', weekdays=weekdays)
-
-
-# enregistre l'activité' dans la Bdd
-@app.route('/admin/schedule/add_new_schedule', methods=['POST'])
-def add_new_schedule():
-    try:
-        name = request.form.get('name_schedule')
-        start_time_str = request.form.get('start_time')
-        end_time_str = request.form.get('end_time')
-        start_time = parse_time(start_time_str)
-        end_time = parse_time(end_time_str)
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
-            return display_schedule_table()
-
-        new_schedule = ActivitySchedule(
-            name=name,
-            start_time=start_time,
-            end_time=end_time)
-
-        db.session.add(new_schedule)
-
-        db.session.commit()
-
-        weekdays_ids = request.form.getlist('weekdays')  # Cela devrait retourner une liste de IDs
-        for weekdays_id in weekdays_ids:
-            weekday = Weekday.query.get(int(weekdays_id))
-            if weekday:
-                new_schedule.weekdays.append(weekday)
-        db.session.commit()
-
-        communication("update_admin", data={"action": "delete_add_schedule_form"})
-
-        # mise à jour de la table activité si nouvelle plage horaire
-        communikation("admin", event="refresh_activity_table")
-        
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_schedule_form"></div>"""
-
-        return f"{display_schedule_table()}{clear_form_html}"
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        return display_schedule_table()
-    
-
-
-def update_button_presence(activity_id, is_present, app):
-    with app.app_context():  # Crée un contexte d'application
-        try:
-            buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity_id).all()
-            for button in buttons:
-                button.is_present = is_present
-            db.session.commit()
-            print(f"Buttons for activity {activity_id} set to {'present' if is_present else 'not present'}")
-        except Exception as e:
-            print(f"Failed to update button presence: {str(e)}")
-            db.session.rollback()
-
-
-# affiche la modale pour confirmer la suppression d'une plage horaire
-@app.route('/admin/schedule/confirm_delete/<int:schedule_id>', methods=['GET'])
-def confirm_delete_schedule(schedule_id):
-    schedule = ActivitySchedule.query.get(schedule_id)
-    return render_template('/admin/schedule_modal_confirm_delete.html', schedule=schedule)
-
-
-# supprime un membre de l'equipe
-@app.route('/admin/schedule/delete/<int:schedule_id>', methods=['GET'])
-def delete_schedule(schedule_id):
-    try:
-        schedule = ActivitySchedule.query.get(schedule_id)
-        if not schedule:
-            display_toast(success=False, message="Plage horaire introuvable")
-            return display_schedule_table()
-
-        db.session.delete(schedule)
-        db.session.commit()
-        display_toast(success=True, message="Suppression réussie'")
-
-        # mise à jour de la table activité si nouvelle plage horaire
-        communikation("admin", event="refresh_activity_table")
-
-        return display_schedule_table()
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        return display_schedule_table()
-
-
-def update_scheduler_for_activity(activity):
-    # Supprimer les anciens jobs pour cette activité
-    job_id_disable_prefix = f"disable_{activity.name}_"
-    job_id_enable_prefix = f"enable_{activity.name}_"
-
-    for job in scheduler.get_jobs():
-        if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
-            scheduler.remove_job(job.id)
-
-    # Fonction utilitaire pour vérifier si les horaires couvrent toute la journée
-    def is_full_day(start_time, end_time):
-        return start_time == time(0, 0) and end_time == time(23, 59)
-    
-    # Fonction utilitaire pour vérifier si les jours couvrent toute la semaine
-    def is_full_week(weekdays):
-        all_days = {'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'}
-        active_days = {day.abbreviation.strip().lower() for day in weekdays}
-        return active_days == all_days
-    
-    # Pour chaque schedule, ajouter des jobs en fonction des horaires et des jours actifs
-    for schedule in activity.schedules:
-        full_day = is_full_day(schedule.start_time, schedule.end_time)
-        full_week = is_full_week(schedule.weekdays)
-
-        if full_day and full_week:
-            # Ne pas créer de jobs car l'activité est toujours active
-            print(f"Full day and full week: No jobs created for {activity.name}")
-            continue
-        
-        # Si l'activité est active toute la journée mais pas tous les jours
-        if full_day:
-            start_day = min(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
-            end_day = max(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
-
-            scheduler.add_job(
-                id=f"{job_id_enable_prefix}{start_day}",
-                func='app:enable_buttons_for_activity',
-                args=[activity.id],
-                trigger='cron',
-                day_of_week=start_day,
-                hour=0,
-                minute=0
-            )
-            scheduler.add_job(
-                id=f"{job_id_disable_prefix}{end_day}",
-                func='app:disable_buttons_for_activity',
-                args=[activity.id],
-                trigger='cron',
-                day_of_week=end_day,
-                hour=23,
-                minute=59
-            )
-            print(f"Scheduled full-day jobs for activity {activity.name} from {start_day} to {end_day}")
-            continue
-        
-        # Si l'activité a des plages horaires spécifiques
-        for weekday in schedule.weekdays:
-            day = weekday.abbreviation.strip().lower()
-
-            scheduler.add_job(
-                id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
-                func='app:enable_buttons_for_activity_task',
-                args=[activity.id],
-                trigger='cron',
-                day_of_week=day,
-                hour=schedule.start_time.hour,
-                minute=schedule.start_time.minute
-            )
-            scheduler.add_job(
-                id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
-                func='app:disable_buttons_for_activity_task',
-                args=[activity.id],
-                trigger='cron',
-                day_of_week=day,
-                hour=schedule.end_time.hour,
-                minute=schedule.end_time.minute
-            )
-            print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
 
 def disable_buttons_for_activity_task(activity_id):
     with app.app_context():
@@ -2065,632 +1576,8 @@ def enable_buttons_for_activity_task(activity_id):
     with app.app_context():
         enable_buttons_for_activity(activity_id)
 
-# -------- Fin de ADMIN -> Activity  ---------
-
-
-# --------  ADMIN -> Algo  ---------
-
-# page de base
-@app.route('/admin/algo')
-def admin_algo():
-    algo_overtaken_limit = app.config['ALGO_OVERTAKEN_LIMIT']
-    return render_template('/admin/algo.html',
-                            algo_overtaken_limit=algo_overtaken_limit)
-
-@app.route('/admin/algo/table')
-def display_algo_table():
-    rules = AlgoRule.query.all()
-    activities = Activity.query.all()
-    return render_template('admin/algo_htmx_table.html', rules=rules, activities=activities)
-
-# affiche le formulaire activer ou desactiver l'algorithme
-@app.route('/admin/button_des_activate_algo')
-def button_des_activate_algo():
-    return render_template("admin/algo_des_activate_buttons.html",
-                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
-
-# active ou desactive l'algorithme, enregistre l'info, retourne les boutons
-@app.route('/admin/algo/toggle_activation')
-def toggle_activation():
-    action = request.args.get('action', 'activate')
-    is_activated = action == 'activate'
-    
-    app.config['ALGO_IS_ACTIVATED'] = is_activated
-    algo_activated = ConfigOption.query.filter_by(config_key="algo_activate").first()
-    algo_activated.value_bool = is_activated
-    db.session.commit()
-
-    return render_template("admin/algo_des_activate_buttons.html",
-                            algo_activated=app.config['ALGO_IS_ACTIVATED'])
-
-
-@app.route('/admin/algo/change_overtaken_limit', methods=['POST'])
-def change_overtaken_limit():
-    overtaken_limit = request.form.get('overtaken_limit')
-
-    app.config['ALGO_OVERTAKEN_LIMIT'] = overtaken_limit
-    try:
-        algo_overtaken_limit = ConfigOption.query.filter_by(config_key="algo_overtaken_limit").first()
-        algo_overtaken_limit.value_int = overtaken_limit
-        db.session.commit()
-        return display_toast()
-    except Exception as e:
-        print(e)
-        return display_toast(success=False, message=str(e))
-
-
-# affiche le formulaire pour ajouter une regle de l'algo
-@app.route('/admin/algo/add_rule_form')
-def add_rule_form():
-    activities = Activity.query.all()
-    return render_template('/admin/algo_add_rule_form.html', activities=activities)
-
-
-# enregistre la regledans la Bdd
-@app.route('/admin/algo/add_new_rule', methods=['POST'])
-def add_new_rule():
-    try:
-        name = request.form.get('name')
-        activity = Activity.query.get(request.form.get('activity_id'))
-        priority_level = request.form.get('priority_level')
-        min_patients = request.form.get('min_patients')
-        max_patients = request.form.get('max_patients')
-        max_overtaken = request.form.get('max_overtaken')
-        start_time_str = request.form.get('start_time')            
-        start_time = datetime.strptime(start_time_str, "%H:%M").time()
-        end_time_str = request.form.get('end_time')
-        end_time = datetime.strptime(end_time_str, "%H:%M").time()
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
-            return display_algo_table()
-
-        new_rule = AlgoRule(
-            name=name,
-            activity = activity,
-            priority_level = priority_level,
-            min_patients = min_patients,
-            max_patients = max_patients,
-            max_overtaken = max_overtaken,
-            start_time = start_time,
-            end_time = end_time
-        )
-        db.session.add(new_rule)
-        db.session.commit()
-
-        communication('update_admin', data={"action": "delete_add_rule_form"})
-        display_toast(success=True, message="Règle ajoutée avec succès")
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_rule_form"></div>"""
-
-        return f"{display_algo_table()}{clear_form_html}"
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        print(e)
-        return display_algo_table()
-
-
-# affiche la modale pour confirmer la suppression d'un membre
-@app.route('/admin/algo/confirm_delete_rule/<int:rule_id>', methods=['GET'])
-def confirm_delete_rule(rule_id):
-    rule = AlgoRule.query.get(rule_id)
-    return render_template('/admin/algo_modal_confirm_delete_rule.html', rule=rule)
-
-
-# supprime une regle de l'algo
-@app.route('/admin/algo/delete_rule/<int:algo_id>', methods=['GET'])
-def delete_algo(algo_id):
-    try:
-        rule = AlgoRule.query.get(algo_id)
-        if not rule:
-            display_toast(success=False, message="Règle non trouvée")
-            return display_algo_table()
-
-        db.session.delete(rule)
-        db.session.commit()
-
-        display_toast(success=True, message="Règle supprimée")
-        return display_algo_table()
-
-    except Exception as e:
-        display_toast(success=False, message="erreur : " + str(e))
-        return display_algo_table()
-
-
-@app.route('/admin/algo/rule_update/<int:rule_id>', methods=['POST'])
-def update_algo_rule(rule_id):
-    try:
-        rule = AlgoRule.query.get(rule_id)
-        if rule:
-            if request.form.get('name') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return ""
-
-            rule.name = request.form.get('name', rule.name)
-            activity = Activity.query.get(request.form.get('activity_id', rule.activity_id))
-            rule.activity = activity
-            rule.priority_level = request.form.get('priority_level', rule.priority_level)
-            rule.min_patients = request.form.get('min_patients', rule.min_patients)
-            rule.max_patients = request.form.get('max_patients', rule.max_patients)
-            rule.max_overtaken = request.form.get('max_overtaken', rule.max_overtaken)
-            start_time_str = request.form.get('start_time', rule.start_time.strftime("%H:%M"))            
-            rule.start_time = datetime.strptime(start_time_str, "%H:%M").time()
-            end_time_str = request.form.get('end_time', rule.end_time.strftime("%H:%M"))
-            rule.end_time = datetime.strptime(end_time_str, "%H:%M").time()
-
-            db.session.commit()
-
-            display_toast(success=True, message="Mise à jour réussie")
-            return ""
-        else:
-            display_toast(success=False, message="Règle introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
-
-
-# -------- Fin de ADMIN -> Algo  ---------
-
-
-# --------  ADMIN -> Counter  ---------
-
-# page de base
-@app.route('/admin/counter')
-def admin_counter():
-    return render_template('/admin/counter.html',
-                            counter_order = app.config['COUNTER_ORDER'])
-
-
-# affiche le tableau des counters 
-@app.route('/admin/counter/table')
-def display_counter_table():
-    counters = Counter.query.all()
-    activities = Activity.query.all()
-    return render_template('admin/counter_htmx_table.html', counters=counters, activities = activities)
-
-
-# mise à jour des informations d'un counter
-@app.route('/admin/counter/counter_update/<int:counter_id>', methods=['POST'])
-def update_counter(counter_id):
-    try:
-        counter = Counter.query.get(counter_id)
-        if counter:
-            if request.form.get('name') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return ""
-            counter.name = request.form.get('name', counter.name)
-            activities_ids = request.form.getlist('activities')
-
-            # Suppression des activités ajoutées pour éviter les erreur de duplication
-            activities_ids = request.form.getlist('activities')
-            new_activities = Activity.query.filter(Activity.id.in_(activities_ids)).all()
-
-            # Clear existing activities and add the new ones
-            counter.activities = new_activities
-
-            db.session.commit()
-            display_toast(success=True, message="Mise à jour réussie")
-            return ""
-        else:
-            display_toast(success=False, message="Comptoir introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
-            return ""
-
-
-# affiche la modale pour confirmer la suppression d'un comptoir
-@app.route('/admin/counter/confirm_delete/<int:counter_id>', methods=['GET'])
-def confirm_delete_counter(counter_id):
-    counter = Counter.query.get(counter_id)
-    print("counter", counter)
-    return render_template('/admin/counter_modal_confirm_delete.html', counter=counter)
-
-
-# supprime un comptoir
-@app.route('/admin/counter/delete/<int:counter_id>', methods=['GET'])
-def delete_counter(counter_id):
-    try:
-        counter = Counter.query.get(counter_id)
-        if not counter:
-            display_toast(success=False, message="Comptoir introuvable")
-            return display_counter_table()
-
-        db.session.delete(counter)
-        db.session.commit()
-
-        display_toast(success=True, message="Comptoir supprimé")
-        communikation("admin", event="refresh_counter_order")
-
-        return display_counter_table()
-
-    except Exception as e:
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
-        return display_counter_table()
-
-
-# affiche le formulaire pour ajouter un counter
-@app.route('/admin/counter/add_form')
-def add_counter_form():
-    activities = Activity.query.all()
-    return render_template('/admin/counter_add_form.html', activities=activities)
-
-
-# enregistre le comptoir dans la Bdd
-@app.route('/admin/counter/add_new_counter', methods=['POST'])
-def add_new_counter():
-    try:
-        name = request.form.get('name')
-        activities_ids = request.form.getlist('activities')
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Le nom est obligatoire")
-            return display_activity_table()
-        
-        # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
-        max_order_counter = Counter.query.order_by(Counter.sort_order.desc()).first()
-        sort_order = max_order_counter.sort_order + 1 if max_order_counter else 0
-
-        new_counter = Counter(
-            name=name,
-            sort_order=sort_order
-        )
-        db.session.add(new_counter)
-        db.session.commit()
-
-
-        # Associer les activités sélectionnées avec le nouveau pharmacien
-        for activity_id in activities_ids:
-            activity = Activity.query.get(int(activity_id))
-            if activity:
-                new_counter.activities.append(activity)
-        db.session.commit()
-
-        communication("update_admin", data={"action": "delete_add_counter_form"})
-        display_toast(success=True, message="Comptoir ajouté")
-        
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_counter_form"></div>"""
-
-        return f"{display_counter_table()}{clear_form_html}"
-
-
-    except Exception as e:
-        db.session.rollback()
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
-        return display_activity_table()
-
-
-@app.route('/admin/counter/order_counter')
-def order_counter_table():
-    counters = Counter.query.order_by(Counter.sort_order).all()
-    return render_template('admin/counter_order_counters.html', counters=counters)
-
-
-@app.route('/admin/counter/update_counter_order', methods=['POST'])
-def update_counter_order():
-    try:
-        order_data = request.form.getlist('order[]')
-        for index, counter_id in enumerate(order_data):
-            print(counter_id, index)
-            counter = Counter.query.order_by(Counter.sort_order).get(counter_id)
-            print(counter)
-            counter.sort_order = index
-        db.session.commit()
-        display_toast(success=True, message="Ordre mis à jour")
-        return '', 200  # Réponse sans contenu
-    except Exception as e:
-        display_toast(success=False, message=f"Erreur: {e}")
-
-
-
-
-
-
-# -------- fin de ADMIN -> Counter  ---------
-
-# --------  ADMIN -> Page patient  ---------
-
-
-# -------- fin de ADMIN -> Page patient  ---------
-
-
-# -------- ADMIN -> Page Announce  ---------
-
-@app.route('/admin/announce')
-def announce_page():
-    return render_template('/admin/announce.html', 
-                            announce_sound = app.config['ANNOUNCE_SOUND'],
-                            announce_alert = app.config['ANNOUNCE_ALERT'],
-                            announce_player = app.config['ANNOUNCE_PLAYER'],
-                            announce_voice = app.config['ANNOUNCE_VOICE'],
-                            anounce_style = app.config['ANNOUNCE_STYLE'],
-                            announce_call_text=app.config['ANNOUNCE_CALL_TEXT'],
-                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],
-                            announce_call_text_transition=app.config['ANNOUNCE_CALL_TEXT_TRANSITION'],
-                            announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
-                            announce_ongoing_text=app.config['ANNOUNCE_ONGOING_TEXT'],
-                            announce_title=app.config['ANNOUNCE_TITLE'],
-                            announce_title_size=app.config["ANNOUNCE_TITLE_SIZE"],
-                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
-                            announce_text_up_patients=app.config['ANNOUNCE_TEXT_UP_PATIENTS'],
-                            announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
-                            announce_text_down_patients=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS'],
-                            announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
-                            announce_infos_display=app.config['ANNOUNCE_INFOS_DISPLAY'],
-                            announce_infos_display_time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
-                            announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION']   ,
-                            announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
-                            announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
-                            announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
-                            )
-
-
-@app.route('/admin/announce/gallery_audio')
-def gallery_audio():    
-    return render_template('/admin/announce_audio_gallery.html',
-                            announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
-
-
-@app.route("/admin/announce/audio/gallery_list", methods=["GET", "DELETE"])
-def gallery_audio_list():
-    # il faut garder la methode DELETE car appeler par delete/<sound_filename> pour réafficher la galerie
-    # Lister tous les fichiers wav dans le répertoire SOUND_FOLDER
-    sounds = [f for f in os.listdir("static/audio/signals") if f.endswith('.wav') or f.endswith('.mp3')]
-    print("sounds", sounds)
-    return render_template("admin/announce_audio_gallery_list.html",
-                            announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],
-                            sounds=sounds)
-
-@app.route('/sounds/<filename>')
-def serve_sound(filename):
-    return send_from_directory("static/audio/signals", filename)
-
-@app.route("/admin/announce/audio/delete/<sound_filename>", methods=["DELETE"])
-def delete_sound(sound_filename):
-    sound_path = os.path.join("static/audio/signals", sound_filename)    
-    try:
-        # on empeche de supprimer le son en cours d'utilisation
-        if sound_filename == app.config["ANNOUNCE_ALERT_FILENAME"]:
-            display_toast(success=False, message="Impossible de supprimer le son courant. Selectionner un autre son et valider avant de supprimer celui-ci.")
-            return "", 204
-        # Vérifier si le fichier existe avant de le supprimer
-        if os.path.exists(sound_path):
-            os.remove(sound_path)
-            app.logger.info(f"Son supprimé : {sound_filename}")
-            return redirect (url_for('gallery_audio_list'))
-        else:
-            app.logger.error(f"Fichier non trouvé : {sound_filename}")
-            display_toast(success=False, message="Fichier non trouvé")
-            return "Fichier non trouvé", 404
-    except Exception as e:
-        app.logger.error(f"Erreur lors de la suppression du fichier : {str(e)}")
-        return "Erreur lors de la suppression du fichier", 500
-
-@app.route('/admin/announce/audio/current_signal')
-def current_signal():
-    return render_template('/admin/announce_audio_current_signal.html',
-                            announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
-
-
-@app.route('/admin/announce/audio/save_selected_sound', methods=['POST'])
-def select_signal():
-    print(request.values)
-    filename = request.form.get('selected_sound')
-    if filename:
-        app.config['ANNOUNCE_ALERT_FILENAME'] = filename
-        config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
-        print(config)
-        config.value_str = filename
-        db.session.commit()
-
-        communikation("admin", event="refresh_sound")
-
-    return "", 204
-
-
-def allowed_audio_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_AUDIO_EXTENSIONS"]
-
-def allowed_image_file(filename):
-    """Vérifie si le fichier a une extension autorisée."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_IMAGE_EXTENSIONS"]
-
-@app.route('/admin/announce/audio/upload', methods=['POST'])
-def upload_signal_file():
-    if 'file' not in request.files:
-        return redirect(request.url)
-    file = request.files['file']
-    if file.filename == '':
-        return redirect(request.url)
-    if file and allowed_audio_file(file.filename):
-        filename = file.filename
-        file.save(os.path.join("static/audio/signals", filename))
-    
-    return redirect(url_for('gallery_audio_list'))
-
-
-# -------- fin de ADMIN -> Page Announce  ---------
-
-
-# -------- ADMIN -> Page INfos ---------
-
-@app.route('/admin/info')
-def admin_info():
-    return render_template('/admin/gallery.html',
-                            galleries = os.listdir(app.config['GALLERIES_FOLDER']))
-
-
-@app.route('/admin/gallery/choose_gallery', methods=['POST'])
-def choose_gallery(gallery_name="", checked=""):
-    """ 
-    Ajout ou suppression de la galerie via le panel d'admin (POST)
-    Ou lors de la suppression du dossier via le panel admin (arguments de la fonction)    
-    """
-    print("choose_gallery")
-    print(request.form)
-    if request.method == 'POST':
-        gallery_name = request.form.get('gallery_name')
-        checked = request.form.get('checked')
-
-    # Récupérer l'entrée existante ou créer une nouvelle
-    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
-    if config_option is None:
-        config_option = ConfigOption(config_key="announce_infos_gallery", value_str=json.dumps([]))
-        db.session.add(config_option)
-
-    # Charger les galeries existantes à partir de la chaîne JSON
-    galleries = json.loads(config_option.value_str)
-
-    print("CHECK", checked)
-    message = ""    
-    if checked == "true":
-        message="Galerie selectionnée"
-        if gallery_name not in galleries:
-            galleries.append(gallery_name)
-    else:
-        message="Galerie deselectionnée"
-        if gallery_name in galleries:
-            galleries.remove(gallery_name)            
-
-    # Enregistrer les galeries mises à jour
-    config_option.value_str = json.dumps(galleries)
-    db.session.commit()
-
-    display_toast(success=True, message=message)
-
-    return "", 200
-
-class UploadForm(FlaskForm):
-    photos = MultipleFileField('Upload Images')
-    submit = SubmitField('Upload')
-
-def get_images_with_dates(folder):
-    try:
-        files = os.listdir(folder)
-        images = []
-        for file in files:
-            filepath = os.path.join(folder, file)
-            date = tm.strftime('%Y-%m-%d %H:%M:%S', tm.localtime(os.path.getmtime(filepath)))
-            images.append({'filename': file, 'date': date})
-        return images
-    except FileNotFoundError:
-        print("File not found")
-        return []
-    
-
-@app.route("/admin/gallery/list", methods=['GET'])
-def gallery_list():
-    galleries = os.listdir(app.config['GALLERIES_FOLDER'])
-    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
-    if config_option:
-        selected_galleries = json.loads(config_option.value_str)
-    else:
-        selected_galleries = []
-    return render_template('admin/gallery_list_galleries.html', 
-                            galleries=galleries,
-                            selected_galleries=selected_galleries)
-
-
-@app.route('/admin/gallery/<name>', methods=['GET', 'POST'])
-def gallery(name):
-    #if request.method == 'POST':
-    #    for file in request.files.getlist('photos'):
-    #        filename = secure_filename(file.filename)
-    #        os.makedirs(os.path.join(app.config['GALLERIES_FOLDER'], name), exist_ok=True)
-    #        file.save(os.path.join(app.config['GALLERIES_FOLDER'], name, filename))
-    #images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
-    return render_template('/admin/gallery_manage.html', gallery=name)
-
-
-@app.route('/admin/gallery/images_list/<name>', methods=['GET'])
-def gallery_images_list(name):
-    if not name:
-        return "No gallery name provided", 400
-    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
-    return render_template('admin/gallery_list_images.html', gallery=name, images=images)
-
-
-@app.route('/admin/gallery/upload/<name>', methods=['POST'])
-def upload_gallery(name):
-    print(name)
-    request.files.getlist('photos')
-    for file in request.files.getlist('photos'):
-        print("FILES", file)
-        filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['GALLERIES_FOLDER'], name, filename))
-    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
-    print("images", images)
-    return render_template('admin/gallery_list_images.html', gallery=name, images=images)
-
-
-@app.route('/admin/gallery/delete_image/<gallery>/<image>', methods=['DELETE'])
-def delete_image(gallery, image):
-    os.remove(os.path.join(app.config['GALLERIES_FOLDER'], gallery, image))
-    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], gallery))
-    return render_template('admin/gallery_list_images.html', gallery=gallery, images=images)
-
-
-@app.route('/admin/gallery/delete_gallery/<name>', methods=['DELETE'])
-def delete_gallery(name):
-    for image in os.listdir(os.path.join(app.config['GALLERIES_FOLDER'], name)):
-        os.remove(os.path.join(app.config['GALLERIES_FOLDER'], name, image))
-    os.rmdir(os.path.join(app.config['GALLERIES_FOLDER'], name))
-
-    # on supprime la selection pour cette galerie si elle est selectionnée
-    choose_gallery(gallery_name=name, checked="false")
-
-    communikation("admin", event="refresh_gallery_list")
-
-    return "", 200
-
-
-@app.route('/admin/gallery/create_gallery', methods=['POST'])
-def create_gallery():
-    name = request.form.get('name')
-    if name == "":
-        display_toast(success=False, message="Le nom de la galerie doit être renseigné")
-        return "", 400
-    try:
-        os.makedirs(os.path.join(app.config['GALLERIES_FOLDER'], name))
-    except FileExistsError:
-        display_toast(success=False, message="La galerie doit avoir un nom unique")
-        return "", 400
-    galleries = os.listdir(app.config['GALLERIES_FOLDER'])
-    communikation("admin", event="display_new_gallery", data=name)
-    return render_template('admin/gallery_list_galleries.html', galleries=galleries)
-
-
-
-# --------  Fin ADMIN -> Page INfos ---------
 
 # -------- ADMIN -> Page Phone ---------
-
-@app.route('/admin/phone')
-def admin_phone():
-    phone_lines = []
-    for line in range(1, 7):
-        exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
-        phone_lines.append(eval(f"phone_line{line}"))
-    print("PL", phone_lines)
-    print("CENTER", app.config['PHONE_CENTER'])
-    return render_template('/admin/phone.html',
-                            phone_center = app.config['PHONE_CENTER'], 
-                            phone_title=app.config['PHONE_TITLE'],
-                            phone_lines=phone_lines,
-                            phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'])
-                            
 
 
 # --------  Fin ADMIN -> Page Phone ---------
@@ -2825,243 +1712,9 @@ def patients_langue(lang):
 
 # ---------------- PAGE PATIENT FRONT ----------------
 
-@app.route('/patient')
-def patients_front_page():
-    language_code = request.args.get('language_code')
-
-    print("language_code", language_code)
-
-    languages = db.session.query(Language).filter_by(is_active = True).order_by(Language.sort_order).all()
-    print("languages_list", languages)
-
-    print("language_code START", language_code)
-    # définition de la langue
-    if language_code is None or language_code == "fr":
-        session['language_code'] = "fr"
-        language_code = "fr"
-    else:
-        session['language_code'] = language_code
-
-    return render_template('patient/patient_front_page.html',
-                            languages=languages,
-                            page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
 
 
 
-@app.route('/patient/change_language/<language_code>')
-def change_language(language_code):
-    # Enregistrer le code de la langue dans la session
-    return redirect(url_for('patients_front_page', language_code=language_code))
-
-@app.route('/patient/patient_title')
-def patient_display_title():
-    return f'<p>{choose_text_translation("page_patient_title")}</p>'
-
-@app.route('/patient/patient_cancel')
-def patient_cancel():
-    session["language_code"] = "fr"
-    return patient_right_page()
-
-# affiche les boutons
-@app.route('/patient/patient_buttons')
-def patient_right_page():
-    buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
-    
-    language_code = session.get('language_code', 'fr')
-    if language_code != "fr":
-        buttons = get_buttons_translation(buttons, language_code)
-        page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)
-        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)
-    else:
-        page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
-        page_patient_interface_validate_cancel = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL']
-
-    max_length = 2 if buttons[0].shape == "square" else 4
-
-    buttons_content = render_template('patient/patient_buttons_left.html', 
-                            buttons=buttons,
-                            max_length=max_length,
-                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
-    
-    subtitle_content = render_template(
-        'patient/patient_default_subtitle.html', 
-        page_patient_subtitle=page_patient_subtitle,
-    )
-    
-    communikation("patient", event="refresh_title")
-    
-    return f"{buttons_content}{subtitle_content}"
-
-
-
-@app.route('/patients_submit', methods=['POST'])
-def patients_submit():
-    print("patients_submit")
-    # Récupération des données du formulaire
-    print('SUBMIT', request.form)
-    if request.form.get('is_active')  == 'False':
-        return display_activity_inactive(request)
-    if request.form.get('is_parent')  == 'True':
-        return display_children_buttons_for_right_page(request)
-    else:
-        return display_validation_after_choice(request)
-
-
-def display_activity_inactive(request):
-    activity = Activity.query.get(request.form.get('activity_id'))
-    
-    language_code = session.get('language_code', 'fr')
-    if language_code != "fr":
-        default_subtitle = get_text_translation("page_patient_subtitle", language_code)
-    else:
-        default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
-
-        message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
-        if activity.inactivity_message != "":
-            message = activity.inactivity_message
-
-    return render_template('patient/activity_inactive.html',
-                            page_patient_disable_default_message=message,
-                            default_subtitle=default_subtitle,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
-                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"])
-
-
-@app.route("/patient/default_subtitle")
-def display_default_children_text():   
-
-    return render_template('patient/patient_default_subtitle.html',
-                            page_patient_subtitle=choose_text_translation("page_patient_subtitle"))
-
-""""@app.route("/patients/cancel_children")
-def cancel_children():
-    print("cancel_children")
-    return redirect(url_for('patients_front_page', language_code="fr"))  """
-
-# affiche les boutons "enfants" de droite
-def display_children_buttons_for_right_page(request):
-    children_buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
-    
-    language_code = session.get('language_code', 'fr')
-    if language_code != "fr":
-        children_buttons = get_buttons_translation(children_buttons, language_code)
-        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)
-    else:
-        page_patient_interface_validate_cancel = app.config["PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL"]
-
-    max_length = 2 if children_buttons[0].shape == "square" else 4
-    return render_template('patient/patient_buttons_left.html', 
-                            buttons=children_buttons,
-                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
-                            max_length=max_length,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
-                            children=True)
-
-# affiche la page de validation pour page gauche et droite
-def display_validation_after_choice(request):
-    activity_id = request.form.get('activity_id')
-    print("reason", activity_id)
-
-    # Si le bouton contient bien une activité
-    if activity_id != "":
-        activity = Activity.query.get(activity_id)
-        #socketio.emit('trigger_valide_activity', {'activity': activity.id})
-        return left_page_validate_patient(activity)
-    
-    app.logger.error("Le bouton ne possède pas d'activité")
-    
-
-# page de validation (QR Code, Impression, Validation, Annulation)
-def left_page_validate_patient(activity):
-    call_number = get_next_call_number(activity)
-    #new_patient = add_patient(call_number, activity)
-    futur_patient = get_futur_patient(call_number, activity)
-    print("futur_patient", futur_patient.id)
-    image_name_qr = create_qr_code(futur_patient)
-    text = f"{activity.name}"
-    # rafraichissement des pages display et counter
-    # envoye de data pour être récupéré sous forme de liste par PySide
-    
-    communikation("update_patient")
-
-    page_patient_validation_message = choose_text_translation("page_patient_validation_message")
-    page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
-    print(page_patient_validation_message)
-
-    main_content = render_template('patient/patient_qr_right_page.html', 
-                            image_name_qr=image_name_qr, 
-                            text=text,
-                            activity=activity,
-                            futur_patient=futur_patient,
-                            page_patient_validation_message=page_patient_validation_message,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
-                            page_patient_interface_validate_print=choose_text_translation("page_patient_interface_validate_print"),
-                            page_patient_interface_validate_scan=choose_text_translation("page_patient_interface_validate_scan"),
-                            page_patient_interface_validate_cancel=choose_text_translation("page_patient_interface_validate_cancel"),
-                            )
-    
-    # si on veut afficher un message specifique (et qu'il existe). Retourné via oob-swap
-    if app.config["PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE"] and activity.specific_message != "":
-        subtitle_content = render_template(
-        'patient/patient_default_subtitle.html', 
-        page_patient_subtitle=activity.specific_message
-        )
-
-        return f"{main_content}{subtitle_content}"
-    
-    return main_content
-
-
-@app.route('/patient/print_and_validate', methods=['POST'])
-def print_and_validate():
-    activity = Activity.query.get(request.form.get('activity_id'))
-    new_patient = register_patient(activity)
-    print("new_patient", new_patient)
-    text = format_ticket_text(new_patient, activity)
-    print("text", text)
-
-    if activity.notification:
-        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
-    communikation("app_patient", flag="print", data=text)
-    communication("update_patient_app", data={"type": "print", "message": text})
-    return patient_conclusion_page(new_patient.call_number)
-
-def patient_validate_scan(activity_id):
-    """ Fct appelée lors du scan du QRCode (validation) """
-    activity = Activity.query.get(activity_id)
-    new_patient = register_patient(activity)
-    if activity.notification:
-        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
-    return new_patient
-
-@app.route('/patient/scan_already_validate', methods=['POST'])
-def patient_scan_already_validate():
-    """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
-    patient_call_number = request.form.get('patient_call_number')
-    print("already scanned", patient_call_number)
-    return patient_conclusion_page(patient_call_number)
-
-@app.route('/patient/scan_and_validate', methods=['POST'])
-def patient_scan_and_validate():
-    """ Fct appelée si clic sur le bouton de validation """
-    activity = Activity.query.get(request.form.get('activity_id'))
-    new_patient = register_patient(activity)
-    if activity.notification:
-        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
-    return patient_conclusion_page(new_patient.call_number)
-
-
-def register_patient(activity):
-    call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity)
-    
-    auto_calling()
-
-    communikation("update_patient")
-    communication("update_patients")
-    return new_patient
 
 @with_app_context
 def auto_calling():
@@ -3087,59 +1740,8 @@ def auto_calling():
                 db.session.commit()
                 break
 
-@app.route('/patient/cancel_patient')
-def cancel_patient():
-    session['language_code'] = "fr"
-    return patient_right_page()
 
 
-@app.route('/patient/conclusion_page')
-def patient_conclusion_page(call_number):
-    image_name_qr = f"qr_patient-{call_number}.png" 
-
-    patient = Patient.query.filter_by(call_number=call_number).first()
-    page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
-    page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
-
-    return render_template('patient/conclusion_page.html',
-                            call_number=call_number,
-                            image_name_qr=image_name_qr,
-                            page_patient_confirmation_message=page_patient_confirmation_message,
-                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
-                            page_patient_interface_done_print = choose_text_translation("page_patient_interface_done_print"),
-                            page_patient_interface_done_extend = choose_text_translation("page_patient_interface_done_extend"),
-                            page_patient_interface_done_back = choose_text_translation("page_patient_interface_done_back")
-                            )
-
-def format_ticket_text(new_patient, activity):
-    print("ticket_text", new_patient)
-    print(app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
-    text_list = [
-        app.config['TICKET_HEADER_PRINTER'],
-        app.config['TICKET_MESSAGE_PRINTER'],
-        app.config['TICKET_FOOTER_PRINTER']
-    ]
-    #if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
-    #    text_list.append(activity.specific_message)
-    print("text_list", text_list)
-    combined_text = "\n".join(text_list)
-    combined_text = replace_balise_phone(combined_text, new_patient)
-    formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
-    return formatted_text
-
-
-def get_futur_patient(call_number, activity):
-    """ CRéation d'un nouveau patient SANS ajout à la BDD
-    Permet de simuler sa création pour pouvoir générer les infos utiles dans le QR Code"""
-    # Création d'un nouvel objet Patient
-    print('    call_number 2', call_number)
-    new_patient = Patient(
-        call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
-        activity = activity,
-        timestamp=datetime.now(timezone.utc),
-        status='standing'
-    ) 
-    return new_patient
 
 
 # liste des patients en attente : Nécessaire pour être transmis à Pyside
@@ -3149,41 +1751,7 @@ def list_patients_standing():
     return patients_data
 
 
-def create_qr_code(patient):
-    print("create_qr_code")
-    print(patient, patient.id, patient.call_number, patient.activity)
-    if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
-        if "SERVER_URL" not in app.config:
-            set_server_url(app, request)
-        data = f"{app.config['SERVER_URL']}/patient/phone/{patient.call_number}/{patient.activity.id}"
-    else :
-        template = app.config['PAGE_PATIENT_QRCODE_DATA']
-        if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
-            template = template + "\n" + patient.activity.specific_message
-        data = replace_balise_phone(template, patient)
 
-    # Générer le QR Code
-    img = qrcode.make(data)
-    
-    # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
-    directory = os.path.join(current_app.static_folder, 'qr_patients')
-    filename = f'qr_patient-{patient.call_number}.png'
-    img_path = os.path.join(directory, filename)
-
-    # Assurer que le répertoire existe
-    if not os.path.exists(directory):
-        os.makedirs(directory)  # Créer le dossier s'il n'existe pas
-
-    # Enregistrement de l'image dans le dossier static
-    img.save(img_path)
-
-    return filename
-
-@app.route('/patient/refresh')
-def patient_refresh():
-    """ Permet de rafraichir la page des patients pour effectuer des changements """
-    communikation("patient", event="refresh")
-    return '', 204
 
 
 # ---------------- FIN  PAGE PATIENTS FRONT ----------------
@@ -3641,151 +2209,9 @@ def events_update_patient_pyside():
     return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
 """
 
-def communikation(stream, data=None, flag=None, event="update", client_id=None):
-    """ Effectue la communication avec les clients """
-    print(f"communikation called with stream={stream}, data={data}, flag={flag}, event={event}, client_id={client_id}")
-    print("communikation", communication_mode, data, event)
-    if communication_mode == "websocket":
-        #communication_websocket(stream=f"socket_{stream}", data=data)
-        if stream == "update_patient":
-            print("UPDATE:::")
-            patients = create_patients_list_for_pyside()
-            #data = json.dumps({"flag": "patient", "data": patients})
-            communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
-            communication_websocket(stream="socket_app_counter", data=patients, flag="my_patient")
-            communication_websocket(stream="socket_update_patient", data=patients)
-        elif stream == "update_audio":
-
-            if event == "spotify":
-                print("spotify!")
-                communication_websocket(stream="socket_update_screen", data=data, flag=flag, event=event)
-            
-            else:
-                if app.config["ANNOUNCE_ALERT"]:
-                    signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
-                    audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-                    print("ANNOUNCE_PLAYER", app.config["ANNOUNCE_PLAYER"])
-                    if app.config["ANNOUNCE_PLAYER"] == "web":
-                        print("websouns", audio_path)
-                        communication_websocket(stream="socket_update_screen", event="audio", data=audio_path)
-                    else:
-                        communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
-                if app.config["ANNOUNCE_PLAYER"] == "web":
-                    communication_websocket(stream="socket_update_screen", data=data, event="audio")
-                else:
-                    communication_websocket(stream="socket_app_screen", data=data, flag="sound")
-        else:
-            print("basique")
-            communication_websocket(stream=f"socket_{stream}", data=data, flag=flag, event=event)
-    # REFAIRE !!!! 
-    elif communication_mode == "rabbitmq":
-        communication_rabbitmq(queue=f"socket_{stream}", data=data)
-        if stream == "update_patient":
-            patients = create_patients_list_for_pyside()
-            data = json.dumps({"type": "patient", "list": patients})
-            communication_rabbitmq(queue="socket_app_counter", data=data)
-        else:
-            communication_rabbitmq(stream=stream, data=data)
 
 
-def communication_websocket(stream, data=None, flag=None, client_id=None, event="update"):
-    print('communication_websocket')
-    print("streamm", stream)
-    print("data", data)
-    print("event", event)
 
-    # Utiliser request.args.get uniquement si dans le contexte de la requête
-    if has_request_context():
-        stream = request.args.get('stream', stream)
-        message = request.args.get('message', data)
-    else:
-        message = data
-
-    try:
-        namespace = f'/{stream}'
-        socketio.emit(event, {"flag": flag, 'data': message}, namespace=namespace)
-        print("message:", message)
-        print("namespace:", namespace)
-        return "Message sent!"
-    except Exception as e:
-        print("message failed:", message)
-        return f"Failed to send message: {e}", 500
-    
-
-def communication_rabbitmq(queue, data=None, client_id=None):
-    print('communication_rabbitmq')
-    print("queue", queue)
-
-    message = data
-    try:
-        channel.basic_publish(exchange='',
-                            routing_key=queue,
-                            body=message)
-        print("message:", message)
-        print("queue:", queue)
-        return "Message sent to RabbitMQ!"
-    except Exception as e:
-        print("message failed:", message)
-        return f"Failed to send message: {e}", 500
-
-
-def communication(stream, data=None, client_id=None, audio_source=None):
-    """ Effectue la communication avec les clients """
-    return None
-    message = {"type": stream, "data": ""}
-    
-    if stream == "update_patients":
-        for client in update_patients:
-            client.put(message)
-        for client in update_patient_pyside:
-            patients = create_patients_list_for_pyside()
-            client.put(json.dumps({"type": "patient", "list": patients}))
-            if data and data["type"] == "notification_new_patient":
-                client.put(json.dumps(data))
-    elif stream == "update_counter_pyside":
-        for client in update_patient_pyside:
-            client.put(json.dumps(data))
-    elif stream == "update_announce":
-        for client in update_announce:
-            client.put(message)
-    elif stream == "update_page_patient":
-        for client in update_page_patient:
-            client.put(json.dumps(data))
-    elif stream == "update_patient_app":
-        app.logger.debug(f"update_patient_app: {data} - {update_patient_app}")
-        for client in update_patient_app:
-            app.logger.debug(f"client {client}")
-            client.put(json.dumps(data))
-    elif stream == "update_admin":
-        for client in update_admin:
-            client.put(json.dumps(data))
-    elif stream == "update_counter":
-        if client_id in counter_streams:
-            counter_streams[client_id].put(message)
-    elif stream == "update_audio":
-        if app.config["ANNOUNCE_ALERT"]:
-            signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
-            audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-            message["data"] = {"audio_url": audio_path}
-            if app.config["ANNOUNCE_PLAYER"] == "web":
-                for client in play_sound_streams:
-                    client.put(json.dumps(message))
-            else:
-                for client in update_screen_app:
-                    client.put(json.dumps(message))
-        message["data"] = {"audio_url": audio_source}
-        if app.config["ANNOUNCE_PLAYER"] == "web":
-            for client in play_sound_streams:
-                client.put(json.dumps(message))
-        else:
-            for client in update_screen_app:
-                client.put(json.dumps(message))
-
-@app.route('/api/patients_list_for_pyside', methods=['GET'])
-def create_patients_list_for_pyside():
-    patients = Patient.query.filter_by(status="standing").all()
-    patients_list = [{"id": patient.id, "call_number": patient.call_number, "activity_id": patient.activity_id, "activity": patient.activity.name} for patient in patients]
-    return patients_list
 
 
 def display_toast(success=True, message=None):
@@ -3990,133 +2416,10 @@ def format_time(value):
     return value.strftime('%H:%M') if value else ''
 
 
-def set_server_url(app, request):
-    # Stockage de l'adresse pour la génération du QR code
-    if request.host_url == "http://127.0.0.1:5000/":
-        server_url = app.config.get('NETWORK_ADRESS')
-    else:
-        server_url = request.host_url
-    app.config['SERVER_URL'] = server_url
+def allowed_image_file(filename):
+    """Vérifie si le fichier a une extension autorisée."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_IMAGE_EXTENSIONS"]
 
-
-# Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
-def load_configuration():
-    app.logger.info("Loading configuration from database")
-
-    config_mappings = {
-        "pharmacy_name": ("PHARMACY_NAME", "value_str"),
-        "network_adress": ("NETWORK_ADRESS", "value_str"),
-        "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
-        "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
-        "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
-        "printer": ("PRINTER", "value_bool"),
-        "printer_width": ("PRINTER_WIDTH", "value_int"),
-        "add_paper": ("ADD_PAPER", "value_bool"),
-        "admin_colors": ("ADMIN_COLORS", "value_str"),
-        "announce_title": ("ANNOUNCE_TITLE", "value_str"),
-        "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
-        "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
-        "announce_text_up_patients": ("ANNOUNCE_TEXT_UP_PATIENTS", "value_str"),
-        "announce_text_up_patients_display": ("ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY", "value_str"),
-        "announce_text_down_patients": ("ANNOUNCE_TEXT_DOWN_PATIENTS", "value_str"),
-        "announce_text_down_patients_display": ("ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY", "value_str"),
-        "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
-        "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
-        "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),
-        "announce_style": ("ANNOUNCE_STYLE", "value_str"),
-        "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
-        "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
-        "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
-        "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
-        "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
-        "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
-        "announce_infos_mix_folders": ("ANNOUNCE_INFOS_MIX_FOLDERS", "value_bool"),
-        "announce_infos_width": ("ANNOUNCE_INFOS_WIDTH", "value_int"),
-        "announce_infos_height": ("ANNOUNCE_INFOS_HEIGHT", "value_int"),
-        "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
-        "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
-        "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),
-        "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
-        "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
-        "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
-        "counter_order": ("COUNTER_ORDER", "value_str"),
-        "music_volume": ("MUSIC_VOLUME", "value_int"),
-        "music_announce_volume": ("MUSIC_ANNOUNCE_VOLUME", "value_int"),
-        "music_announce_action": ("MUSIC_ANNOUNCE_ACTION", "value_str"),
-        "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),        
-        "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
-        "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
-        "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),
-        "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
-        "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
-        "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
-        "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
-        "page_patient_validation_message": ("PAGE_PATIENT_VALIDATION_MESSAGE", "value_str"),
-        "page_patient_confirmation_message": ("PAGE_PATIENT_CONFIRMATION_MESSAGE", "value_str"),
-        "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
-        "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
-        "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
-        "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
-        "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
-        "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
-        "page_patient_interface_validate_print": ("PAGE_PATIENT_INTERFACE_VALIDATE_PRINT", "value_str"),
-        "page_patient_interface_validate_scan": ("PAGE_PATIENT_INTERFACE_VALIDATE_SCAN", "value_str"),
-        "page_patient_interface_validate_cancel": ("PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL", "value_str"),
-        "page_patient_interface_done_print": ("PAGE_PATIENT_INTERFACE_DONE_PRINT", "value_str"),
-        "page_patient_interface_done_extend": ("PAGE_PATIENT_INTERFACE_DONE_EXTEND", "value_str"),
-        "page_patient_interface_done_back": ("PAGE_PATIENT_INTERFACE_DONE_BACK", "value_str"),
-        "ticket_header": ("TICKET_HEADER", "value_str"),
-        "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
-        "ticket_message": ("TICKET_MESSAGE", "value_str"),
-        "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
-        "ticket_footer": ("TICKET_FOOTER", "value_str"),
-        "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
-        "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "phone_center": ("PHONE_CENTER", "value_bool"),
-        "phone_title": ("PHONE_TITLE", "value_str"),
-        "phone_line1": ("PHONE_LINE1", "value_str"),
-        "phone_line2": ("PHONE_LINE2", "value_str"),
-        "phone_line3": ("PHONE_LINE3", "value_str"),
-        "phone_line4": ("PHONE_LINE4", "value_str"),
-        "phone_line5": ("PHONE_LINE5", "value_str"),
-        "phone_line6": ("PHONE_LINE6", "value_str"),
-        "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
-        "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
-        "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
-        "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
-        "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
-        "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
-        "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
-        "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
-        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
-    }
-
-    for key, (config_name, value_type) in config_mappings.items():
-        config_option = ConfigOption.query.filter_by(config_key=key).first()
-        if config_option:
-            app.config[config_name] = getattr(config_option, value_type)
-
-    # Handling special case for cron_delete_patient_table_activated
-    if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
-        scheduler_clear_all_patients()
-
-    # stockage de la durée de conservation des cookies pour les mots de passe
-    app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
-
-    # auto_calling 
-    auto_calling = []
-    for counter in Counter.query.all():
-        if counter.auto_calling:
-            auto_calling.append(counter.id)
-    app.config["AUTO_CALLING"] = auto_calling
-
-
-    #start_serveo_tunnel_in_thread()
-    #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
-    #flask_thread.start()
 
 # Chargement des couleurs pour pouvoir les passer dans la session pour être envoyé à base.html
 def load_colors(sender, **extra):
@@ -4126,44 +2429,6 @@ def load_colors(sender, **extra):
 # Connecter le signal request_started à la fonction load_configuration
 request_started.connect(load_colors, app)
 
-app.config.from_object(ConfigScheduler())
-scheduler = APScheduler()
-scheduler.init_app(app)
-scheduler.start()
-
-with app.app_context():
-
-    init_database(database, db)
-
-    # Check if the user table is empty and create an admin user if it is
-
-    if User.query.count() == 0:
-        app.logger.info("Creating admin user...")
-        #admin_role = Role.query.filter_by(name='admin').first()
-        #if not admin_role:
-            #admin_role = Role(name='admin', description='Administrator')
-            #db.session.add(admin_role)
-            #db.session.commit()
-
-        admin_user = User(email='admin', username='admin', password=hash_password('admin'), active=True, confirmed_at=datetime.now())
-        #admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-        db.session.commit()
-
-    init_days_of_week_db_from_json(Weekday, db, app)
-    init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app)
-    init_default_activities_db_from_json(ConfigVersion, Activity, ActivitySchedule, db)
-    init_counters_data_from_json(ConfigVersion, Counter, Activity, db)  # a verifier
-    init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db)
-    init_default_options_db_from_json(db, ConfigVersion, ConfigOption)
-    init_default_buttons_db_from_json(ConfigVersion, Button, Activity, db)
-    init_default_languages_db_from_json(Language, db)
-    init_or_update_default_texts_db_from_json(ConfigVersion, Text, db)
-    init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db)
-    init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db)
-    load_configuration()
-    clear_old_patients_table()
-    clear_counter_table(db, Counter, Patient)
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
@@ -4172,6 +2437,10 @@ app.logout_all = logout_all
 app.communikation = communikation
 app.call_specific_patient = call_specific_patient
 app.allowed_image_file = allowed_image_file
+app.scheduler = scheduler
+app.mail = mail
+app.auto_calling = auto_calling
+
 
 
 if __name__ == "__main__":

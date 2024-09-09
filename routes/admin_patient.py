@@ -1,8 +1,12 @@
 import os
-from flask import request, render_template, redirect, jsonify, current_app as app
+from flask import Blueprint, request, render_template, redirect, jsonify, current_app as app
 from werkzeug.utils import secure_filename
 from models import Button, Activity, db
 
+admin_patient_bp = Blueprint('admin_patient', __name__)
+
+
+@admin_patient_bp.route('/admin/patient')
 def admin_patient():
     buttons = Button.query.all()
 
@@ -37,18 +41,21 @@ def admin_patient():
 
 
 # affiche le tableau des boutons 
+@admin_patient_bp.route('/admin/patient/button_table')
 def display_button_table():
     buttons = Button.query.order_by(Button.sort_order).all()
     activities = Activity.query.all()
     return render_template('admin/patient_page_htmx_buttons_table.html', buttons=buttons, activities = activities)
 
 
+@admin_patient_bp.route('/admin/patient/order_buttons')
 def order_button_table():
     buttons = Button.query.order_by(Button.sort_order).all()
     return render_template('admin/patient_page_order_buttons.html', buttons=buttons)
 
 
 # affiche la liste des boutons pour le 
+@admin_patient_bp.route('/admin/patient/display_parent_buttons/<int:button_id>', methods=['GET'])
 def display_children_buttons(button_id):
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_parent=True).all()
     button = Button.query.get(button_id)
@@ -56,6 +63,7 @@ def display_children_buttons(button_id):
 
 
 # mise à jour des informations d'un bouton
+@admin_patient_bp.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
 def update_button(button_id):
     try:
         button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -112,7 +120,7 @@ def update_button(button_id):
             app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
 
-
+@admin_patient_bp.route('/admin/patient/update_button_order', methods=['POST'])
 def update_button_order():
     try:
         order_data = request.form.getlist('order[]')
@@ -129,6 +137,7 @@ def update_button_order():
 
 
 # affiche le formulaire pour ajouter un membre
+@admin_patient_bp.route('/admin/button/add_form')
 def add_button_form():
     activities = Activity.query.all()
     parent_buttons = Button.query.filter_by(is_parent=True).all()
@@ -136,6 +145,7 @@ def add_button_form():
                             activities=activities,
                             parent_buttons=parent_buttons)
 
+@admin_patient_bp.route('/admin/patient/add_new_button', methods=['POST'])
 def add_new_button():
     try:
         activity_id = request.form.get('activity')
@@ -212,12 +222,14 @@ def add_new_button():
 
 
 # affiche la modale pour confirmer la suppression d'un patient
+@admin_patient_bp.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
 def confirm_delete_button(button_id):
     button = Button.query.get(button_id)
     return render_template('/admin/patient_page_button_modal_confirm_delete.html', button=button)
 
 
 # supprime un bouton
+@admin_patient_bp.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
 def delete_button(button_id):
     try:
         button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -240,6 +252,7 @@ def delete_button(button_id):
         return display_button_table()
 
 
+@admin_patient_bp.route('/upload_image/<int:button_id>', methods=['POST'])
 def upload_image(button_id):
     """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
     button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -258,11 +271,14 @@ def upload_image(button_id):
         return redirect("/admin/patient", code=302)
     return "Invalid file", 400
 
+
 # Permet de définir le type de fichiers autorisés pour l'ajout d'images
 def allowed_image_file(filename):
     return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
 
+
+@admin_patient_bp.route('/admin/patient/gallery_button_images/<int:button_id>', methods=['GET'])
 def gallery_button_images(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
@@ -271,6 +287,7 @@ def gallery_button_images(button_id):
     return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
 
 
+@admin_patient_bp.route('/admin/patient/update_button_image_from_gallery', methods=['POST'])
 def update_button_image_from_gallery():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
@@ -281,6 +298,7 @@ def update_button_image_from_gallery():
     return """<img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">"""
 
 
+@admin_patient_bp.route('/admin/patient/delete_button_image/<int:button_id>', methods=['GET'])
 def delete_button_image(button_id):
     button = Button.query.order_by(Button.sort_order).get(button_id)
     button.image_url = None
@@ -288,6 +306,7 @@ def delete_button_image(button_id):
     return "<div>Pas d'image</div>"
 
 
+@admin_patient_bp.route("/admin/patient/print_ticket_test")
 def print_ticket_test():
     text = "12345678901234567890123456789012345678901234567890"
     print(text)

@@ -6,9 +6,11 @@ from datetime import datetime, time
 from flask import redirect, url_for, render_template, current_app
 from io import BytesIO
 
+from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient
+
 # CONFIGURATION DE L'APP
 
-def init_default_options_db_from_json(db, ConfigVersion, ConfigOption):
+def init_default_options_db_from_json():
     json_file='static/json/default_config.json'
     load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False)
     
@@ -77,7 +79,7 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
 
 # TABLE EQUIPE 
 
-def init_staff_data_from_json(ConfigVersion, Pharmacist, Activity, db):
+def init_staff_data_from_json():
     json_file='static/json/default_staff.json'    
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -163,7 +165,7 @@ def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
 
 # COMPTOIRS
 
-def init_counters_data_from_json(ConfigVersion, Counter, Activity, db):
+def init_counters_data_from_json():
     json_file='static/json/default_counters.json'    
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -319,7 +321,7 @@ def schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, d
 
 # ACTIVITIES 
 
-def init_default_activities_db_from_json(ConfigVersion, Activity, ActivitySchedule, db):
+def init_default_activities_db_from_json():
     json_file = 'static/json/default_activities.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -409,7 +411,7 @@ def activity_restore_init(Activity, ActivitySchedule, db, restore, file_path):
 
 # REGLES DE L'ALGORITHME
 
-def init_default_algo_rules_db_from_json(ConfigVersion, AlgoRule, db):
+def init_default_algo_rules_db_from_json():
     json_file = 'static/json/default_algo_rules.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -505,7 +507,7 @@ def algo_rule_restore_init(AlgoRule, db, restore, file_path):
 
 # BOUTONS 
 
-def init_default_buttons_db_from_json(ConfigVersion, Button, Activity, db):
+def init_default_buttons_db_from_json():
     json_file = 'static/json/default_buttons.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -710,7 +712,7 @@ def restore_mysql_database(db_name, sql_content, cursor, connection):
 # A TRIER 
 
 
-def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation, Text, Language, db):
+def init_update_default_translations_db_from_json():
     json_file = 'static/json/default_translations.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -744,7 +746,7 @@ def init_update_default_translations_db_from_json(ConfigVersion, TextTranslation
         print("Database updated to version:", data['version'])
 
 
-def init_default_languages_db_from_json(Language, db):
+def init_default_languages_db_from_json():
     """ Remplit la BDD des langues par defaut. Uniquement au 1er lancement.
     Permet de ne pas avoir à créer les langues de base : FR, EN """
     json_file = 'static/json/default_languages.json'
@@ -773,7 +775,7 @@ def init_default_languages_db_from_json(Language, db):
             print(f"Fichier {json_file} introuvable.")
 
 
-def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
+def init_or_update_default_texts_db_from_json():
     json_file = 'static/json/default_texts.json'
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -803,9 +805,9 @@ def init_or_update_default_texts_db_from_json(ConfigVersion, Text, db):
 
 
 
-def init_days_of_week_db_from_json(Weekday, db, app):
+def init_days_of_week_db_from_json():
     if Weekday.query.first() is None:
-        app.logger.info("Initialisation des jours de la semaine...")
+        current_app.logger.info("Initialisation des jours de la semaine...")
         days = [
             {'french': 'Lundi', 'english': 'monday', 'abbreviation': 'mon'},
             {'french': 'Mardi', 'english': 'tuesday', 'abbreviation': 'tue'},
@@ -821,9 +823,9 @@ def init_days_of_week_db_from_json(Weekday, db, app):
         db.session.commit()
 
 
-def init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app):
+def init_activity_schedules_db_from_json():
     if ActivitySchedule.query.first() is None:
-        app.logger.info("Initialisation des horaires d'activité...")
+        current_app.logger.info("Initialisation des horaires d'activité...")
 
         with open('static/json/default_schedules.json', 'r', encoding='utf-8') as file:
             schedules = json.load(file)
@@ -848,7 +850,7 @@ def init_activity_schedules_db_from_json(ActivitySchedule, Weekday, db, app):
 
 
 
-def clear_counter_table(db, Counter, Patient):
+def clear_counter_table():
     """ 
     Repasse tous les comptoirs qui n'ont pas de patients en inactif 
     Utile au rédémarrage du serveur pour nettoyé la base de données si des patients ont été supprime

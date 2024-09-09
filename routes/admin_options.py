@@ -1,6 +1,9 @@
 import os
-from flask import render_template, current_app as app
+from flask import Blueprint, render_template, current_app as app
 
+admin_options_bp = Blueprint('admin_options', __name__)
+
+@admin_options_bp.route('/admin/admin_options')
 def admin_admin():
     themes_path = os.path.join(app.static_folder, 'css/themes')
     
@@ -13,4 +16,3 @@ def admin_admin():
     return render_template('/admin/admin_options.html',
                             admin_colors = app.config['ADMIN_COLORS'],
                             themes=themes)
-
