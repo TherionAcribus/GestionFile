@@ -163,7 +163,18 @@ eventSource.onmessage = function(event) {
 
 
 function refresh_queue(){
-    htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
+    var queueTable = document.querySelector('#div_queue_table');
+    var queueDashboard = document.querySelector('#queue_dashboard');
+
+    // Vérifie si div_queue_table existe
+    if (queueTable) {
+        htmx.trigger(queueTable, 'refresh_queue_patient', {target: "#div_queue_table"});
+    }
+
+    // Vérifie si queue_dashboard existe
+    if (queueDashboard) {
+        htmx.trigger(queueDashboard, 'refresh_queue_patient', {target: "#queue_dashboard"});
+    }
 }
 
 $(document).ready(function() {

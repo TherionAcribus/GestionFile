@@ -312,3 +312,4 @@ def print_ticket_test():
     print(text)
     app.communikation(stream="app_patient", data=text, flag="print")
     return "", 204
+

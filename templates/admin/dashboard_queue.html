@@ -1,0 +1,17 @@
+<div class="card" style="width: 18rem;">
+    <div class="card-header">
+        Patients
+    </div>
+    <div class="card-body">
+        {% for patient in patients %}
+            <div 
+                {% if patient.status == "ongoing" %}
+                    class="bg-primary-subtle"
+                {% elif patient.status == "calling" %}
+                    class="bg-warning-subtle"
+                {% endif %}>
+                {{ patient.call_number }} - {{ patient.activity.name }}
+            </div>
+        {% endfor %}
+    </div>
+</div>

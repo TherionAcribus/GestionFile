@@ -138,3 +138,9 @@ def create_new_patient_auto():
     app.communikation("update_patient")
 
     return "", 204
+
+
+@admin_queue_bp.route('/admin/queue/dashboard')
+def dashboard_queue():
+    patients = Patient.query.filter(Patient.status != "done").all()
+    return render_template('/admin/dashboard_queue.html', patients=patients)

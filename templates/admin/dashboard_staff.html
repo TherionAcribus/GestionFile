@@ -1,0 +1,10 @@
+<div class="card" style="width: 18rem;">
+    <div class="card-header">
+        Equipe
+    </div>
+    <div class="card-body">
+        {% for staff in staffs %}
+            <button class="btn btn_primary">{{ staff.name }}</button>
+        {% endfor %}
+    </div>
+  </div>

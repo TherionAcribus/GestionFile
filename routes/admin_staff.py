@@ -141,4 +141,11 @@ def add_new_staff():
         db.session.rollback()
         app.display_toast(success=False, message= "Erreur : " + str(e))
         return display_staff_table()
+    
+
+@admin_staff_bp.route('/admin/staff/dashboard')
+def dashboard_staff():
+    print("dashboard staff")
+    staffs = Pharmacist.query.all()
+    return render_template('/admin/dashboard_staff.html', staffs=staffs)
 

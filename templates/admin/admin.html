@@ -1,8 +1,20 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Page 1{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
-    <p>Page d'accueil du logiciel</p>
-    <p>A METTRE ICI : SYSTEME MODULABLE DE BLOCS type Dashboard</p>
+
+<div id="dashboard"></div>
+    <div class="card" id="card-spotify">Lecteur Spotify</div>
+    <div class="card" id="card-alerts">Alertes</div>
+    <div id="staff_dashboard"
+        hx-get="/admin/staff/dashboard"
+        hx-trigger="load">        
+    </div>
+    <div id="queue_dashboard"
+        hx-get="/admin/queue/dashboard"
+        hx-trigger="load, refresh_queue_patient">
+</div>
+</div>
+
 {% endblock %}
