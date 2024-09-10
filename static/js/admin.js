@@ -85,6 +85,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_page();
     })
 
+    adminSocket.on("refresh_dashboard_select", function(msg) {
+        console.log("refresh_dashboard_select:", msg);
+        refresh_dashboard_select();
+    })
+
     adminSocket.on("display_new_gallery", function(msg) {
         console.log("display_new_gallery:", msg);
         document.getElementById("name").value = ""
@@ -209,9 +214,13 @@ function refresh_gallery_list(data) {
     htmx.trigger('#galleries_list', 'refresh_gallery_list', {target: "#galleries_list"});
 }
 
-// -------------- GALERIES --------------
+// -------------- DASHBOARD --------------
 
+refresh_dashboard_select
 
+function refresh_dashboard_select(){
+    htmx.trigger('#div_select_dashboard', 'refresh_dashboard_select', {target: "#div_select_dashboard"});
+}
 
 // -------------- ACTIVITY --------------
 

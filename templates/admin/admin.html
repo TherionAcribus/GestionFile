@@ -4,25 +4,61 @@
 
 {% block content %}
 
-
-
 <div id="div_select_dashboard"
     hx-get="/admin/dashboard/display_select"
-    hx-trigger="load">
+    hx-trigger="load, refresh_dashboard_select">
 </div>
 
 
 <div id="dashboard" class="container">
     <div class="row">
-
-        {% for dashboardcard in dashboardcards %}
-            {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
-            {% with dashboardcard = dashboardcard %}
-                {% include template_name %}
-            {% endwith %}
-        {% endfor %}
-
+        <div class="row" id="sortable-dashboard">
+            {% for dashboardcard in dashboardcards %}
+                {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
+                {% with dashboardcard = dashboardcard %}
+                    {% include template_name %}
+                {% endwith %}
+            {% endfor %}
+        </div> 
     </div>
 </div>
 
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var sortable = new Sortable(document.getElementById('sortable-dashboard'), {
+        handle: '.card-header',  // Seule la partie header de la card est draggable
+        animation: 150,  // Animation fluide
+        onEnd: function (evt) {
+            var order = [];
+            document.querySelectorAll('#sortable-dashboard .col-lg-4').forEach(function (item, index) {
+                // On envoie le nom directement, sans essayer de le convertir en entier
+                order.push({
+                    id: item.id.replace('card-', ''),  // Extraire le nom ou l'ID de la card
+                    position: index + 1  // Position basée sur l'ordre actuel
+                });
+            });
+
+            // Envoyer l'ordre au serveur
+            fetch('/admin/dashboard/save_order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ order: order })
+            }).then(response => {
+                if (response.ok) {
+                    console.log('Order saved successfully!');
+                } else {
+                    console.error('Failed to save order');
+                }
+            });
+        }
+    });
+});
+</script>
+
+
 {% endblock %}
+

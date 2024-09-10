@@ -20,6 +20,7 @@ def hide_dashboard_card():
         # Modifier la visibilité de la card
         card.visible = False
         db.session.commit()
+        app.communikation("admin", event="refresh_dashboard_select")
         return '', 200  # Réponse vide 
     else:
         return 'Card non trouvée', 404
@@ -51,4 +52,19 @@ def dashboard_display_select():
     all_dashboardcards = DashboardCard.query.all()
     return render_template('/admin/dashboard_select.html',
                         all_dashboardcards=all_dashboardcards)
+
+
+@admin_dashboard_bp.route('/admin/dashboard/save_order', methods=['POST'])
+def save_dashboard_order():
+    data = request.get_json()  # Récupérer les données JSON envoyées depuis le frontend
+    if 'order' in data:
+        for card_data in data['order']:
+            card_name = card_data['id']  # Maintenant on utilise 'id' comme le nom de la card
+            position = int(card_data['position'])
+            card = DashboardCard.query.filter_by(name=card_name).first()
+            if card:
+                card.position = position  # Mettre à jour la position
+        db.session.commit()  # Sauvegarder les modifications dans la base de données
+        return '', 204  # Réponse vide avec succès
+    return 'Invalid data', 400
     

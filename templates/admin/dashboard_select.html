@@ -1,14 +1,12 @@
-<div class="input-field"></div>
+<div class="input-field">
     <select multiple
         class="form-select"
         id="closed-cards-select"
         hx-post="/admin/dashboard/valide_select"
-        hx-trigger="change"
         hx-vals='js:{"dashboard_options": Array.from(document.querySelectorAll("#closed-cards-select option:checked")).map(option => option.value)}'
         hx-headers='{"Content-Type": "application/json"}'
-        hx_target="#invisible"
-        hx-on="htmx:afterRequest: window.location.reload()"
-        >
+        hx-target="#invisible"
+        hx-on="htmx:afterRequest: console.log('Requête envoyée'), window.location.reload()">
         {% for card in all_dashboardcards %}
             <option class="dashboard_options" value="{{ card.name }}"
             {% if card.visible %} selected {% endif %}
@@ -17,14 +15,32 @@
     </select>
     <label>Sélectionner les cartes visibles :</label>
 </div>
+<div id="invisible"></div>
 
 <script>
-    $(document).ready(function() {
-    $('#closed-cards-select').select2({
-        width: '100%',  // Permet au Select2 de s'adapter à la largeur de son conteneur
-        placeholder: "Sélectionner des cards à rouvrir",  // Placeholders pour les éléments non sélectionnés
-        allowClear: true  // Permet à l'utilisateur de désélectionner facilement
-    });
-});
+    function initializeSelect2() {
+        $('#closed-cards-select').select2({
+            width: '100%',
+            placeholder: "Sélectionner des cards à rouvrir",
+            allowClear: true
+        });
 
+        // Ajoute des événements pour détecter la sélection et la désélection
+        $('#closed-cards-select').on('select2:select select2:unselect', function (e) {
+            // Déclencher HTMX manuellement en simulant le changement d'état
+            this.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
+
+    // Initialisation de Select2 au chargement
+    $(document).ready(function() {
+        initializeSelect2();
+    });
+
+    // Réinitialisation de Select2 après un swap HTMX
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail.target.id === "closed-cards-select") {
+            initializeSelect2();
+        }
+    });
 </script>
