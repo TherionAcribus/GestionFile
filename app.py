@@ -53,6 +53,7 @@ from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json
+from python.engine import generate_audio_calling
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
@@ -1038,6 +1039,7 @@ def update_input():
     key = request.values.get('key')
     value = request.values.get('value')
     check = request.values.get('check')
+    print("ZINPUT", key, value)
 
     if check:
         if check == "int":
@@ -1333,43 +1335,7 @@ def patient_right_page_default():
 
 
 
-def generate_audio_calling(counter_number, next_patient):
 
-    # voir pour la possibilité d'utiliser https://cloud.google.com/text-to-speech/ 
-    # en version basique semble pas trop cher
-
-    # Si on ne veux pas de son, on quitte
-    if not app.config["ANNOUNCE_SOUND"]:
-        return
-    
-    # Texte pour la synthèse vocale
-    text_template = app.config["ANNOUNCE_CALL_SOUND"]
-    text = replace_balise_announces(text_template, next_patient)
-
-    # choix de la voix
-    if app.config["ANNOUNCE_VOICE"] == "fr-ca":
-        lang = "fr"
-        tld = "ca"
-    elif app.config["ANNOUNCE_VOICE"] == "fr-fr":
-        lang = "fr"
-        tld = "fr"
-    tts = gTTS(text, lang=lang, tld=tld)  # Utilisation de gTTS avec langue française
-
-    # Chemin de sauvegarde du fichier audio
-    audiofile = f'patient_{next_patient.call_number}.mp3'
-    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)  # Enregistrement dans le dossier 'static/audio'
-
-    # Assurer que le répertoire existe
-    if not os.path.exists(os.path.dirname(audio_path)):
-        os.makedirs(os.path.dirname(audio_path))
-
-    # Sauvegarde du fichier audio
-    tts.save(audio_path)
-
-    # Envoi du chemin relatif via SSE
-    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    
-    communikation("update_audio", event="audio", data=audio_url)
 
     #communication("update_audio", audio_source=audio_url)
 
@@ -1406,7 +1372,8 @@ def call_specific_patient(counter_id, patient_id):
         next_patient_pyside = next_patient.to_dict()
         communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
 
-        generate_audio_calling(counter_id, next_patient)
+        audio_url = generate_audio_calling(counter_id, next_patient)
+        app.communikation("update_audio", event="audio", data=audio_url)
 
         return jsonify(next_patient.to_dict()), 200  
     else:
@@ -1696,7 +1663,8 @@ def call_next(counter_id):
         #socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
         # Optionnel: Ajoutez ici u système pour annoncer le patient au système audio ou un écran d'affichage
 
-        generate_audio_calling(counter_id, next_patient)
+        audio_url = generate_audio_calling(counter_id, next_patient)
+        app.communikation("update_audio", event="audio", data=audio_url)
 
     else:
         next_patient = None

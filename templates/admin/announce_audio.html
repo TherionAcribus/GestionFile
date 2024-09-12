@@ -80,7 +80,18 @@ Choisir le son de l'alerte:
     <label>Choix de la voix</label>
 </div>
 
-{{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Appel audio pour annoncer le tour d'un patient") }}
+{{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Appel audio pour annoncer le tour d'un patient") }}
+
+
+<button class="btn btn-success"
+        hx-get="announce/audio/test/local"
+        hx-target="#invisible"
+        >Tester l'annonce sur cette page</button>
+
+        <button class="btn btn-warning"
+        hx-get="announce/audio/test/announce"
+        hx-target="#invisible"
+        >Tester l'annonce sur la page "Annonce"</button>
 
 <!-- Modal Structure Galerie audio -->
 <div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">

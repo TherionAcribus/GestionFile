@@ -14,9 +14,6 @@
                     <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#tab_general" type="button" role="tab" aria-controls="tab_general" aria-selected="true">Général</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="sound-tab" data-bs-toggle="tab" data-bs-target="#tab_sound" type="button" role="tab" aria-controls="tab_sound" aria-selected="false">Musique</button>
-                </li>
-                <li class="nav-item" role="presentation">
                     <button class="nav-link" id="backups-tab" data-bs-toggle="tab" data-bs-target="#tab_backups" type="button" role="tab" aria-controls="tab_backups" aria-selected="false">Sauvegardes</button>
                 </li>
             </ul>
@@ -25,9 +22,6 @@
             <div class="tab-content" id="myTabContent">
                 <div class="tab-pane fade show active" id="tab_general" role="tabpanel" aria-labelledby="general-tab">
                     {% include 'admin/app_general.html' %}
-                </div>
-                <div class="tab-pane fade" id="tab_sound" role="tabpanel" aria-labelledby="sound-tab">
-                    {% include 'admin/app_music.html' %}
                 </div>
                 <div class="tab-pane fade" id="tab_backups" role="tabpanel" aria-labelledby="backups-tab">
                     {% include 'admin/app_backups.html' %}

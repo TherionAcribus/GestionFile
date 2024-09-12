@@ -1,6 +1,9 @@
-from flask import current_app as app
+import os
+from flask import url_for, current_app as app
 from datetime import datetime, timezone, date
 from models import Patient, db
+from utils import replace_balise_announces
+from gtts import gTTS
 
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
@@ -79,3 +82,43 @@ def register_patient(activity):
 
     app.communikation("update_patient")
     return new_patient
+
+
+def generate_audio_calling(counter_number, next_patient):
+
+    # voir pour la possibilité d'utiliser https://cloud.google.com/text-to-speech/ 
+    # en version basique semble pas trop cher
+
+    # Si on ne veux pas de son, on quitte
+    if not app.config["ANNOUNCE_SOUND"]:
+        return
+    
+    # Texte pour la synthèse vocale
+    text_template = app.config["ANNOUNCE_CALL_SOUND"]
+    print("text_template", text_template)
+    text = replace_balise_announces(text_template, next_patient)
+
+    # choix de la voix
+    if app.config["ANNOUNCE_VOICE"] == "fr-ca":
+        lang = "fr"
+        tld = "ca"
+    elif app.config["ANNOUNCE_VOICE"] == "fr-fr":
+        lang = "fr"
+        tld = "fr"
+    tts = gTTS(text, lang=lang, tld=tld)  # Utilisation de gTTS avec langue française
+
+    # Chemin de sauvegarde du fichier audio
+    audiofile = f'patient_{next_patient.call_number}.mp3'
+    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)  # Enregistrement dans le dossier 'static/audio'
+
+    # Assurer que le répertoire existe
+    if not os.path.exists(os.path.dirname(audio_path)):
+        os.makedirs(os.path.dirname(audio_path))
+
+    # Sauvegarde du fichier audio
+    tts.save(audio_path)
+
+    # Envoi du chemin relatif via SSE
+    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
+
+    return audio_url

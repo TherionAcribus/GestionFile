@@ -100,13 +100,16 @@ def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
     print(template)
     print("replace_balise_announces", template, patient)
+    print(patient.counter)
+    print(patient.counter.staff)
     try:
         if patient.counter.staff.name:
             return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
         else:
             template = "Patient {N} : {C}"
             return template.format(N=patient.call_number, C=patient.counter.name)
-    except AttributeError:
+    except AttributeError as e:
+        app.logger.error(f"Failed to replace balise announces: {e}")
         return f"Erreur! Demandez à notre personnel"
 
 

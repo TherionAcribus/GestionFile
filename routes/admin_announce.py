@@ -1,6 +1,8 @@
 import os
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
-from models import ConfigOption, db
+from sqlalchemy import and_
+from models import ConfigOption, Pharmacist, Activity, Counter, db
+from python.engine import get_futur_patient, generate_audio_calling
 
 admin_announce_bp = Blueprint('admin_announce', __name__)
 
@@ -30,6 +32,7 @@ def announce_page():
                             announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
                             announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
                             announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
+                            announce_call_sound=app.config['ANNOUNCE_CALL_SOUND'],
                             )
 
 
@@ -112,3 +115,28 @@ def upload_signal_file():
         file.save(os.path.join("static/audio/signals", filename))
     
     return redirect(url_for('gallery_audio_list'))
+
+
+@admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['GET'])
+def announce_audio_test(scope):
+    call_number = "A-1"
+    activity = Activity.query.get(1)
+    patient = get_futur_patient(call_number, activity)
+    
+    # Recherche du premier comptoir occupé par un pharmacien
+    counter = Counter.query.filter(Counter.staff_id.isnot(None)).first()
+
+    if counter is None:
+        counter = Counter.query.get(1)
+    
+    patient.counter = counter
+    audio_url = generate_audio_calling("A", patient)
+
+    if scope == "announce":        
+        app.communikation("update_audio", event="audio", data=audio_url)
+    else:
+        app.communikation("admin", event="audio_test", data=audio_url)
+
+    return "", 200
+
+

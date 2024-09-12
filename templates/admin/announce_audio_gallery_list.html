@@ -8,7 +8,7 @@
             {% endif %}                    
             data-sound="{{ sound }}">
             <audio controls class="me-3">
-                <source src="{{ url_for('serve_sound', filename=sound) }}" type="audio/wav">
+                <source src="{{ url_for('admin_announce.serve_sound', filename=sound) }}" type="audio/wav">
                 Votre navigateur ne supporte pas l'élément audio.
             </audio>
             <p class="mb-0">{{ sound }}</p>
@@ -20,7 +20,7 @@
             <button
                 class="delete-sound-button btn btn-danger"
                 name="{{ sound }}"
-                hx-delete="{{ url_for('delete_sound', sound_filename=sound) }}"
+                hx-delete="{{ url_for('admin_announce.delete_sound', sound_filename=sound) }}"
                 hx-target="#modal_display_gallery_list"
         >Supprimer</button>
         </li>

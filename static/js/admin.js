@@ -106,6 +106,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_schedule_tasks_list(msg);
     })
 
+    adminSocket.on("audio_test", function(msg) {
+        console.log("audio_test:", msg);
+        playAudio(msg);
+    })
+
+
     adminSocket.on('connect_error', function(err) {
         console.error('Admin WebSocket connection error:', err);
     });
@@ -333,6 +339,20 @@ htmx.on('htmx:afterSwap', function(evt) {
     }
     
 });
+
+
+// Créez un élément audio global
+let audioPlayer = new Audio();
+
+// Fonction pour jouer l'audio
+function playAudio(audioUrl) {
+    console.log("Playing audio:", audioUrl);
+    audioPlayer.src = audioUrl.data;
+    audioPlayer.play().catch(error => {
+        console.error("Erreur lors de la lecture audio:", error);
+    });
+}
+
 
 
 // ---------------- TASKS ----------------
