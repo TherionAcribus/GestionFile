@@ -1342,12 +1342,18 @@ def patient_right_page_default():
 
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
 def call_specific_patient(counter_id, patient_id):
+    patient_id = 197
     print("specifique", patient_id)
 
     validate_current_patient(counter_id)
 
     # Récupération du patient spécifique
     next_patient = Patient.query.get(patient_id)
+
+    # Cas d'un patient appelé en même temps par un autre comptoir. On empêche double selection et retourne une info
+    if next_patient.status != "standing":
+        app.logger.info("Already called")
+        return "Already called", 423
     
     if next_patient:
         print("Appel du patient :", patient_id, "au comptoir", counter_id)
@@ -1362,7 +1368,6 @@ def call_specific_patient(counter_id, patient_id):
         # Notifier tous les clients et mettre à jour le comptoir
         communikation("update_patient")
         text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
-        print("TEXTEEEE", text)
         communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
 
         communication("update_patients")
@@ -1600,8 +1605,7 @@ def validate_and_call_next(counter_id):
         communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
 
     validate_current_patient(counter_id)
-    print('patient_valide')
-    # TODO Prevoir que ne renvoie rien
+
     next_patient = call_next(counter_id)
 
     # si pas de patient suivant, le comptoir devient inactif
@@ -1609,8 +1613,6 @@ def validate_and_call_next(counter_id):
         counter_become_inactive(counter_id)
     else:
         counter_become_active(counter_id)
-
-    print("prochain patient")
 
     communikation("update_patient")
     
@@ -1647,29 +1649,42 @@ def validate_current_patient(counter_id):
 
 
 @app.route('/call_next/<int:counter_id>')
-def call_next(counter_id):
+def call_next(counter_id, attempts=0):
+    max_attempts = 5
 
-    # CHoix du patient suivant pour un comptoir appelant
-    if Patient.query.count() ==  0:
+    if attempts >= max_attempts:
+        app.logger.warning(f"Max attempts reached for counter {counter_id}")
+        return None
+
+    if Patient.query.count() == 0:
+        app.logger.info("No patients available")
         return None
     
     next_patient = algo_choice_next_patient(counter_id)
 
-    if next_patient:
-        # Met à jour le statut du patient
+    if next_patient is None:
+        app.logger.info(f"No next patient found for counter {counter_id}")
+        return None
+
+    if next_patient.status != "standing":
+        app.logger.info(f"Patient {next_patient.id} not standing, retrying. Attempt {attempts + 1}")
+        return call_next(counter_id, attempts=attempts+1)
+
+    try:
         next_patient.status = 'calling'
         next_patient.counter_id = counter_id
         db.session.commit()
-        #socketio.emit('trigger_patient_calling', {'last_patient_number': next_patient.call_number})
-        # Optionnel: Ajoutez ici u système pour annoncer le patient au système audio ou un écran d'affichage
+        app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
 
         audio_url = generate_audio_calling(counter_id, next_patient)
         app.communikation("update_audio", event="audio", data=audio_url)
+        
+        return next_patient
 
-    else:
-        next_patient = None
-
-    return next_patient
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating patient status: {str(e)}")
+        return call_next(counter_id, attempts=attempts+1)
 
 
 def algo_choice_next_patient(counter_id):
