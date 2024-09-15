@@ -3,7 +3,7 @@ import qrcode
 from flask import Blueprint, render_template, request, session, url_for, redirect, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text
-from python.engine import get_next_call_number, get_futur_patient, register_patient
+from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -256,44 +256,6 @@ def patient_conclusion_page(call_number):
                             page_patient_interface_done_extend = choose_text_translation("page_patient_interface_done_extend"),
                             page_patient_interface_done_back = choose_text_translation("page_patient_interface_done_back")
                             )
-
-def set_server_url(app, request):
-    # Stockage de l'adresse pour la génération du QR code
-    if request.host_url == "http://127.0.0.1:5000/":
-        server_url = app.config.get('NETWORK_ADRESS')
-    else:
-        server_url = request.host_url
-    app.config['SERVER_URL'] = server_url
-
-def create_qr_code(patient):
-    print("create_qr_code")
-    print(patient, patient.id, patient.call_number, patient.activity)
-    if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
-        if "SERVER_URL" not in app.config:
-            set_server_url(app, request)
-        data = f"{app.config['SERVER_URL']}/patient/phone/{patient.call_number}/{patient.activity.id}"
-    else :
-        template = app.config['PAGE_PATIENT_QRCODE_DATA']
-        if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
-            template = template + "\n" + patient.activity.specific_message
-        data = replace_balise_phone(template, patient)
-
-    # Générer le QR Code
-    img = qrcode.make(data)
-    
-    # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
-    directory = os.path.join(app.static_folder, 'qr_patients')
-    filename = f'qr_patient-{patient.call_number}.png'
-    img_path = os.path.join(directory, filename)
-
-    # Assurer que le répertoire existe
-    if not os.path.exists(directory):
-        os.makedirs(directory)  # Créer le dossier s'il n'existe pas
-
-    # Enregistrement de l'image dans le dossier static
-    img.save(img_path)
-
-    return filename
 
 @patient_bp.route('/patient/refresh')
 def patient_refresh():

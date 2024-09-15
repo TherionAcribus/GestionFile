@@ -177,7 +177,22 @@
             <div class="modal-body" id="modal-htmx">
                 <!-- Le contenu de la modale est chargé dynamiquement ici : body + footer -->
             </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
 
+{% macro modal_generic(title) %}
+<div class="modal fade" id="modal_generic" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDeleteabel">{{title}}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modal-generic-htmx">
+                <!-- Le contenu de la modale est chargé dynamiquement ici : body + footer -->
+            </div>
         </div>
     </div>
 </div>

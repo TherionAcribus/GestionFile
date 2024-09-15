@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, request, render_template, redirect, jsonify, current_app as app
 from werkzeug.utils import secure_filename
 from models import Button, Activity, DashboardCard, db
+from python.engine import get_futur_patient, create_qr_code 
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -37,6 +38,7 @@ def admin_patient():
                             page_patient_interface_done_print = app.config['PAGE_PATIENT_INTERFACE_DONE_PRINT'],
                             page_patient_interface_done_extend = app.config['PAGE_PATIENT_INTERFACE_DONE_EXTEND'],
                             page_patient_interface_done_back = app.config['PAGE_PATIENT_INTERFACE_DONE_BACK'], 
+                            activities = Activity.query.all()
                             )
 
 
@@ -312,6 +314,17 @@ def print_ticket_test():
     print(text)
     app.communikation(stream="app_patient", data=text, flag="print")
     return "", 204
+
+
+@admin_patient_bp.route('/admin/patient/qr_code/test', methods=['GET'])
+def admin_patient_qr_code_modal():
+    call_number = request.values.get('call_number', 'A-1')
+    activity_id = request.values.get('activity', 1)
+    activity = Activity.query.get(activity_id)
+    patient = get_futur_patient(call_number, activity)
+    qr_code = create_qr_code(patient)
+    return render_template('/admin/patient_page_qr_code_test_modal.html',
+                            qr_code=qr_code)
 
 
 @admin_patient_bp.route('/admin/button/dashboard')

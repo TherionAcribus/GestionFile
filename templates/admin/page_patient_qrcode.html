@@ -38,3 +38,40 @@
                 page_patient_qrcode_display_specific_message, 
                 "Afficher le message spécifique à l'activité dans le QRCode")
 }}
+
+<h5>Tester le QR Code</h5>
+
+<form id="qrcode-form" 
+    hx-get="/admin/patient/qr_code/test" 
+    hx-target="#modal_display_qrcode .modal-content" 
+    hx-trigger="submit"
+    class="row g-3 align-items-end">
+    <div class="col-auto">
+        <label for="call_number" class="form-label">Numéro d'appel</label>
+        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
+    </div>
+    <div class="col-auto">
+        <label for="activity" class="form-label">Activité</label>
+        <select class="form-select" id="activity" name="activity">
+            {% for activity in activities %}
+            <option value="{{ activity.id }}">
+                {{ activity.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modal_display_qrcode">
+            Afficher un exemple de QRCode
+        </button>
+    </div>
+</form>
+
+<!-- Modal Structure Galerie-->
+<div class="modal fade" id="modal_display_qrcode" tabindex="-1" aria-labelledby="modalGalleryLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <!-- Le contenu de la modale sera chargé ici par HTMX -->
+        </div>
+    </div>
+</div>

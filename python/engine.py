@@ -1,9 +1,11 @@
 import os
-from flask import url_for, current_app as app
+import qrcode
+from flask import url_for, request, current_app as app
 from datetime import datetime, timezone, date
-from models import Patient, db
 from utils import replace_balise_announces
 from gtts import gTTS
+from models import Patient, db
+from utils import replace_balise_phone
 
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
@@ -122,3 +124,43 @@ def generate_audio_calling(counter_number, next_patient):
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
 
     return audio_url
+
+
+def create_qr_code(patient):
+    print("create_qr_code")
+    print(patient, patient.id, patient.call_number, patient.activity)
+    if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
+        if "SERVER_URL" not in app.config:
+            set_server_url(app, request)
+        data = f"{app.config['SERVER_URL']}/patient/phone/{patient.call_number}/{patient.activity.id}"
+    else :
+        template = app.config['PAGE_PATIENT_QRCODE_DATA']
+        if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
+            template = template + "\n" + patient.activity.specific_message
+        data = replace_balise_phone(template, patient)
+
+    # Générer le QR Code
+    img = qrcode.make(data)
+    
+    # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
+    directory = os.path.join(app.static_folder, 'qr_patients')
+    filename = f'qr_patient-{patient.call_number}.png'
+    img_path = os.path.join(directory, filename)
+
+    # Assurer que le répertoire existe
+    if not os.path.exists(directory):
+        os.makedirs(directory)  # Créer le dossier s'il n'existe pas
+
+    # Enregistrement de l'image dans le dossier static
+    img.save(img_path)
+
+    return filename
+
+
+def set_server_url(app, request):
+    # Stockage de l'adresse pour la génération du QR code
+    if request.host_url == "http://127.0.0.1:5000/":
+        server_url = app.config.get('NETWORK_ADRESS')
+    else:
+        server_url = request.host_url
+    app.config['SERVER_URL'] = server_url
