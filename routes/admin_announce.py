@@ -119,7 +119,7 @@ def upload_signal_file():
 
 @admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['GET'])
 def announce_audio_test(scope):
-    call_number = "A-1"
+    call_number = request.values.get('call_number', 'A-1')
     activity = Activity.query.get(1)
     patient = get_futur_patient(call_number, activity)
     

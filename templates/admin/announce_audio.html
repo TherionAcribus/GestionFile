@@ -82,16 +82,29 @@ Choisir le son de l'alerte:
 
 {{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Appel audio pour annoncer le tour d'un patient") }}
 
+<h5>Test de l'annonce</h5>
 
-<button class="btn btn-success"
-        hx-get="announce/audio/test/local"
-        hx-target="#invisible"
-        >Tester l'annonce sur cette page</button>
-
+<form id="audio-announce-form" class="row g-3 align-items-end">
+    <div class="col-auto">
+        <label for="call_number" class="form-label">Numéro d'appel</label>
+        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
+    </div>
+    
+    <div class="col-auto">
+        <button class="btn btn-success"
+                hx-get="announce/audio/test/local"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Tester l'annonce sur cette page</button>
+    </div>
+    <div class="col-auto">
         <button class="btn btn-warning"
-        hx-get="announce/audio/test/announce"
-        hx-target="#invisible"
-        >Tester l'annonce sur la page "Annonce"</button>
+                hx-get="announce/audio/test/announce"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Tester l'annonce sur la page "Annonce"</button>
+    </div>
+</form>
 
 <!-- Modal Structure Galerie audio -->
 <div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">
