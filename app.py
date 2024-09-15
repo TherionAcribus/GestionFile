@@ -1333,17 +1333,11 @@ def patient_right_page_default():
     print("default")
     return render_template('htmx/patient_right_page_default.html')
 
-
-
-
-
     #communication("update_audio", audio_source=audio_url)
 
 
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
 def call_specific_patient(counter_id, patient_id):
-    patient_id = 197
-    print("specifique", patient_id)
 
     validate_current_patient(counter_id)
 
@@ -1367,15 +1361,9 @@ def call_specific_patient(counter_id, patient_id):
 
         # Notifier tous les clients et mettre à jour le comptoir
         communikation("update_patient")
+
         text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
         communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
-
-        communication("update_patients")
-        communication("update_counter", client_id=counter_id)
-
-        # counter pyside
-        next_patient_pyside = next_patient.to_dict()
-        communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
 
         audio_url = generate_audio_calling(counter_id, next_patient)
         app.communikation("update_audio", event="audio", data=audio_url)
