@@ -1,6 +1,6 @@
 from datetime import datetime, time
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
-from models import Activity, ActivitySchedule, Pharmacist, Button, db
+from models import Activity, ActivitySchedule, Pharmacist, Button, DashboardCard, db
 from sqlalchemy.orm import joinedload
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
@@ -340,3 +340,5 @@ def update_scheduler_for_activity(activity):
                 minute=schedule.end_time.minute
             )
             print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
+
+

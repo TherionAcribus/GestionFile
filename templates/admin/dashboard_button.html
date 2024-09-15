@@ -1,0 +1,73 @@
+<div id="card-{{ dashboardcard.id }}" class="col-lg-4 col-md-6 col-sm-12 mb-4">
+    <div class="card" style="width: 18rem;">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Boutons</span>
+            <div>
+                <a href="/admin/buttons" target="_blank" class="btn btn-link p-0">
+                    <i class="bi bi-arrow-up-right-square-fill"></i>
+                </a>
+                <a class="text-danger" 
+                    hx-post="/admin/dashboard/hide" 
+                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
+                    hx-target="#card-{{ dashboardcard.id }}" 
+                    hx-swap="outerHTML">
+                    <i class="bi bi-x-circle-fill"></i>
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% for group in grouped_buttons %}
+                <div class="button-group mb-3">
+                    <button 
+                        {% if group.parent.is_active %} 
+                            class="btn btn-primary text-uppercase"
+                            hx-get="/admin/button/deactivate/{{ group.parent.id }}"
+                        {% else %}
+                            class="btn btn-secondary text-uppercase"
+                            hx-get="/admin/button/activate/{{ group.parent.id }}"
+                        {% endif %} 
+                        hx-target="#card-{{ dashboardcard.id }}">
+                        {{ group.parent.label }}
+                    </button>
+                    {% for button in group.children %}
+                        <button 
+                            {% if button.is_active %} 
+                                class="btn btn-primary"
+                                hx-get="/admin/button/deactivate/{{ button.id }}"
+                            {% else %}
+                                class="btn btn-secondary"
+                                hx-get="/admin/button/activate/{{ button.id }}"
+                            {% endif %} 
+                            hx-target="#card-{{ dashboardcard.id }}">
+                            {{ button.label }}
+                        </button>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+            <div class="other-buttons mb-3">
+                <h6>Autres boutons</h6>
+                {% for button in other_buttons %}
+                    <button 
+                        {% if button.is_active %} 
+                            class="btn btn-primary"
+                            hx-get="/admin/button/deactivate/{{ button.id }}"
+                        {% else %}
+                            class="btn btn-secondary"
+                            hx-get="/admin/button/activate/{{ button.id }}"
+                        {% endif %} 
+                        hx-target="#card-{{ dashboardcard.id }}">
+                        {{ button.label }}
+                    </button>
+                {% endfor %}
+            </div>
+
+            <div>
+                <button class="btn btn-danger"
+                        hx-get="/patient/refresh"
+                        hx-target="#invisible">Relancer la page "Patient"
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

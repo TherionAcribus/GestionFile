@@ -1,7 +1,7 @@
 import os
 from flask import Blueprint, request, render_template, redirect, jsonify, current_app as app
 from werkzeug.utils import secure_filename
-from models import Button, Activity, db
+from models import Button, Activity, DashboardCard, db
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -313,3 +313,62 @@ def print_ticket_test():
     app.communikation(stream="app_patient", data=text, flag="print")
     return "", 204
 
+
+@admin_patient_bp.route('/admin/button/dashboard')
+def dashboard_button():
+    # Récupérer tous les boutons
+    all_buttons = Button.query.all()
+    
+    # Regrouper les boutons par parent
+    grouped_buttons = {}
+    other_buttons = []
+    
+    for button in all_buttons:
+        if button.parent_button_id:
+            parent_id = button.parent_button_id
+            if parent_id not in grouped_buttons:
+                parent_button = Button.query.get(parent_id)
+                grouped_buttons[parent_id] = {
+                    'parent': parent_button,
+                    'children': []
+                }
+            grouped_buttons[parent_id]['children'].append(button)
+        elif button.is_parent:
+            if button.id not in grouped_buttons:
+                grouped_buttons[button.id] = {
+                    'parent': button,
+                    'children': []
+                }
+        else:
+            other_buttons.append(button)
+    
+    # Trier les groupes et les boutons dans chaque groupe
+    sorted_groups = sorted(grouped_buttons.values(), key=lambda x: x['parent'].label.lower())
+    for group in sorted_groups:
+        group['children'].sort(key=lambda x: x.label.lower())
+    
+    # Trier les autres boutons
+    other_buttons.sort(key=lambda x: x.label.lower())
+    
+    dashboardcard = DashboardCard.query.filter_by(name="button").first()
+    
+    return render_template('/admin/dashboard_button.html', 
+                            grouped_buttons=sorted_groups,
+                            other_buttons=other_buttons,
+                            dashboardcard=dashboardcard)
+
+
+@admin_patient_bp.route('/admin/button/deactivate/<int:button_id>', methods=['GET'])
+def deactivate_button(button_id):
+    button = Button.query.get(button_id)
+    button.is_active = False
+    db.session.commit()
+    return dashboard_button()
+
+
+@admin_patient_bp.route('/admin/button/activate/<int:button_id>', methods=['GET'])
+def activate_button(button_id):
+    button = Button.query.get(button_id)
+    button.is_active = True
+    db.session.commit()
+    return dashboard_button()
