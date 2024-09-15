@@ -1,8 +1,8 @@
 <div id="gallery-list" class="galleries_list">
     {% for gallery in galleries %}
         <div class="gallery_item">
-            <a class="btn btn-primary" href="{{ url_for('gallery', name=gallery) }}" 
-            hx-get="{{ url_for('gallery', name=gallery) }}" 
+            <a class="btn btn-primary" href="{{ url_for('admin_gallery.gallery', name=gallery) }}" 
+            hx-get="{{ url_for('admin_gallery.gallery', name=gallery) }}" 
             hx-target="#content">Visualiser {{ gallery }}
             </a>
         </div>
