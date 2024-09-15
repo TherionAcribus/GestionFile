@@ -175,7 +175,8 @@ eventSource.onmessage = function(event) {
 
 function refresh_queue(){
     var queueTable = document.querySelector('#div_queue_table');
-    var queueDashboard = document.querySelector('#queue_dashboard');
+    var card_queue = document.querySelector('#card-queue');
+    console.log("card_queue", card_queue)
 
     // Vérifie si div_queue_table existe
     if (queueTable) {
@@ -183,8 +184,8 @@ function refresh_queue(){
     }
 
     // Vérifie si queue_dashboard existe
-    if (queueDashboard) {
-        htmx.trigger(queueDashboard, 'refresh_queue_patient', {target: "#queue_dashboard"});
+    if (card_queue) {
+        htmx.trigger(card_queue, 'refresh_queue_patient', {target: "#card_queue"});
     }
 }
 
@@ -221,8 +222,6 @@ function refresh_gallery_list(data) {
 }
 
 // -------------- DASHBOARD --------------
-
-refresh_dashboard_select
 
 function refresh_dashboard_select(){
     htmx.trigger('#div_select_dashboard', 'refresh_dashboard_select', {target: "#div_select_dashboard"});

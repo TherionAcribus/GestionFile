@@ -10,16 +10,14 @@
 </div>
 
 
-<div id="dashboard" class="container">
-    <div class="row">
-        <div class="row" id="sortable-dashboard">
-            {% for dashboardcard in dashboardcards %}
-                {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
-                {% with dashboardcard = dashboardcard %}
-                    {% include template_name %}
-                {% endwith %}
-            {% endfor %}
-        </div> 
+<div id="dashboard" class="container-fluid">
+    <div id="sortable-dashboard" class="dashboard-flex">
+        {% for dashboardcard in dashboardcards %}
+            {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
+            {% with dashboardcard = dashboardcard %}
+                {% include template_name %}
+            {% endwith %}
+        {% endfor %}
     </div>
 </div>
 
