@@ -76,6 +76,7 @@ from routes.admin_schedule import admin_schedule_bp
 from routes.admin_security import admin_security_bp
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
+from routes.admin_app import admin_app_bp
 from routes.announce import announce_bp
 from routes.patient import patient_bp, patient_validate_scan
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
@@ -161,13 +162,13 @@ class Config:
     REMEMBER_COOKIE_NAME = 'remember_me'
     REMEMBER_COOKIE_SECURE = True  # uniquement si HTTPS
     # mails
-    MAIL_SERVER = "live.smtp.mailtrap.io"
-    MAIL_PORT = 587 
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
-    MAIL_USERNAME = "api"
-    MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
-    MAIL_DEFAULT_SENDER = "hi@demomailtrap.com."
+    #MAIL_SERVER = "live.smtp.mailtrap.io"
+    #MAIL_PORT = 587 
+    #MAIL_USE_TLS = True
+    #MAIL_USE_SSL = False
+    #MAIL_USERNAME = "api"
+    #MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
+    #MAIL_DEFAULT_SENDER = "hi@demomailtrap.com"
 
     GALLERIES_FOLDER = 'static/galleries'
     FLAG_FOLDER = 'static/images/flags'
@@ -432,6 +433,13 @@ def load_configuration(app):
         "ticket_footer": ("TICKET_FOOTER", "value_str"),
         "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
         "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "mail_server": ("MAIL_SERVER", "value_str"),
+        "mail_port": ("MAIL_PORT", "value_int"),
+        "mail_username": ("MAIL_USERNAME", "value_str"),
+        "mail_password": ("MAIL_PASSWORD", "value_str"),
+        "mail_default_sender": ("MAIL_DEFAULT_SENDER", "value_str"),
+        "mail_use_tls": ("MAIL_USE_TLS", "value_bool"),
+        "mail_use_ssl": ("MAIL_USE_SSL", "value_bool"),
         "phone_center": ("PHONE_CENTER", "value_bool"),
         "phone_title": ("PHONE_TITLE", "value_str"),
         "phone_line1": ("PHONE_LINE1", "value_str"),
@@ -517,7 +525,6 @@ def create_app():
     #, logger=True, engineio_logger=True
     app.config.from_object(Config())
     app.debug = True
-    mail = Mail(app)
 
     # Pour le logging
     logging.basicConfig(level=logging.DEBUG,
@@ -532,6 +539,8 @@ def create_app():
 
     with app.app_context():
         start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
+
+    app.mail = Mail(app)
 
     app.register_blueprint(admin_announce_bp, url_prefix='')
     app.register_blueprint(admin_counter_bp, url_prefix='')
@@ -552,6 +561,7 @@ def create_app():
     app.register_blueprint(pyside_bp, url_prefix='')
     app.register_blueprint(admin_music_bp, url_prefix='')
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
+    app.register_blueprint(admin_app_bp, url_prefix='')
 
     return app
 
@@ -1164,34 +1174,7 @@ def check_balises_after_validation(value):
 
 # --------  ADMIN -> App  ---------
 
-@app.route('/admin/app')
-def admin_app():
-    return render_template('/admin/app.html',
-                            network_adress = app.config["NETWORK_ADRESS"],
-                            numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
-                            announce_sound = app.config["ANNOUNCE_SOUND"],
-                            pharmacy_name = app.config["PHARMACY_NAME"],
-    )
 
-@app.route('/admin/app/update_numbering_by_activity', methods=['POST'])
-def update_numbering_by_activity():
-    new_value = request.values.get('numbering_by_activity')
-    try:
-        # Récupérer la valeur du checkbox à partir de la requête
-        new_value = request.values.get('numbering_by_activity')
-        config_option = ConfigOption.query.filter_by(config_key="numbering_by_activity").first()
-        if config_option:
-            config_option.value_bool = True if new_value == "true" else False
-            db.session.commit()
-            display_toast(success=True, message="Configuration mise à jour.")
-            return ""
-        else:
-            display_toast(success=False, message="Configuration non trouvée.")
-            return ""
-    except Exception as e:
-            display_toast(success=False, message=str(e))
-            app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
 
 
 
@@ -1332,8 +1315,6 @@ def enable_buttons_for_activity_task(activity_id):
 def patient_right_page_default():
     print("default")
     return render_template('htmx/patient_right_page_default.html')
-
-    #communication("update_audio", audio_source=audio_url)
 
 
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
@@ -1806,14 +1787,6 @@ def counter_become_active(counter_id):
         print('change')
         counter.is_active = True
         db.session.commit()
-
-
-
-
-
-
-
-
 
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------

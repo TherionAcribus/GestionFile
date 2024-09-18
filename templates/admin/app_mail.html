@@ -1,0 +1,28 @@
+{{ macros.textarea_full("mail_server", mail_server, "Serveur mail") }}
+
+{{ macros.textarea_full("mail_username", mail_username, "Nom d'utilisateur") }}
+
+{{ macros.textarea_full("mail_password", mail_password, "Mot de passe") }}
+
+{{ macros.textarea_full("mail_default_sender", mail_default_sender, "Expediteur") }}
+
+{{ macros.textbloc_int("mail_port", mail_port, "Port") }}
+
+{{ macros.switch("mail_use_tls", mail_use_tls, "Utiliser TLS") }}
+
+{{ macros.switch("mail_use_ssl", mail_use_ssl, "Utiliser SSL") }}
+
+<form id="audio-announce-form" class="row g-3 align-items-end">
+    <div class="col-auto">
+        <label for="mail_adress" class="form-label">Adresse email</label>
+        <input type="text" class="form-control" id="mail_adress" name="mail_adress" value="">
+    </div>
+    
+    <div class="col-auto">
+        <button class="btn btn-success"
+                hx-get="/admin/app/mail/test"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Envoyer un mail de test</button>
+    </div>
+</form>

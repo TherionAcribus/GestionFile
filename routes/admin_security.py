@@ -25,7 +25,6 @@ def display_security_table():
 def add_user_form():
     return render_template('/admin/security_add_user_form.html')
 
-
 @admin_security_bp.route('/admin/security/add_new_user', methods=['POST'])
 def add_new_user():
     try:
@@ -125,13 +124,15 @@ def delete_user(user_id):
     
 
 @admin_security_bp.route('/send_test_email')
-def send_test_email():
-    print("MAIL", app.mail)
+def send_test_email(mail_adress):
+    app.logger.info("Envoi d'un email de test")
+    print("mail_adress", mail_adress)
     msg = EmailMessage(
         subject="Test Email",
         body="This is a test email sent from Flask-Mailman.",
-        to=["arggg55@gmail.com"],
+        to=[mail_adress],
     )
+    print("message", msg)
     msg.send()
-    return "Email sent!"
+    return True
 
