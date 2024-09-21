@@ -30,12 +30,14 @@ document.addEventListener('DOMContentLoaded', function () {
         animation: 150,  // Animation fluide
         onEnd: function (evt) {
             var order = [];
-            document.querySelectorAll('#sortable-dashboard .col-lg-4').forEach(function (item, index) {
+            console.log(evt);
+            document.querySelectorAll('#sortable-dashboard .dashboard-card').forEach(function (item, index) {
                 // On envoie le nom directement, sans essayer de le convertir en entier
                 order.push({
                     id: item.id.replace('card-', ''),  // Extraire le nom ou l'ID de la card
                     position: index + 1  // Position basée sur l'ordre actuel
                 });
+                console.log(item.id.replace('card-', ''), index + 1);
             });
 
             // Envoyer l'ordre au serveur

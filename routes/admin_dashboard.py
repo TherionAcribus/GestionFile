@@ -58,12 +58,14 @@ def dashboard_display_select():
 def save_dashboard_order():
     data = request.get_json()  # Récupérer les données JSON envoyées depuis le frontend
     if 'order' in data:
+        print('data', data)
         for card_data in data['order']:
             card_name = card_data['id']  # Maintenant on utilise 'id' comme le nom de la card
             position = int(card_data['position'])
-            card = DashboardCard.query.filter_by(name=card_name).first()
+            card = DashboardCard.query.filter_by(id=card_name).first()
             if card:
                 card.position = position  # Mettre à jour la position
+                print('card', card)
         db.session.commit()  # Sauvegarder les modifications dans la base de données
         return '', 204  # Réponse vide avec succès
     return 'Invalid data', 400
