@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     var domain = document.domain;
     var port = protocol === 'https:' ? '443' : '5000';
     
-    var socket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient');
+    var socket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient', 
+        { query: `username=counter ${counter_id} web` });
 
     socket.on('connect', function() {
         console.log('WebSocket connected');
@@ -48,7 +49,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     // Connexion au namespace écran
-    var counterSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_counter');
+    var counterSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_counter', 
+        { query: "username=counter web" });
 
     counterSocket.on('connect', function() {
         console.log('Counter WebSocket connected');

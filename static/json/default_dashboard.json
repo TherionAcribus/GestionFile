@@ -1,7 +1,7 @@
 {
     "name": "gf_dashboard",
     "type": "default",
-    "version": "0.2",
+    "version": "0.3",
     "timestamp": "2024-09-15 14:35:26",
     "comments": "Version initiale",
     "dashboard": [
@@ -33,6 +33,14 @@
         "name": "button",
         "visible": true,
         "position": 4,
+        "size": "col-md-6",
+        "color": "bg-primary",
+        "htmx_triggers": {}
+        },
+        {"id": 5, 
+        "name": "connexion",
+        "visible": true,
+        "position": 5,
         "size": "col-md-6",
         "color": "bg-primary",
         "htmx_triggers": {}

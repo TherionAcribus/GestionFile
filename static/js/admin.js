@@ -5,7 +5,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     var port = protocol === 'https:' ? '443' : '5000';
     
     // Connexion au namespace général
-    var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient');
+    var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient', 
+                                    { query: "username=admin_interface" });
     console.log("adresse")
     console.log(socketProtocol + domain + ':' + port + '/socket_update_patient')
 
@@ -39,7 +40,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     // Connexion au namespace écran
-    var adminSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_admin');
+    var adminSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_admin',
+                    { query: "username=admin_interface" }
+    );
 
     adminSocket.on('connect', function() {
         console.log('Admin WebSocket connected');

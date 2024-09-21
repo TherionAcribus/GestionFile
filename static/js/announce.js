@@ -5,7 +5,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     var port = protocol === 'https:' ? '443' : '5000';
     
     // Connexion au namespace général
-    var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient');
+    var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient', 
+            { query: "username=announce screen" });
 
     generalSocket.on('connect', function() {
         console.log('General WebSocket connected');
@@ -38,7 +39,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     // Connexion au namespace écran
-    var screenSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_screen');
+    var screenSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_screen', 
+        { query: "username=announce screen" });
 
     screenSocket.on('connect', function() {
         console.log('Screen WebSocket connected');

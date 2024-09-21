@@ -5,7 +5,7 @@
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
 eventlet.monkey_patch(thread=True, time=True)
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash, session
 
 from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
 from sqlalchemy.ext.mutable import MutableList
@@ -77,6 +77,7 @@ from routes.admin_security import admin_security_bp
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
+from routes.admin_communication import admin_communication_bp
 from routes.announce import announce_bp
 from routes.patient import patient_bp, patient_validate_scan
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
@@ -148,6 +149,8 @@ class Config:
     # Scheduler
     SCHEDULER_API_ENABLED = True
     JOBS = []
+
+
 
     #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
     ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -562,6 +565,7 @@ def create_app():
     app.register_blueprint(admin_music_bp, url_prefix='')
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
     app.register_blueprint(admin_app_bp, url_prefix='')
+    app.register_blueprint(admin_communication_bp, url_prefix='')
 
     return app
 
@@ -608,74 +612,126 @@ def consume_rabbitmq(connection, channel, queue_name, callback):
         connection.process_data_events(time_limit=None)
 
 
+# Dictionnaire pour suivre les connexions actives
+active_connections = {
+    '/socket_update_patient': set(),
+    '/socket_update_screen': set(),
+    '/socket_admin': set(),
+    '/socket_patient': set(),
+    '/socket_app_counter': set(),
+    '/socket_app_patient': set(),
+    '/socket_app_screen': set(),
+    '/socket_counter': set()
+}
+
+app.active_connections = active_connections
+
+app.connected_clients_info = {}
+
+def get_and_register_socketio_username(request):
+    """ Les usernames sont transmis via le header dans Pyside et via la querystring dans JS. 
+    Ceci pour des raisons de simplicité côté client.
+    """
+
+    # Essayer d'abord de récupérer le username des headers (cas PySide)
+    username = request.headers.get('username')
+
+    # Si le username n'est pas dans les headers, chercher dans la query string (cas JavaScript)
+    if not username:
+        username = request.args.get('username', 'Unknown')
+
+    # Enregistrer le client avec son SID dans le dictionnaire
+    app.connected_clients_info[request.sid] = {
+        'username': username
+    }
+
+    return username
+
+
 @socketio.on('connect', namespace='/socket_update_patient')
 def connect_general():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to update patient namespace")
 
 @socketio.on('disconnect', namespace='/socket_update_patient')
 def disconnect_general():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from general namespace")
 
 @socketio.on('connect', namespace='/socket_update_screen')
 def connect_screen():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to screen namespace")
 
 @socketio.on('disconnect', namespace='/socket_update_screen')
 def disconnect_screen():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from screen namespace")
 
-@socketio.on('connect', namespace='/socket_admin')
+@socketio.on('connect', namespace='/socket_admin', )
 def connect_admin():
+    username = get_and_register_socketio_username(request)
+    logging.info(f"Client connected to admin namespace with SID {request.sid} and username {username}")
     logging.info("Client connected to screen namespace")
 
 @socketio.on('disconnect', namespace='/socket_admin')
 def disconnect_admin():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from screen namespace")
 
 @socketio.on('connect', namespace='/socket_patient')
 def connect_patient():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to update patient namespace")
 
 @socketio.on('disconnect', namespace='/socket_patient')
 def disconnect_patient():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from patient namespace")
 
 @socketio.on('connect', namespace='/socket_app_counter')
 def connect_app_counter():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to app counter namespace")
 
 @socketio.on('disconnect', namespace='/socket_app_counter')
 def disconnect_app_counter():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from app counter namespace")
 
 @socketio.on('connect', namespace='/socket_app_patient')
 def connect_app_patient():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to test namespace")
 
 @socketio.on('disconnect', namespace='/socket_app_patient')
 def disconnect_app_patient():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from test namespace")
 
 @socketio.on('connect', namespace='/socket_app_screen')
 def connect_app_screen():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to test namespace")
 
 @socketio.on('disconnect', namespace='/socket_app_screen')
 def disconnect_app_screen():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from test namespace")
 
 @socketio.on('connect', namespace='/socket_counter')
 def connect_counter():
+    username = get_and_register_socketio_username(request)
     logging.info("Client connected to counter namespace")
 
 @socketio.on('disconnect', namespace='/socket_counter')
 def disconnect_counter():
+    app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from counter namespace")
 
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
-    print("MESSAGEss")
     message = request.json.get('message', 'Hello from server')
     try:
         socketio.emit('new_message', {'data': message})
@@ -1007,17 +1063,6 @@ def require_login_for_admin():
         
     
 
-# ---------------- Fin Sécurité ----------------------------
-
-
-# --------   ADMIN   ---------
-
-
-
-
-# -------- ADMIN -> Sécurité --------------------
-
-# --------- ADMIN -> fin sécurité -------------
 
 
 @app.route('/admin/update_switch', methods=['POST'])
@@ -1172,14 +1217,6 @@ def check_balises_after_validation(value):
 
     #return validate_and_transform_text_for_after_validation(value)
 
-# --------  ADMIN -> App  ---------
-
-
-
-
-
-
-# --------  FIn ADMIN -> App  ---------
 
 
 
@@ -2127,6 +2164,7 @@ app.allowed_image_file = allowed_image_file
 app.scheduler = scheduler
 app.mail = mail
 app.auto_calling = auto_calling
+app.socketio = socketio
 
 
 

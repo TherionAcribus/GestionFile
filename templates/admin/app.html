@@ -19,6 +19,9 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="mail-tab" data-bs-toggle="tab" data-bs-target="#tab_mail" type="button" role="tab" aria-controls="tab_mail" aria-selected="false">E-Mails</button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="connexion-tab" data-bs-toggle="tab" data-bs-target="#tab_connexion" type="button" role="tab" aria-controls="tab_connexion" aria-selected="false">Connexions</button>
+                </li>
             </ul>
 
             <!-- Tab content -->
@@ -31,6 +34,9 @@
                 </div>
                 <div class="tab-pane fade" id="tab_mail" role="tabpanel" aria-labelledby="mail-tab">
                     {% include 'admin/app_mail.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_connexion" role="tabpanel" aria-labelledby="mail-tab">
+                    {% include 'admin/app_connexion.html' %}
                 </div>
             </div>
         </div>

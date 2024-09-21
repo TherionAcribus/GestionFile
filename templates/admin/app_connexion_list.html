@@ -1,0 +1,8 @@
+{% for namespace, clients in connections.items() %}
+    <h2>{{ namespace }}</h2>
+    <ul>
+    {% for client in clients %}
+        <li>{{ client.username }} (SID: {{ client.sid }})</li>
+    {% endfor %}
+    </ul>
+{% endfor %}
