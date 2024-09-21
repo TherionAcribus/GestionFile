@@ -108,7 +108,7 @@ def spotify_callback():
         print(f"Error obtaining token: {e}")
         return redirect(url_for('admin_music.error_page'))
 
-    return redirect(url_for('admin_music.admin_app'))  # Rediriger vers votre page d'administration ou autre
+    return redirect(url_for('admin_music.admin_music'))  # Rediriger vers votre page d'administration ou autre
 
 @admin_music_bp.route('/show_saved_tracks')
 def show_saved_tracks():
