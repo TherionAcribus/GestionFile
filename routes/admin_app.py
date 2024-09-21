@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, current_app as app
 from routes.admin_security import send_test_email
-from flask_socketio import rooms as socketio_rooms
+from models import DashboardCard
 
 admin_app_bp = Blueprint('admin_app', __name__)
 
@@ -36,6 +36,14 @@ def admin_app_mail_test():
         app.display_toast(success=False, message="Email non envoyé")    
 
     return "", 200
+
+
+@admin_app_bp.route('/admin/communication/dashboard')
+def dashboard_communication():
+    dashboardcard = DashboardCard.query.filter_by(name="connection").first()
+    return render_template('/admin/dashboard_connection.html',
+                            dashboardcard=dashboardcard,
+                            namespaces = list(app.active_connections.keys()))
 
 
 @admin_app_bp.route('/admin/app/get_connections', methods=['POST'])

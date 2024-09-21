@@ -38,7 +38,7 @@
         "htmx_triggers": {}
         },
         {"id": 5, 
-        "name": "connexion",
+        "name": "connection",
         "visible": true,
         "position": 5,
         "size": "col-md-6",
