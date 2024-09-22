@@ -1,8 +1,8 @@
 {
     "name": "gf_dashboard",
     "type": "default",
-    "version": "0.3",
-    "timestamp": "2024-09-15 14:35:26",
+    "version": "0.4",
+    "timestamp": "2024-09-22 14:35:26",
     "comments": "Version initiale",
     "dashboard": [
         {"id": 1, 
@@ -41,6 +41,15 @@
         "name": "connection",
         "visible": true,
         "position": 5,
+        "size": "col-md-6",
+        "color": "bg-primary",
+        "htmx_triggers": {}
+        }
+        ,
+        {"id": 6, 
+        "name": "printer",
+        "visible": true,
+        "position": 6,
         "size": "col-md-6",
         "color": "bg-primary",
         "htmx_triggers": {}

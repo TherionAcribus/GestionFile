@@ -172,6 +172,9 @@ class Config:
     # music
     IS_PLAYING_SPOTIFY = False
 
+    PRINTER_ERROR = None  # None : pas d'infos, True: Erreur, False: OK
+    PRINTER_INFOS = []  # infos du printer pour stocker les dernières infos
+
 scheduler = APScheduler()
 mail = Mail()
 
@@ -1056,8 +1059,6 @@ def require_login_for_admin():
             else:
                 return redirect(url_for('security.login', next=request.url))
         
-    
-
 
 
 @app.route('/admin/update_switch', methods=['POST'])

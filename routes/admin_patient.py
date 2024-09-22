@@ -1,4 +1,5 @@
 import os
+import datetime
 from flask import Blueprint, request, render_template, redirect, jsonify, current_app as app
 from werkzeug.utils import secure_filename
 from models import Button, Activity, DashboardCard, db
@@ -385,3 +386,42 @@ def activate_button(button_id):
     button.is_active = True
     db.session.commit()
     return dashboard_button()
+
+
+@admin_patient_bp.route('/api/printer/status', methods=['POST'])
+def admin_printer_status():
+    # Récupérer les données envoyées par la requête POST
+    printer_error = request.json.get('error')
+    error_message = request.json.get('message', 'No error message provided')
+    
+    # Mettre à jour l'état de l'imprimante dans la configuration de Flask
+    app.config["PRINTER_ERROR"] = printer_error
+    
+    # Créer un horodatage dans le format "DD/MM-HH:MM"
+    timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
+
+    # Limiter la taille de la liste à 10 éléments
+    if len(app.config["PRINTER_INFOS"]) >= 10:
+        app.config["PRINTER_INFOS"].pop(0)  # Supprimer l'élément le plus ancien
+
+    # Ajouter la nouvelle erreur à la liste PRINTER_INFOS
+    app.config["PRINTER_INFOS"].append({
+        'error': printer_error,
+        'message': error_message,
+        'timestamp': timestamp
+    })
+
+    # Afficher les informations pour vérifier la mise à jour
+    print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
+    
+    return jsonify({'status': 'success'}), 200
+
+
+@admin_patient_bp.route('/admin/printer/dashboard')
+def dashboard_staff():
+    dashboardcard = DashboardCard.query.filter_by(name="staff").first()
+    print("PRINTERINFOS", app.config["PRINTER_INFOS"])
+    return render_template('/admin/dashboard_printer.html', 
+                            dashboardcard=dashboardcard,
+                            printer_error=app.config["PRINTER_ERROR"],
+                            printer_infos=app.config["PRINTER_INFOS"])

@@ -1,13 +1,6 @@
-<btn class=btn btn-primary
-    hx-get="/admin/patient/print_ticket_test"
-    hx-target="#invisible"
-    >
-    Tester l'imprimante
-</btn>
-
 {{ macros.switch("page_patient_print_ticket_display", 
             page_patient_print_ticket_display, 
-            "Afficher la possibilité d'imprimer le ticket")
+            "Afficher la possibilité d'imprimer le ticket - NON EFFECTIF")
 }}
 
 {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
@@ -23,3 +16,10 @@
                 ticket_display_specific_message, 
                 "Afficher le message spécifique à l'activité sur le ticket")
 }}
+
+<btn class="btn btn-primary"
+    hx-get="/admin/patient/print_ticket_test"
+    hx-target="#invisible"
+    >
+    Tester l'imprimante
+</btn>
