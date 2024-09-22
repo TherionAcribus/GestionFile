@@ -18,6 +18,9 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#tab_gallery" type="button" role="tab" aria-controls="tab_gallery" aria-selected="false">Galerie</button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="googleVoice-tab" data-bs-toggle="tab" data-bs-target="#tab_googleVoice" type="button" role="tab" aria-controls="tab_googleVoice" aria-selected="false">Google Voice</button>
+                </li>
             </ul>
 
             <!-- Tab content -->
@@ -30,6 +33,9 @@
                 </div>
                 <div class="tab-pane fade" id="tab_gallery" role="tabpanel" aria-labelledby="gallery-tab">
                     {% include 'admin/announce_gallery.html' %}
+                </div>
+                <div class="tab-pane fade" id="tab_googleVoice" role="tabpanel" aria-labelledby="googleVoice-tab">
+                    {% include 'admin/announce_google_voice.html' %}
                 </div>
             </div>
         </div>

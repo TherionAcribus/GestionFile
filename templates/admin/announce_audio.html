@@ -1,37 +1,34 @@
 <!-- Switch -->
-<div class="switch">
-    <span>Activer le son pour les annonces : </span>
-    <label>
-    Muet
-    <input id="announce_sound" 
-            type="checkbox"
-            {% if announce_sound == True %}checked{% endif %}
-            hx-post="/admin/update_switch"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "announce_sound",
-                        "value": document.getElementById("announce_sound").checked}'>
-    <span class="lever"></span>
-    Activé
-    </label>
+
+<h5>Options générales</h5>
+
+{{ macros.switch("announce_sound", 
+            announce_sound, 
+            "Activer le son pour les annonces")
+}}
+
+<div class="input-field col s12">
+    <select
+        class="form-select"
+        id="announce_player"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "announce_player", "value": document.getElementById("announce_player").value}'>
+        <option value="" disabled selected>Lecteur audio</option>
+        <option value="app" {% if announce_player == "app" %}selected{% endif %}>Application (recommandé)</option>
+        <option value="web" {% if announce_player == "web" %}selected{% endif %}>Page web (en cas d'échec)</option>
+    </select>
+    <label>Choix du lecteur audio</label>
 </div>
 
-<div class="switch">
-    <span>Activer une alerte avant de lancer l'appel : </span>
-    <label>
-    Muet
-    <input id="announce_alert" 
-            type="checkbox"
-            {% if announce_alert == True %}checked{% endif %}
-            hx-post="/admin/update_switch"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "announce_alert",
-                        "value": document.getElementById("announce_alert").checked}'>
-    <span class="lever"></span>
-    Activé
-    </label>
-</div>
+<h5>Alerte sonore avant l'appel</h5>
 
-Choisir le son de l'alerte:
+{{ macros.switch("announce_alert", 
+announce_alert, 
+            "Activer une alerte avant de lancer l'appel")
+}}
+
+Son actuel :
 
 <div id="announce_current_signal"
         hx-get="/admin/announce/audio/current_signal"
@@ -51,20 +48,8 @@ Choisir le son de l'alerte:
     Librairie sonore
     </button>
 
-<div class="input-field col s12">
-    <select
-        class="form-select"
-        id="announce_player"
-        hx-post="/admin/update_select"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_player", "value": document.getElementById("announce_player").value}'>
-        <option value="" disabled selected>Lecteur audio</option>
-        <option value="app" {% if announce_player == "app" %}selected{% endif %}>Application (recommandé)</option>
-        <option value="web" {% if announce_player == "web" %}selected{% endif %}>Page web (en cas d'échec)</option>
-    </select>
-    <label>Choix du lecteur audio</label>
-</div>
 
+<h5>Choix de la voix</h5>
 
 <div class="input-field col s12">
     <select
@@ -79,6 +64,22 @@ Choisir le son de l'alerte:
     </select>
     <label>Choix de la voix</label>
 </div>
+
+{% if voice_google_key %}
+<div class="input-field col s12">
+    <label>Origine de la voix</label>
+    <select
+        class="form-select"
+        id="announce_voice_source"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-vals='js:{"key": "announce_voice_source", "value": document.getElementById("announce_voice_source").value}'>
+        <option value="" disabled selected>Origine de la voix</option>
+        <option value="local" {% if announce_voice_source == "local" %}selected{% endif %}>Locale</option>
+        <option value="google" {% if announce_voice_source == "google" %}selected{% endif %}>Google Voice</option>
+    </select>
+</div>
+{% endif %}
 
 {{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Appel audio pour annoncer le tour d'un patient") }}
 

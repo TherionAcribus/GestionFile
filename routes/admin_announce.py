@@ -1,8 +1,13 @@
 import os
-from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
-from sqlalchemy import and_
-from models import ConfigOption, Pharmacist, Activity, Counter, db
-from python.engine import get_futur_patient, generate_audio_calling
+from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, send_file
+from cryptography.fernet import Fernet
+from werkzeug.utils import secure_filename
+from models import ConfigOption, Activity, Counter, db
+from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
+from google.cloud import texttospeech
+
+def allowed_json_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
 
 admin_announce_bp = Blueprint('admin_announce', __name__)
 
@@ -33,6 +38,9 @@ def announce_page():
                             announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
                             announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
                             announce_call_sound=app.config['ANNOUNCE_CALL_SOUND'],
+                            voice_google_name=app.config['VOICE_GOOGLE_NAME'],
+                            announce_voice_source=app.config['ANNOUNCE_VOICE_SOURCE'],
+                            voice_google_key=get_google_credentials()
                             )
 
 
@@ -140,3 +148,123 @@ def announce_audio_test(scope):
     return "", 200
 
 
+@admin_announce_bp.route('/admin/announce/google/add_key', methods=['POST'])
+def upload_google_key():
+
+    cipher_suite = Fernet(app.config["BASE32_KEY"])
+
+    if 'google_key_file' not in request.files:
+        return '<div class="alert alert-danger">Aucun fichier sélectionné.</div>'
+    file = request.files['google_key_file']
+    if file.filename == '':
+        return '<div class="alert alert-danger">Le nom du fichier est vide.</div>'
+    if file and allowed_json_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_content = file.read()
+        # Chiffrer le contenu du fichier
+        encrypted_content = cipher_suite.encrypt(file_content)
+        # Convertir en chaîne de caractères pour le stockage
+        encrypted_content_str = encrypted_content.decode('utf-8')
+        # Enregistrer dans la base de données
+        config_option = ConfigOption.query.filter_by(config_key='voice_google_key').first()
+        if config_option:
+            config_option.value_json = encrypted_content_str
+        else:
+            config_option = ConfigOption(config_key='voice_google_key', value_json=encrypted_content_str)
+            db.session.add(config_option)
+        db.session.commit()
+        return '<div class="alert alert-success">Clé Google Cloud enregistrée avec succès.</div>'
+    else:
+        return '<div class="alert alert-danger">Format de fichier non autorisé. Veuillez télécharger un fichier JSON.</div>'
+
+
+
+@admin_announce_bp.route('/admin/announce/google/filter_voices', methods=['POST'])
+def filter_voices():
+    # Récupérer les filtres depuis le formulaire
+    selected_language = request.form.get('voice_google_language', '')
+    selected_gender = request.form.get('voice_google_gender', '')
+    selected_type = request.form.get('voice_google_type', '')
+
+    # Récupérer les voix filtrées
+    google_voices = list_google_voices(language=selected_language, gender=selected_gender, voice_type=selected_type)
+
+    # Renvoyer la liste filtrée dans le select
+    return render_template('/admin/announce_google_voice_list.html', 
+                            google_voices=google_voices,
+                            voice_google_name=app.config['VOICE_GOOGLE_NAME'],)
+
+
+def list_google_voices(language=None, gender=None, voice_type=None):
+    """Récupère la liste des voix disponibles avec filtres et retourne un dictionnaire."""
+
+    # Récupérer les credentials déchiffrés
+    credentials_json = get_google_credentials()
+    if not credentials_json:
+        return "Erreur : Clé Google Cloud non configurée.", 500
+
+    # Écrire les credentials dans un fichier temporaire
+    temp_credentials_path = 'temp_google_credentials.json'
+    with open(temp_credentials_path, 'wb') as temp_file:
+        temp_file.write(credentials_json)
+
+    # Configurer la variable d'environnement pour Google Cloud
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_credentials_path
+
+    # Appel à l'API Google Text-to-Speech
+    client = texttospeech.TextToSpeechClient()
+
+    # Effectuer la requête pour lister les voix disponibles
+    voices = client.list_voices()
+
+    # Liste des voix sous forme de dictionnaire
+    voice_list = []
+
+    for voice in voices.voices:
+        # Filtrer par langue si précisé
+        if language and language not in voice.language_codes:
+            continue
+
+        # Filtrer par genre si précisé
+        ssml_gender = texttospeech.SsmlVoiceGender(voice.ssml_gender).name
+        if gender and ssml_gender.lower() != gender.lower():
+            continue
+
+        # Filtrer par type de voix (ex. Wavenet, Standard) si précisé
+        if voice_type and voice_type.lower() not in voice.name.lower():
+            continue
+
+        # Créer un dictionnaire pour chaque voix filtrée
+        voice_info = {
+            "name": voice.name,
+            "language_codes": voice.language_codes,
+            "ssml_gender": ssml_gender,
+            "natural_sample_rate_hertz": voice.natural_sample_rate_hertz
+        }
+        voice_list.append(voice_info)
+
+    return voice_list
+
+
+@admin_announce_bp.route('/admin/announce/google/save_voice', methods=['POST'])
+def save_voice():
+    # Récupérer la voix sélectionnée dans le formulaire
+    selected_voice = request.form.get('voice_google_name', '')
+    print(request.form)
+
+    if selected_voice:
+        # Sauvegarder la voix dans la base de données (exemple)
+        config_option = ConfigOption.query.filter_by(config_key='voice_google_name').first()
+        if config_option:
+            config_option.value_str = selected_voice
+            app.config['VOICE_GOOGLE_NAME'] = selected_voice
+        else:
+            config_option = ConfigOption(config_key='voice_google_name', value_str=selected_voice)
+            app.config['VOICE_GOOGLE_NAME'] = selected_voice
+            db.session.add(config_option)
+        
+        db.session.commit()
+
+        return f"Voix '{selected_voice}' sauvegardée avec succès !"
+    else:
+        return "Erreur : aucune voix sélectionnée.", 400

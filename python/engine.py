@@ -2,15 +2,15 @@ import os
 import qrcode
 from flask import url_for, request, current_app as app
 from datetime import datetime, timezone, date
-from utils import replace_balise_announces
+from cryptography.fernet import Fernet
+from google.cloud import texttospeech
+from utils import replace_balise_announces, replace_balise_phone
 from gtts import gTTS
-from models import Patient, db
-from utils import replace_balise_phone
+from models import Patient, ConfigOption, db
 
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
     # Création d'un nouvel objet Patient
-    print('    call_number 2', call_number)
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
@@ -100,6 +100,12 @@ def generate_audio_calling(counter_number, next_patient):
     print("text_template", text_template)
     text = replace_balise_announces(text_template, next_patient)
 
+    if app.config["ANNOUNCE_VOICE_SOURCE"] == "local":
+        return create_tts_sound(next_patient, text)
+    elif app.config["ANNOUNCE_VOICE_SOURCE"] == "google":
+        return create_google_tts_sound(next_patient, text)
+
+def create_tts_sound(next_patient, text):
     # choix de la voix
     if app.config["ANNOUNCE_VOICE"] == "fr-ca":
         lang = "fr"
@@ -119,6 +125,65 @@ def generate_audio_calling(counter_number, next_patient):
 
     # Sauvegarde du fichier audio
     tts.save(audio_path)
+
+    # Envoi du chemin relatif via SSE
+    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
+
+    return audio_url
+
+
+def create_google_tts_sound(next_patient, text):
+    
+    # Récupérer la voix sélectionnée depuis la base de données (ou config)
+    voice_google_name = app.config["VOICE_GOOGLE_NAME"]
+
+    # Récupérer les credentials déchiffrés
+    credentials_json = get_google_credentials()
+    if not credentials_json:
+        return "Erreur : Clé Google Cloud non configurée.", 500
+
+    # Écrire les credentials dans un fichier temporaire
+    temp_credentials_path = 'temp_google_credentials.json'
+    with open(temp_credentials_path, 'wb') as temp_file:
+        temp_file.write(credentials_json)
+
+    # Configurer la variable d'environnement pour Google Cloud
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_credentials_path
+
+    # Appel à l'API Google Text-to-Speech
+    client = texttospeech.TextToSpeechClient()
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+
+    # Utiliser la voix sélectionnée
+    voice = texttospeech.VoiceSelectionParams(
+        name=voice_google_name,  # Voix sauvegardée dans la base de données
+        language_code="fr-FR"  # Adapter selon la voix sélectionnée (ex: "fr-FR")
+    )
+
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
+    )
+
+    # Effectuer la requête à l'API
+    response = client.synthesize_speech(
+        input=synthesis_input, voice=voice, audio_config=audio_config
+    )
+
+    # Chemin de sauvegarde du fichier audio
+    audiofile = f'patient_{next_patient.call_number}.mp3'
+    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)  # Enregistrement dans le dossier 'static/audio'
+
+    # Assurer que le répertoire existe
+    if not os.path.exists(os.path.dirname(audio_path)):
+        os.makedirs(os.path.dirname(audio_path))
+
+    # Sauvegarder l'audio généré dans un fichier MP3
+    with open(audio_path, 'wb') as out:
+        out.write(response.audio_content)
+
+    # Supprimer le fichier temporaire après utilisation
+    os.remove(temp_credentials_path)
 
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
@@ -164,3 +229,14 @@ def set_server_url(app, request):
     else:
         server_url = request.host_url
     app.config['SERVER_URL'] = server_url
+
+
+def get_google_credentials():
+    cipher_suite = Fernet(app.config["BASE32_KEY"])
+    config_option = ConfigOption.query.filter_by(config_key='voice_google_key').first()
+    if config_option:
+        encrypted_content = config_option.value_json.encode('utf-8')
+        # Déchiffrer le contenu de la clé JSON
+        decrypted_content = cipher_suite.decrypt(encrypted_content)
+        return decrypted_content  # Bytes du fichier JSON
+    return None

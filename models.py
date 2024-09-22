@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from flask import current_app as app
 from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
@@ -246,6 +247,7 @@ class ConfigOption(db.Model):
     value_int = db.Column(db.Integer)     # Pour les entiers
     value_bool = db.Column(db.Boolean)    # Pour les valeurs booléennes
     value_text = db.Column(db.Text)       # Pour les très longues chaînes
+    value_json = db.Column(db.JSON)  # Type JSON pour MySQL
 
     def __repr__(self):
         return f'<ConfigOption {self.config_key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'

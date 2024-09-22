@@ -7,21 +7,16 @@ import eventlet
 eventlet.monkey_patch(thread=True, time=True)
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash, session
 
-from sqlalchemy.orm import scoped_session, sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
-from sqlalchemy.ext.mutable import MutableList
-from sqlalchemy import create_engine, ForeignKeyConstraint, UniqueConstraint, Sequence, func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
+from sqlalchemy.orm import sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
+from sqlalchemy import func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
 from flask_migrate import Migrate
 from flask.signals import request_started
-from flask_mailman import Mail, EmailMessage
+from flask_mailman import Mail
 from flask_socketio import SocketIO
-from datetime import datetime, timezone, date, time, timedelta
+from datetime import datetime, timezone, time, timedelta
 import time as tm
-#from flask_babel import Babel
-from gtts import gTTS
 
 from flask_apscheduler import APScheduler
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 import json
 import markdown2
@@ -36,7 +31,6 @@ import boto3
 
 from urllib.parse import urlparse, urljoin
 import random
-
 
 from functools import partial
 
@@ -77,7 +71,6 @@ from routes.admin_security import admin_security_bp
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
-from routes.admin_communication import admin_communication_bp
 from routes.announce import announce_bp
 from routes.patient import patient_bp, patient_validate_scan
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
@@ -122,13 +115,14 @@ class Config:
             MYSQL_PASSWORD = get_parameter('MYSQL_PASSWORD')
             HOST = get_parameter('MYSQL_HOST')
             DB_NAME = get_parameter('MYSQL_DATABASE')
+            BASE32_KEY = get_parameter('BASE32_KEY')
 
         else:
-
             MYSQL_USER = os.getenv('MYSQL_USER')
             MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
             HOST = os.getenv('MYSQL_HOST')
             DB_NAME = os.getenv('MYSQL_DATABASE')
+            BASE32_KEY = os.getenv('BASE32_KEY')
         
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
@@ -388,6 +382,7 @@ def load_configuration(app):
         "announce_style": ("ANNOUNCE_STYLE", "value_str"),
         "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
         "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
+        "announce_voice_source": ("ANNOUNCE_VOICE_SOURCE", "value_str"),
         "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
@@ -461,6 +456,7 @@ def load_configuration(app):
         "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
         "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
         "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
+        "voice_google_name": ("VOICE_GOOGLE_NAME", "value_str"),
     }
 
     for key, (config_name, value_type) in config_mappings.items():
@@ -565,7 +561,6 @@ def create_app():
     app.register_blueprint(admin_music_bp, url_prefix='')
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
     app.register_blueprint(admin_app_bp, url_prefix='')
-    app.register_blueprint(admin_communication_bp, url_prefix='')
 
     return app
 
@@ -2165,6 +2160,7 @@ app.scheduler = scheduler
 app.mail = mail
 app.auto_calling = auto_calling
 app.socketio = socketio
+app.database = database
 
 
 
