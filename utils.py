@@ -28,33 +28,32 @@ def parse_time(time_str):
             return datetime.strptime(time_str, '%H:%M:%S').time()
     return None
 
-
-def word_wrap(text, width):
-    # Split text by spaces but keep spaces with words
-    words = re.split(r'(\s+)', text)
+def word_wrap(text, line_width):
+    """
+    Enveloppe le texte à la largeur de ligne spécifiée, sans couper les mots.
+    """
     lines = []
-    current_line = ""
+    paragraphs = text.split('\n')  # Diviser le texte en paragraphes
 
-    print("ENTREE", width, text)
-    for word in words:
-        print("MOT", word)
-        if len(current_line) + len(word) <= width:
-            print("LEN", len(current_line) + len(word))
-            current_line += word
-            print("CURRENT", current_line)
-            print('LEN CURRENT', len(current_line))
-        else:
-            lines.append(current_line.strip())
-            current_line = word
-
-    if current_line:
-        lines.append(current_line.strip())
-
-    return "\n".join(lines)
-
+    for paragraph in paragraphs:
+        words = paragraph.split(' ')
+        current_line = ''
+        for word in words:
+            # Vérifier si le mot dépasse la largeur de ligne
+            if len(current_line + ' ' + word) > line_width:
+                lines.append(current_line)
+                current_line = word
+            else:
+                if current_line:
+                    current_line += ' ' + word
+                else:
+                    current_line = word
+        if current_line:
+            lines.append(current_line)
+    return '\n'.join(lines)
 
 def convert_markdown_to_escpos(markdown_text, line_width=42):
-    # ESC/POS commands
+    # Commandes ESC/POS
     escpos_commands = {
         'center_on': '\x1b\x61\x01',
         'center_off': '\x1b\x61\x00',
@@ -64,10 +63,10 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
         'bold_off': '\x1b\x45\x00',
         'underline_on': '\x1b\x2d\x01',
         'underline_off': '\x1b\x2d\x00',
-        'separator': '--------------------------------\n',
+        'separator': '-' * line_width + '\n',
     }
 
-    # Markdown patterns
+    # Motifs Markdown
     patterns = {
         'center': re.compile(r'\[center\](.*?)\[\/center\]', re.DOTALL),
         'double_size': re.compile(r'\[double\](.*?)\[\/double\]', re.DOTALL),
@@ -79,22 +78,44 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
     def replace_pattern(pattern, on_command, off_command, text, adjust_width=True):
         def wrap_and_format(match):
             inner_text = match.group(1)
+            # Ajuster la largeur si en double taille
             width = line_width // 2 if adjust_width else line_width
             wrapped_text = word_wrap(inner_text, width)
             return f"{on_command}{wrapped_text}{off_command}"
         return pattern.sub(wrap_and_format, text)
 
-    # Handling new lines explicitly
+    # Gérer les sauts de ligne explicitement
     escpos_text = markdown_text.replace('\\n', '\n')
 
+    # Appliquer les transformations basées sur les motifs Markdown
     escpos_text = replace_pattern(patterns['center'], escpos_commands['center_on'], escpos_commands['center_off'], escpos_text, adjust_width=False)
     escpos_text = replace_pattern(patterns['double_size'], escpos_commands['double_size_on'], escpos_commands['double_size_off'], escpos_text)
     escpos_text = replace_pattern(patterns['bold'], escpos_commands['bold_on'], escpos_commands['bold_off'], escpos_text, adjust_width=False)
     escpos_text = replace_pattern(patterns['underline'], escpos_commands['underline_on'], escpos_commands['underline_off'], escpos_text, adjust_width=False)
     escpos_text = patterns['separator'].sub(escpos_commands['separator'], escpos_text)
 
-    return escpos_text
+    # Appliquer le retour à la ligne au texte brut restant
+    # Nous devons faire attention à ne pas altérer les commandes ESC/POS insérées
+    # Nous pouvons diviser le texte en parties, en conservant les commandes ESC/POS intactes
 
+    # Expression régulière pour séparer le texte en gardant les commandes ESC/POS
+    split_pattern = re.compile('(\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x1b]*\x1b\\\\|\x1b.|[\x00-\x1F])')
+
+    parts = split_pattern.split(escpos_text)
+    wrapped_parts = []
+
+    for part in parts:
+        # Si la partie est une commande ESC/POS, on la laisse telle quelle
+        if re.match(split_pattern, part):
+            wrapped_parts.append(part)
+        else:
+            # Appliquer le retour à la ligne
+            wrapped_text = word_wrap(part, line_width)
+            wrapped_parts.append(wrapped_text)
+
+    escpos_text = ''.join(wrapped_parts)
+
+    return escpos_text
 
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
@@ -170,8 +191,8 @@ def format_ticket_text(new_patient, activity):
         app.config['TICKET_MESSAGE_PRINTER'],
         app.config['TICKET_FOOTER_PRINTER']
     ]
-    #if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
-    #    text_list.append(activity.specific_message)
+    if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
+        text_list.append(activity.specific_message)
     print("text_list", text_list)
     combined_text = "\n".join(text_list)
     combined_text = replace_balise_phone(combined_text, new_patient)
