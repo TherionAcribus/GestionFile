@@ -109,6 +109,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_schedule_tasks_list(msg);
     })
 
+    adminSocket.on("refresh_printer_dashboard", function(msg) {
+        console.log("refresh_printer_dashboard:", msg);
+        refresh_printer_dashboard(msg);
+    })
+
     adminSocket.on("audio_test", function(msg) {
         console.log("audio_test:", msg);
         playAudio(msg);
@@ -239,6 +244,14 @@ function refresh_activity_table(){
 function refresh_activity_staff_table(){
     htmx.trigger('#div_activity_staff_table', 'refresh_activity_staff_table', {target: "#div_activity_staff_table"});
 }
+
+
+// ---------------- DASHBOARD ----------------
+
+function refresh_printer_dashboard(){
+    htmx.trigger('#card-printer', 'refresh_printer_dashboard', {target: "#card-printer"});
+}
+
 
 // ---------------- BOUTONS ----------------
 

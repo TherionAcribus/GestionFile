@@ -5,6 +5,13 @@
 
 {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
 
+<btn class="btn btn-primary"
+    hx-get="/admin/patient/print_test_ticket_size"
+    hx-target="#invisible"
+    >
+    Tester la largeur d'impression
+</btn>
+
 <h5>Message du ticket</h5>
 
 {{ macros.textbloc_for_printer("ticket_header", ticket_header, "En-tête du message") }}
@@ -17,9 +24,37 @@
                 "Afficher le message spécifique à l'activité sur le ticket")
 }}
 
-<btn class="btn btn-primary"
-    hx-get="/admin/patient/print_ticket_test"
-    hx-target="#invisible"
-    >
-    Tester l'imprimante
-</btn>
+<form id="qrcode-form" 
+    hx-get="/admin/patient/print_ticket_test" 
+    hx-trigger="submit"
+    class="row g-3 align-items-end">
+    <div class="col-auto">
+        <label for="call_number" class="form-label">Numéro d'appel</label>
+        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
+    </div>
+    <div class="col-auto">
+        <label for="activity" class="form-label">Activité</label>
+        <select class="form-select" id="activity" name="activity">
+            {% for activity in activities %}
+            <option value="{{ activity.id }}">
+                {{ activity.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <label for="language" class="form-label">Activité</label>
+        <select class="form-select" id="language" name="language">
+            {% for language in languages %}
+            <option value="{{ language.code }}">
+                {{ language.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">
+            Imprimer un exemple de ticket
+        </button>
+    </div>
+</form>

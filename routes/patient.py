@@ -2,7 +2,7 @@ import os
 import qrcode
 from flask import Blueprint, render_template, request, session, url_for, redirect, current_app as app
 from models import Language, Button, Activity, Patient, db
-from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text
+from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
 
 patient_bp = Blueprint('patient', __name__)
@@ -171,6 +171,11 @@ def left_page_validate_patient(activity):
     page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
     print(page_patient_validation_message)
 
+    if session.get('language_code', 'fr') == "fr":
+        page_patient_subtitle=activity.specific_message
+    else:
+        page_patient_subtitle=get_activity_message_translation(activity, session.get('language_code', 'fr'))
+
     main_content = render_template('patient/patient_qr_right_page.html', 
                             image_name_qr=image_name_qr, 
                             text=text,
@@ -186,8 +191,8 @@ def left_page_validate_patient(activity):
     # si on veut afficher un message specifique (et qu'il existe). Retourné via oob-swap
     if app.config["PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE"] and activity.specific_message != "":
         subtitle_content = render_template(
-        'patient/patient_default_subtitle.html', 
-        page_patient_subtitle=activity.specific_message
+        'patient/patient_default_subtitle.html',
+        page_patient_subtitle=page_patient_subtitle
         )
 
         return f"{main_content}{subtitle_content}"

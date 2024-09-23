@@ -1,9 +1,10 @@
 import os
 import datetime
-from flask import Blueprint, request, render_template, redirect, jsonify, current_app as app
+from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
 from werkzeug.utils import secure_filename
-from models import Button, Activity, DashboardCard, db
+from models import Button, Activity, DashboardCard, Language, db
 from python.engine import get_futur_patient, create_qr_code 
+from utils import format_ticket_text
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -39,7 +40,8 @@ def admin_patient():
                             page_patient_interface_done_print = app.config['PAGE_PATIENT_INTERFACE_DONE_PRINT'],
                             page_patient_interface_done_extend = app.config['PAGE_PATIENT_INTERFACE_DONE_EXTEND'],
                             page_patient_interface_done_back = app.config['PAGE_PATIENT_INTERFACE_DONE_BACK'], 
-                            activities = Activity.query.all()
+                            activities = Activity.query.all(),
+                            languages = Language.query.all()
                             )
 
 
@@ -309,10 +311,23 @@ def delete_button_image(button_id):
     return "<div>Pas d'image</div>"
 
 
+@admin_patient_bp.route("/admin/patient/print_test_ticket_size")
+def print_ticket_test_size():
+    text = "123456789012345678901234567890123456789012345678901234567890"
+    print(text)
+    app.communikation(stream="app_patient", data=text, flag="print")
+    return "", 204
+
 @admin_patient_bp.route("/admin/patient/print_ticket_test")
 def print_ticket_test():
-    text = "12345678901234567890123456789012345678901234567890"
-    print(text)
+    call_number = request.values.get('call_number', 'A-1')
+    activity_id = request.values.get('activity', 1)
+    activity = Activity.query.get(activity_id)
+    language_code = request.values.get("language", "fr")
+    print("language_code", language_code)
+    session["language_code"] = language_code
+    patient = get_futur_patient(call_number, activity)    
+    text = format_ticket_text(patient, activity)
     app.communikation(stream="app_patient", data=text, flag="print")
     return "", 204
 
@@ -411,9 +426,11 @@ def admin_printer_status():
         'timestamp': timestamp
     })
 
+    app.communikation("admin", event="refresh_printer_dashboard")    
+
     # Afficher les informations pour vérifier la mise à jour
     print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
-    
+
     return jsonify({'status': 'success'}), 200
 
 

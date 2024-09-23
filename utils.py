@@ -138,6 +138,7 @@ def replace_balise_phone(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)
     Pour le nom de l'activité, on reprend le nom du bouton pour plus de o"""
     button = Button.query.filter_by(activity_id=patient.activity_id).first()
+    print("LANGUES8REPLACE", session.get('language_code'))
     if session.get('language_code') != "fr":        
         button = get_buttons_translation([button], session.get('language_code'))[0]
     return template.format(P=app.config["PHARMACY_NAME"],
@@ -162,6 +163,16 @@ def get_buttons_translation(buttons, language_code):
     return buttons
 
 
+def get_activity_message_translation(activity, language_code):
+    translation = Translation.query.filter_by(
+        table_name='Activity',
+        row_id=activity.id,
+        language_code=language_code
+    ).first()
+    
+    return translation.translated_text
+
+
 def get_text_translation(key_name, language_code):
     print("key_name", key_name, "language_code", language_code)
     try:
@@ -182,17 +193,26 @@ def choose_text_translation(key):
     return text
 
 
-
 def format_ticket_text(new_patient, activity):
     print("ticket_text", new_patient)
     print(app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
-    text_list = [
-        app.config['TICKET_HEADER_PRINTER'],
-        app.config['TICKET_MESSAGE_PRINTER'],
-        app.config['TICKET_FOOTER_PRINTER']
-    ]
-    if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
-        text_list.append(activity.specific_message)
+    if session.get('language_code') != "fr":
+        language_code = session.get('language_code')
+        text_list = [
+        get_text_translation("ticket_header", language_code),
+        get_text_translation('ticket_message',language_code),
+        get_text_translation("ticket_footer",language_code)
+        ]
+        if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
+            text_list.append(get_activity_message_translation(activity, language_code))
+    else:
+        text_list = [
+            app.config['TICKET_HEADER_PRINTER'],
+            app.config['TICKET_MESSAGE_PRINTER'],
+            app.config['TICKET_FOOTER_PRINTER']
+        ]
+        if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
+            text_list.append(activity.specific_message)
     print("text_list", text_list)
     combined_text = "\n".join(text_list)
     combined_text = replace_balise_phone(combined_text, new_patient)
