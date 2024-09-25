@@ -518,8 +518,8 @@ def start_fonctions(app):
     init_default_algo_rules_db_from_json()
     init_default_dashboard_db_from_json()
     #load_configuration(app)
-    clear_old_patients_table(app)
-    clear_counter_table()
+    #clear_old_patients_table(app)
+    #clear_counter_table()
 
 
 def create_app():
@@ -540,8 +540,8 @@ def create_app():
     scheduler.start()
 
     with app.app_context():
-        start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
-
+        #start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
+        pass
     app.mail = Mail(app)
 
     app.register_blueprint(admin_announce_bp, url_prefix='')
