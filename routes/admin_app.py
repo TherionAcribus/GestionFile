@@ -5,8 +5,15 @@ from models import DashboardCard
 admin_app_bp = Blueprint('admin_app', __name__)
 
 @admin_app_bp.route('/admin/app')
-def admin_app():
+@admin_app_bp.route('/admin/app/<tab>')
+def admin_app(tab=None):
+    valid_tabs = ['general', 'backups', 'mail', 'connexion']
+    tab = request.args.get('tab', 'general')
+    if tab not in valid_tabs:
+        tab = 'general'
+        
     return render_template('/admin/app.html',
+                            active_tab=tab,
                             network_adress = app.config["NETWORK_ADRESS"],
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],

@@ -9,6 +9,11 @@ admin_translation_bp = Blueprint('admin_translation', __name__)
 
 @admin_translation_bp.route('/admin/translations')
 def admin_translation():
+    valid_tabs = ['languages', 'texts']
+    tab = request.args.get('tab', 'languages')
+    if tab not in valid_tabs:
+        tab = 'languages'
+
     languages = Language.query.all()
     return render_template('/admin/translations.html',
                             languages=languages)

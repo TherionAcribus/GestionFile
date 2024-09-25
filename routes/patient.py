@@ -1,5 +1,3 @@
-import os
-import qrcode
 from flask import Blueprint, render_template, request, session, url_for, redirect, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation

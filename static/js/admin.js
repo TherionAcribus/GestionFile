@@ -138,6 +138,68 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 
+// -------------- TABS BOOTSTRAP  --------------
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Fonction pour activer un onglet
+    function activateTab(tabId) {
+        var tabElement = document.querySelector('#' + tabId + '-tab');
+        if (tabElement) {
+            var tab = new bootstrap.Tab(tabElement);
+            tab.show();
+            return true;
+        }
+        return false;
+    }
+
+    // Fonction pour obtenir le paramètre 'tab' de l'URL
+    function getTabFromUrl() {
+        var urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('tab') || getDefaultTab();
+    }
+
+    // Fonction pour obtenir l'ID du premier onglet disponible (onglet par défaut)
+    function getDefaultTab() {
+        var firstTab = document.querySelector('button[data-bs-toggle="tab"]');
+        return firstTab ? firstTab.id.replace('-tab', '') : null;
+    }
+
+    // Fonction pour mettre à jour l'URL
+    function updateUrl(tabId) {
+        var url = new URL(window.location);
+        url.searchParams.set('tab', tabId);
+        history.pushState({tabId: tabId}, '', url);
+    }
+
+    // Activer l'onglet initial ou le premier onglet disponible
+    var initialTab = getTabFromUrl();
+    if (!activateTab(initialTab)) {
+        initialTab = getDefaultTab();
+        if (initialTab) {
+            activateTab(initialTab);
+        }
+    }
+
+    // Ajouter des écouteurs d'événements pour les clics sur les onglets
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function(tabEl) {
+        tabEl.addEventListener('shown.bs.tab', function(event) {
+            var id = event.target.id.replace('-tab', '');
+            updateUrl(id);
+        });
+    });
+
+    // Gérer les événements de navigation (boutons précédent/suivant du navigateur)
+    window.addEventListener('popstate', function(event) {
+        var tabId = getTabFromUrl();
+        if (!activateTab(tabId)) {
+            var defaultTab = getDefaultTab();
+            if (defaultTab) {
+                activateTab(defaultTab);
+            }
+        }
+    });
+});
+
 
 function display_toast(data) {
     console.log('toast', data);

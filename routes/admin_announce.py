@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, send_file
+from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
 from models import ConfigOption, Activity, Counter, db
@@ -12,7 +12,11 @@ def allowed_json_file(filename):
 admin_announce_bp = Blueprint('admin_announce', __name__)
 
 @admin_announce_bp.route('/admin/announce')
-def announce_page():
+@admin_announce_bp.route('/admin/announce/<tab>')
+def announce_page(tab=None):
+    valid_tabs = ['visual', 'audio', 'gallery', 'googleVoice']
+    if tab not in valid_tabs:
+        tab = 'visual'
     return render_template('/admin/announce.html', 
                             announce_sound = app.config['ANNOUNCE_SOUND'],
                             announce_alert = app.config['ANNOUNCE_ALERT'],

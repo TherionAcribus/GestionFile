@@ -22,7 +22,13 @@ class SpotifyFlaskCacheHandler(spotipy.CacheHandler):
 
 
 @admin_music_bp.route('/admin/music')
-def admin_music():
+@admin_music_bp.route('/admin/music/<tab>')
+def admin_music(tab=None):
+    valid_tabs = ['player', 'options']
+    tab = request.args.get('tab', 'player')
+    if tab not in valid_tabs:
+        tab = 'player'
+
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
     print("spotify", spotify_connected)

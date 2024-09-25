@@ -8,6 +8,11 @@ admin_activity_bp = Blueprint('admin_activity', __name__)
 # page de base
 @admin_activity_bp.route('/admin/activity')
 def admin_activity():
+    valid_tabs = ['activity', 'schedule']
+    tab = request.args.get('tab', 'activity')
+    if tab not in valid_tabs:
+        tab = 'activity'
+
     return render_template('/admin/activity.html')
 
 # affiche le tableau des activités 

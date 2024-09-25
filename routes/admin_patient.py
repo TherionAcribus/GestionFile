@@ -10,7 +10,14 @@ admin_patient_bp = Blueprint('admin_patient', __name__)
 
 
 @admin_patient_bp.route('/admin/patient')
-def admin_patient():
+@admin_patient_bp.route('/admin/patient/<tab>')
+def admin_patient(tab=None):
+
+    valid_tabs = ['text', 'buttons', 'ticket', 'qrcode', 'interface']
+    tab = request.args.get('tab', 'text')
+    if tab not in valid_tabs:
+        tab = 'text'
+
     buttons = Button.query.all()
 
     return render_template('/admin/patient_page.html', buttons=buttons,

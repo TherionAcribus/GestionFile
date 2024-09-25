@@ -8,6 +8,12 @@ admin_security_bp = Blueprint('admin_security', __name__)
 
 @admin_security_bp.route('/admin/security')
 def admin_security():
+
+    valid_tabs = ['general', 'users']
+    tab = request.args.get('tab', 'general')
+    if tab not in valid_tabs:
+        tab = 'general'
+
     return render_template('admin/security.html',
                         security_login_admin=app.config["SECURITY_LOGIN_ADMIN"],
                         security_login_counter=app.config["SECURITY_LOGIN_COUNTER"],

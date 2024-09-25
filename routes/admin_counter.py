@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
+from flask import Blueprint, render_template, request, current_app as app
 from models import Counter, Activity, db
 from routes.admin_activity import display_activity_table
 
