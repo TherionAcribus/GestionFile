@@ -517,7 +517,7 @@ def start_fonctions(app):
     #init_update_default_translations_db_from_json()
     init_default_algo_rules_db_from_json()
     init_default_dashboard_db_from_json()
-    load_configuration(app)
+    #load_configuration(app)
     clear_old_patients_table(app)
     clear_counter_table()
 

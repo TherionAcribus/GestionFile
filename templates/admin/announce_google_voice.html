@@ -1,5 +1,10 @@
 <div class="container mt-5">
     <h5>Configurer la clé Google Cloud</h5>
+    {% if voice_google_key %}
+        <div class="alert alert-success" role="alert">Votre clé Google Cloud est valide.</div>
+    {% else %}
+        <div class="alert alert-danger" role="alert">Votre clé Google Cloud n'est pas valide ou n'existe pas. Veuillez la télécharger si vous voulez utiliser la fonctionnalité.</div>
+    {% endif %}
     <form id="google-key-form" enctype="multipart/form-data" hx-post="/admin/announce/google/add_key" hx-target="#upload-result" hx-swap="innerHTML">
         <div class="form-group">
             <label for="googleKeyFile">Télécharger le fichier JSON de clés Google Cloud :</label>
@@ -51,9 +56,10 @@
                 hx-target="#voice_google_name" 
                 hx-trigger="change"
                 hx-include="#voice_google_language, #voice_google_gender">
-            <option value="">Tous les types</option>
-            <option value="Wavenet">Wavenet</option>
+            <option value="">Tous les types</option>            
             <option value="Standard">Standard</option>
+            <option value="Neural2">Neural2</option>
+            <option value="Wavenet">Wavenet</option>
         </select>
     </div>
 </div>

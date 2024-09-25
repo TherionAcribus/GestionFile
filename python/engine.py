@@ -234,7 +234,7 @@ def set_server_url(app, request):
 def get_google_credentials():
     cipher_suite = Fernet(app.config["BASE32_KEY"])
     config_option = ConfigOption.query.filter_by(config_key='voice_google_key').first()
-    if config_option:
+    if config_option and config_option.value_json:
         encrypted_content = config_option.value_json.encode('utf-8')
         # Déchiffrer le contenu de la clé JSON
         decrypted_content = cipher_suite.decrypt(encrypted_content)

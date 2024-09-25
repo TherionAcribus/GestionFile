@@ -190,20 +190,24 @@ def filter_voices():
     selected_gender = request.form.get('voice_google_gender', '')
     selected_type = request.form.get('voice_google_type', '')
 
-    # Récupérer les voix filtrées
-    google_voices = list_google_voices(language=selected_language, gender=selected_gender, voice_type=selected_type)
+    credentials_json = get_google_credentials()
+
+    google_voices = []
+    if credentials_json:
+        # Récupérer les voix filtrées
+        google_voices = list_google_voices(credentials_json, language=selected_language, gender=selected_gender, voice_type=selected_type)
 
     # Renvoyer la liste filtrée dans le select
     return render_template('/admin/announce_google_voice_list.html', 
                             google_voices=google_voices,
-                            voice_google_name=app.config['VOICE_GOOGLE_NAME'],)
+                            voice_google_name=app.config['VOICE_GOOGLE_NAME'],
+                            credentials_json=credentials_json)
 
 
-def list_google_voices(language=None, gender=None, voice_type=None):
+def list_google_voices(credentials_json, language=None, gender=None, voice_type=None):
     """Récupère la liste des voix disponibles avec filtres et retourne un dictionnaire."""
 
-    # Récupérer les credentials déchiffrés
-    credentials_json = get_google_credentials()
+    # Récupérer les credentials déchiffrés    
     if not credentials_json:
         return "Erreur : Clé Google Cloud non configurée.", 500
 
