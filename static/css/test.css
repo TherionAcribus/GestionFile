@@ -226,13 +226,16 @@ html, body {
 
 .language-selector {
     position: fixed;
-    top: 20px;
+    top: 50%;
     right: 20px;
     z-index: 1000;
+    transform: translateY(-50%);
 }
 
 .language-selector img {
+    display: flex;
+    flex-direction: column;
     cursor: pointer;
-    width: 30px;
-    margin-left: 10px;
+    width: 70px;
+    margin: 10px;
 }

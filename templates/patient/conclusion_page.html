@@ -14,7 +14,8 @@
 
         <div class="div_validation_buttons">
 
-            <div 
+            <div
+                id="print_btn" 
                 class="div_validation_one_button">
                 <p class="validation_button">{{page_patient_interface_done_print}}</p>
             </div>
@@ -46,6 +47,7 @@
 <script>
     var timerGauge = document.getElementById('timer_gauge');
     var prolongBtn = document.getElementById('prolong_btn');
+    var printBtn = document.getElementById('print_btn');
     var cancelBtn = document.getElementById('cancel_btn');
     var timerDuration = {{page_patient_end_timer}}; // seconds
     var startTime;
@@ -91,6 +93,10 @@
     }
 
     prolongBtn.addEventListener('click', function() {
+        resetTimer();
+    });
+
+    printBtn.addEventListener('click', function() {
         resetTimer();
     });
 
