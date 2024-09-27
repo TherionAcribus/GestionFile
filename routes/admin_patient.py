@@ -343,9 +343,16 @@ def print_ticket_test():
 def admin_patient_qr_code_modal():
     call_number = request.values.get('call_number', 'A-1')
     activity_id = request.values.get('activity', 1)
+    language_code = request.values.get("language", "fr")
+    session["language_code"] = language_code
+    
     activity = Activity.query.get(activity_id)
     patient = get_futur_patient(call_number, activity)
     qr_code = create_qr_code(patient)
+ 
+    # retour en français
+    session["language_code"] = "fr"
+
     return render_template('/admin/patient_page_qr_code_test_modal.html',
                             qr_code=qr_code)
 

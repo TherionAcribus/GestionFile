@@ -204,10 +204,11 @@ def filter_voices():
                             credentials_json=credentials_json)
 
 
-def list_google_voices(credentials_json, language=None, gender=None, voice_type=None):
+def list_google_voices(credentials_json,language=None, gender=None, voice_type=None):
     """Récupère la liste des voix disponibles avec filtres et retourne un dictionnaire."""
 
-    # Récupérer les credentials déchiffrés    
+    # Récupérer les credentials déchiffrés
+    
     if not credentials_json:
         return "Erreur : Clé Google Cloud non configurée.", 500
 

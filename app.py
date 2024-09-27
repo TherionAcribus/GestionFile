@@ -19,7 +19,7 @@ import time as tm
 from flask_apscheduler import APScheduler
 
 import json
-import markdown2
+
 import os
 from queue import Queue, Empty
 import logging
@@ -1958,73 +1958,8 @@ def get_counters():
 # ---------------- FONCTIONS Généralistes > Affichage page sur téléphone ---------------- 
 
 
-@app.route('/patient/phone/<patient_id>/<int:activity_id>', methods=['GET'])
-def phone_patient(patient_id, activity_id):
-    """ 
-    Page pour téléphone appelé lors du scan
-    Affiche la structure puis les infos spécifiques au patient sont chargées lors du ping en htmx
-    On regarde s'il y a un cookie déja placé (par ping). Si c'est le cas et que le numéro est différent c'est qu'il y a un nouvel enregistrement
-    Dans ce cas on efface le cookie, sinon c'est un rafraichissement de la page et donc on le laisse.
-    """
-    app.logger.debug(f"TITLE2 {app.config['PHONE_TITLE']}")
-    if request.cookies.get('patient_call_number') != patient_id:
-        if request.cookies.get('patient_id') != patient_id:
-            response = make_response(render_template('/patient/phone.html', 
-                                                    patient_id=patient_id, 
-                                                    activity_id=activity_id,
-                                                    phone_title=app.config['PHONE_TITLE']))
-            response.set_cookie('patient_id', "", expires=0)
-            response.set_cookie('patient_call_number', "", expires=0)
-            return response
-    return render_template('/patient/phone.html',
-                            phone_title=app.config['PHONE_TITLE'],
-                            patient_id=patient_id, 
-                            activity_id=activity_id)
 
 
-@app.route('/patient/phone/ping', methods=['POST'])
-def phone_patient_ping():
-    """ 
-    Fct qui s'execute une fois que la page phone est chargee.
-    Renvoie la page de confirmation de l'activité
-    Place un cookie pendant 20 minutes. Le but du cookie est de stocker l'id du patient
-    Si le cookie existe, c'est qu'il s,'est déja inscrit et qu'il ne faut pas l'inscrire une seconde fois
-    mais simplement lui réafficher les informations. Cela arrive s'il rafraichit la page.
-    S'il vient à la page phone avec un autre numéro (nouvelle inscription) le cookie est effacé dans la fonction précédente
-    """
-    activity_id = request.form.get('activity_id')
-    # si déja inscrit
-    if request.cookies.get('patient_id'):
-        patient = Patient.query.get(request.cookies.get('patient_id'))
-    # si pas encore inscrit
-    else:
-        patient = patient_validate_scan(activity_id)
-        communikation("patient", event="update_scan_phone")
-    print("update_scan_phone")
-
-    phone_lines = []
-
-    for line in range(1, 7):
-        exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
-        exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
-        phone_lines.append(eval(f"phone_line{line}"))
-
-    print(phone_lines)
-
-    # Convertir le texte des phone_lines de markdown en HTML
-    phone_lines = [markdown2.markdown(line) for line in phone_lines]
-
-    print(phone_lines)
-
-    response = make_response(render_template('/patient/phone_confirmation.html', 
-                                            patient=patient,
-                                            phone_lines=phone_lines,
-                                            specific_message= Activity.query.get(activity_id).specific_message,
-                                            phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'],
-                                            phone_center=app.config['PHONE_CENTER']))
-    response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
-    response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
-    return response
 
 
 

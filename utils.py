@@ -131,19 +131,26 @@ def replace_balise_announces(template, patient):
             return template.format(N=patient.call_number, C=patient.counter.name)
     except AttributeError as e:
         app.logger.error(f"Failed to replace balise announces: {e}")
-        return f"Erreur! Demandez à notre personnel"
+        return "Erreur! Demandez à notre personnel"
 
 
 def replace_balise_phone(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)
-    Pour le nom de l'activité, on reprend le nom du bouton pour plus de o"""
-    button = Button.query.filter_by(activity_id=patient.activity_id).first()
+    Pour le nom de l'activité, on reprend le nom du bouton pour plus de o"""    
     print("LANGUES8REPLACE", session.get('language_code'))
-    if session.get('language_code') != "fr":        
-        button = get_buttons_translation([button], session.get('language_code'))[0]
+    print('template')
+    button_label = ""
+    if "{A}" in template:
+        print("BIUYRD")
+        button = Button.query.filter_by(activity_id=patient.activity_id).first()
+        if session.get('language_code') != "fr":        
+            button_label = get_buttons_translation([button], session.get('language_code'))[0].label
+            print("button_label", button_label)
+        else:
+            button_label = button.label
     return template.format(P=app.config["PHARMACY_NAME"],
                             N=patient.call_number, 
-                            A=button.label, 
+                            A=button_label, 
                             D=date.today().strftime("%d/%m/%y"),
                             H=datetime.now().strftime("%H:%M"))
 
@@ -157,9 +164,12 @@ def get_buttons_translation(buttons, language_code):
                 language_code=language_code
             ).first()
             
+            print("button", button)
+            print("translation", translation)
             # Si une traduction existe, mettre à jour le label du bouton
-            if translation.translated_text != "":
+            if translation:
                 button.label = translation.translated_text
+    print("buttons", buttons)
     return buttons
 
 
@@ -169,8 +179,11 @@ def get_activity_message_translation(activity, language_code):
         row_id=activity.id,
         language_code=language_code
     ).first()
-    
-    return translation.translated_text
+
+    if translation:    
+        return translation.translated_text
+    else:
+        return ""
 
 
 def get_text_translation(key_name, language_code):

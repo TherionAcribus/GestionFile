@@ -1,10 +1,10 @@
 import os
 import qrcode
-from flask import url_for, request, current_app as app
+from flask import url_for, request, session, current_app as app
 from datetime import datetime, timezone, date
 from cryptography.fernet import Fernet
 from google.cloud import texttospeech
-from utils import replace_balise_announces, replace_balise_phone
+from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
 from models import Patient, ConfigOption, db
 
@@ -194,14 +194,23 @@ def create_google_tts_sound(next_patient, text):
 def create_qr_code(patient):
     print("create_qr_code")
     print(patient, patient.id, patient.call_number, patient.activity)
+
+    language_code = session.get('language_code', "fr")
+
     if app.config['PAGE_PATIENT_QRCODE_WEB_PAGE']:
         if "SERVER_URL" not in app.config:
             set_server_url(app, request)
-        data = f"{app.config['SERVER_URL']}/patient/phone/{patient.call_number}/{patient.activity.id}"
+        data = f"{app.config['SERVER_URL']}/patient/phone/{language_code}/{patient.call_number}/{patient.activity.id}"
     else :
-        template = app.config['PAGE_PATIENT_QRCODE_DATA']
-        if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
-            template = template + "\n" + patient.activity.specific_message
+        if session.get('language_code') != "fr":
+            language_code = session.get('language_code')
+            template = get_text_translation("page_patient_qrcode_data", language_code)
+            if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
+                template = template + "\n" + get_activity_message_translation(patient.activity, language_code)
+        else:
+            template = app.config['PAGE_PATIENT_QRCODE_DATA']
+            if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
+                template = template + "\n" + patient.activity.specific_message
         data = replace_balise_phone(template, patient)
 
     # Générer le QR Code

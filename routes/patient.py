@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, session, url_for, redirect, current_app as app
+import markdown2
+from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
@@ -265,3 +266,87 @@ def patient_refresh():
     """ Permet de rafraichir la page des patients pour effectuer des changements """
     app.communikation("patient", event="refresh")
     return '', 204
+
+
+@patient_bp.route('/patient/phone/<language_code>/<patient_id>/<int:activity_id>', methods=['GET'])
+def phone_patient(language_code, patient_id, activity_id):
+    """ 
+    Page pour téléphone appelé lors du scan
+    Affiche la structure puis les infos spécifiques au patient sont chargées lors du ping en htmx
+    On regarde s'il y a un cookie déja placé (par ping). Si c'est le cas et que le numéro est différent c'est qu'il y a un nouvel enregistrement
+    Dans ce cas on efface le cookie, sinon c'est un rafraichissement de la page et donc on le laisse.
+    """
+    app.logger.debug(f"TITLE2 {app.config['PHONE_TITLE']}")
+    session["language_code"] = language_code
+    if language_code != "fr":
+        phone_title = get_text_translation("phone_title", language_code)
+        print("phone_title", phone_title)
+    else:
+        phone_title = app.config['PHONE_TITLE']
+
+    if request.cookies.get('patient_call_number') != patient_id:
+        if request.cookies.get('patient_id') != patient_id:
+            response = make_response(render_template('/patient/phone.html', 
+                                                    patient_id=patient_id, 
+                                                    activity_id=activity_id,
+                                                    phone_title=phone_title,
+                                                    language_code=language_code))
+            response.set_cookie('patient_id', "", expires=0)
+            response.set_cookie('patient_call_number', "", expires=0)
+            return response
+    return render_template('/patient/phone.html',
+                            phone_title=phone_title,
+                            patient_id=patient_id, 
+                            activity_id=activity_id,
+                            language_code=language_code)
+
+
+@patient_bp.route('/patient/phone/ping', methods=['POST'])
+def phone_patient_ping():
+    """ 
+    Fct qui s'execute une fois que la page phone est chargee.
+    Renvoie la page de confirmation de l'activité
+    Place un cookie pendant 20 minutes. Le but du cookie est de stocker l'id du patient
+    Si le cookie existe, c'est qu'il s,'est déja inscrit et qu'il ne faut pas l'inscrire une seconde fois
+    mais simplement lui réafficher les informations. Cela arrive s'il rafraichit la page.
+    S'il vient à la page phone avec un autre numéro (nouvelle inscription) le cookie est effacé dans la fonction précédente
+    """
+    activity_id = request.form.get('activity_id')
+    language_code = request.form.get('language_code')
+    # si déja inscrit
+    if request.cookies.get('patient_id'):
+        patient = Patient.query.get(request.cookies.get('patient_id'))
+    # si pas encore inscrit
+    else:
+        patient = patient_validate_scan(activity_id)
+        app.communikation("patient", event="update_scan_phone")
+
+    phone_lines = []
+
+    if language_code != "fr":
+        for line in range(1, 7):            
+            exec(f"phone_line{line} = get_text_translation('phone_line{line}', language_code)"),
+            exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
+            phone_lines.append(eval(f"phone_line{line}"))
+        activity = Activity.query.get(activity_id)
+        specific_message = get_activity_message_translation(activity, session.get('language_code', 'fr'))
+    else:
+        for line in range(1, 7):
+            exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
+            exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
+            phone_lines.append(eval(f"phone_line{line}"))
+        specific_message= Activity.query.get(activity_id).specific_message
+
+    # Convertir le texte des phone_lines de markdown en HTML
+    phone_lines = [markdown2.markdown(line) for line in phone_lines]
+
+    response = make_response(render_template('/patient/phone_confirmation.html', 
+                                            patient=patient,
+                                            phone_lines=phone_lines,
+                                            specific_message = specific_message,
+                                            phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'],
+                                            phone_center=app.config['PHONE_CENTER']))
+    response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
+    response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
+    return response
+

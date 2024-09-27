@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Information</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-    <link rel="stylesheet" href="../../../static/css/phone.css">
+    <link rel="stylesheet" href="../../../../static/css/phone.css">
     <script src="https://unpkg.com/htmx.org@2.0.1" integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -19,7 +19,7 @@
             hx-trigger="load"
             hx-post="/patient/phone/ping"
             hx-swap="outerHTML"
-            hx-vals='{"activity_id": "{{ activity_id }}"}'> 
+            hx-vals='{"activity_id": "{{ activity_id }}", "language_code": "{{language_code}}"}'> 
 
             <p>En attente de validation pour le numéro {{ patient_id }}</p>
             <p>Veuillez patienter....</p>
