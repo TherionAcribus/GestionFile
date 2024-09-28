@@ -1,5 +1,5 @@
 {% for voice in google_voices %}
-    <option value="{{ voice.name }}" {% if voice_google_name == voice.name %}selected{% endif %}>
-        {{ voice.name }} - {{ voice.language_codes[0] }} ({{ voice.ssml_gender }})
+    <option value="{{ voice.name }}|{{ voice.full_language_code }}" {% if voice_google_name == voice.name %}selected{% endif %}>
+        {{ voice.name }} - {{ voice.full_language_code }} ({{ voice.ssml_gender }})
     </option>
 {% endfor %}

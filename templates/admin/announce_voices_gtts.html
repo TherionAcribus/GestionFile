@@ -1,0 +1,16 @@
+<div class="input-field col s12">
+    <select 
+        class="form-select" 
+        id="gtts_voice" 
+        name="gtts_voice"
+        hx-post="/admin/announce/save_gtts_voice" 
+        hx-target="#invisible" 
+        hx-vals='js:{"language_id": {{ language.id }}, "gtts_voice_name": document.getElementById("gtts_voice").value}'>
+        <option value="" disabled selected>Choix de la voix</option>
+        {% for lang_code, lang_name in gtts_languages.items() %}
+            <option value="{{ lang_code }}" {% if language.voice_gtts_name == lang_code %}selected{% endif %}>
+                {{ lang_name }} ({{ lang_code }})
+            </option>
+        {% endfor %}
+    </select>
+</div>

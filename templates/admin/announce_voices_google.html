@@ -1,0 +1,74 @@
+<h5>Choisir la voix "Google Voice"</h5>
+
+<div class="row">
+    <!-- Langue -->
+    <div class="col-md-4">
+        <label for="voice_google_language">Langue</label>
+        <select id="voice_google_language" class="form-select" name="voice_google_language"
+                hx-post="/admin/announce/google/filter_voices" 
+                hx-target="#voice_google_name" 
+                hx-trigger="change, load"
+                hx-include="#voice_google_gender, #voice_google_type">
+            <option value="">Toutes les langues</option>
+            {% for lang in languages %}
+                <option value="{{ lang.code }}" 
+                    {% if lang.code == language.code %} selected {% endif %}>
+                        {{ lang.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Genre -->
+    <div class="col-md-4">
+        <label for="voice_google_gender">Genre</label>
+        <select id="voice_google_gender" class="form-select" name="voice_google_gender"
+                hx-post="/admin/announce/google/filter_voices" 
+                hx-target="#voice_google_name" 
+                hx-trigger="change"
+                hx-include="#voice_google_language, #voice_google_type">
+            <option value="">Indifférent</option>
+            <option value="MALE">Masculin</option>
+            <option value="FEMALE">Féminin</option>
+            <option value="NEUTRAL">Neutre</option>
+        </select>
+    </div>
+
+    <!-- Type de voix -->
+    <div class="col-md-4">
+        <label for="voice_google_type">Type de voix</label>
+        <select id="voice_google_type" class="form-select" name="voice_google_type"
+                hx-post="/admin/announce/google/filter_voices" 
+                hx-target="#voice_google_name" 
+                hx-trigger="change"
+                hx-include="#voice_google_language, #voice_google_gender">
+            <option value="">Tous les types</option>            
+            <option value="Standard">Standard</option>
+            <option value="Neural2">Neural2</option>
+            <option value="Wavenet">Wavenet</option>
+        </select>
+    </div>
+</div>
+
+<!-- Liste des voix disponibles -->
+<div class="input-field col s12">
+    <label for="voice_google_name">Nom de la voix</label>
+    <select id="voice_google_name" class="form-select" name="voice_google_name">            
+        <!-- Les options de voix seront ajoutées dynamiquement ici -->
+    </select>
+</div>
+
+<!-- Champ caché pour stocker language.id -->
+<input type="hidden" id="language_id" name="language_id" value="{{ language.id }}">
+
+<!-- Bouton de sauvegarde -->
+<div class="mt-3">
+    <button class="btn btn-primary" id="save-voice-btn" 
+            hx-post="/admin/announce/save_google_voice" 
+            hx-include="#voice_google_name, #language_id" 
+            hx-target="#voice-save-result">
+        Sauvegarder la voix sélectionnée
+    </button>
+</div>
+
+<!-- Section pour afficher les résultats de la sauvegarde -->
+<div id="voice-save-result" class="mt-3"></div>

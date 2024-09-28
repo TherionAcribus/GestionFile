@@ -325,6 +325,10 @@ class Language(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     flag_url = db.Column(db.String(100))
     sort_order = db.Column(db.Integer)  # Champ pour l'ordre
+    voice_model = db.Column(db.String(20))
+    voice_gtts_name = db.Column(db.String(100))
+    voice_google_name = db.Column(db.String(100))
+    voice_google_region = db.Column(db.String(20))
 
     __table_args__ = (
         db.UniqueConstraint('code', name='uq_language_code'),

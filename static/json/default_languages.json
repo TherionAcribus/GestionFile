@@ -2,11 +2,24 @@
     {
         "code": "fr",
         "name": "Français",
-        "translation": "Français"
+        "translation": "Français",
+        "is_active": true,
+        "flag_url": "",
+        "sort_order": 1,
+        "voice_model": "gtts",
+        "voice_gtts_name": "fr",
+        "voice_google_name": "",
+        "voice_google_region": ""
     },
     {
         "code": "en",
         "name": "Anglais",
-        "translation": "English"
+        "translation": "English",
+        "is_active": false,
+        "flag_url": "",
+        "sort_order": 2,
+        "voice_model": "gtts",
+        "voice_google_name": "",
+        "voice_google_region": ""
     }
 ]

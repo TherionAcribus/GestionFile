@@ -51,8 +51,8 @@ def patient_right_page():
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         buttons = get_buttons_translation(buttons, language_code)
-        page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)
-        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)
+        page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)["translation"]
+        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)["translation"]
     else:
         page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
         page_patient_interface_validate_cancel = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL']
@@ -94,7 +94,7 @@ def display_activity_inactive(request):
     
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
-        default_subtitle = get_text_translation("page_patient_subtitle", language_code)
+        default_subtitle = get_text_translation("page_patient_subtitle", language_code)["translation"]
     else:
         default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
 
@@ -127,7 +127,7 @@ def display_children_buttons_for_right_page(request):
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         children_buttons = get_buttons_translation(children_buttons, language_code)
-        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)
+        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)["translation"]
     else:
         page_patient_interface_validate_cancel = app.config["PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL"]
 
@@ -279,7 +279,7 @@ def phone_patient(language_code, patient_id, activity_id):
     app.logger.debug(f"TITLE2 {app.config['PHONE_TITLE']}")
     session["language_code"] = language_code
     if language_code != "fr":
-        phone_title = get_text_translation("phone_title", language_code)
+        phone_title = get_text_translation("phone_title", language_code)["translation"]
         print("phone_title", phone_title)
     else:
         phone_title = app.config['PHONE_TITLE']
@@ -325,7 +325,7 @@ def phone_patient_ping():
 
     if language_code != "fr":
         for line in range(1, 7):            
-            exec(f"phone_line{line} = get_text_translation('phone_line{line}', language_code)"),
+            exec(f"phone_line{line} = get_text_translation('phone_line{line}', language_code)['translation']"),
             exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
             phone_lines.append(eval(f"phone_line{line}"))
         activity = Activity.query.get(activity_id)

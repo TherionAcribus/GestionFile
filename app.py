@@ -384,8 +384,6 @@ def load_configuration(app):
         "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),
         "announce_style": ("ANNOUNCE_STYLE", "value_str"),
         "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
-        "announce_voice": ("ANNOUNCE_VOICE", "value_str"),
-        "announce_voice_source": ("ANNOUNCE_VOICE_SOURCE", "value_str"),
         "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
@@ -459,7 +457,6 @@ def load_configuration(app):
         "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
         "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
         "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
-        "voice_google_name": ("VOICE_GOOGLE_NAME", "value_str"),
     }
 
     for key, (config_name, value_type) in config_mappings.items():
@@ -470,6 +467,14 @@ def load_configuration(app):
     # Handling special case for cron_delete_patient_table_activated
     if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
         scheduler_clear_all_patients(app)
+
+    # Chargement des voix françaises
+    french = Language.query.filter_by(code="fr").first()
+    app.config["VOICE_MODEL"] = french.voice_model
+    app.config["VOICE_GTTS_NAME"] = french.voice_gtts_name
+    app.config["VOICE_GOOGLE_NAME"] = french.voice_google_name
+    app.config["VOICE_GOOGLE_REGION"] = french.voice_google_region
+    print("VOICE_MODEL", app.config["VOICE_MODEL"])
 
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
@@ -1379,7 +1384,9 @@ def call_specific_patient(counter_id, patient_id):
         text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
         communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
 
-        audio_url = generate_audio_calling(counter_id, next_patient)
+        language_code = next_patient.language.code
+        print("language_code_pour_audio", language_code)
+        audio_url = generate_audio_calling(counter_id, next_patient, language_code)
         app.communikation("update_audio", event="audio", data=audio_url)
 
         return jsonify(next_patient.to_dict()), 200  
@@ -1666,13 +1673,17 @@ def call_next(counter_id, attempts=0):
         app.logger.info(f"Patient {next_patient.id} not standing, retrying. Attempt {attempts + 1}")
         return call_next(counter_id, attempts=attempts+1)
 
+    language_code = next_patient.language.code
+    print("language_code_pour_audio", language_code)
     try:
         next_patient.status = 'calling'
         next_patient.counter_id = counter_id
         db.session.commit()
         app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
 
-        audio_url = generate_audio_calling(counter_id, next_patient)
+        language_code = next_patient.language.code
+        print("language_code_pour_audio", language_code)
+        audio_url = generate_audio_calling(counter_id, next_patient, language_code=language_code)
         app.communikation("update_audio", event="audio", data=audio_url)
         
         return next_patient
@@ -1950,11 +1961,6 @@ def get_counters():
 
 
 # ---------------- FONCTIONS Généralistes > Affichage page sur téléphone ---------------- 
-
-
-
-
-
 
 
 def start_serveo():

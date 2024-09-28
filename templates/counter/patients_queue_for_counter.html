@@ -2,6 +2,7 @@
     {% for patient in patients %}
         <li>Patient {{ patient.call_number }} - 
             {{ patient.activity.name }} - 
+            {{ patient.language.code }}
             {{ patient.timestamp | format_time}}
             <button id="btn_select_patient_{{ patient.id }}" 
                     class="filled btn_select_patient"

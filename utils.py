@@ -191,18 +191,18 @@ def get_text_translation(key_name, language_code):
     try:
         translation = db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
         if translation == "":
-            translation = app.config[key_name.upper()]
-        return translation
+            return {"success": False, "translation": app.config[key_name.upper()], "error": "Translation empty"}
+        return {"success": True, "translation": translation, "error": None}
     except AttributeError:
         app.logger.error(f"Translation not found for key: {key_name}, language: {language_code}")
-        return "Erreur"
+        return {"success": False, "translation": app.config[key_name.upper()], "error": "Translation not found"}
 
 def choose_text_translation(key):
     language_code = session.get('language_code', 'fr')
     if language_code == "fr":
         text = app.config[key.upper()]
     else:
-        text = get_text_translation(key, language_code)
+        text = get_text_translation(key, language_code)["translation"]
     return text
 
 
@@ -212,9 +212,9 @@ def format_ticket_text(new_patient, activity):
     if session.get('language_code') != "fr":
         language_code = session.get('language_code')
         text_list = [
-        get_text_translation("ticket_header", language_code),
-        get_text_translation('ticket_message',language_code),
-        get_text_translation("ticket_footer",language_code)
+        get_text_translation("ticket_header", language_code)["translation"],
+        get_text_translation('ticket_message',language_code)["translation"],
+        get_text_translation("ticket_footer",language_code)["translation"]
         ]
         if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
             text_list.append(get_activity_message_translation(activity, language_code))

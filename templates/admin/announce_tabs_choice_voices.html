@@ -1,0 +1,65 @@
+<div class="row">
+    <div class="col-12">
+        <!-- Nav tabs -->
+        <ul class="nav nav-tabs" id="securityTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="gtts-tab" data-bs-toggle="tab" data-bs-target="#tab_gtts" type="button" role="tab" aria-controls="tab_gtts" aria-selected="true">GTTS (local)</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="google-tab" data-bs-toggle="tab" data-bs-target="#tab_google" type="button" role="tab" aria-controls="tab_google" aria-selected="false">Google (cloud)</button>
+            </li>
+        </ul>
+
+        <!-- Tab content -->
+        <div class="tab-content" id="securityTabContent">
+            <div class="tab-pane fade show active" id="tab_gtts" role="tabpanel" aria-labelledby="gtts-tab">
+                {% include 'admin/announce_voices_gtts.html' %}
+            </div>
+            <div class="tab-pane fade" id="tab_google" role="tabpanel" aria-labelledby="google-tab">
+                {% include 'admin/announce_voices_google.html' %}     
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if voice_google_key %}
+<div class="input-field col s12">
+    <label>Origine de la voix</label>
+    <select
+        class="form-select"
+        id="announce_voice_model"
+        hx-post="/admin/announce/save_voice_model"
+        hx-target="#invisible"
+        hx-vals='js:{"language_id": {{ language.id }}, "voice_model": document.getElementById("announce_voice_model").value}'>
+        <option value="" disabled selected>Origine de la voix</option>
+        <option value="gtts" {% if language.voice_model == "gtts" %}selected{% endif %}>Locale</option>
+        <option value="google" {% if language.voice_model == "google" %}selected{% endif %}>Google Voice</option>
+    </select>
+</div>
+{% endif %}
+
+
+<h5>Test de l'annonce</h5>
+
+<form id="audio-announce-form" class="row g-3 align-items-end">
+    <div class="col-auto">
+        <label for="call_number" class="form-label">Numéro d'appel</label>
+        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
+        <input type="text" class="form-control" id="language_code" name="language_code" value="{{language.code}}">
+    </div>
+    
+    <div class="col-auto">
+        <button class="btn btn-success"
+                hx-get="announce/audio/test/local"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Tester l'annonce sur cette page</button>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-warning"
+                hx-get="announce/audio/test/announce"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Tester l'annonce sur la page "Annonce"</button>
+    </div>
+</form>

@@ -48,64 +48,29 @@ Son actuel :
     Librairie sonore
     </button>
 
+<h5>Texte pour appeler le patient</h5>
+
+{{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Appel audio pour annoncer le tour d'un patient") }}
 
 <h5>Choix de la voix</h5>
 
 <div class="input-field col s12">
     <select
         class="form-select"
-        id="announce_voice"
-        hx-post="/admin/update_select"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_voice", "value": document.getElementById("announce_voice").value}'>
-        <option value="" disabled selected>Choix de la voix</option>
-        <option value="fr-fr" {% if announce_voice == "fr-fr" %}selected{% endif %}>Français de France</option>
-        <option value="fr-ca" {% if announce_voice == "fr-ca" %}selected{% endif %}>Français du Canada</option>
-    </select>
-    <label>Choix de la voix</label>
-</div>
-
-{% if voice_google_key %}
-<div class="input-field col s12">
-    <label>Origine de la voix</label>
-    <select
-        class="form-select"
-        id="announce_voice_source"
-        hx-post="/admin/update_select"
-        hx-target="#invisible"
-        hx-vals='js:{"key": "announce_voice_source", "value": document.getElementById("announce_voice_source").value}'>
-        <option value="" disabled selected>Origine de la voix</option>
-        <option value="local" {% if announce_voice_source == "local" %}selected{% endif %}>Locale</option>
-        <option value="google" {% if announce_voice_source == "google" %}selected{% endif %}>Google Voice</option>
+        id="language_choice"
+        hx-post="/admin/announce/select_language_voice"
+        hx-target="#div_select_voice"
+        hx-trigger="change, load"
+        hx-vals='js:{"language_code": document.getElementById("language_choice").value}'>
+        {% for language in languages %}
+            <option value="{{ language.code }}">{{ language.name }}</option>
+        {% endfor %}
     </select>
 </div>
-{% endif %}
 
-{{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Appel audio pour annoncer le tour d'un patient") }}
+<div id="div_select_voice"></div>
 
-<h5>Test de l'annonce</h5>
 
-<form id="audio-announce-form" class="row g-3 align-items-end">
-    <div class="col-auto">
-        <label for="call_number" class="form-label">Numéro d'appel</label>
-        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
-    </div>
-    
-    <div class="col-auto">
-        <button class="btn btn-success"
-                hx-get="announce/audio/test/local"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Tester l'annonce sur cette page</button>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-warning"
-                hx-get="announce/audio/test/announce"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Tester l'annonce sur la page "Annonce"</button>
-    </div>
-</form>
 
 <!-- Modal Structure Galerie audio -->
 <div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">

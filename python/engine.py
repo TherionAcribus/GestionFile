@@ -99,34 +99,47 @@ def register_patient(activity):
     return new_patient
 
 
-def generate_audio_calling(counter_number, next_patient):
-
-    # voir pour la possibilité d'utiliser https://cloud.google.com/text-to-speech/ 
-    # en version basique semble pas trop cher
+def generate_audio_calling(counter_number, next_patient, language_code="fr"):
 
     # Si on ne veux pas de son, on quitte
     if not app.config["ANNOUNCE_SOUND"]:
         return
     
     # Texte pour la synthèse vocale
-    text_template = app.config["ANNOUNCE_CALL_SOUND"]
+    if language_code == "fr":
+        text_template = app.config["ANNOUNCE_CALL_SOUND"]
+    else :
+        translated_template = get_text_translation("announce_call_sound", next_patient.language.code)
+        if translated_template["error"]:
+            language_code == "fr"
+        text_template = translated_template["translation"]
     print("text_template", text_template)
     text = replace_balise_announces(text_template, next_patient)
 
-    if app.config["ANNOUNCE_VOICE_SOURCE"] == "local":
-        return create_tts_sound(next_patient, text)
-    elif app.config["ANNOUNCE_VOICE_SOURCE"] == "google":
-        return create_google_tts_sound(next_patient, text)
+    return choose_voice_model(next_patient, text, language_code)
+    
+def choose_voice_model(next_patient, text, language_code):
+    if language_code == "fr":
+        voice_model = app.config["VOICE_MODEL"]
+    else:
+        voice_model = next_patient.language.voice_model
 
-def create_tts_sound(next_patient, text):
-    # choix de la voix
-    if app.config["ANNOUNCE_VOICE"] == "fr-ca":
-        lang = "fr"
-        tld = "ca"
-    elif app.config["ANNOUNCE_VOICE"] == "fr-fr":
-        lang = "fr"
-        tld = "fr"
-    tts = gTTS(text, lang=lang, tld=tld)  # Utilisation de gTTS avec langue française
+    if voice_model == "gtts":
+        return create_tts_sound(next_patient, text, language_code)
+    elif voice_model == "google":
+        return create_google_tts_sound(next_patient, text, language_code)
+
+def create_tts_sound(next_patient, text, language_code):
+    print("create_tts_sound", text, app.config["VOICE_GTTS_NAME"])
+
+    if language_code == "fr":
+        voice_gtts_name = app.config["VOICE_GTTS_NAME"]
+    else:
+        voice_gtts_name = next_patient.language.voice_gtts_name
+
+    lang = voice_gtts_name
+
+    tts = gTTS(text, lang=lang)  
 
     # Chemin de sauvegarde du fichier audio
     audiofile = f'patient_{next_patient.call_number}.mp3'
@@ -142,13 +155,20 @@ def create_tts_sound(next_patient, text):
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
 
+    print("AUDIO", audio_url)
+
     return audio_url
 
 
-def create_google_tts_sound(next_patient, text):
+def create_google_tts_sound(next_patient, text, language_code):
     
     # Récupérer la voix sélectionnée depuis la base de données (ou config)
-    voice_google_name = app.config["VOICE_GOOGLE_NAME"]
+    if language_code == "fr":
+        voice_google_name = app.config["VOICE_GOOGLE_NAME"]
+        voice_google_region = app.config["VOICE_GOOGLE_REGION"]
+    else:
+        voice_google_name = next_patient.language.voice_google_name
+        voice_google_region = next_patient.language.voice_google_region
 
     # Récupérer les credentials déchiffrés
     credentials_json = get_google_credentials()
@@ -171,7 +191,7 @@ def create_google_tts_sound(next_patient, text):
     # Utiliser la voix sélectionnée
     voice = texttospeech.VoiceSelectionParams(
         name=voice_google_name,  # Voix sauvegardée dans la base de données
-        language_code="fr-FR"  # Adapter selon la voix sélectionnée (ex: "fr-FR")
+        language_code=voice_google_region  # Adapter selon la voix sélectionnée (ex: "fr-FR")
     )
 
     audio_config = texttospeech.AudioConfig(
@@ -217,7 +237,7 @@ def create_qr_code(patient):
     else :
         if session.get('language_code') != "fr":
             language_code = session.get('language_code')
-            template = get_text_translation("page_patient_qrcode_data", language_code)
+            template = get_text_translation("page_patient_qrcode_data", language_code)["translation"]
             if app.config["PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE"]:
                 template = template + "\n" + get_activity_message_translation(patient.activity, language_code)
         else:

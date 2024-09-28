@@ -2,9 +2,11 @@ import os
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
-from models import ConfigOption, Activity, Counter, db
-from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
 from google.cloud import texttospeech
+import gtts
+from models import ConfigOption, Activity, Counter, Language, db
+from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
+
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
@@ -21,7 +23,6 @@ def announce_page(tab=None):
                             announce_sound = app.config['ANNOUNCE_SOUND'],
                             announce_alert = app.config['ANNOUNCE_ALERT'],
                             announce_player = app.config['ANNOUNCE_PLAYER'],
-                            announce_voice = app.config['ANNOUNCE_VOICE'],
                             anounce_style = app.config['ANNOUNCE_STYLE'],
                             announce_call_text=app.config['ANNOUNCE_CALL_TEXT'],
                             announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],
@@ -42,9 +43,10 @@ def announce_page(tab=None):
                             announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
                             announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
                             announce_call_sound=app.config['ANNOUNCE_CALL_SOUND'],
-                            voice_google_name=app.config['VOICE_GOOGLE_NAME'],
-                            announce_voice_source=app.config['ANNOUNCE_VOICE_SOURCE'],
-                            voice_google_key=get_google_credentials()
+                            #voice_google_name=app.config['VOICE_GOOGLE_NAME'],
+                            #announce_voice_source=app.config['ANNOUNCE_VOICE_SOURCE'],
+                            voice_google_key=get_google_credentials(),
+                            languages = Language.query.all()
                             )
 
 
@@ -133,8 +135,16 @@ def upload_signal_file():
 def announce_audio_test(scope):
     call_number = request.values.get('call_number', 'A-1')
     activity = Activity.query.get(1)
+
     patient = get_futur_patient(call_number, activity)
-    
+
+    # changement de langue si besoin
+    language_code = request.values.get('language_code', 'fr')
+    if language_code != "fr":
+        language = Language.query.filter_by(code=language_code).first()
+        patient.language = language
+        patient.language_code = language_code
+
     # Recherche du premier comptoir occupé par un pharmacien
     counter = Counter.query.filter(Counter.staff_id.isnot(None)).first()
 
@@ -142,7 +152,7 @@ def announce_audio_test(scope):
         counter = Counter.query.get(1)
     
     patient.counter = counter
-    audio_url = generate_audio_calling("A", patient)
+    audio_url = generate_audio_calling("A", patient, language_code=language_code)
 
     if scope == "announce":        
         app.communikation("update_audio", event="audio", data=audio_url)
@@ -231,7 +241,7 @@ def list_google_voices(credentials_json,language=None, gender=None, voice_type=N
 
     for voice in voices.voices:
         # Filtrer par langue si précisé
-        if language and language not in voice.language_codes:
+        if not any(lang_code.startswith(language) for lang_code in voice.language_codes):
             continue
 
         # Filtrer par genre si précisé
@@ -243,10 +253,14 @@ def list_google_voices(credentials_json,language=None, gender=None, voice_type=N
         if voice_type and voice_type.lower() not in voice.name.lower():
             continue
 
+        # Trouver le code de langue complet correspondant
+        full_language_code = next((code for code in voice.language_codes if code.startswith(language)), voice.language_codes[0]) if language else voice.language_codes[0]
+
         # Créer un dictionnaire pour chaque voix filtrée
         voice_info = {
             "name": voice.name,
             "language_codes": voice.language_codes,
+            "full_language_code": full_language_code,
             "ssml_gender": ssml_gender,
             "natural_sample_rate_hertz": voice.natural_sample_rate_hertz
         }
@@ -255,25 +269,95 @@ def list_google_voices(credentials_json,language=None, gender=None, voice_type=N
     return voice_list
 
 
-@admin_announce_bp.route('/admin/announce/google/save_voice', methods=['POST'])
-def save_voice():
-    # Récupérer la voix sélectionnée dans le formulaire
-    selected_voice = request.form.get('voice_google_name', '')
-    print(request.form)
+@admin_announce_bp.route('/admin/announce/save_google_voice', methods=['POST'])
+def announce_save_google_voice():
+    language_id = request.form.get('language_id')
+    voice_data = request.form.get('voice_google_name', '').split('|')
+    voice_google_name = voice_data[0] if len(voice_data) > 0 else ''
+    voice_google_region = voice_data[1] if len(voice_data) > 1 else ''
 
-    if selected_voice:
-        # Sauvegarder la voix dans la base de données (exemple)
-        config_option = ConfigOption.query.filter_by(config_key='voice_google_name').first()
-        if config_option:
-            config_option.value_str = selected_voice
-            app.config['VOICE_GOOGLE_NAME'] = selected_voice
-        else:
-            config_option = ConfigOption(config_key='voice_google_name', value_str=selected_voice)
-            app.config['VOICE_GOOGLE_NAME'] = selected_voice
-            db.session.add(config_option)
-        
+    try:
+        language = Language.query.get(language_id)
+
+        language.voice_google_name = voice_google_name
+        language.voice_google_region = voice_google_region  
         db.session.commit()
 
-        return f"Voix '{selected_voice}' sauvegardée avec succès !"
-    else:
-        return "Erreur : aucune voix sélectionnée.", 400
+        if language.code == "fr":
+            app.config["VOICE_GOOGLE_NAME"] = voice_google_name
+            app.config["VOICE_GOOGLE_REGION"] = voice_google_region  # Ajoutez cette ligne
+
+        app.display_toast(success=True, message="Voix sauvegardée")
+
+        return "", 200
+
+    except Exception as e:
+        print(e)
+        app.display_toast(success=False, message=f"Erreur : {e}")
+        return f"Erreur : {e}", 400
+
+
+@admin_announce_bp.route('/admin/announce/select_language_voice', methods=['POST'])
+def announce_select_language_voice():
+    # Récupérer la voix sélectionnée dans le formulaire
+    language_code = request.form.get('language_code', 'fr')
+    print("language_code", language_code)
+    language = Language.query.filter_by(code=language_code).first()
+    languages = Language.query.all()
+    return render_template('/admin/announce_tabs_choice_voices.html',
+                        gtts_languages = gtts.lang.tts_langs(),
+                        announce_voice = app.config['VOICE_GTTS_NAME'],
+                        voice_google_key=get_google_credentials(),
+                        language=language,
+                        languages=languages
+                        )
+
+@admin_announce_bp.route('/admin/announce/save_voice_model', methods=['POST'])
+def announce_save_voice_model():
+    # Récupérer la voix sélectionnée dans le formulaire
+    language_id = request.form.get('language_id')
+    voice_model = request.form.get('voice_model')
+    print("voice_model", voice_model, language_id)
+
+    try:
+        language = Language.query.get(language_id)
+
+        language.voice_model = voice_model
+        db.session.commit()
+
+        if language.code == "fr":
+            app.config["VOICE_MODEL"] = voice_model
+
+        app.display_toast(success=True, message="Modele de voix sauvegardé")
+
+        return "", 200
+
+    except Exception as e:
+        print(e)
+        app.display_toast(success=False, message=f"Erreur : {e}")
+        return f"Erreur : {e}", 400
+
+
+@admin_announce_bp.route('/admin/announce/save_gtts_voice', methods=['POST'])
+def announce_save_gtts_voice():
+    # Récupérer la voix sélectionnée dans le formulaire
+    language_id = request.form.get('language_id')
+    voice_gtts_name = request.form.get('gtts_voice_name')
+
+    try:
+        language = Language.query.get(language_id)
+
+        language.voice_gtts_name = voice_gtts_name
+        db.session.commit()
+
+        if language.code == "fr":
+            app.config["VOICE_GTTS_NAME"] = voice_gtts_name
+
+        app.display_toast(success=True, message="Voix sauvegardée")
+
+        return "", 200
+
+    except Exception as e:
+        print(e)
+        app.display_toast(success=False, message=f"Erreur : {e}")
+        return f"Erreur : {e}", 400
