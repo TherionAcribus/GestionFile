@@ -1441,7 +1441,7 @@ def auto_calling():
     if len(app.config["AUTO_CALLING"]) > 0:
         counters = db.session.query(Counter).filter(
             Counter.id.in_(current_app.config["AUTO_CALLING"]),
-            Counter.is_active == False,
+            Counter.is_active.is_(False),
             Counter.staff_id != None
         ).all()
 
@@ -1458,17 +1458,11 @@ def auto_calling():
                 break
 
 
-
-
-
 # liste des patients en attente : Nécessaire pour être transmis à Pyside
 def list_patients_standing():
     patients_standing = Patient.query.filter_by(status='standing').all()
     patients_data = [patient.to_dict() for patient in patients_standing]
     return patients_data
-
-
-
 
 
 # ---------------- FIN  PAGE PATIENTS FRONT ----------------

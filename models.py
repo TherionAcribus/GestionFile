@@ -19,7 +19,9 @@ class Patient(db.Model):
     activity_id = db.Column(db.Integer, db.ForeignKey('activity.id', name='fk_patient_activity_id'), nullable=False)  # Now referencing the activity directly
     activity = db.relationship('Activity', backref=db.backref('patients', lazy=True))
     overtaken = db.Column(db.Integer, default=0)
-
+    # ajout d'une référence à Language
+    language_id = db.Column(db.Integer, db.ForeignKey('language.id', name='fk_patient_language_id'), nullable=True)
+    language = db.relationship('Language', backref=db.backref('patients', lazy=True))
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'
@@ -32,7 +34,8 @@ class Patient(db.Model):
             "activity": self.activity.name,
             "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Format datetime as string
             "status": self.status,
-            "counter_id": self.counter_id
+            "counter_id": self.counter_id,
+            "language_id": self.language_id
         }
     
 

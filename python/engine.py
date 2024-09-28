@@ -6,16 +6,23 @@ from cryptography.fernet import Fernet
 from google.cloud import texttospeech
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
-from models import Patient, ConfigOption, db
+from models import Patient, ConfigOption, Language, db
 
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
+    language_code = session.get('language_code', 'fr')
+    language = Language.query.filter_by(code=language_code).first()
+    # Vérifier que la langue existe, sinon utiliser une langue par défaut
+    if not language:
+        language = Language.query.filter_by(code='fr').first()  
+
     # Création d'un nouvel objet Patient
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
         timestamp=datetime.now(timezone.utc),
-        status='standing'
+        status='standing',
+        language_id=language.id
     )    
     # Ajout à la base de données
     db.session.add(new_patient)
@@ -65,13 +72,19 @@ def get_next_category_number(activity):
 def get_futur_patient(call_number, activity):
     """ CRéation d'un nouveau patient SANS ajout à la BDD
     Permet de simuler sa création pour pouvoir générer les infos utiles dans le QR Code"""
-    # Création d'un nouvel objet Patient
-    print('    call_number 2', call_number)
+
+    language_code = session.get('language_code', 'fr')
+    language = Language.query.filter_by(code=language_code).first()
+    # Vérifier que la langue existe, sinon utiliser une langue par défaut
+    if not language:
+        language = Language.query.filter_by(code='fr').first()  
+
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
         timestamp=datetime.now(timezone.utc),
-        status='standing'
+        status='standing',
+        language_id=language.id
     ) 
     return new_patient
 
