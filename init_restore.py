@@ -763,7 +763,11 @@ def init_default_languages_db_from_json():
                 new_language = Language(                    
                     code=language['code'],
                     name=language['name'],
-                    traduction=language['traduction']
+                    translation=language['translation'],
+                    is_active=language['is_active'],
+                    sort_order=language['sort_order'],
+                    voice_model=language['voice_model'],
+                    voice_gtts_name=language['voice_gtts_name'],
                 )
                 db.session.add(new_language)
 
