@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from flask import current_app as app
-from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint
+from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint, event
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from flask_security import UserMixin
@@ -13,6 +13,8 @@ class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp_counter = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp_end = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     status = db.Column(db.String(50), nullable=False, default='standing')
     counter_id = db.Column(db.Integer, db.ForeignKey('counter.id', name='fk_patient_counter_id'), nullable=True)  # nullable=True si un patient peut ne pas être à un comptoir
     counter = db.relationship('Counter', backref=db.backref('patients', lazy=True))
@@ -37,7 +39,14 @@ class Patient(db.Model):
             "counter_id": self.counter_id,
             "language_id": self.language_id
         }
-    
+
+# Écouteur pour détecter les changements de status
+@event.listens_for(Patient.status, 'set', retval=False)
+def update_timestamps(target, value, oldvalue, initiator):
+    if value == 'done':
+        target.timestamp_end = datetime.now(timezone.utc)
+    elif value == 'ongoing':
+        target.timestamp_counter = datetime.now(timezone.utc)
 
 counters_activities = db.Table('counters_activities',
     db.Column('counter_id', db.Integer, db.ForeignKey('counter.id'), primary_key=True),
