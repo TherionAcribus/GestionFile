@@ -549,8 +549,8 @@ def create_app():
 
     socketio.init_app(app, async_mode='eventlet', cors_allowed_origins="*")
 
-    with app.app_context():
-        start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
+    #with app.app_context():
+    #    start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
 
     app.mail = Mail(app)
 
