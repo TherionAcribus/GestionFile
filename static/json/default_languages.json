@@ -19,6 +19,7 @@
         "flag_url": "",
         "sort_order": 2,
         "voice_model": "gtts",
+        "voice_gtts_name": "en",
         "voice_google_name": "",
         "voice_google_region": ""
     }
