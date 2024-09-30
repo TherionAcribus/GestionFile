@@ -397,6 +397,7 @@ def load_configuration(app):
         "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
+        "announce_call_translation": ("ANNOUNCE_CALL_TRANSLATION", "value_str"),
         "counter_order": ("COUNTER_ORDER", "value_str"),
         "music_volume": ("MUSIC_VOLUME", "value_int"),
         "music_announce_volume": ("MUSIC_ANNOUNCE_VOLUME", "value_int"),

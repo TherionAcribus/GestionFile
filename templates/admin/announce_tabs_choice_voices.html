@@ -38,28 +38,14 @@
 </div>
 {% endif %}
 
+<div class="form-check form-switch">
+    <input class="form-check-input" type="checkbox" 
+    id="voice_is_active" 
+    {% if language.voice_is_active %} checked {% endif %}
+    hx-post="/admin/announce/save_voice_is_active" 
+    hx-target="#invisible"
+    hx-vals='js:{"language_id": {{ language.id }}, "voice_is_active": document.getElementById("voice_is_active").checked}'>        
+    <label class="form-check-label" for="voice_is_active">L'audio de la langue est active</label>
+</div>
 
-<h5>Test de l'annonce</h5>
 
-<form id="audio-announce-form" class="row g-3 align-items-end">
-    <div class="col-auto">
-        <label for="call_number" class="form-label">Numéro d'appel</label>
-        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
-        <input type="text" class="form-control" id="language_code" name="language_code" value="{{language.code}}">
-    </div>
-    
-    <div class="col-auto">
-        <button class="btn btn-success"
-                hx-get="announce/audio/test/local"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Tester l'annonce sur cette page</button>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-warning"
-                hx-get="announce/audio/test/announce"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Tester l'annonce sur la page "Annonce"</button>
-    </div>
-</form>

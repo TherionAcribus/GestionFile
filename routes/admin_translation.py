@@ -38,6 +38,7 @@ def update_language(language_id):
             name = request.form.get('name', language.name)
             translation = request.form.get('translation', language.translation)
             is_active = True if request.form.get('is_active', language.is_active) == "true" else False
+            voice_is_active = True if request.form.get('voice_is_active', language.voice_is_active) == "true" else False
             if code == '':
                 app.display_toast(success=False, message="Le code est obligatoire")
                 return "", 204
@@ -62,6 +63,7 @@ def update_language(language_id):
             language.name = name
             language.translation = translation
             language.is_active = is_active
+            language.voice_is_active = voice_is_active
 
             # Gestion du téléchargement de l'image
             print("request.files", request.files)
@@ -125,6 +127,7 @@ def add_new_language():
         name = request.form.get('name')
         translation = request.form.get('translation')
         is_active = True if request.form.get('is_active') == "true" else False
+        voice_is_active = True if request.form.get('voice_is_active') == "true" else False
         image_url = request.form.get('image_url')
         if image_url:
             flag_url = image_url.split('/')[-1]  # Extraire le nom du fichier depuis l'URL
@@ -154,6 +157,7 @@ def add_new_language():
             translation=translation,
             name=name,
             is_active=is_active,
+            voice_is_active=voice_is_active,
             flag_url=flag_url,
             sort_order=sort_order
         )

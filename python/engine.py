@@ -106,23 +106,33 @@ def generate_audio_calling(counter_number, next_patient, language_code="fr"):
         return
     
     # Texte pour la synthèse vocale
-    if language_code == "fr":
+    # patient FR ou que langue FR
+    if language_code == "fr" or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         text_template = app.config["ANNOUNCE_CALL_SOUND"]
-    else :
-        translated_template = get_text_translation("announce_call_sound", next_patient.language.code)
-        if translated_template["error"]:
-            language_code == "fr"
-        text_template = translated_template["translation"]
-    print("text_template", text_template)
+    # si pas FR
+    else:
+        # si langue desactivée
+        if not next_patient.language.voice_is_active:
+            text_template = app.config["ANNOUNCE_CALL_SOUND"]
+        # si langue activée
+        else :
+            translated_template = get_text_translation("announce_call_sound", next_patient.language.code)
+            if translated_template["error"]:
+                language_code == "fr"
+            text_template = translated_template["translation"]
+
     text = replace_balise_announces(text_template, next_patient)
 
     return choose_voice_model(next_patient, text, language_code)
     
 def choose_voice_model(next_patient, text, language_code):
-    if language_code == "fr":
+    if language_code == "fr" or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         voice_model = app.config["VOICE_MODEL"]
     else:
-        voice_model = next_patient.language.voice_model
+        if not next_patient.language.voice_is_active:
+            voice_model = app.config["VOICE_MODEL"]
+        else:
+            voice_model = next_patient.language.voice_model
 
     if voice_model == "gtts":
         return create_tts_sound(next_patient, text, language_code)
@@ -132,10 +142,13 @@ def choose_voice_model(next_patient, text, language_code):
 def create_tts_sound(next_patient, text, language_code):
     print("create_tts_sound", text, app.config["VOICE_GTTS_NAME"])
 
-    if language_code == "fr":
+    if language_code == "fr"or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         voice_gtts_name = app.config["VOICE_GTTS_NAME"]
     else:
-        voice_gtts_name = next_patient.language.voice_gtts_name
+        if not next_patient.language.voice_is_active:
+            voice_gtts_name = app.config["VOICE_GTTS_NAME"]
+        else:
+            voice_gtts_name = next_patient.language.voice_gtts_name
 
     lang = voice_gtts_name
 
@@ -163,12 +176,16 @@ def create_tts_sound(next_patient, text, language_code):
 def create_google_tts_sound(next_patient, text, language_code):
     
     # Récupérer la voix sélectionnée depuis la base de données (ou config)
-    if language_code == "fr":
+    if language_code == "fr" or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         voice_google_name = app.config["VOICE_GOOGLE_NAME"]
         voice_google_region = app.config["VOICE_GOOGLE_REGION"]
     else:
-        voice_google_name = next_patient.language.voice_google_name
-        voice_google_region = next_patient.language.voice_google_region
+        if not next_patient.language.voice_is_active:
+            voice_google_name = app.config["VOICE_GOOGLE_NAME"]
+            voice_google_region = app.config["VOICE_GOOGLE_REGION"]
+        else:
+            voice_google_name = next_patient.language.voice_google_name
+            voice_google_region = next_patient.language.voice_google_region
 
     # Récupérer les credentials déchiffrés
     credentials_json = get_google_credentials()

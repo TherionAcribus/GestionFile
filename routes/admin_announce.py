@@ -43,8 +43,7 @@ def announce_page(tab=None):
                             announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],
                             announce_infos_mix_folders=app.config['ANNOUNCE_INFOS_MIX_FOLDERS'],
                             announce_call_sound=app.config['ANNOUNCE_CALL_SOUND'],
-                            #voice_google_name=app.config['VOICE_GOOGLE_NAME'],
-                            #announce_voice_source=app.config['ANNOUNCE_VOICE_SOURCE'],
+                            announce_call_translation = app.config['ANNOUNCE_CALL_TRANSLATION'],
                             voice_google_key=get_google_credentials(),
                             languages = Language.query.all()
                             )
@@ -354,6 +353,27 @@ def announce_save_gtts_voice():
             app.config["VOICE_GTTS_NAME"] = voice_gtts_name
 
         app.display_toast(success=True, message="Voix sauvegardée")
+
+        return "", 200
+
+    except Exception as e:
+        print(e)
+        app.display_toast(success=False, message=f"Erreur : {e}")
+        return f"Erreur : {e}", 400
+    
+@admin_announce_bp.route('/admin/announce/save_voice_is_active', methods=['POST'])
+def announce_save_voice_is_active():
+    # Récupérer la voix sélectionnée dans le formulaire
+    language_id = request.form.get('language_id')
+    voice_is_active = request.form.get('voice_is_active')
+
+    try:
+        language = Language.query.get(language_id)
+
+        language.voice_is_active = True if voice_is_active == 'true' else False 
+        db.session.commit()
+
+        app.display_toast(success=True, message="Option sauvée")
 
         return "", 200
 

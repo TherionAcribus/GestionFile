@@ -54,6 +54,21 @@ Son actuel :
 
 <h5>Choix de la voix</h5>
 
+<p>Choisissez la voix qui sera utilisée pour annoncer le patient</p>
+<div class="input-field col s12">
+    <select
+        class="form-select"
+        id="announce_call_translation"
+        hx-post="/admin/update_select"
+        hx-target="#invisible"
+        hx-trigger="change, load"
+        hx-vals='js:{"key": "announce_call_translation", "value": document.getElementById("announce_call_translation").value}'>
+        <option value="fr">Uniquement en français</option>
+        <option value="vo">Uniquement dans la langue du patient</option>
+        <option value="both">Dans les deux langues (A venir)</option>
+    </select>
+</div>
+
 <div class="input-field col s12">
     <select
         class="form-select"
@@ -70,7 +85,39 @@ Son actuel :
 
 <div id="div_select_voice"></div>
 
+<h5>Test de l'annonce</h5>
 
+<form id="audio-announce-form" class="row g-3 align-items-end">
+    <div class="col-auto">
+        <label for="call_number" class="form-label">Numéro d'appel</label>
+        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
+    </div>
+    <div class="col-auto">
+        <label for="language" class="form-label">Langue</label>
+        <select class="form-select" id="language_code" name="language_code">
+            {% for language in languages %}
+            <option value="{{ language.code }}">
+                {{ language.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div class="col-auto">
+        <button class="btn btn-success"
+                hx-get="announce/audio/test/local"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Tester l'annonce sur cette page</button>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-warning"
+                hx-get="announce/audio/test/announce"
+                hx-target="#invisible"
+                hx-include="closest form"
+                >Tester l'annonce sur la page "Annonce"</button>
+    </div>
+</form>
 
 <!-- Modal Structure Galerie audio -->
 <div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">
