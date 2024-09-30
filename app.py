@@ -177,6 +177,7 @@ class Config:
     PRINTER_INFOS = []  # infos du printer pour stocker les dernières infos
 
 scheduler = APScheduler()
+socketio = SocketIO()
 mail = Mail()
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
@@ -546,6 +547,8 @@ def create_app():
     scheduler.init_app(app)
     scheduler.start()
 
+    socketio.init_app(app, async_mode='eventlet', cors_allowed_origins="*")
+
     with app.app_context():
         start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
 
@@ -575,8 +578,11 @@ def create_app():
 
     return app
 
+def init_socketio(app):
+    app.extensions['socketio'] = socketio
+
 app = create_app()
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+
 
 def callback_update_patient(ch, method, properties, body):
     logging.debug(f"Received general message: {body}")

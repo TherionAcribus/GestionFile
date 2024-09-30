@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     patientSocket.on('refresh_buttons', function(msg) {
-        console.log("Received Patient message:", msg);
+        console.log("REFRESH BUTTONS:", msg);
         refresh_buttons();
     });
 
