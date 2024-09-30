@@ -72,7 +72,8 @@ from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
 from routes.announce import announce_bp
-from routes.patient import patient_bp, patient_validate_scan
+from routes.admin_stats import admin_stats_bp
+from routes.patient import patient_bp
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
 
 # adresse production
@@ -569,6 +570,7 @@ def create_app():
     app.register_blueprint(pyside_bp, url_prefix='')
     app.register_blueprint(admin_music_bp, url_prefix='')
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
+    app.register_blueprint(admin_stats_bp, url_prefix='')
     app.register_blueprint(admin_app_bp, url_prefix='')
 
     return app

@@ -1,0 +1,140 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Stats{% endblock %}
+
+{% block content %}
+
+<div style="width: 80%; margin: auto;">
+    <div id="controls" hx-get="/admin/stats/chart" hx-trigger="change from:#data-selector, change from:#chart-type-selector, change from:#time-granularity" hx-target="#chart-data" hx-include="#controls">
+        <select id="data-selector" name="chart_type">
+            <option value="languages">Patients par langue</option>
+            <option value="activities">Patients par activité</option>
+        </select>
+
+        <select id="chart-type-selector" name="chart_style">
+            <option value="pie">Camembert</option>
+            <option value="bar">Histogramme</option>
+            <option value="line">Graphique temporel</option>
+        </select>
+
+        <select id="time-granularity" name="time_granularity">
+            <option value="day">Par jour</option>
+            <option value="hour">Par heure</option>
+        </select>
+    </div>
+
+    <div id="chart-container">
+        <canvas id="statsChart"></canvas>
+    </div>
+    <div id="chart-data" hx-swap-oob="true"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+
+<script>
+    let chart;
+    
+    htmx.on('#chart-data', 'htmx:afterSettle', function(evt) {
+        const canvas = document.getElementById('statsChart');
+        if (!canvas) {
+            console.error('Canvas element not found');
+            return;
+        }
+    
+        const ctx = canvas.getContext('2d');
+        let data;
+        try {
+            data = JSON.parse(evt.detail.elt.textContent);
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+            return;
+        }
+        
+        console.log('Received data:', data);  // Pour le débogage
+        
+        if (chart) {
+            chart.destroy();
+        }
+        
+        const chartType = document.getElementById('chart-type-selector').value;
+        const timeGranularity = document.getElementById('time-granularity').value;
+        
+        moment.locale('fr');  // Définir la locale française pour Moment.js
+        
+        const config = {
+            type: chartType,
+            data: data,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: data.title
+                    }
+                }
+            }
+        };
+    
+        if (chartType === 'bar') {
+            config.options.scales = {
+                y: {
+                    beginAtZero: true
+                }
+            };
+        } else if (chartType === 'line') {
+            config.options.scales = {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: timeGranularity,
+                        displayFormats: {
+                            hour: 'HH:mm',
+                            day: 'DD MMM'
+                        }
+                    },
+                    ticks: {
+                        source: 'auto'
+                    }
+                },
+                y: {
+                    beginAtZero: true
+                }
+            };
+            
+            // Convertir les dates en utilisant Moment.js
+            config.data.datasets = data.datasets.map(dataset => ({
+                ...dataset,
+                data: dataset.data.map(point => ({
+                    x: moment(point.x).toDate(),
+                    y: Number(point.y)
+                }))
+            }));
+    
+            // Ajoutez ces options pour éviter l'erreur 'hitRadius'
+            config.options.elements = {
+                point: {
+                    hitRadius: 10,
+                    hoverRadius: 10
+                }
+            };
+        }
+        
+        chart = new Chart(ctx, config);
+    });
+    
+    // Trigger initial load
+    document.addEventListener('DOMContentLoaded', function() {
+        const dataSelector = document.getElementById('data-selector');
+        if (dataSelector) {
+            dataSelector.dispatchEvent(new Event('change'));
+        }
+    });
+    </script>
+
+{% endblock %}
