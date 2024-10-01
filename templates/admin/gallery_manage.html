@@ -9,7 +9,7 @@
 
 
 <form 
-    hx-post="{{ url_for('upload_gallery', name=gallery) }}" 
+    hx-post="{{ url_for('admin_gallery.upload_gallery', name=gallery) }}" 
     hx-target="#image-list"
     enctype="multipart/form-data">
     <input id="file-input" type="file" name="photos" multiple>
@@ -18,7 +18,7 @@
 
 <a href="{{ url_for('delete_gallery', name=gallery) }}" 
     class="btn btn-danger"
-    hx-delete="{{ url_for('delete_gallery', name=gallery) }}" 
+    hx-delete="{{ url_for('admin_gallery.delete_gallery', name=gallery) }}" 
     hx-target="#content" 
     hx-swap="innerHTML">
         Supprimer cette galerie
