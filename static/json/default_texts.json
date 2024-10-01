@@ -3,16 +3,20 @@
     "comments": "Version de test",
     "texts": [
         {
-            "key": "patient_page_title"
+            "key": "patient_page_title",
+            "value": "Bienvenue à la Pharmacie Sainte-Agathe"
         },
         {
-            "key": "patient_page_subtitle"
+            "key": "patient_page_subtitle",
+            "value": "Afin d'améliorer votre prise en charge, saisissez le motif de votre visite. Nous vous appelerons à votre tour."
         },
         {
-            "key": "patient_page_right_page"
+            "key": "patient_page_right_page",
+            "value": "HHHHH"
         },
         {
-            "key": "announce_titre"
+            "key": "announce_titre",
+            "value": "Bienvenue à la Pharmacie Sainte-Agathe"
         }
     ]
 }
