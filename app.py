@@ -124,6 +124,8 @@ class Config:
             HOST = os.getenv('MYSQL_HOST')
             DB_NAME = os.getenv('MYSQL_DATABASE')
             BASE32_KEY = os.getenv('BASE32_KEY')
+            print("BASE32_KEY", BASE32_KEY)
+
         
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
