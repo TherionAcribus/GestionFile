@@ -188,7 +188,10 @@ def create_google_tts_sound(next_patient, text, language_code):
             voice_google_region = next_patient.language.voice_google_region
 
     # Récupérer les credentials déchiffrés
-    credentials_json = get_google_credentials()
+    try:
+        credentials_json = get_google_credentials()
+    except Exception as e:
+        credentials_json = None
     if not credentials_json:
         return "Erreur : Clé Google Cloud non configurée.", 500
 
