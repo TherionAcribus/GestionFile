@@ -1,22 +1,19 @@
 from functools import wraps
-from flask import current_app
-from models import Activity, Button, db
-from threading import Thread
-import eventlet
-eventlet.monkey_patch()
+from flask import current_app as app
 
 def with_app_context(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        from app import app  # Importation locale de l'instance de l'application
-        with app.app_context():
+        from flask import current_app
+        with current_app.app_context():
             return f(*args, **kwargs)
     return decorated_function
 
 @with_app_context
 def disable_buttons_for_activity(activity_id):
+    from flask import current_app
+    from app import Activity, Button, db  # Importez vos modèles ici
 
-    print("DISABLING BUTTONS FOR ACTIVITY", activity_id)
     # Logique pour désactiver les boutons pour une activité donnée
     activity = Activity.query.get(activity_id)
     if activity:
@@ -29,12 +26,14 @@ def disable_buttons_for_activity(activity_id):
             else:
                 button.is_present = False
         db.session.commit()
-        current_app.communikation("patient", event="refresh")
+        app.communikation("patient", event="refresh")
 
 
 @with_app_context
 def enable_buttons_for_activity(activity_id):
-    print("ENABLING BUTTONS FOR ACTIVITY", activity_id)
+    from flask import current_app
+    from app import Activity, Button, db  # Importez vos modèles ici
+    # Logique pour activer les boutons pour une activité donnée
     
     activity = Activity.query.get(activity_id)
     if activity:
@@ -50,15 +49,4 @@ def enable_buttons_for_activity(activity_id):
         db.session.commit()
         # TODO trouver une solution pour APSCHEDULER + Websocket -> Celery ???
         #communication("update_page_patient", data={"action": "refresh buttons"})
-        thread = Thread(target=send_refresh_message, args=(current_app._get_current_object(),))
-        thread.start()
-
-def send_refresh_message(app):
-    with app.app_context():
-        try:
-            socketio = current_app.extensions['socketio']
-            current_app.logger.info("Attempting to emit 'refresh' event")
-            eventlet.spawn(socketio.emit, 'refresh', {'data': 'Refresh triggered'}, namespace='/socket_patient')
-            current_app.logger.info("'refresh' event emitted successfully")
-        except Exception as e:
-            current_app.logger.error(f"Error in send_refresh_message: {str(e)}")
+        app.communikation("patient", event="refresh")
