@@ -170,6 +170,34 @@
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
 
+    <footer class="bg-dark text-white mt-5">
+        <div class="container py-4">
+          <div class="row">
+            <div class="col-md-4">
+              <h5>PharmaFile</h5>
+              <p>Attention, à tout moment se site peut exploser !</p>
+            </div>
+            <div class="col-md-4">
+              <h5>Autres pages</h5>
+              <ul class="list-unstyled">
+                <li><a href="/patient" class="text-white">Patient</a></li>
+                <li><a href="/display" class="text-white">Affichage</a></li>
+                <li><a href="/counter/1" class="text-white">Comptoir</a></li>
+              </ul>
+            </div>
+            <div class="col-md-4">
+              <h5>Autres infos</h5>
+              <ul class="list-unstyled">
+                <li><a href="#" class="text-white">Rien</a></li>
+              </ul>
+            </div>
+          </div>
+          <div class="text-center mt-3">
+            <small>CC-By-SA</small>
+          </div>
+        </div>
+      </footer>
+
 
     <!-- Bootstrap JS (ensure this is after the closing </body> tag to avoid any rendering issues) -->
     <script src="{{ url_for('static', filename='js/libs/bootstrap.bundle.min.js') }}"></script>
