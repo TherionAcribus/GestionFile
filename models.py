@@ -13,8 +13,8 @@ class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    timestamp_counter = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    timestamp_end = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp_counter = db.Column(db.DateTime, default=None)
+    timestamp_end = db.Column(db.DateTime, default=None)
     status = db.Column(db.String(50), nullable=False, default='standing')
     counter_id = db.Column(db.Integer, db.ForeignKey('counter.id', name='fk_patient_counter_id'), nullable=True)  # nullable=True si un patient peut ne pas être à un comptoir
     counter = db.relationship('Counter', backref=db.backref('patients', lazy=True))
