@@ -186,14 +186,13 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
     if communication_mode == "websocket":
         #communication_websocket(stream=f"socket_{stream}", data=data)
         if stream == "update_patient":
-            print("UPDATE:::")
             patients = create_patients_list_for_pyside()
+            print("PYSODE", patients)
             #data = json.dumps({"flag": "patient", "data": patients})
             communication_websocket(stream="socket_app_counter", data=patients, flag="update_patient_list")
             communication_websocket(stream="socket_app_counter", data=patients, flag="my_patient")
             communication_websocket(stream="socket_update_patient", data=patients)
         elif stream == "update_audio":
-
             if event == "spotify":
                 print("spotify!")
                 communication_websocket(stream="socket_update_screen", data=data, flag=flag, event=event)
@@ -202,9 +201,7 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
                 if app.config["ANNOUNCE_ALERT"]:
                     signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
                     audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-                    print("ANNOUNCE_PLAYER", app.config["ANNOUNCE_PLAYER"])
                     if app.config["ANNOUNCE_PLAYER"] == "web":
-                        print("websouns", audio_path)
                         communication_websocket(stream="socket_update_screen", event="audio", data=audio_path)
                     else:
                         communication_websocket(stream="socket_app_screen", data=audio_path, flag="sound")
@@ -213,7 +210,6 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
                 else:
                     communication_websocket(stream="socket_app_screen", data=data, flag="sound")
         else:
-            print("basique")
             communication_websocket(stream=f"socket_{stream}", data=data, flag=flag, event=event)
     # REFAIRE !!!! 
     elif communication_mode == "rabbitmq":
@@ -1441,8 +1437,6 @@ def patients_langue(lang):
 
 
 
-
-
 @with_app_context
 def auto_calling():
     # si il y a des comptoirs en appel automatique on lance l'appel automatique
@@ -1456,7 +1450,7 @@ def auto_calling():
         ).all()
 
         if app.config["COUNTER_ORDER"] == "order":
-            counters = sorted(counters, key=lambda x: x.order)
+            counters = sorted(counters, key=lambda x: x.sort_order)
         elif app.config["COUNTER_ORDER"] == "random":
             random.shuffle(counters)
 

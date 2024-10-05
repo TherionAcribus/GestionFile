@@ -37,7 +37,8 @@ class Patient(db.Model):
             "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),  # Format datetime as string
             "status": self.status,
             "counter_id": self.counter_id,
-            "language_id": self.language_id
+            "language_id": self.language_id,
+            "language_code": self.language.code
         }
 
 # Écouteur pour détecter les changements de status
@@ -217,7 +218,8 @@ class ActivitySchedule(db.Model):
 
     def __repr__(self):
         return f'<ActivitySchedule from {self.start_time} to {self.end_time}>'
-    
+
+
 
 # pour l'instant les jours ne sont pas utilisées... Peut être plus simple d'ajouter une table pour les jours de la semaine ????
 class AlgoRule(db.Model):
