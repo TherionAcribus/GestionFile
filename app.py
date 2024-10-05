@@ -28,6 +28,7 @@ import threading
 import socket
 import pika
 import boto3
+import threading
 
 from urllib.parse import urlparse, urljoin
 import random
@@ -54,7 +55,7 @@ from scheduler_functions import enable_buttons_for_activity, disable_buttons_for
 from bdd import init_database
 
 
-from routes.counter import counter_bp
+from routes.counter import counter_bp, update_switch_auto_calling
 from routes.admin_announce import admin_announce_bp
 from routes.admin_counter import admin_counter_bp
 from routes.admin_activity import admin_activity_bp
@@ -1408,9 +1409,6 @@ def validate_patient(counter_id, patient_id):
     communikation("update_patient")
     communikation("update_screen", event="remove_calling", data={"id": patient_id})
 
-    communication("update_patients")
-    communication("update_counter", client_id=counter_id)
-
     if isinstance(current_patient, Patient):
         current_patient_pyside = current_patient.to_dict()
     communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": current_patient_pyside}})  
@@ -1440,7 +1438,6 @@ def patients_langue(lang):
 @with_app_context
 def auto_calling():
     # si il y a des comptoirs en appel automatique on lance l'appel automatique
-
     print(app.config["AUTO_CALLING"])
     if len(app.config["AUTO_CALLING"]) > 0:
         counters = db.session.query(Counter).filter(
@@ -1449,6 +1446,8 @@ def auto_calling():
             Counter.staff_id != None
         ).all()
 
+        print("auto counters", counters)
+
         if app.config["COUNTER_ORDER"] == "order":
             counters = sorted(counters, key=lambda x: x.sort_order)
         elif app.config["COUNTER_ORDER"] == "random":
@@ -1456,9 +1455,13 @@ def auto_calling():
 
         for counter in counters:
             if not counter.is_active:
-                call_next(int(counter.id))
-                counter.is_active = True
-                db.session.commit()
+                patient = call_next(int(counter.id))
+                # mise à jour écran ... bizarremment l'audio est dans le call next....
+                text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
+                communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
+                counter_become_active(int(counter.id))
+                # mise à jour de Pyside, car lui est mis à jour normalement via les retours du serveur et non via websocket contrairement au site (pour l'instant)
+                communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
                 break
 
 
@@ -1553,27 +1556,7 @@ def switch_auto_calling(counter_id):
                             counter=counter,
                             auto_calling=counter.auto_calling)
 
-@app.route('/counter/update_switch_auto_calling', methods=['POST'])
-def update_switch_auto_calling():
-    counter_id = request.values.get('counter_id')
-    value = request.values.get('value')
-    try:
-        # MAJ BDD
-        counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
-        if counter:
-            counter.auto_calling = True if value == "true" else False
-            db.session.commit()
-            # MAJ app.Config
-            if value == "true":
-                app.config["AUTO_CALLING"].append(counter.id)
-            elif value == "false":
-                app.config["AUTO_CALLING"].remove(counter.id)
-            communikation("app_counter", event="change_auto_calling", data={"counter_id": counter_id, "autocalling": counter.auto_calling})
-        else:
-            app.logger.error("Counter not found")
-    except Exception as e:
-        app.logger.error(f'Erreur: {e}')
-    return "", 204
+
 
 
 # A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
@@ -1650,6 +1633,8 @@ def validate_current_patient(counter_id):
 
 @app.route('/call_next/<int:counter_id>')
 def call_next(counter_id, attempts=0):
+    # pour éviter de prendre deux fois le même patient, en vérifie en l'appelant qu'il est toujours en attente sinon on rappelle un patient.
+    # pour éviter des boucles infinies, on considère qu'après x (5) essais on abandonne. Peut probable que 5 comptoirs appellent en même temps des patients.
     max_attempts = 5
 
     if attempts >= max_attempts:
@@ -1802,13 +1787,33 @@ def pause_patient(counter_id, patient_id):
     counter_become_inactive(counter_id)
     
     communikation("update_patient")
-
-    communication("update_patients")
-    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": None }})
+    print("counterauto", Counter.query.get(counter_id).auto_calling)
+    # si l'autocalling est activé. On le vire quand on se met en pause
+    if Counter.query.get(counter_id).auto_calling:
+        call_update_switch_auto_calling(counter_id)  
 
     return jsonify({"id": None, "counter_id": counter_id}), 200  
 
+def call_update_switch_auto_calling(counter_id):
+    with current_app.test_request_context():
+        
+        # Simuler les données de la requête
+        request.values = {
+            'counter_id': counter_id,
+            'value': "false"
+        }        
+        # Appel direct de la fonction
+        result = update_switch_auto_calling()
+
+        # mise à jour du web. Pas nécessaire pour l'App
+        communikation("counter", event="refresh_auto_calling", data={"auto_calling": False})
+                
+        print("switch_auto_calling")
+        print(f"Résultat : {result}")
+        
+
 def counter_become_inactive(counter_id):
+    print("counter_become_inactiv")
     counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
     counter.is_active = False
     db.session.commit()

@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
 
 counter_bp = Blueprint('counter', __name__)
@@ -159,35 +160,72 @@ def patients_queue_for_counter(counter_id):
     return render_template('/counter/patients_queue_for_counter.html', patients=patients, counter_id=counter_id)
 
 
-@counter_bp.route('/app/counter/auto_calling', methods=['POST'])
-def app_auto_calling():
-    print("COUNTER AUTOCALLING", request.values)
-    counter_id = request.form.get('counter_id')
-    print("COUNTER ID", counter_id)
-    counter = Counter.query.get(counter_id)
-
-    if request.form.get('action') is None:
-        return jsonify({"status": counter.auto_calling}), 200 # 
-
-    auto_calling_action = True if request.form.get('action') == "activate" else False
-    print("COUNTER AUTOCALLING", request.values)
-    counter = Counter.query.get(counter_id)
-    print("counter", counter.auto_calling)
+def update_counter_auto_calling(counter_id, auto_calling_value):
+    """ FOnction commune pour le changement de l'autocalling web et App"""
     try:
-        counter.auto_calling = auto_calling_action
+        counter = Counter.query.get(counter_id)
+        if not counter:
+            app.logger.error(f"Counter not found: {counter_id}")
+            return False, "Counter not found", 404
+
+        counter.auto_calling = auto_calling_value
         db.session.commit()
-        # MAJ app.Config
-        if auto_calling_action:
+
+        # Mise à jour de app.config
+        if auto_calling_value:
             app.config["AUTO_CALLING"].append(counter.id)
         else:
             app.config["AUTO_CALLING"].remove(counter.id)
 
-        app.communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_action})
+        #if auto_calling_value:
+            
 
-        return jsonify({"status": counter.auto_calling}), 200 # 
+        return True, {"status": counter.auto_calling}, 200
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.error(f'Database error: {str(e)}')
+        return False, str(e), 500
     except Exception as e:
-        app.logger.error(f'Erreur: {e}')
-        return e, 500
+        app.logger.error(f'Unexpected error: {str(e)}')
+        return False, str(e), 500
+
+
+@counter_bp.route('/counter/update_switch_auto_calling', methods=['POST'])
+def update_switch_auto_calling():
+    counter_id = request.values.get('counter_id')
+    value = request.values.get('value')
+    auto_calling_value = value.lower() == "true"
+
+    success, result, status_code = update_counter_auto_calling(counter_id, auto_calling_value)
+
+    # Notification de changement
+    app.communikation("app_counter", event="change_auto_calling", 
+                                    data={"counter_id": counter_id, "autocalling": auto_calling_value})
+    if not success:
+        return result, status_code
+    return "", 204
+
+
+@counter_bp.route('/app/counter/auto_calling', methods=['POST'])
+def app_auto_calling():
+    counter_id = request.form.get('counter_id')
+    action = request.form.get('action')
+
+    if action is None:
+        counter = Counter.query.get(counter_id)
+        return jsonify({"status": counter.auto_calling}), 200
+
+    auto_calling_value = action == "activate"
+
+    success, result, status_code = update_counter_auto_calling(counter_id, auto_calling_value)
+
+    # notification de changement
+    app.communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_value})
+
+    if not success:
+        return jsonify({"error": result}), status_code
+    return jsonify(result), status_code
     
 
 @counter_bp.route('/app/counter/init_app', methods=['POST'])

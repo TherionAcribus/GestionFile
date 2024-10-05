@@ -8,6 +8,8 @@ from utils import replace_balise_announces, replace_balise_phone, get_text_trans
 from gtts import gTTS
 from models import Patient, ConfigOption, Language, db
 
+
+
 def add_patient(call_number, activity):
     """ CRéation d'un nouveau patient et ajout à la BDD"""
     language_code = session.get('language_code', 'fr')
@@ -52,6 +54,8 @@ def get_next_call_number_simple():
     return 1  # Réinitialiser le compteur si aucun patient n'a été enregistré aujourd'hui
 
 
+
+
 # Générer le numéro d'appel en fonction de l'activité
 def get_next_category_number(activity):
     # on utilise le code prévu de l'activité. Plusieurs activités peuvent avoir la même lettre
@@ -93,6 +97,7 @@ def register_patient(activity):
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
     
+    print("before autocalling")
     app.auto_calling()
 
     app.communikation("update_patient")
