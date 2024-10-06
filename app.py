@@ -48,7 +48,7 @@ from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json
-from python.engine import generate_audio_calling
+from python.engine import generate_audio_calling, call_next
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
@@ -76,6 +76,7 @@ from routes.announce import announce_bp
 from routes.admin_stats import admin_stats_bp
 from routes.patient import patient_bp
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
+from python.engine import engine_bp
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -569,6 +570,7 @@ def create_app():
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
     app.register_blueprint(admin_stats_bp, url_prefix='')
     app.register_blueprint(admin_app_bp, url_prefix='')
+    app.register_blueprint(engine_bp, url_prefix='')
 
     return app
 
@@ -1631,145 +1633,10 @@ def validate_current_patient(counter_id):
         print("pas de patient")
 
 
-@app.route('/call_next/<int:counter_id>')
-def call_next(counter_id, attempts=0):
-    # pour éviter de prendre deux fois le même patient, en vérifie en l'appelant qu'il est toujours en attente sinon on rappelle un patient.
-    # pour éviter des boucles infinies, on considère qu'après x (5) essais on abandonne. Peut probable que 5 comptoirs appellent en même temps des patients.
-    max_attempts = 5
-
-    if attempts >= max_attempts:
-        app.logger.warning(f"Max attempts reached for counter {counter_id}")
-        return None
-
-    if Patient.query.count() == 0:
-        app.logger.info("No patients available")
-        return None
-    
-    next_patient = algo_choice_next_patient(counter_id)
-
-    if next_patient is None:
-        app.logger.info(f"No next patient found for counter {counter_id}")
-        return None
-
-    if next_patient.status != "standing":
-        app.logger.info(f"Patient {next_patient.id} not standing, retrying. Attempt {attempts + 1}")
-        return call_next(counter_id, attempts=attempts+1)
-
-    language_code = next_patient.language.code
-    print("language_code_pour_audio", language_code)
-    try:
-        next_patient.status = 'calling'
-        next_patient.counter_id = counter_id
-        db.session.commit()
-        app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
-
-        language_code = next_patient.language.code
-        print("language_code_pour_audio", language_code)
-        audio_url = generate_audio_calling(counter_id, next_patient, language_code=language_code)
-        app.communikation("update_audio", event="audio", data=audio_url)
-        
-        return next_patient
-
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error updating patient status: {str(e)}")
-        return call_next(counter_id, attempts=attempts+1)
 
 
-def algo_choice_next_patient(counter_id):
-
-    counter = Counter.query.get(counter_id)
-
-    # activités possible par ce pharmacien
-    staff_activities = set(activity.id for activity in counter.staff.activities)
-
-    # choix parmi les patients qui attendent 
-    next_possible_patient = Patient.query.filter_by(status='standing')
-
-    # choix parmi les patient qui correspondent aux activités du pharmacien
-    next_possible_patient = next_possible_patient.filter(
-        Patient.activity_id.in_(staff_activities)
-    )
-
-    # permet de voir si un patient s'est fait doubler plus que le nombre prévu
-    # Si oui on bloque l'algo le temps de rétablir l'équilibre
-    is_patient_waiting_too_long = Patient.query.filter(
-        and_(Patient.status == 'standing',
-                Patient.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"])).first()
-    print("is_patient_waiting_too_long", is_patient_waiting_too_long)
-
-    applicable_rules = None
-    if app.config['ALGO_IS_ACTIVATED'] and not is_patient_waiting_too_long:
-    # priorité à un type d'activité si un patient répond aux critère
-    # Récupération des règles applicables
-        current_day = datetime.now().weekday()
-        current_time = datetime.now().time()
-        print('current_time', current_time)
-        print('current_day', current_day)
-        number_of_patients = Patient.query.filter_by(status='standing').count()
-        print('number_of_patients', number_of_patients)
-
-        # cherche des regles applicables
-        applicable_rules = AlgoRule.query.filter(
-            AlgoRule.start_time <= current_time,  # L'heure actuelle doit être après l'heure de début
-            AlgoRule.end_time >= current_time,    # et avant l'heure de fin
-            AlgoRule.min_patients <= number_of_patients,  # Le nombre de patients doit être dans l'intervalle
-            AlgoRule.max_patients >= number_of_patients,
-            #AlgoRule.days_of_week.contains(current_day)  # Le jour actuel doit être inclus dans les jours valides
-        )
-        print("applicable_rules", applicable_rules)
-
-        # S'il y a des regles applicables, regarde niveau par niveau les activités correspondantes
-        if applicable_rules:
-            for level in range(1, 6):
-                rules_at_level = applicable_rules.filter(AlgoRule.priority_level == level)
-                if rules_at_level:
-                    print("level", level)
-                    activity_ids_from_rules  = [rule.activity_id for rule in rules_at_level]
-                    next_possible_patient_via_rules = next_possible_patient.filter(
-                        Patient.activity_id.in_(activity_ids_from_rules)
-                    )
-
-                    print("next_possible_patient", next_possible_patient_via_rules.all())
-                    # pour les patients qui rentrent dans les priorité on va regarder si on ne dépasse pas le nombre de patients à dépasser de la régle
-                    if next_possible_patient_via_rules.all():
-                        for patient in next_possible_patient_via_rules.all():
-                            print("patient", patient)
-                            patients_ahead_count = next_possible_patient.filter(
-                                                                                        Patient.timestamp < patient.timestamp
-                                                                                    ).count()
-                            max_overtaken = min(rule.max_overtaken for rule in patient.activity.priority_rules)
-                            print("max_overtaken", max_overtaken, patients_ahead_count)
-                            if patients_ahead_count < max_overtaken:
-                                next_possible_patient = next_possible_patient_via_rules
-                                break
-
-    print('next_possible_patient', next_possible_patient)
-    
-    # tri par date 
-    next_patient = next_possible_patient.order_by(Patient.timestamp).first()
-
-    if applicable_rules:
-        patient_overtaken(next_patient)
-
-    print('next_patient', next_patient)
-
-    return next_patient
 
 
-def patient_overtaken(next_patient):
-    """ Met a jour le nombre de fois que le patient a été doublé"""
-    patients_overtaken = Patient.query.filter(
-        and_(
-            Patient.status == 'standing',
-            Patient.timestamp < next_patient.timestamp 
-        )
-    ).all() 
-
-    for patient in patients_overtaken:
-        patient.overtaken = patient.overtaken + 1
-        print("patient overtaken", patient)
-        db.session.commit()
 
 
 
