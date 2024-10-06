@@ -57,7 +57,7 @@ def enable_buttons_for_activity(activity_id):
         current_app.communikation("patient", event="refresh")
 
 
-def scheduler_clear_all_patients():
+def add_scheduler_clear_all_patients():
     job_id = 'Clear Patient Table'
 
     # Vérifier si le job existe avant de tenter de le supprimer
@@ -155,6 +155,7 @@ def remove_scheduler_clear_announce_calls():
 def clear_all_patients_job():
     """Efface tous les patients en utilisant le contexte de l'application globale"""
     app = AppHolder.get_app()  # Obtenir l'instance de l'application
+    print("Clear all patients")
 
     # Créer explicitement un contexte d'application avec l'instance obtenue
     with app.app_context():

@@ -18,6 +18,7 @@ import time as tm
 
 from flask_apscheduler import APScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.schedulers.background import BackgroundScheduler
 
 import json
 
@@ -28,7 +29,6 @@ import subprocess
 import threading
 import socket
 import pika
-import boto3
 import threading
 
 from urllib.parse import urlparse, urljoin
@@ -47,13 +47,14 @@ from wtforms.validators import DataRequired
 import jwt
 from dotenv import load_dotenv
 
-from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Weekday, TextTranslation, activity_schedule_link, Translation
+from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json
 from python.engine import generate_audio_calling, call_next
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
-from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
+from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
+from config import Config
 
 from app_holder import AppHolder
 
@@ -91,11 +92,6 @@ communication_mode = "websocket"  # websocket, sse or rabbitmq
 load_dotenv()
 database = "mysql"
 
-def get_parameter(name):
-    """ Récupération des paramètres pour AWS"""
-    ssm = boto3.client('ssm', region_name='eu-west-3')  
-    response = ssm.get_parameter(Name=name, WithDecryption=True)
-    return response['Parameter']['Value']
 
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
@@ -109,81 +105,14 @@ if site == "production":
 else:
     parameters = pika.URLParameters('amqp://guest:guest@localhost:5672/%2F')
 
-class Config:
-    SECRET_KEY = 'your_secret_key'
-
-    if database == "mysql":
-
-        if site=="aws":
-            MYSQL_USER = get_parameter('MYSQL_USER')
-            MYSQL_PASSWORD = get_parameter('MYSQL_PASSWORD')
-            HOST = get_parameter('MYSQL_HOST')
-            DB_NAME = get_parameter('MYSQL_DATABASE')
-            BASE32_KEY = get_parameter('BASE32_KEY')
-
-        else:
-            MYSQL_USER = os.getenv('MYSQL_USER')
-            MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
-            HOST = os.getenv('MYSQL_HOST')
-            DB_NAME = os.getenv('MYSQL_DATABASE')
-            BASE32_KEY = os.getenv('BASE32_KEY')
-        
-        # MySQL Configuration
-        SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
-        SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
-        # SQLALCHEMY_BINDS configuration to include MySQL
-        SQLALCHEMY_BINDS = {
-            'users': f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/userdatabase'
-        }
-            # Config MySQL
-
-    elif database == "sqlite":
-        SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
-        SQLALCHEMY_DATABASE_URI_SCHEDULER = 'sqlite:///instance/queueschedulerdatabase.db'
-        SQLALCHEMY_BINDS = {
-            'users': 'sqlite:///userdatabase.db'
-        }
-
-    # Scheduler
-    SCHEDULER_JOBSTORES = {
-        'default': SQLAlchemyJobStore(url=SQLALCHEMY_DATABASE_URI_SCHEDULER)
-    }
-    SCHEDULER_API_ENABLED = True
-    JOBS = []
-
-
-
-    #SQLALCHEMY_DATABASE_URI = 'duckdb:///database.duckdb'
-    ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-    ALLOWED_AUDIO_EXTENSIONS = {'wav', 'mp3'}
-    AUDIO_FOLDER = '/static/audio'
-    BABEL_DEFAULT_LOCALE = 'fr'  # Définit la langue par défaut
-    # sécurité
-    SECURITY_PASSWORD_SALT = os.environ.get("SECURITY_PASSWORD_SALT", '146585145368132386173505678016728509634')
-    SECURITY_REGISTERABLE = False
-    SECURITY_RECOVERABLE = True
-    SECURITY_USER_IDENTITY_ATTRIBUTES = [{"username": {"mapper": uia_username_mapper}}]
-    REMEMBER_COOKIE_NAME = 'remember_me'
-    REMEMBER_COOKIE_SECURE = True  # uniquement si HTTPS
-    # mails
-    #MAIL_SERVER = "live.smtp.mailtrap.io"
-    #MAIL_PORT = 587 
-    #MAIL_USE_TLS = True
-    #MAIL_USE_SSL = False
-    #MAIL_USERNAME = "api"
-    #MAIL_PASSWORD = "6f04dfe4bbf9eaaf656f18a2698db1ec"
-    #MAIL_DEFAULT_SENDER = "hi@demomailtrap.com"
-
-    GALLERIES_FOLDER = 'static/galleries'
-    FLAG_FOLDER = 'static/images/flags'
-    # music
-    IS_PLAYING_SPOTIFY = False
-
-    PRINTER_ERROR = None  # None : pas d'infos, True: Erreur, False: OK
-    PRINTER_INFOS = []  # infos du printer pour stocker les dernières infos
-
-scheduler = APScheduler()
+executors = {
+    'default': {'type': 'eventlet'}
+}
+scheduler = BackgroundScheduler()
 mail = Mail()
+migrate = Migrate()
+user_datastore = SQLAlchemyUserDatastore(db, User, Role)
+security = Security()
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
     """ Effectue la communication avec les clients """
@@ -491,32 +420,34 @@ def start_fonctions(app):
     clear_counter_table()
 
 
-def create_app():
+def create_app(config_class=Config):
     app = Flask(__name__)
 
-    # Assigner l'instance Flask à AppHolder
+    # Charger la configuration avant toute initialisation
     AppHolder.set_app(app)
-
-    #, logger=True, engineio_logger=True
-    app.config.from_object(Config())
+    app.config.from_object(config_class)
     app.debug = True
 
-    # Pour le logging
+    # Initialiser le logging
     logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
+                        format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
-    db.init_app(app) 
-    migrate = Migrate(app, db)  # Initialisation de Flask-Migrate
-    #babel = Babel(app)
-    
-    scheduler.init_app(app)
-    scheduler.start()
+    # Initialiser les extensions avec l'application
+    db.init_app(app)
+    migrate.init_app(app, db)
+    security.init_app(app, user_datastore, register_blueprint=True, name='flask_security')
 
-    with app.app_context():
-        start_fonctions(app)  # Appeler explicitement start_fonctions() dans le contexte de l'application
-
+    # Initialiser le mail avec l'application
     app.mail = Mail(app)
 
+    #scheduler.init_app(app)
+    scheduler.start()
+
+    # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
+    with app.app_context():
+        start_fonctions(app)
+
+    # Enregistrement des blueprints
     app.register_blueprint(admin_announce_bp, url_prefix='')
     app.register_blueprint(admin_counter_bp, url_prefix='')
     app.register_blueprint(admin_activity_bp, url_prefix='')
@@ -542,7 +473,7 @@ def create_app():
 
     return app
 
-app = create_app()
+app = create_app(config_class=Config)
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 def callback_update_patient(ch, method, properties, body):
@@ -952,8 +883,8 @@ class ExtendedLoginForm(LoginForm):
         print("OK !!!!")
         return home()
 
-user_datastore = SQLAlchemyUserDatastore(db, User, None)
-security = Security(app, user_datastore, login_form=ExtendedLoginForm)
+#user_datastore = SQLAlchemyUserDatastore(db, User, None)
+#security = Security(app, user_datastore, login_form=ExtendedLoginForm)
 
 
 def get_locale():
@@ -1130,7 +1061,7 @@ def update_input():
 def special_functions_with_input(key):
     if key == "cron_delete_patient_table_hour":
         remove_scheduler_clear_all_patients()
-        scheduler_clear_all_patients()
+        add_scheduler_clear_all_patients()
         communikation("admin", event="refresh_schedule_tasks_list")
     if key == "cron_delete_announce_calls_hour":
         remove_scheduler_clear_announce_calls()
@@ -1171,7 +1102,7 @@ def call_function_with_switch(key, value):
     """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde"""
     if key == "cron_delete_patient_table_activated":
         if value == "true":
-            scheduler_clear_all_patients()
+            add_scheduler_clear_all_patients()
         else:
             remove_scheduler_clear_all_patients()
     elif key == "cron_delete_announce_calls_activated":
@@ -1194,9 +1125,6 @@ def check_balises_after_validation(value):
     #return validate_and_transform_text_for_after_validation(value)
 
 
-
-
-
 # --------  ADMIN -> DataBase  ---------
 
 @app.route('/admin/database')
@@ -1206,6 +1134,7 @@ def admin_database():
                         cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],
                         cron_delete_announce_calls_activated=app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"],
                         cron_delete_announce_calls_hour=app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"])
+
 
 @app.route("/admin/database/schedule_tasks_list")
 def display_schedule_tasks_list():
@@ -1217,7 +1146,6 @@ def display_schedule_tasks_list():
     } for job in jobs]
     return render_template('/admin/database_schedule_tasks_list.html',
                         jobs_info=jobs_info)
-
 
 
 def disable_buttons_for_activity_task(activity_id):
@@ -1829,8 +1757,6 @@ app.auto_calling = auto_calling
 app.socketio = socketio
 app.database = database
 app.scheduler = scheduler
-
-
 
 if __name__ == "__main__":
 
