@@ -17,6 +17,7 @@ from datetime import datetime, timezone, time, timedelta
 import time as tm
 
 from flask_apscheduler import APScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 import json
 
@@ -51,7 +52,7 @@ from init_restore import init_default_buttons_db_from_json, init_default_options
 from python.engine import generate_audio_calling, call_next
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
-from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity
+from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
 
 
@@ -64,7 +65,7 @@ from routes.admin_gallery import admin_gallery_bp
 from routes.admin_phone import admin_phone_bp
 from routes.admin_staff import admin_staff_bp
 from routes.admin_patient import admin_patient_bp
-from routes.admin_queue import admin_queue_bp, clear_all_patients_from_db
+from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
@@ -108,7 +109,6 @@ else:
     parameters = pika.URLParameters('amqp://guest:guest@localhost:5672/%2F')
 
 class Config:
-    SCHEDULER_API_ENABLED = True
     SECRET_KEY = 'your_secret_key'
 
     if database == "mysql":
@@ -144,6 +144,9 @@ class Config:
         }
 
     # Scheduler
+    SCHEDULER_JOBSTORES = {
+        'default': SQLAlchemyJobStore(url=SQLALCHEMY_DATABASE_URI_SCHEDULER)
+    }
     SCHEDULER_API_ENABLED = True
     JOBS = []
 
@@ -316,46 +319,6 @@ def communication(stream, data=None, client_id=None, audio_source=None):
                 client.put(json.dumps(message))
 
 
-def clear_old_patients_table(app):
-    # Vérifie si la fonctionnalité est activée dans la configuration
-    if app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
-        # Obtenez la date actuelle en UTC
-        today = datetime.now(timezone.utc).date()
-        
-        # Construisez la requête pour trouver tous les patients dont la date est antérieure à aujourd'hui
-        old_patients = Patient.query.filter(Patient.timestamp < today)
-        
-        # Supprimez ces patients
-        if old_patients.count() > 0:
-            old_patients.delete(synchronize_session='fetch')
-            db.session.commit()
-            communikation("update_patient")
-            app.logger.info(f"Deleted old patients not from today ({today}).")
-    else:
-        app.logger.info("Deletion of old patients is disabled.")
-
-def scheduler_clear_all_patients(app):
-    # vide la table patient
-    job_id = 'Clear Patient Table'
-
-    # Vérifier si le job existe déjà
-    if scheduler.get_job(job_id):
-        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
-        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
-
-    try:
-        hour=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[0])
-        minute=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
-        scheduler.add_job(id=job_id, 
-                        func=clear_all_patients_job, 
-                        trigger='cron', 
-                        hour=hour, 
-                        minute=minute)
-        app.logger.info(f"Job '{job_id}' successfully added.")
-        return True
-    except Exception as e:
-        app.logger.error(f"Failed to add job '{job_id}': {e}")
-        return False
 
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
 def load_configuration(app):
@@ -465,8 +428,8 @@ def load_configuration(app):
             app.config[config_name] = getattr(config_option, value_type)
 
     # Handling special case for cron_delete_patient_table_activated
-    if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
-        scheduler_clear_all_patients(app)
+    #if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
+    #    scheduler_clear_all_patients()
 
     # Chargement des voix françaises
     french = Language.query.filter_by(code="fr").first()
@@ -1206,6 +1169,11 @@ def call_function_with_switch(key, value):
             scheduler_clear_all_patients()
         else:
             remove_scheduler_clear_all_patients()
+    elif key == "cron_delete_announce_calls_activated":
+        if value == "true":
+            scheduler_clear_announce_calls()
+        else:
+            remove_scheduler_clear_announce_calls()
 
 
 def check_balises_before_validation(value):
@@ -1247,95 +1215,6 @@ def display_schedule_tasks_list():
 
 
 
-
-def scheduler_clear_announce_calls():
-    # vide la table patient
-    job_id = 'Clear Announce Calls'
-
-    # Vérifier si le job existe déjà
-    if scheduler.get_job(job_id):
-        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
-        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
-
-    try:
-        hour=int(app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
-        minute=int(app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[1])
-        scheduler.add_job(id=job_id, 
-                        func=clear_announce_calls_job, 
-                        trigger='cron', 
-                        hour=hour, 
-                        minute=minute)
-        app.logger.info(f"Job '{job_id}' successfully added.")
-        return True
-    except Exception as e:
-        app.logger.error(f"Failed to add job '{job_id}': {e}")
-        return False
-
-
-def remove_scheduler_clear_announce_calls():
-    try:
-        # Supprime le job à l'aide de son id
-        scheduler.remove_job('Clear Announce Calls')
-        app.logger.info("Job 'Clear Announce Calls' successfully removed.")
-        return True
-    except Exception as e:
-        app.logger.error(f"Failed to remove job 'Clear Announce Calls': {e}")
-        return False
-
-
-def clear_all_patients_job():
-    """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
-    with app.app_context():
-        clear_all_patients_from_db()
-
-def remove_scheduler_clear_all_patients():
-    try:
-        # Supprime le job à l'aide de son id
-        scheduler.remove_job('Clear Patient Table')
-        app.logger.info("Job 'Clear Patient Table' successfully removed.")
-        return True
-    except Exception as e:
-        app.logger.error(f"Failed to remove job 'Clear Patient Table': {e}")
-        return False
-
-
-
-
-def clear_announce_calls_job():
-    """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
-    with app.app_context():
-        clear_announces_call()
-
-def clear_announces_call():
-    """ Permet de vider le dossier static/audio/annonces des vieux fichiers audio """
-    announce_folder = os.path.join(os.getcwd(), 'static/audio/annonces/')
-    
-    # Vérifie si le répertoire existe
-    if os.path.exists(announce_folder):
-        # Parcours tous les fichiers dans le répertoire
-        for fichier in os.listdir(announce_folder):
-            fichier_complet = os.path.join(announce_folder, fichier)
-            # Vérifie si c'est un fichier (et non un sous-répertoire)
-            if os.path.isfile(fichier_complet):
-                os.remove(fichier_complet)  # Supprime le fichier
-        display_toast(success=True, message="Tous les fichiers audio ont été supprimés.")
-        return "", 200
-    else:
-        display_toast(success=False, message="Le répertoire n'existe pas.")
-        return "", 200
-
-
-# --------  FIn ADMIN -> DataBase  ---------
-
-
-# --------  ADMIN -> Staff   ---------
-
-# --------  FIN  de ADMIN -> Staff   ---------
-
-# --------  ADMIN -> Activity  ---------
-
-
-
 def disable_buttons_for_activity_task(activity_id):
     with app.app_context():
         disable_buttons_for_activity(activity_id)
@@ -1344,11 +1223,6 @@ def enable_buttons_for_activity_task(activity_id):
     with app.app_context():
         enable_buttons_for_activity(activity_id)
 
-
-# -------- ADMIN -> Page Phone ---------
-
-
-# --------  Fin ADMIN -> Page Phone ---------
 
 
 @app.route('/patient_right_page_default')
@@ -1633,13 +1507,6 @@ def validate_current_patient(counter_id):
         print("pas de patient")
 
 
-
-
-
-
-
-
-
 @app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
 def pause_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
@@ -1697,15 +1564,6 @@ def counter_become_active(counter_id):
 
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
-
-
-# ---------------- PAGE AnnoNces FRONT ----------------
-
-
-
-
-# ---------------- FIN  PAGE AnnoNces FRONT ----------------
-
 
 
 # ---------------- FONCTIONS Généralistes / COmmunication ---------------- 
@@ -1961,11 +1819,11 @@ app.logout_all = logout_all
 app.communikation = communikation
 app.call_specific_patient = call_specific_patient
 app.allowed_image_file = allowed_image_file
-app.scheduler = scheduler
 app.mail = mail
 app.auto_calling = auto_calling
 app.socketio = socketio
 app.database = database
+app.scheduler = scheduler
 
 
 
