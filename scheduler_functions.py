@@ -1,9 +1,10 @@
 import os
 from functools import wraps
 from datetime import datetime, timezone
-from flask import current_app as app
+from flask import current_app
 from models import db, Patient
 from routes.admin_queue import clear_all_patients_from_db
+from app_holder import AppHolder
 
 def with_app_context(f):
     @wraps(f)
@@ -30,7 +31,7 @@ def disable_buttons_for_activity(activity_id):
             else:
                 button.is_present = False
         db.session.commit()
-        app.communikation("patient", event="refresh")
+        current_app.communikation("patient", event="refresh")
 
 
 @with_app_context
@@ -53,36 +54,42 @@ def enable_buttons_for_activity(activity_id):
         db.session.commit()
         # TODO trouver une solution pour APSCHEDULER + Websocket -> Celery ???
         #communication("update_page_patient", data={"action": "refresh buttons"})
-        app.communikation("patient", event="refresh")
+        current_app.communikation("patient", event="refresh")
 
 
 def scheduler_clear_all_patients():
-    # vide la table patient
     job_id = 'Clear Patient Table'
 
-    # Vérifier si le job existe déjà
-    if app.scheduler.get_job(job_id):
-        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
-        return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
+    # Vérifier si le job existe avant de tenter de le supprimer
+    if current_app.scheduler.get_job(job_id):
+        try:
+            current_app.scheduler.remove_job(job_id)
+            current_app.logger.info(f"Existing job '{job_id}' removed.")
+        except Exception as e:
+            current_app.logger.error(f"Failed to remove job '{job_id}': {e}")
 
     try:
-        hour=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[0])
-        minute=int(app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
-        app.scheduler.add_job(id=job_id, 
-                        func=clear_all_patients_job, 
-                        trigger='cron', 
-                        hour=hour, 
-                        minute=minute)
-        app.logger.info(f"Job '{job_id}' successfully added.")
+        hour = int(current_app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[0])
+        minute = int(current_app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
+
+        # Ajouter la tâche avec une référence de fonction sans arguments
+        current_app.scheduler.add_job(
+            id=job_id,
+            func=clear_all_patients_job,  # Utiliser la référence de fonction directe
+            trigger='cron',
+            hour=hour,
+            minute=minute
+        )
+        current_app.logger.info(f"Job '{job_id}' successfully added.")
         return True
     except Exception as e:
-        app.logger.error(f"Failed to add job '{job_id}': {e}")
+        current_app.logger.error(f"Failed to add job '{job_id}': {e}")
         return False
     
 
 def clear_old_patients_table(app):
     # Vérifie si la fonctionnalité est activée dans la configuration
-    if app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
+    if current_app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
         # Obtenez la date actuelle en UTC
         today = datetime.now(timezone.utc).date()
         
@@ -93,20 +100,20 @@ def clear_old_patients_table(app):
         if old_patients.count() > 0:
             old_patients.delete(synchronize_session='fetch')
             db.session.commit()
-            app.communikation("update_patient")
-            app.logger.info(f"Deleted old patients not from today ({today}).")
+            current_app.communikation("update_patient")
+            current_app.logger.info(f"Deleted old patients not from today ({today}).")
     else:
-        app.logger.info("Deletion of old patients is disabled.")
+        current_app.logger.info("Deletion of old patients is disabled.")
 
 
 def remove_scheduler_clear_all_patients():
     try:
         # Supprime le job à l'aide de son id
-        app.scheduler.remove_job('Clear Patient Table')
-        app.logger.info("Job 'Clear Patient Table' successfully removed.")
+        current_app.scheduler.remove_job('Clear Patient Table')
+        current_app.logger.info("Job 'Clear Patient Table' successfully removed.")
         return True
     except Exception as e:
-        app.logger.error(f"Failed to remove job 'Clear Patient Table': {e}")
+        current_app.logger.error(f"Failed to remove job 'Clear Patient Table': {e}")
         return False
     
 
@@ -115,45 +122,48 @@ def scheduler_clear_announce_calls():
     job_id = 'Clear Announce Calls'
 
     # Vérifier si le job existe déjà
-    if app.scheduler.get_job(job_id):
-        app.logger.info(f"Job '{job_id}' already exists. No new job added.")
+    if current_app.scheduler.get_job(job_id):
+        current_app.logger.info(f"Job '{job_id}' already exists. No new job added.")
         return False  # ou True si vous souhaitez indiquer que l'opération globale est réussie
 
     try:
-        hour=int(app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
-        minute=int(app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[1])
-        app.scheduler.add_job(id=job_id, 
+        hour=int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
+        minute=int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[1])
+        current_app.scheduler.add_job(id=job_id, 
                         func=clear_announce_calls_job, 
                         trigger='cron', 
                         hour=hour, 
                         minute=minute)
-        app.logger.info(f"Job '{job_id}' successfully added.")
+        current_app.logger.info(f"Job '{job_id}' successfully added.")
         return True
     except Exception as e:
-        app.logger.error(f"Failed to add job '{job_id}': {e}")
+        current_app.logger.error(f"Failed to add job '{job_id}': {e}")
         return False
 
 
 def remove_scheduler_clear_announce_calls():
     try:
         # Supprime le job à l'aide de son id
-        app.scheduler.remove_job('Clear Announce Calls')
-        app.logger.info("Job 'Clear Announce Calls' successfully removed.")
+        current_app.scheduler.remove_job('Clear Announce Calls')
+        current_app.logger.info("Job 'Clear Announce Calls' successfully removed.")
         return True
     except Exception as e:
-        app.logger.error(f"Failed to remove job 'Clear Announce Calls': {e}")
+        current_app.logger.error(f"Failed to remove job 'Clear Announce Calls': {e}")
         return False
 
 
 def clear_all_patients_job():
-    """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
+    """Efface tous les patients en utilisant le contexte de l'application globale"""
+    app = AppHolder.get_app()  # Obtenir l'instance de l'application
+
+    # Créer explicitement un contexte d'application avec l'instance obtenue
     with app.app_context():
-        clear_all_patients_from_db()
+        clear_all_patients_from_db(app)
 
 
 def clear_announce_calls_job():
     """ Il faut appeler la fonction dans une fonction wrapper dans app context car les Threads sont différents"""
-    with app.app_context():
+    with current_app.app_context():
         clear_announces_call()
 
 def clear_announces_call():
@@ -168,8 +178,8 @@ def clear_announces_call():
             # Vérifie si c'est un fichier (et non un sous-répertoire)
             if os.path.isfile(fichier_complet):
                 os.remove(fichier_complet)  # Supprime le fichier
-        app.display_toast(success=True, message="Tous les fichiers audio ont été supprimés.")
+        current_app.display_toast(success=True, message="Tous les fichiers audio ont été supprimés.")
         return "", 200
     else:
-        app.display_toast(success=False, message="Le répertoire n'existe pas.")
+        current_app.display_toast(success=False, message="Le répertoire n'existe pas.")
         return "", 200

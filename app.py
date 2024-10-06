@@ -55,6 +55,7 @@ from backup import backup_config_all, backup_staff, backup_counters, backup_sche
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
 
+from app_holder import AppHolder
 
 from routes.counter import counter_bp, update_switch_auto_calling
 from routes.admin_announce import admin_announce_bp
@@ -492,6 +493,10 @@ def start_fonctions(app):
 
 def create_app():
     app = Flask(__name__)
+
+    # Assigner l'instance Flask à AppHolder
+    AppHolder.set_app(app)
+
     #, logger=True, engineio_logger=True
     app.config.from_object(Config())
     app.debug = True

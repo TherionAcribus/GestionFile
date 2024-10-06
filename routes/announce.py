@@ -90,4 +90,5 @@ def announce_init_gallery():
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
     app.communikation("update_screen", event="refresh")
+    print("Refresh DISPLAY!!")
     return '', 204
