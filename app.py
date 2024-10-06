@@ -1,10 +1,8 @@
-# TODO : Affichage d'un message en etranger si patient etranger "on going"
 # TODO : Si choix langue en etranger -> Diriger vers comptoir en etranger
-# TODO : Bouton Help ?
 
 # deux lignes a appeler avant tout le reste (pour server Render)
 import eventlet
-eventlet.monkey_patch(thread=True, time=True)
+eventlet.monkey_patch() #thread=True, time=True
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash, session
 
 from sqlalchemy.orm import sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
@@ -1154,7 +1152,7 @@ def disable_buttons_for_activity_task(activity_id):
 
 def enable_buttons_for_activity_task(activity_id):
     with app.app_context():
-        enable_buttons_for_activity(activity_id)
+        enable_buttons_for_activity(app, activity_id)
 
 
 

@@ -32,7 +32,7 @@
             <td><input type="text" class="form-control" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
             <td>
                 <div class="mb-3 col-10">
-                    <select class="form-select" multiple id="schedules-{{ activity.id }}">
+                    <select multiple id="schedules-{{ activity.id }}">
                         {% for schedule in schedules %}
                             <option value="{{schedule.id}}"
                                     {% if schedule in activity.schedules %}selected{% endif %}>

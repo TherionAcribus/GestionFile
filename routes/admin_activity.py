@@ -303,7 +303,7 @@ def update_scheduler_for_activity(activity):
 
             app.scheduler.add_job(
                 id=f"{job_id_enable_prefix}{start_day}",
-                func='app:enable_buttons_for_activity',
+                func='scheduler_functions:enable_buttons_for_activity_job',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=start_day,
@@ -312,7 +312,7 @@ def update_scheduler_for_activity(activity):
             )
             app.scheduler.add_job(
                 id=f"{job_id_disable_prefix}{end_day}",
-                func='app:disable_buttons_for_activity',
+                func='scheduler_functions:disable_buttons_for_activity_job',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=end_day,
@@ -328,7 +328,7 @@ def update_scheduler_for_activity(activity):
 
             app.scheduler.add_job(
                 id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
-                func='app:enable_buttons_for_activity_task',
+                func='scheduler_functions:enable_buttons_for_activity_job',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=day,
@@ -337,7 +337,7 @@ def update_scheduler_for_activity(activity):
             )
             app.scheduler.add_job(
                 id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
-                func='app:disable_buttons_for_activity_task',
+                func='scheduler_functions:disable_buttons_for_activity_job',
                 args=[activity.id],
                 trigger='cron',
                 day_of_week=day,
