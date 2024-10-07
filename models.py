@@ -55,6 +55,34 @@ counters_activities = db.Table('counters_activities',
     db.Column('activity_id', db.Integer, db.ForeignKey('activity.id'), primary_key=True)
 )
 
+class PatientHistory(db.Model):
+    id = db.Column(db.Integer, Sequence('patient_history_id_seq'), primary_key=True)
+    call_number = db.Column(db.String(10), nullable=False)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp_counter = db.Column(db.DateTime, default=None)
+    timestamp_end = db.Column(db.DateTime, default=None)
+    day_of_week = db.Column(db.String(10), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='standing')
+    counter_id = db.Column(db.Integer, nullable=True)
+    activity_id = db.Column(db.Integer, nullable=False)
+    overtaken = db.Column(db.Integer, default=0)
+    language_id = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return f'<PatientHistory {self.call_number}> ({self.id})'
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "call_number": self.call_number,
+            "activity_id": self.activity_id,
+            "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            "day_of_week": self.day_of_week,
+            "status": self.status,
+            "counter_id": self.counter_id,
+            "language_id": self.language_id,
+        }
+
 class Counter(db.Model):
     id = db.Column(db.Integer, Sequence('counter_id_seq'), primary_key=True)
     name = db.Column(db.String(20), nullable=False)

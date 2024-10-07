@@ -103,10 +103,6 @@ if site == "production":
 else:
     parameters = pika.URLParameters('amqp://guest:guest@localhost:5672/%2F')
 
-executors = {
-    'default': {'type': 'eventlet'}
-}
-scheduler = BackgroundScheduler()
 mail = Mail()
 migrate = Migrate()
 user_datastore = SQLAlchemyUserDatastore(db, User, Role)
@@ -340,6 +336,7 @@ def load_configuration(app):
         "phone_line6": ("PHONE_LINE6", "value_str"),
         "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
+        "cron_transfer_patient_to_history": ("CRON_TRANSFER_PATIENT_TO_HISTORY", "value_bool"),
         "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
         "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
         "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
@@ -438,9 +435,6 @@ def create_app(config_class=Config):
     # Initialiser le mail avec l'application
     app.mail = Mail(app)
 
-    #scheduler.init_app(app)
-    scheduler.start()
-
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
     with app.app_context():
         start_fonctions(app)
@@ -473,6 +467,14 @@ def create_app(config_class=Config):
 
 app = create_app(config_class=Config)
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+
+# Définir le jobstore avec votre base de données
+jobstores = {
+    'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI_SCHEDULER'])
+}
+scheduler = BackgroundScheduler(jobstores=jobstores)
+#scheduler.init_app(app)
+scheduler.start()
 
 def callback_update_patient(ch, method, properties, body):
     logging.debug(f"Received general message: {body}")
@@ -1129,6 +1131,7 @@ def check_balises_after_validation(value):
 def admin_database():
     return render_template('/admin/database.html',
                         cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
+                        cron_transfer_patient_to_history = app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"],
                         cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],
                         cron_delete_announce_calls_activated=app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"],
                         cron_delete_announce_calls_hour=app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"])

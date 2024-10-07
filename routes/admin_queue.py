@@ -47,7 +47,9 @@ def clear_all_patients_from_db(appp):
             db.session.commit()
             appp.logger.info("La table Patient a été vidée")
             appp.communikation("update_patient")
+            # rafraichissement de la page Announce
             announce_refresh()
+            # mise à jour des dispos des comptoirs
             clear_counter_table()
             return current_app.display_toast(message="La table Patient a été vidée")
         except Exception as e:

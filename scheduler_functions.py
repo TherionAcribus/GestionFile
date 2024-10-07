@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from flask import current_app
 from models import db, Button, Activity, Patient
 from routes.admin_queue import clear_all_patients_from_db
+from bdd import transfer_patients_to_history
 from app_holder import AppHolder
 
 def with_app_context(f):
@@ -170,7 +171,11 @@ def clear_all_patients_job():
 
     # Créer explicitement un contexte d'application avec l'instance obtenue
     with app.app_context():
-        clear_all_patients_from_db(app)
+        success = True
+        if app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"]:
+            success = transfer_patients_to_history()
+        if success:
+            clear_all_patients_from_db(app)
 
 
 def clear_announce_calls_job():

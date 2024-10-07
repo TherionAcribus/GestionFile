@@ -12,6 +12,11 @@
             "Vider automatiquement la table des patients une fois par jour")
     }}
 
+    {{ macros.switch("cron_transfer_patient_to_history", 
+        cron_transfer_patient_to_history, 
+        "Copier les patients du jour dans l'historique (visée statistique)")
+    }}
+
     {{ macros.textbloc_hour("cron_delete_patient_table_hour", 
             cron_delete_patient_table_hour, 
             "Heure de la suppression")
