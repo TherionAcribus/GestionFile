@@ -47,7 +47,7 @@ from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json
-from python.engine import generate_audio_calling, call_next
+from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
@@ -1200,14 +1200,14 @@ def auto_calling():
 
         for counter in counters:
             if not counter.is_active:
+                print("auto calling counter libre", counter.id)
                 is_patient, patient = call_next(int(counter.id))
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
                 communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
-                counter_become_active(int(counter.id))
+                counter_become_active(counter.id)
                 # mise à jour de Pyside, car lui est mis à jour normalement via les retours du serveur et non via websocket contrairement au site (pour l'instant)
                 communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
-
                 break
 
 
@@ -1410,21 +1410,7 @@ def call_update_switch_auto_calling(counter_id):
         print(f"Résultat : {result}")
         
 
-def counter_become_inactive(counter_id):
-    print("counter_become_inactiv")
-    counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
-    counter.is_active = False
-    db.session.commit()
 
-
-def counter_become_active(counter_id):
-    print("counter_become_activ")
-    counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
-    print(counter, counter.is_active)
-    if not counter.is_active:
-        print('change')
-        counter.is_active = True
-        db.session.commit()
 
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------

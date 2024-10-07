@@ -4,6 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
 from python.engine import call_next
 from utils import replace_balise_announces
+from python.engine import counter_become_active, counter_become_inactive
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -184,6 +185,7 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
         if auto_calling_value and not counter.is_active:
             is_patient, patient = call_next(counter.id)
             if is_patient:
+                counter_become_active(counter.id)
                 app.communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)

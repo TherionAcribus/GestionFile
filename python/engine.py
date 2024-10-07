@@ -453,3 +453,20 @@ def get_google_credentials():
         decrypted_content = cipher_suite.decrypt(encrypted_content)
         return decrypted_content  # Bytes du fichier JSON
     return None
+
+
+def counter_become_inactive(counter_id):
+    print("counter_become_inactiv")
+    counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
+    counter.is_active = False
+    db.session.commit()
+
+
+def counter_become_active(counter_id):
+    print("counter_become_activ")
+    counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
+    print(counter, counter.is_active)
+    if not counter.is_active:
+        print('change')
+        counter.is_active = True
+        db.session.commit()
