@@ -20,17 +20,17 @@ def call_next(counter_id, attempts=0):
 
     if attempts >= max_attempts:
         app.logger.warning(f"Max attempts reached for counter {counter_id}")
-        return None
+        return False, "max_loop"
 
     if Patient.query.count() == 0:
         app.logger.info("No patients available")
-        return None
+        return False, "no_patient"
     
     next_patient = algo_choice_next_patient(counter_id)
 
     if next_patient is None:
         app.logger.info(f"No next patient found for counter {counter_id}")
-        return None
+        return False, "no_patient_for_counter"
 
     if next_patient.status != "standing":
         app.logger.info(f"Patient {next_patient.id} not standing, retrying. Attempt {attempts + 1}")
@@ -49,7 +49,7 @@ def call_next(counter_id, attempts=0):
         audio_url = generate_audio_calling(counter_id, next_patient, language_code=language_code)
         app.communikation("update_audio", event="audio", data=audio_url)
         
-        return next_patient
+        return True, next_patient
 
     except Exception as e:
         db.session.rollback()
@@ -71,6 +71,10 @@ def algo_choice_next_patient(counter_id):
     next_possible_patient = next_possible_patient.filter(
         Patient.activity_id.in_(staff_activities)
     )
+
+    print("next_possible_patient", next_possible_patient)
+    if next_possible_patient.count() == 0:
+        return None
 
     # permet de voir si un patient s'est fait doubler plus que le nombre prévu
     # Si oui on bloque l'algo le temps de rétablir l'équilibre

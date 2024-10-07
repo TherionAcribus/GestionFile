@@ -182,11 +182,13 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
         # si on relance autocalling, on appelle automatiquement le patient suivant
         # uniquement si le comptoir est inactif
         if auto_calling_value and not counter.is_active:
-            patient = call_next(counter.id)
-            app.communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
-            # mise à jour écran ... bizarremment l'audio est dans le call next....
-            text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
-            app.communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
+            is_patient, patient = call_next(counter.id)
+            if is_patient:
+                app.communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
+                # mise à jour écran ... bizarremment l'audio est dans le call next....
+                text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
+                app.communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
+
 
         return True, {"status": counter.auto_calling}, 200
 
@@ -219,6 +221,7 @@ def update_switch_auto_calling():
 def app_auto_calling():
     counter_id = request.form.get('counter_id')
     action = request.form.get('action')
+    print("autocalling", action)
 
     if action is None:
         counter = Counter.query.get(counter_id)
@@ -231,8 +234,10 @@ def app_auto_calling():
     # notification de changement
     app.communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_value})
 
+    print(success, result, status_code)
     if not success:
         return jsonify({"error": result}), status_code
+    print("OL ")
     return jsonify(result), status_code
     
 

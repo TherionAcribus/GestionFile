@@ -1265,13 +1265,14 @@ def auto_calling():
 
         for counter in counters:
             if not counter.is_active:
-                patient = call_next(int(counter.id))
+                is_patient, patient = call_next(int(counter.id))
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
                 communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
                 counter_become_active(int(counter.id))
                 # mise à jour de Pyside, car lui est mis à jour normalement via les retours du serveur et non via websocket contrairement au site (pour l'instant)
                 communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
+
                 break
 
 
@@ -1390,7 +1391,6 @@ def counter_refresh_buttons(counter_id):
 
 @app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
 def validate_and_call_next(counter_id):
-    start_time = tm.time()
     print('validate_and_call_next', counter_id)
 
     current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
@@ -1399,29 +1399,22 @@ def validate_and_call_next(counter_id):
 
     validate_current_patient(counter_id)
 
-    next_patient = call_next(counter_id)
+    is_patient, next_patient = call_next(counter_id)
+
+    
+    if is_patient:
+        counter_become_active(counter_id)   
+        communikation("update_patient")
+        
+        text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
+        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
+        
+        return jsonify(next_patient.to_dict()), 200  
 
     # si pas de patient suivant, le comptoir devient inactif
-    if not next_patient:
-        counter_become_inactive(counter_id)
     else:
-        counter_become_active(counter_id)
-
-    communikation("update_patient")
-    
-    text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
-    communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
-
-    communication("update_patients")
-    communication("update_counter", client_id=counter_id)
-    # counter pyside
-    if isinstance(next_patient, Patient):
-        next_patient_pyside = next_patient.to_dict()
-    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": next_patient_pyside}})
-    end_time = tm.time()
-    print('validate_and_call_next', end_time - start_time)
-
-    return jsonify(next_patient.to_dict()), 200  
+        counter_become_inactive(counter_id)
+        return '', 204
 
 
 def validate_current_patient(counter_id):
