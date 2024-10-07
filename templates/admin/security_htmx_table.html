@@ -12,6 +12,7 @@
         {% for user in users %}
         <tr>
             <td><input type="text" class="form-control" value="{{ user.username }}" id="username-{{ user.id }}"></td>
+            <td>A venir</td>
             <td>
                 <div class="input-field">
                     <input id="email-{{ user.id }}" type="email" class="form-control" class="validate" value="{{ user.email }}">
