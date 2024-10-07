@@ -70,7 +70,7 @@ from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
 from routes.admin_security import admin_security_bp, ExtendedLoginForm
-from routes.admin_music import admin_music_bp
+from routes.admin_music import admin_music_bp, is_spotipy_connected
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
 from routes.announce import announce_bp

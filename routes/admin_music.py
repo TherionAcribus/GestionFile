@@ -82,6 +82,7 @@ def spotify_login():
     # Initialiser le flux OAuth avec le cache personnalisé
     sp_oauth = get_spotify_oauth()
     auth_url = sp_oauth.get_authorize_url()
+    app.communikation("update_screen", event="spotify_status", data=True)
     # Rediriger l'utilisateur vers l'URL d'autorisation
     return redirect(auth_url)
 
@@ -95,6 +96,7 @@ def clear_spotify_tokens():
 def spotify_logout():
     sp_oauth = get_spotify_oauth()
     sp_oauth.cache_handler.delete_token_from_cache()
+    app.communikation("update_screen", event="spotify_status", data=False)
     return redirect(url_for('admin_music.admin_music'))
 
 @admin_music_bp.route('/spotify/callback')
@@ -135,8 +137,6 @@ def show_saved_tracks():
     return "<br>".join(tracks)
 
 
-
-
 @admin_music_bp.route('/error')
 def error_page():
     return "Une erreur s'est produite avec votre authentification Spotify. Veuillez essayer de vous reconnecter.", 400
@@ -147,6 +147,12 @@ def get_spotipy():
         return redirect(url_for('admin_music.spotify_login'))
     
     return spotipy.Spotify(auth=token_info['access_token'])
+
+def is_spotipy_connected():
+    token_info, authorized = get_spotify_token()
+    if not authorized:
+        return False    
+    return True
 
 def spotify_exception_handler(func):
     """ Décoration qui permet de gérer les erreurs de Spotify"""

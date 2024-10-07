@@ -70,6 +70,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
         add_calling(msg);
     });
 
+    screenSocket.on('spotify_status', function(msg) {
+        console.log("spotify_status:", msg);
+        isSpotifyConnected = msg.data;
+        console.log("isSpotifyConnected WS:", isSpotifyConnected);
+    });
+
     screenSocket.on('remove_calling', function(msg) {
         console.log("Received screen message:", msg);
         console.log('REMOVED')
@@ -123,6 +129,23 @@ function refresh_calling_list() {
     //htmx.trigger('#div_ongoing', 'refresh_ongoing', {target: '#div_ongoing'});
 }
 
+let isSpotifyConnected = false;
+
+// Fonction pour vérifier la connexion spotify au chargement de la page
+function checkSpotifyConnection() {
+    fetch('/announce/spotify/check_connection')
+        .then(response => response.json())
+        .then(data => {
+            isSpotifyConnected = data.connected;
+            console.log('Connexion Spotify:', data.connected);
+        })
+        .catch(error => console.error('Erreur:', error));
+}
+
+// Appeler cette fonction au chargement de la page
+document.addEventListener('DOMContentLoaded', checkSpotifyConnection);
+
+
 const audioQueue = [];
 let isPlaying = false;
 
@@ -132,7 +155,8 @@ function receive_audio(msg) {
     console.log("Queueing audio...", audioUrl);
     queueAudio(audioUrl);
     // Envoyer une requête à Flask pour mettre la musique en pause
-    pauseMusicOnSpotify();
+    if (isSpotifyConnected)
+        {pauseMusicOnSpotify();}
 }
 
 function queueAudio(audioUrl) {
@@ -146,7 +170,8 @@ function playNextAudio() {
     console.log("Playing next audio...", audioQueue);
     if (audioQueue.length === 0) {
         isPlaying = false;
-        resumeMusicOnSpotify();
+        if (isSpotifyConnected)
+            {resumeMusicOnSpotify();}
         return;
     }
     isPlaying = true;
