@@ -95,7 +95,7 @@ def clear_spotify_tokens():
 def spotify_logout():
     sp_oauth = get_spotify_oauth()
     sp_oauth.cache_handler.delete_token_from_cache()
-    return redirect(url_for('admin_music.admin_app'))
+    return redirect(url_for('admin_music.admin_music'))
 
 @admin_music_bp.route('/spotify/callback')
 def spotify_callback():
@@ -340,8 +340,16 @@ def get_spotify_current_track_info():
 
 @admin_music_bp.route('/admin/music/dashboard')
 def dashboard_music():
-    track_infos = get_spotify_current_track_info()
+    token_info, authorized = get_spotify_token()
     dashboardcard = DashboardCard.query.filter_by(name="player").first()
-    return render_template('/admin/dashboard_player.html', 
-                            track_infos=track_infos,
-                            dashboardcard=dashboardcard)
+    print("spotify", authorized)
+    if authorized:
+        track_infos = get_spotify_current_track_info()
+        return render_template('/admin/dashboard_player.html',
+                                spotify_connected=authorized,
+                                track_infos=track_infos,
+                                dashboardcard=dashboardcard)
+    else:
+        return render_template('/admin/dashboard_player.html', 
+                                spotify_connected=authorized,
+                                dashboardcard=dashboardcard)

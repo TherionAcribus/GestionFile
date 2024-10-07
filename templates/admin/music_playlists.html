@@ -34,5 +34,6 @@
     {% endif %}
 
 {% else %}
-    Vous n'êtes pas connecté à Spotify.
+    Vous n'êtes pas connecté à Spotify.<br>
+    <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
 {% endif %}

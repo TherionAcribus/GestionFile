@@ -17,7 +17,12 @@
             </div>
         </div>
         <div class="card-body">
-            {% include 'admin/music_player.html' %}
+            {% if spotify_connected %}
+                {% include 'admin/music_player.html' %}
+            {% else %}
+                <p>Connectez-vous à Spotify pour utiliser ce service</p>
+                <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
+            {% endif %}
         </div>
     </div>
 </div>
