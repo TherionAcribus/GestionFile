@@ -1,8 +1,16 @@
-from flask import Blueprint, render_template, jsonify, request, current_app as app
+import os
+from flask import Blueprint, render_template, jsonify, redirect, url_for, request, current_app as app
 from flask_security import hash_password
 from datetime import datetime
 from models import User, db
 from flask_mailman import EmailMessage
+from flask_login import logout_user
+from flask_security import Security, current_user, auth_required, hash_password, \
+    SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
+from wtforms import StringField, PasswordField, HiddenField
+from wtforms.validators import DataRequired
+from flask_security.forms import LoginForm, BooleanField
+from urllib.parse import urlparse, urljoin
 
 admin_security_bp = Blueprint('admin_security', __name__)
 
@@ -142,3 +150,88 @@ def send_test_email(mail_adress):
     msg.send()
     return True
 
+
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+
+@admin_security_bp.route('/login', methods=['GET', 'POST'])
+def login():
+    print("FLASK LOGIN")
+    form = ExtendedLoginForm()
+    # Récupérez 'next' de l'URL ou du formulaire
+    next_url = request.args.get('next') or form.next.data
+    
+    # Assurez-vous que form.next.data est toujours défini
+    form.next.data = next_url
+
+    print("next_url", next_url)
+    
+    if form.validate_on_submit():
+        user = form.user
+        remember = form.remember.data 
+        login_user(user, remember=remember)
+        
+        # Vérifiez si l'URL next est sûre avant de rediriger
+        if not next_url or not is_safe_url(next_url):
+            next_url = url_for('admin_security.home')
+        
+        return redirect(next_url)
+    
+    return render_template('security/login.html', form=form)
+
+
+class ExtendedLoginForm(LoginForm):
+    print("EXTENDED LOGIN FORM")
+    username = StringField('Nom d\'utilisateur', [DataRequired()])
+    password = PasswordField('Mot de passe', [DataRequired()])
+    remember = BooleanField('Se souvenir de moi')
+    email = None
+    next = HiddenField()
+
+    def validate(self, extra_validators=None):
+        print("VALIDATE")
+        self.user = User.query.filter_by(username=self.username.data).first()
+        print(self.user)
+
+        self.user = User.query.filter_by(username=self.username.data).first()
+        if not self.user:
+            print("Unknown username")
+            return False
+
+        if not verify_and_update_password(self.password.data, self.user):
+            print("Invalid password")
+            return False
+        return True
+    
+@admin_security_bp.route('/logout_all')
+def logout_all():
+    """ Déconnexion de tous les utilisateurs 
+    Cela permet de restaurer la base de données User """
+    app.logger.info("Logout all users")
+    # Supprimer toutes les sessions
+    if os.path.exists('flask_session'):
+        for filename in os.listdir('flask_session'):
+            file_path = os.path.join('flask_session', filename)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+            except Exception as e:
+                print(e)    
+    
+    return redirect(url_for('admin_security.login'))
+
+
+# POSITION TEMPORAIRE -> FAIRE UNE VRAIE PAGE D'ACCEUIL AVEC TOUTES LES PAGES + DOC
+@admin_security_bp.route('/')
+@login_required
+def home():
+    return "Bonjour la pharmacie!"
+
+@admin_security_bp.route('/logout')
+def logout():
+    logout_user()
+    # Rediriger vers la page de login ou une autre page appropriée après la déconnexion
+    return redirect(url_for('admin_security.login'))

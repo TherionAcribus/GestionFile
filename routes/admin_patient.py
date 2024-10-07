@@ -451,6 +451,8 @@ def admin_printer_status():
 @admin_patient_bp.route('/admin/printer/dashboard')
 def dashboard_staff():
     dashboardcard = DashboardCard.query.filter_by(name="staff").first()
+    if not app.config["PRINTER_INFOS"]:
+        print("Karamaba")
     print("PRINTERINFOS", app.config["PRINTER_INFOS"])
     return render_template('/admin/dashboard_printer.html', 
                             dashboardcard=dashboardcard,

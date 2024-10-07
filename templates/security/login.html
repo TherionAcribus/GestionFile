@@ -5,7 +5,7 @@
 </head>
 <body>
     <h1>Connexion</h1>
-    <form method="POST" action="{{ url_for('login') }}">
+    <form method="POST" action="{{ url_for('admin_security.login') }}">
         {{ form.hidden_tag() }}
         {{ form.next }}
         <div>

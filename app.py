@@ -69,7 +69,7 @@ from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
-from routes.admin_security import admin_security_bp
+from routes.admin_security import admin_security_bp, ExtendedLoginForm
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -105,8 +105,6 @@ else:
 
 mail = Mail()
 migrate = Migrate()
-user_datastore = SQLAlchemyUserDatastore(db, User, Role)
-security = Security()
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
     """ Effectue la communication avec les clients """
@@ -364,6 +362,14 @@ def load_configuration(app):
     app.config["VOICE_GOOGLE_REGION"] = french.voice_google_region
     print("VOICE_MODEL", app.config["VOICE_MODEL"])
 
+    # printer
+    app.config["PRINTER_INFOS"] = []
+    app.config["PRINTER_ERROR"] = {
+        'error': True,
+        'message': "pas de connexion à l'App Patient",
+        'timestamp': datetime.now(timezone.utc)
+    }
+
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
 
@@ -427,10 +433,12 @@ def create_app(config_class=Config):
     logging.basicConfig(level=logging.DEBUG,
                         format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
-    # Initialiser les extensions avec l'application
     db.init_app(app)
     migrate.init_app(app, db)
-    security.init_app(app, user_datastore, register_blueprint=True, name='flask_security')
+
+    user_datastore = SQLAlchemyUserDatastore(db, User, Role)
+    security = Security(app, user_datastore, register_blueprint=True)
+    #security.init_app(app, user_datastore, register_blueprint=True, name='flask_security')
 
     # Initialiser le mail avec l'application
     app.mail = Mail(app)
@@ -462,6 +470,8 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_stats_bp, url_prefix='')
     app.register_blueprint(admin_app_bp, url_prefix='')
     app.register_blueprint(engine_bp, url_prefix='')
+
+    print(app.url_map)
 
     return app
 
@@ -736,11 +746,6 @@ def rabbitmq_status_local():
 
 
 
-def is_safe_url(target):
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
-    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
-
 """with app.app_context():
     app.add_url_rule('/admin/backup/config', 'backup_config_all', backup_config_all(ConfigOption, ConfigVersion))
 """
@@ -815,74 +820,6 @@ app.add_url_rule('/admin/buttons/restore', 'restore_buttons',
 
 
 
-@app.route('/logout_all')
-def logout_all():
-    """ Déconnexion de tous les utilisateurs 
-    Cela permet de restaurer la base de données User """
-    app.logger.info("Logout all users")
-    # Supprimer toutes les sessions
-    if os.path.exists('flask_session'):
-        for filename in os.listdir('flask_session'):
-            file_path = os.path.join('flask_session', filename)
-            try:
-                if os.path.isfile(file_path):
-                    os.unlink(file_path)
-            except Exception as e:
-                print(e)    
-    
-    return redirect(url_for('login'))
-
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    form = ExtendedLoginForm()
-    # Récupérez 'next' de l'URL ou du formulaire
-    next_url = request.args.get('next') or form.next.data
-    
-    # Assurez-vous que form.next.data est toujours défini
-    form.next.data = next_url
-    
-    if form.validate_on_submit():
-        user = form.user
-        remember = form.remember.data 
-        login_user(user, remember=remember)
-        
-        # Vérifiez si l'URL next est sûre avant de rediriger
-        if not next_url or not is_safe_url(next_url):
-            next_url = url_for('home')
-        
-        return redirect(next_url)
-    
-    return render_template('security/login.html', form=form)
-
-
-class ExtendedLoginForm(LoginForm):
-    username = StringField('Nom d\'utilisateur', [DataRequired()])
-    password = PasswordField('Mot de passe', [DataRequired()])
-    remember = BooleanField('Se souvenir de moi')
-    email = None
-    next = HiddenField()
-
-    def validate(self, extra_validators=None):
-        print("VALIDATE")
-        self.user = User.query.filter_by(username=self.username.data).first()
-        print(self.user)
-        """if not super(ExtendedLoginForm, self).validate(extra_validators=extra_validators):
-            print("Erreurs de validation:", self.errors)
-            print("TRUC BIZARRE")
-            return False"""
-
-        self.user = User.query.filter_by(username=self.username.data).first()
-        if not self.user:
-            print("Unknown username")
-            return False
-
-        if not verify_and_update_password(self.password.data, self.user):
-            print("Invalid password")
-            return False
-        print("OK !!!!")
-        return home()
-
 #user_datastore = SQLAlchemyUserDatastore(db, User, None)
 #security = Security(app, user_datastore, login_form=ExtendedLoginForm)
 
@@ -907,10 +844,7 @@ def with_app_context(func):
     return wrapper
 
 
-@app.route('/')
-@login_required
-def home():
-    return "Bonjour la pharmacie!"
+
 
 # -------------- SECURITé ---------------------
 
@@ -947,23 +881,23 @@ def require_login_for_admin():
     if request.path.startswith('/admin'):
         if app.config["SECURITY_LOGIN_ADMIN"] and not current_user.is_authenticated:
             print("SECURITY_LOGIN_ADMIN", request.url)
-            return redirect(url_for('security.login', next=request.url))
+            return redirect(url_for('admin_security.login', next=request.url))
     elif request.path.startswith('/counter'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not current_user.is_authenticated:
-            return redirect(url_for('security.login', next=request.url))
+            return redirect(url_for('admin_security.login', next=request.url))
     elif request.path.startswith('/display'):
         if app.config["SECURITY_LOGIN_SCREEN"] and not current_user.is_authenticated:
-            return redirect(url_for('security.login', next=request.url))
+            return redirect(url_for('admin_security.login', next=request.url))
     # on mets en code sur les pages patients, mais pas patient/phone
     elif request.path.startswith('/patient') and not request.path.startswith('/patient/phone'):
         if app.config["SECURITY_LOGIN_PATIENT"] and not current_user.is_authenticated:
-            return redirect(url_for('security.login', next=request.url))
+            return redirect(url_for('admin_security.login', next=request.url))
     elif request.path.startswith('/app'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not (current_user.is_authenticated or is_valid_app_request):
             if is_valid_app_request:
                 return jsonify({"error": "Unauthorized"}), 401
             else:
-                return redirect(url_for('security.login', next=request.url))
+                return redirect(url_for('admin_security.login', next=request.url))
         
 
 
@@ -1419,7 +1353,6 @@ def validate_and_call_next(counter_id):
 
 
 def validate_current_patient(counter_id):
-
     current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
     if current_patient:
         communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
@@ -1746,7 +1679,6 @@ request_started.connect(load_colors, app)
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
 app.display_toast = display_toast
-app.logout_all = logout_all
 app.communikation = communikation
 app.call_specific_patient = call_specific_patient
 app.allowed_image_file = allowed_image_file
