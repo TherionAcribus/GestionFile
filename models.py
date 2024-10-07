@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from flask import current_app as app
 from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint, event
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Session
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
 from celery_sqlalchemy_scheduler.models import PeriodicTask, CrontabSchedule, PeriodicTaskChanged
@@ -42,13 +42,6 @@ class Patient(db.Model):
             "language_code": self.language.code
         }
 
-# Écouteur pour détecter les changements de status
-@event.listens_for(Patient.status, 'set', retval=False)
-def update_timestamps(target, value, oldvalue, initiator):
-    if value == 'done':
-        target.timestamp_end = datetime.now(timezone.utc)
-    elif value == 'ongoing':
-        target.timestamp_counter = datetime.now(timezone.utc)
 
 counters_activities = db.Table('counters_activities',
     db.Column('counter_id', db.Integer, db.ForeignKey('counter.id'), primary_key=True),

@@ -39,14 +39,17 @@ def confirm_delete_patient_table():
     return render_template('/admin/queue_modal_confirm_delete.html')
 
 @admin_queue_bp.route('/admin/database/clear_all_patients')
-def clear_all_patients_from_db(appp):
+def clear_all_patients_from_db(app_context=None):
     print("Suppression de la table Patient")
+    # je dois passer le contexte dans le cas d'APscheduler car dans un Thread différent d'où "app_context", 
+    # je ne peux pas utiliser simplement current_app. Par contre quand appelé par le bouton supprimé on utilise current_app
+    app_context = current_app if not app_context else app_context
     with current_app.app_context():  # Nécessaire pour pouvoir effacer la table via le CRON
         try:
             db.session.query(Patient).delete()
             db.session.commit()
-            appp.logger.info("La table Patient a été vidée")
-            appp.communikation("update_patient")
+            app_context.logger.info("La table Patient a été vidée")
+            app_context.communikation("update_patient")
             # rafraichissement de la page Announce
             announce_refresh()
             # mise à jour des dispos des comptoirs
@@ -54,8 +57,8 @@ def clear_all_patients_from_db(appp):
             return current_app.display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
-            appp.logger.error(str(e))
-            appp.display_toast(success = False, message=str(e))
+            app_context.logger.error(str(e))
+            app_context.display_toast(success = False, message=str(e))
             return "", 200
 
 

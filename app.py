@@ -1197,7 +1197,7 @@ def call_specific_patient(counter_id, patient_id):
         language_code = next_patient.language.code
         print("language_code_pour_audio", language_code)
         audio_url = generate_audio_calling(counter_id, next_patient, language_code)
-        app.communikation("update_audio", event="audio", data=audio_url)
+        communikation("update_audio", event="audio", data=audio_url)
 
         return jsonify(next_patient.to_dict()), 200  
     else:
@@ -1214,6 +1214,7 @@ def validate_patient(counter_id, patient_id):
     current_patient = Patient.query.get(patient_id)
     if current_patient:
         current_patient.status = 'ongoing'
+        current_patient.timestamp_counter = datetime.now(timezone.utc)
         db.session.commit()
 
     communikation("update_patient")
@@ -1425,11 +1426,13 @@ def validate_current_patient(counter_id):
     
     # si patient actuel
     patients_at_counter = Patient.query.filter_by(counter_id=counter_id).all()
-    if patients_at_counter :
+    if patients_at_counter:
         print("patient dans le comptoir")
-        # Mise à jour du statut pour tous les patients au comptoir
-        Patient.query.filter_by(counter_id=counter_id).update({'status': 'done'})
-        db.session.commit()        
+        # Mise à jour du statut et du timestamp_end pour tous les patients au comptoir
+        for patient in patients_at_counter:
+            patient.status = 'done'
+            patient.timestamp_end = datetime.now(timezone.utc)        
+        db.session.commit()
     else:
         print("pas de patient")
 
@@ -1442,6 +1445,7 @@ def pause_patient(counter_id, patient_id):
     current_patient = Patient.query.get(patient_id)
     if current_patient:
         current_patient.status = 'done'
+        current_patient.timestamp_end = datetime.now(timezone.utc)
         db.session.commit()
 
     # le comptoir devient inactif

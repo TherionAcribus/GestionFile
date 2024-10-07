@@ -47,7 +47,6 @@ def patients_ongoing():
     patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
     ongoing_patients = []
     for patient in patients:
-        print("PATATE", patient)
         ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
 
