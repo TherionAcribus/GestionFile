@@ -6,7 +6,6 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship, Session
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
-from celery_sqlalchemy_scheduler.models import PeriodicTask, CrontabSchedule, PeriodicTaskChanged
 
 db = SQLAlchemy()
 
