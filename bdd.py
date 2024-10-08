@@ -7,7 +7,7 @@ def init_database(database, db):
         # Créer les bases de données si elles n'existent pas
         create_database_if_not_exists(app.config["SQLALCHEMY_DATABASE_URI"], 'queueschedulerdatabase')
         create_database_if_not_exists(app.config["SQLALCHEMY_DATABASE_URI"], 'queuedatabase')
-        create_database_if_not_exists(app.config["SQLALCHEMY_DATABASE_URI"], 'userdatabase')
+        #create_database_if_not_exists(app.config["SQLALCHEMY_DATABASE_URI"], 'userdatabase')
         
         db.create_all()
 

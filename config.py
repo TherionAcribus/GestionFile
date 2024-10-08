@@ -54,9 +54,9 @@ class Config:
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
         SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
         # SQLALCHEMY_BINDS configuration to include MySQL
-        SQLALCHEMY_BINDS = {
-            'users': f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/userdatabase'
-        }
+        #SQLALCHEMY_BINDS = {
+        #    'users': f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/userdatabase'
+        #}
 
         # Scheduler
         SCHEDULER_JOBSTORES = {
