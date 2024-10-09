@@ -112,7 +112,8 @@ def clear_old_patients_table(app):
         if old_patients.count() > 0:
             old_patients.delete(synchronize_session='fetch')
             db.session.commit()
-            current_app.communikation("update_patient")
+            # TODO à remettre une fois "communikation" déplacé
+            #current_app.communikation("update_patient")
             current_app.logger.info(f"Deleted old patients not from today ({today}).")
     else:
         current_app.logger.info("Deletion of old patients is disabled.")
