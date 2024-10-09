@@ -21,7 +21,6 @@ class Role(db.Model, RoleMixin):
     description = db.Column(db.String(255))
 
 class User(db.Model, UserMixin):
-    __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=True)  # Rendre email nullable
     username = db.Column(db.String(255), unique=True, nullable=False)  # Le username devient obligatoire
