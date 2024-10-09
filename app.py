@@ -1657,7 +1657,10 @@ def allowed_image_file(filename):
 def load_colors(sender, **extra):
     # Cette fonction sera appelée avant chaque requête
     if 'admin_colors' not in session or session['admin_colors'] != app.config['ADMIN_COLORS']:
-        session['admin_colors'] = app.config['ADMIN_COLORS']
+        try:
+            session['admin_colors'] = app.config['ADMIN_COLORS']
+        except KeyError:
+            session['admin_colors'] = "flatly"
 # Connecter le signal request_started à la fonction load_configuration
 request_started.connect(load_colors, app)
 
