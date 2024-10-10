@@ -3,6 +3,7 @@ import os
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from models import ConfigOption, Button, Activity, Language, Translation, db
 from werkzeug.utils import secure_filename
+from communication import communikation
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -105,7 +106,7 @@ def delete_language(language_id):
         db.session.commit()
         app.display_toast(success=True, message="Suppression réussie")
 
-        app.communikation("admin", event="refresh_languages_order")
+        communikation("admin", event="refresh_languages_order")
 
         return display_languages_table()
 
@@ -164,7 +165,7 @@ def add_new_language():
         db.session.add(new_language)
         db.session.commit()
 
-        app.communikation("admin", event="refresh_languages_order")
+        communikation("admin", event="refresh_languages_order")
 
         app.display_toast(success=True, message="Langue ajoutée avec succès")
 

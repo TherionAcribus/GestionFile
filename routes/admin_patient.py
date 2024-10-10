@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 from models import Button, Activity, DashboardCard, Language, db
 from python.engine import get_futur_patient, create_qr_code 
 from utils import format_ticket_text
+from communication import communikation
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -218,7 +219,7 @@ def add_new_button():
         db.session.commit()
 
         app.display_toast(success=True, message="Bouton ajouté")
-        app.communikation("admin", event="refresh_button_order")
+        communikation("admin", event="refresh_button_order")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_button_form"></div>"""
@@ -253,7 +254,7 @@ def delete_button(button_id):
         db.session.commit()
         app.display_toast(success=True, message="Bouton supprimé")
 
-        app.communikation("admin", event="refresh_button_order")
+        communikation("admin", event="refresh_button_order")
 
         return display_button_table()
 
@@ -322,7 +323,7 @@ def delete_button_image(button_id):
 def print_ticket_test_size():
     text = "123456789012345678901234567890123456789012345678901234567890"
     print(text)
-    app.communikation(stream="app_patient", data=text, flag="print")
+    communikation(stream="app_patient", data=text, flag="print")
     return "", 204
 
 @admin_patient_bp.route("/admin/patient/print_ticket_test")
@@ -335,7 +336,7 @@ def print_ticket_test():
     session["language_code"] = language_code
     patient = get_futur_patient(call_number, activity)    
     text = format_ticket_text(patient, activity)
-    app.communikation(stream="app_patient", data=text, flag="print")
+    communikation(stream="app_patient", data=text, flag="print")
     return "", 204
 
 
@@ -440,7 +441,7 @@ def admin_printer_status():
         'timestamp': timestamp
     })
 
-    app.communikation("admin", event="refresh_printer_dashboard")    
+    communikation("admin", event="refresh_printer_dashboard")    
 
     # Afficher les informations pour vérifier la mise à jour
     print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")

@@ -3,6 +3,7 @@ from models import Patient, Activity, Counter, DashboardCard, db
 from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
 from routes.announce import announce_refresh
+from communication import communikation
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
@@ -117,7 +118,7 @@ def delete_patient(patient_id):
         db.session.delete(patient)
         db.session.commit()
         
-        current_app.communikation("update_patient")
+        communikation("update_patient")
         announce_refresh()
         clear_counter_table()
         current_app.display_toast()
@@ -140,7 +141,7 @@ def create_new_patient_auto():
     new_patient = add_patient(call_number, activity)
 
     print("new_patient", activity)
-    current_app.communikation("update_patient")
+    communikation("update_patient")
 
     return "", 204
 

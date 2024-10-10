@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, make_response, request, session, u
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
+from communication import communikation
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -70,7 +71,7 @@ def patient_right_page():
         page_patient_subtitle=page_patient_subtitle,
     )
     
-    app.communikation("patient", event="refresh_title")
+    communikation("patient", event="refresh_title")
     
     return f"{buttons_content}{subtitle_content}"
 
@@ -164,7 +165,7 @@ def left_page_validate_patient(activity):
     # rafraichissement des pages display et counter
     # envoye de data pour être récupéré sous forme de liste par PySide
     
-    app.communikation("update_patient")
+    communikation("update_patient")
 
     page_patient_validation_message = choose_text_translation("page_patient_validation_message")
     page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
@@ -208,8 +209,8 @@ def print_and_validate():
     print("text", text)
 
     if activity.notification:
-        app.communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
-    app.communikation("app_patient", flag="print", data=text)
+        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+    communikation("app_patient", flag="print", data=text)
     return patient_conclusion_page(new_patient.call_number)
 
 def patient_validate_scan(activity_id):
@@ -217,7 +218,7 @@ def patient_validate_scan(activity_id):
     activity = Activity.query.get(activity_id)
     new_patient = register_patient(activity)
     if activity.notification:
-        app.communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
     return new_patient
 
 @patient_bp.route('/patient/scan_already_validate', methods=['POST'])
@@ -233,7 +234,7 @@ def patient_scan_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
     if activity.notification:
-        app.communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
     return patient_conclusion_page(new_patient.call_number)
 
 
@@ -264,7 +265,7 @@ def patient_conclusion_page(call_number):
 @patient_bp.route('/patient/refresh')
 def patient_refresh():
     """ Permet de rafraichir la page des patients pour effectuer des changements """
-    app.communikation("patient", event="refresh")
+    communikation("patient", event="refresh")
     return '', 204
 
 
@@ -319,7 +320,7 @@ def phone_patient_ping():
     # si pas encore inscrit
     else:
         patient = patient_validate_scan(activity_id)
-        app.communikation("patient", event="update_scan_phone")
+        communikation("patient", event="update_scan_phone")
 
     phone_lines = []
 

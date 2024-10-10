@@ -1,5 +1,6 @@
 from flask import Blueprint,render_template, request, current_app as app
 from models import DashboardCard, db
+from communication import communikation
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
 
@@ -20,7 +21,7 @@ def hide_dashboard_card():
         # Modifier la visibilité de la card
         card.visible = False
         db.session.commit()
-        app.communikation("admin", event="refresh_dashboard_select")
+        communikation("admin", event="refresh_dashboard_select")
         return '', 200  # Réponse vide 
     else:
         return 'Card non trouvée', 404

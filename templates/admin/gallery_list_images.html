@@ -9,7 +9,7 @@
                 <p>{{ image['date'] }}</p>
                 <button
                     class="btn btn-danger"
-                    hx-delete="{{ url_for('delete_image', gallery=gallery, image=image['filename']) }}" 
+                    hx-delete="{{ url_for('admin_gallery.delete_image', gallery=gallery, image=image['filename']) }}" 
                     hx-target="#image-list" 
                     hx-swap="innerHTML">Supprimer</button>
             </div>

@@ -8,6 +8,7 @@ from google.cloud import texttospeech
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
 from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
+from communication import communikation
 
 engine_bp = Blueprint('engine', __name__)
 
@@ -47,7 +48,7 @@ def call_next(counter_id, attempts=0):
         language_code = next_patient.language.code
         print("language_code_pour_audio", language_code)
         audio_url = generate_audio_calling(counter_id, next_patient, language_code=language_code)
-        app.communikation("update_audio", event="audio", data=audio_url)
+        communikation("update_audio", event="audio", data=audio_url)
         
         return True, next_patient
 
@@ -246,7 +247,7 @@ def register_patient(activity):
     print("before autocalling")
     app.auto_calling()
 
-    app.communikation("update_patient")
+    communikation("update_patient")
     return new_patient
 
 

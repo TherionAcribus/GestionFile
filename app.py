@@ -272,6 +272,7 @@ def load_configuration(app):
         "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
         "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
         "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
+        "announce_gallery_folders": ("ANNOUNCE_GALLERY_FOLDERS", "value_str"),
         "announce_infos_mix_folders": ("ANNOUNCE_INFOS_MIX_FOLDERS", "value_bool"),
         "announce_infos_width": ("ANNOUNCE_INFOS_WIDTH", "value_int"),
         "announce_infos_height": ("ANNOUNCE_INFOS_HEIGHT", "value_int"),

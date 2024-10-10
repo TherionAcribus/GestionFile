@@ -6,13 +6,14 @@ from models import ConfigOption, db
 from wtforms import MultipleFileField, SubmitField
 from flask_wtf import FlaskForm
 from werkzeug.utils import secure_filename
+from communication import communikation
 
 admin_gallery_bp = Blueprint('admin_gallery', __name__)
 
 @admin_gallery_bp.route('/admin/info')
 def admin_info():
     return render_template('/admin/gallery.html',
-                            galleries = os.listdir(app.config['GALLERIES_FOLDER']))
+                            galleries = os.listdir(app.config['ANNOUNCE_GALLERY_FOLDERS']))
 
 
 @admin_gallery_bp.route('/admin/gallery/choose_gallery', methods=['POST'])
@@ -75,7 +76,7 @@ def get_images_with_dates(folder):
 
 @admin_gallery_bp.route("/admin/gallery/list", methods=['GET'])
 def gallery_list():
-    galleries = os.listdir(app.config['GALLERIES_FOLDER'])
+    galleries = os.listdir(app.config['ANNOUNCE_GALLERY_FOLDERS'])
     config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
     if config_option:
         selected_galleries = json.loads(config_option.value_str)
@@ -91,9 +92,9 @@ def gallery(name):
     #if request.method == 'POST':
     #    for file in request.files.getlist('photos'):
     #        filename = secure_filename(file.filename)
-    #        os.makedirs(os.path.join(app.config['GALLERIES_FOLDER'], name), exist_ok=True)
-    #        file.save(os.path.join(app.config['GALLERIES_FOLDER'], name, filename))
-    #images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    #        os.makedirs(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name), exist_ok=True)
+    #        file.save(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name, filename))
+    #images = get_images_with_dates(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name))
     return render_template('/admin/gallery_manage.html', gallery=name)
 
 
@@ -101,7 +102,7 @@ def gallery(name):
 def gallery_images_list(name):
     if not name:
         return "No gallery name provided", 400
-    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    images = get_images_with_dates(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name))
     return render_template('admin/gallery_list_images.html', gallery=name, images=images)
 
 
@@ -112,29 +113,29 @@ def upload_gallery(name):
     for file in request.files.getlist('photos'):
         print("FILES", file)
         filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['GALLERIES_FOLDER'], name, filename))
-    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], name))
+        file.save(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name, filename))
+    images = get_images_with_dates(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name))
     print("images", images)
     return render_template('admin/gallery_list_images.html', gallery=name, images=images)
 
 
 @admin_gallery_bp.route('/admin/gallery/delete_image/<gallery>/<image>', methods=['DELETE'])
 def delete_image(gallery, image):
-    os.remove(os.path.join(app.config['GALLERIES_FOLDER'], gallery, image))
-    images = get_images_with_dates(os.path.join(app.config['GALLERIES_FOLDER'], gallery))
+    os.remove(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], gallery, image))
+    images = get_images_with_dates(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], gallery))
     return render_template('admin/gallery_list_images.html', gallery=gallery, images=images)
 
 
 @admin_gallery_bp.route('/admin/gallery/delete_gallery/<name>', methods=['DELETE'])
 def delete_gallery(name):
-    for image in os.listdir(os.path.join(app.config['GALLERIES_FOLDER'], name)):
-        os.remove(os.path.join(app.config['GALLERIES_FOLDER'], name, image))
-    os.rmdir(os.path.join(app.config['GALLERIES_FOLDER'], name))
+    for image in os.listdir(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name)):
+        os.remove(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name, image))
+    os.rmdir(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name))
 
     # on supprime la selection pour cette galerie si elle est selectionnée
     choose_gallery(gallery_name=name, checked="false")
 
-    app.communikation("admin", event="refresh_gallery_list")
+    communikation("admin", event="refresh_gallery_list")
 
     return "", 200
 
@@ -146,12 +147,12 @@ def create_gallery():
         app.display_toast(success=False, message="Le nom de la galerie doit être renseigné")
         return "", 400
     try:
-        os.makedirs(os.path.join(app.config['GALLERIES_FOLDER'], name))
+        os.makedirs(os.path.join(app.config['ANNOUNCE_GALLERY_FOLDERS'], name))
     except FileExistsError:
         app.display_toast(success=False, message="La galerie doit avoir un nom unique")
         return "", 400
-    galleries = os.listdir(app.config['GALLERIES_FOLDER'])
-    app.communikation("admin", event="display_new_gallery", data=name)
+    galleries = os.listdir(app.config['ANNOUNCE_GALLERY_FOLDERS'])
+    communikation("admin", event="display_new_gallery", data=name)
     return render_template('admin/gallery_list_galleries.html', galleries=galleries)
 
 

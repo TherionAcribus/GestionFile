@@ -4,6 +4,7 @@ from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, session, current_app as app
 from models import db, ConfigOption, DashboardCard
+from communication import communikation
 
 admin_music_bp = Blueprint('admin_music', __name__)
 
@@ -82,7 +83,7 @@ def spotify_login():
     # Initialiser le flux OAuth avec le cache personnalisé
     sp_oauth = get_spotify_oauth()
     auth_url = sp_oauth.get_authorize_url()
-    app.communikation("update_screen", event="spotify_status", data=True)
+    communikation("update_screen", event="spotify_status", data=True)
     # Rediriger l'utilisateur vers l'URL d'autorisation
     return redirect(auth_url)
 
@@ -96,7 +97,7 @@ def clear_spotify_tokens():
 def spotify_logout():
     sp_oauth = get_spotify_oauth()
     sp_oauth.cache_handler.delete_token_from_cache()
-    app.communikation("update_screen", event="spotify_status", data=False)
+    communikation("update_screen", event="spotify_status", data=False)
     return redirect(url_for('admin_music.admin_music'))
 
 @admin_music_bp.route('/spotify/callback')

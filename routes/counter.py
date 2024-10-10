@@ -5,6 +5,7 @@ from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
 from python.engine import call_next
 from utils import replace_balise_announces
 from python.engine import counter_become_active, counter_become_inactive
+from communication import communikation
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -27,8 +28,8 @@ def action_add_paper(add_paper):
         config_option.value_bool = add_paper
         db.session.commit()
         app.config["ADD_PAPER"] = add_paper
-        app.communikation("counter", event="paper")
-        app.communikation("app_counter", data={"add_paper": add_paper}, event="paper")
+        communikation("counter", event="paper")
+        communikation("app_counter", data={"add_paper": add_paper}, event="paper")
         return counter_paper_add()
     except Exception as e:
         print(e)
@@ -48,7 +49,7 @@ def app_paper_add():
             app.config["ADD_PAPER"] = add_paper_action
 
             #app.communikation("counter", event="paper")
-            app.communikation("app_counter", {"add_paper": add_paper_action}, event="paper")
+            communikation("app_counter", {"add_paper": add_paper_action}, event="paper")
         
             return "", 200
 
@@ -84,7 +85,7 @@ def update_counter_staff():
         db.session.commit()
 
         # mise à jour des boutons
-        app.communikation("counter", event="update buttons")
+        communikation("counter", event="update buttons")
         # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
         if from_app:
             return api_is_staff_on_counter(request.form.get('counter_id'))
@@ -96,7 +97,7 @@ def update_counter_staff():
     counter.staff = None
     db.session.commit()
     # mise à jour des boutons
-    app.communikation("counter", event="update buttons")
+    communikation("counter", event="update buttons")
     # on affiche une erreur à la place du nom
     if from_app:
         return "", 204
@@ -128,7 +129,7 @@ def remove_counter_staff():
     db.session.commit()
 
     # mise à jour des boutons
-    app.communikation("counter", event="update buttons")
+    communikation("counter", event="update buttons")
     return is_staff_on_counter(request.form.get('counter_id'))
 
 
@@ -141,7 +142,7 @@ def deconnect_staff_from_all_counters(staff):
             db.session.commit()
             #socketio.emit("trigger_disconnect_staff", {})
             # mise à jour des boutons
-            app.communikation("counter", event="update buttons")
+            communikation("counter", event="update buttons")
 
 
 @counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
@@ -186,10 +187,10 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
             is_patient, patient = call_next(counter.id)
             if is_patient:
                 counter_become_active(counter.id)
-                app.communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
+                communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
-                app.communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
+                communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
 
 
         return True, {"status": counter.auto_calling}, 200
@@ -212,7 +213,7 @@ def update_switch_auto_calling():
     success, result, status_code = update_counter_auto_calling(counter_id, auto_calling_value)
 
     # Notification de changement
-    app.communikation("app_counter", event="change_auto_calling", 
+    communikation("app_counter", event="change_auto_calling", 
                                     data={"counter_id": counter_id, "autocalling": auto_calling_value})
     if not success:
         return result, status_code
@@ -234,7 +235,7 @@ def app_auto_calling():
     success, result, status_code = update_counter_auto_calling(counter_id, auto_calling_value)
 
     # notification de changement
-    app.communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_value})
+    communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_value})
 
     print(success, result, status_code)
     if not success:
@@ -287,7 +288,7 @@ def counter_select_patient(counter_id, patient_id):
     """ Appeler lors du choix d'un patient spécifique au comptoir """
     print("counter_select_patient", counter_id, patient_id)
     app.call_specific_patient(counter_id, patient_id)
-    app.communikation("update_patient")
+    communikation("update_patient")
     return '', 204
 
 
@@ -296,5 +297,5 @@ def relaunch_patient_call(counter_id):
     patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
     audiofile = f'patient_{patient.call_number}.mp3'
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    app.communikation("update_audio", event="audio", data=audio_url)
+    communikation("update_audio", event="audio", data=audio_url)
     return '', 204

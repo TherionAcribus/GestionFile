@@ -4,6 +4,7 @@ from flask import Blueprint, render_template, jsonify, url_for, current_app as a
 from models import Patient, ConfigOption
 from utils import replace_balise_announces
 from routes.admin_music import is_spotipy_connected
+from communication import communikation
 
 announce_bp = Blueprint('announce', __name__)
 
@@ -89,7 +90,7 @@ def announce_init_gallery():
 @announce_bp.route('/announce/refresh')
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
-    app.communikation("update_screen", event="refresh")
+    communikation("update_screen", event="refresh")
     print("Refresh DISPLAY!!")
     return '', 204
 

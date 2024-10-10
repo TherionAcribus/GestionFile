@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, current_app as app
 from models import Counter, Activity, db
 from routes.admin_activity import display_activity_table
+from communication import communikation
 
 admin_counter_bp = Blueprint('admin_counter', __name__)
 
@@ -40,6 +41,8 @@ def update_counter(counter_id):
 
             db.session.commit()
             app.display_toast(success=True, message="Mise à jour réussie")
+            # mise à jour liste des comptoirs
+            communikation("admin", event="refresh_counter_order")
             return ""
         else:
             app.display_toast(success=False, message="Comptoir introuvable")
@@ -72,7 +75,7 @@ def delete_counter(counter_id):
         db.session.commit()
 
         app.display_toast(success=True, message="Comptoir supprimé")
-        app.communikation("admin", event="refresh_counter_order")
+        communikation("admin", event="refresh_counter_order")
 
         return display_counter_table()
 
@@ -123,6 +126,9 @@ def add_new_counter():
         
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_counter_form"></div>"""
+
+        # mise à jour de la liste
+        communikation("admin", event="refresh_counter_order")
 
         return f"{display_counter_table()}{clear_form_html}"
 

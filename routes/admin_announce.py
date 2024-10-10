@@ -6,7 +6,7 @@ from google.cloud import texttospeech
 import gtts
 from models import ConfigOption, Activity, Counter, Language, db
 from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
-
+from communication import communikation
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
@@ -107,7 +107,7 @@ def select_signal():
         config.value_str = filename
         db.session.commit()
 
-        app.communikation("admin", event="refresh_sound")
+        communikation("admin", event="refresh_sound")
 
     return "", 204
 
@@ -154,9 +154,9 @@ def announce_audio_test(scope):
     audio_url = generate_audio_calling("A", patient, language_code=language_code)
 
     if scope == "announce":        
-        app.communikation("update_audio", event="audio", data=audio_url)
+        communikation("update_audio", event="audio", data=audio_url)
     else:
-        app.communikation("admin", event="audio_test", data=audio_url)
+        communikation("admin", event="audio_test", data=audio_url)
 
     return "", 200
 
@@ -172,7 +172,7 @@ def upload_google_key():
     if file.filename == '':
         return '<div class="alert alert-danger">Le nom du fichier est vide.</div>'
     if file and allowed_json_file(file.filename):
-        filename = secure_filename(file.filename)
+        secure_filename(file.filename)
         file_content = file.read()
         # Chiffrer le contenu du fichier
         encrypted_content = cipher_suite.encrypt(file_content)
