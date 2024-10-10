@@ -371,6 +371,9 @@ def load_configuration(app):
         'timestamp': datetime.now(timezone.utc)
     }
 
+    # TMP FIX adresse galleries
+    app.config["ANNOUNCE_GALLERY_FOLDERS"]= "static/galleries"
+
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
 
