@@ -1,11 +1,14 @@
 import os
 import boto3
 import bleach
+from dotenv import load_dotenv
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 
 database = "mysql"
 site = "prod"
+
+load_dotenv()
 
 def uia_username_mapper(identity):
     return bleach.clean(identity, strip=True)
@@ -17,6 +20,7 @@ def get_parameter(name):
     return response['Parameter']['Value']
 
 class Config:
+    print(print("CREATE_APP_CONFIG:", os.getenv('MYSQL_HOST')))
     SECRET_KEY = 'your_secret_key'
     SECURITY_PASSWORD_SALT = os.getenv('SECURITY_PASSWORD_SALT', 'default_salt')
     SECURITY_PASSWORD_HASH = 'bcrypt'
@@ -44,11 +48,13 @@ class Config:
             BASE32_KEY = get_parameter('BASE32_KEY')
 
         else:
+            print("Using local environment variables")
             MYSQL_USER = os.getenv('MYSQL_USER')
             MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
             HOST = os.getenv('MYSQL_HOST')
             DB_NAME = os.getenv('MYSQL_DATABASE')
             BASE32_KEY = os.getenv('BASE32_KEY')
+            print("TEST_USER", MYSQL_USER, MYSQL_PASSWORD, HOST, DB_NAME, BASE32_KEY)
 
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'

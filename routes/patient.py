@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, make_response, request, session, u
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
-from communication import communikation
+from communication import communikation, send_app_notification
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -199,17 +199,14 @@ def left_page_validate_patient(activity):
     
     return main_content
 
-
 @patient_bp.route('/patient/print_and_validate', methods=['POST'])
 def print_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
-    print("new_patient", new_patient)
     text = format_ticket_text(new_patient, activity)
-    print("text", text)
 
     if activity.notification:
-        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+        send_app_notification(origin="activity", data={"patient":new_patient, "activity": activity})
     communikation("app_patient", flag="print", data=text)
     return patient_conclusion_page(new_patient.call_number)
 
@@ -218,8 +215,9 @@ def patient_validate_scan(activity_id):
     activity = Activity.query.get(activity_id)
     new_patient = register_patient(activity)
     if activity.notification:
-        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+        send_app_notification(origin="activity", data={"patient":new_patient, "activity": activity})
     return new_patient
+
 
 @patient_bp.route('/patient/scan_already_validate', methods=['POST'])
 def patient_scan_already_validate():
@@ -234,7 +232,7 @@ def patient_scan_and_validate():
     activity = Activity.query.get(request.form.get('activity_id'))
     new_patient = register_patient(activity)
     if activity.notification:
-        communikation("app_counter", flag="notification", data = f"Demande pour '{activity.name}'")
+        send_app_notification(origin="activity", data={"patient":new_patient, "activity": activity})
     return patient_conclusion_page(new_patient.call_number)
 
 

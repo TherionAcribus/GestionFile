@@ -199,7 +199,6 @@ class Weekday(db.Model):
         return f'<Weekday {self.name}>'
 
 
-
 class Activity(db.Model):
     __tablename__ = 'activity'
     id = db.Column(db.Integer, Sequence('activity_id_seq'), primary_key=True)

@@ -1,5 +1,6 @@
-from flask import url_for, request, has_request_context, current_app
 import json
+import time
+from flask import url_for, request, has_request_context, current_app
 from routes.pyside import create_patients_list_for_pyside
 
 communication_mode = "websocket"
@@ -89,3 +90,30 @@ def communication(stream, data=None, client_id=None, audio_source=None):
     """ Effectue la communication avec les clients """
     return None
 
+def send_app_notification(origin, data):
+    # for_counter = None si c'est pour tout le monde, sinon mettre l'id du comptoir
+    for_counter = None
+    if origin == "activity":
+        message = f"{data['activity'].name} : {data['patient'].call_number}"
+        print("message_notif:", message)
+    elif origin == "printer_error":
+        message = f"Erreur d'impression: {data['message']}"
+    elif origin == "printer_paper":
+        if data["add_paper"]:
+            message = "On est quasiment au bout du rouleau"
+        else:
+            message = "Une gentille personne a remis du papier"
+    elif origin == "patient_taken":
+        message = f"Le patient {data['patient'].call_number} vient d'être appelé par un autre comptoir."
+        for_counter = data['counter_id']
+    else:
+        origin = origin
+        message = data
+
+    notification_data  = {
+        "origin": origin,
+        "message": message,
+        "timestamp": int(time.time()),
+        "for_counter": for_counter
+    }
+    communikation("app_counter", event="notification", flag=for_counter,  data = json.dumps(notification_data))

@@ -5,7 +5,7 @@ from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
 from python.engine import call_next
 from utils import replace_balise_announces
 from python.engine import counter_become_active, counter_become_inactive
-from communication import communikation
+from communication import communikation, send_app_notification
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -14,10 +14,12 @@ def counter_paper_add():
     return render_template('counter/paper_add.html',
                             add_paper=app.config["ADD_PAPER"])
 
-@counter_bp.route('app/counter/paper_add', methods=['POST'])
+
+"""@counter_bp.route('app/counter/paper_add', methods=['POST'])
 def app_counter_paper_add():
     action = False if request.form.get("action") == "deactivate" else True
-    return action_add_paper(action)
+    return app_paper_add(action)
+"""
 
 @counter_bp.route('/counter/paper_add/<int:add_paper>', methods=['GET'])
 def action_add_paper(add_paper):
@@ -30,12 +32,13 @@ def action_add_paper(add_paper):
         app.config["ADD_PAPER"] = add_paper
         communikation("counter", event="paper")
         communikation("app_counter", data={"add_paper": add_paper}, event="paper")
+        send_app_notification(origin="printer_paper", data={"add_paper": add_paper})
         return counter_paper_add()
     except Exception as e:
         print(e)
 
 
-@counter_bp.route('/counter/paper_add', methods=['POST'])
+@counter_bp.route('app/counter/paper_add', methods=['POST'])
 def app_paper_add():
     if request.form.get('action') is None:
         return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
@@ -51,7 +54,7 @@ def app_paper_add():
             #app.communikation("counter", event="paper")
             communikation("app_counter", {"add_paper": add_paper_action}, event="paper")
         
-            return "", 200
+            return {"status": app.config["ADD_PAPER"] }, 200
 
         except Exception as e:
             print(e)

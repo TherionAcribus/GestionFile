@@ -53,6 +53,7 @@ from backup import backup_config_all, backup_staff, backup_counters, backup_sche
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
 from config import Config
+from communication import send_app_notification
 
 from app_holder import AppHolder
 
@@ -87,10 +88,8 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
-load_dotenv()
+
 database = "mysql"
-
-
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
@@ -428,6 +427,8 @@ def start_fonctions(app):
 def create_app(config_class=Config):
     app = Flask(__name__)
 
+    print("CREATE_APP_HOST:", os.getenv('MYSQL_HOST'))
+
     # Charger la configuration avant toute initialisation
     AppHolder.set_app(app)
     app.config.from_object(config_class)
@@ -446,6 +447,8 @@ def create_app(config_class=Config):
 
     # Initialiser le mail avec l'application
     app.mail = Mail(app)
+
+    print("CONFIG_CLASS", config_class.SECURITY_PASSWORD_HASH)
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
     with app.app_context():
@@ -479,7 +482,13 @@ def create_app(config_class=Config):
 
     return app
 
+load_dotenv()
+print("MYSQL_USER:", os.getenv('MYSQL_USER'))
+print("MYSQL_PASSWORD:", os.getenv('MYSQL_PASSWORD'))
+print("MYSQL_HOST:", os.getenv('MYSQL_HOST'))
 app = create_app(config_class=Config)
+print("App configuration:", app.config)
+
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 # Définir le jobstore avec votre base de données
@@ -1114,6 +1123,7 @@ def call_specific_patient(counter_id, patient_id):
     # Cas d'un patient appelé en même temps par un autre comptoir. On empêche double selection et retourne une info
     if next_patient.status != "standing":
         app.logger.info("Already called")
+        send_app_notification(origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient})
         return "Already called", 423
     
     if next_patient:

@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 from models import Button, Activity, DashboardCard, Language, db
 from python.engine import get_futur_patient, create_qr_code 
 from utils import format_ticket_text
-from communication import communikation
+from communication import communikation, send_app_notification
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -441,7 +441,10 @@ def admin_printer_status():
         'timestamp': timestamp
     })
 
-    communikation("admin", event="refresh_printer_dashboard")    
+    communikation("admin", event="refresh_printer_dashboard")
+
+    # notification à Pyside
+    send_app_notification(origin="printer_error", data={"error": printer_error, "message": error_message, "timestamp": timestamp})
 
     # Afficher les informations pour vérifier la mise à jour
     print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
