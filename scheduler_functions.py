@@ -1,11 +1,12 @@
 import os
 from functools import wraps
-from datetime import datetime, timezone
+from datetime import datetime
 from flask import current_app
 from models import db, Button, Activity, Patient
 from routes.admin_queue import clear_all_patients_from_db
 from bdd import transfer_patients_to_history
 from app_holder import AppHolder
+from config import time_tz
 
 def with_app_context(f):
     @wraps(f)
@@ -103,7 +104,7 @@ def clear_old_patients_table(app):
     # Vérifie si la fonctionnalité est activée dans la configuration
     if current_app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
         # Obtenez la date actuelle en UTC
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(time_tz).date()
         
         # Construisez la requête pour trouver tous les patients dont la date est antérieure à aujourd'hui
         old_patients = Patient.query.filter(Patient.timestamp < today)

@@ -11,7 +11,7 @@ from flask_migrate import Migrate
 from flask.signals import request_started
 from flask_mailman import Mail
 from flask_socketio import SocketIO
-from datetime import datetime, timezone, time, timedelta
+from datetime import datetime, time, timedelta
 import time as tm
 
 from flask_apscheduler import APScheduler
@@ -52,7 +52,7 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
-from config import Config
+from config import Config, time_tz
 from communication import send_app_notification
 
 from app_holder import AppHolder
@@ -367,7 +367,7 @@ def load_configuration(app):
     app.config["PRINTER_ERROR"] = {
         'error': True,
         'message': "pas de connexion à l'App Patient",
-        'timestamp': datetime.now(timezone.utc)
+        'timestamp': datetime.now(time_tz)
     }
 
     # TMP FIX adresse galleries
@@ -1162,7 +1162,7 @@ def validate_patient(counter_id, patient_id):
     current_patient = Patient.query.get(patient_id)
     if current_patient:
         current_patient.status = 'ongoing'
-        current_patient.timestamp_counter = datetime.now(timezone.utc)
+        current_patient.timestamp_counter = datetime.now(time_tz)
         db.session.commit()
 
     communikation("update_patient")
@@ -1378,7 +1378,7 @@ def validate_current_patient(counter_id):
         # Mise à jour du statut et du timestamp_end pour tous les patients au comptoir
         for patient in patients_at_counter:
             patient.status = 'done'
-            patient.timestamp_end = datetime.now(timezone.utc)        
+            patient.timestamp_end = datetime.now(time_tz)        
         db.session.commit()
     else:
         print("pas de patient")
@@ -1392,7 +1392,7 @@ def pause_patient(counter_id, patient_id):
     current_patient = Patient.query.get(patient_id)
     if current_patient:
         current_patient.status = 'done'
-        current_patient.timestamp_end = datetime.now(timezone.utc)
+        current_patient.timestamp_end = datetime.now(time_tz)
         db.session.commit()
 
     # le comptoir devient inactif

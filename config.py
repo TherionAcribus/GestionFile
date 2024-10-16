@@ -1,9 +1,13 @@
 import os
 import boto3
 import bleach
+import pytz
 from dotenv import load_dotenv
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
+# mieux que datetime.timezone pour gérer les fuseaux horaires et les changements d'heure.
+# TODO permettre de choisir le fuseau horaire
+time_tz = pytz.timezone('Europe/Paris')
 
 database = "mysql"
 site = "prod"
@@ -59,6 +63,11 @@ class Config:
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
         SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "connect_args": {
+                "init_command": "SET time_zone = '+02:00'"
+            }
+        }
         # SQLALCHEMY_BINDS configuration to include MySQL
         #SQLALCHEMY_BINDS = {
         #    'users': f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/userdatabase'

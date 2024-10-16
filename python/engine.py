@@ -1,7 +1,7 @@
 import os
 import qrcode
 from flask import Blueprint, url_for, request, session, current_app as app
-from datetime import datetime, timezone, date
+from datetime import datetime, date
 from sqlalchemy import and_
 from cryptography.fernet import Fernet
 from google.cloud import texttospeech
@@ -9,6 +9,7 @@ from utils import replace_balise_announces, replace_balise_phone, get_text_trans
 from gtts import gTTS
 from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
 from communication import communikation
+from config import time_tz
 
 engine_bp = Blueprint('engine', __name__)
 
@@ -169,7 +170,7 @@ def add_patient(call_number, activity):
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(time_tz),
         status='standing',
         language_id=language.id
     )    
@@ -233,7 +234,7 @@ def get_futur_patient(call_number, activity):
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(time_tz),
         status='standing',
         language_id=language.id
     ) 

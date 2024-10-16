@@ -1,14 +1,14 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from flask import current_app as app
 from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint, event
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship, Session
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
+from config import time_tz
 
 db = SQLAlchemy()
-
 
 roles_users = db.Table(
     'roles_users',
@@ -39,7 +39,7 @@ class User(db.Model, UserMixin):
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
     timestamp_counter = db.Column(db.DateTime, default=None)
     timestamp_end = db.Column(db.DateTime, default=None)
     status = db.Column(db.String(50), nullable=False, default='standing')
@@ -77,7 +77,7 @@ counters_activities = db.Table('counters_activities',
 class PatientHistory(db.Model):
     id = db.Column(db.Integer, Sequence('patient_history_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
     timestamp_counter = db.Column(db.DateTime, default=None)
     timestamp_end = db.Column(db.DateTime, default=None)
     day_of_week = db.Column(db.String(10), nullable=False)
@@ -319,7 +319,7 @@ class ConfigVersion(db.Model):
     config_key = db.Column(db.String(50), unique=True, nullable=False)
     version = db.Column(db.String(50), nullable=False)
     comments = db.Column(db.Text)
-    date = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    date = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
 
     def __repr__(self):
         return f'<ConfigVersion {self.version}>'
