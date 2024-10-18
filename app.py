@@ -1192,8 +1192,6 @@ def patients_langue(lang):
 
 # ---------------- PAGE PATIENT FRONT ----------------
 
-
-
 @with_app_context
 def auto_calling():
     # si il y a des comptoirs en appel automatique on lance l'appel automatique
