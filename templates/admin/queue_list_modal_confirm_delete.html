@@ -1,0 +1,28 @@
+<!-- Contenu de la modale -->
+<p>Vous vous apprêtez à <strong>supprimer définitivement</strong> les patients visibles dans la liste.
+    <br>
+    {% if save_to_history %} 
+        Vous avez choisi de les <strong>sauvegarder</strong> dans l'historique. 
+    {% else %}
+        Vous avez choisi de <strong>ne pas sauvegarder</strong> les patients dans l'historique.
+    {% endif %}
+    <br>
+    Confirmez-vous la suppression ? </p>
+    
+    <!-- Champs cachés pour transmettre les données -->
+    <input type="hidden" name="save_to_history" value="{{ 'on' if save_to_history else 'off' }}">
+    {% for option in selected_options %}
+        <input type="hidden" name="selected_options" value="{{ option }}">
+    {% endfor %}
+    
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+        <button type="button" class="btn btn-danger"
+            hx-post="/admin/database/clear_list_patients"
+            hx-target="#div_queue_table"
+            hx-trigger="click"
+            hx-include="closest .modal-content"
+            data-bs-dismiss="modal">
+            Supprimer
+        </button>
+    </div>

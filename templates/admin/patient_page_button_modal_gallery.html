@@ -16,9 +16,9 @@
     </div>
 </div>
 
-<form action="{{ url_for('upload_image', button_id=button.id) }}" method="post"
+<form action="{{ url_for('admin_patient.upload_image', button_id=button.id) }}" method="post"
     enctype="multipart/form-data"
-    hx-post="{{ url_for('upload_image', button_id=button.id) }}"
+    hx-post="{{ url_for('admin_patient.upload_image', button_id=button.id) }}"
     hx-target="#button-image-{{ button.id }}"
     hx-swap="outerHTML"
     hx-encoding="multipart/form-data">
