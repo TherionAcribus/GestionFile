@@ -3,6 +3,7 @@ import pytz
 from datetime import datetime, date
 from flask import session, current_app as app
 from models import Button, Translation, db
+from communication import send_app_notification
 
 def validate_and_transform_text(user_input, allowed_letters):
     """ Vérification et transformation des entrées avec des lettres autorisées spécifiques"""
@@ -127,11 +128,12 @@ def replace_balise_announces(template, patient):
         if patient.counter.staff:
             return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name)
         else:
+            app.logger.error(f"Pas de Staff on counter : {patient} {patient.counter} {patient.counter.staff}")
             template = "Comptoir {C}: {N}"
+            send_app_notification(origin="erreur", data="Erreur: Vous n'êtes pas rattaché au comptoir. Le patient est bien appelé. Signaler le problème.")
             return template.format(N=patient.call_number, C=patient.counter.name)
     except AttributeError as e:
         app.logger.error(f"Failed to replace balise announces: {e}")
-        print("")
         return "Erreur"
 
 

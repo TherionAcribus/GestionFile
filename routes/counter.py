@@ -183,6 +183,7 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
             app.config["AUTO_CALLING"].append(counter.id)
         else:
             app.config["AUTO_CALLING"].remove(counter.id)
+        app.logger.info(f"counter autocalling : {app.config['AUTO_CALLING']}" )
 
         # si on relance autocalling, on appelle automatiquement le patient suivant
         # uniquement si le comptoir est inactif
