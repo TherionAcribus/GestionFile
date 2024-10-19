@@ -144,7 +144,6 @@ def replace_balise_phone(template, patient):
     print('template')
     button_label = ""
     if "{A}" in template:
-        print("BIUYRD")
         button = Button.query.filter_by(activity_id=patient.activity_id).first()
         if session.get('language_code') != "fr":        
             button_label = get_buttons_translation([button], session.get('language_code'))[0].label

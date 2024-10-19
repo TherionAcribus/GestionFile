@@ -88,3 +88,5 @@ class Config:
 
     # Flask SQLAlchemy Configuration
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
