@@ -34,6 +34,7 @@ def with_rabbitmq_connection(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         max_retries = 3
+        print("monurl", current_app.config['RABBITMQ_URL'])
         for attempt in range(max_retries):
             try:
                 connection = pika.BlockingConnection(pika.URLParameters(current_app.config['RABBITMQ_URL']))
