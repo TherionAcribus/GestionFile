@@ -196,7 +196,8 @@ def load_configuration(app):
         "pharmacy_name": ("PHARMACY_NAME", "value_str"),
         "network_adress": ("NETWORK_ADRESS", "value_str"),
         "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
-        "is_rabbitmq_active": ("IS_RABBITMQ_ACTIVE", "value_bool"),
+        "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
+        "use_rabbitmq": ("USE_RABBITMQ", "value_bool"),
         "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
         "printer": ("PRINTER", "value_bool"),
@@ -324,6 +325,10 @@ def load_configuration(app):
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
 
+    # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
+    if not app.config["START_RABBITMQ"]:
+        app.config["USE_RABBITMQ"] = False
+        
     # auto_calling 
     auto_calling = []
     for counter in Counter.query.all():
@@ -872,7 +877,7 @@ def update_switch():
     try:
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(config_key=key).first()
-        # MAJ Config
+        # MAJ Config 
         app.config[key.upper()] = True if value == "true" else False
         if config_option:
             config_option.value_bool = True if value == "true" else False
@@ -1006,13 +1011,7 @@ def call_function_with_switch(key, value):
             scheduler_clear_announce_calls()
         else:
             remove_scheduler_clear_announce_calls()
-    elif key == "is_rabbitmq_active":
-        if value == "true":
-            # Activation de RabbitMQ
-            pass
-        else:
-            # Désactivation de RabbitMQ
-            pass
+
 
 def check_balises_before_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""

@@ -5,10 +5,18 @@
             "Numérotation par activité")
 }}
 
-{{ macros.switch("is_rabbitmq_active", 
-            is_rabbitmq_active, 
-            "Utilisation de RabbitMQ")
+{{ macros.switch("start_rabbitmq", 
+    start_rabbitmq, 
+            "Démarrer le serveur avec RabbitMQ (il faudra redémarrer le serveur)")
 }}
+ATTENTION OBLIGATOIRE DE RELANCER LE SERVEUR SI ON CHANGE CE SWITCH !!! (TEMPORAIRE)
+
+{% if start_rabbitmq %}
+    {{ macros.switch("use_rabbitmq", 
+                use_rabbitmq, 
+                "Utilisation de RabbitMQ")
+    }}
+{% endif %}
 
 A METTRE AILLEURS !!!
 {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}

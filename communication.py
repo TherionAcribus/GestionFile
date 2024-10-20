@@ -4,8 +4,10 @@ import logging
 import pika
 import os
 import threading
+from functools import wraps
 from flask import url_for, request, has_request_context, current_app
 from routes.pyside import create_patients_list_for_pyside
+from pika.exceptions import AMQPConnectionError, AMQPChannelError
 
 """
 # Configuration RabbitMQ
@@ -28,6 +30,25 @@ ENVIRONMENT = os.environ.get('FLASK_ENV', 'development')
 def get_rabbitmq_config():
     return RABBITMQ_CONFIG[ENVIRONMENT]"""
 
+def with_rabbitmq_connection(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                connection = pika.BlockingConnection(pika.URLParameters(current_app.config['RABBITMQ_URL']))
+                channel = connection.channel()
+                channel.queue_declare(queue=current_app.config['RABBITMQ_QUEUE'], durable=True)
+                channel.confirm_delivery()
+                result = func(channel, *args, **kwargs)
+                connection.close()
+                return result
+            except (AMQPConnectionError, AMQPChannelError) as e:
+                logging.error(f"Tentative {attempt + 1} échouée: {str(e)}")
+                if attempt == max_retries - 1:
+                    raise
+    return wrapper
+
 def setup_rabbitmq():
     #config = get_rabbitmq_config()
     parameters = pika.URLParameters(current_app.config['RABBITMQ_URL'])
@@ -37,10 +58,8 @@ def setup_rabbitmq():
     channel.confirm_delivery()
     return connection, channel
 
-def send_message_to_rabbitmq(stream, data, flag=None, event="update"):
-    print("RABBIT!!")
-    config = get_rabbitmq_config()
-    connection, channel = setup_rabbitmq()
+@with_rabbitmq_connection
+def send_message_to_rabbitmq(channel, stream, data, flag=None, event="update"):
     message = {
         'namespace': f'/{stream}',
         'event': event,
@@ -50,51 +69,86 @@ def send_message_to_rabbitmq(stream, data, flag=None, event="update"):
         }
     }
     try:
-        channel.basic_publish(
+        confirm = channel.basic_publish(
             exchange='',
-            routing_key=config['queue'],
+            routing_key=current_app.config['RABBITMQ_QUEUE'],
             body=json.dumps(message),
-            properties=pika.BasicProperties(delivery_mode=2),
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # message persistant
+                content_type='application/json'
+            ),
             mandatory=True
         )
-        logging.info(f"Message envoyé à RabbitMQ: {stream}")
-        return True
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi à RabbitMQ: {e}")
+        if confirm:
+            logging.info(f"Message envoyé à RabbitMQ: {stream}")
+            return True
+        else:
+            logging.error("Le message n'a pas pu être confirmé par RabbitMQ")
+            return False
+    except pika.exceptions.UnroutableError:
+        logging.error("Message non routable")
         return False
-    finally:
-        connection.close()
+    except Exception as e:
+        logging.error(f"Erreur inattendue lors de l'envoi à RabbitMQ: {e}")
+        return False
 
 def rabbitmq_to_socketio(app):
     with app.app_context():
-        #config = get_rabbitmq_config()
-        connection, channel = setup_rabbitmq()
+        @with_rabbitmq_connection
+        def consume(channel):
+            def callback(ch, method, properties, body):
+                try:
+                    message = json.loads(body)
+                    # Utiliser la méthode emit sans l'argument broadcast
+                    current_app.socketio.emit(
+                        message['event'],
+                        message['data'],
+                        namespace=message['namespace'],
+                        room=None  # Cela envoie à tous les clients dans le namespace
+                    )
+                    logging.info(f"Message émis: {message['event']} dans {message['namespace']}")
+                    ch.basic_ack(delivery_tag=method.delivery_tag)
+                except Exception as e:
+                    logging.error(f"Erreur lors du traitement du message RabbitMQ: {e}")
+                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
-        def callback(ch, method, properties, body):
-            message = json.loads(body)
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue=current_app.config['RABBITMQ_QUEUE'], on_message_callback=callback)
             try:
-                current_app.socketio.emit(message['event'], message['data'], namespace=message['namespace'])
-                ch.basic_ack(delivery_tag=method.delivery_tag)
+                channel.start_consuming()
             except Exception as e:
-                logging.error(f"Erreur lors du traitement du message RabbitMQ: {e}")
-                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+                logging.error(f"Erreur dans la boucle de consommation RabbitMQ: {e}")
 
-        channel.basic_qos(prefetch_count=1)
-        channel.basic_consume(queue=current_app.config['RABBITMQ_QUEUE'], on_message_callback=callback)
-        
-        try:
-            channel.start_consuming()
-        except Exception as e:
-            logging.error(f"Erreur dans la boucle de consommation RabbitMQ: {e}")
-        finally:
-            connection.close()
+        while True:
+            try:
+                consume()
+            except Exception as e:
+                logging.error(f"Erreur de connexion RabbitMQ, tentative de reconnexion: {e}")
+                time.sleep(5)
 
 def start_rabbitmq_consumer(app):
-    threading.Thread(target=rabbitmq_to_socketio, args=(app,), daemon=True).start()
+    if app.config["START_RABBITMQ"]:
+        def run_consumer():
+            with app.app_context():
+                try:
+                    rabbitmq_to_socketio(app)
+                except Exception as e:
+                    logging.error(f"Erreur dans le consumer RabbitMQ: {e}")
+
+        threading.Thread(target=run_consumer, daemon=True).start()
+        logging.info("Consumer RabbitMQ démarré")
+    else:
+        logging.info("RabbitMQ n'est pas activé, le consumer n'a pas été démarré")
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None, use_rabbitmq=False):
     """ Effectue la communication avec les clients """
     logging.info(f"communikation called with stream={stream}, event={event}, use_rabbitmq={use_rabbitmq}")
+
+    use_rabbitmq = current_app.config["USE_RABBITMQ"]
+
+    if use_rabbitmq and not current_app.config["START_RABBITMQ"]:
+        logging.warning("RabbitMQ demandé mais non activé, utilisation de SocketIO direct")
+        use_rabbitmq = False
 
     if stream == "update_patient":
         patients = create_patients_list_for_pyside()

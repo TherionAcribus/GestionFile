@@ -50,6 +50,7 @@ class Config:
             HOST = get_parameter('MYSQL_HOST')
             DB_NAME = get_parameter('MYSQL_DATABASE')
             BASE32_KEY = get_parameter('BASE32_KEY')
+            RABBITMQ_URL = get_parameter("RABBITMQ_URL")
 
         else:
             print("Using local environment variables")
@@ -58,6 +59,7 @@ class Config:
             HOST = os.getenv('MYSQL_HOST')
             DB_NAME = os.getenv('MYSQL_DATABASE')
             BASE32_KEY = os.getenv('BASE32_KEY')
+            RABBITMQ_URL = os.getenv("RABBITMQ_URL")
             print("TEST_USER", MYSQL_USER, MYSQL_PASSWORD, HOST, DB_NAME, BASE32_KEY)
 
         # MySQL Configuration
