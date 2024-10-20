@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.20",
+    "version": "0.23",
     "timestamp": "2024-10-20 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -32,8 +32,10 @@
             "announce_subtitle": "Merci de vous enregistrer sur la borne à l'entrée",
             "announce_text_up_patients": "En appel",
             "announce_text_up_patients_display": "always",
+            "announce_text_up_patients_size": 50,
             "announce_text_down_patients": "Prenez un ticket",
             "announce_text_down_patients_display": "empty",
+            "announce_text_down_patients_size": 50,
             "announce_call_text": "Le patient {N} est invité au comptoir {C}",
             "announce_call_text_size": 50,
             "announce_call_text_transition": "slide",

@@ -88,7 +88,6 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
-
 database = "mysql"
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
@@ -209,8 +208,10 @@ def load_configuration(app):
         "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
         "announce_text_up_patients": ("ANNOUNCE_TEXT_UP_PATIENTS", "value_str"),
         "announce_text_up_patients_display": ("ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY", "value_str"),
+        "announce_text_up_patients_size": ("ANNOUNCE_TEXT_UP_PATIENTS_SIZE", "value_int"),
         "announce_text_down_patients": ("ANNOUNCE_TEXT_DOWN_PATIENTS", "value_str"),
         "announce_text_down_patients_display": ("ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY", "value_str"),
+        "announce_text_down_patients_size": ("ANNOUNCE_TEXT_DOWN_PATIENTS_SIZE", "value_int"),
         "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
         "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
         "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),

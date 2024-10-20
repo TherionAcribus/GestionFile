@@ -63,7 +63,9 @@
 
                 <div id="div_display_text_up"
                     {% if announce_text_up_patients == "" or announce_text_up_patients_display == "never" %} 
-                        style="display: none;" 
+                        style="display: none;"
+                    {% else %}
+                        style="font-size: {{ announce_text_up_patients_size }}px;"
                     {% endif %}
                 >
                     {{announce_text_up_patients}}
@@ -87,7 +89,9 @@
                 
                 <div id="div_display_text_down"
                     {% if announce_text_down_patients == "" or announce_text_down_patients_display == "never" %} 
-                        style="display: none;" 
+                        style="display: none;"
+                    {% else %}
+                        style="font-size: {{ announce_text_down_patients_size }}px;"
                     {% endif %}                >
                     {{announce_text_down_patients}}
                 </div>
