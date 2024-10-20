@@ -29,7 +29,7 @@ def display_queue_table():
 
     return render_template('admin/queue_htmx_table.html', 
                             patients=patients, 
-                            activities=Activity.query.all(), 
+                            activities=Activity.query.all(),
                             status_list=status_list,
                             counters=Counter.query.all())
 

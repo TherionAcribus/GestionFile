@@ -71,7 +71,6 @@ def web_update_counter_staff():
 
 
 def update_counter_staff():
-    print("RECONNEXION ")
     print(request.form)
     counter = Counter.query.get(request.form.get('counter_id'))  
     initials = request.form.get('initials')
@@ -80,7 +79,7 @@ def update_counter_staff():
     staff = Pharmacist.query.filter(func.lower(Pharmacist.initials) == func.lower(initials)).first()
     if staff:
         # si demande de déconnexion
-        if request.form.get('deconnect').lower() == "true":
+        if request.form.get('deconnect').lower() == "true" or request.form.get('deconnect') == True:
             # deconnexion de tous les postes
             deconnect_staff_from_all_counters(staff)
         # Ajout du membre de l'équipe au comptoir        
@@ -127,9 +126,13 @@ def api_is_staff_on_counter(counter_id):
 
 
 def remove_counter_staff():
-    counter = Counter.query.get(request.form.get('counter_id')) 
+    counter_id = request.form.get('counter_id')
+    counter = Counter.query.get(counter_id) 
     counter.staff = None
     db.session.commit()
+
+    # quand on se déconnecte on enleve l'autocalling
+    update_counter_auto_calling(counter_id=counter_id, auto_calling_value=False)
 
     # mise à jour des boutons
     communikation("counter", event="update buttons")
@@ -144,8 +147,9 @@ def deconnect_staff_from_all_counters(staff):
             counter.staff = None
             db.session.commit()
             #socketio.emit("trigger_disconnect_staff", {})
-            # mise à jour des boutons
+            # mise à jour des boutons. PB sur tous les COUNTERS !!!!
             communikation("counter", event="update buttons")
+            communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": staff.name})
 
 
 @counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
@@ -182,7 +186,11 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
         if auto_calling_value:
             app.config["AUTO_CALLING"].append(counter.id)
         else:
-            app.config["AUTO_CALLING"].remove(counter.id)
+            # avant de supprimer, on vérifie que le comptoir est bien dans la liste
+            if counter.id in app.config["AUTO_CALLING"]:
+                app.config["AUTO_CALLING"].remove(counter.id)
+            else:
+                app.logger(f"Le comptoir {counter.id} n'étais pas dans la liste des autocalling")
         app.logger.info(f"counter autocalling : {app.config['AUTO_CALLING']}" )
 
         # si on relance autocalling, on appelle automatiquement le patient suivant

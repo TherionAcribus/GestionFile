@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, current_app as app
-from models import Counter, Activity, db
+from models import Counter, Activity, DashboardCard, db
 from routes.admin_activity import display_activity_table
 from communication import communikation
 
@@ -160,6 +160,16 @@ def update_counter_order():
         return '', 200  # Réponse sans contenu
     except Exception as e:
         app.display_toast(success=False, message=f"Erreur: {e}")
+
+@admin_counter_bp.route('/admin/counter/dashboard')
+def dashboard_counter():
+    counters = Counter.query.all()
+
+    dashboardcard = DashboardCard.query.filter_by(name="counter").first()
+
+    return render_template('/admin/dashboard_counter.html', 
+                            counters=counters,
+                            dashboardcard=dashboardcard)
 
 
 

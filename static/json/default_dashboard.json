@@ -1,9 +1,9 @@
 {
     "name": "gf_dashboard",
     "type": "default",
-    "version": "0.4",
-    "timestamp": "2024-09-22 14:35:26",
-    "comments": "Version initiale",
+    "version": "0.5",
+    "timestamp": "2024-10-19 14:35:26",
+    "comments": "Ajout comptoirs",
     "dashboard": [
         {"id": 1, 
         "name": "staff",
@@ -50,6 +50,14 @@
         "name": "printer",
         "visible": true,
         "position": 6,
+        "size": "col-md-6",
+        "color": "bg-primary",
+        "htmx_triggers": {}
+        },
+        {"id": 7, 
+        "name": "counter",
+        "visible": true,
+        "position": 7,
         "size": "col-md-6",
         "color": "bg-primary",
         "htmx_triggers": {}
