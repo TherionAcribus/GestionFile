@@ -325,10 +325,6 @@ def load_configuration(app):
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
 
-    # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
-    if not app.config["START_RABBITMQ"]:
-        app.config["USE_RABBITMQ"] = False
-        
     # auto_calling 
     auto_calling = []
     for counter in Counter.query.all():
@@ -375,6 +371,10 @@ def start_fonctions(app):
     load_configuration(app)
     clear_old_patients_table(app)
     clear_counter_table()
+
+    # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
+    if not app.config["START_RABBITMQ"]:
+        app.config["USE_RABBITMQ"] = False
 
 
 def create_app(config_class=Config):
