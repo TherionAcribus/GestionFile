@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, current_app as app
 from models import ActivitySchedule, Activity, Weekday, activity_schedule_link, db
 from utils import parse_time
 from routes.admin_activity import update_bouton_after_scheduler_changed
+from communication import communikation
 
 admin_schedule_bp = Blueprint('admin_schedule', __name__)
 
@@ -43,7 +44,7 @@ def update_schedule(schedule_id):
                 update_bouton_after_scheduler_changed(activity)
 
             # mise à jour de la table activité si nouvelle plage horaire
-            app.communikation("admin", event="refresh_activity_table")
+            communikation("admin", event="refresh_activity_table")
 
             return ""
         else:
@@ -94,7 +95,7 @@ def add_new_schedule():
         db.session.commit()
 
         # mise à jour de la table activité si nouvelle plage horaire
-        app.communikation("admin", event="refresh_activity_table")
+        communikation("admin", event="refresh_activity_table")
         
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_schedule_form"></div>"""
@@ -128,7 +129,7 @@ def delete_schedule(schedule_id):
         app.display_toast(success=True, message="Suppression réussie'")
 
         # mise à jour de la table activité si nouvelle plage horaire
-        app.communikation("admin", event="refresh_activity_table")
+        communikation("admin", event="refresh_activity_table")
 
         return display_schedule_table()
 

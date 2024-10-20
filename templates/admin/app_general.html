@@ -5,6 +5,11 @@
             "Numérotation par activité")
 }}
 
+{{ macros.switch("is_rabbitmq_active", 
+            is_rabbitmq_active, 
+            "Utilisation de RabbitMQ")
+}}
+
 A METTRE AILLEURS !!!
 {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}
 

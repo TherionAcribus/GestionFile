@@ -7,6 +7,7 @@ from routes.admin_queue import clear_all_patients_from_db
 from bdd import transfer_patients_to_history
 from app_holder import AppHolder
 from config import time_tz
+from communication import communikation
 
 def with_app_context(f):
     @wraps(f)
@@ -40,7 +41,7 @@ def disable_buttons_for_activity(app, activity_id):
                 else:
                     button.is_present = False
             db.session.commit()
-            current_app.communikation("patient", event="refresh_buttons")
+            communikation("patient", event="refresh_buttons")
 
 def enable_buttons_for_activity_job(activity_id):
     """Efface tous les patients en utilisant le contexte de l'application globale"""
@@ -67,7 +68,7 @@ def enable_buttons_for_activity(app, activity_id):
                 button.is_present = True
             db.session.commit()
 
-            app.communikation("patient", event="refresh_buttons")
+            communikation("patient", event="refresh_buttons")
 
 
 def add_scheduler_clear_all_patients():

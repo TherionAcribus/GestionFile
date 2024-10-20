@@ -53,7 +53,7 @@ from backup import backup_config_all, backup_staff, backup_counters, backup_sche
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
 from config import Config, time_tz
-from communication import send_app_notification
+from communication import send_app_notification, start_rabbitmq_consumer, communikation
 
 from app_holder import AppHolder
 
@@ -105,8 +105,8 @@ else:
 mail = Mail()
 migrate = Migrate()
 
-def communikation(stream, data=None, flag=None, event="update", client_id=None):
-    """ Effectue la communication avec les clients """
+"""def communikation(stream, data=None, flag=None, event="update", client_id=None):
+
     print(f"communikation called with stream={stream}, data={data}, flag={flag}, event={event}, client_id={client_id}")
     print("communikation", communication_mode, data, event)
     if communication_mode == "websocket":
@@ -184,60 +184,7 @@ def communication_rabbitmq(queue, data=None, client_id=None):
         return "Message sent to RabbitMQ!"
     except Exception as e:
         print("message failed:", message)
-        return f"Failed to send message: {e}", 500
-
-# TODO A SUPPRIMER
-def communication(stream, data=None, client_id=None, audio_source=None):
-    """ Effectue la communication avec les clients """
-    return None
-    message = {"type": stream, "data": ""}
-    
-    if stream == "update_patients":
-        for client in update_patients:
-            client.put(message)
-        for client in update_patient_pyside:
-            patients = create_patients_list_for_pyside()
-            client.put(json.dumps({"type": "patient", "list": patients}))
-            if data and data["type"] == "notification_new_patient":
-                client.put(json.dumps(data))
-    elif stream == "update_counter_pyside":
-        for client in update_patient_pyside:
-            client.put(json.dumps(data))
-    elif stream == "update_announce":
-        for client in update_announce:
-            client.put(message)
-    elif stream == "update_page_patient":
-        for client in update_page_patient:
-            client.put(json.dumps(data))
-    elif stream == "update_patient_app":
-        app.logger.debug(f"update_patient_app: {data} - {update_patient_app}")
-        for client in update_patient_app:
-            app.logger.debug(f"client {client}")
-            client.put(json.dumps(data))
-    elif stream == "update_admin":
-        for client in update_admin:
-            client.put(json.dumps(data))
-    elif stream == "update_counter":
-        if client_id in counter_streams:
-            counter_streams[client_id].put(message)
-    elif stream == "update_audio":
-        if app.config["ANNOUNCE_ALERT"]:
-            signal_file = app.config["ANNOUNCE_ALERT_FILENAME"]
-            audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-            message["data"] = {"audio_url": audio_path}
-            if app.config["ANNOUNCE_PLAYER"] == "web":
-                for client in play_sound_streams:
-                    client.put(json.dumps(message))
-            else:
-                for client in update_screen_app:
-                    client.put(json.dumps(message))
-        message["data"] = {"audio_url": audio_source}
-        if app.config["ANNOUNCE_PLAYER"] == "web":
-            for client in play_sound_streams:
-                client.put(json.dumps(message))
-        else:
-            for client in update_screen_app:
-                client.put(json.dumps(message))
+        return f"Failed to send message: {e}", 500"""
 
 
 
@@ -249,6 +196,7 @@ def load_configuration(app):
         "pharmacy_name": ("PHARMACY_NAME", "value_str"),
         "network_adress": ("NETWORK_ADRESS", "value_str"),
         "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
+        "is_rabbitmq_active": ("IS_RABBITMQ_ACTIVE", "value_bool"),
         "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
         "printer": ("PRINTER", "value_bool"),
@@ -490,6 +438,7 @@ app = create_app(config_class=Config)
 print("App configuration:", app.config)
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+start_rabbitmq_consumer(app)
 
 # Définir le jobstore avec votre base de données
 jobstores = {
@@ -1057,7 +1006,13 @@ def call_function_with_switch(key, value):
             scheduler_clear_announce_calls()
         else:
             remove_scheduler_clear_announce_calls()
-
+    elif key == "is_rabbitmq_active":
+        if value == "true":
+            # Activation de RabbitMQ
+            pass
+        else:
+            # Désactivation de RabbitMQ
+            pass
 
 def check_balises_before_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
@@ -1170,7 +1125,6 @@ def validate_patient(counter_id, patient_id):
 
     if isinstance(current_patient, Patient):
         current_patient_pyside = current_patient.to_dict()
-    communication("update_counter_pyside", {"type":"my_patient", "data":{"counter_id": counter_id, "next_patient": current_patient_pyside}})  
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return jsonify(current_patient.to_dict()), 200  
@@ -1680,7 +1634,6 @@ request_started.connect(load_colors, app)
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
 app.display_toast = display_toast
-app.communikation = communikation
 app.call_specific_patient = call_specific_patient
 app.allowed_image_file = allowed_image_file
 app.mail = mail
@@ -1694,6 +1647,7 @@ if __name__ == "__main__":
     # POUR L'instant RabbitMQ ne fonctionne pas avec Flask-SocketIO
     # VOir https://github.com/sensibill/socket.io-amqp pour faire le lien
 
+    """
     if communication_mode == "rabbitmq":
         print("Starting RabbitMQ...", rabbitMQ_url)
         connection = pika.BlockingConnection(parameters)
@@ -1704,7 +1658,7 @@ if __name__ == "__main__":
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_admin)).start()
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_app_counter', callback_app_counter)).start()
         socketio.run(app, host='0.0.0.0', port=5000, debug=True) 
-
+"""
     
     if communication_mode == "websocket":
         #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 5000)), app)

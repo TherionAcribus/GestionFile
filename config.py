@@ -89,4 +89,7 @@ class Config:
     # Flask SQLAlchemy Configuration
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # RabbitMQ. L'URL est dans le .env 
+    RABBITMQ_QUEUE = "socketio_messages"
+
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}

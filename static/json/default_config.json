@@ -1,12 +1,13 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.16",
+    "version": "0.17",
     "timestamp": "2024-10-07 16:35:26",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "http://192.168.86.221:5000",
             "pharmacy_name": "Pharmacie Sainte-Agathe",
+            "is_rabbitmq_active": false,
             "cron_delete_patient_table_activated": true,
             "cron_transfer_patient_to_history": true,
             "cron_delete_patient_table_hour": "00:00",
