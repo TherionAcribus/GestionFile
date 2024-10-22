@@ -71,7 +71,7 @@ def web_update_counter_staff():
 
 
 def update_counter_staff():
-    print(request.form)
+    print('ma_request', request.form)
     counter = Counter.query.get(request.form.get('counter_id'))  
     initials = request.form.get('initials')
     # la demande vient elle de l'App en mode réduit ?
@@ -79,8 +79,9 @@ def update_counter_staff():
     staff = Pharmacist.query.filter(func.lower(Pharmacist.initials) == func.lower(initials)).first()
     if staff:
         # si demande de déconnexion
-        if request.form.get('deconnect').lower() == "true" or request.form.get('deconnect') == True:
+        if request.form.get('deconnect').lower() == "true" or request.form.get('deconnect') == 'True':
             # deconnexion de tous les postes
+            print("on se barre")
             deconnect_staff_from_all_counters(staff)
         # Ajout du membre de l'équipe au comptoir        
         counter.staff = staff
@@ -141,16 +142,26 @@ def remove_counter_staff():
 
 def deconnect_staff_from_all_counters(staff):
     """ Déconnecte le membre de l'équipe de tous les comptoirs """
-    print("deconnecte")
-    for counter in Counter.query.all():
-        if counter.staff == staff:
-            counter.staff = None
-            db.session.commit()
-            #socketio.emit("trigger_disconnect_staff", {})
-            # mise à jour des boutons. PB sur tous les COUNTERS !!!!
-            communikation("counter", event="update buttons")
-            communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": staff.name})
-
+    print("Déconnexion en cours...")
+    
+    # Récupère tous les comptoirs associés à ce membre du personnel
+    affected_counters = Counter.query.filter_by(staff=staff).all()
+    
+    if not affected_counters:
+        print("Aucun comptoir à déconnecter pour ce membre du personnel.")
+        return
+    
+    for counter in affected_counters:
+        print("counter->", counter)
+        counter.staff = None
+        communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": staff.name})
+    
+    db.session.commit()
+    
+    # TODO A MODIFIER.... 
+    communikation("counter", event="update buttons")
+    
+    print(f"Déconnexion réussie de {len(affected_counters)} comptoir(s).")
 
 @counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
 def app_is_patient_on_counter(counter_id):

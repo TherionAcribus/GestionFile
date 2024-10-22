@@ -22,17 +22,19 @@
                 >
                 <p class="validation_button">{{page_patient_interface_validate_print}}</p>
             </div>
-    
-            <div class="div_validation_one_button"
-                hx-post="patient/scan_and_validate"
-                {% if page_patient_structure=="full"%}
-                    hx-target="#div_buttons_parents"
-                {% else %}
-                    hx-target="#div_buttons_children"
-                {% endif %}
-                hx-vals='{"activity_id": "{{ activity.id }}"}'>
-                <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
-            </div>
+            
+            {% if page_patient_display_button_scan %}
+                <div class="div_validation_one_button"
+                    hx-post="patient/scan_and_validate"
+                    {% if page_patient_structure=="full"%}
+                        hx-target="#div_buttons_parents"
+                    {% else %}
+                        hx-target="#div_buttons_children"
+                    {% endif %}
+                    hx-vals='{"activity_id": "{{ activity.id }}"}'>
+                    <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
+                </div>
+            {% endif %}
 
             <div 
                 id="div_for_scan"

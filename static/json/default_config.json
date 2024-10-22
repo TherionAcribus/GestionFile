@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.23",
+    "version": "0.24",
     "timestamp": "2024-10-20 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -71,6 +71,7 @@
             "page_patient_qrcode_display_specific_message": true,
             "page_patient_print_ticket_display": true,
             "page_patient_end_timer": 5,
+            "page_patient_display_button_scan": true,
             "page_patient_display_specific_message": true,
             "page_patient_display_translations": true,
             "page_patient_interface_validate_print": "Imprimer et valider",

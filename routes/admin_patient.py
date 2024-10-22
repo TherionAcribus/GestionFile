@@ -35,6 +35,7 @@ def admin_patient(tab=None):
                             page_patient_qrcode_display_specific_message = app.config['PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE'],
                             page_patient_print_ticket_display = app.config['PAGE_PATIENT_PRINT_TICKET_DISPLAY'],
                             page_patient_end_timer = app.config['PAGE_PATIENT_END_TIMER'],
+                            page_patient_display_button_scan = app.config["PAGE_PATIENT_DISPLAY_BUTTON_SCAN"],
                             page_patient_display_specific_message = app.config['PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE'],
                             page_patient_display_translations=app.config['PAGE_PATIENT_DISPLAY_TRANSLATIONS'],
                             ticket_header = app.config['TICKET_HEADER'],

@@ -247,6 +247,7 @@ def load_configuration(app):
         "page_patient_validation_message": ("PAGE_PATIENT_VALIDATION_MESSAGE", "value_str"),
         "page_patient_confirmation_message": ("PAGE_PATIENT_CONFIRMATION_MESSAGE", "value_str"),
         "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
+        "page_patient_display_button_scan" : ("PAGE_PATIENT_DISPLAY_BUTTON_SCAN", "value_bool"),
         "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
         "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
         "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
