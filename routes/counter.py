@@ -126,7 +126,7 @@ def api_is_staff_on_counter(counter_id):
         return "", 204 
 
 
-def remove_counter_staff():
+def remove_counter_staff(origine=None):
     counter_id = request.form.get('counter_id')
     counter = Counter.query.get(counter_id) 
     counter.staff = None
@@ -134,6 +134,9 @@ def remove_counter_staff():
 
     # quand on se déconnecte on enleve l'autocalling
     update_counter_auto_calling(counter_id=counter_id, auto_calling_value=False)
+
+    if origine == "dashboard":
+        communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": "Admin"})
 
     # mise à jour des boutons
     communikation("counter", event="update buttons")
@@ -282,11 +285,17 @@ def app_remove_counter_staff():
     remove_counter_staff()
     return '', 200
 
+@counter_bp.route('/dash/counter/remove_staff', methods=['POST'])
+def dashboard_remove_counter_staff():
+    remove_counter_staff(origine="dashboard")
+    communikation("admin", event="refresh_counter_dashboard")
+    
+    return '', 200
+
 
 @counter_bp.route('/counter/remove_staff', methods=['POST'])
 def web_remove_counter_staff():
     return remove_counter_staff()
-
 
 
 @counter_bp.route('/counter/list_of_activities', methods=['POST'])

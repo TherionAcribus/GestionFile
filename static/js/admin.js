@@ -114,6 +114,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_printer_dashboard(msg);
     })
 
+    adminSocket.on("refresh_counter_dashboard", function(msg) {
+        console.log("refresh_counter_dashboard:", msg);
+        refresh_counter_dashboard(msg);
+    })
+
     adminSocket.on("audio_test", function(msg) {
         console.log("audio_test:", msg);
         playAudio(msg);
@@ -312,6 +317,10 @@ function refresh_activity_staff_table(){
 
 function refresh_printer_dashboard(){
     htmx.trigger('#card-printer', 'refresh_printer_dashboard', {target: "#card-printer"});
+}
+
+function refresh_counter_dashboard(){
+    htmx.trigger('#card-counter', 'refresh_counter_dashboard', {target: "#card-counter"});
 }
 
 

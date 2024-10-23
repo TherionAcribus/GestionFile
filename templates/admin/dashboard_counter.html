@@ -24,12 +24,20 @@
                 {{counter.name}} : 
                 {% if counter.staff %}
                     {{ counter.staff.name }}
+                    {% if counter.auto_calling %}
+                        (AC)
+                    {% endif %}
+                    <a class="btn btn-danger"
+                        hx-post="/dash/counter/remove_staff"
+                        hx-target="#invisible"
+                        hx-trigger="click" 
+                        hx-vals='{"staff_id": "{{counter.staff.id}}", "counter_id": "{{counter.id}}"}'>
+                        Déconnecter
+                    </a>
                 {% else %}
-                    Personne
+                    Personne                    
                 {% endif %}
-                {% if counter.auto_calling %}
-                    (AC)
-                {% endif %}
+
             </div>
         {% endfor %}
         </div>
