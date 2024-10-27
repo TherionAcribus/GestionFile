@@ -229,13 +229,11 @@ def format_ticket_text(new_patient, activity):
         ]
         if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
             text_list.append(activity.specific_message)
-    print("text_list", text_list)
+            
     combined_text = "\n".join(text_list)
-    print("text_join", combined_text)
     combined_text = replace_balise_phone(combined_text, new_patient)
     formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
     encoded_text = base64.b64encode(formatted_text.encode('utf-8')).decode('utf-8')
-    print("encoded", encoded_text)
     return encoded_text
 
 

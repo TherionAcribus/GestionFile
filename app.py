@@ -1128,7 +1128,7 @@ def validate_patient(counter_id, patient_id):
         current_patient_pyside = current_patient.to_dict()
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
-    return jsonify(current_patient.to_dict()), 200  
+    return jsonify(current_patient_pyside), 200  
 
 
 @app.route('/update_patient_status')

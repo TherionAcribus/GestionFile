@@ -331,3 +331,36 @@ def relaunch_patient_call(counter_id):
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
     communikation("update_audio", event="audio", data=audio_url)
     return '', 204
+
+
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>', methods=['GET'])
+def put_waiting_list(patient_id):
+    return handle_patient_from_app(patient_id, action="standing")
+
+@counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['GET'])
+def delete_patient_from_app(patient_id):
+    return handle_patient_from_app(patient_id, action="delete")
+
+def handle_patient_from_app(patient_id, action):
+    patient = Patient.query.get(patient_id)
+    print("STANDING", patient)
+
+    if action == "delete":
+        status = "done"  # en cas de suppression de la part du comptoir, on marque le patient comme terminé
+    elif action == "standing":
+        status = "standing"
+    
+    if patient:
+        # on change les infos du patient
+        patient.status = status
+        patient.counter = None
+        db.session.commit()
+
+        # rafraichissement de la page
+        communikation("update_screen", event="remove_calling", data={"id": patient_id})
+
+        # rafraichissement des infos
+        communikation("update_patient")
+        return "", 201
+    else:
+        return 'Patient not found', 404
