@@ -222,7 +222,6 @@ def patient_return_validation_page_and_print_data(print_ticket):
     new_patient = register_patient(activity)
     print_data = format_ticket_text(new_patient, activity)
     print("print_data", print_data)
-    communikation("app_patient", flag="print", data=print_data)
 
     # Gestion des notifications si nécessaire
     if activity.notification:
