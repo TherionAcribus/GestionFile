@@ -230,6 +230,7 @@ def format_ticket_text(new_patient, activity):
             text_list.append(activity.specific_message)
     print("text_list", text_list)
     combined_text = "\n".join(text_list)
+    print("text_join", combined_text)
     combined_text = replace_balise_phone(combined_text, new_patient)
     formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
     return formatted_text
