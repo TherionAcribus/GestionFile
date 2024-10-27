@@ -1,5 +1,6 @@
 import re
 import pytz
+import base64
 from datetime import datetime, date
 from flask import session, current_app as app
 from models import Button, Translation, db
@@ -233,6 +234,8 @@ def format_ticket_text(new_patient, activity):
     print("text_join", combined_text)
     combined_text = replace_balise_phone(combined_text, new_patient)
     formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
-    return formatted_text
+    encoded_text = base64.b64encode(formatted_text.encode('utf-8')).decode('utf-8')
+    print("encoded", encoded_text)
+    return encoded_text
 
 
