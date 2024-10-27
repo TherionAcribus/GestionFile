@@ -1,5 +1,6 @@
 import markdown2
-from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, current_app as app
+import json
+from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
@@ -202,14 +203,42 @@ def left_page_validate_patient(activity):
 
 @patient_bp.route('/patient/print_and_validate', methods=['POST'])
 def print_and_validate():
-    activity = Activity.query.get(request.form.get('activity_id'))
-    new_patient = register_patient(activity)
-    text = format_ticket_text(new_patient, activity)
+    return patient_return_validation_page_and_print_data(print_ticket=True)
 
+
+@patient_bp.route('/patient/scan_and_validate', methods=['POST'])
+def patient_scan_and_validate():
+    return patient_return_validation_page_and_print_data(print_ticket=False)
+
+
+def patient_return_validation_page_and_print_data(print_ticket):
+    """ Fournit le template pour la page conclusion et les données d'impressions
+    Les données d'impression sont fournies dans tous les cas, mais utilisées selon l'ordre d'impression. 
+    Le but est de pouvoir réimprimer facilement, même si on a choisi Scan au départ."""
+
+    # Récupération et traitement des données comme avant
+    activity_id = request.form.get('activity_id')
+    activity = Activity.query.get(activity_id)
+    new_patient = register_patient(activity)
+    print_data = format_ticket_text(new_patient, activity)
+    print("print_data", print_data)
+
+    # Gestion des notifications si nécessaire
     if activity.notification:
-        send_app_notification(origin="activity", data={"patient":new_patient, "activity": activity})
-    communikation("app_patient", flag="print", data=text)
-    return patient_conclusion_page(new_patient.call_number)
+        send_app_notification(origin="activity", data={"patient": new_patient, "activity": activity})
+
+    if 'HX-Request' in request.headers:
+        # Requête provenant de HTMX
+        # Rendre le template de la page de conclusion
+        html_content = patient_conclusion_page(new_patient.call_number, print_ticket=print_ticket, print_data=print_data)
+
+        # Inclure les données d'impression dans un en-tête HX-Trigger si nécessaire (voir plus bas)
+        response = make_response(html_content)
+        return response
+    else:
+        # Redirection traditionnelle si pas de requête AJAX
+        return redirect(url_for('patient.patient_conclusion_page', call_number=new_patient.call_number))
+        
 
 def patient_validate_scan(activity_id):
     """ Fct appelée lors du scan du QRCode (validation) """
@@ -227,24 +256,15 @@ def patient_scan_already_validate():
     print("already scanned", patient_call_number)
     return patient_conclusion_page(patient_call_number)
 
-@patient_bp.route('/patient/scan_and_validate', methods=['POST'])
-def patient_scan_and_validate():
-    """ Fct appelée si clic sur le bouton de validation """
-    activity = Activity.query.get(request.form.get('activity_id'))
-    new_patient = register_patient(activity)
-    if activity.notification:
-        send_app_notification(origin="activity", data={"patient":new_patient, "activity": activity})
-    return patient_conclusion_page(new_patient.call_number)
-
 
 @patient_bp.route('/patient/cancel_patient')
 def cancel_patient():
     session['language_code'] = "fr"
     return patient_right_page()
+    
 
-
-@patient_bp.route('/patient/conclusion_page')
-def patient_conclusion_page(call_number):
+@patient_bp.route('/patient/conclusion_page/<call_number>')
+def patient_conclusion_page(call_number, print_ticket, print_data=None):
     image_name_qr = f"qr_patient-{call_number}.png" 
 
     patient = Patient.query.filter_by(call_number=call_number).first()
@@ -252,14 +272,16 @@ def patient_conclusion_page(call_number):
     page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
 
     return render_template('patient/conclusion_page.html',
-                            call_number=call_number,
-                            image_name_qr=image_name_qr,
-                            page_patient_confirmation_message=page_patient_confirmation_message,
-                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
-                            page_patient_interface_done_print = choose_text_translation("page_patient_interface_done_print"),
-                            page_patient_interface_done_extend = choose_text_translation("page_patient_interface_done_extend"),
-                            page_patient_interface_done_back = choose_text_translation("page_patient_interface_done_back")
-                            )
+                        call_number=call_number,
+                        image_name_qr=image_name_qr,
+                        page_patient_confirmation_message=page_patient_confirmation_message,
+                        page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
+                        page_patient_interface_done_print=choose_text_translation("page_patient_interface_done_print"),
+                        page_patient_interface_done_extend=choose_text_translation("page_patient_interface_done_extend"),
+                        page_patient_interface_done_back=choose_text_translation("page_patient_interface_done_back"),
+                        print_data=print_data,
+                        print_ticket=print_ticket
+                        )
 
 @patient_bp.route('/patient/refresh')
 def patient_refresh():

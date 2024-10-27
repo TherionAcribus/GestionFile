@@ -95,3 +95,53 @@ function refresh_title(){
     htmx.trigger('#div_title_area', 'refresh_title', {target: "#div_title_area"});
 }
 
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialisation du Bridge PySide s'il n'a pas encore été initialisé
+    if (typeof window.bridge === 'undefined') {
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            window.bridge = channel.objects.bridge;
+            console.log("Bridge PySide initialisé.");
+        });
+    } else {
+        console.log("Bridge PySide déjà initialisé.");
+    }
+
+    // Écoute de l'événement htmx:afterSwap sur le document
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        console.log("htmx:afterSwap déclenché", event);
+
+        // Vérifier que la cible mise à jour est celle que nous attendons
+        if (event.detail.target.id === 'div_buttons_parents') {
+            console.log("div_buttons_parents a été mise à jour");
+
+            // Récupérer les données d'impression
+            var printDataElement = document.getElementById('print_data');
+            if (printDataElement) {
+                var printData = printDataElement.getAttribute('data-print');
+                var printTicket = printDataElement.getAttribute('print-ticket');
+                console.log('printTicket', printTicket);
+
+                // Vérifier si l'impression est demandée
+                if (printTicket !== "False") {  // Utiliser "False" comme chaîne car c'est une valeur d'attribut
+                    if (printData) {
+                        console.log("Données d'impression récupérées :", printData);
+
+                        // Vérifier que le Bridge est bien initialisé avant d'appeler print_ticket
+                        if (typeof window.bridge !== 'undefined') {
+                            bridge.print_ticket(printData);
+                        } else {
+                            console.error("Le Bridge PySide n'est pas disponible.");
+                        }
+                    } else {
+                        console.error("Les données d'impression ne sont pas disponibles.");
+                    }
+                } else {
+                    console.log("Pas d'impression demandée");
+                }
+            } else {
+                console.error("L'élément print_data est introuvable.");
+            }
+        }
+    });
+});

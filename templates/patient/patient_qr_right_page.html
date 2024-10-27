@@ -10,17 +10,19 @@
         </div>
 
         <div class="div_validation_buttons">
-            <div 
+
+            <div
+                id="print_and_validate"
                 class="div_validation_one_button"
-                hx-post="patient/print_and_validate"
+                hx-post="/patient/print_and_validate"
                 hx-vals='{"activity_id": "{{ activity.id }}"}'
-                {% if page_patient_structure=="full"%}
+                {% if page_patient_structure == "full" %}
                     hx-target="#div_buttons_parents"
                 {% else %}
                     hx-target="#div_buttons_children"
                 {% endif %}
-                >
-                <p class="validation_button">{{page_patient_interface_validate_print}}</p>
+            >
+                <p class="validation_button">{{ page_patient_interface_validate_print }}</p>
             </div>
             
             {% if page_patient_display_button_scan %}
@@ -66,14 +68,16 @@
                     </div>
                 </div>
             {% endif %}
-
         </div>
-
     </div>
 
 </div>
 
+    <!-- Inclure les données d'impression 
+    <div id="print_data" data-print='{{ print_data | safe }}' style="display:none"></div>-->
+
 <script>
+
     // Fonction qui permet de désactiver les boutons de validation pour éviter double validation
     function disableButtons(button) {
         // Désactive le bouton cliqué

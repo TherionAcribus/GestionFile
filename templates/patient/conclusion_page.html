@@ -15,9 +15,9 @@
         <div class="div_validation_buttons">
 
             <div
-                id="print_btn" 
+                id="print_btn"
                 class="div_validation_one_button">
-                <p class="validation_button">{{page_patient_interface_done_print}}</p>
+                <p class="validation_button">{{ page_patient_interface_done_print }}</p>
             </div>
 
             <div
@@ -43,8 +43,10 @@
 
 </div>
 
+<div id="print_data" print-ticket="{{ print_ticket }}" data-print="{{ print_data | escape }}" style="display: none;"></div>
 
 <script>
+
     var timerGauge = document.getElementById('timer_gauge');
     var prolongBtn = document.getElementById('prolong_btn');
     var printBtn = document.getElementById('print_btn');
@@ -98,6 +100,7 @@
 
     printBtn.addEventListener('click', function() {
         resetTimer();
+        handlePrintButtonClick()
     });
 
     cancelBtn.addEventListener('click', function() {
@@ -106,4 +109,45 @@
 
     // Ensure timer starts immediately without delay
     startTimer();
+
+
+    function handlePrintButtonClick() {
+        // Récupérer les données d'impression
+        var printDataElement = document.getElementById('print_data');
+        if (printDataElement) {
+            var printData = printDataElement.getAttribute('data-print');
+            var printTicket = printDataElement.getAttribute('print-ticket');
+
+            // Vérifier si l'impression est demandée
+
+                if (printData) {
+                    console.log("Données d'impression prêtes à être envoyées :", printData);
+
+                    // Vérifier si le Bridge est disponible
+                    if (typeof window.bridge !== 'undefined') {
+                        // Appeler la méthode d'impression via le Bridge
+                        bridge.print_ticket(printData);
+                    } else {
+                        console.warn("Le Bridge n'est pas disponible. Tentative de ré-initialisation...");
+
+                        // Tentative de ré-initialisation du Bridge
+                        new QWebChannel(qt.webChannelTransport, function(channel) {
+                            window.bridge = channel.objects.bridge;
+                            if (typeof window.bridge !== 'undefined') {
+                                console.log("Bridge ré-initialisé avec succès.");
+                                bridge.print_ticket(printData);  // Appel d'impression après ré-initialisation
+                            } else {
+                                console.error("Échec de la ré-initialisation du Bridge. Impression non effectuée.");
+                            }
+                        });
+                    }
+                } else {
+                    console.error("Les données d'impression ne sont pas disponibles.");
+                }            
+        } else {
+            console.error("L'élément print_data est introuvable.");
+        }
+    }
+
+
 </script>
