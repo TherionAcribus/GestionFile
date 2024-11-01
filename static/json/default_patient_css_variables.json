@@ -1,13 +1,17 @@
 {
     "name": "gf_patient_css_variables",
     "type": "default",
-    "version": "0.1",
+    "version": "0.2",
     "timestamp": "2024-11-01 14:35:26",
     "comments": "Version initiale",
     "variables": {
-        "scan_explanation_font_size": "50px",
-        "scan_explanation_font_color": "50px",
-        "scan_explanation_border_size": "50px",
-        "scan_explanation_border_color": "50px"
+        "patient_title_font_size": "80",
+        "patient_title_font_color": "white",
+        "patient_title_border_size": "1",
+        "patient_title_border_color": "black",
+        "scan_explanation_font_size": "50",
+        "scan_explanation_font_color": "darkcyan",
+        "scan_explanation_border_size": "1",
+        "scan_explanation_border_color": "black"
     }
 }

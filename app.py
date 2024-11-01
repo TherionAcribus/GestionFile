@@ -54,6 +54,7 @@ from scheduler_functions import enable_buttons_for_activity, disable_buttons_for
 from bdd import init_database
 from config import Config, time_tz
 from communication import send_app_notification, start_rabbitmq_consumer, communikation
+from variables import MultiCssVariableManager
 
 from app_holder import AppHolder
 
@@ -346,6 +347,9 @@ def start_fonctions(app):
 
     init_database(database, db)
 
+    # Pour gérer les app.config des CSS. A faire également pour mon Config général
+    css_manager = MultiCssVariableManager(app)
+
     # Check if the user table is empty and create an admin user if it is
 
     if User.query.count() == 0:
@@ -376,6 +380,7 @@ def start_fonctions(app):
     init_default_patient_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
+    css_manager.reload_all()
     clear_counter_table()
 
     # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
@@ -410,8 +415,8 @@ def create_app(config_class=Config):
     print("CONFIG_CLASS", config_class.SECURITY_PASSWORD_HASH)
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
-    #with app.app_context():
-    #    start_fonctions(app)
+    with app.app_context():
+        start_fonctions(app)
 
     # Enregistrement des blueprints
     app.register_blueprint(admin_announce_bp, url_prefix='')
@@ -437,8 +442,6 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_app_bp, url_prefix='')
     app.register_blueprint(engine_bp, url_prefix='')
 
-    print(app.url_map)
-
     return app
 
 load_dotenv()
@@ -449,7 +452,7 @@ app = create_app(config_class=Config)
 print("App configuration:", app.config)
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
-#start_rabbitmq_consumer(app)
+start_rabbitmq_consumer(app)
 
 # Définir le jobstore avec votre base de données
 jobstores = {
@@ -894,6 +897,47 @@ def update_switch():
             print(e)
             return display_toast(success=False, message=str(e))
     
+
+@app.route('/admin/update_css_variable', methods=['POST'])
+def update_css_variable():
+    try:
+        # Récupération des données
+        source = request.form.get('source')
+        variable = request.form.get('variable')
+        value = request.form.get('value')
+
+        # Validation des données
+        if not all([source, variable, value]):
+            return jsonify({
+                'status': 'error',
+                'message': 'Données manquantes'
+            }), 400
+
+        if source not in ['patient', 'announce']:
+            return jsonify({
+                'status': 'error',
+                'message': 'Source invalide'
+            }), 400
+
+        # Mise à jour via le gestionnaire
+        app.css_manager.update_variable(source, variable, value)
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Variable {variable} mise à jour pour {source}',
+            'data': {
+                'source': source,
+                'variable': variable,
+                'value': value
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 
 @app.route('/admin/update_input', methods=['POST'])
 def update_input():

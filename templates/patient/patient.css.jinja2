@@ -14,13 +14,15 @@ html, body {
 #div_title_area {
     height: 10%;
     text-align: center;
-    font-size: 40px;
+    font-size: {{patient_title_font_size}}px;
     font-weight: bold;
     background-color: darkcyan;
-    color: white;
+    color: {{patient_title_font_color}};
     display: flex;        /* Utilise Flexbox */
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
+    -webkit-text-stroke-color: {{patient_title_border_color}};
+    -webkit-text-stroke-width: {{patient_title_border_size}}px;
 }
 
 #div_buttons_parents{
@@ -248,6 +250,8 @@ html, body {
 .div_explanation {
     font-size: {{page_patient_explanation_font_size}}px;
     font-weight: 500;
-    color: darkcyan;
+    color: {{ scan_explanation_font_color }};
     text-align: center;
+    -webkit-text-stroke-color: {{scan_explanation_border_color}};
+    -webkit-text-stroke-width: {{scan_explanation_border_size}}px;
 }

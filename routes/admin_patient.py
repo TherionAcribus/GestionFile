@@ -54,7 +54,18 @@ def admin_patient(tab=None):
                             page_patient_interface_done_extend = app.config['PAGE_PATIENT_INTERFACE_DONE_EXTEND'],
                             page_patient_interface_done_back = app.config['PAGE_PATIENT_INTERFACE_DONE_BACK'], 
                             activities = Activity.query.all(),
-                            languages = Language.query.all()
+                            languages = Language.query.all(),
+                            # CSS
+                            #titre
+                            patient_title_font_size=app.css_manager.get_variable('patient', 'patient_title_font_size'),
+                            patient_title_font_color=app.css_manager.get_variable('patient', 'patient_title_font_color'),
+                            patient_title_border_size=app.css_manager.get_variable('patient', 'patient_title_border_size'),
+                            patient_title_border_color=app.css_manager.get_variable('patient', 'patient_title_border_color'),
+                            #explication
+                            scan_explanation_font_size = app.css_manager.get_variable('patient', 'scan_explanation_font_size'),
+                            scan_explanation_font_color = app.css_manager.get_variable('patient', 'scan_explanation_font_color'),
+                            scan_explanation_border_size = app.css_manager.get_variable('patient', 'scan_explanation_border_size'),
+                            scan_explanation_border_color = app.css_manager.get_variable('patient', 'scan_explanation_border_color'),
                             )
 
 

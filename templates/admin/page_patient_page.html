@@ -61,6 +61,37 @@
     </button>
 </div>
 
+PTFZ{{patient_title_font_size}}
+{{ macros.css_textbloc(
+    "patient",
+    "patient_title_font_size",
+    patient_title_font_size,
+    "Taille de la police du titre"
+) }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "patient_title_font_color",
+    patient_title_font_color,
+    "Couleur de la police du titre"
+) }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "patient_title_border_size",
+    patient_title_border_size,
+    "Taille du contour de la police du titre"
+) }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "patient_title_border_color",
+    patient_title_border_color,
+    "Couleur du contour de la police du titre"
+) }}
+
+
+
 <div class="mb-3">
     <label for="page_patient_subtitle" class="form-label">Texte en bas de la page (Indications)</label>
     <textarea id="page_patient_subtitle" class="form-control" rows="3">{{page_patient_subtitle}}</textarea>
@@ -89,6 +120,34 @@
                 page_patient_display_specific_message, 
                 "Afficher le message spécifique à l'activité dans le pied de page")
 }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "scan_explanation_font_size",
+    scan_explanation_font_size,
+    "Taille de police des explications"
+) }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "scan_explanation_font_color",
+    scan_explanation_font_color,
+    "Couleur de police des explications"
+) }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "scan_explanation_border_size",
+    scan_explanation_border_size,
+    "Taille du contour de la police des explications"
+) }}
+
+{{ macros.css_textbloc(
+    "patient",
+    "scan_explanation_border_color",
+    scan_explanation_border_color,
+    "Couleur du contour de la police des explications"
+) }}
 
 <h5>Texte de la page de validation</h5>
 

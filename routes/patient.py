@@ -381,7 +381,15 @@ def phone_patient_ping():
 @patient_bp.route('/static/css/patient.css')
 def patient_css():
     print("patient_css")
-    page_patient_explanation_font_size = 50
     return Response(render_template('/patient/patient.css.jinja2',
-                            page_patient_explanation_font_size=page_patient_explanation_font_size),
+                            #titre
+                            patient_title_font_size=app.css_manager.get_variable('patient', 'patient_title_font_size'),
+                            patient_title_font_color=app.css_manager.get_variable('patient', 'patient_title_font_color'),
+                            patient_title_border_size=app.css_manager.get_variable('patient', 'patient_title_border_size'),
+                            patient_title_border_color=app.css_manager.get_variable('patient', 'patient_title_border_color'),
+                            #explication
+                            page_patient_explanation_font_size=app.css_manager.get_variable('patient', 'scan_explanation_font_size'),
+                            scan_explanation_font_color=app.css_manager.get_variable('patient', 'scan_explanation_font_color'),
+                            scan_explanation_border_size=app.css_manager.get_variable('patient', 'scan_explanation_border_size'),
+                            scan_explanation_border_color=app.css_manager.get_variable('patient', 'scan_explanation_border_color')),
                             mimetype='text/css')

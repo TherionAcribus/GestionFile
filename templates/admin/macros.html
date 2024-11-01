@@ -312,3 +312,48 @@
     }
 </script>
 {% endmacro %}
+
+
+
+<!--- Pour les variables CSS -->
+
+{# Macro de base pour le textarea #}
+{% macro css_textarea(source, variable, value, label) %}
+<div class="mb-3">
+    <label for="{{ source }}_{{ variable }}" class="form-label">{{ label }}</label>
+    <textarea 
+        id="{{ source }}_{{ variable }}" 
+        class="form-control" 
+        rows="3"
+    >{{ value }}</textarea>
+</div>
+{% endmacro %}
+
+{# Macro pour le bouton #}
+{% macro css_button(source, variable) %}
+<div class="mt-2">
+    <button
+        class="btn btn-primary"
+        hx-post="/admin/update_css_variable"
+        hx-target="#invisible"
+        hx-vals='js:{
+            "source": "{{ source }}",
+            "variable": "{{ variable }}", 
+            "value": document.getElementById("{{ source }}_{{ variable }}").value
+        }'
+    >
+        Enregistrer
+    </button>
+    <div id="{{ source }}_{{ variable }}_result"></div>
+</div>
+{% endmacro %}
+
+{# Macro complète #}
+{% macro css_textbloc(source, variable, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        {{ css_textarea(source, variable, value, label) }}
+        {{ css_button(source, variable) }}
+    </div>
+</div>
+{% endmacro %}
