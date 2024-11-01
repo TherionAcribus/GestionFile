@@ -6,7 +6,44 @@ from datetime import datetime, time
 from flask import redirect, url_for, render_template, current_app
 from io import BytesIO
 
-from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, DashboardCard
+from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, PatientCssVariable, DashboardCard
+
+def init_default_patient_css_variables_db_from_json():
+    json_file='static/json/default_patient_css_variables.json'
+    load_patient_css_variables_from_json(json_file, restore=False)
+
+def load_patient_css_variables_from_json(json_file, restore=False):
+    with current_app.app_context():
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            current_version = ConfigVersion.query.filter_by(config_key="patient_css_variables_version").first()
+
+            if not current_version or current_version.version != data['version'] or restore:
+                if current_version:
+                    current_app.logger.info(f"Mise à jour de la table CSS DATA VARIABLES : {current_version.version} vers {data['version']}")
+                    current_version.version = data['version']
+                else:
+                    current_app.logger.info(f"Ajout de la version CSS DATA VARIABLES : {data['version']}")
+                    new_version = ConfigVersion(config_key="patient_css_variables_version", version=data['version'])
+                    db.session.add(new_version)
+
+                for key, value in data['variables'].items():
+                    css_variable = PatientCssVariable.query.filter_by(variable=key).first()
+                    
+                    if css_variable:
+                        # pas encore ajouté à l'interface. A FAIRE + Gestion de la restauration / Sauvegarde
+                        if restore:
+                            current_app.logger.info(f"Mise à jour de {key}")
+                            css_variable.value = value
+                    else:
+                        current_app.logger.info(f"Création de {key}")
+                        new_variable = PatientCssVariable(
+                            variable=key,
+                            value=value)
+                        db.session.add(new_variable)
+
+                db.session.commit()
+                current_app.logger.info("Table CSS DATA VARIABLES mise à jour")
 
 # CONFIGURATION DE L'APP       
 def init_default_options_db_from_json():

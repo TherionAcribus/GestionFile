@@ -46,7 +46,7 @@ import jwt
 from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json
 from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
@@ -184,7 +184,6 @@ def communication_rabbitmq(queue, data=None, client_id=None):
     except Exception as e:
         print("message failed:", message)
         return f"Failed to send message: {e}", 500"""
-
 
 
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
@@ -374,6 +373,7 @@ def start_fonctions(app):
     init_update_default_translations_db_from_json()
     init_default_algo_rules_db_from_json()
     init_default_dashboard_db_from_json()
+    init_default_patient_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
     clear_counter_table()
@@ -410,8 +410,8 @@ def create_app(config_class=Config):
     print("CONFIG_CLASS", config_class.SECURITY_PASSWORD_HASH)
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
-    with app.app_context():
-        start_fonctions(app)
+    #with app.app_context():
+    #    start_fonctions(app)
 
     # Enregistrement des blueprints
     app.register_blueprint(admin_announce_bp, url_prefix='')
@@ -449,7 +449,7 @@ app = create_app(config_class=Config)
 print("App configuration:", app.config)
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
-start_rabbitmq_consumer(app)
+#start_rabbitmq_consumer(app)
 
 # Définir le jobstore avec votre base de données
 jobstores = {

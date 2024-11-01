@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
 from flask import current_app as app
-from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint, event
+from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import relationship, Session
+from sqlalchemy.orm import relationship
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
 from config import time_tz
@@ -439,6 +439,12 @@ class TextInterface(db.Model):
 
 class PatientCssVariable(db.Model):
     __tablename__ = 'patient_css_variable'
+    id = db.Column(db.Integer, primary_key=True)
+    variable = db.Column(db.String(50), nullable=False)
+    value = db.Column(db.Text, nullable=False)
+
+class AnnounceCssVariable(db.Model):
+    __tablename__ = 'announce_css_variable'
     id = db.Column(db.Integer, primary_key=True)
     variable = db.Column(db.String(50), nullable=False)
     value = db.Column(db.Text, nullable=False)
