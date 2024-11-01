@@ -38,6 +38,12 @@
                 </div>
             {% endif %}
 
+            {% if page_patient_display_scan_explanation %}
+                <div class="div_explanation">
+                    {{page_patient_interface_scan_explanation}}
+                </div>
+            {% endif %}
+
             <div 
                 id="div_for_scan"
                 hx-trigger="qrcode_is_scanned"

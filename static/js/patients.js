@@ -1,30 +1,3 @@
-var eventSource = new EventSource('/events/update_page_patient');
-
-eventSource.onmessage = function(event) {
-    // SOLUTION TEMPORAIRE PASSANT PAR SSE LE TEMPS DE TROUVER UNE SOLUTION AVEC WEBSOCKET
-    console.log(event);
-    //var data = JSON.parse(event.data);
-    console.log("TRIGGER1")
-    // on laisse du temps pour les commit soient faits
-    setTimeout(function() {
-        console.log("TRIGGER2")
-        htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
-
-        // Fermez la connexion après avoir reçu un message
-        //eventSource.close();
-    }, 10000); // 2000 millisecondes = 2 secondes
-
-    eventSource = new EventSource('/events/update_page_patient');
-
-    //if (event.data == "refresh buttons") {
-    //    htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
-    //} else if (data.action == "refresh page") {
-    //    console.log("Refresh activities...");
-    ///    refresh_page();        
-    //}
-};
-
-
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
     var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';

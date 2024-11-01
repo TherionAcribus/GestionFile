@@ -183,11 +183,13 @@ def left_page_validate_patient(activity):
                             activity=activity,
                             futur_patient=futur_patient,                            
                             page_patient_display_button_scan=app.config["PAGE_PATIENT_DISPLAY_BUTTON_SCAN"],
+                            page_patient_display_scan_explanation=app.config["PAGE_PATIENT_DISPLAY_SCAN_EXPLANATION"],
                             page_patient_validation_message=page_patient_validation_message,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             page_patient_interface_validate_print=choose_text_translation("page_patient_interface_validate_print"),
                             page_patient_interface_validate_scan=choose_text_translation("page_patient_interface_validate_scan"),
                             page_patient_interface_validate_cancel=choose_text_translation("page_patient_interface_validate_cancel"),
+                            page_patient_interface_scan_explanation=choose_text_translation("page_patient_interface_scan_explanation"),
                             )
     
     # si on veut afficher un message specifique (et qu'il existe). Retourné via oob-swap

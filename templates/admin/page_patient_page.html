@@ -32,6 +32,11 @@
                 "Afficher le bouton 'Scanner et valider'")
 }}
 
+{{ macros.switch("page_patient_display_scan_explanation", 
+page_patient_display_scan_explanation,
+                "Afficher les explication pour scanner le QRCode")
+}}
+
 {{ macros.textbloc_int("page_patient_end_timer", page_patient_end_timer, "Temps avant le retour à l'accueil en s")}}
 
 <div class="mb-3">

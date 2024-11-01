@@ -30,6 +30,10 @@ html, body {
     background-color: rgb(182, 245, 245);
 }
 
+.div_validation_buttons{
+    margin-left: 50px;
+}
+
 .cancel_button_container {
     position: absolute;
     bottom: 10px; /* Ajustez cette valeur selon vos besoins */
@@ -165,11 +169,13 @@ html, body {
 
 .div_validation_one_button{
     background-color:darkcyan;
-    border-radius: 10%;
+    border-radius: 5%;
     box-shadow: 5px 5px 5px #888888;
     color: white;
     text-align: center;
     margin: 30px ;
+    padding-top: 5px;
+    padding-bottom: 5px;
 }
 
 .validation_button {
@@ -183,7 +189,7 @@ html, body {
 
 .div_qr_plus_buttons{
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 2fr;
 }
 
 .text_summary {
@@ -238,4 +244,11 @@ html, body {
     cursor: pointer;
     width: 70px;
     margin: 10px;
+}
+
+.div_explanation {
+    font-size: 50px;
+    font-weight: 500;
+    color: darkcyan;
+    text-align: center;
 }
