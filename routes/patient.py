@@ -273,7 +273,7 @@ def patient_conclusion_page(call_number, print_ticket, print_data=None):
 
     # print_ticket == False si mode Scan. On défini si on affiche ou non les boutons pour réimprimer et prolonger
     reprint = False
-    if (print_ticket and app.config["PAGE_PATIENT_PRINT_CONFIRMATION_AFTER"]) or (not print_ticket and app.config["PAGE_PATIENT_SCAN_CONFIRMATION_AFTER"]):
+    if (print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_PRINT"]) or (not print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_SCAN"]):
         reprint = True
 
     return render_template('patient/conclusion_page.html',
