@@ -33,11 +33,21 @@
 }}
 
 {{ macros.switch("page_patient_display_scan_explanation", 
-page_patient_display_scan_explanation,
+                page_patient_display_scan_explanation,
                 "Afficher les explication pour scanner le QRCode")
 }}
 
-{{ macros.textbloc_int("page_patient_end_timer", page_patient_end_timer, "Temps avant le retour à l'accueil en s")}}
+{{ macros.switch("page_patient_print_confirmation_after", 
+                page_patient_print_confirmation_after,
+                "Afficher la page pour réimprimer après le clic sur 'Print'")
+}}
+
+{{ macros.switch("page_patient_scan_confirmation_after", 
+                page_patient_scan_confirmation_after,
+                "Afficher la page pour réimprimer après le clic sur 'Scan'")
+}}
+
+{{ macros.textbloc_int("page_patient_end_timer", page_patient_end_timer, "Temps avant le retour à l'accueil en s après le clic")}}
 
 <div class="mb-3">
     <label for="page_patient_title" class="form-label">Texte en haut de la page (Titre)</label>

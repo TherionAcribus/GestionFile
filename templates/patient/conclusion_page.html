@@ -13,15 +13,17 @@
         </div>
 
         <div class="div_validation_buttons">
-
+            
             <div
                 id="print_btn"
+                {% if not reprint %} style="display: none;" {% endif %} 
                 class="div_validation_one_button">
                 <p class="validation_button">{{ page_patient_interface_done_print }}</p>
             </div>
 
             <div
                 id="prolong_btn"
+                {% if not reprint %} style="display: none;" {% endif %} 
                 class="div_validation_one_button">
                 <p class="validation_button">{{page_patient_interface_done_extend}}</p>
             </div>

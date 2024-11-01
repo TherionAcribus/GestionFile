@@ -12,12 +12,8 @@ patient_bp = Blueprint('patient', __name__)
 def patients_front_page():
     language_code = request.args.get('language_code')
 
-    print("language_code", language_code)
-
     languages = db.session.query(Language).filter_by(is_active = True).order_by(Language.sort_order).all()
-    print("languages_list", languages)
 
-    print("language_code START", language_code)
     # définition de la langue
     if language_code is None or language_code == "fr":
         session['language_code'] = "fr"
@@ -205,7 +201,7 @@ def left_page_validate_patient(activity):
 
 @patient_bp.route('/patient/print_and_validate', methods=['POST'])
 def print_and_validate():
-    return patient_return_validation_page_and_print_data(print_ticket=True)
+        return patient_return_validation_page_and_print_data(print_ticket=True)
 
 
 @patient_bp.route('/patient/scan_and_validate', methods=['POST'])
@@ -232,7 +228,9 @@ def patient_return_validation_page_and_print_data(print_ticket):
     if 'HX-Request' in request.headers:
         # Requête provenant de HTMX
         # Rendre le template de la page de conclusion
-        html_content = patient_conclusion_page(new_patient.call_number, print_ticket=print_ticket, print_data=print_data)
+        html_content = patient_conclusion_page(new_patient.call_number,
+                                                print_ticket=print_ticket, 
+                                                print_data=print_data)
 
         # Inclure les données d'impression dans un en-tête HX-Trigger si nécessaire (voir plus bas)
         response = make_response(html_content)
@@ -273,6 +271,11 @@ def patient_conclusion_page(call_number, print_ticket, print_data=None):
     page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
     page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
 
+    # print_ticket == False si mode Scan. On défini si on affiche ou non les boutons pour réimprimer et prolonger
+    reprint = False
+    if (print_ticket and app.config["PAGE_PATIENT_PRINT_CONFIRMATION_AFTER"]) or (not print_ticket and app.config["PAGE_PATIENT_SCAN_CONFIRMATION_AFTER"]):
+        reprint = True
+
     return render_template('patient/conclusion_page.html',
                         call_number=call_number,
                         image_name_qr=image_name_qr,
@@ -282,7 +285,8 @@ def patient_conclusion_page(call_number, print_ticket, print_data=None):
                         page_patient_interface_done_extend=choose_text_translation("page_patient_interface_done_extend"),
                         page_patient_interface_done_back=choose_text_translation("page_patient_interface_done_back"),
                         print_data=print_data,
-                        print_ticket=print_ticket
+                        print_ticket=print_ticket,
+                        reprint=reprint
                         )
 
 @patient_bp.route('/patient/refresh')
