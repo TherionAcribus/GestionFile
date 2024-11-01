@@ -1,0 +1,13 @@
+{
+    "name": "gf_patient_css_variables",
+    "type": "default",
+    "version": "0.1",
+    "timestamp": "2024-11-01 14:35:26",
+    "comments": "Version initiale",
+    "variables": {
+        "scan_explanation_font_size": "50px",
+        "scan_explanation_font_color": "50px",
+        "scan_explanation_border_size": "50px",
+        "scan_explanation_border_color": "50px"
+    }
+}

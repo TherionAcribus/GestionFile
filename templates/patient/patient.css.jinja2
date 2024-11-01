@@ -1,0 +1,253 @@
+html, body {
+    height: 100%; /* Assure que le html et body prennent toute la hauteur de l'écran */
+    margin: 0; /* Enlève les marges par défaut */
+    padding: 0; /* Enlève les paddings par défaut */
+    overflow: hidden; /* Empêche le défilement */
+}
+
+#main {
+    display: flex;
+    flex-direction: column; /* Organise les enfants de #main en colonne */
+    height: 100%; /* Prend toute la hauteur disponible */
+}
+
+#div_title_area {
+    height: 10%;
+    text-align: center;
+    font-size: 40px;
+    font-weight: bold;
+    background-color: darkcyan;
+    color: white;
+    display: flex;        /* Utilise Flexbox */
+    align-items: center;  /* Centre le contenu verticalement */
+    justify-content: center; /* Centre le contenu horizontalement */
+}
+
+#div_buttons_parents{
+    position: relative; 
+    justify-content:space-around;
+    align-items: center;
+    background-color: rgb(182, 245, 245);
+}
+
+.div_validation_buttons{
+    margin-left: 50px;
+}
+
+.cancel_button_container {
+    position: absolute;
+    bottom: 10px; /* Ajustez cette valeur selon vos besoins */
+    right: 10px; /* Ajustez cette valeur selon vos besoins */
+}
+
+#div_buttons_children {
+    height: 10%;
+    background-color: darkcyan;
+    display: flex;        /* Utilise Flexbox */
+    align-items: center;  /* Centre le contenu verticalement */
+    justify-content: center; /* Centre le contenu horizontalement */
+}
+
+#div_intermediaire {
+    height: 2%;
+    background-color: darkcyan;
+}
+
+
+.div_bloc_activity{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.div_square_bloc_activity{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.div_circle_buttons {
+    width: 200px;  /* Largeur fixe */
+    height: 200px;
+    margin: 10px;
+    border-radius: 50%;
+    box-shadow: 5px 5px 5px #888888;
+    text-align: center;
+}
+
+.div_square_buttons {
+    width: 500px;  /* Largeur fixe */
+    height: 150px;
+    margin: 10px;    
+    border-radius: 5%;
+    box-shadow: 5px 5px 5px #888888;
+    text-align: center;
+    align-items: center;
+}
+
+.div_square_buttons:hover {
+    box-shadow: 0px 0px 0px #888888;
+    scale: 0.95;
+}
+
+.div_circle_buttons:hover {
+    box-shadow: 0px 0px 0px #888888;
+    scale: 0.95;
+}
+
+.grid_square_buttons {
+    display: grid;
+    grid-template-columns: 120px auto; /* La première colonne fait 120px, la seconde prend le reste */
+}
+
+.div_square_bloc_activity {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.div_button_active {
+    background-color:darkcyan;
+}
+
+.div_button_inactive {
+    background-color:rgb(102, 105, 105);
+}
+
+.img_btn {
+    height: 200px;
+}
+
+.img_btn_small {
+    height: 100px;
+    margin: 10px;
+}
+
+.img_btn_inactive {
+    filter: grayscale(100%);
+}
+
+.div_text_button{
+    text-align: center;
+    font-size: 30px;
+    font-weight: bold;
+}
+
+.div_text_button_active{
+    color: darkcyan;
+}
+
+.div_text_button_square_active{
+    color: white;
+    font-size: 35px;
+}
+
+.div_text_button_inactive{
+    color: rgb(102, 105, 105);
+}
+
+.div_square_buttons .div_text_button_inactive {
+    color: white;
+}
+
+.div_summary{
+    display: flex;
+    flex-direction: column;
+}
+
+#div_qr_code{
+    display: flex;
+    width: 50%;
+    text-align: center;
+    padding-top: 1%;
+}
+
+
+.div_validation_one_button{
+    background-color:darkcyan;
+    border-radius: 5%;
+    box-shadow: 5px 5px 5px #888888;
+    color: white;
+    text-align: center;
+    margin: 30px ;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+.validation_button {
+    font-size: 50px;
+    font-weight: 500;
+}
+
+#div_call_number{
+    text-align: center;
+}
+
+.div_qr_plus_buttons{
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+}
+
+.text_summary {
+    font-size: 50px;
+    font-weight: 500;
+    color: darkcyan;
+}
+
+#conclusion_page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+}
+
+#div_conclusion_buttons{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+#timer_container {
+    width: 100%;
+    height: 20px;
+    background-color: #e0e0e0;
+    position: relative;
+    margin-top: 10px;
+}
+
+#timer_gauge {
+    width: 100%;
+    height: 100%;
+    background-color: #76c7c0;
+    transition: width 1s linear;
+}
+
+.language-selector {
+    position: fixed;
+    top: 50%;
+    right: 20px;
+    z-index: 1000;
+    transform: translateY(-50%);
+}
+
+.language-selector img {
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    width: 70px;
+    margin: 10px;
+}
+
+.div_explanation {
+    font-size: {{page_patient_explanation_font_size}}px;
+    font-weight: 500;
+    color: darkcyan;
+    text-align: center;
+}

@@ -8,8 +8,7 @@ from io import BytesIO
 
 from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, DashboardCard
 
-# CONFIGURATION DE L'APP
-
+# CONFIGURATION DE L'APP       
 def init_default_options_db_from_json():
     json_file='static/json/default_config.json'
     load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False)

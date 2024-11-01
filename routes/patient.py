@@ -1,6 +1,5 @@
 import markdown2
-import json
-from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
+from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, Response, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
@@ -378,3 +377,11 @@ def phone_patient_ping():
     response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
     return response
 
+
+@patient_bp.route('/static/css/patient.css')
+def patient_css():
+    print("patient_css")
+    page_patient_explanation_font_size = 50
+    return Response(render_template('/patient/patient.css.jinja2',
+                            page_patient_explanation_font_size=page_patient_explanation_font_size),
+                            mimetype='text/css')

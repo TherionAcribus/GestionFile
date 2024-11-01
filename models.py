@@ -437,6 +437,12 @@ class TextInterface(db.Model):
     text_id = db.Column(db.String(50), nullable=False)
     value = db.Column(db.Text, nullable=False)
 
+class PatientCssVariable(db.Model):
+    __tablename__ = 'patient_css_variable'
+    id = db.Column(db.Integer, primary_key=True)
+    variable = db.Column(db.String(50), nullable=False)
+    value = db.Column(db.Text, nullable=False)
+
 class DashboardCard(db.Model):
     __tablename__ = 'dashboard_cards'
 
