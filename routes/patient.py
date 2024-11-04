@@ -7,6 +7,11 @@ from communication import communikation, send_app_notification
 
 patient_bp = Blueprint('patient', __name__)
 
+def utility_processor():
+    def get_css_url():
+        return app.css_manager.get_current_css_url()
+    return dict(get_css_url=get_css_url)
+
 @patient_bp.route('/patient')
 def patients_front_page():
     language_code = request.args.get('language_code')
@@ -376,20 +381,3 @@ def phone_patient_ping():
     response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
     response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
     return response
-
-
-@patient_bp.route('/static/css/patient.css')
-def patient_css():
-    print("patient_css")
-    return Response(render_template('/patient/patient.css.jinja2',
-                            #titre
-                            patient_title_font_size=app.css_manager.get_variable('patient', 'patient_title_font_size'),
-                            patient_title_font_color=app.css_manager.get_variable('patient', 'patient_title_font_color'),
-                            patient_title_border_size=app.css_manager.get_variable('patient', 'patient_title_border_size'),
-                            patient_title_border_color=app.css_manager.get_variable('patient', 'patient_title_border_color'),
-                            #explication
-                            page_patient_explanation_font_size=app.css_manager.get_variable('patient', 'scan_explanation_font_size'),
-                            scan_explanation_font_color=app.css_manager.get_variable('patient', 'scan_explanation_font_color'),
-                            scan_explanation_border_size=app.css_manager.get_variable('patient', 'scan_explanation_border_size'),
-                            scan_explanation_border_color=app.css_manager.get_variable('patient', 'scan_explanation_border_color')),
-                            mimetype='text/css')

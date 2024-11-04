@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.28",
+    "version": "0.29",
     "timestamp": "2024-11-01 16:35:26",
     "comments": "Version de test",
         "configurations": {

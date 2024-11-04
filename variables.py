@@ -34,7 +34,7 @@ class MultiCssVariableManager:
         self._load_all_css_variables(app)
         
         # Ajout du gestionnaire à l'application
-        app.css_manager = self
+        app.css_variable_manager = self
 
     def _load_css_variables_for_source(self, app: Flask, source_name: str) -> None:
         """Charge les variables CSS pour une source spécifique"""

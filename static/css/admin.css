@@ -44,6 +44,9 @@
     grid-column-gap: 10px;
 }
 
+.admin_css_textbloc {
+    display: flex;
+}
 
 
 /* DASHBOARD */

@@ -395,6 +395,7 @@ function refresh_sound(){
 // ---------------- ANNOUNCES ----------------
 
 function insertPlaceholder(textareaId, text) {
+    console.log("Insert placeholder", textareaId, text);
     var textarea = document.getElementById(textareaId);
     var cursorPos = textarea.selectionStart;
     var v = textarea.value;
@@ -491,6 +492,374 @@ eventSource.onmessage = function(event) {
 };
 
 
+// ---------------- COLORS PICKERS ----------------  
+
+const colorMappings = {
+    'patient_main_color': {
+        // Liste des variables qui dépendent de la couleur principale
+        targets: [
+            'patient_title_background_color',
+            'patient_title_font_color',
+            // ... autres variables
+        ]
+    },
+    'patient_secondary_color': {
+        targets: [
+            'subtitle_background_color',
+            'subtitle_font_color',
+            // ... autres variables
+        ]
+    },
+    'patient_third_color': {
+        targets: [
+            'subtitle_no_activity_background_color',
+            'subtitle_no_activity_font_color',
+            // ... autres variables
+        ]
+    }
+};
+
+// Configuration des couleurs et fonctions
+const cssNamedColors = {
+    // Rouges
+    'indianred': '#CD5C5C',
+    'lightcoral': '#F08080',
+    'salmon': '#FA8072',
+    'darksalmon': '#E9967A',
+    'lightsalmon': '#FFA07A',
+    'crimson': '#DC143C',
+    'red': '#FF0000',
+    'firebrick': '#B22222',
+    'darkred': '#8B0000',
+    
+    // Roses
+    'pink': '#FFC0CB',
+    'lightpink': '#FFB6C1',
+    'hotpink': '#FF69B4',
+    'deeppink': '#FF1493',
+    'mediumvioletred': '#C71585',
+    'palevioletred': '#DB7093',
+    
+    // Oranges
+    'coral': '#FF7F50',
+    'tomato': '#FF6347',
+    'orangered': '#FF4500',
+    'darkorange': '#FF8C00',
+    'orange': '#FFA500',
+    
+    // Jaunes
+    'gold': '#FFD700',
+    'yellow': '#FFFF00',
+    'lightyellow': '#FFFFE0',
+    'lemonchiffon': '#FFFACD',
+    'lightgoldenrodyellow': '#FAFAD2',
+    'papayawhip': '#FFEFD5',
+    'moccasin': '#FFE4B5',
+    'peachpuff': '#FFDAB9',
+    'palegoldenrod': '#EEE8AA',
+    'khaki': '#F0E68C',
+    'darkkhaki': '#BDB76B',
+    
+    // Violets
+    'lavender': '#E6E6FA',
+    'thistle': '#D8BFD8',
+    'plum': '#DDA0DD',
+    'violet': '#EE82EE',
+    'orchid': '#DA70D6',
+    'fuchsia': '#FF00FF',
+    'magenta': '#FF00FF',
+    'mediumorchid': '#BA55D3',
+    'mediumpurple': '#9370DB',
+    'rebeccapurple': '#663399',
+    'blueviolet': '#8A2BE2',
+    'darkviolet': '#9400D3',
+    'darkorchid': '#9932CC',
+    'darkmagenta': '#8B008B',
+    'purple': '#800080',
+    'indigo': '#4B0082',
+    'slateblue': '#6A5ACD',
+    'darkslateblue': '#483D8B',
+    
+    // Verts
+    'greenyellow': '#ADFF2F',
+    'chartreuse': '#7FFF00',
+    'lawngreen': '#7CFC00',
+    'lime': '#00FF00',
+    'limegreen': '#32CD32',
+    'palegreen': '#98FB98',
+    'lightgreen': '#90EE90',
+    'mediumspringgreen': '#00FA9A',
+    'springgreen': '#00FF7F',
+    'mediumseagreen': '#3CB371',
+    'seagreen': '#2E8B57',
+    'forestgreen': '#228B22',
+    'green': '#008000',
+    'darkgreen': '#006400',
+    'yellowgreen': '#9ACD32',
+    'olivedrab': '#6B8E23',
+    'olive': '#808000',
+    'darkolivegreen': '#556B2F',
+    'mediumaquamarine': '#66CDAA',
+    'darkseagreen': '#8FBC8F',
+    'lightseagreen': '#20B2AA',
+    'darkcyan': '#008B8B',
+    'teal': '#008080',
+    
+    // Bleus
+    'aqua': '#00FFFF',
+    'cyan': '#00FFFF',
+    'lightcyan': '#E0FFFF',
+    'paleturquoise': '#AFEEEE',
+    'aquamarine': '#7FFFD4',
+    'turquoise': '#40E0D0',
+    'mediumturquoise': '#48D1CC',
+    'darkturquoise': '#00CED1',
+    'cadetblue': '#5F9EA0',
+    'steelblue': '#4682B4',
+    'lightsteelblue': '#B0C4DE',
+    'powderblue': '#B0E0E6',
+    'lightblue': '#ADD8E6',
+    'skyblue': '#87CEEB',
+    'lightskyblue': '#87CEFA',
+    'deepskyblue': '#00BFFF',
+    'dodgerblue': '#1E90FF',
+    'cornflowerblue': '#6495ED',
+    'mediumslateblue': '#7B68EE',
+    'royalblue': '#4169E1',
+    'blue': '#0000FF',
+    'mediumblue': '#0000CD',
+    'darkblue': '#00008B',
+    'navy': '#000080',
+    'midnightblue': '#191970',
+    
+    // Bruns
+    'cornsilk': '#FFF8DC',
+    'blanchedalmond': '#FFEBCD',
+    'bisque': '#FFE4C4',
+    'navajowhite': '#FFDEAD',
+    'wheat': '#F5DEB3',
+    'burlywood': '#DEB887',
+    'tan': '#D2B48C',
+    'rosybrown': '#BC8F8F',
+    'sandybrown': '#F4A460',
+    'goldenrod': '#DAA520',
+    'darkgoldenrod': '#B8860B',
+    'peru': '#CD853F',
+    'chocolate': '#D2691E',
+    'saddlebrown': '#8B4513',
+    'sienna': '#A0522D',
+    'brown': '#A52A2A',
+    'maroon': '#800000',
+    
+    // Blancs
+    'white': '#FFFFFF',
+    'snow': '#FFFAFA',
+    'honeydew': '#F0FFF0',
+    'mintcream': '#F5FFFA',
+    'azure': '#F0FFFF',
+    'aliceblue': '#F0F8FF',
+    'ghostwhite': '#F8F8FF',
+    'whitesmoke': '#F5F5F5',
+    'seashell': '#FFF5EE',
+    'beige': '#F5F5DC',
+    'oldlace': '#FDF5E6',
+    'floralwhite': '#FFFAF0',
+    'ivory': '#FFFFF0',
+    'antiquewhite': '#FAEBD7',
+    'linen': '#FAF0E6',
+    'lavenderblush': '#FFF0F5',
+    'mistyrose': '#FFE4E1',
+    
+    // Gris
+    'gainsboro': '#DCDCDC',
+    'lightgray': '#D3D3D3',
+    'silver': '#C0C0C0',
+    'darkgray': '#A9A9A9',
+    'gray': '#808080',
+    'dimgray': '#696969',
+    'lightslategray': '#778899',
+    'slategray': '#708090',
+    'darkslategray': '#2F4F4F',
+    'black': '#000000'
+};
+
+
+function getColorData() {
+    // Définition des couleurs appartenant à chaque groupe
+    const colorFamilies = {
+        'Rouges': [
+            'red', 'indianred', 'lightcoral', 'salmon', 'darksalmon', 
+            'lightsalmon', 'crimson', 'firebrick', 'darkred', 'maroon'
+        ],
+        'Roses': [
+            'pink', 'lightpink', 'hotpink', 'deeppink', 'palevioletred', 
+            'mediumvioletred'
+        ],
+        'Oranges': [
+            'coral', 'tomato', 'orangered', 'darkorange', 'orange'
+        ],
+        'Jaunes': [
+            'gold', 'yellow', 'lightyellow', 'lemonchiffon', 'lightgoldenrodyellow',
+            'papayawhip', 'moccasin', 'peachpuff', 'palegoldenrod', 'khaki',
+            'darkkhaki', 'goldenrod', 'darkgoldenrod'
+        ],
+        'Violets': [
+            'lavender', 'thistle', 'plum', 'violet', 'orchid', 'fuchsia',
+            'magenta', 'mediumorchid', 'mediumpurple', 'rebeccapurple',
+            'blueviolet', 'darkviolet', 'darkorchid', 'darkmagenta',
+            'purple', 'indigo'
+        ],
+        'Bleus': [
+            'blue', 'mediumblue', 'darkblue', 'navy', 'midnightblue',
+            'royalblue', 'cornflowerblue', 'lightsteelblue', 'lightblue',
+            'powderblue', 'deepskyblue', 'skyblue', 'lightskyblue',
+            'steelblue', 'aliceblue', 'dodgerblue', 'slateblue',
+            'darkslateblue', 'mediumslateblue'
+        ],
+        'Cyans': [
+            'aqua', 'cyan', 'lightcyan', 'paleturquoise', 'aquamarine',
+            'turquoise', 'mediumturquoise', 'darkturquoise', 'cadetblue',
+            'darkcyan', 'teal'
+        ],
+        'Verts': [
+            'green', 'darkgreen', 'lightgreen', 'palegreen', 'lime',
+            'limegreen', 'forestgreen', 'seagreen', 'mediumseagreen',
+            'springgreen', 'mediumspringgreen', 'greenyellow',
+            'chartreuse', 'lawngreen', 'yellowgreen', 'olivedrab',
+            'olive', 'darkolivegreen', 'mediumaquamarine', 'darkseagreen',
+            'lightseagreen'
+        ],
+        'Bruns': [
+            'cornsilk', 'blanchedalmond', 'bisque', 'navajowhite', 'wheat',
+            'burlywood', 'tan', 'rosybrown', 'sandybrown', 'peru',
+            'chocolate', 'saddlebrown', 'sienna', 'brown'
+        ],
+        'Blancs': [
+            'white', 'snow', 'honeydew', 'mintcream', 'azure',
+            'ghostwhite', 'whitesmoke', 'seashell', 'beige', 'oldlace',
+            'floralwhite', 'ivory', 'antiquewhite', 'linen',
+            'lavenderblush', 'mistyrose'
+        ],
+        'Gris': [
+            'gainsboro', 'lightgray', 'silver', 'darkgray', 'gray',
+            'dimgray', 'lightslategray', 'slategray', 'darkslategray',
+            'black'
+        ]
+    };
+
+    // Création des groupes de couleurs
+    return Object.entries(colorFamilies).map(([group, colorNames]) => ({
+        text: group,
+        children: colorNames
+            .filter(name => cssNamedColors[name]) // Vérifie que la couleur existe
+            .map(name => ({
+                id: cssNamedColors[name],
+                text: `${name} ${cssNamedColors[name]}`,
+                color: cssNamedColors[name]
+            }))
+    }));
+}
+
+function formatColorOption(color) {
+    if (!color.id || !color.color) return color.text;
+    return $(`<span>
+        <span style="display:inline-block; width:20px; height:20px; margin-right:10px; background-color:${color.color}; vertical-align:middle;"></span>
+        ${color.text}
+    </span>`);
+}
+
+function initColorPickers() {
+    $('.color-select2').each(function() {
+        const $select = $(this);
+        if (!$select.data('select2')) {  // Vérifie si Select2 n'est pas déjà initialisé
+            const selectId = this.id;
+            
+            // Récupère la première partie comme source et le reste comme variable
+            const firstUnderscore = selectId.indexOf('_');
+            const source = selectId.substring(0, firstUnderscore);
+            const variable = selectId.substring(firstUnderscore + 1);
+            const colorPickerId = `${source}_${variable}_picker`;
+
+            console.log('Initializing picker:', {
+                selectId,
+                source,
+                variable,
+                colorPickerId
+            });
+
+            $select.select2({
+                data: getColorData(),
+                templateResult: formatColorOption,
+                templateSelection: formatColorOption
+            });
+
+            // Synchronisation Select2 -> ColorPicker
+            $select.on('select2:select', function(e) {
+                const colorPicker = document.getElementById(colorPickerId);
+                if (colorPicker) {
+                    colorPicker.value = e.params.data.id;
+                    handleColorChange(source, variable);
+                }
+            });
+
+            // Synchronisation ColorPicker -> Select2
+            const colorPicker = document.getElementById(colorPickerId);
+            if (colorPicker) {
+                colorPicker.addEventListener('input', function(e) {
+                    const color = e.target.value.toUpperCase();
+                    const colorName = Object.entries(cssNamedColors).find(([_, hex]) => 
+                        hex.toUpperCase() === color)?.[0] || color;
+                    
+                    // Mise à jour ou création de l'option dans Select2
+                    if (!$select.find(`option[value="${color}"]`).length) {
+                        $select.append(new Option(`${colorName} ${color}`, color, false, false));
+                    }
+                    $select.val(color).trigger('change');
+                    handleColorChange(source, variable);
+                });
+            }
+        }
+    });
+}
+
+function handleColorChange(source, variable) {
+    // On ne gère que l'activation du bouton
+    const input = document.getElementById(`${source}_${variable}`);
+    const button = document.getElementById(`${source}_${variable}_button`);
+    const initialValue = input.dataset.initialValue;
+    
+    button.disabled = input.value === initialValue;
+}
+
+
+function handleColorAfterRequest(source, variable) {
+    const input = document.getElementById(`${source}_${variable}`);
+    const button = document.getElementById(`${source}_${variable}_button`);
+    const newValue = input.value;
+    
+    // Met à jour la valeur initiale du parent
+    input.dataset.initialValue = newValue;
+    button.disabled = true;
+    
+    // Feedback visuel
+    button.textContent = "Enregistré ✓";
+    setTimeout(() => {
+        button.textContent = "Enregistrer";
+    }, 1000);
+    
+    // Si c'est une couleur parent, met à jour les dépendances
+    if (colorMappings[variable]) {
+        updateDependentColors(source, variable, newValue);
+    }
+}
+
+// Initialisation
+document.addEventListener('DOMContentLoaded', initColorPickers);
+document.addEventListener('htmx:afterSettle', initColorPickers);
+
+
+
+
 document.addEventListener('DOMContentLoaded', function() {
 
     // initialisation du modal
@@ -499,3 +868,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+function updateDependentColors(source, parentVariable, newValue) {
+    // Met à jour les colorpickers dépendants
+    const dependencies = colorMappings[parentVariable]?.targets || [];
+    dependencies.forEach(targetVar => {
+        // Met à jour le colorpicker
+        const picker = document.getElementById(`${source}_${targetVar}_picker`);
+        if (picker) {
+            picker.value = newValue;
+        }
+
+        // Met à jour le select2
+        const select = $(`#${source}_${targetVar}`);
+        if (select.length) {
+            const colorName = Object.entries(cssNamedColors).find(([_, hex]) => 
+                hex.toUpperCase() === newValue.toUpperCase())?.[0] || newValue;
+            
+            if (!select.find(`option[value="${newValue}"]`).length) {
+                select.append(new Option(`${colorName} ${newValue}`, newValue, false, false));
+            }
+            select.val(newValue).trigger('change');
+        }
+
+        // Met à jour la valeur initiale
+        const input = document.getElementById(`${source}_${targetVar}`);
+        if (input) {
+            input.dataset.initialValue = newValue;
+        }
+    });
+}

@@ -22,14 +22,3 @@
     justify-items: center; /* Center the items */
 }
 
-.div_text_explanation{
-    text-align: center;
-    font-size: 40px;
-    font-weight: bold;
-    color: rgb(255, 255, 255);
-}
-
-.div_text_explanation_inactive {
-    color: #CCCCCC; /* Une couleur grise plus claire pour une meilleure visibilité sur darkcyan */
-    text-shadow: 1px 1px 2px black; /* Contour noir pour améliorer la lisibilité */
-}

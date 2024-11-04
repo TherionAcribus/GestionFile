@@ -14,15 +14,15 @@ html, body {
 #div_title_area {
     height: 10%;
     text-align: center;
-    font-size: {{patient_title_font_size}}px;
+    font-size: {{patient_title_font_size}};
     font-weight: bold;
-    background-color: darkcyan;
+    background-color: {{patient_title_background_color}};
     color: {{patient_title_font_color}};
     display: flex;        /* Utilise Flexbox */
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
     -webkit-text-stroke-color: {{patient_title_border_color}};
-    -webkit-text-stroke-width: {{patient_title_border_size}}px;
+    -webkit-text-stroke-width: {{patient_title_border_size}};
 }
 
 #div_buttons_parents{
@@ -248,10 +248,26 @@ html, body {
 }
 
 .div_explanation {
-    font-size: {{page_patient_explanation_font_size}}px;
+    font-size: {{page_patient_explanation_font_size}};
     font-weight: 500;
     color: {{ scan_explanation_font_color }};
     text-align: center;
     -webkit-text-stroke-color: {{scan_explanation_border_color}};
-    -webkit-text-stroke-width: {{scan_explanation_border_size}}px;
+    -webkit-text-stroke-width: {{scan_explanation_border_size}};
+}
+
+
+.div_text_explanation{
+    text-align: center;
+    font-size: {{subtitle_font_size}};
+    color: {{subtitle_font_color}};
+    font-weight: bold;
+    -webkit-text-stroke-color: {{subtitle_border_color}};
+    -webkit-text-stroke-width: {{subtitle_border_size}};
+    background-color:{{subtitle_background_color}};
+}
+
+.div_text_explanation_inactive {
+    color: #CCCCCC; /* Une couleur grise plus claire pour une meilleure visibilité sur darkcyan */
+    text-shadow: 1px 1px 2px black; /* Contour noir pour améliorer la lisibilité */
 }

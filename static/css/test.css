@@ -1,3 +1,30 @@
+:root {
+    --scan_explanation_font_size: 80px;
+    --scan_explanation_font_color: #7DCD5B;
+    --scan_explanation_border_size: 2px;
+    --scan_explanation_border_color: #030303;
+    --patient_title_font_size: 80px;
+    --patient_title_font_color: #be0707;
+    --patient_title_border_size: 2px;
+    --patient_title_border_color: #000000;
+    --subtitle_font_size: 50px;
+    --subtitle_font_color: #FFFFFF;
+    --subtitle_border_size: 0px;
+    --subtitle_border_color: black;
+    --subtitle_no_activity_font_size: 40;
+    --subtitle_no_activity_font_color: white;
+    --subtitle_no_activity_border_size: 0;
+    --subtitle_no_activity_border_color: black;
+    --subtitle_specific_message_font_size: 40;
+    --subtitle_specific_message_font_color: white;
+    --subtitle_specific_message_border_size: 0;
+    --subtitle_specific_message_border_color: black;
+    --patient_title_background_color: #2E8B57;
+    --subtitle_background_color: #00FF7B;
+    --subtitle_no_activity_background_color: #F90101;
+    --subtitle_specific_message_background_color: #DFF95D;
+}
+
 html, body {
     height: 100%; /* Assure que le html et body prennent toute la hauteur de l'écran */
     margin: 0; /* Enlève les marges par défaut */
@@ -14,13 +41,15 @@ html, body {
 #div_title_area {
     height: 10%;
     text-align: center;
-    font-size: 40px;
+    font-size: var(--patient_title_font_size);
     font-weight: bold;
-    background-color: darkcyan;
-    color: white;
-    display: flex;        /* Utilise Flexbox */
-    align-items: center;  /* Centre le contenu verticalement */
-    justify-content: center; /* Centre le contenu horizontalement */
+    background-color: var(--patient_title_background_color);
+    color: var(--patient-title-font-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-text-stroke-color: var(--patient_title_border_color);
+    -webkit-text-stroke-width: var(--patient_title_border_size);
 }
 
 #div_buttons_parents{
@@ -247,8 +276,25 @@ html, body {
 }
 
 .div_explanation {
-    font-size: 50px;
+    font-size: var(--scan_explanation_font_size);
     font-weight: 500;
-    color: darkcyan;
+    color: var(--scan_explanation_font_color);
     text-align: center;
+    -webkit-text-stroke-color: var(--scan_explanation_border_color);
+    -webkit-text-stroke-width: var(--scan_explanation_border_size);
+}
+
+.div_text_explanation{
+    text-align: center;
+    font-size: var(--subtitle_font_size);
+    color: var(--subtitle_font_color);
+    font-weight: bold;
+    -webkit-text-stroke-color: var(--subtitle_border_color);
+    -webkit-text-stroke-width: var(--subtitle_border_size);
+    background-color: var(--subtitle_background_color);
+}
+
+.div_text_explanation_inactive {
+    color: #CCCCCC; /* Une couleur grise plus claire pour une meilleure visibilité sur darkcyan */
+    text-shadow: 1px 1px 2px black; /* Contour noir pour améliorer la lisibilité */
 }

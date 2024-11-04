@@ -56,16 +56,36 @@ def admin_patient(tab=None):
                             activities = Activity.query.all(),
                             languages = Language.query.all(),
                             # CSS
+                            #main
+                            patient_main_color=app.css_variable_manager.get_variable('patient', 'patient_main_color'),
+                            patient_secondary_color=app.css_variable_manager.get_variable('patient', 'patient_secondary_color'),
+                            patient_third_color=app.css_variable_manager.get_variable('patient', 'patient_third_color'),
                             #titre
-                            patient_title_font_size=app.css_manager.get_variable('patient', 'patient_title_font_size'),
-                            patient_title_font_color=app.css_manager.get_variable('patient', 'patient_title_font_color'),
-                            patient_title_border_size=app.css_manager.get_variable('patient', 'patient_title_border_size'),
-                            patient_title_border_color=app.css_manager.get_variable('patient', 'patient_title_border_color'),
+                            patient_title_font_size=app.css_variable_manager.get_variable('patient', 'patient_title_font_size'),
+                            patient_title_font_color=app.css_variable_manager.get_variable('patient', 'patient_title_font_color'),
+                            patient_title_border_size=app.css_variable_manager.get_variable('patient', 'patient_title_border_size'),
+                            patient_title_border_color=app.css_variable_manager.get_variable('patient', 'patient_title_border_color'),
                             #explication
-                            scan_explanation_font_size = app.css_manager.get_variable('patient', 'scan_explanation_font_size'),
-                            scan_explanation_font_color = app.css_manager.get_variable('patient', 'scan_explanation_font_color'),
-                            scan_explanation_border_size = app.css_manager.get_variable('patient', 'scan_explanation_border_size'),
-                            scan_explanation_border_color = app.css_manager.get_variable('patient', 'scan_explanation_border_color'),
+                            scan_explanation_font_size = app.css_variable_manager.get_variable('patient', 'scan_explanation_font_size'),
+                            scan_explanation_font_color = app.css_variable_manager.get_variable('patient', 'scan_explanation_font_color'),
+                            scan_explanation_border_size = app.css_variable_manager.get_variable('patient', 'scan_explanation_border_size'),
+                            scan_explanation_border_color = app.css_variable_manager.get_variable('patient', 'scan_explanation_border_color'),
+                            #soustitre
+                            subtitle_font_size=app.css_variable_manager.get_variable('patient', 'subtitle_font_size'),
+                            subtitle_font_color=app.css_variable_manager.get_variable('patient', 'subtitle_font_color'),
+                            subtitle_border_size=app.css_variable_manager.get_variable('patient', 'subtitle_border_size'),
+                            subtitle_border_color=app.css_variable_manager.get_variable('patient', 'subtitle_border_color'),
+                            subtitle_background_color=app.css_variable_manager.get_variable('patient', 'subtitle_background_color'),
+                            subtitle_no_activity_font_size=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_font_size'),
+                            subtitle_no_activity_font_color=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_font_color'),
+                            subtitle_no_activity_border_size=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_border_size'),
+                            subtitle_no_activity_border_color=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_border_color'),
+                            subtitle_no_activity_background_color=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_background_color'),
+                            subtitle_specific_message_font_size=app.css_variable_manager.get_variable('patient', 'subtitle_specific_message_font_size'),
+                            subtitle_specific_message_font_color=app.css_variable_manager.get_variable('patient', 'subtitle_specific_message_font_color'),
+                            subtitle_specific_message_border_size=app.css_variable_manager.get_variable('patient', 'subtitle_specific_message_border_size'),
+                            subtitle_specific_message_border_color=app.css_variable_manager.get_variable('patient', 'subtitle_specific_message_border_color'),
+                            subtitle_specific_message_background_color=app.css_variable_manager.get_variable('patient', 'subtitle_specific_message_background_color'),
                             )
 
 
@@ -478,3 +498,4 @@ def dashboard_staff():
                             dashboardcard=dashboardcard,
                             printer_error=app.config["PRINTER_ERROR"],
                             printer_infos=app.config["PRINTER_INFOS"])
+

@@ -1,13 +1,59 @@
-{% macro button(key, check) %}
-<button
-    class="btn btn-primary"
-    hx-post="/admin/update_input"
-    hx-target="#invisible"
-    hx-vals='js:{"key": "{{ key }}", 
-            "value": document.getElementById("{{ key }}").value,
-            "check": "{{ check }}"}'>
-    Enregistrer
-</button>
+{# Fonctions JavaScript communes #}
+{% macro common_js() %}
+<script>
+
+
+function handleInputChangeConfig(key) {
+    // Récupération des éléments avec vérification
+    console.log(key)
+    const input = document.getElementById(key);
+    const button = document.getElementById(`${key}_button`);
+    
+    if (!input || !button) {
+        console.error('Elements not found:', { 
+            key,
+            inputFound: !!input, 
+            buttonFound: !!button 
+        });
+        return;
+    }
+    
+    const currentValue = input.value;
+    const initialValue = input.getAttribute('data-initial-value');
+    
+    // Active/désactive le bouton selon si la valeur a changé
+    button.disabled = currentValue === initialValue;
+}
+function handleKeyPressConfig(event, variable) {
+    // Si la touche Entrée est pressée et que le bouton est activé
+    if (event.key === 'Enter' && !event.shiftKey) {  // Permet le saut de ligne avec Shift+Enter
+        const button = document.getElementById(`${variable}_button`);
+        if (!button.disabled) {
+            event.preventDefault();
+            button.click();
+        }
+    }
+}
+
+function handleAfterRequestConfig(source, variable) {
+    console.log(variable)
+    const input = document.getElementById(`${variable}`);
+    const button = document.getElementById(`${variable}_button`);
+    
+    // Met à jour la valeur initiale
+    input.dataset.initialValue = input.value;
+    
+    // Désactive le bouton
+    button.disabled = true;
+    
+    // Feedback visuel temporaire
+    button.textContent = "Enregistré ✓";
+    setTimeout(() => {
+        button.textContent = "Enregistrer";
+    }, 1000);
+}
+
+</script>
 {% endmacro %}
 
 {% macro balises_before_call(key) %}
@@ -65,89 +111,164 @@
 {% endmacro %}
 
 
+{# Macro pour le bouton universel #}
+{% macro button(key, check="text") %}
+<button
+    id="{{ key }}_button"
+    class="btn btn-primary"
+    disabled
+    hx-post="/admin/update_input"
+    hx-target="#invisible"
+    hx-vals='js:{
+        "key": "{{ key }}", 
+        "value": document.getElementById("{{ key }}").value,
+        "check": "{{ check }}"
+    }'
+    hx-on::after-request="handleAfterRequestConfig('', '{{ key }}')"
+>
+    Enregistrer
+</button>
+{% endmacro %}
+
+{# Macro de base pour textarea #}
 {% macro textarea(key, value, label) %}
-<div class="mb-3">
-    <label for="{{ key }}" class="form-label">{{label}}</label>
-    <textarea id="{{ key }}" class="form-control" rows="3">{{ value }}</textarea>
+<div class="flex-grow-1">
+    <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
+    <textarea 
+        id="{{ key }}" 
+        class="form-control" 
+        rows="3"
+        oninput="handleInputChangeConfig('{{ key }}')"
+        onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+        data-initial-value="{{ value }}"
+    >{{ value }}</textarea>
 </div>
 {% endmacro %}
 
-
-{% macro textbloc_before_call(key, value, label) %}
-<div class="row">
-    <div class="row">
-        {{ textarea(key, value, label) }}
-        {{ balises_before_call(key) }}
-    </div>
-    {{ button(key, "before_call") }}
-</div>
-{% endmacro %}
-
-
-{% macro textbloc_for_printer(key, value, label) %}
-<div class="row">
-    <div class="row">
-        {{ textarea(key, value, label) }}
-        {{ balises_before_call(key) }}
-        {{ balises_for_printer(key) }}
-    </div>
-    {{ button(key, "before_call") }}
-</div>
-{% endmacro %}
-
-
-{% macro textbloc_after_call(key, value, label) %}
-<div class="row">
-    <div class="row">
-        {{ textarea(key, value, label) }}
-        {{ balises_after_call(key) }}
-    </div>
-    {{ button(key, "after_call") }}
-</div>
-{% endmacro %}
-
-{% macro textbloc_welcome(key, value, label) %}
-<div class="row">
-    <div class="row">
-        {{ textarea(key, value, label) }}
-        {{ balises_welcome(key) }}
-    </div>
-    {{ button(key, "welcome") }}
-</div>
-{% endmacro %}
-
-<!-- Champs texte pour les entiers -->
-{% macro textbloc_int(key, value, label) %}
-<div class="mb-3 d-flex">
-    {{ input_field(key, value, label) }}
-    {{ button(key, "int") }}
-</div>
-{% endmacro %}
-
-<!-- Champs texte pour les heures -->
-{% macro textbloc_hour(key, value, label) %}
-<div class="flex-grow-1 me-2">
-    <label for="{{ key }}" class="form-label">{{label}}</label>
-    <input type="time" id="{{ key }}" class="form-control" value="{{ value }}">
-</div>
-{{ button(key) }}
-{% endmacro %}
-
-
-{% macro textarea_full(key, value, label) %}
-<div class="row">
-    <div class="row">
-        {{ textarea(key, value, label) }}
-    </div>
-    {{ button(key) }}
-</div>
-{% endmacro %}
-
-
+{# Macro de base pour input #}
 {% macro input_field(key, value, label) %}
-<div class="flex-grow-1 me-2">
-    <label for="{{ key }}" class="form-label">{{label}}</label>
-    <input type="text" id="{{ key }}" class="form-control" value="{{ value }}">
+<div class="flex-grow-1">
+    <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
+    <input 
+        type="text" 
+        id="{{ key }}" 
+        class="form-control" 
+        value="{{ value }}"
+        oninput="handleInputChangeConfig('{{ key }}')"
+        onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+        data-initial-value="{{ value }}"
+    >
+</div>
+{% endmacro %}
+
+{# Macro pour les blocs de texte avec balises #}
+{% macro textbloc_with_balises(key, value, label, balises_macro, balises_key) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-start">
+            <div class="flex-grow-1">
+                {{ textarea(key, value, label) }}
+                <div class="mt-2">
+                    {{ balises_macro(key) }}
+                </div>
+            </div>
+            <div class="ms-3">
+                {{ button(key, balises_key) }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour bloc before_call #}
+{% macro textbloc_before_call(key, value, label) %}
+{{ textbloc_with_balises(key, value, label, balises_before_call, "before_call") }}
+{% endmacro %}
+
+{# Macro pour bloc after_call #}
+{% macro textbloc_after_call(key, value, label) %}
+{{ textbloc_with_balises(key, value, label, balises_after_call, "after_call") }}
+{% endmacro %}
+
+{# Macro pour bloc welcome #}
+{% macro textbloc_welcome(key, value, label) %}
+{{ textbloc_with_balises(key, value, label, balises_welcome, "welcome") }}
+{% endmacro %}
+
+{# Macro pour bloc printer #}
+{% macro textbloc_for_printer(key, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-start">
+            <div class="flex-grow-1">
+                {{ textarea(key, value, label) }}
+                <div class="mt-2">
+                    {{ balises_before_call(key) }}
+                    {{ balises_for_printer(key) }}
+                </div>
+            </div>
+            <div class="ms-3">
+                {{ button(key, "before_call") }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour les entiers #}
+{% macro textbloc_int(key, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <div class="flex-grow-1">
+                {{ input_field(key, value, label) }}
+            </div>
+            <div class="ms-3">
+                {{ button(key, "int") }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour les heures #}
+{% macro textbloc_hour(key, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <div class="flex-grow-1">
+                <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
+                <input 
+                    type="time" 
+                    id="{{ key }}" 
+                    class="form-control" 
+                    value="{{ value }}"
+                    oninput="handleInputChangeConfig('', '{{ key }}')"
+                    onkeydown="handleKeyPressConfig(event, '', '{{ key }}')"
+                    data-initial-value="{{ value }}"
+                >
+            </div>
+            <div class="ms-3">
+                {{ button(key, "hour") }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour textarea simple #}
+{% macro textarea_full(key, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-start">
+            <div class="flex-grow-1">
+                {{ textarea(key, value, label) }}
+            </div>
+            <div class="ms-3">
+                {{ button(key) }}
+            </div>
+        </div>
+    </div>
 </div>
 {% endmacro %}
 
@@ -314,13 +435,12 @@
 {% endmacro %}
 
 
-
 <!--- Pour les variables CSS -->
 
 {# Macro de base pour le textarea #}
 {% macro css_textarea(source, variable, value, label) %}
-<div class="mb-3">
-    <label for="{{ source }}_{{ variable }}" class="form-label">{{ label }}</label>
+<div class="mb-3 d-flex">
+    <label for="{{ source }}_{{ variable }}" class="col col-form-label">{{ label }}</label>
     <textarea 
         id="{{ source }}_{{ variable }}" 
         class="form-control" 
@@ -356,4 +476,299 @@
         {{ css_button(source, variable) }}
     </div>
 </div>
+{% endmacro %}
+
+
+
+{# Macro pour l'input avec unité #}
+{% macro css_unit_input(source, variable, value, label, unit="px") %}
+<div class="row align-items-center">
+    <div class="col-sm-4">
+        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+    </div>
+    <div class="col-sm-8">
+        <div class="input-group">
+            <input 
+                type="number" 
+                id="{{ source }}_{{ variable }}" 
+                class="form-control" 
+                value="{{ value|replace(unit, '') }}"
+                min="0"
+                step="1"
+                oninput="handleInputChange('{{ source }}', '{{ variable }}')"
+                onkeydown="handleKeyPress(event, '{{ source }}', '{{ variable }}', '{{ unit }}')"
+                data-initial-value="{{ value|replace(unit, '') }}"
+            >
+            <span class="input-group-text">{{ unit }}</span>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour le bouton aligné #}
+{% macro css_unit_button(source, variable, unit="px") %}
+<div class="d-flex align-items-end mb-2">
+    <button
+        id="{{ source }}_{{ variable }}_button"
+        class="btn btn-primary ms-2"
+        disabled
+        hx-post="/admin/update_css_variable"
+        hx-target="#invisible"
+        hx-vals='js:{
+            "source": "{{ source }}",
+            "variable": "{{ variable }}", 
+            "value": document.getElementById("{{ source }}_{{ variable }}").value + "{{ unit }}"
+        }'
+        hx-on::after-request="handleAfterRequest('{{ source }}', '{{ variable }}')"
+    >
+        Enregistrer
+    </button>
+    <div id="{{ source }}_{{ variable }}_result"></div>
+</div>
+{% endmacro %}
+
+{# Macro complète pour input avec unité #}
+{% macro css_unit_bloc(source, variable, value, label, unit="px") %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex">
+            <div class="flex-grow-1">
+                {{ css_unit_input(source, variable, value, label, unit) }}
+            </div>
+            {{ css_unit_button(source, variable, unit) }}
+        </div>
+    </div>
+</div>
+
+<script>
+function handleInputChange(source, variable) {
+    console.log(source, variable)
+    const input = document.getElementById(`${source}_${variable}`);
+    console.log(input)
+    const button = document.getElementById(`${source}_${variable}_button`);
+    const initialValue = input.dataset.initialValue;
+    
+    // Active/désactive le bouton selon si la valeur a changé
+    button.disabled = input.value === initialValue;
+}
+
+function handleKeyPress(event, source, variable, unit) {
+    // Si la touche Entrée est pressée et que le bouton est activé
+    if (event.key === 'Enter') {
+        const button = document.getElementById(`${source}_${variable}_button`);
+        if (!button.disabled) {
+            event.preventDefault();
+            button.click();
+        }
+    }
+}
+
+function handleAfterRequest(source, variable) {
+    const input = document.getElementById(`${source}_${variable}`);
+    const button = document.getElementById(`${source}_${variable}_button`);
+    
+    // Met à jour la valeur initiale et désactive le bouton
+    input.dataset.initialValue = input.value;
+    button.disabled = true;
+}
+</script>
+{% endmacro %}
+
+
+{# Macro pour l'input de couleur #}
+{% macro css_color_input(source, variable, value, label) %}
+<div class="d-flex">
+    <div class="ms-4">
+        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+    </div>
+    <div class="ms-2 me-2">
+        <div class="input-group">
+            <input 
+                type="color" 
+                id="{{ source }}_{{ variable }}_picker"
+                class="form-control form-control-color me-2" 
+                value="{{ value }}"
+                title="Choisir une couleur"
+                oninput="handleColorChange('{{ source }}', '{{ variable }}')"
+                data-initial-value="{{ value }}"
+                style="width: 60px;"
+            >
+            <select 
+                id="{{ source }}_{{ variable }}"
+                class="form-select color-select2 ms-4"
+                style="width: 150px; max-width: 200px;"
+                data-initial-value="{{ value }}"
+            >
+                <option value="{{ value }}">{{ value }}</option>
+            </select>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour le bouton #}
+{% macro css_color_button(source, variable) %}
+<button
+id="{{ source }}_{{ variable }}_button"
+class="btn btn-primary"
+disabled
+hx-post="/admin/update_css_variable"
+hx-target="#invisible"
+hx-vals='js:{
+    "source": "{{ source }}",
+    "variable": "{{ variable }}", 
+    "value": document.getElementById("{{ source }}_{{ variable }}").value,
+    "isParent": Boolean(colorMappings["{{ variable }}"]),
+    "dependencies": JSON.stringify(
+        colorMappings["{{ variable }}"] ? 
+        colorMappings["{{ variable }}"].targets.map(target => ({
+            variable: target,
+            value: document.getElementById("{{ source }}_{{ variable }}").value
+        })) : []
+    )
+}'
+hx-on::after-request="handleColorAfterRequest('{{ source }}', '{{ variable }}')"
+>
+Enregistrer
+</button>
+    <div id="{{ source }}_{{ variable }}_result"></div>
+
+{% endmacro %}
+
+{# Macro pour le bloc complet - sans le script #}
+{% macro css_color_bloc(source, variable, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <div class="flex-grow-1">
+                {{ css_color_input(source, variable, value, label) }}
+            </div>
+            {{ css_color_button(source, variable) }}
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+
+{# Macro pour l'input #}
+{% macro simple_input(variable, value, label) %}
+<div class="row align-items-center">
+    <div class="col-sm-1">
+        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+    </div>
+    <div class="col-sm-11">
+        <input 
+            type="text" 
+            id="{{ source }}_{{ variable }}" 
+            class="form-control" 
+            value="{{ value }}"
+            oninput="handleSimpleInputChange('{{ source }}', '{{ variable }}')"
+            onkeydown="handleSimpleKeyPress(event, '{{ source }}', '{{ variable }}')"
+            data-initial-value="{{ value }}"
+        >
+    </div>
+</div>
+{% endmacro %}
+
+
+{# Macro pour l'input avec unité #}
+{% macro number_input(variable, value, label, unit="px") %}
+<div class="row align-items-center">
+    <div class="col-sm-1">
+        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+    </div>
+    <div class="col-sm-11">
+        <div class="input-group">
+            <input 
+                type="number" 
+                id="{{ source }}_{{ variable }}" 
+                class="form-control" 
+                value="{{ value }}"
+                oninput="handleNumberInputChange('{{ source }}', '{{ variable }}')"
+                onkeydown="handleNumberKeyPress(event, '{{ source }}', '{{ variable }}')"
+                data-initial-value="{{ value }}"
+                min="0"
+                step="1"
+            >
+            <span class="input-group-text">{{ unit }}</span>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro pour le bouton universel #}
+{% macro simple_button(variable, check="text") %}
+<div class="ms-3">
+    <button
+        id="{{ source }}_{{ variable }}_button"
+        class="btn btn-primary"
+        disabled
+        hx-post="/admin/update_input"
+        hx-target="#invisible"
+        hx-vals='js:{
+            "source": "{{ source }}",
+            "variable": "{{ variable }}", 
+            "value": document.getElementById("{{ source }}_{{ variable }}").value,
+            "check": "{{ check }}"
+        }'
+        hx-on::after-request="handleSimpleAfterRequest('{{ source }}', '{{ variable }}')"
+    >
+        Enregistrer
+    </button>
+    <div id="{{ source }}_{{ variable }}_result"></div>
+</div>
+{% endmacro %}
+
+{# Macro complète #}
+{% macro simple_bloc(variable, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center">
+            <div class="flex-grow-1">
+                {{ simple_input(variable, value, label) }}
+            </div>
+            {{ simple_button(variable) }}
+        </div>
+    </div>
+</div>
+
+<script>
+function handleSimpleInputChange(source, variable) {
+    const input = document.getElementById(`${source}_${variable}`);
+    const button = document.getElementById(`${source}_${variable}_button`);
+    const initialValue = input.dataset.initialValue;
+    
+    // Active/désactive le bouton selon si la valeur a changé
+    button.disabled = input.value === initialValue;
+}
+
+function handleSimpleKeyPress(event, source, variable) {
+    // Si la touche Entrée est pressée et que le bouton est activé
+    if (event.key === 'Enter') {
+        const button = document.getElementById(`${source}_${variable}_button`);
+        if (!button.disabled) {
+            event.preventDefault();
+            button.click();
+        }
+    }
+}
+
+function handleSimpleAfterRequest(source, variable) {
+    const input = document.getElementById(`${source}_${variable}`);
+    const button = document.getElementById(`${source}_${variable}_button`);
+    
+    // Met à jour la valeur initiale
+    input.dataset.initialValue = input.value;
+    
+    // Désactive le bouton
+    button.disabled = true;
+    
+    // Feedback visuel temporaire
+    button.textContent = "Enregistré ✓";
+    setTimeout(() => {
+        button.textContent = "Enregistrer";
+    }, 1000);
+}
+</script>
 {% endmacro %}

@@ -55,6 +55,7 @@ from bdd import init_database
 from config import Config, time_tz
 from communication import send_app_notification, start_rabbitmq_consumer, communikation
 from variables import MultiCssVariableManager
+from css_manager import CSSManager
 
 from app_holder import AppHolder
 
@@ -297,7 +298,7 @@ def load_configuration(app):
         "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
         "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
         "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
-        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
+        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int")
     }
 
     for key, (config_name, value_type) in config_mappings.items():
@@ -348,7 +349,11 @@ def start_fonctions(app):
     init_database(database, db)
 
     # Pour gérer les app.config des CSS. A faire également pour mon Config général
-    css_manager = MultiCssVariableManager(app)
+    css_variable_manager = MultiCssVariableManager(app)
+
+    app.css_manager = CSSManager()
+    app.css_manager.init_app(app)
+
 
     # Check if the user table is empty and create an admin user if it is
 
@@ -380,7 +385,7 @@ def start_fonctions(app):
     init_default_patient_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
-    css_manager.reload_all()
+    css_variable_manager.reload_all()
     clear_counter_table()
 
     # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
@@ -898,8 +903,9 @@ def update_switch():
             return display_toast(success=False, message=str(e))
     
 
-@app.route('/admin/update_css_variable', methods=['POST'])
-def update_css_variable():
+@app.route('/admin/update_css_variable_old', methods=['POST'])
+def update_css_variable_old():
+    print(request.form)
     try:
         # Récupération des données
         source = request.form.get('source')
@@ -920,7 +926,7 @@ def update_css_variable():
             }), 400
 
         # Mise à jour via le gestionnaire
-        app.css_manager.update_variable(source, variable, value)
+        app.css_variable_manager.update_variable(source, variable, value)
 
         return jsonify({
             'status': 'success',
@@ -939,13 +945,47 @@ def update_css_variable():
         }), 500
 
 
+@app.route('/admin/update_css_variable', methods=['POST'])
+def update_css_variable():
+    print("UPDATE")
+
+    source_name = request.form.get('source')
+    variable_name = request.form.get('variable')
+    value = request.form.get('value')
+    dependencies = json.loads(request.form.get('dependencies', '[]'))
+
+    print("DEP", request.form)
+    
+    # Met à jour la variable dans la base de données
+    app.css_variable_manager.update_variable(source_name, variable_name, value)
+    
+    # Met à jour toutes les variables dépendantes
+    for dep in dependencies:
+        app.css_variable_manager.update_variable(
+            source_name, 
+            dep['variable'], 
+            dep['value']
+        )
+
+    # Récupère toutes les variables pour générer le CSS
+    variables = app.css_variable_manager.get_all_variables(source_name)
+    
+    # Génère le nouveau CSS
+    new_css_url = app.css_manager.generate_css(variables)
+    
+    return jsonify({
+        'status': 'success',
+        'css_url': new_css_url
+    })
+
+
 @app.route('/admin/update_input', methods=['POST'])
 def update_input():
     """ Mise à jour des input d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
     check = request.values.get('check')
-    print("ZINPUT", key, value)
+    print("ZINPUT", key, value, check)
 
     if check:
         if check == "int":
