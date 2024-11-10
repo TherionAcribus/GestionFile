@@ -1,4 +1,6 @@
-<div class="grid-item div_square_bloc_activity" id="{{ button.activity.name | replace(' ', '_') }}"
+<div class="grid-item div_square_bloc_activity
+                {% if button.is_active %} div_square_button_active {% else %} div_square_button_inactive {% endif %}"
+                    id="{{ button.activity.name | replace(' ', '_') }}"
                 hx-post="/patients_submit" 
                 hx-vals='{"activity_id": "{{ button.activity.id }}",
                         "is_parent": "{{ button.is_parent }}",
@@ -17,9 +19,9 @@
 
                         <div class="div_square_buttons 
                                 {% if button.image_url %} grid_square_buttons {% endif %}
-                                {% if button.is_active %} div_button_active {% else %} div_button_inactive {% endif %}">
+                                ">
                                 {% if button.image_url %}
-                                        <img class="img_btn_small {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}"
+                                        <img class="img_square_button {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}"
                                                 src='/static/images/buttons/{{ button.image_url }}'>
                                 {% endif %}
                                 <div class="div_text_button {% if button.is_active %} div_text_button_square_active {% else %} div_text_button_inactive {% endif %}">

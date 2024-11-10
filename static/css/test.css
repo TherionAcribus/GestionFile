@@ -1,28 +1,79 @@
 :root {
+    --circle_button_size: 200px;
+    --circle_button_color: darkcyan;
+    --circle_button_border_size: 0px;
+    --circle_button_border_color: black;
+    --circle_button_image_size: 200px;
+    --circle_button_text_size: 30px;
+    --circle_button_text_color: darkcyan;
+    --circle_button_text_border_size: "0px";
+    --circle_button_text_border_color: "black";
+    --square_button_width: 500px;
+    --square_button_height: 150px;
+    --square_button_color: darkcyan;
+    --square_button_border_size: 0px;
+    --square_button_border_color: black;
+    --square_button_image_size: 200px;
+    --square_button_text_size: 30px;
+    --square_button_text_color: white;
+    --square_button_text_border_size: "0px";
+    --square_button_text_border_color: "black";
+    --square_cancel_button_width: 500px;
+    --square_cancel_button_height: 150px;
+    --square_cancel_button_color: darkcyan;
+    --square_cancel_button_border_size: 0px;
+    --square_cancel_button_border_color: black;
+    --square_cancel_button_image_size: 200px;
+    --square_cancel_button_text_size: 30px;
+    --square_cancel_button_text_color: darkcyan;
+    --square_cancel_button_text_border_size: "0px";
+    --square_cancel_button_text_border_color: "black";      
     --scan_explanation_font_size: 80px;
-    --scan_explanation_font_color: #7DCD5B;
+    --scan_explanation_font_color: #008B8B;
     --scan_explanation_border_size: 2px;
-    --scan_explanation_border_color: #030303;
+    --scan_explanation_border_color: #black;
     --patient_title_font_size: 80px;
-    --patient_title_font_color: #be0707;
+    --patient_title_font_color: #FFFFFF;
     --patient_title_border_size: 2px;
     --patient_title_border_color: #000000;
+    --patient_title_background_color: #008B8B;
+    --patient_title_background_height: 200px;
     --subtitle_font_size: 50px;
     --subtitle_font_color: #FFFFFF;
     --subtitle_border_size: 0px;
     --subtitle_border_color: black;
-    --subtitle_no_activity_font_size: 40;
+    --subtitle_no_activity_font_size: 40px;
     --subtitle_no_activity_font_color: white;
     --subtitle_no_activity_border_size: 0;
     --subtitle_no_activity_border_color: black;
-    --subtitle_specific_message_font_size: 40;
+    --subtitle_specific_message_font_size: 40px;
     --subtitle_specific_message_font_color: white;
-    --subtitle_specific_message_border_size: 0;
+    --subtitle_specific_message_border_size: 0px;
     --subtitle_specific_message_border_color: black;
-    --patient_title_background_color: #2E8B57;
-    --subtitle_background_color: #00FF7B;
-    --subtitle_no_activity_background_color: #F90101;
-    --subtitle_specific_message_background_color: #DFF95D;
+    --subtitle_background_height: 200px;
+    --subtitle_background_color: #008B8B;
+    --subtitle_no_activity_background_color: #008B8B;
+    --subtitle_specific_message_background_color: #008B8B;
+    --validation_text_font_color:darkcyan;
+    --validation_text_font_size: 50px;
+    --validation_text_border_size: 0px;
+    --validation_text_border_color: black;
+    --validation_button_height: 150px;
+    --validation_button_width: 500px;
+    --validation_button_color: #008B8B;
+    --validation_button_border_size: 0px;
+    --validation_button_border_color: black;
+    --validation_button_text_size: 30px;
+    --validation_button_text_color: #008B8B;
+    --validation_button_text_border_size: 0px;
+    --validation_button_text_border_color: black;    
+    --confirmation_text_font_color:darkcyan;
+    --confirmation_text_font_size: 50px;
+    --confirmation_text_border_size: 0px;
+    --confirmation_text_border_color: black;
+    --flag_size: 100px;
+    --flag_border_color: black;
+    --flag_border_size: 0px;
 }
 
 html, body {
@@ -39,12 +90,12 @@ html, body {
 }
 
 #div_title_area {
-    height: 10%;
+    height: var(--patient_title_background_height);
     text-align: center;
     font-size: var(--patient_title_font_size);
     font-weight: bold;
     background-color: var(--patient_title_background_color);
-    color: var(--patient-title-font-color);
+    color: var(--patient_title_font_color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -56,7 +107,7 @@ html, body {
     position: relative; 
     justify-content:space-around;
     align-items: center;
-    background-color: rgb(182, 245, 245);
+    background-color: var(--patient_secondary_color);
 }
 
 .div_validation_buttons{
@@ -70,18 +121,17 @@ html, body {
 }
 
 #div_buttons_children {
-    height: 10%;
-    background-color: darkcyan;
+    height: var(--subtitle_background_height);
     display: flex;        /* Utilise Flexbox */
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
+    background-color: var(--subtitle_background_color);
 }
 
 #div_intermediaire {
     height: 2%;
     background-color: darkcyan;
 }
-
 
 .div_bloc_activity{
     display: flex;
@@ -98,28 +148,80 @@ html, body {
 }
 
 .div_circle_buttons {
-    width: 200px;  /* Largeur fixe */
-    height: 200px;
+    width: var(--circle_button_size);  
+    height: var(--circle_button_size);
     margin: 10px;
     border-radius: 50%;
     box-shadow: 5px 5px 5px #888888;
     text-align: center;
+    border-color: var(--circle_button_border_color);
+    border-width: var(--circle_button_border_size);
+    border-style: solid;
 }
 
-.div_square_buttons {
-    width: 500px;  /* Largeur fixe */
-    height: 150px;
+.div_square_bloc_activity {
+    width: var(--square_button_width);  
+    height: var(--square_button_height);
     margin: 10px;    
     border-radius: 5%;
+    border-color: var(--square_button_border_color);
+    border-width: var(--square_button_border_size);
+    border-style: solid;
     box-shadow: 5px 5px 5px #888888;
-    text-align: center;
+    display: flex;
     align-items: center;
+    justify-content: center;
+    text-align: center;
 }
 
-.div_square_buttons:hover {
+
+.div_square_bloc_activity:hover {
     box-shadow: 0px 0px 0px #888888;
     scale: 0.95;
 }
+
+.div_square_bloc_cancel {
+    width: var(--square_cancel_button_width);  
+    height: var(--square_cancel_button_height);
+    background-color: var(--square_cancel_button_color);
+    margin: 10px;    
+    border-radius: 5%;
+    border-color: var(--square_cancel_button_border_color);
+    border-width: var(--square_cancel_button_border_size);
+    border-style: solid;
+    box-shadow: 5px 5px 5px #888888;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.div_square_bloc_cancel:hover {
+    box-shadow: 0px 0px 0px #888888;
+    scale: 0.95;
+}
+
+.grid_square_cancel_buttons {
+    display: grid;
+    grid-template-columns: var(--square_cancel_button_image_size) 1fr;
+    align-items: center;
+    gap: 8px; /* Espace entre l'image et le texte */
+}
+
+.img_square_cancel_bouton {
+    max-width: var(--square_cancel_button_image_size);
+    height: auto;
+    object-fit: contain;
+}
+
+.div_text_cancel_button_square_active{
+    font-size: var(--square_cancel_button_text_size);
+    color: var(--square_cancel_button_text_color);
+    font-weight: bold;
+    -webkit-text-stroke-color: var(--square_cancel_button_text_border_color);
+    -webkit-text-stroke-width: var(--square_cancel_button_text_border_size);
+}
+
 
 .div_circle_buttons:hover {
     box-shadow: 0px 0px 0px #888888;
@@ -128,33 +230,37 @@ html, body {
 
 .grid_square_buttons {
     display: grid;
-    grid-template-columns: 120px auto; /* La première colonne fait 120px, la seconde prend le reste */
-}
-
-.div_square_bloc_activity {
-    display: flex;
-    flex-direction: row;
+    grid-template-columns: var(--square_button_image_size) 1fr;
     align-items: center;
-    justify-content: center;
+    gap: 8px; /* Espace entre l'image et le texte */
 }
 
 .div_button_active {
-    background-color:darkcyan;
+    background-color:var(--circle_button_color);
+}
+
+.div_square_button_active {
+    background-color:var(--square_button_color);
 }
 
 .div_button_inactive {
     background-color:rgb(102, 105, 105);
 }
 
+.div_square_button_inactive {
+    background-color:rgb(102, 105, 105);
+}
 
 .img_btn {
-    height: 200px;
+    height: var(--circle_button_image_size);
 }
 
-.img_btn_small {
-    height: 100px;
-    margin: 10px;
+.img_square_button {
+    max-width: var(--square_button_image_size);
+    height: auto;
+    object-fit: contain;
 }
+
 
 .img_btn_inactive {
     filter: grayscale(100%);
@@ -162,17 +268,23 @@ html, body {
 
 .div_text_button{
     text-align: center;
-    font-size: 30px;
+    font-size: var(--circle_button_text_size);
     font-weight: bold;
+    -webkit-text-stroke-color: var(--circle_button_text_border_color);
+    -webkit-text-stroke-width: var(--circle_button_text_border_size);
 }
 
 .div_text_button_active{
-    color: darkcyan;
+    color: var(--circle_button_text_color)
 }
 
+
 .div_text_button_square_active{
-    color: white;
-    font-size: 35px;
+    font-size: var(--square_button_text_size);
+    color: var(--square_button_text_color);
+    font-weight: bold;
+    -webkit-text-stroke-color: var(--square_button_text_border_color);
+    -webkit-text-stroke-width: var(--square_button_text_border_size);
 }
 
 .div_text_button_inactive{
@@ -195,25 +307,45 @@ html, body {
     padding-top: 1%;
 }
 
-
 .div_validation_one_button{
-    background-color:darkcyan;
+    background-color:var(--validation_button_color);
+    height: var(--validation_button_height);
+    width: var(--validation_button_width);
     border-radius: 5%;
     box-shadow: 5px 5px 5px #888888;
-    color: white;
+    color: var(--validation_button_text_color);
     text-align: center;
     margin: 30px ;
     padding-top: 5px;
     padding-bottom: 5px;
+    border-color: var(--validation_button_border_color);
+    border-width: var(--validation_button_border_size);
+    border-style: solid;
 }
 
 .validation_button {
-    font-size: 50px;
+    font-size: var(--validation_button_text_size);
     font-weight: 500;
+    -webkit-text-stroke-color: var(--validation_button_text_border_color);
+    -webkit-text-stroke-width: var(--validation_button_text_border_size);
 }
 
 #div_call_number{
     text-align: center;
+    font-size: var(--validation_text_font_size);
+    font-weight: 500;
+    color: var(--validation_text_font_color);
+    -webkit-text-stroke-color: var(--validation_text_border_color);
+    -webkit-text-stroke-width: var(--validation_text_border_size);
+}
+
+#conclusion_text{
+    text-align: center;
+    font-size: var(--confirmation_text_font_size);
+    font-weight: 500;
+    color: var(--confirmation_text_font_color);
+    -webkit-text-stroke-color: var(--confirmation_text_border_color);
+    -webkit-text-stroke-width: var(--confirmation_text_border_size);
 }
 
 .div_qr_plus_buttons{
@@ -221,11 +353,6 @@ html, body {
     grid-template-columns: 1fr 2fr;
 }
 
-.text_summary {
-    font-size: 50px;
-    font-weight: 500;
-    color: darkcyan;
-}
 
 #conclusion_page {
     display: flex;
@@ -271,8 +398,12 @@ html, body {
     display: flex;
     flex-direction: column;
     cursor: pointer;
-    width: 70px;
+    width: var(--flag_size);
     margin: 10px;
+    border-width: var(--flag_border_size);
+    border-style: solid;
+    border-color: var(--flag_border_color);
+    border-radius: 50%;
 }
 
 .div_explanation {
@@ -286,15 +417,16 @@ html, body {
 
 .div_text_explanation{
     text-align: center;
+    height: var(--subtitle_background_height);
     font-size: var(--subtitle_font_size);
     color: var(--subtitle_font_color);
     font-weight: bold;
     -webkit-text-stroke-color: var(--subtitle_border_color);
     -webkit-text-stroke-width: var(--subtitle_border_size);
-    background-color: var(--subtitle_background_color);
 }
 
 .div_text_explanation_inactive {
     color: #CCCCCC; /* Une couleur grise plus claire pour une meilleure visibilité sur darkcyan */
     text-shadow: 1px 1px 2px black; /* Contour noir pour améliorer la lisibilité */
 }
+

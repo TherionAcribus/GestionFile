@@ -4,11 +4,6 @@
     flex-direction: row;
 }
 
-#div_buttons_children {
-    height: 10%;
-    background-color: darkcyan;
-}
-
 .outer-grid-container {
     display: grid;
     grid-template-columns: 1fr;

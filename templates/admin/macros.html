@@ -651,6 +651,59 @@ Enregistrer
 
 
 
+{# Macro pour le bloc complet - avec collapse pour les variables dépendantes #}
+{% macro parent_css_color_bloc(source, variable, value, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-2">
+            <div class="flex-grow-1">
+                {{ css_color_input(source, variable, value, label) }}
+            </div>
+            {{ css_color_button(source, variable) }}
+        </div>
+        
+        {# Bouton pour le collapse #}
+        <div class="mb-2">
+            <button class="btn btn-outline-secondary btn-sm" type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#collapse-{{ variable }}" 
+                    aria-expanded="false" 
+                    aria-controls="collapse-{{ variable }}">
+                <i class="fas fa-cog"></i> Configuration des variables dépendantes
+            </button>
+        </div>
+
+        {# Contenu du collapse #}
+        <div class="collapse" id="collapse-{{ variable }}">
+            <div class="card card-body">
+                {# Boutons de sélection #}
+                <div class="mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary me-2" 
+                            onclick="selectAllVariables('{{ variable }}')">
+                        Tout sélectionner
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary me-2" 
+                            onclick="deselectAllVariables('{{ variable }}')">
+                        Tout désélectionner
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="invertSelection('{{ variable }}')">
+                        Inverser la sélection
+                    </button>
+                </div>
+
+                {# Container pour les checkboxes #}
+                <div id="variableCheckboxes-{{ variable }}" class="variable-checkboxes">
+                    {# Les checkboxes seront générées ici par JavaScript #}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+
 {# Macro pour l'input #}
 {% macro simple_input(variable, value, label) %}
 <div class="row align-items-center">

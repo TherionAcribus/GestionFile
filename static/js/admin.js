@@ -499,21 +499,35 @@ const colorMappings = {
         // Liste des variables qui dépendent de la couleur principale
         targets: [
             'patient_title_background_color',
-            'patient_title_font_color',
+            'circle_button_color',
+            'circle_button_text_color',
+            'square_button_color',
+            'square_cancel_button_color',
+            'confirmation_text_font_color',
+            'validation_button_color',
+            'subtitle_background_color',
+            'scan_explanation_font_color',
+            'subtitle_specific_message_background_color',
+            'subtitle_no_activity_background_color',
+            'validation_text_font_color'
+
             // ... autres variables
         ]
     },
     'patient_secondary_color': {
         targets: [
-            'subtitle_background_color',
-            'subtitle_font_color',
             // ... autres variables
         ]
     },
     'patient_third_color': {
         targets: [
-            'subtitle_no_activity_background_color',
+            'patient_title_font_color',
+            'subtitle_font_color',
             'subtitle_no_activity_font_color',
+            'subtitle_specific_message_font_color',
+            'validation_button_text_color',
+            'square_cancel_button_text_color',
+            'square_button_text_color',
             // ... autres variables
         ]
     }

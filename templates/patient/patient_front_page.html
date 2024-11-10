@@ -54,7 +54,7 @@
         {% if page_patient_display_translations %}
             <div class="language-selector">
                 {% for language in languages %}
-                    <img src="/static/images/flags/{{language.flag_url}}" alt="{{language.translation}}" hx-get="/patient/change_language/{{language.code}}" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
+                    <img class="flag" src="/static/images/flags/{{language.flag_url}}" alt="{{language.translation}}" hx-get="/patient/change_language/{{language.code}}" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
                 {% endfor %}
             </div>
         {% endif %}
