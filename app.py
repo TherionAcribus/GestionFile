@@ -266,6 +266,7 @@ def load_configuration(app):
         "page_patient_interface_done_back": ("PAGE_PATIENT_INTERFACE_DONE_BACK", "value_str"),
         "page_patient_print_after_scan": ("PAGE_PATIENT_PRINT_AFTER_SCAN", "value_bool"),
         "page_patient_print_after_print": ("PAGE_PATIENT_PRINT_AFTER_PRINT", "value_bool"),
+        "page_patient_timer_activity_inactive": ("PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE", "value_int"),
         "ticket_header": ("TICKET_HEADER", "value_str"),
         "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
         "ticket_message": ("TICKET_MESSAGE", "value_str"),
@@ -960,11 +961,12 @@ def update_css_variable():
     app.css_variable_manager.update_variable(source_name, variable_name, value)
     
     # Met à jour toutes les variables dépendantes
-    for dep in dependencies:
+    for dep_variable in dependencies:
+        print("DEPVAR", dep_variable)
         app.css_variable_manager.update_variable(
             source_name, 
-            dep['variable'], 
-            dep['value']
+            dep_variable,  # Maintenant dep_variable est directement le nom de la variable
+            value  # On utilise la même valeur que la variable parente
         )
 
     # Récupère toutes les variables pour générer le CSS

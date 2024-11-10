@@ -4,12 +4,20 @@
 
 {% if page_patient_structure == "full" %}
     <script>
+        var div_bottom = document.getElementById('div_buttons_children')
+        div_bottom.classList.add('buttons_children_inactive');
+        div_bottom.classList.remove('buttons_children_active');     
+        
+        console.log({{page_patient_end_timer}});
+
         setTimeout(function() {
             var element = document.querySelector('.div_text_explanation_inactive');
+            div_bottom.classList.remove('buttons_children_inactive');
+            div_bottom.classList.add('buttons_children_active');
             if (element) {
                 element.classList.remove('div_text_explanation_inactive');
                 element.textContent = '{{default_subtitle}}';
             }
-        }, {{page_patient_end_timer}} * 1000);
+        }, {{page_patient_timer_activity_inactive}} * 1000);
     </script>
 {% endif %}

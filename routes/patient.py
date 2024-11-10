@@ -108,7 +108,7 @@ def display_activity_inactive(request):
                             page_patient_disable_default_message=message,
                             default_subtitle=default_subtitle,
                             page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
-                            page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"])
+                            page_patient_timer_activity_inactive=app.config["PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE"])
 
 
 @patient_bp.route("/patient/default_subtitle")
@@ -196,7 +196,8 @@ def left_page_validate_patient(activity):
     if app.config["PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE"] and activity.specific_message != "":
         subtitle_content = render_template(
         'patient/patient_default_subtitle.html',
-        page_patient_subtitle=page_patient_subtitle
+        page_patient_subtitle=page_patient_subtitle,
+        is_specific_message=True
         )
 
         return f"{main_content}{subtitle_content}"

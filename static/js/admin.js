@@ -533,6 +533,81 @@ const colorMappings = {
     }
 };
 
+const variableDescriptions = {
+    'patient_title_background_color': 'Couleur de fond du titre',
+    'circle_button_color': 'Couleur des boutons circulaires',
+    'circle_button_text_color': 'Couleur du texte des boutons circulaires',
+    'square_button_color': 'Couleur des boutons carrés',
+    'square_cancel_button_color': 'Couleur des boutons d\'annulation',
+    'confirmation_text_font_color': 'Couleur du texte de confirmation',
+    // ... ajoutez les autres descriptions
+};
+
+// Fonction pour générer les checkboxes pour une couleur spécifique
+function generateCheckboxes(parentColor) {
+    const container = document.getElementById(`variableCheckboxes-${parentColor}`);
+    if (!container || !colorMappings[parentColor]) return;
+    
+    container.innerHTML = ''; // Nettoie le conteneur
+    
+    const variables = colorMappings[parentColor].targets;
+    variables.forEach(variable => {
+        const description = variableDescriptions[variable] || variable;
+        const checkboxDiv = document.createElement('div');
+        checkboxDiv.className = 'form-check';
+        checkboxDiv.innerHTML = `
+            <input class="form-check-input variable-checkbox-${parentColor}" 
+                   type="checkbox"
+                   checked
+                   value="${variable}" 
+                   id="checkbox-${variable}">
+            <label class="form-check-label" for="checkbox-${variable}">
+                ${description}
+            </label>
+        `;
+        container.appendChild(checkboxDiv);
+    });
+}
+
+// Fonction pour sélectionner toutes les variables d'une couleur
+function selectAllVariables(parentColor) {
+    document.querySelectorAll(`.variable-checkbox-${parentColor}`).forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+// Fonction pour désélectionner toutes les variables d'une couleur
+function deselectAllVariables(parentColor) {
+    document.querySelectorAll(`.variable-checkbox-${parentColor}`).forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+// Fonction pour inverser la sélection des variables d'une couleur
+function invertSelection(parentColor) {
+    document.querySelectorAll(`.variable-checkbox-${parentColor}`).forEach(checkbox => {
+        checkbox.checked = !checkbox.checked;
+    });
+}
+
+// Fonction pour obtenir les variables sélectionnées pour une couleur
+function getSelectedVariables(parentColor) {
+    const selectedVariables = [];
+    document.querySelectorAll(`.variable-checkbox-${parentColor}:checked`).forEach(checkbox => {
+        selectedVariables.push(checkbox.value);
+    });
+    return selectedVariables;
+}
+
+// Initialisation des checkboxes pour chaque couleur
+document.addEventListener('DOMContentLoaded', function() {
+    Object.keys(colorMappings).forEach(color => {
+        generateCheckboxes(color);
+    });
+});
+
+
+
 // Configuration des couleurs et fonctions
 const cssNamedColors = {
     // Rouges
@@ -851,7 +926,21 @@ function handleColorAfterRequest(source, variable) {
     const button = document.getElementById(`${source}_${variable}_button`);
     const newValue = input.value;
     
-    // Met à jour la valeur initiale du parent
+    // Si c'est une couleur parent, met à jour les dépendances sélectionnées
+    if (colorMappings[variable]) {
+        const selectedVariables = getSelectedVariables(variable);
+        updateDependentColors(source, variable, newValue, selectedVariables);
+    } else {
+        // Si ce n'est pas une couleur parent, mise à jour simple
+        const formData = new FormData();
+        formData.append('source', source);
+        formData.append('variable', variable);
+        formData.append('value', newValue);
+        formData.append('dependencies', '[]');
+        sendUpdateToServer(formData);
+    }
+
+    // Met à jour la valeur initiale et le bouton après l'envoi
     input.dataset.initialValue = newValue;
     button.disabled = true;
     
@@ -860,18 +949,12 @@ function handleColorAfterRequest(source, variable) {
     setTimeout(() => {
         button.textContent = "Enregistrer";
     }, 1000);
-    
-    // Si c'est une couleur parent, met à jour les dépendances
-    if (colorMappings[variable]) {
-        updateDependentColors(source, variable, newValue);
-    }
 }
+
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', initColorPickers);
 document.addEventListener('htmx:afterSettle', initColorPickers);
-
-
 
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -882,17 +965,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function updateDependentColors(source, parentVariable, newValue) {
-    // Met à jour les colorpickers dépendants
-    const dependencies = colorMappings[parentVariable]?.targets || [];
-    dependencies.forEach(targetVar => {
-        // Met à jour le colorpicker
+function updateDependentColors(source, parentVariable, newValue, selectedVariables) {
+    // Mise à jour de l'interface pour les variables sélectionnées
+    selectedVariables.forEach(targetVar => {
         const picker = document.getElementById(`${source}_${targetVar}_picker`);
         if (picker) {
             picker.value = newValue;
         }
 
-        // Met à jour le select2
         const select = $(`#${source}_${targetVar}`);
         if (select.length) {
             const colorName = Object.entries(cssNamedColors).find(([_, hex]) => 
@@ -901,13 +981,50 @@ function updateDependentColors(source, parentVariable, newValue) {
             if (!select.find(`option[value="${newValue}"]`).length) {
                 select.append(new Option(`${colorName} ${newValue}`, newValue, false, false));
             }
-            select.val(newValue).trigger('change');
+            select.val(newValue).trigger('change.select2');  // Utiliser change.select2 pour éviter la propagation
         }
 
-        // Met à jour la valeur initiale
         const input = document.getElementById(`${source}_${targetVar}`);
         if (input) {
             input.dataset.initialValue = newValue;
         }
     });
+
+    // Un seul envoi avec toutes les informations
+    const formData = new FormData();
+    formData.append('source', source);
+    formData.append('variable', parentVariable);
+    formData.append('value', newValue);
+    formData.append('dependencies', JSON.stringify(selectedVariables));
+
+    sendUpdateToServer(formData);
+}
+
+function sendUpdateToServer(formData) {
+    console.log(formData);
+    fetch('/admin/update_css_variable', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Variables mises à jour avec succès');
+        } else {
+            console.error('Erreur lors de la mise à jour des variables');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+    });
+}
+
+
+// Fonction utilitaire pour récupérer les variables sélectionnées
+function getSelectedVariables(parentColor) {
+    const selectedVariables = [];
+    document.querySelectorAll(`.variable-checkbox-${parentColor}:checked`).forEach(checkbox => {
+        selectedVariables.push(checkbox.value);
+    });
+    return selectedVariables;
 }

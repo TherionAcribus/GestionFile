@@ -2,11 +2,11 @@
 
 <h3>Page "Patient"</h3>
 
-{{ macros.css_color_bloc("patient", "patient_main_color", patient_main_color, "Couleur principale") }}
+{{ macros.parent_css_color_bloc("patient", "patient_main_color", patient_main_color, "Couleur principale") }}
 
 {{ macros.css_color_bloc("patient", "patient_secondary_color", patient_secondary_color, "Couleur secondaire") }}
 
-{{ macros.css_color_bloc("patient", "patient_third_color", patient_third_color, "Couleur tertiaire") }}
+{{ macros.parent_css_color_bloc("patient", "patient_third_color", patient_third_color, "Couleur tertiaire") }}
 
 
 <div class="mb-3">
@@ -64,7 +64,6 @@
                 page_patient_display_specific_message, 
                 "Afficher le message spécifique à l'activité dans le pied de page")
 }}
-
 
 
 <h5>Texte de la page de confirmation</h5>
@@ -297,6 +296,8 @@
                 <h2>Texte qui s'affiche par défaut si l'activité n'est pas en cours</h2>
 
                 {{ macros.textbloc_before_call("page_patient_disable_default_message", page_patient_disable_default_message, "Texte")}}
+
+                {{ macros.textbloc_int("page_patient_timer_activity_inactive", page_patient_timer_activity_inactive, "Durée du timer (en secondes)") }}
 
                 <strong>Police du texte</strong>
                 <div class="admin_css_textbloc">

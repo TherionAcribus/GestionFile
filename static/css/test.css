@@ -120,12 +120,28 @@ html, body {
     right: 10px; /* Ajustez cette valeur selon vos besoins */
 }
 
-#div_buttons_children {
+.buttons_children_active {
     height: var(--subtitle_background_height);
     display: flex;        /* Utilise Flexbox */
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
     background-color: var(--subtitle_background_color);
+}
+
+.buttons_children_inactive {
+    height: var(--subtitle_background_height);
+    display: flex;        /* Utilise Flexbox */
+    align-items: center;  /* Centre le contenu verticalement */
+    justify-content: center; /* Centre le contenu horizontalement */
+    background-color: var(--subtitle_no_activity_background_color);
+}
+
+.buttons_children_specific_message {
+    height: var(--subtitle_background_height);
+    display: flex;        /* Utilise Flexbox */
+    align-items: center;  /* Centre le contenu verticalement */
+    justify-content: center; /* Centre le contenu horizontalement */
+    background-color: var(--subtitle_specific_message_background_color);
 }
 
 #div_intermediaire {
@@ -417,7 +433,6 @@ html, body {
 
 .div_text_explanation{
     text-align: center;
-    height: var(--subtitle_background_height);
     font-size: var(--subtitle_font_size);
     color: var(--subtitle_font_color);
     font-weight: bold;
@@ -426,7 +441,17 @@ html, body {
 }
 
 .div_text_explanation_inactive {
-    color: #CCCCCC; /* Une couleur grise plus claire pour une meilleure visibilité sur darkcyan */
-    text-shadow: 1px 1px 2px black; /* Contour noir pour améliorer la lisibilité */
+    color: var(--subtitle_no_activity_font_color);
+    font-size: var(--subtitle_no_activity_font_size);
+    -webkit-text-stroke-color: var(--subtitle_no_activity_border_color);
+    -webkit-text-stroke-width: var(--subtitle_no_activity_border_size);  
+    font-weight: bold;  
 }
 
+.div_text_explanation_specific_message {
+    color: var(--subtitle_specific_message_font_color);
+    font-size: var(--subtitle_specific_message_font_size);
+    -webkit-text-stroke-color: var(--subtitle_specific_message_border_color);
+    -webkit-text-stroke-width: var(--subtitle_specific_message_border_size);
+    font-weight: bold;
+}

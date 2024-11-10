@@ -41,6 +41,7 @@ def admin_patient(tab=None):
                             page_patient_print_after_scan = app.config['PAGE_PATIENT_PRINT_AFTER_SCAN'],
                             page_patient_print_after_print = app.config['PAGE_PATIENT_PRINT_AFTER_PRINT'],
                             page_patient_display_translations=app.config['PAGE_PATIENT_DISPLAY_TRANSLATIONS'],
+                            page_patient_timer_activity_inactive=app.config['PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE'],
                             ticket_header = app.config['TICKET_HEADER'],
                             ticket_message = app.config['TICKET_MESSAGE'],
                             ticket_footer = app.config['TICKET_FOOTER'],
