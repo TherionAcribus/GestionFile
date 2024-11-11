@@ -385,7 +385,6 @@ function checkTokenValidity(accessToken) {
 }
 
 
-const announce_call_text_size = document.getElementById('announce_call_text_size').textContent;
 const announce_text_up_patients = document.getElementById('announce_text_up_patients').textContent;
 const announce_text_up_patients_display = document.getElementById('announce_text_up_patients_display').textContent;
 const announce_text_down_patients = document.getElementById('announce_text_down_patients').textContent;
@@ -404,7 +403,8 @@ function animateElement(element, properties, options) {
 }
 
 
-async function add_calling(msg) {   
+async function add_calling(msg) {  
+    console.log('add_calling', msg); 
     
     add_text_up();
 
@@ -413,10 +413,7 @@ async function add_calling(msg) {
     // Créer un nouvel élément <li>
     const newListItem = document.createElement('li');
     newListItem.id = 'patient-' + patient.id;
-    newListItem.className = 'text_patient_calling hidden'; // Caché initialement
-    if (announce_call_text_size) {
-        newListItem.style.fontSize = announce_call_text_size +'px'; // Taille de texte dynamique
-    }    
+    newListItem.className = 'text_patient_calling hidden'; // Caché initialement   
     newListItem.textContent = patient.text;
 
     // Ajouter le nouvel élément à la liste
