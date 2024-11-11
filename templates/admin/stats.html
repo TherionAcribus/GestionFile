@@ -3,53 +3,188 @@
 {% block title %}Stats{% endblock %}
 
 {% block content %}
+<div class="container mx-auto px-4">
+    <div id="controls" class="mb-6 space-y-4"
+         hx-get="/admin/stats/chart" 
+         hx-trigger="change from:select, input from:.date-input, click from:#apply-filters" 
+         hx-target="#chart-data" 
+         hx-include="#controls">
+        
+        <!-- Période -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="form-group">
+                <label for="date-type">Période</label>
+                <select id="date-type" name="date_type" class="form-select w-full" onchange="toggleDateOptions()">
+                    <option value="current">Aujourd'hui</option>
+                    <option value="history">Historique</option>
+                </select>
+            </div>
 
-<div style="width: 80%; margin: auto;">
-    <div id="controls" hx-get="/admin/stats/chart" hx-trigger="change from:#data-selector, change from:#chart-type-selector, change from:#time-granularity" hx-target="#chart-data" hx-include="#controls">
-        <select id="data-selector" name="chart_type">
-            <option value="languages">Patients par langue</option>
-            <option value="activities">Patients par activité</option>
-            <option value="waiting_times">Temps d'attente</option>
-            <option value="counter_times">Temps au comptoir</option>
-            <option value="total_times">Temps total</option>
-            <option value="waiting_times_by_activity">Temps d'attente par activité</option>
-            <option value="counter_times_by_activity">Temps au comptoir par activité</option>
-            <option value="total_times_by_activity">Temps total par activité</option>
-        </select>
+            <div id="history-options" class="form-group hidden">
+                <label for="period-type">Type de période</label>
+                <select id="period-type" name="period_type" class="form-select w-full" onchange="toggleCustomDates()">
+                    <option value="7">7 derniers jours</option>
+                    <option value="28">28 derniers jours</option>
+                    <option value="365">365 derniers jours</option>
+                    <option value="custom">Période personnalisée</option>
+                </select>
+            </div>
 
-        <select id="chart-type-selector" name="chart_style">
-            <option value="pie">Camembert</option>
-            <option value="bar">Histogramme</option>
-            <option value="line">Graphique temporel</option>
-        </select>
+            <div id="custom-dates" class="hidden col-span-2 grid grid-cols-2 gap-4">
+                <div>
+                    <label for="start-date">Date de début</label>
+                    <input type="date" id="start-date" name="start_date" class="form-input w-full date-input">
+                </div>
+                <div>
+                    <label for="end-date">Date de fin</label>
+                    <input type="date" id="end-date" name="end_date" class="form-input w-full date-input">
+                </div>
+            </div>
+        </div>
 
-        <select id="time-granularity" name="time_granularity">
-            <option value="day">Par jour</option>
-            <option value="hour">Par heure</option>
-        </select>
+        <!-- Filtres -->
+        <div class="bg-gray-50 p-4 rounded-lg">
+            <h3 class="text-lg font-medium mb-4">Filtres</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="form-group">
+                    <label for="counter-filter">Comptoir</label>
+                    <select id="counter-filter" name="counter_filter" class="form-select w-full" multiple>
+                        {% for counter in counters %}
+                        <option value="{{ counter.id }}">{{ counter.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="activity-filter">Activité</label>
+                    <select id="activity-filter" name="activity_filter" class="form-select w-full" multiple>
+                        {% for activity in activities %}
+                        <option value="{{ activity.id }}">{{ activity.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="language-filter">Langue</label>
+                    <select id="language-filter" name="language_filter" class="form-select w-full" multiple>
+                        {% for language in languages %}
+                        <option value="{{ language.id }}">{{ language.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div id="day-of-week-filter-container" class="form-group" style="display: none;">
+                    <label for="day-of-week-filter">Jour de la semaine</label>
+                    <select id="day-of-week-filter" name="day_of_week_filter" class="form-select w-full" multiple>
+                        <option value="1">Lundi</option>
+                        <option value="2">Mardi</option>
+                        <option value="3">Mercredi</option>
+                        <option value="4">Jeudi</option>
+                        <option value="5">Vendredi</option>
+                        <option value="6">Samedi</option>
+                        <option value="7">Dimanche</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Type de graphique -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="form-group">
+                <label for="data-selector">Type de données</label>
+                <select id="data-selector" name="chart_type" class="form-select w-full">
+                    <option value="counters">Patients par comptoir</option>
+                    <option value="languages">Patients par langue</option>
+                    <option value="activities">Patients par activité</option>
+                    <option value="waiting_times">Temps d'attente</option>
+                    <option value="counter_times">Temps au comptoir</option>
+                    <option value="total_times">Temps total</option>
+                    <option value="waiting_times_by_activity">Temps d'attente par activité</option>
+                    <option value="counter_times_by_activity">Temps au comptoir par activité</option>
+                    <option value="total_times_by_activity">Temps total par activité</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="chart-type-selector">Type de graphique</label>
+                <select id="chart-type-selector" name="chart_style" class="form-select w-full">
+                    <option value="pie">Camembert</option>
+                    <option value="bar">Histogramme</option>
+                    <option value="line">Graphique temporel</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="granularity-container">
+                <label for="time-granularity">Granularité temporelle</label>
+                <select id="time-granularity" name="time_granularity" class="form-select w-full">
+                    <option value="day">Par jour</option>
+                    <option value="hour">Par heure</option>
+                </select>
+            </div>
+        </div>
     </div>
 
-    <div id="chart-container">
-        <canvas id="statsChart"></canvas>
+    <div class="bg-white rounded-lg shadow p-6">
+        <div id="chart-container" class="w-full" style="height: 400px;">
+            <canvas id="statsChart"></canvas>
+        </div>
+        <div id="chart-data" hx-swap-oob="true"></div>
     </div>
-    <div id="chart-data" hx-swap-oob="true"></div>
 </div>
 
+
+<!-- Chargement des scripts dans le bon ordre -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
 
 <script>
+    function toggleDateOptions() {
+        const dateType = document.getElementById('date-type').value;
+        const historyOptions = document.getElementById('history-options');
+        const customDates = document.getElementById('custom-dates');
+        const dayOfWeekFilter = document.getElementById('day-of-week-filter-container');
+        
+        if (dateType === 'history') {
+            historyOptions.classList.remove('hidden');
+            dayOfWeekFilter.style.display = 'block';
+            toggleCustomDates();
+        } else {
+            historyOptions.classList.add('hidden');
+            customDates.classList.add('hidden');
+            dayOfWeekFilter.style.display = 'none';
+        }
+        
+        // Déclencher la mise à jour du graphique
+        document.getElementById('data-selector').dispatchEvent(new Event('change'));
+    }
+
+    function toggleCustomDates() {
+        const periodType = document.getElementById('period-type').value;
+        const customDates = document.getElementById('custom-dates');
+        
+        if (periodType === 'custom') {
+            customDates.classList.remove('hidden');
+        } else {
+            customDates.classList.add('hidden');
+        }
+    }
+
     let chart;
+    const granularityContainer = document.getElementById('granularity-container');
     
+    // Mise à jour de l'affichage des contrôles en fonction des sélections
+    document.getElementById('chart-type-selector').addEventListener('change', function(e) {
+        const isLine = e.target.value === 'line';
+        granularityContainer.style.display = isLine ? 'block' : 'none';
+    });
+
+    // Logique de mise à jour du graphique
     htmx.on('#chart-data', 'htmx:afterSettle', function(evt) {
         const canvas = document.getElementById('statsChart');
-        if (!canvas) {
-            console.error('Canvas element not found');
-            return;
-        }
-    
+        if (!canvas) return;
+        
         const ctx = canvas.getContext('2d');
         let data;
         try {
@@ -59,88 +194,149 @@
             return;
         }
         
-        console.log('Received data:', data);  // Pour le débogage
-        
         if (chart) {
             chart.destroy();
         }
         
         const chartType = document.getElementById('chart-type-selector').value;
-        const timeGranularity = document.getElementById('time-granularity').value;
-        
-        moment.locale('fr');  // Définir la locale française pour Moment.js
+        const config = createChartConfig(chartType, data);
+        chart = new Chart(ctx, config);
+    });
+
+    function createChartConfig(chartType, data) {
+        // Calculer le total pour les pourcentages
+        const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
         
         const config = {
             type: chartType,
             data: data,
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'top',
                     },
                     title: {
                         display: true,
-                        text: data.title
+                        text: data.title || ''
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.raw;
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                
+                                if (data.isTime) {
+                                    // Pour les temps, on affiche en minutes
+                                    return `${context.label}: ${value.toFixed(1)} min (${percentage}%)`;
+                                } else {
+                                    // Pour les comptages
+                                    return `${context.label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
                     }
                 }
             }
         };
-    
-        if (chartType === 'bar') {
-            config.options.scales = {
-                y: {
-                    beginAtZero: true
-                }
-            };
-        } else if (chartType === 'line') {
-            config.options.scales = {
-                x: {
-                    type: 'time',
-                    time: {
-                        unit: timeGranularity,
-                        displayFormats: {
-                            hour: 'HH:mm',
-                            day: 'DD MMM'
-                        }
-                    },
-                    ticks: {
-                        source: 'auto'
-                    }
+
+        if (chartType === 'pie' || chartType === 'doughnut') {
+            config.options.plugins.datalabels = {
+                color: '#fff',
+                font: {
+                    weight: 'bold'
                 },
-                y: {
-                    beginAtZero: true
-                }
-            };
-            
-            // Convertir les dates en utilisant Moment.js
-            config.data.datasets = data.datasets.map(dataset => ({
-                ...dataset,
-                data: dataset.data.map(point => ({
-                    x: moment(point.x).toDate(),
-                    y: Number(point.y)
-                }))
-            }));
-    
-            // Ajoutez ces options pour éviter l'erreur 'hitRadius'
-            config.options.elements = {
-                point: {
-                    hitRadius: 10,
-                    hoverRadius: 10
+                formatter: function(value, context) {
+                    const percentage = ((value / total) * 100).toFixed(1);
+                    return `${value}\n(${percentage}%)`;
                 }
             };
         }
         
-        chart = new Chart(ctx, config);
-    });
-    
-    // Trigger initial load
-    document.addEventListener('DOMContentLoaded', function() {
-        const dataSelector = document.getElementById('data-selector');
-        if (dataSelector) {
-            dataSelector.dispatchEvent(new Event('change'));
+        if (chartType === 'bar') {
+            config.options.plugins.datalabels = {
+                anchor: 'end',
+                align: 'top',
+                formatter: function(value, context) {
+                    const percentage = ((value / total) * 100).toFixed(1);
+                    return `${value}\n(${percentage}%)`;
+                }
+            };
+            config.options.scales = {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            if (data.isTime) {
+                                return `${value} min`;
+                            }
+                            return value;
+                        }
+                    }
+                }
+            };
         }
-    });
-    </script>
 
+        if (chartType === 'line') {
+            config.options.scales = {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: document.getElementById('time-granularity').value,
+                        displayFormats: {
+                            hour: 'HH:mm',
+                            day: 'DD MMM'
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            if (data.isTime) {
+                                return `${value} min`;
+                            }
+                            return value;
+                        }
+                    }
+                }
+            };
+            config.options.plugins.datalabels = {
+                align: 'top',
+                formatter: function(value, context) {
+                    if (data.isTime) {
+                        return `${value.y.toFixed(1)} min`;
+                    }
+                    return value.y;
+                }
+            };
+        }
+
+        return config;
+    }
+
+
+    // Ajout avant la création du graphique
+    document.addEventListener('DOMContentLoaded', function() {
+        import('https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js')
+            .then(() => {
+                Chart.register(ChartDataLabels);
+            })
+            .catch(err => console.error('Erreur chargement plugin datalabels:', err));
+    });
+
+
+    // Initialisation
+    document.addEventListener('DOMContentLoaded', function() {
+        // Déclencher le premier chargement
+        document.getElementById('data-selector').dispatchEvent(new Event('change'));
+        
+        // Initialiser l'affichage des contrôles
+        granularityContainer.style.display = 
+            document.getElementById('chart-type-selector').value === 'line' 
+            ? 'block' 
+            : 'none';
+    });
+</script>
 {% endblock %}
