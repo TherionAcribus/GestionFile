@@ -127,11 +127,122 @@ def get_aggregated_data(model, chart_type, join_models, base_query):
     """
     Obtient les données agrégées avec le bon formatage
     """
-    query = add_metrics_to_query(base_query, model, chart_type)
-    results = query.all()
-    
     is_time = '_times' in chart_type
+    
+    # Construction de la requête selon le type de modèle et de données
+    if join_models:  # Pour Patient (données actuelles)
+        if chart_type == 'languages':
+            query = (
+                base_query.with_entities(
+                    Language.name.label('category'),
+                    func.count(model.id).label('count')
+                )
+                .join(Language)
+                .group_by(Language.name, Language.id)
+            )
+        elif chart_type == 'activities':
+            query = (
+                base_query.with_entities(
+                    Activity.name.label('category'),
+                    func.count(model.id).label('count')
+                )
+                .join(Activity)
+                .group_by(Activity.name, Activity.id)
+            )
+        elif chart_type == 'counters':
+            query = (
+                base_query.with_entities(
+                    Counter.name.label('category'),
+                    func.count(model.id).label('count')
+                )
+                .join(Counter)
+                .group_by(Counter.name, Counter.id)
+            )
+        elif is_time:
+            if 'waiting_times' in chart_type:
+                time_diff = text("TIMESTAMPDIFF(SECOND, timestamp, timestamp_counter)")
+                filters = [model.timestamp_counter.isnot(None)]
+            elif 'counter_times' in chart_type:
+                time_diff = text("TIMESTAMPDIFF(SECOND, timestamp_counter, timestamp_end)")
+                filters = [model.timestamp_counter.isnot(None), model.timestamp_end.isnot(None)]
+            else:  # total_times
+                time_diff = text("TIMESTAMPDIFF(SECOND, timestamp, timestamp_end)")
+                filters = [model.timestamp_end.isnot(None)]
 
+            base_query = base_query.filter(*filters)
+
+            if '_by_activity' in chart_type:
+                query = (
+                    base_query.with_entities(
+                        Activity.name.label('category'),
+                        func.avg(time_diff).label('value')
+                    )
+                    .join(Activity)
+                    .group_by(Activity.name, Activity.id)
+                )
+            else:
+                query = base_query.with_entities(
+                    func.avg(time_diff).label('value')
+                )
+
+    else:  # Pour PatientHistory
+        if chart_type == 'languages':
+            query = (
+                base_query.with_entities(
+                    Language.name.label('category'),
+                    func.count(model.id).label('count')
+                )
+                .join(Language, Language.id == model.language_id)
+                .group_by(Language.name, Language.id)
+            )
+        elif chart_type == 'activities':
+            query = (
+                base_query.with_entities(
+                    Activity.name.label('category'),
+                    func.count(model.id).label('count')
+                )
+                .join(Activity, Activity.id == model.activity_id)
+                .group_by(Activity.name, Activity.id)
+            )
+        elif chart_type == 'counters':
+            query = (
+                base_query.with_entities(
+                    Counter.name.label('category'),
+                    func.count(model.id).label('count')
+                )
+                .join(Counter, Counter.id == model.activity_id)
+                .group_by(Counter.name, Counter.id)
+            )
+        elif is_time:
+            if 'waiting_times' in chart_type:
+                time_diff = text("TIMESTAMPDIFF(SECOND, timestamp, timestamp_counter)")
+                filters = [model.timestamp_counter.isnot(None)]
+            elif 'counter_times' in chart_type:
+                time_diff = text("TIMESTAMPDIFF(SECOND, timestamp_counter, timestamp_end)")
+                filters = [model.timestamp_counter.isnot(None), model.timestamp_end.isnot(None)]
+            else:  # total_times
+                time_diff = text("TIMESTAMPDIFF(SECOND, timestamp, timestamp_end)")
+                filters = [model.timestamp_end.isnot(None)]
+
+            base_query = base_query.filter(*filters)
+
+            if '_by_activity' in chart_type:
+                query = (
+                    base_query.with_entities(
+                        Activity.name.label('category'),
+                        func.avg(time_diff).label('value')
+                    )
+                    .join(Activity, Activity.id == model.activity_id)
+                    .group_by(Activity.name, Activity.id)
+                )
+            else:
+                query = base_query.with_entities(
+                    func.avg(time_diff).label('value')
+                )
+
+    results = query.all()
+
+    # Formatage des résultats
     if chart_type in ['languages', 'activities', 'counters']:
         labels = [row.category for row in results]
         values = [row.count for row in results]
@@ -153,9 +264,8 @@ def get_aggregated_data(model, chart_type, join_models, base_query):
             'backgroundColor': generate_colors(len(labels))
         }],
         'title': get_chart_title(chart_type),
-        'isTime': is_time  # Ajout du flag pour indiquer si c'est des temps
+        'isTime': is_time
     }
-
     
 
 
