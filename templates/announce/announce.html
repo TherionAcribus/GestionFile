@@ -8,7 +8,10 @@
         <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
         <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        {# CSS par défaut pour être sûr d'avoir quelque chose #}
         <link rel="stylesheet" href="../static/css/display.css">
+        {# Les surcharges personnalisées sont chargées après #}
+        <link rel="stylesheet" href="{{ get_css_url(mode='announce') }}">
         <!-- Swiper-->
         <link
         rel="stylesheet"
@@ -26,7 +29,6 @@
         <audio id="player" src="" hidden></audio>
 
         <div hidden>
-            <span id="announce_call_text_size">{{announce_call_text_size}}</span>
             <span id="announce_text_up_patients">{{announce_text_up_patients}}</span>
             <span id="announce_text_up_patients_display">{{announce_text_up_patients_display}}</span>
             <span id="announce_text_down_patients">{{announce_text_down_patients}}</span>
@@ -34,53 +36,30 @@
         </div>
 
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-            <p id="text_title" onclick="initializeAudio()" id="text_title"
-                {% if announce_title_size %}
-                    style="font-size: {{ announce_title_size }}px;"
-                {% endif %}>
+            <p id="text_title" onclick="initializeAudio()" id="text_title">
                 {{announce_title}}</p>
-            <p id="text_subtitle"
-                {% if announce_title_size %}
-                    style="font-size: {{ announce_title_size }}px;"
-                {% endif %}>
+            <p id="text_subtitle">
                 {{announce_subtitle}}</p>
         </div>
 
-        <!--
-        <div class="div_center"
-        {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
-            <div id="left_side">
-                <div id="div_calling"
-                        hx-trigger="refresh_calling, load" 
-                        hx-get="/announce/patients_calling" 
-                        hx-swap="innerHTML">
-                PATIENT CALLING 
-                </div>-->
         <div class="div_center"
             {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
-            <div id="left_side">
-                
+            <div id="left_side">                
 
                 <div id="div_display_text_up"
                     {% if announce_text_up_patients == "" or announce_text_up_patients_display == "never" %} 
                         style="display: none;"
-                    {% else %}
-                        style="font-size: {{ announce_text_up_patients_size }}px;"
                     {% endif %}
                 >
                     {{announce_text_up_patients}}
                 </div>
-
 
                 <div id="div_calling">
                     <ul id="patient_list">
                         {% for call_patient in call_patients %}
                             <li 
                                 id="patient-{{call_patient.id}}"
-                                class="text_patient_calling"
-                                {% if announce_call_text_size %}
-                                    style="font-size: {{ announce_call_text_size }}px;"
-                                {% endif %}>
+                                class="text_patient_calling">
                                 {{ call_patient.text }}
                             </li>
                         {% endfor %}
@@ -90,8 +69,6 @@
                 <div id="div_display_text_down"
                     {% if announce_text_down_patients == "" or announce_text_down_patients_display == "never" %} 
                         style="display: none;"
-                    {% else %}
-                        style="font-size: {{ announce_text_down_patients_size }}px;"
                     {% endif %}>
                     {{announce_text_down_patients}}
                 </div>

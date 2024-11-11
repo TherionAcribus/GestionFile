@@ -46,7 +46,7 @@ import jwt
 from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json
 from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
@@ -384,6 +384,7 @@ def start_fonctions(app):
     init_default_algo_rules_db_from_json()
     init_default_dashboard_db_from_json()
     init_default_patient_css_variables_db_from_json()
+    init_default_announce_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
     css_variable_manager.reload_all()
@@ -948,7 +949,7 @@ def update_css_variable_old():
 
 @app.route('/admin/update_css_variable', methods=['POST'])
 def update_css_variable():
-    print("UPDATE")
+    print("UPDATE!!!")
 
     source_name = request.form.get('source')
     variable_name = request.form.get('variable')
@@ -973,7 +974,7 @@ def update_css_variable():
     variables = app.css_variable_manager.get_all_variables(source_name)
     
     # Génère le nouveau CSS
-    new_css_url = app.css_manager.generate_css(variables)
+    new_css_url = app.css_manager.generate_css(variables, mode=source_name)
     
     return jsonify({
         'status': 'success',
@@ -996,6 +997,7 @@ def update_input():
             else:
                 return display_toast(success=False, message="L'entrée doit être un nombre.")
         else:
+            authorized_letters = ""
             if check == "welcome":
                 authorized_letters = "PDH"
             elif check == "before_call":

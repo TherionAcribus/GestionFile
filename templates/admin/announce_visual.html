@@ -1,54 +1,250 @@
-{{ macros.textbloc_int("announce_title_size", announce_title_size, "Taille du texte du titre") }}
 
-{{ macros.textbloc_welcome("announce_title", announce_title, "Texte en haut de la page (Titre)") }}
+{{ macros.parent_css_color_bloc("announce", "announce_main_color", announce_main_color, "Couleur principale") }}
 
-{{ macros.textbloc_welcome("announce_subtitle", announce_subtitle, "Seconde ligne (Sous-titre)") }}
+{{ macros.parent_css_color_bloc("announce", "announce_fourth_color", announce_fourth_color, "Dérivée de la couleur principale") }}
 
-{{ macros.textbloc_welcome("announce_text_up_patients", announce_text_up_patients, "Texte affiché au dessus des patients appelés") }}
+{{ macros.css_color_bloc("announce", "announce_secondary_color", announce_secondary_color, "Couleur de fond") }}
 
-{{ macros.textbloc_int("announce_text_up_patients_size", announce_text_up_patients_size, "Taille du texte affiché au dessus des patients appelés") }}
+{{ macros.parent_css_color_bloc("announce", "announce_third_color", announce_third_color, "Couleur des textes") }}
 
-<!-- Select affichage texte up -->
-<div class="input-field col s12">
-    <select
-      class="form-select"
-      id="announce_text_up_patients_display"
-      hx-post="/admin/update_select"
-      hx-target="#invisible"
-      hx-vals='js:{"key": "announce_text_up_patients_display", "value": document.getElementById("announce_text_up_patients_display").value}'>
-      <option value="always" {% if announce_text_up_patients_display == "always" %}selected{% endif %}>Toujours affiché</option>
-      <option value="never" {% if announce_text_up_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
-      <option value="empty" {% if announce_text_up_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
-      <option value="full" {% if announce_text_up_patients_display == "full" %}selected{% endif %}>Affiché si patient(s)</option>
-    </select>
-    <label>Mode d'affichage du texte</label>
+{{ macros.parent_css_color_bloc("announce", "announce_border_color", announce_border_color, "Couleur des bordures") }}
+
+
+<div class="accordion" id="accordionPanelsStayOpen">
+
+  <!-- Titre de la page -->
+  <div class="accordion-item">
+      <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TitleAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TitleAnnounce">
+              <h3>Première ligne de la page</h3>
+          </button>
+      </h2>
+      <div id="panelsStayOpen-TitleAnnounce" class="accordion-collapse collapse">
+          <div class="accordion-body">
+
+            {{ macros.textbloc_welcome("announce_title", announce_title, "Texte en haut de la page (Titre)") }}
+
+              <strong>Police du texte</strong>
+              <div class="admin_css_textbloc">
+                  {{ macros.css_unit_bloc("announce", "title_font_size", title_font_size, "Taille", "px") }}
+                  {{ macros.css_color_bloc("announce", "title_font_color", title_font_color, "Couleur") }}    
+              </div>
+
+              <strong>Contour du texte</strong>
+              <div class="admin_css_textbloc">                
+                  {{ macros.css_unit_bloc("announce", "title_font_border_size", title_font_border_size, "Taille", "px") }}
+                  {{ macros.css_color_bloc("announce", "title_font_border_color", title_font_border_color, "Couleur") }}
+              </div>
+
+              <strong>Fond</strong>
+              <div class="admin_css_textbloc">
+                  {{ macros.css_unit_bloc("announce", "title_background_height", title_background_height, "Hauteur", "px") }}
+                  {{ macros.css_color_bloc("announce", "title_background_color", title_background_color, "Couleur") }}
+              </div>
+
+          </div>
+      </div>
+  </div>
+
+
+<!-- Sous Titre de la page -->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-SubTitleAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-SubTitleAnnounce">
+            <h3>Seconde ligne de la page</h3>
+        </button>
+    </h2>
+    <div id="panelsStayOpen-SubTitleAnnounce" class="accordion-collapse collapse">
+        <div class="accordion-body">
+
+            {{ macros.textbloc_welcome("announce_subtitle", announce_subtitle, "Seconde ligne (Sous-titre)") }}
+
+            <strong>Police du texte</strong>
+            <div class="admin_css_textbloc">
+                {{ macros.css_unit_bloc("announce", "subtitle_font_size", subtitle_font_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "subtitle_font_color", subtitle_font_color, "Couleur") }}    
+            </div>
+
+            <strong>Contour du texte</strong>
+            <div class="admin_css_textbloc">                
+                {{ macros.css_unit_bloc("announce", "subtitle_font_border_size", subtitle_font_border_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "subtitle_font_border_color", subtitle_font_border_color, "Couleur") }}
+            </div>
+        </div>
+    </div>
 </div>
 
-{{ macros.textbloc_welcome("announce_text_down_patients", announce_text_down_patients, "Texte affiché si aucun patient n'est appelé") }}
 
-{{ macros.textbloc_int("announce_text_down_patients_size", announce_text_down_patients_size, "Taille du texte si aucun patient n'est appelé") }}
+<!-- Text UP-->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TextUpAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TextUpAnnounce">
+            <h3>Texte affiché au dessus des patients appelés</h3>
+        </button>
+    </h2>
+    <div id="panelsStayOpen-TextUpAnnounce" class="accordion-collapse collapse">
+        <div class="accordion-body">
 
-<!-- Select affichage texte pas de patient -->
-<div class="input-field col s12">
-    <select
-      class="form-select"
-      id="announce_text_down_patients_display"
-      hx-post="/admin/update_select"
-      hx-target="#invisible"
-      hx-vals='js:{"key": "announce_text_down_patients_display", "value": document.getElementById("announce_text_down_patients_display").value}'>
-      <option value="never" {% if announce_text_down_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
-      <option value="empty" {% if announce_text_down_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
-    </select>
-    <label>Mode d'affichage du texte</label>
+            {{ macros.textbloc_welcome("announce_text_up_patients", announce_text_up_patients, "Texte affiché au dessus des patients appelés") }}
+
+            <!-- Select affichage texte up -->
+            <div class="input-field col s12">
+                <select
+                class="form-select"
+                id="announce_text_up_patients_display"
+                hx-post="/admin/update_select"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "announce_text_up_patients_display", "value": document.getElementById("announce_text_up_patients_display").value}'>
+                <option value="always" {% if announce_text_up_patients_display == "always" %}selected{% endif %}>Toujours affiché</option>
+                <option value="never" {% if announce_text_up_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
+                <option value="empty" {% if announce_text_up_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
+                <option value="full" {% if announce_text_up_patients_display == "full" %}selected{% endif %}>Affiché si patient(s)</option>
+                </select>
+                <label>Mode d'affichage du texte</label>
+            </div>
+
+            <strong>Police du texte</strong>
+            <div class="admin_css_textbloc">
+                {{ macros.css_unit_bloc("announce", "text_up_font_size", text_up_font_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "text_up_font_color", text_up_font_color, "Couleur") }}    
+            </div>
+
+            <strong>Contour du texte</strong>
+            <div class="admin_css_textbloc">                
+                {{ macros.css_unit_bloc("announce", "text_up_font_border_size", text_up_font_border_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "text_up_font_border_color", text_up_font_border_color, "Couleur") }}
+            </div>
+
+            <strong>Fond</strong>
+            <div class="admin_css_textbloc">              
+                {{ macros.css_color_bloc("announce", "text_up_background_color", text_up_background_color, "Couleur") }}
+            </div>
+
+        </div>
+    </div>
 </div>
 
-{{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Texte pour annoncer le tour d'un patient") }}
 
-{{ macros.textbloc_int("announce_call_text_size", announce_call_text_size, "Taille du texte pour annoncer le tour d'un patient") }}
+<!-- Text Calling-->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TextCallingAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TextCallingAnnounce">
+            <h3>Texte pour appeler les patients</h3>
+        </button>
+    </h2>
+    <div id="panelsStayOpen-TextCallingAnnounce" class="accordion-collapse collapse">
+        <div class="accordion-body">
 
-{{ macros.switch("announce_ongoing_display", 
-    announce_ongoing_display,
-    "Afficher les patients au comptoir'")
-}}
+            {{ macros.textbloc_after_call("announce_call_text", announce_call_text, "Texte pour annoncer le tour d'un patient") }}
 
-{{ macros.textbloc_after_call("announce_ongoing_text", announce_ongoing_text, "Texte pour indiquer qu'un patient est au comptoir") }}
+            <strong>Police du texte</strong>
+            <div class="admin_css_textbloc">
+                {{ macros.css_unit_bloc("announce", "calling_font_size", calling_font_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "calling_font_color", calling_font_color, "Couleur") }}    
+            </div>
+
+            <strong>Contour du texte</strong>
+            <div class="admin_css_textbloc">                
+                {{ macros.css_unit_bloc("announce", "calling_font_border_size", calling_font_border_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "calling_font_border_color", calling_font_border_color, "Couleur") }}
+            </div>
+
+            <strong>Fond</strong>
+            <div class="admin_css_textbloc">              
+                {{ macros.css_color_bloc("announce", "calling_background_color", calling_background_color, "Couleur") }}
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- Text DOWN-->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TextDownAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TextDownAnnounce">
+            <h3>Texte affiché si aucun patient n'est appelé</h3>
+        </button>
+    </h2>
+    <div id="panelsStayOpen-TextDownAnnounce" class="accordion-collapse collapse">
+        <div class="accordion-body">
+
+            {{ macros.textbloc_welcome("announce_text_down_patients", announce_text_down_patients, "Texte affiché si aucun patient n'est appelé") }}
+
+            <!-- Select affichage texte pas de patient -->
+            <div class="input-field col s12">
+                <select
+                class="form-select"
+                id="announce_text_down_patients_display"
+                hx-post="/admin/update_select"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "announce_text_down_patients_display", "value": document.getElementById("announce_text_down_patients_display").value}'>
+                <option value="never" {% if announce_text_down_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
+                <option value="empty" {% if announce_text_down_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
+                </select>
+                <label>Mode d'affichage du texte</label>
+            </div>
+
+            <strong>Police du texte</strong>
+            <div class="admin_css_textbloc">
+                {{ macros.css_unit_bloc("announce", "text_down_font_size", text_down_font_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "text_down_font_color", text_down_font_color, "Couleur") }}    
+            </div>
+
+            <strong>Contour du texte</strong>
+            <div class="admin_css_textbloc">                
+                {{ macros.css_unit_bloc("announce", "text_down_font_border_size", text_down_font_border_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "text_down_font_border_color", text_down_font_border_color, "Couleur") }}
+            </div>
+
+            <strong>Fond</strong>
+            <div class="admin_css_textbloc">              
+                {{ macros.css_color_bloc("announce", "text_down_background_color", text_down_background_color, "Couleur") }}
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+<!-- Text DOWN-->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-OngoingAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-OngoingAnnounce">
+            <h3>Texte affiché pour les patient au comptoir</h3>
+        </button>
+    </h2>
+    <div id="panelsStayOpen-OngoingAnnounce" class="accordion-collapse collapse">
+        <div class="accordion-body">
+
+            {{ macros.textbloc_welcome("announce_ongoing_text", announce_ongoing_text, "Texte affiché pour les patient déjà appelés") }}
+
+            {{ macros.switch("announce_ongoing_display", 
+                announce_ongoing_display,
+                "Afficher les patients au comptoir'")
+            }}        
+
+            <strong>Police du texte</strong>
+            <div class="admin_css_textbloc">
+                {{ macros.css_unit_bloc("announce", "ongoing_font_size", ongoing_font_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "ongoing_font_color", ongoing_font_color, "Couleur") }}    
+            </div>
+
+            <strong>Contour du texte</strong>
+            <div class="admin_css_textbloc">                
+                {{ macros.css_unit_bloc("announce", "ongoing_font_border_size", ongoing_font_border_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "ongoing_font_border_color", ongoing_font_border_color, "Couleur") }}
+            </div>
+
+            <strong>Fond</strong>
+            <div class="admin_css_textbloc">              
+                {{ macros.css_color_bloc("announce", "ongoing_background_color", ongoing_background_color, "Couleur") }}
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
+
+</div>

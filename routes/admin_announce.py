@@ -19,6 +19,10 @@ def announce_page(tab=None):
     valid_tabs = ['visual', 'audio', 'gallery', 'googleVoice']
     if tab not in valid_tabs:
         tab = 'visual'
+
+    variables=app.css_variable_manager.get_all_variables('announce')
+    print('variables', variables)
+
     return render_template('/admin/announce.html', 
                             announce_sound = app.config['ANNOUNCE_SOUND'],
                             announce_alert = app.config['ANNOUNCE_ALERT'],
@@ -47,7 +51,50 @@ def announce_page(tab=None):
                             announce_call_sound=app.config['ANNOUNCE_CALL_SOUND'],
                             announce_call_translation = app.config['ANNOUNCE_CALL_TRANSLATION'],
                             voice_google_key=get_google_credentials(),
-                            languages = Language.query.all()
+                            languages = Language.query.all(),
+                            #css
+                            # générique
+                            announce_main_color = app.css_variable_manager.get_variable('announce', 'announce_main_color'),
+                            announce_secondary_color = app.css_variable_manager.get_variable('announce', 'announce_secondary_color'),
+                            announce_third_color = app.css_variable_manager.get_variable('announce', 'announce_third_color'),
+                            announce_fourth_color = app.css_variable_manager.get_variable('announce', 'announce_fourth_color'),
+                            announce_border_color = app.css_variable_manager.get_variable('announce', 'announce_border_color'),
+                            # titre
+                            title_background_color = app.css_variable_manager.get_variable('announce', 'title_background_color'),
+                            title_background_height = app.css_variable_manager.get_variable('announce', 'title_background_height'),
+                            title_font_color=app.css_variable_manager.get_variable('announce', 'title_font_color'),
+                            title_font_size=app.css_variable_manager.get_variable('announce', 'title_font_size'),
+                            title_font_border_size = app.css_variable_manager.get_variable('announce', 'title_font_border_size'),
+                            title_font_border_color = app.css_variable_manager.get_variable('announce', 'title_font_border_color'),
+                            #sous titre
+                            subtitle_font_color=app.css_variable_manager.get_variable('announce', 'subtitle_font_color'),
+                            subtitle_font_size=app.css_variable_manager.get_variable('announce', 'subtitle_font_size'),
+                            subtitle_font_border_size = app.css_variable_manager.get_variable('announce', 'subtitle_font_border_size'),
+                            subtitle_font_border_color = app.css_variable_manager.get_variable('announce', 'subtitle_font_border_color'),
+                            #texte up
+                            text_up_background_color = app.css_variable_manager.get_variable('announce', 'text_up_background_color'),
+                            text_up_font_color=app.css_variable_manager.get_variable('announce', 'text_up_font_color'),
+                            text_up_font_size=app.css_variable_manager.get_variable('announce', 'text_up_font_size'),
+                            text_up_font_border_size = app.css_variable_manager.get_variable('announce', 'text_up_font_border_size'),
+                            text_up_font_border_color = app.css_variable_manager.get_variable('announce', 'text_up_font_border_color'),
+                            #text calling
+                            calling_background_color = app.css_variable_manager.get_variable('announce', 'calling_background_color'),
+                            calling_font_color=app.css_variable_manager.get_variable('announce', 'calling_font_color'),
+                            calling_font_size=app.css_variable_manager.get_variable('announce', 'calling_font_size'),
+                            calling_font_border_size = app.css_variable_manager.get_variable('announce', 'calling_font_border_size'),    
+                            calling_font_border_color = app.css_variable_manager.get_variable('announce', 'calling_font_border_color'),
+                            #texte down
+                            text_down_background_color = app.css_variable_manager.get_variable('announce', 'text_down_background_color'),
+                            text_down_font_color=app.css_variable_manager.get_variable('announce', 'text_down_font_color'),
+                            text_down_font_size=app.css_variable_manager.get_variable('announce', 'text_down_font_size'),
+                            text_down_font_border_size = app.css_variable_manager.get_variable('announce', 'text_down_font_border_size'),    
+                            text_down_font_border_color = app.css_variable_manager.get_variable('announce', 'text_down_font_border_color'),
+                            #text ongoing
+                            ongoing_background_color = app.css_variable_manager.get_variable('announce', 'ongoing_background_color'),
+                            ongoing_font_color=app.css_variable_manager.get_variable('announce', 'ongoing_font_color'),
+                            ongoing_font_size=app.css_variable_manager.get_variable('announce', 'ongoing_font_size'),
+                            ongoing_font_border_size = app.css_variable_manager.get_variable('announce', 'ongoing_font_border_size'),    
+                            ongoing_font_border_color = app.css_variable_manager.get_variable('announce', 'ongoing_font_border_color'),
                             )
 
 

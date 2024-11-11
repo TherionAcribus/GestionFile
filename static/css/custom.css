@@ -1,5 +1,5 @@
 :root {
-    --scan_explanation_font_size: 50px;
+    --scan_explanation_font_size: 51px;
     --scan_explanation_font_color: #FFD700;
     --scan_explanation_border_size: 2px;
     --scan_explanation_border_color: #030303;
@@ -87,4 +87,21 @@
     --validation_button_text_color: #F90101;
     --validation_button_text_border_size: 0px;
     --validation_button_text_border_color: black;
+    --background_color: #b6f5f5;
+    --title_background_color: #008B8B;
+    --title_background_height: 200px;
+    --title_font_color: #FFFFFF;
+    --title_font_size: 75px;
+    --title_font_border_size: 0px;
+    --title_font_border_color: black;
+    --text_up_background_color: #008B8B;
+    --text_up_font_color: #FFFFFF;
+    --text_up_font_size: 75px;
+    --text_up_font_border_size: 0px;
+    --text_up_font_border_color: black;
+    --text_down_background_color: #008B8B;
+    --text_down_font_color: #FFFFFF;
+    --text_down_font_size: 75px;
+    --text_down_font_border_size: 0px;
+    --text_down_font_border_color: black;
 }

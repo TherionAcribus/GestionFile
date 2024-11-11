@@ -530,7 +530,44 @@ const colorMappings = {
             'square_button_text_color',
             // ... autres variables
         ]
-    }
+    },
+    'announce_main_color':{
+        targets : [
+            'title_background_color',
+            'text_up_background_color',           
+
+        ]
+    },
+    'announce_third_color': {
+        targets: [
+            'title_font_color',
+            'subtitle_font_color',
+            'text_up_font_color',
+            'calling_font_color',
+            'text_down_font_color',
+            'ongoing_font_color',
+            // ... autres variables
+        ]
+    },
+    'announce_fourth_color': {
+        targets: [
+            'text_down_background_color',
+            'ongoing_background_color',
+            'calling_background_color',
+            // ... autres variables
+        ]
+    },
+    'announce_border_color': {
+        targets: [
+            'title_font_border_color',
+            'subtitle_font_border_color',
+            'text_up_font_border_color',
+            'calling_font_border_color',
+            'text_down_font_border_color',
+            'ongoing_font_border_color',
+            // ... autres variables
+        ]
+    },
 };
 
 const variableDescriptions = {
