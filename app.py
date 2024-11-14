@@ -422,8 +422,8 @@ def create_app(config_class=Config):
     print("CONFIG_CLASS", config_class.SECURITY_PASSWORD_HASH)
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
-    with app.app_context():
-        start_fonctions(app)
+    #with app.app_context():
+    #    start_fonctions(app)
 
     # Enregistrement des blueprints
     app.register_blueprint(admin_announce_bp, url_prefix='')
