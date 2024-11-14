@@ -875,10 +875,15 @@ def init_or_update_default_texts_db_from_json():
         for text_data in data['texts']:
             text = Text.query.filter_by(text_key=text_data['key']).first()
             if not text:
-                new_text = Text(text_key=text_data['key'])
+                # Créer avec key ET value
+                new_text = Text(
+                    text_key=text_data['key'],
+                    text_value=text_data['value']  # Ajout de la valeur lors de la création
+                )
                 db.session.add(new_text)
             else:
-                text.text = text_data['value']
+                # Mettre à jour avec le bon nom de champ
+                text.text_value = text_data['value']  # Utilisation de text_value au lieu de text
 
         db.session.commit()
         print("Database updated to version:", data['version'])
