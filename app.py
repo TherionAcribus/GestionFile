@@ -459,7 +459,7 @@ app = create_app(config_class=Config)
 print("App configuration:", app.config)
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
-start_rabbitmq_consumer(app)
+#start_rabbitmq_consumer(app)
 
 # Définir le jobstore avec votre base de données
 jobstores = {
