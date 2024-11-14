@@ -375,7 +375,7 @@ def start_fonctions(app):
     init_activity_schedules_db_from_json()
     init_default_activities_db_from_json()
     init_counters_data_from_json()  # a verifier
-    init_staff_data_from_json()
+    #init_staff_data_from_json()  A refaire
     init_default_options_db_from_json()
     init_default_buttons_db_from_json()
     init_default_languages_db_from_json()
