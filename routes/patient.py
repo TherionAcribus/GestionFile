@@ -259,7 +259,7 @@ def patient_scan_already_validate():
     """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
     patient_call_number = request.form.get('patient_call_number')
     print("already scanned", patient_call_number)
-    return patient_conclusion_page(patient_call_number)
+    return patient_conclusion_page(patient_call_number, print_data=False)
 
 
 @patient_bp.route('/patient/cancel_patient')

@@ -70,6 +70,16 @@ function refresh_title(){
 
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialisation du Bridge PySide s'il n'a pas encore été initialisé
+    if (typeof window.bridge === 'undefined') {
+        new QWebChannel(qt.webChannelTransport, function(channel) {
+            window.bridge = channel.objects.bridge;
+            console.log("Bridge PySide initialisé.");
+        });
+    } else {
+        console.log("Bridge PySide déjà initialisé.");
+    }
+
     // Écoute de l'événement htmx:afterSwap sur le document
     document.body.addEventListener('htmx:afterSwap', function(event) {
         console.log("htmx:afterSwap déclenché", event);
@@ -86,25 +96,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('printTicket', printTicket);
 
                 // Vérifier si l'impression est demandée
-                if (printTicket !== "False") {
+                if (printTicket !== "False") {  // Utiliser "False" comme chaîne car c'est une valeur d'attribut
                     if (printData) {
                         console.log("Données d'impression récupérées :", printData);
 
-                        // Vérifier que l'API PyWebView est disponible
-                        if (window.pywebview && window.pywebview.api) {
-                            window.pywebview.api.print_ticket(printData)
-                                .then(function(result) {
-                                    if (result.success) {
-                                        console.log("Impression réussie:", result.message);
-                                    } else {
-                                        console.error("Échec de l'impression:", result.message);
-                                    }
-                                })
-                                .catch(function(error) {
-                                    console.error("Erreur lors de l'impression:", error);
-                                });
+                        // Vérifier que le Bridge est bien initialisé avant d'appeler print_ticket
+                        if (typeof window.bridge !== 'undefined') {
+                            bridge.print_ticket(printData);
                         } else {
-                            console.error("L'API PyWebView n'est pas disponible.");
+                            console.error("Le Bridge PySide n'est pas disponible.");
                         }
                     } else {
                         console.error("Les données d'impression ne sont pas disponibles.");
