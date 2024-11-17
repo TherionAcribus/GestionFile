@@ -66,8 +66,17 @@ class Config:
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
         SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
         SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_size": 10,  # Nombre maximum de connexions permanentes
+            "max_overflow": 20,  # Connexions supplémentaires temporaires si nécessaire
+            "pool_recycle": 7200,  # Recycle les connexions après 2 heures
+            "pool_pre_ping": True,  # Vérifie la validité de la connexion avant utilisation
+            "pool_timeout": 30,  # Temps d'attente pour obtenir une connexion du pool
             "connect_args": {
-                "init_command": "SET time_zone = '+02:00'"
+                "init_command": "SET time_zone = '+02:00'",
+                # Paramètres MySQL pour les connexions longue durée
+                "connect_timeout": 60,  # Timeout de connexion en secondes
+                "read_timeout": 60 * 60,  # Timeout de lecture (1 heure)
+                "write_timeout": 60 * 60,  # Timeout d'écriture (1 heure)
             }
         }
         # SQLALCHEMY_BINDS configuration to include MySQL
@@ -77,7 +86,13 @@ class Config:
 
         # Scheduler
         SCHEDULER_JOBSTORES = {
-            'default': SQLAlchemyJobStore(url=SQLALCHEMY_DATABASE_URI_SCHEDULER)
+            'default': SQLAlchemyJobStore(
+                url=SQLALCHEMY_DATABASE_URI_SCHEDULER,
+                engine_options={
+                    "pool_recycle": 7200,
+                    "pool_pre_ping": True
+                }
+            )
         }
         SCHEDULER_API_ENABLED = True
         JOBS = []
