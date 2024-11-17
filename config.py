@@ -77,8 +77,6 @@ class Config:
                 "connect_timeout": 60,  # Timeout de connexion en secondes
                 "read_timeout": 60 * 60,  # Timeout de lecture (1 heure)
                 "write_timeout": 60 * 60,  # Timeout d'écriture (1 heure)
-                "client_flag": 2048,  # Permet la reconnexion
-                "reconnect": True     # Active la reconnexion automatique
             }
         }
         # SQLALCHEMY_BINDS configuration to include MySQL
