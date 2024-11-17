@@ -86,52 +86,12 @@
         updateTimerGauge();
     }
 
-
-// Utilisation de window.patientCounter pour éviter la redéclaration
-if (typeof window.patientCounter === 'undefined') {
-    window.patientCounter = 0;
-}
-
-function goToCancelPatient() {
-    window.patientCounter++;  // Incrémente le compteur de patients
-    console.log(`Compteur de patients : ${window.patientCounter}`);
-
-    if (typeof window.bridge == 'undefined') {
+    function goToCancelPatient() {
+        // Effectue la requête HTMX même sans rechargement
         htmx.ajax('GET', '/patient/cancel_patient', {
             target: '#div_buttons_parents'
         });
-        return;
     }
-
-    if (window.patientCounter >= 15) {
-        if (typeof window.bridge !== 'undefined') {
-            console.log("Appel de bridge.request_reload()");
-            bridge.request_reload();
-            window.patientCounter = 0;  // Réinitialise le compteur après le rechargement
-        } else {
-            console.error("Le bridge n'est pas disponible. Tentative de ré-initialisation...");
-            // Tentative de ré-initialisation du Bridge
-            new QWebChannel(qt.webChannelTransport, function(channel) {
-                window.bridge = channel.objects.bridge;
-                if (typeof window.bridge !== 'undefined') {
-                    console.log("Bridge ré-initialisé avec succès.");
-                    bridge.request_reload();
-                    window.patientCounter = 0;  // Réinitialise le compteur après le rechargement
-                } else {
-                    console.error("Échec de la ré-initialisation du Bridge.");
-                }
-            });
-        }
-    } else {
-        console.log("Pas encore besoin de recharger.");
-    }
-
-    // Effectue la requête HTMX même sans rechargement
-    htmx.ajax('GET', '/patient/cancel_patient', {
-        target: '#div_buttons_parents'
-    });
-}
-
 
     function stopTimer() {
         cancelAnimationFrame(animationFrame);

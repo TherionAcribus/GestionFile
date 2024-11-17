@@ -35,7 +35,7 @@ class Config:
     SECURITY_EMAIL_REQUIRED = False  # Désactiver l'obligation d'un email
     SECURITY_REGISTERABLE = True  # Activer l'enregistrement manuel des utilisateurs (si besoin)
     SECURITY_LOGIN_URL = '/admin_security/login'
-    SECURITY_POST_LOGIN_VIEW = '/admin_security/home'
+    SECURITY_POST_LOGIN_VIEW = '/admin'
     SECURITY_REDIRECT_BEHAVIOR = 'spa'
 
     # Définir les valeurs par défaut ici
