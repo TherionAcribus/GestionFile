@@ -66,8 +66,8 @@ class Config:
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
         SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
         SQLALCHEMY_ENGINE_OPTIONS = {
-            "pool_size": 10,  # Nombre maximum de connexions permanentes
-            "max_overflow": 20,  # Connexions supplémentaires temporaires si nécessaire
+            "pool_size": 5,  # Nombre maximum de connexions permanentes
+            "max_overflow": 10,  # Connexions supplémentaires temporaires si nécessaire
             "pool_recycle": 7200,  # Recycle les connexions après 2 heures
             "pool_pre_ping": True,  # Vérifie la validité de la connexion avant utilisation
             "pool_timeout": 30,  # Temps d'attente pour obtenir une connexion du pool
@@ -77,6 +77,8 @@ class Config:
                 "connect_timeout": 60,  # Timeout de connexion en secondes
                 "read_timeout": 60 * 60,  # Timeout de lecture (1 heure)
                 "write_timeout": 60 * 60,  # Timeout d'écriture (1 heure)
+                "client_flag": 2048,  # Permet la reconnexion
+                "reconnect": True     # Active la reconnexion automatique
             }
         }
         # SQLALCHEMY_BINDS configuration to include MySQL
