@@ -10,6 +10,7 @@ def create_patients_list_for_pyside():
                         "call_number": patient.call_number, 
                         "activity_id": patient.activity_id, 
                         "activity": patient.activity.name,
+                        "activity_is_staff": patient.activity.staff_id,
                         "language_code": patient.language.code
                     } for patient in patients]
     print("PYSODE", patients_list)

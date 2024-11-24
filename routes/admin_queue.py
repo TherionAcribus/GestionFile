@@ -50,7 +50,7 @@ def clear_all_patients_from_db(app_context=None):
             db.session.query(Patient).delete()
             db.session.commit()
             app_context.logger.info("La table Patient a été vidée")
-            app_context.communikation("update_patient")
+            communikation("update_patient")
             # rafraichissement de la page Announce
             announce_refresh()
             # mise à jour des dispos des comptoirs

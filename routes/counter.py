@@ -275,8 +275,12 @@ def app_init_app():
     """ Fonction d'initialisation de l'application pour récupérer les infos utiles en une seule requete """
     counter_id = request.form.get('counter_id')
     counter = Counter.query.get(counter_id)
+    activity_staff = Activity.query.filter_by(is_staff=True).all()
+    activities_data = [activity.to_dict_for_app() for activity in activity_staff]
     return jsonify({"autocalling": counter.auto_calling,
-                    "add_paper": app.config["ADD_PAPER"]}), 200
+                    "add_paper": app.config["ADD_PAPER"],
+                    "activities_staff": activities_data           
+                    }), 200
 
 
 @counter_bp.route('/app/counter/remove_staff', methods=['POST'])
@@ -333,15 +337,21 @@ def relaunch_patient_call(counter_id):
     return '', 204
 
 
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>/<int:activity_id>', methods=['GET'])
+def put_waiting_list_with_activity(patient_id, activity_id):
+    return handle_patient_from_app(patient_id, action="standing", activity_id=activity_id)
+
+
 @counter_bp.route('/api/counter/put_standing_list/<int:patient_id>', methods=['GET'])
 def put_waiting_list(patient_id):
     return handle_patient_from_app(patient_id, action="standing")
+
 
 @counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['GET'])
 def delete_patient_from_app(patient_id):
     return handle_patient_from_app(patient_id, action="delete")
 
-def handle_patient_from_app(patient_id, action):
+def handle_patient_from_app(patient_id, action, activity_id=None):    
     patient = Patient.query.get(patient_id)
     print("STANDING", patient)
 
@@ -354,6 +364,15 @@ def handle_patient_from_app(patient_id, action):
         # on change les infos du patient
         patient.status = status
         patient.counter = None
+
+        # Si une nouvelle activité est spécifiée, on met à jour l'activité du patient
+        if activity_id is not None:
+            new_activity = Activity.query.get(activity_id)
+            if new_activity:
+                patient.activity_id = activity_id
+                patient.activity = new_activity
+                print(f"Activity changed to: {new_activity.name}")
+        
         db.session.commit()
 
         # rafraichissement de la page

@@ -243,8 +243,8 @@ function handleAfterRequestConfig(source, variable) {
                     id="{{ key }}" 
                     class="form-control" 
                     value="{{ value }}"
-                    oninput="handleInputChangeConfig('', '{{ key }}')"
-                    onkeydown="handleKeyPressConfig(event, '', '{{ key }}')"
+                    oninput="handleInputChangeConfig('{{ key }}')"
+                    onkeydown="handleKeyPressConfig(event, '{{ key }}')"
                     data-initial-value="{{ value }}"
                 >
             </div>

@@ -226,6 +226,13 @@ class Activity(db.Model):
                 self.staff_id = data[field] if data[field] else None
             else:
                 setattr(self, field, data[field])
+    
+    def to_dict_for_app(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "staff_id": self.staff_id,
+        }
 
 
 # Table d'association pour la relation many-to-many
