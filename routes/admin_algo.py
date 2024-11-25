@@ -141,6 +141,9 @@ def update_algo_rule(rule_id):
             if request.form.get('name') == '':
                 app.display_toast(success=False, message="Le nom est obligatoire")
                 return ""
+            elif request.form.get('min_patients') > request.form.get('max_patients'):
+                app.display_toast(success=False, message="Le nombre de patients maximum doit être superieur au nombre de patients minimum")
+                return ""
 
             rule.name = request.form.get('name', rule.name)
             activity = Activity.query.get(request.form.get('activity_id', rule.activity_id))

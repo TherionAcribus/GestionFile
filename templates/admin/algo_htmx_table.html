@@ -47,7 +47,7 @@
             <td><input type="time" class="form-control" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}"></td>
 
             <td>
-                <button class="btn btn-primary"
+                <button class="btn btn-primary btn-save_line"
                     hx-target="#invisible"
                     hx-post="/admin/algo/rule_update/{{ rule.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ rule.id }}").value,
@@ -76,3 +76,88 @@
         {% endfor %}
     </tbody>
 </table>
+
+<script>
+// Fonction principale qui initialise les comportements des boutons et champs
+function initializeFormBehaviors() {
+    // Désactiver tous les boutons Enregistrer du tableau
+    const saveButtons = document.querySelectorAll('.btn-save_line');
+    saveButtons.forEach(button => {
+        button.disabled = true;
+    });
+
+    // Fonction pour obtenir tous les champs d'une ligne
+    const getRowFields = (ruleId) => {
+        return [
+            document.getElementById(`name-${ruleId}`),
+            document.getElementById(`activity-${ruleId}`),
+            document.getElementById(`priority_level-${ruleId}`),
+            document.getElementById(`min_patients-${ruleId}`),
+            document.getElementById(`max_patients-${ruleId}`),
+            document.getElementById(`max_overtaken-${ruleId}`),
+            document.getElementById(`start_time-${ruleId}`),
+            document.getElementById(`end_time-${ruleId}`)
+        ];
+    };
+
+    // Pour chaque ligne du tableau
+    document.querySelectorAll('#algo_table tbody tr').forEach(row => {
+        // Extraire l'ID de la règle depuis n'importe quel champ de la ligne
+        const firstInput = row.querySelector('input');
+        const ruleId = firstInput.id.split('-')[1];
+        const saveButton = row.querySelector('.btn-save_line');
+        const fields = getRowFields(ruleId);
+
+        // Stocker les valeurs initiales
+        const initialValues = fields.map(field => field.value);
+
+        // Fonction pour vérifier si des changements ont été effectués
+        const hasChanges = () => {
+            return fields.some((field, index) => field.value !== initialValues[index]);
+        };
+
+        // Ajouter les écouteurs d'événements pour chaque champ
+        fields.forEach(field => {
+            // Pour les champs input et select
+            ['change', 'input'].forEach(eventType => {
+                field.addEventListener(eventType, () => {
+                    saveButton.disabled = !hasChanges();
+                });
+            });
+
+            // Gestion de la touche Entrée
+            field.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter' && !saveButton.disabled) {
+                    event.preventDefault();
+                    saveButton.click();
+                    // Mettre à jour les valeurs initiales après la sauvegarde
+                    fields.forEach((f, index) => {
+                        initialValues[index] = f.value;
+                    });
+                    saveButton.disabled = true;
+                }
+            });
+        });
+
+        // Écouteur pour le bouton de sauvegarde
+        saveButton.addEventListener('htmx:afterRequest', () => {
+            // Mettre à jour les valeurs initiales après une sauvegarde réussie
+            fields.forEach((field, index) => {
+                initialValues[index] = field.value;
+            });
+            saveButton.disabled = true;
+        });
+    });
+}
+
+// Exécuter l'initialisation au chargement initial
+initializeFormBehaviors();
+
+// Réexécuter l'initialisation après chaque mise à jour HTMX
+document.body.addEventListener('htmx:afterSettle', function(event) {
+    // Vérifie si la mise à jour concerne notre tableau
+    if (event.detail.target.querySelector('#algo_table')) {
+        initializeFormBehaviors();
+    }
+});
+</script>

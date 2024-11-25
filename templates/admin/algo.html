@@ -13,21 +13,8 @@
         <!-- Bouton activer desactiver Algorithme -->
     </div>
 
-    <div class="col s12">
-        Nombre de dépassements d'un patient avant de bloquer l'algorithme :
-        <div class="input-field inline">
-          <input id="overtaken_limit" type="number" class="form-control" value="{{ algo_overtaken_limit }}">
-          <span class="helper-text" data-error="wrong" data-success="right">Permet d'éviter qu'un patient attende trop longtemps</span>
-          <button type="button" class="btn btn-primary"
-            hx-post="/admin/algo/change_overtaken_limit" 
-            hx-target="#invisible" 
-            hx-swap="innerHTML"
-            hx-trigger="click"
-            hx-vals='js:{"overtaken_limit": document.getElementById("overtaken_limit").value}'>
-            Valider
-        </button>
-        </div>
-      </div>
+
+    {{ macros.textbloc_int("algo_overtaken_limit", algo_overtaken_limit, "Nombre de dépassements d'un patient avant de bloquer l'algorithme :")}}
 
 
     <div id="div_algo_table"
