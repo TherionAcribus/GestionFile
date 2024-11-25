@@ -11,82 +11,113 @@
          hx-include="#controls">
         
         <!-- Période -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div class="form-group">
-                <label for="date-type">Période</label>
-                <select id="date-type" name="date_type" class="form-select w-full" onchange="toggleDateOptions()">
-                    <option value="current">Aujourd'hui</option>
-                    <option value="history">Historique</option>
-                </select>
-            </div>
-
-            <div id="history-options" class="form-group hidden">
-                <label for="period-type">Type de période</label>
-                <select id="period-type" name="period_type" class="form-select w-full" onchange="toggleCustomDates()">
-                    <option value="7">7 derniers jours</option>
-                    <option value="28">28 derniers jours</option>
-                    <option value="365">365 derniers jours</option>
-                    <option value="custom">Période personnalisée</option>
-                </select>
-            </div>
-
-            <div id="custom-dates" class="hidden col-span-2 grid grid-cols-2 gap-4">
-                <div>
-                    <label for="start-date">Date de début</label>
-                    <input type="date" id="start-date" name="start_date" class="form-input w-full date-input">
+        <div class="row mb-3">
+            <!-- Sélection de la période -->
+            <div class="col-md-3">
+                <div class="form-group">
+                    <label for="date-type">Période</label>
+                    <select id="date-type" name="date_type" class="form-select" onchange="toggleDateOptions()">
+                        <option value="current">Aujourd'hui</option>
+                        <option value="history">Historique</option>
+                    </select>
                 </div>
-                <div>
-                    <label for="end-date">Date de fin</label>
-                    <input type="date" id="end-date" name="end_date" class="form-input w-full date-input">
+            </div>
+
+            <!-- Type de période (visible uniquement si historique) -->
+            <div id="history-options" class="col-md-3 d-none">
+                <div class="form-group">
+                    <label for="period-type">Type de période</label>
+                    <select id="period-type" name="period_type" class="form-select" onchange="toggleCustomDates()">
+                        <option value="7">7 derniers jours</option>
+                        <option value="28">28 derniers jours</option>
+                        <option value="365">365 derniers jours</option>
+                        <option value="custom">Période personnalisée</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Dates personnalisées (visible uniquement si période personnalisée) -->
+            <div id="custom-dates" class="col-md-6 d-none">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="start-date">Date de début</label>
+                            <input type="date" id="start-date" name="start_date" class="form-control date-input">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="end-date">Date de fin</label>
+                            <input type="date" id="end-date" name="end_date" class="form-control date-input">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Filtres -->
-        <div class="bg-gray-50 p-4 rounded-lg">
-            <h3 class="text-lg font-medium mb-4">Filtres</h3>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="form-group">
-                    <label for="counter-filter">Comptoir</label>
-                    <select id="counter-filter" name="counter_filter" class="form-select w-full" multiple>
-                        {% for counter in counters %}
-                        <option value="{{ counter.id }}">{{ counter.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+    <!-- Bouton pour afficher/masquer les filtres -->
+    <button class="btn btn-secondary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse" aria-expanded="false" aria-controls="filtersCollapse">
+        <i class="bi bi-funnel"></i> Afficher/Masquer les filtres
+    </button>
 
-                <div class="form-group">
-                    <label for="activity-filter">Activité</label>
-                    <select id="activity-filter" name="activity_filter" class="form-select w-full" multiple>
-                        {% for activity in activities %}
-                        <option value="{{ activity.id }}">{{ activity.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+    <!-- Filtres dans un collapse -->
+    <div class="collapse" id="filtersCollapse">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="card-title mb-3">Filtres</h3>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="counter-filter">Comptoir</label>
+                            <select id="counter-filter" name="counter_filter" class="form-select" multiple>
+                                {% for counter in counters %}
+                                <option value="{{ counter.id }}">{{ counter.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
 
-                <div class="form-group">
-                    <label for="language-filter">Langue</label>
-                    <select id="language-filter" name="language_filter" class="form-select w-full" multiple>
-                        {% for language in languages %}
-                        <option value="{{ language.id }}">{{ language.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="activity-filter">Activité</label>
+                            <select id="activity-filter" name="activity_filter" class="form-select" multiple>
+                                {% for activity in activities %}
+                                <option value="{{ activity.id }}">{{ activity.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
 
-                <div id="day-of-week-filter-container" class="form-group" style="display: none;">
-                    <label for="day-of-week-filter">Jour de la semaine</label>
-                    <select id="day-of-week-filter" name="day_of_week_filter" class="form-select w-full" multiple>
-                        <option value="1">Lundi</option>
-                        <option value="2">Mardi</option>
-                        <option value="3">Mercredi</option>
-                        <option value="4">Jeudi</option>
-                        <option value="5">Vendredi</option>
-                        <option value="6">Samedi</option>
-                        <option value="7">Dimanche</option>
-                    </select>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="language-filter">Langue</label>
+                            <select id="language-filter" name="language_filter" class="form-select" multiple>
+                                {% for language in languages %}
+                                <option value="{{ language.id }}">{{ language.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="day-of-week-filter-container" class="col-md-3 d-none">
+                        <div class="form-group">
+                            <label for="day-of-week-filter">Jour de la semaine</label>
+                            <select id="day-of-week-filter" name="day_of_week_filter" class="form-select" multiple>
+                                <option value="1">Lundi</option>
+                                <option value="2">Mardi</option>
+                                <option value="3">Mercredi</option>
+                                <option value="4">Jeudi</option>
+                                <option value="5">Vendredi</option>
+                                <option value="6">Samedi</option>
+                                <option value="7">Dimanche</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
+
 
         <!-- Type de graphique -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -147,17 +178,14 @@
         const dayOfWeekFilter = document.getElementById('day-of-week-filter-container');
         
         if (dateType === 'history') {
-            historyOptions.classList.remove('hidden');
-            dayOfWeekFilter.style.display = 'block';
+            historyOptions.classList.remove('d-none');
+            dayOfWeekFilter.classList.remove('d-none');
             toggleCustomDates();
         } else {
-            historyOptions.classList.add('hidden');
-            customDates.classList.add('hidden');
-            dayOfWeekFilter.style.display = 'none';
+            historyOptions.classList.add('d-none');
+            customDates.classList.add('d-none');
+            dayOfWeekFilter.classList.add('d-none');
         }
-        
-        // Déclencher la mise à jour du graphique
-        document.getElementById('data-selector').dispatchEvent(new Event('change'));
     }
 
     function toggleCustomDates() {
@@ -165,11 +193,16 @@
         const customDates = document.getElementById('custom-dates');
         
         if (periodType === 'custom') {
-            customDates.classList.remove('hidden');
+            customDates.classList.remove('d-none');
         } else {
-            customDates.classList.add('hidden');
+            customDates.classList.add('d-none');
         }
     }
+
+    // Appeler toggleDateOptions au chargement de la page
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleDateOptions();
+    });
 
     let chart;
     const granularityContainer = document.getElementById('granularity-container');
