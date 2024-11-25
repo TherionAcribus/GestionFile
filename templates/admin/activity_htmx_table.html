@@ -1,4 +1,10 @@
-<table id="staff_table" class="striped">
+<table 
+    {% if staff %} 
+        id="staff_activity_table" 
+    {% else %} 
+        id="activity_table"
+    {% endif %} 
+    class="striped">
     <thead>
         <tr>
             {% if staff %}
@@ -57,7 +63,7 @@
                 </p>
             </td>
             <td>
-                <button class="btn btn-primary" 
+                <button class="btn btn-primary btnSaveLine" 
                     hx-target="#invisible"
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
                     hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 

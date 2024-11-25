@@ -1,4 +1,4 @@
-<table id="staff_table" class="table">
+<table id="buttons_table" class="table">
     <thead>
         <tr>
             <th>Intitulé</th>
@@ -68,7 +68,7 @@
             
 
             <td>
-                <button class="btn btn-primary"
+                <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
                     hx-post="/admin/patient/button_update/{{ button.id }}"
                     hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value,

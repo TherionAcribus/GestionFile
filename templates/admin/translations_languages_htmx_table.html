@@ -1,4 +1,4 @@
-<table id="staff_table" class="striped">
+<table id="translation_table" class="striped">
     <thead>
         <tr>
             <th>Code</th>
@@ -29,7 +29,7 @@
                 <input type="hidden" name="image_url" id="image_url-{{ language.id }}" value="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}">
             </td>
             <td>
-                <button class="btn btn-primary" 
+                <button class="btn btn-primary btnSaveLine" 
                     hx-target="#invisible"
                     hx-post="/admin/languages/language_update/{{ language.id }}"
                     hx-vals='js:{"code": document.getElementById("code-{{ language.id }}").value, 

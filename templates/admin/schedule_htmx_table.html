@@ -1,4 +1,4 @@
-<table id="staff_table" class="striped">
+<table id="schedule_table" class="striped">
     <thead>
         <tr>
             <th>Nom</th>
@@ -24,7 +24,7 @@
                 </div>
             </td>
             <td>
-                <button class="btn btn-primary"
+                <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
                     hx-post="/admin/schedule/schedule_update/{{ schedule.id }}"
                     hx-vals='js:{"name_schedule": document.getElementById("name_schedule-{{ schedule.id }}").value,
