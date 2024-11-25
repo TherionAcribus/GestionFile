@@ -218,6 +218,9 @@ def send_app_notification(origin, data):
     elif origin == "patient_taken":
         message = f"Le patient {data['patient'].call_number} vient d'être appelé par un autre comptoir."
         for_counter = data['counter_id']
+    elif origin == "patient_for_staff_from_app":
+        message = f"Le patient {data['patient'].call_number} est redirigé vers vous."
+        for_counter = data['counters']
     else:
         origin = origin
         message = data

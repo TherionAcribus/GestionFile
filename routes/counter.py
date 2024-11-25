@@ -380,6 +380,47 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
 
         # rafraichissement des infos
         communikation("update_patient")
+
+        # notification au staff concerné si connecté
+        if activity_id is not None:
+            counters = get_all_counter_ids_from_activity(activity_id)
+            if counters:
+                send_app_notification(origin="patient_for_staff_from_app", data={"patient":patient, "counters": counters})
+
         return "", 201
     else:
         return 'Patient not found', 404
+    
+
+def get_all_counter_ids_from_activity(activity_id):
+    """ Permet de récuperer tous les comptoirs associés à une activité (staff) et d'en faire une liste d'id"""
+    counters = get_counters_from_activity(activity_id)
+    if counters:
+        return [counter.id for counter in counters]
+    else:
+        return None
+
+
+def get_counters_from_activity(activity_id):
+    """ Permet de récuperer tous les comptoirs associés à une activité (staff)"""
+    # Récupérer l'activité à partir de l'ID
+    activity = Activity.query.get(activity_id)
+    if not activity:
+        print(f"Activity with ID {activity_id} not found.")
+        return None
+
+    # Récupérer le staff associé à cette activité
+    staff = activity.staff
+    if not staff:
+        print(f"No staff associated with Activity ID {activity_id}.")
+        return None
+
+    # Récupérer tous les comptoirs associés à ce staff
+    counters = staff.counter if isinstance(staff.counter, list) else [staff.counter]
+
+    if not counters:
+        print(f"No counters associated with staff ID {staff.id} for Activity ID {activity_id}.")
+        return None
+
+    # Retourner les comptoirs
+    return counters
