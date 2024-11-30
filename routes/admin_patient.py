@@ -517,9 +517,11 @@ def activate_button(button_id):
 @admin_patient_bp.route('/api/printer/status', methods=['POST'])
 def admin_printer_status():
     # Récupérer les données envoyées par la requête POST
-    printer_error = request.json.get('error')
+    printer_error_code = request.json.get('error')
     error_message = request.json.get('message', 'No error message provided')
     
+    printer_error = True if 'error' in printer_error_code else False
+
     # Mettre à jour l'état de l'imprimante dans la configuration de Flask
     app.config["PRINTER_ERROR"] = printer_error
     

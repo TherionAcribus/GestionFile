@@ -346,6 +346,9 @@ def put_waiting_list_with_activity(patient_id, activity_id):
 def put_waiting_list(patient_id):
     return handle_patient_from_app(patient_id, action="standing")
 
+@counter_bp.route('/api/counter/validate_patient/<int:patient_id>', methods=['GET'])
+def validate_patient_from_app(patient_id):
+    return handle_patient_from_app(patient_id, action="validate")
 
 @counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['GET'])
 def delete_patient_from_app(patient_id):
@@ -359,7 +362,9 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
         status = "done"  # en cas de suppression de la part du comptoir, on marque le patient comme terminé
     elif action == "standing":
         status = "standing"
-    
+    elif action == "validate":
+        status = "done"
+        
     if patient:
         # on change les infos du patient
         patient.status = status
