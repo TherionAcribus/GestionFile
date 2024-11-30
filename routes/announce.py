@@ -36,10 +36,10 @@ def patient_list_for_init_display():
     announce_call_text = ConfigOption.query.filter_by(config_key="announce_call_text").first().value_str
     call_patients = []
     for patient in patients:
-        print("PATATOR", patient)
         call_patient = {
             'id': patient.id,
-            'text': replace_balise_announces(announce_call_text, patient)
+            'text': replace_balise_announces(announce_call_text, patient),
+            'counter_id': patient.counter_id
         }
         call_patients.append(call_patient)
     return call_patients

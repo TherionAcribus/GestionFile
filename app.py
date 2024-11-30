@@ -1105,7 +1105,7 @@ def call_specific_patient(counter_id, patient_id):
         communikation("update_patient")
 
         text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
-        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
+        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
 
         language_code = next_patient.language.code
         print("language_code_pour_audio", language_code)
@@ -1180,7 +1180,7 @@ def auto_calling():
                 is_patient, patient = call_next(int(counter.id))
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
-                communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
+                communikation("update_screen", event="add_calling", data={"id": patient.id, "counter_id": counter.id, "text": text})
                 counter_become_active(counter.id)
                 # mise à jour de Pyside, car lui est mis à jour normalement via les retours du serveur et non via websocket contrairement au site (pour l'instant)
                 communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
@@ -1318,7 +1318,7 @@ def validate_and_call_next(counter_id):
         communikation("update_patient")
         
         text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
-        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "text": text})
+        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
         
         return jsonify(next_patient.to_dict()), 200  
 

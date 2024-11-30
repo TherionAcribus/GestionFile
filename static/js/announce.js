@@ -405,10 +405,30 @@ function animateElement(element, properties, options) {
 
 async function add_calling(msg) {  
     console.log('add_calling', msg); 
+
+    const patient = msg.data;
+    const counterId = patient.counter_id;
+
+    // Système de sécurité. On vérifie qu'il n'existe plus d'appel pour ce comptoir avant d'en afficher un nouveau
+    // Cela peut arriver si bug au cours de la transmission des infos remove_calling
+    // Rechercher tous les appels existants pour ce comptoir
+    const existingCalls = Array.from(patientList.children).filter(item => 
+        item.getAttribute('data-counter') === counterId.toString()
+    );
+
+    // Supprimer les appels existants avec animation
+    for (const existingCall of existingCalls) {
+        await animateElement(existingCall, {
+            opacity: [1, 0],
+            translateX: [0, 50],
+            duration: 500,
+            easing: 'easeInQuad'
+        });
+        existingCall.remove();
+    }
     
     add_text_up();
 
-    const patient = msg.data;
     console.log('ADDED', patient)
     // Créer un nouvel élément <li>
     const newListItem = document.createElement('li');
@@ -433,7 +453,6 @@ async function add_calling(msg) {
             newListItem.classList.remove('hidden');
         }
     });
-
 }
 
 
@@ -463,8 +482,7 @@ async function remove_calling(msg) {
     }
     if (announce_text_down_patients_display == "empty"){
         add_text_down();
-    }  
-
+    }
 }
 
 
@@ -504,7 +522,6 @@ function add_text_down(){
         if (childElements == 0){
             display_text_down.style.display = "block";
         }
-
     }
 }
 

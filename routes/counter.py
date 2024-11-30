@@ -216,7 +216,7 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
                 communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
-                communikation("update_screen", event="add_calling", data={"id": patient.id, "text": text})
+                communikation("update_screen", event="add_calling", data={"id": patient.id, "counter_id": counter.id, "text": text})
 
 
         return True, {"status": counter.auto_calling}, 200
@@ -364,7 +364,7 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
         status = "standing"
     elif action == "validate":
         status = "done"
-        
+
     if patient:
         # on change les infos du patient
         patient.status = status

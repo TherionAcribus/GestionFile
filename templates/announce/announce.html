@@ -59,8 +59,9 @@
                         {% for call_patient in call_patients %}
                             <li 
                                 id="patient-{{call_patient.id}}"
-                                class="text_patient_calling">
-                                {{ call_patient.text }}
+                                class="text_patient_calling"
+                                data-counter="{{call_patient.counter_id}}">
+                                {{ call_patient.text }} {{call_patient.counter_id}}
                             </li>
                         {% endfor %}
                     </ul>
