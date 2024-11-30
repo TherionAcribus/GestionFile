@@ -40,7 +40,7 @@
             "announce_call_text_size": 50,
             "announce_call_text_transition": "slide",
             "announce_ongoing_display": true,
-            "announce_ongoing_text": "Comptoir {C} : Patient {P}",
+            "announce_ongoing_text": "Comptoir {C} : Patient {N}",
             "announce_call_sound": "Le patient {N} est invité au comptoir {C}",
             "announce_call_translation": "vo",
             "announce_infos_display": true,

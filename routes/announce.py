@@ -52,6 +52,8 @@ def patients_ongoing():
     ongoing_patients = []
     for patient in patients:
         ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
+        print("ONGOINT", ongoing_patients)
+        print(patient)
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
 
 @announce_bp.route('/announce/init_gallery')

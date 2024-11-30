@@ -121,17 +121,14 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
 
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
-    print(template)
     print("replace_balise_announces", template, patient)
-    app.logger.info(patient.counter)
-    app.logger.info(patient.counter.staff)
     try:
         if patient.counter.staff:
             return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name, P=ConfigOption.query.get("pharmacy_name"))
         else:
             app.logger.error(f"Pas de Staff on counter : {patient} {patient.counter} {patient.counter.staff}")
             template = "Comptoir {C}: {N}"
-            send_app_notification(origin="erreur", data="Erreur: Vous n'êtes pas rattaché au comptoir. Le patient est bien appelé. Signaler le problème.")
+            send_app_notification(origin="erreur", data="Erreur: Vous n'êtes pas connecté au comptoir. Le patient est bien appelé. Signaler le problème.")
             return template.format(N=patient.call_number, C=patient.counter.name, P=ConfigOption.query.get("pharmacy_name"))
     except AttributeError as e:
         app.logger.error(f"Failed to replace balise announces: {e}")
