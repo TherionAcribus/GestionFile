@@ -6,6 +6,7 @@ from models import Button, Activity, DashboardCard, Language, db
 from python.engine import get_futur_patient, create_qr_code 
 from utils import format_ticket_text
 from communication import communikation, send_app_notification
+from routes.counter import action_add_paper
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -543,6 +544,12 @@ def admin_printer_status():
 
     # notification à Pyside
     send_app_notification(origin="printer_error", data={"error": printer_error, "message": error_message, "timestamp": timestamp})
+
+    # on met à jour l'icone des Apps Comptoir en fonction du status du papier
+    if printer_error_code in ["no_paper", "low_paper"]:
+        action_add_paper(True)
+    elif printer_error_code == "paper_ok":
+        action_add_paper(False)
 
     # Afficher les informations pour vérifier la mise à jour
     print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
