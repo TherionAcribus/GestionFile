@@ -543,13 +543,13 @@ def admin_printer_status():
     communikation("admin", event="refresh_printer_dashboard")
 
     # notification à Pyside
-    send_app_notification(origin="printer_error", data={"error": printer_error, "message": error_message, "timestamp": timestamp})
+    send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp})
 
     # on met à jour l'icone des Apps Comptoir en fonction du status du papier
     if printer_error_code in ["no_paper", "low_paper"]:
-        action_add_paper(True)
+        action_add_paper(add_paper=True, from_printer=True)
     elif printer_error_code == "paper_ok":
-        action_add_paper(False)
+        action_add_paper(add_paper=False, from_printer=True)
 
     # Afficher les informations pour vérifier la mise à jour
     print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")

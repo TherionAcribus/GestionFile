@@ -28,6 +28,7 @@ import threading
 import socket
 import pika
 import threading
+import pytz
 
 from urllib.parse import urlparse, urljoin
 import random
@@ -45,7 +46,7 @@ from wtforms.validators import DataRequired
 import jwt
 from dotenv import load_dotenv
 
-from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation
+from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json
 from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
@@ -1049,16 +1050,91 @@ def admin_database():
                         cron_delete_announce_calls_hour=app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"])
 
 
+
 @app.route("/admin/database/schedule_tasks_list")
 def display_schedule_tasks_list():
     jobs = scheduler.get_jobs()
-    jobs_info = [{
-        'id': job.id,
-        'next_run_time': str(job.next_run_time),
-        'function_name': job.func.__name__
-    } for job in jobs]
+    main_jobs = []
+    other_jobs = []
+    
+    MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
+    
+    for job in jobs:
+        # Préparer les informations du job
+        job_info = {
+            'id': job.id,
+            'next_run_time': str(job.next_run_time),
+            'function_name': job.func.__name__,
+            'trigger': str(job.trigger),
+            'misfire_grace_time': job.misfire_grace_time,
+            'coalesce': job.coalesce,
+            'max_instances': job.max_instances,
+            'cron_details': {
+                'hour': job.trigger.fields[5] if hasattr(job.trigger, 'fields') else None,
+                'minute': job.trigger.fields[4] if hasattr(job.trigger, 'fields') else None,
+            }
+        }
+        
+        # Récupérer les 5 dernières exécutions
+        last_executions = JobExecutionLog.query.filter_by(
+            job_id=job.id
+        ).order_by(
+            JobExecutionLog.execution_time.desc()
+        ).limit(5).all()
+        
+        job_info['last_executions'] = [{
+            'time': log.execution_time,
+            'status': log.status,
+            'error': log.error_message
+        } for log in last_executions]
+        
+        # Séparer les jobs en deux groupes
+        if job.id in MAIN_JOBS:
+            main_jobs.append(job_info)
+        else:
+            other_jobs.append(job_info)
+    
     return render_template('/admin/database_schedule_tasks_list.html',
-                        jobs_info=jobs_info)
+                        main_jobs=main_jobs,
+                        other_jobs=other_jobs)
+
+
+@app.route('/admin/appschedule/dashboard')
+def dashboard_counter():
+    jobs = scheduler.get_jobs()
+    main_jobs_info = []
+    other_jobs_info = []
+    MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
+    
+    for job in jobs:
+        # Récupérer la dernière exécution
+        last_execution = JobExecutionLog.query.filter_by(
+            job_id=job.id
+        ).order_by(
+            JobExecutionLog.execution_time.desc()
+        ).first()
+        
+        job_info = {
+            'id': job.id,
+            'next_run_time': job.next_run_time,
+            'last_execution': {
+                'time': last_execution.execution_time if last_execution else None,
+                'status': last_execution.status if last_execution else None,
+                'error': last_execution.error_message if last_execution else None
+            } if last_execution else None
+        }
+        
+        if job.id in MAIN_JOBS:
+            main_jobs_info.append(job_info)
+        else:
+            other_jobs_info.append(job_info)
+
+    dashboardcard = DashboardCard.query.filter_by(name="appschedule").first()
+    
+    return render_template('/admin/dashboard_appschedule.html',
+                            dashboardcard=dashboardcard,
+                            main_jobs=main_jobs_info,
+                            other_jobs=other_jobs_info)
 
 
 def disable_buttons_for_activity_task(activity_id):
@@ -1068,7 +1144,6 @@ def disable_buttons_for_activity_task(activity_id):
 def enable_buttons_for_activity_task(activity_id):
     with app.app_context():
         enable_buttons_for_activity(app, activity_id)
-
 
 
 @app.route('/patient_right_page_default')

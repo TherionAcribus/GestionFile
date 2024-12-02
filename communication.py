@@ -210,11 +210,12 @@ def send_app_notification(origin, data):
         print("message_notif:", message)
     elif origin == "printer_error":
         message = f"Erreur d'impression: {data['message']}"
-    elif origin == "printer_paper":
-        if data["add_paper"]:
-            message = "On est quasiment au bout du rouleau"
-        else:
-            message = "Une gentille personne a remis du papier"
+    elif origin == "low_paper":
+        message = "On est quasiment au bout du rouleau"
+    elif origin == "no_paper":
+        message = "Il n'y a plus de papier dans la borne !"
+    elif origin == "paper_ok":
+        message = "Une gentille personne a remis du papier"
     elif origin == "patient_taken":
         message = f"Le patient {data['patient'].call_number} vient d'être appelé par un autre comptoir."
         for_counter = data['counter_id']

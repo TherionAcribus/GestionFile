@@ -1,10 +1,67 @@
-{% if jobs_info|length == 0%}
+{% if not main_jobs and not other_jobs %}
     Aucune tâche planifiée
 {% else %}
-    Tâches planifiées:
-    <ol>
-    {% for job in jobs_info %}
-        <li>{{ job.id }} - Next run time : {{ job.next_run_time }}</li>
-    {% endfor %}
-    </ol>
+    {% if main_jobs %}
+        <h3 class="text-xl font-bold mb-4">Tâches principales :</h3>
+        <ol class="mb-8">
+        {% for job in main_jobs %}
+            <li class="mb-4 p-4 border rounded-lg bg-blue-50">
+                <div><strong>{{ job.id }}</strong></div>
+                <div class="ml-4">
+                    <div>Fonction : {{ job.function_name }}</div>
+                    <div>Prochaine exécution : {{ job.next_run_time }}</div>
+                    <div>Type de déclenchement : {{ job.trigger }}</div>
+                    <div>Délai de grâce : {{ job.misfire_grace_time }} secondes</div>
+                    <div>Coalesce : {{ 'Oui' if job.coalesce else 'Non' }}</div>
+                    <div>Instances max : {{ job.max_instances }}</div>
+                    {% if job.last_executions %}
+                        <div class="mt-2 font-semibold">Dernières exécutions :</div>
+                        <ul class="ml-4">
+                        {% for exec in job.last_executions %}
+                            <li class="{% if exec.status == 'success' %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ exec.time.strftime('%Y-%m-%d %H:%M:%S') }} - {{ exec.status }}
+                                {% if exec.error %}
+                                    <div class="text-sm">Erreur : {{ exec.error }}</div>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </li>
+        {% endfor %}
+        </ol>
+    {% endif %}
+
+    {% if other_jobs %}
+        <h3 class="text-xl font-bold mb-4">Autres tâches :</h3>
+        <ol>
+        {% for job in other_jobs %}
+            <li class="mb-4 p-4 border rounded-lg">
+                <div><strong>{{ job.id }}</strong></div>
+                <div class="ml-4">
+                    <div>Fonction : {{ job.function_name }}</div>
+                    <div>Prochaine exécution : {{ job.next_run_time }}</div>
+                    <div>Type de déclenchement : {{ job.trigger }}</div>
+                    <div>Délai de grâce : {{ job.misfire_grace_time }} secondes</div>
+                    <div>Coalesce : {{ 'Oui' if job.coalesce else 'Non' }}</div>
+                    <div>Instances max : {{ job.max_instances }}</div>
+                    {% if job.last_executions %}
+                        <div class="mt-2 font-semibold">Dernières exécutions :</div>
+                        <ul class="ml-4">
+                        {% for exec in job.last_executions %}
+                            <li class="{% if exec.status == 'success' %}text-green-600{% else %}text-red-600{% endif %}">
+                                {{ exec.time.strftime('%Y-%m-%d %H:%M:%S') }} - {{ exec.status }}
+                                {% if exec.error %}
+                                    <div class="text-sm">Erreur : {{ exec.error }}</div>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </li>
+        {% endfor %}
+        </ol>
+    {% endif %}
 {% endif %}

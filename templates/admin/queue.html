@@ -47,13 +47,23 @@
     <br>
 
     <button 
-        class="btn btn-danger"
-        hx-get="/admin/database/confirm_delete_patient_table"
+        class="btn btn-warning"
+        hx-get="/admin/database/confirm_delete_patient_table_with_saving"
         hx-target="#modal-htmx"
         hx-trigger="click"
         data-bs-target="#modal_delete"
         data-bs-toggle="modal">
-        Supprimer toute la liste
+        Supprimer toute la liste AVEC copie dans l'historique
+    </button>
+
+    <button 
+        class="btn btn-danger"
+        hx-get="/admin/database/confirm_delete_patient_table_without_saving"
+        hx-target="#modal-htmx"
+        hx-trigger="click"
+        data-bs-target="#modal_delete"
+        data-bs-toggle="modal">
+        Supprimer toute la liste SANS copie dans l'historique
     </button>
     
     <br><br>

@@ -268,82 +268,106 @@ def update_button_presence(activity_id, is_present, app):
             db.session.rollback()
 
 def update_scheduler_for_activity(activity):
-    # Supprimer les anciens jobs pour cette activité
+    # Constantes pour la configuration
+    MISFIRE_GRACE_TIME = 300  # 5 minutes de délai de grâce
+    
     job_id_disable_prefix = f"disable_{activity.name}_"
     job_id_enable_prefix = f"enable_{activity.name}_"
 
-    for job in app.scheduler.get_jobs():
-        if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
-            app.scheduler.remove_job(job.id)
+    # Nettoyage des jobs existants
+    try:
+        for job in app.scheduler.get_jobs():
+            if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
+                app.scheduler.remove_job(job.id)
+                app.logger.info(f"Removed existing job: {job.id}")
+    except Exception as e:
+        app.logger.error(f"Error removing existing jobs for {activity.name}: {str(e)}")
 
-    # Fonction utilitaire pour vérifier si les horaires couvrent toute la journée
     def is_full_day(start_time, end_time):
         return start_time == time(0, 0) and end_time == time(23, 59)
     
-    # Fonction utilitaire pour vérifier si les jours couvrent toute la semaine
     def is_full_week(weekdays):
         all_days = {'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'}
         active_days = {day.abbreviation.strip().lower() for day in weekdays}
         return active_days == all_days
-    
-    # Pour chaque schedule, ajouter des jobs en fonction des horaires et des jours actifs
+
+    def add_job(job_id, func, args, trigger_args):
+        try:
+            app.scheduler.add_job(
+                id=job_id,
+                func=func,
+                args=args,
+                trigger='cron',
+                misfire_grace_time=MISFIRE_GRACE_TIME,
+                coalesce=True,
+                max_instances=1,
+                **trigger_args
+            )
+            app.logger.info(f"Successfully added job: {job_id}")
+        except Exception as e:
+            app.logger.error(f"Failed to add job {job_id}: {str(e)}")
+
     for schedule in activity.schedules:
         full_day = is_full_day(schedule.start_time, schedule.end_time)
         full_week = is_full_week(schedule.weekdays)
 
         if full_day and full_week:
-            # Ne pas créer de jobs car l'activité est toujours active
-            print(f"Full day and full week: No jobs created for {activity.name}")
+            app.logger.info(f"Full day and full week: No jobs created for {activity.name}")
             continue
         
-        # Si l'activité est active toute la journée mais pas tous les jours
         if full_day:
             start_day = min(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
             end_day = max(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
 
-            app.scheduler.add_job(
-                id=f"{job_id_enable_prefix}{start_day}",
+            add_job(
+                job_id=f"{job_id_enable_prefix}{start_day}",
                 func='scheduler_functions:enable_buttons_for_activity_job',
                 args=[activity.id],
-                trigger='cron',
-                day_of_week=start_day,
-                hour=0,
-                minute=0
+                trigger_args={
+                    'day_of_week': start_day,
+                    'hour': 0,
+                    'minute': 0
+                }
             )
-            app.scheduler.add_job(
-                id=f"{job_id_disable_prefix}{end_day}",
+            add_job(
+                job_id=f"{job_id_disable_prefix}{end_day}",
                 func='scheduler_functions:disable_buttons_for_activity_job',
                 args=[activity.id],
-                trigger='cron',
-                day_of_week=end_day,
-                hour=23,
-                minute=59
+                trigger_args={
+                    'day_of_week': end_day,
+                    'hour': 23,
+                    'minute': 59
+                }
             )
-            print(f"Scheduled full-day jobs for activity {activity.name} from {start_day} to {end_day}")
+            app.logger.info(f"Scheduled full-day jobs for activity {activity.name} from {start_day} to {end_day}")
             continue
         
-        # Si l'activité a des plages horaires spécifiques
         for weekday in schedule.weekdays:
             day = weekday.abbreviation.strip().lower()
 
-            app.scheduler.add_job(
-                id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
+            add_job(
+                job_id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
                 func='scheduler_functions:enable_buttons_for_activity_job',
                 args=[activity.id],
-                trigger='cron',
-                day_of_week=day,
-                hour=schedule.start_time.hour,
-                minute=schedule.start_time.minute
+                trigger_args={
+                    'day_of_week': day,
+                    'hour': schedule.start_time.hour,
+                    'minute': schedule.start_time.minute
+                }
             )
-            app.scheduler.add_job(
-                id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
+            add_job(
+                job_id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
                 func='scheduler_functions:disable_buttons_for_activity_job',
                 args=[activity.id],
-                trigger='cron',
-                day_of_week=day,
-                hour=schedule.end_time.hour,
-                minute=schedule.end_time.minute
+                trigger_args={
+                    'day_of_week': day,
+                    'hour': schedule.end_time.hour,
+                    'minute': schedule.end_time.minute
+                }
             )
-            print(f"Scheduled job from {schedule.start_time} to {schedule.end_time} on {day} for activity {activity.name}")
-
+            app.logger.info(
+                f"Scheduled jobs for {activity.name} on {day}: "
+                f"enable at {schedule.start_time.strftime('%H:%M')}, "
+                f"disable at {schedule.end_time.strftime('%H:%M')}"
+            )
 

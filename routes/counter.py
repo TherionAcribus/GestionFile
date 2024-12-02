@@ -22,7 +22,7 @@ def app_counter_paper_add():
 """
 
 @counter_bp.route('/counter/paper_add/<int:add_paper>', methods=['GET'])
-def action_add_paper(add_paper):
+def action_add_paper(add_paper, from_printer=False):
     print("action_add_paper", add_paper)
     try:
         print("action_add_paper", add_paper)
@@ -31,8 +31,9 @@ def action_add_paper(add_paper):
         db.session.commit()
         app.config["ADD_PAPER"] = add_paper
         communikation("counter", event="paper")
-        communikation("app_counter", data={"add_paper": add_paper}, event="paper")
-        send_app_notification(origin="printer_paper", data={"add_paper": add_paper})
+        if not from_printer:
+            communikation("app_counter", data={"add_paper": add_paper}, event="paper")
+            send_app_notification(origin="low_paper", data={"add_paper": add_paper})
         return counter_paper_add()
     except Exception as e:
         print(e)

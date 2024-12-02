@@ -472,3 +472,15 @@ class DashboardCard(db.Model):
 
     def __repr__(self):
         return f'<DashboardCard {self.name}>'
+    
+class JobExecutionLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.String(50))
+    execution_time = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(20))  # 'success' ou 'failed'
+    error_message = db.Column(db.Text, nullable=True)
+
+
+    @property
+    def local_time(self):
+        return self.execution_time.astimezone(time_tz)

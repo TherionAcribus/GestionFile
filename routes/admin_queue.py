@@ -4,6 +4,7 @@ from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
 from routes.announce import announce_refresh
 from communication import communikation
+from bdd import transfer_patients_to_history
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
@@ -35,9 +36,25 @@ def display_queue_table():
 
 
 # affiche la modale pour confirmer la suppression de toute la table patient
-@admin_queue_bp.route('/admin/database/confirm_delete_patient_table')
-def confirm_delete_patient_table():
-    return render_template('/admin/queue_modal_confirm_delete.html')
+@admin_queue_bp.route('/admin/database/confirm_delete_patient_table_without_saving')
+def confirm_delete_patient_table_without_saving():
+    return render_template('/admin/queue_modal_confirm_delete.html',
+                            saving=False)
+
+# affiche la modale pour confirmer la suppression de toute la table patient
+@admin_queue_bp.route('/admin/database/confirm_delete_patient_table_with_saving')
+def confirm_delete_patient_table_with_saving():
+    return render_template('/admin/queue_modal_confirm_delete.html',
+                            saving=True)
+
+@admin_queue_bp.route('/admin/database/clear_all_patients_with_saving')
+def clear_all_patients_from_db_with_saving():
+    success = transfer_patients_to_history()
+    if success:
+        clear_all_patients_from_db()
+    else:
+        current_app.logger.error("Failed to transfer patients to history")
+        current_app.display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
 
 @admin_queue_bp.route('/admin/database/clear_all_patients')
 def clear_all_patients_from_db(app_context=None):

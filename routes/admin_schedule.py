@@ -115,7 +115,6 @@ def confirm_delete_schedule(schedule_id):
     return render_template('/admin/schedule_modal_confirm_delete.html', schedule=schedule)
 
 
-# supprime un membre de l'equipe
 @admin_schedule_bp.route('/admin/schedule/delete/<int:schedule_id>', methods=['GET'])
 def delete_schedule(schedule_id):
     try:
