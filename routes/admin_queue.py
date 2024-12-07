@@ -72,6 +72,7 @@ def clear_all_patients_from_db(app_context=None):
             announce_refresh()
             # mise à jour des dispos des comptoirs
             clear_counter_table()
+            communikation("app_counter", event="refresh_after_clear_patient_list")
             return current_app.display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
