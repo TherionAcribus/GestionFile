@@ -1199,11 +1199,15 @@ def call_specific_patient(counter_id, patient_id):
 def validate_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
     print("validation", patient_id)
-    current_patient = Patient.query.get(patient_id)
-    if current_patient:
-        current_patient.status = 'ongoing'
-        current_patient.timestamp_counter = datetime.now(time_tz)
-        db.session.commit()
+
+    if patient_id:
+        current_patient = Patient.query.get(patient_id)
+        if current_patient:
+            current_patient.status = 'ongoing'
+            current_patient.timestamp_counter = datetime.now(time_tz)
+            db.session.commit()
+    else:
+        current_patient = None
 
     communikation("update_patient")
     communikation("update_screen", event="remove_calling", data={"id": patient_id})

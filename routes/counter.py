@@ -280,7 +280,8 @@ def app_init_app():
     activities_data = [activity.to_dict_for_app() for activity in activity_staff]
     return jsonify({"autocalling": counter.auto_calling,
                     "add_paper": app.config["ADD_PAPER"],
-                    "activities_staff": activities_data           
+                    "activities_staff": activities_data,
+                    "counter_name": counter.name          
                     }), 200
 
 
