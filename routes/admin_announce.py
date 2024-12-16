@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
+from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, jsonify
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
 from google.cloud import texttospeech
@@ -200,14 +200,15 @@ def announce_audio_test(scope):
         counter = Counter.query.get(1)
     
     patient.counter = counter
-    audio_url = generate_audio_calling("A", patient, language_code=language_code)
+    audio_data = generate_audio_calling("A", patient, language_code=language_code)
 
     if scope == "announce":        
-        communikation("update_audio", event="audio", data=audio_url)
+        communikation("update_audio", event="audio", data=audio_data["url"])
     else:
-        communikation("admin", event="audio_test", data=audio_url)
+        communikation("admin", event="audio_test", data=audio_data["url"])
 
-    return "", 200
+    # Return generation time in the response
+    return jsonify({"generation_time": audio_data["generation_time"]}), 200
 
 
 @admin_announce_bp.route('/admin/announce/google/add_key', methods=['POST'])

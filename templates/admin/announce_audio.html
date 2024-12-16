@@ -87,37 +87,53 @@ Son actuel :
 
 <h5>Test de l'annonce</h5>
 
-<form id="audio-announce-form" class="row g-3 align-items-end">
-    <div class="col-auto">
-        <label for="call_number" class="form-label">Numéro d'appel</label>
-        <input type="text" class="form-control" id="call_number" name="call_number" value="A-1">
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="card-title">Test des annonces vocales</h3>
+                <div id="generation-time" class="mb-3">Generation time: -- seconds</div>
+                <div class="mb-3">
+                    <label for="call_number" class="form-label">Numéro d'appel</label>
+                    <input type="text" class="form-control" id="call_number" value="A-1">
+                </div>
+                <div class="mb-3">
+                    <label for="language_code" class="form-label">Code langue</label>
+                    <select class="form-select" id="language_code">
+                        {% for language in languages %}
+                        <option value="{{ language.code }}">{{ language.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="testAudio('test')">Tester l'annonce</button>
+                    <button class="btn btn-success" onclick="testAudio('announce')">Tester sur l'écran d'annonce</button>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="col-auto">
-        <label for="language" class="form-label">Langue</label>
-        <select class="form-select" id="language_code" name="language_code">
-            {% for language in languages %}
-            <option value="{{ language.code }}">
-                {{ language.name }}
-            </option>
-            {% endfor %}
-        </select>
-    </div>
-    
-    <div class="col-auto">
-        <button class="btn btn-success"
-                hx-get="announce/audio/test/local"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Tester l'annonce sur cette page</button>
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-warning"
-                hx-get="announce/audio/test/announce"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Tester l'annonce sur la page "Annonce"</button>
-    </div>
-</form>
+</div>
+
+<script>
+function updateGenerationTime(time) {
+    document.getElementById('generation-time').textContent = `Generation time: ${time.toFixed(3)} seconds`;
+}
+
+function testAudio(scope) {
+    let language_code = document.getElementById('language_code').value;
+    let call_number = document.getElementById('call_number').value;
+
+    fetch(`/admin/announce/audio/test/${scope}?language_code=${language_code}&call_number=${call_number}`)
+        .then(response => response.json())
+        .then(data => {
+            updateGenerationTime(data.generation_time);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('generation-time').textContent = 'Error measuring generation time';
+        });
+}
+</script>
 
 <!-- Modal Structure Galerie audio -->
 <div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">
