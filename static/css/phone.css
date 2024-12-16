@@ -1,15 +1,121 @@
+:root {
+    --phone_secondary_color: #b6f5f5;
+    --phone_title_font_color: #FFFFFF;
+    --phone_title_font_size: 20px;
+    --phone_title_font_weight: 700;
+    --phone_title_background_color: #008B8B;
+    --phone_title_background_height: 100px;
+    --phone_title_border_color: #000000;
+    --phone_title_border_size: 2px;
+    --phone_line1_font_color: #000000;
+    --phone_line1_font_size: 30px;
+    --phone_line1_font_weight: 400;
+    --phone_line1_background_color: #b6f5f5;
+    --phone_line1_background_height: 50px;
+    --phone_line1_border_color: #000000;
+    --phone_line1_border_size: 0px;
+    --phone_line2_font_color: #000000;
+    --phone_line2_font_size: 30px;
+    --phone_line2_font_weight: 400;
+    --phone_line2_background_color: #b6f5f5;
+    --phone_line2_background_height: 50px;
+    --phone_line2_border_color: #000000;
+    --phone_line2_border_size: 0px;
+    --phone_line3_font_color: #000000;
+    --phone_line3_font_size: 30px;
+    --phone_line3_font_weight: 400;
+    --phone_line3_background_color: #b6f5f5;
+    --phone_line3_background_height: 50px;
+    --phone_line3_border_color: #000000;
+    --phone_line3_border_size: 0px;
+    --phone_line4_font_color: #000000;
+    --phone_line4_font_size: 30px;
+    --phone_line4_font_weight: 400;
+    --phone_line4_background_color: #b6f5f5;
+    --phone_line4_background_height: 50px;
+    --phone_line4_border_color: #000000;
+    --phone_line4_border_size: 0px;
+    --phone_line5_font_color: #000000;
+    --phone_line5_font_size: 30px;
+    --phone_line5_font_weight: 400;
+    --phone_line5_background_color: #b6f5f5;
+    --phone_line5_background_height: 50px;
+    --phone_line5_border_color: #000000;
+    --phone_line5_border_size: 0px;
+    --phone_line6_font_color: #000000;
+    --phone_line6_font_size: 30px;
+    --phone_line6_font_weight: 400;
+    --phone_line6_background_color: #b6f5f5;
+    --phone_line6_background_height: 50px;
+    --phone_line6_border_color: #000000;
+    --phone_line6_border_size: 0px;
+    --phone_specific_message_font_color: #000000;
+    --phone_specific_message_font_size: 30px;
+    --phone_specific_message_background_color: #b6f5f5;
+    --phone_specific_message_background_height: 50px;
+    --phone_specific_message_border_color: #000000;
+    --phone_specific_message_border_size: 0px;
+    --phone_your_turn_line1_font_color: #000000;
+    --phone_your_turn_line1_font_size: 30px;
+    --phone_your_turn_line1_font_weight: 400;
+    --phone_your_turn_line1_background_color: #b6f5f5;
+    --phone_your_turn_line1_background_height: 50px;
+    --phone_your_turn_line1_border_color: #000000;
+    --phone_your_turn_line1_border_size: 0px;
+    --phone_your_turn_line2_font_color: #000000;
+    --phone_your_turn_line2_font_size: 30px;
+    --phone_your_turn_line2_font_weight: 400;
+    --phone_your_turn_line2_background_color: #b6f5f5;
+    --phone_your_turn_line2_background_height: 50px;
+    --phone_your_turn_line2_border_color: #000000;
+    --phone_your_turn_line2_border_size: 0px;
+    --phone_your_turn_line3_font_color: #000000;
+    --phone_your_turn_line3_font_size: 30px;
+    --phone_your_turn_line3_font_weight: 400;
+    --phone_your_turn_line3_background_color: #b6f5f5;
+    --phone_your_turn_line3_background_height: 50px;
+    --phone_your_turn_line3_border_color: #000000;
+    --phone_your_turn_line3_border_size: 0px;
+    --phone_your_turn_line4_font_color: #000000;
+    --phone_your_turn_line4_font_size: 30px;
+    --phone_your_turn_line4_font_weight: 400;
+    --phone_your_turn_line4_background_color: #b6f5f5;
+    --phone_your_turn_line4_background_height: 50px;
+    --phone_your_turn_line4_border_color: #000000;
+    --phone_your_turn_line4_border_size: 0px;
+    --phone_your_turn_line5_font_color: #000000;
+    --phone_your_turn_line5_font_size: 30px;
+    --phone_your_turn_line5_font_weight: 400;
+    --phone_your_turn_line5_background_color: #b6f5f5;
+    --phone_your_turn_line5_background_height: 50px;
+    --phone_your_turn_line5_border_color: #000000;
+    --phone_your_turn_line5_border_size: 0px;
+    --phone_your_turn_line6_font_color: #000000;
+    --phone_your_turn_line6_font_size: 30px;
+    --phone_your_turn_line6_font_weight: 400;
+    --phone_your_turn_line6_background_color: #b6f5f5;
+    --phone_your_turn_line6_background_height: 50px;
+    --phone_your_turn_line6_border_color: #000000;
+    --phone_your_turn_line6_border_size: 0px;
+}
+
 html {
-    background-color: rgb(182, 245, 245);
+    background-color: var(--phone_secondary_color);
 }
 
 #div_title_area {
-    height: 10%;
+    padding: var(--phone_title_background_height) 0 var(--phone_title_background_height) 0;
     text-align: center;
-    font-size: 30px;
-    font-weight: bold;
-    background-color:darkcyan;
-    color: white;
-    padding: 0px;
+    font-size: var(--phone_title_font_size);
+
+    background-color:var(--phone_title_background_color);
+    color: var(--phone_title_font_color);
+    -webkit-text-stroke-color: var(--phone_title_border_color);
+    -webkit-text-stroke-width: var(--phone_title_border_size);
+}
+
+#text_title {
+    font-weight: var(--phone_title_font_weight);
 }
 
 #div_infos {
@@ -17,6 +123,151 @@ html {
     margin: 10px;
     font-size: 30px;
 }
+
+#phone_line1 {
+    padding: var(--phone_line1_background_height) 0 var(--phone_line1_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_line1_font_size);
+    font-weight: var(--phone_line1_font_weight);
+    background-color:var(--phone_line1_background_color);
+    color: var(--phone_line1_font_color);
+    -webkit-text-stroke-color: var(--phone_line1_border_color);
+    -webkit-text-stroke-width: var(--phone_line1_border_size);
+}
+
+#phone_line2 {
+    padding: var(--phone_line2_background_height) 0 var(--phone_line2_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_line2_font_size);
+    font-weight: var(--phone_line2_font_weight);
+    background-color:var(--phone_line2_background_color);
+    color: var(--phone_line2_font_color);
+    -webkit-text-stroke-color: var(--phone_line2_border_color);
+    -webkit-text-stroke-width: var(--phone_line2_border_size);
+}
+
+#phone_line3 {
+    padding: var(--phone_line3_background_height) 0 var(--phone_line3_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_line3_font_size);
+    font-weight: var(--phone_line3_font_weight);
+    background-color:var(--phone_line3_background_color);
+    color: var(--phone_line3_font_color);
+    -webkit-text-stroke-color: var(--phone_line3_border_color);
+    -webkit-text-stroke-width: var(--phone_line3_border_size);
+}
+
+#phone_line4 {
+    padding: var(--phone_line4_background_height) 0 var(--phone_line4_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_line4_font_size);
+    font-weight: var(--phone_line4_font_weight);
+    background-color:var(--phone_line4_background_color);
+    color: var(--phone_line4_font_color);
+    -webkit-text-stroke-color: var(--phone_line4_border_color);
+    -webkit-text-stroke-width: var(--phone_line4_border_size);
+}
+
+#phone_line5 {
+    padding: var(--phone_line5_background_height) 0 var(--phone_line5_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_line5_font_size);
+    font-weight: var(--phone_line5_font_weight);
+    background-color:var(--phone_line5_background_color);
+    color: var(--phone_line5_font_color);
+    -webkit-text-stroke-color: var(--phone_line5_border_color);
+    -webkit-text-stroke-width: var(--phone_line5_border_size);
+}
+
+#phone_line6 {
+    padding: var(--phone_line6_background_height) 0 var(--phone_line6_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_line6_font_size);
+    font-weight: var(--phone_line6_font_weight);
+    background-color:var(--phone_line6_background_color);
+    color: var(--phone_line6_font_color);
+    -webkit-text-stroke-color: var(--phone_line6_border_color);
+    -webkit-text-stroke-width: var(--phone_line6_border_size);
+}
+
+
+#phone_your_turn_line1 {
+    padding: var(--phone_your_turn_line1_background_height) 0 var(--phone_your_turn_line1_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_your_turn_line1_font_size);
+    font-weight: var(--phone_your_turn_line1_font_weight);
+    background-color:var(--phone_your_turn_line1_background_color);
+    color: var(--phone_your_turn_line1_font_color);
+    -webkit-text-stroke-color: var(--phone_your_turn_line1_border_color);
+    -webkit-text-stroke-width: var(--phone_your_turn_line1_border_size);
+}
+
+#phone_your_turn_line2 {
+    padding: var(--phone_your_turn_line2_background_height) 0 var(--phone_your_turn_line2_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_your_turn_line2_font_size);
+    font-weight: var(--phone_your_turn_line2_font_weight);
+    background-color:var(--phone_your_turn_line2_background_color);
+    color: var(--phone_your_turn_line2_font_color);
+    -webkit-text-stroke-color: var(--phone_your_turn_line2_border_color);
+    -webkit-text-stroke-width: var(--phone_your_turn_line2_border_size);
+}
+
+#phone_your_turn_line3 {
+    padding: var(--phone_your_turn_line3_background_height) 0 var(--phone_your_turn_line3_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_your_turn_line3_font_size);
+    font-weight: var(--phone_your_turn_line3_font_weight);
+    background-color:var(--phone_your_turn_line3_background_color);
+    color: var(--phone_your_turn_line3_font_color);
+    -webkit-text-stroke-color: var(--phone_your_turn_line3_border_color);
+    -webkit-text-stroke-width: var(--phone_your_turn_line3_border_size);
+}
+
+#phone_your_turn_line4 {
+    padding: var(--phone_your_turn_line4_background_height) 0 var(--phone_your_turn_line4_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_your_turn_line4_font_size);
+    font-weight: var(--phone_your_turn_line4_font_weight);
+    background-color:var(--phone_your_turn_line4_background_color);
+    color: var(--phone_your_turn_line4_font_color);
+    -webkit-text-stroke-color: var(--phone_your_turn_line4_border_color);
+    -webkit-text-stroke-width: var(--phone_your_turn_line4_border_size);
+}
+
+#phone_your_turn_line5 {
+    padding: var(--phone_your_turn_line5_background_height) 0 var(--phone_your_turn_line5_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_your_turn_line5_font_size);
+    font-weight: var(--phone_your_turn_line5_font_weight);
+    background-color:var(--phone_your_turn_line5_background_color);
+    color: var(--phone_your_turn_line5_font_color);
+    -webkit-text-stroke-color: var(--phone_your_turn_line5_border_color);
+    -webkit-text-stroke-width: var(--phone_your_turn_line5_border_size);
+}
+
+#phone_your_turn_line6 {
+    padding: var(--phone_your_turn_line6_background_height) 0 var(--phone_your_turn_line6_background_height) 0;
+    text-align: center;
+    font-size: var(--phone_your_turn_line6_font_size);
+    font-weight: var(--phone_your_turn_line6_font_weight);
+    background-color:var(--phone_your_turn_line6_background_color);
+    color: var(--phone_your_turn_line6_font_color);
+    -webkit-text-stroke-color: var(--phone_your_turn_line6_border_color);
+    -webkit-text-stroke-width: var(--phone_your_turn_line1_border_size);
+}
+
+#specific_message {
+    height: var(--phone_specific_message_background_height);
+    text-align: center;
+    font-size: var(--phone_specific_message_font_size);
+    font-weight: var(--phone_specific_message_font_weight);
+    background-color:var(--phone_specific_message_background_color);
+    color: var(--phone_specific_message_font_color);
+    -webkit-text-stroke-color: var(--phone_specific_message_border_color);
+    -webkit-text-stroke-width: var(--phone_specific_message_border_size);
+}
+
 
 .text-center {
     text-align: center;

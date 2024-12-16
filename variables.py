@@ -1,7 +1,7 @@
 from flask import Flask, current_app
 from typing import Dict, Optional, Type
 from dataclasses import dataclass
-from models import db, PatientCssVariable, AnnounceCssVariable
+from models import db, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable
 
 @dataclass
 class CssSource:
@@ -23,6 +23,11 @@ class MultiCssVariableManager:
                 model=AnnounceCssVariable,
                 config_key='ANNOUNCE_CSS_VARIABLES',
                 description='Variables CSS pour les annonces'
+            ),
+            'phone': CssSource(
+                model=PhoneCssVariable,
+                config_key='PHONE_CSS_VARIABLES',
+                description='Variables CSS pour le téléphone'
             )
         }
         

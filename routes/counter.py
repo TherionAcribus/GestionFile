@@ -5,7 +5,7 @@ from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
 from python.engine import call_next
 from utils import replace_balise_announces
 from python.engine import counter_become_active, counter_become_inactive
-from communication import communikation, send_app_notification
+from communication import communikation, send_app_notification, notify_patient_phone
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -327,6 +327,8 @@ def counter_select_patient(counter_id, patient_id):
     print("counter_select_patient", counter_id, patient_id)
     app.call_specific_patient(counter_id, patient_id)
     communikation("update_patient")
+    next_patient = Patient.query.get(patient_id)
+    notify_patient_phone(next_patient.call_number)
     return '', 204
 
 

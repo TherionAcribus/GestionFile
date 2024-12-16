@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Information</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    {# CSS par défaut pour être sûr d'avoir quelque chose #}
     <link rel="stylesheet" href="../../../../static/css/phone.css">
+    {# Les surcharges personnalisées sont chargées après #}
+    <link rel="stylesheet" href="{{ get_css_url(mode='phone') }}">
     <script src="https://unpkg.com/htmx.org@2.0.1" integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -16,6 +20,8 @@
             <h1 id="text_title">{{phone_title}}</h1>
         </div>
         <div id="div_infos"
+            data-activity-id="{{ activity_id }}"
+            data-language-code="{{ language_code }}"
             hx-trigger="load"
             hx-post="/patient/phone/ping"
             hx-swap="outerHTML"
@@ -26,24 +32,7 @@
         </div>
     </div>
 
-    <script>
-        window.onbeforeunload = function(event) {
-            // Message displayed to user to prevent refresh/navigation
-            event.preventDefault();
-            return 'Are you sure you want to leave? Changes you made may not be saved.';
-        };
-
-        // Optional: Additional handling for navigation within the app
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('a').forEach(function(link) {
-                link.addEventListener('click', function(event) {
-                    // Custom logic to handle in-app navigation if needed
-                    // For example: Check if the link should be allowed
-                    // event.preventDefault(); // Uncomment to prevent default action
-                });
-            });
-        });
-    </script>
+    <script src="../../../../static/js/phone.js"></script>
 
 </body>
 </html>

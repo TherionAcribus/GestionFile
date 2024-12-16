@@ -5,7 +5,6 @@
 
 function handleInputChangeConfig(key) {
     // Récupération des éléments avec vérification
-    console.log(key)
     const input = document.getElementById(key);
     const button = document.getElementById(`${key}_button`);
     
@@ -36,7 +35,6 @@ function handleKeyPressConfig(event, variable) {
 }
 
 function handleAfterRequestConfig(source, variable) {
-    console.log(variable)
     const input = document.getElementById(`${variable}`);
     const button = document.getElementById(`${variable}_button`);
     
@@ -68,6 +66,25 @@ function handleAfterRequestConfig(source, variable) {
     pour la date,
     <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
     pour l'heure.
+</div>
+{% endmacro %}
+
+{% macro balises_web(key) %}
+<div>
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '#')">#</span>
+    pour un titre 1,  
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '##')">##</span>
+    pour un titre 2, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '###')">###</span>
+    pour un titre 3, 
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '*italique*')">*italique*</span>
+    pour un texte en italique,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**gras**')">**gras**</span>
+    pour un texte en gras,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '***')">***</span>
+    pour une séparation,
+    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;')">&lt;p align="center"&gt;&lt;/p&gt;</span>
+    pour centrer un texte. Les autres balises markdown sont également utilisables.
 </div>
 {% endmacro %}
 
@@ -162,7 +179,7 @@ function handleAfterRequestConfig(source, variable) {
 {% endmacro %}
 
 {# Macro pour les blocs de texte avec balises #}
-{% macro textbloc_with_balises(key, value, label, balises_macro, balises_key) %}
+{% macro textbloc_with_balises(key, value, label, balises_macro, balises_key, display_balises_web=False) %}
 <div class="row mb-4">
     <div class="col-12">
         <div class="d-flex align-items-start">
@@ -171,6 +188,9 @@ function handleAfterRequestConfig(source, variable) {
                 <div class="mt-2">
                     {{ balises_macro(key) }}
                 </div>
+                {% if display_balises_web %}
+                    {{ balises_web(key) }}
+                {% endif %}
             </div>
             <div class="ms-3">
                 {{ button(key, balises_key) }}
@@ -183,6 +203,11 @@ function handleAfterRequestConfig(source, variable) {
 {# Macro pour bloc before_call #}
 {% macro textbloc_before_call(key, value, label) %}
 {{ textbloc_with_balises(key, value, label, balises_before_call, "before_call") }}
+{% endmacro %}
+
+{# Macro pour bloc before_call pour le web dans le cadre #}
+{% macro textbloc_before_call_web(key, value, label) %}
+{{ textbloc_with_balises(key, value, label, balises_before_call, "before_call", display_balises_web=True) }}
 {% endmacro %}
 
 {# Macro pour bloc after_call #}
@@ -542,9 +567,7 @@ function handleAfterRequestConfig(source, variable) {
 
 <script>
 function handleInputChange(source, variable) {
-    console.log(source, variable)
     const input = document.getElementById(`${source}_${variable}`);
-    console.log(input)
     const button = document.getElementById(`${source}_${variable}_button`);
     const initialValue = input.dataset.initialValue;
     
@@ -692,7 +715,7 @@ Enregistrer
                 {{ parent_css_color_button(source, variable) }}
             </div>
         </div>
-        
+
         {# Contenu du collapse #}
         <div class="collapse" id="collapse-{{ variable }}" style="max-width: 800px;">
             <div class="card card-body">
@@ -714,6 +737,97 @@ Enregistrer
 
                 {# Container pour les checkboxes #}
                 <div id="variableCheckboxes-{{ variable }}" class="variable-checkboxes">
+                    {# Les checkboxes seront générées ici par JavaScript #}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+
+
+{# Macro pour le bloc parent avec collapse pour les inputs numériques #}
+{% macro parent_number_input_bloc(source, variable, value, label, unit="px") %}
+<div class="row mb-4">
+    <div class="col-12">
+        {# Flexbox principal avec largeur limitée #}
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-2" style="max-width: 800px;">
+            {# Zone de l'input numérique #}
+            <div class="flex-grow-1" style="min-width: 300px; max-width: 400px;">
+                <div class="row align-items-center">
+                    <div class="col-sm-4">
+                        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+                    </div>
+                    <div class="col-sm-8">
+                        <div class="input-group">
+                            <input 
+                                type="number" 
+                                id="{{ source }}_{{ variable }}" 
+                                class="form-control" 
+                                value="{{ value|replace(unit, '') }}"
+                                min="0"
+                                step="1"
+                                oninput="handleInputChange('{{ source }}', '{{ variable }}')"
+                                onkeydown="handleParentKeyPress(event, '{{ source }}', '{{ variable }}', '{{ unit }}')"
+                                data-initial-value="{{ value|replace(unit, '') }}"
+                            >
+                            <span class="input-group-text">{{ unit }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Boutons groupés #}
+            <div class="d-flex gap-2 align-items-center">
+                {# Bouton de configuration #}
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#collapse-number-{{ variable }}" 
+                        aria-expanded="false" 
+                        aria-controls="collapse-number-{{ variable }}">
+                    <i class="fas fa-cog"></i> Choisir les éléments à modifier
+                </button>
+
+                {# Bouton de validation #}
+                <button type="button" 
+                        id="{{ source }}_{{ variable }}_button"
+                        class="btn btn-primary"
+                        hx-swap="none"
+                        hx-vals='js:{
+                            "source": "{{ source }}",
+                            "variable": "{{ variable }}", 
+                            "value": document.getElementById("{{ source }}_{{ variable }}").value + "{{ unit }}"
+                        }'
+                        hx-post="/admin/update_css_variable"
+                        onclick="applyNumberToAll('{{ source }}', '{{ variable }}', '{{ unit }}')"
+                        >
+                    <i class="fas fa-check"></i> Enregistrer
+                </button>
+            </div>
+        </div>
+        
+        {# Contenu du collapse #}
+        <div class="collapse" id="collapse-number-{{ variable }}" style="max-width: 800px;">
+            <div class="card card-body">
+                {# Boutons de sélection #}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="selectAllNumberVariables('{{ variable }}')">
+                        Tout sélectionner
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="deselectAllNumberVariables('{{ variable }}')">
+                        Tout désélectionner
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" 
+                            onclick="invertNumberSelection('{{ variable }}')">
+                        Inverser la sélection
+                    </button>
+                </div>
+
+                {# Container pour les checkboxes #}
+                <div id="numberVariableCheckboxes-{{ variable }}" class="variable-checkboxes">
                     {# Les checkboxes seront générées ici par JavaScript #}
                 </div>
             </div>

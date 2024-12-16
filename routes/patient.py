@@ -309,11 +309,9 @@ def phone_patient(language_code, patient_id, activity_id):
     On regarde s'il y a un cookie déja placé (par ping). Si c'est le cas et que le numéro est différent c'est qu'il y a un nouvel enregistrement
     Dans ce cas on efface le cookie, sinon c'est un rafraichissement de la page et donc on le laisse.
     """
-    app.logger.debug(f"TITLE2 {app.config['PHONE_TITLE']}")
     session["language_code"] = language_code
     if language_code != "fr":
         phone_title = get_text_translation("phone_title", language_code)["translation"]
-        print("phone_title", phone_title)
     else:
         phone_title = app.config['PHONE_TITLE']
 
@@ -375,10 +373,50 @@ def phone_patient_ping():
 
     response = make_response(render_template('/patient/phone_confirmation.html', 
                                             patient=patient,
+                                            activity_id=activity_id,
+                                            language_code=language_code,
                                             phone_lines=phone_lines,
+                                            your_turn=False,
                                             specific_message = specific_message,
                                             phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'],
                                             phone_center=app.config['PHONE_CENTER']))
     response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
     response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
     return response
+
+
+@patient_bp.route('/patient/phone/your_turn', methods=['POST'])
+def phone_patient_your_turn():
+    """
+    Endpoint spécifique pour afficher le message 'c'est votre tour'
+    """
+    activity_id = request.form.get('activity_id')
+    language_code = request.form.get('language_code')
+    patient = Patient.query.get(request.cookies.get('patient_id'))
+
+    phone_lines = []
+
+    if language_code != "fr":
+        for line in range(1, 7):            
+            exec(f"phone_your_turn_line{line} = get_text_translation('phone_your_turn_line{line}', language_code)['translation']"),
+            exec(f"phone_your_turn_line{line} = replace_balise_phone(phone_your_turn_line{line}, patient)"),
+            phone_lines.append(eval(f"phone_your_turn_line{line}"))
+        activity = Activity.query.get(activity_id)
+        specific_message = get_activity_message_translation(activity, session.get('language_code', 'fr'))
+    else:
+        for line in range(1, 7):
+            exec(f"phone_your_turn_line{line} = app.config['PHONE_YOUR_TURN_LINE{line}']"),
+            exec(f"phone_your_turn_line{line} = replace_balise_phone(phone_your_turn_line{line}, patient)"),
+            phone_lines.append(eval(f"phone_your_turn_line{line}"))
+        specific_message= Activity.query.get(activity_id).specific_message
+
+    # Convertir le texte des phone_lines de markdown en HTML
+    phone_lines = [markdown2.markdown(line) for line in phone_lines]
+
+    return render_template('/patient/phone_confirmation.html', 
+                                            patient=patient,
+                                            phone_lines=phone_lines,
+                                            your_turn=True,
+                                            specific_message = specific_message,
+                                            phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'],
+                                            phone_center=app.config['PHONE_CENTER'])

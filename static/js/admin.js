@@ -395,7 +395,7 @@ function refresh_sound(){
 // ---------------- ANNOUNCES ----------------
 
 function insertPlaceholder(textareaId, text) {
-    console.log("Insert placeholder", textareaId, text);
+    console.log("Insert placeholder", textareaId, "_", text);
     var textarea = document.getElementById(textareaId);
     var cursorPos = textarea.selectionStart;
     var v = textarea.value;
@@ -455,11 +455,7 @@ function refresh_schedule_tasks_list(data) {
 // utiliser pour les communications spécifiques du serveur vers l'admin
 var eventSource = new EventSource('/events/update_admin_old');
 eventSource.onmessage = function(event) {
-    console.log("toqt ?", event.data);
-    console.log(typeof(event.data));
     data = JSON.parse(event.data);
-    console.log("toqt ?", data);
-    console.log("ACTION", data.action);
     if (data.toast){
         //display_toast(data);
     }
@@ -534,8 +530,7 @@ const colorMappings = {
     'announce_main_color':{
         targets : [
             'title_background_color',
-            'text_up_background_color',           
-
+            'text_up_background_color',        
         ]
     },
     'announce_third_color': {
@@ -566,6 +561,33 @@ const colorMappings = {
             'text_down_font_border_color',
             'ongoing_font_border_color',
             // ... autres variables
+        ]
+    },
+    'phone_main_color': {
+        targets: [
+            'phone_title_background_color',
+        ]
+    },
+    'phone_secondary_color': {
+        targets: [
+            'phone_line1_background_color',
+            'phone_line2_background_color',
+            'phone_line3_background_color',
+            'phone_line4_background_color',
+            'phone_line5_background_color',
+            'phone_line6_background_color',
+            'phone_specific_message_background_color'
+        ]
+    },
+    'phone_third_color': {
+        targets: [
+            'phone_line1_font_color',
+            'phone_line2_font_color',
+            'phone_line3_font_color',
+            'phone_line4_font_color',
+            'phone_line5_font_color',
+            'phone_line6_font_color',
+            'phone_specific_message_font_color'
         ]
     },
 };
@@ -1065,3 +1087,161 @@ function getSelectedVariables(parentColor) {
     });
     return selectedVariables;
 }
+
+
+// ---------------- INPUT POUR ENTIER PERMETTANT D'EN CHANGER PLUSIEURS ----------------
+
+// Configuration des mappings pour les variables numériques
+const numberMappings = {
+    'phone_lines_font_size': {
+        targets: [
+            'phone_line1_font_size',
+            'phone_line2_font_size',
+            'phone_line3_font_size',
+            'phone_line4_font_size',
+            'phone_line5_font_size',
+            'phone_line6_font_size',
+            'phone_your_turn_line1_font_size',
+            'phone_your_turn_line2_font_size',
+            'phone_your_turn_line3_font_size',
+            'phone_your_turn_line4_font_size',
+            'phone_your_turn_line5_font_size',
+            'phone_your_turn_line6_font_size',
+            // Ajoutez d'autres variables liées
+        ]
+    },
+    'phone_lines_font_weight': {
+        targets: [
+            'phone_line1_font_weight',
+            'phone_line2_font_weight',
+            'phone_line3_font_weight',
+            'phone_line4_font_weight',
+            'phone_line5_font_weight',
+            'phone_line6_font_weight',
+            'phone_your_turn_line1_font_weight',
+            'phone_your_turn_line2_font_weight',
+            'phone_your_turn_line3_font_weight',
+            'phone_your_turn_line4_font_weight',
+            'phone_your_turn_line5_font_weight',
+            'phone_your_turn_line6_font_weight',
+            // Ajoutez d'autres variables liées
+        ]
+    }
+    // Ajoutez d'autres groupes de variables
+};
+
+// Fonction pour gérer les touches spéciales pour l'input parent
+function handleParentKeyPress2(event, source, variable, unit) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        // D'abord appliquer les changements à tous les champs
+        applyNumberToAll(source, variable);
+        // Puis simuler le clic sur le bouton d'enregistrement
+        document.getElementById(`${source}_${variable}_button`).click();
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        resetNumberInput(source, variable);
+    }
+}
+
+function handleParentKeyPress(event, source, variable, unit) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        // Créer et envoyer la requête HTMX pour le champ parent, sans traiter la réponse
+        htmx.ajax('POST', '/admin/update_css_variable', {
+            values: {
+                source: source,
+                variable: variable,
+                value: document.getElementById(`${source}_${variable}`).value + unit
+            },
+            swap: 'none'  // Ignorer la réponse
+        });
+        // Puis appliquer les changements aux autres champs
+        applyNumberToAll(source, variable, unit);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        resetNumberInput(source, variable);
+    }
+}
+
+// Fonction pour appliquer la valeur à toutes les variables sélectionnées
+function applyNumberToAll(source, variable) {
+    const sourceInput = document.getElementById(`${source}_${variable}`);
+    const value = sourceInput.value;
+    
+    const checkboxes = document.querySelectorAll(`#numberVariableCheckboxes-${variable} input[type="checkbox"]:checked`);
+    
+    // Appliquer les changements à tous les champs sélectionnés
+    checkboxes.forEach(checkbox => {
+        const targetVariable = checkbox.value;
+        const targetInput = document.getElementById(`${source}_${targetVariable}`);
+        if (targetInput) {
+            targetInput.value = value;
+            // Déclencher l'événement input
+            targetInput.dispatchEvent(new Event('input', {
+                bubbles: true,
+                cancelable: true,
+            }));
+            
+            // Cliquer sur le bouton d'enregistrement correspondant
+            const saveButton = document.getElementById(`${source}_${targetVariable}_button`);
+            if (saveButton) {
+                saveButton.click();
+            }
+        }
+    });
+}
+
+// Fonctions pour gérer les sélections
+function selectAllNumberVariables(variable) {
+    const checkboxes = document.querySelectorAll(`#numberVariableCheckboxes-${variable} input[type="checkbox"]`);
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function deselectAllNumberVariables(variable) {
+    const checkboxes = document.querySelectorAll(`#numberVariableCheckboxes-${variable} input[type="checkbox"]`);
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+function invertNumberSelection(variable) {
+    const checkboxes = document.querySelectorAll(`#numberVariableCheckboxes-${variable} input[type="checkbox"]`);
+    checkboxes.forEach(checkbox => checkbox.checked = !checkbox.checked);
+}
+
+// Fonction pour initialiser les checkboxes
+function initNumberVariableCheckboxes(variable) {
+    if (!numberMappings[variable]) return;
+    
+    const container = document.getElementById(`numberVariableCheckboxes-${variable}`);
+    if (!container) return;
+
+    const targets = numberMappings[variable].targets;
+    targets.forEach(target => {
+        const div = document.createElement('div');
+        div.className = 'form-check';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'form-check-input';
+        checkbox.id = `checkbox-${target}`;
+        checkbox.value = target;
+        checkbox.checked = true;  // Coché par défaut
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.htmlFor = `checkbox-${target}`;
+        label.textContent = target.replace(/_/g, ' ');
+        
+        div.appendChild(checkbox);
+        div.appendChild(label);
+        container.appendChild(div);
+    });
+}
+
+// Initialisation au chargement de la page
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialiser les checkboxes pour chaque variable dans numberMappings
+    Object.keys(numberMappings).forEach(variable => {
+        initNumberVariableCheckboxes(variable);
+    });
+});

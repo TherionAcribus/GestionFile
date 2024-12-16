@@ -459,6 +459,12 @@ class AnnounceCssVariable(db.Model):
     variable = db.Column(db.String(50), nullable=False)
     value = db.Column(db.Text, nullable=False)
 
+class PhoneCssVariable(db.Model):
+    __tablename__ = 'phone_css_variable'
+    id = db.Column(db.Integer, primary_key=True)
+    variable = db.Column(db.String(50), nullable=False)
+    value = db.Column(db.Text, nullable=False)
+
 class DashboardCard(db.Model):
     __tablename__ = 'dashboard_cards'
 

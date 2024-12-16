@@ -10,7 +10,7 @@ from sqlalchemy import func, CheckConstraint, and_, Boolean, DateTime, Column, I
 from flask_migrate import Migrate
 from flask.signals import request_started
 from flask_mailman import Mail
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, join_room, leave_room
 from datetime import datetime, time, timedelta
 import time as tm
 
@@ -47,7 +47,7 @@ import jwt
 from dotenv import load_dotenv
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
 from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
@@ -209,6 +209,13 @@ def load_configuration(app):
         "phone_line4": ("PHONE_LINE4", "value_str"),
         "phone_line5": ("PHONE_LINE5", "value_str"),
         "phone_line6": ("PHONE_LINE6", "value_str"),
+        "phone_display_your_turn": ("PHONE_DISPLAY_YOUR_TURN", "value_bool"),
+        "phone_your_turn_line1": ("PHONE_YOUR_TURN_LINE1", "value_str"),
+        "phone_your_turn_line2": ("PHONE_YOUR_TURN_LINE2", "value_str"),
+        "phone_your_turn_line3": ("PHONE_YOUR_TURN_LINE3", "value_str"),
+        "phone_your_turn_line4": ("PHONE_YOUR_TURN_LINE4", "value_str"),
+        "phone_your_turn_line5": ("PHONE_YOUR_TURN_LINE5", "value_str"),
+        "phone_your_turn_line6": ("PHONE_YOUR_TURN_LINE6", "value_str"),
         "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
         "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
         "cron_transfer_patient_to_history": ("CRON_TRANSFER_PATIENT_TO_HISTORY", "value_bool"),
@@ -305,6 +312,7 @@ def start_fonctions(app):
     init_default_dashboard_db_from_json()
     init_default_patient_css_variables_db_from_json()
     init_default_announce_css_variables_db_from_json()
+    init_default_phone_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
     css_variable_manager.reload_all()
@@ -419,6 +427,12 @@ def callback_counter(ch, method, properties, body):
         socketio.emit('update', {'data': body.decode()}, namespace='/socket_counter')
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
+def callback_phone(ch, method, properties, body):
+    logging.debug(f"Received counter message: {body}")
+    if communication_mode == "websocket":
+        socketio.emit('update', {'data': body.decode()}, namespace='/socket_phone')
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
 # continuer les connexioNs Rabbit
 
 def consume_rabbitmq(connection, channel, queue_name, callback):
@@ -438,7 +452,8 @@ active_connections = {
     '/socket_app_counter': set(),
     '/socket_app_patient': set(),
     '/socket_app_screen': set(),
-    '/socket_counter': set()
+    '/socket_counter': set(),
+    '/socket_phone': set(),
 }
 
 app.active_connections = active_connections
@@ -546,6 +561,33 @@ def disconnect_counter():
     app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from counter namespace")
 
+@socketio.on('connect', namespace='/socket_phone')
+def connect_phone():
+    username = get_and_register_socketio_username(request)
+    logging.info("Client connected to phone namespace")
+    # Récupérer le patient_id depuis le cookie
+    patient_id = request.cookies.get('patient_id')
+    call_number = request.cookies.get('patient_call_number')
+    
+    if patient_id and call_number:
+        # Créer une salle unique pour ce patient
+        call_room = f"call_{call_number}"
+        
+        # Rejoindre les deux salles
+        join_room(call_room)
+        
+        app.logger.debug(f"Patient {patient_id} (call number {call_number}) connected and joined rooms")
+
+
+@socketio.on('disconnect', namespace='/socket_phone')
+def disconnect_phone():
+    app.connected_clients_info.pop(request.sid, None)
+    logging.info("Client disconnected from phone namespace")
+    patient_id = request.cookies.get('patient_id')
+    call_number = request.cookies.get('patient_call_number')
+    
+    if patient_id and call_number:
+        leave_room(f"call_{call_number}")
 
 @app.route('/send_message', methods=['POST'])
 def send_message():

@@ -8,7 +8,7 @@ from google.cloud import texttospeech
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
 from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
-from communication import communikation
+from communication import communikation, notify_patient_phone
 from config import time_tz
 
 engine_bp = Blueprint('engine', __name__)
@@ -50,7 +50,9 @@ def call_next(counter_id, attempts=0):
         print("language_code_pour_audio", language_code)
         audio_url = generate_audio_calling(counter_id, next_patient, language_code=language_code)
         communikation("update_audio", event="audio", data=audio_url)
-        
+
+        notify_patient_phone(next_patient.call_number)
+
         return True, next_patient
 
     except Exception as e:

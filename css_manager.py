@@ -22,6 +22,10 @@ class CSSManager:
             "announce": {
                 "source": "display.css",
                 "custom": "custom_display.css"
+            },
+            "phone": {
+                "source": "phone.css",
+                "custom": "custom_phone.css"
             }
         }
         

@@ -2,7 +2,6 @@ import json
 import time
 import logging
 import pika
-import os
 import threading
 from functools import wraps
 from flask import url_for, request, has_request_context, current_app
@@ -233,3 +232,19 @@ def send_app_notification(origin, data):
         "for_counter": for_counter
     }
     communikation("app_counter", event="notification", flag=for_counter,  data = json.dumps(notification_data))
+
+
+def notify_patient_phone(call_number):
+    """Notifie un patient sur son téléphone que c'est son tour"""
+    if not current_app.config["PHONE_DISPLAY_YOUR_TURN"]:
+        return False
+    try:
+        current_app.socketio.emit('your_turn', 
+                                {'call_number': call_number},
+                                namespace='/socket_phone', 
+                                room=f"call_{call_number}")
+        logging.info(f"Notification envoyée au patient {call_number}")
+        return True
+    except Exception as e:
+        logging.error(f"Échec de la notification du patient {call_number}: {e}")
+        return False
