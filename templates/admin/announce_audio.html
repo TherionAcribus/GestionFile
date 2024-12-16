@@ -93,6 +93,9 @@ Son actuel :
             <div class="card-body">
                 <h3 class="card-title">Test des annonces vocales</h3>
                 <div id="generation-time" class="mb-3">Generation time: -- seconds</div>
+                <div id="generation-time-info" class="mb-3 text-muted" style="display: none;">
+                    La mesure du temps n'est possible que si la lecture se fait sur cette page
+                </div>
                 <div class="mb-3">
                     <label for="call_number" class="form-label">Numéro d'appel</label>
                     <input type="text" class="form-control" id="call_number" value="A-1">
@@ -115,8 +118,18 @@ Son actuel :
 </div>
 
 <script>
-function updateGenerationTime(time) {
-    document.getElementById('generation-time').textContent = `Generation time: ${time.toFixed(3)} seconds`;
+function updateGenerationTime(time, scope) {
+    const timeElement = document.getElementById('generation-time');
+    const infoElement = document.getElementById('generation-time-info');
+    
+    if (scope === 'announce') {
+        timeElement.style.display = 'none';
+        infoElement.style.display = 'block';
+    } else {
+        timeElement.style.display = 'block';
+        infoElement.style.display = 'none';
+        timeElement.textContent = `Generation time: ${time.toFixed(3)} seconds`;
+    }
 }
 
 function testAudio(scope) {
@@ -126,11 +139,12 @@ function testAudio(scope) {
     fetch(`/admin/announce/audio/test/${scope}?language_code=${language_code}&call_number=${call_number}`)
         .then(response => response.json())
         .then(data => {
-            updateGenerationTime(data.generation_time);
+            updateGenerationTime(data.generation_time, scope);
         })
         .catch(error => {
             console.error('Error:', error);
             document.getElementById('generation-time').textContent = 'Error measuring generation time';
+            document.getElementById('generation-time-info').style.display = 'none';
         });
 }
 </script>

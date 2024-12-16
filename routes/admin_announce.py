@@ -7,6 +7,7 @@ import gtts
 from models import ConfigOption, Activity, Counter, Language, db
 from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
 from communication import communikation
+import time
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
@@ -181,13 +182,13 @@ def upload_signal_file():
 
 @admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['GET'])
 def announce_audio_test(scope):
-    call_number = request.values.get('call_number', 'A-1')
-    activity = Activity.query.get(1)
+    language_code = request.args.get('language_code', 'fr')
+    call_number = request.args.get('call_number', 'A-1')
 
+    # Création d'un patient temporaire pour le test
+    activity = Activity.query.first()
     patient = get_futur_patient(call_number, activity)
 
-    # changement de langue si besoin
-    language_code = request.values.get('language_code', 'fr')
     if language_code != "fr":
         language = Language.query.filter_by(code=language_code).first()
         patient.language = language
@@ -200,15 +201,23 @@ def announce_audio_test(scope):
         counter = Counter.query.get(1)
     
     patient.counter = counter
-    audio_data = generate_audio_calling("A", patient, language_code=language_code)
+
+    if scope == "test":
+        # Mesure du temps uniquement pour le test sur cette page
+        start_time = time.time()
+        audio_url = generate_audio_calling("A", patient, language_code=language_code)
+        generation_time = time.time() - start_time
+    else:
+        # Pour l'annonce sur l'écran d'annonce, pas de mesure de temps
+        audio_url = generate_audio_calling("A", patient, language_code=language_code)
+        generation_time = 0
 
     if scope == "announce":        
-        communikation("update_audio", event="audio", data=audio_data["url"])
+        communikation("update_audio", event="audio", data=audio_url)
     else:
-        communikation("admin", event="audio_test", data=audio_data["url"])
+        communikation("admin", event="audio_test", data=audio_url)
 
-    # Return generation time in the response
-    return jsonify({"generation_time": audio_data["generation_time"]}), 200
+    return jsonify({"generation_time": generation_time}), 200
 
 
 @admin_announce_bp.route('/admin/announce/google/add_key', methods=['POST'])
@@ -334,7 +343,7 @@ def announce_save_google_voice():
 
         if language.code == "fr":
             app.config["VOICE_GOOGLE_NAME"] = voice_google_name
-            app.config["VOICE_GOOGLE_REGION"] = voice_google_region  # Ajoutez cette ligne
+            app.config["VOICE_GOOGLE_REGION"] = voice_google_region  
 
         app.display_toast(success=True, message="Voix sauvegardée")
 
