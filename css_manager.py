@@ -1,4 +1,6 @@
 import os
+from variables import MultiCssVariableManager
+
 
 class CSSManager:
     def __init__(self, app=None):
@@ -28,6 +30,11 @@ class CSSManager:
                 "custom": "custom_phone.css"
             }
         }
+
+        # Génération des fichiers CSS au démarrage
+        for mode in self.css_configs:
+            variables = MultiCssVariableManager(app=self.app).get_all_variables(mode)
+            self.generate_css(variables, mode=mode)
         
         @app.context_processor
         def utility_processor():

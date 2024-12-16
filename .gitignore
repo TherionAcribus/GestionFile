@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 static/audio/annonces/*.*
 static/qr_patients/*.*
+static/css/custom.css
+static/css/custom_display.css
+static/css/custom_phone.css
 .env
 out/*.*
 temp_google_credentials.json

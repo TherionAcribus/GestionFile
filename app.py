@@ -276,13 +276,6 @@ def start_fonctions(app):
 
     init_database(database, db)
 
-    # Pour gérer les app.config des CSS. A faire également pour mon Config général
-    css_variable_manager = MultiCssVariableManager(app)
-
-    app.css_manager = CSSManager()
-    app.css_manager.init_app(app)
-
-
     # Check if the user table is empty and create an admin user if it is
 
     if User.query.count() == 0:
@@ -315,8 +308,14 @@ def start_fonctions(app):
     init_default_phone_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
-    css_variable_manager.reload_all()
     clear_counter_table()
+
+    # Pour gérer les app.config des CSS. A faire également pour mon Config général
+    css_variable_manager = MultiCssVariableManager(app)
+    css_variable_manager.reload_all()
+
+    app.css_manager = CSSManager()
+    app.css_manager.init_app(app)
 
     # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
     if not app.config["START_RABBITMQ"]:
@@ -917,15 +916,12 @@ def update_css_variable():
     variable_name = request.form.get('variable')
     value = request.form.get('value')
     dependencies = json.loads(request.form.get('dependencies', '[]'))
-
-    print("DEP", request.form)
     
     # Met à jour la variable dans la base de données
     app.css_variable_manager.update_variable(source_name, variable_name, value)
     
     # Met à jour toutes les variables dépendantes
     for dep_variable in dependencies:
-        print("DEPVAR", dep_variable)
         app.css_variable_manager.update_variable(
             source_name, 
             dep_variable,  # Maintenant dep_variable est directement le nom de la variable
