@@ -41,9 +41,10 @@
 
                 <button class="btn btn-danger"
                     hx-get="/admin/security/confirm_delete_user/{{ user.id }}"
-                    hx-target="#modal_delete_user"
+                    hx-target="#modal-htmx"
                     hx-trigger="click"
-                    data-target="modal_delete_user">
+                    data-bs-target="#modal_delete"
+                    data-bs-toggle="modal">
                 Supprimer
                 </button> 
             </td>

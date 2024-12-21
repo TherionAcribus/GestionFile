@@ -6,6 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
+from werkzeug.security import check_password_hash
 from config import time_tz
 
 db = SQLAlchemy()
@@ -38,6 +39,9 @@ class User(db.Model, UserMixin):
     fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     confirmed_at = db.Column(db.DateTime())
     #roles = db.relationship('Role', secondary='roles_users', backref=db.backref('users', lazy='dynamic'))
+
+    def verify_password(self, password):
+        return check_password_hash(self.password, password)
 
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)

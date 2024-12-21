@@ -11,6 +11,8 @@ from wtforms import StringField, PasswordField, HiddenField
 from wtforms.validators import DataRequired
 from flask_security.forms import LoginForm, BooleanField
 from urllib.parse import urlparse, urljoin
+from werkzeug.security import generate_password_hash, check_password_hash
+from communication import communikation
 
 admin_security_bp = Blueprint('admin_security', __name__)
 
@@ -27,7 +29,8 @@ def admin_security():
                         security_login_counter=app.config["SECURITY_LOGIN_COUNTER"],
                         security_login_screen=app.config["SECURITY_LOGIN_SCREEN"],
                         security_login_patient=app.config["SECURITY_LOGIN_PATIENT"],
-                        security_remember_duration=app.config["SECURITY_REMEMBER_DURATION"])
+                        security_remember_duration=app.config["SECURITY_REMEMBER_DURATION"],
+                        is_default_admin = check_default_admin())
 
 @admin_security_bp.route('/admin/security/table')
 def display_security_table():
@@ -39,6 +42,8 @@ def display_security_table():
 def add_user_form():
     return render_template('/admin/security_add_user_form.html')
 
+from werkzeug.security import generate_password_hash
+
 @admin_security_bp.route('/admin/security/add_new_user', methods=['POST'])
 def add_new_user():
     try:
@@ -47,7 +52,8 @@ def add_new_user():
         password1 = request.form.get("password1")
         password2 = request.form.get("password2")
 
-        if not username:  # Vérifiez que les champs obligatoires sont remplis
+        # Vérifications de base
+        if not username:
             app.display_toast(success=False, message="Nom obligatoire")
             return display_security_table()
         if not password1 or not password2:
@@ -57,15 +63,32 @@ def add_new_user():
             app.display_toast(success=False, message="Les deux champs de mots de passe doivent être similaires")
             return display_security_table()
 
+        # Vérification si le nom d'utilisateur existe déjà
+        if User.query.filter_by(username=username).first():
+            app.display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
+            return display_security_table()
+
+        # Vérifications supplémentaires de sécurité
+        #if len(password1) < 8:
+        #    app.display_toast(success=False, message="Le mot de passe doit contenir au moins 8 caractères")
+        #    return display_security_table()
+
+        # Création du nouvel utilisateur avec mot de passe haché
+        hashed_password = generate_password_hash(password1, method='pbkdf2:sha256')
         new_user = User(
-            username = username,
-            email = email,
-            password = hash_password(password1)
+            username=username,
+            email=None,  # On met l'email à None par défaut
+            password=hashed_password
         )
+        
+        # Si un email est fourni et qu'il n'existe pas déjà, on l'ajoute
+        if email and not User.query.filter_by(email=email).first():
+            new_user.email = email
+
         db.session.add(new_user)
         db.session.commit()
 
-        app.communication('update_admin', data={"action": "delete_add_rule_form"})
+        communikation('update_admin', data={"action": "delete_add_rule_form"})
         app.display_toast(success=True, message="Utilisateur ajouté avec succès")
 
         return display_security_table()
@@ -114,10 +137,11 @@ def security_update_user(user_id):
 @admin_security_bp.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
 def confirm_delete_user(user_id):
     user = User.query.get(user_id)
+    print(user)
     return render_template('/admin/security_modal_confirm_delete_user.html', user=user)
 
 
-# supprime une regle de l'algo
+# supprime un utilisateur
 @admin_security_bp.route('/admin/security/delete_user/<int:user_id>', methods=['GET'])
 def delete_user(user_id):
     try:
@@ -196,12 +220,11 @@ class ExtendedLoginForm(LoginForm):
         self.user = User.query.filter_by(username=self.username.data).first()
         print(self.user)
 
-        self.user = User.query.filter_by(username=self.username.data).first()
         if not self.user:
             print("Unknown username")
             return False
 
-        if not verify_and_update_password(self.password.data, self.user):
+        if not self.user.verify_password(self.password.data):
             print("Invalid password")
             return False
         return True
@@ -235,3 +258,58 @@ def logout():
     logout_user()
     # Rediriger vers la page de login ou une autre page appropriée après la déconnexion
     return redirect(url_for('admin_security.login'))
+
+
+def create_default_user():
+        if User.query.count() == 0:
+            app.logger.info("Creating admin user...")
+            #admin_role = Role.query.filter_by(name='admin').first()
+            #if not admin_role:
+                #admin_role = Role(name='admin', description='Administrator')
+                #db.session.add(admin_role)
+                #db.session.commit()
+
+            hashed_password = generate_password_hash('admin', method='pbkdf2:sha256')
+            admin_user = User(email='admin', username='admin', password=hashed_password, active=True, confirmed_at=datetime.now())
+            #admin_user.roles.append(admin_role)
+            db.session.add(admin_user)
+            db.session.commit()
+
+
+@admin_security_bp.route('/admin/check_default_admin', methods=['GET'])
+def check_default_admin():
+    """Check if the default admin/admin credentials still exist"""
+    admin_user = User.query.filter_by(username='admin').first()
+    
+    print("admin_user", admin_user)
+
+    # les valeurs de base sont trouvées
+    if admin_user and admin_user.verify_password('admin'):
+        return True    
+    return False
+
+
+def reset_admin_user():
+    """Reset the admin user by deleting it if it exists"""
+    admin_user = User.query.filter_by(username='admin').first()
+    if admin_user:
+        db.session.delete(admin_user)
+        db.session.commit()
+        return True
+    return False
+
+@admin_security_bp.route('/admin/reset_admin', methods=['POST'])
+def reset_admin():
+    """Reset the admin user and create a new one"""
+    try:
+        reset_admin_user()
+        create_default_user()
+        return jsonify({
+            "success": True,
+            "message": "L'utilisateur admin a été réinitialisé avec succès"
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Erreur lors de la réinitialisation : {str(e)}"
+        }), 500

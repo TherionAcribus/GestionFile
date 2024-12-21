@@ -73,7 +73,7 @@ from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
-from routes.admin_security import admin_security_bp, ExtendedLoginForm
+from routes.admin_security import admin_security_bp, ExtendedLoginForm, create_default_user
 from routes.admin_music import admin_music_bp, is_spotipy_connected
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -278,18 +278,7 @@ def start_fonctions(app):
 
     # Check if the user table is empty and create an admin user if it is
 
-    if User.query.count() == 0:
-        app.logger.info("Creating admin user...")
-        #admin_role = Role.query.filter_by(name='admin').first()
-        #if not admin_role:
-            #admin_role = Role(name='admin', description='Administrator')
-            #db.session.add(admin_role)
-            #db.session.commit()
-
-        admin_user = User(email='admin', username='admin', password=hash_password('admin'), active=True, confirmed_at=datetime.now())
-        #admin_user.roles.append(admin_role)
-        db.session.add(admin_user)
-        db.session.commit()
+    create_default_user()
 
     init_days_of_week_db_from_json()
     init_activity_schedules_db_from_json()
@@ -308,11 +297,11 @@ def start_fonctions(app):
     init_default_phone_css_variables_db_from_json()
     load_configuration(app)
     clear_old_patients_table(app)
+
     clear_counter_table()
 
     # Pour gérer les app.config des CSS. A faire également pour mon Config général
     css_variable_manager = MultiCssVariableManager(app)
-    css_variable_manager.reload_all()
 
     app.css_manager = CSSManager()
     app.css_manager.init_app(app)

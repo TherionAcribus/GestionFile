@@ -4,6 +4,16 @@
 
 {% block content %}
     <h3>Sécurité de l'App</h3>
+
+    {% if is_default_admin %}
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <div>
+            L'utilisateur "admin" possède encore le mot de passe par défaut. Pensez à changer le mot de passe ou à supprimer l'utilisateur surtout si l'application est accessible en ligne.<br>
+            Une fois le changement effectué, pensez à modifier les identifiants de connexion sur toutes les applications.
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endif %}
     
     <div class="row">
         <div class="col-12">
