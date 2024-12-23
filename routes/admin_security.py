@@ -646,8 +646,8 @@ def create_default_user():
 
 @admin_security_bp.route('/admin/security/add_role_form')
 def add_role_form():
-    admin_pages = ['security', 'counter', 'activity', 'schedule', 'algo', 
-                   'translation', 'options', 'music', 'dashboard', 'app']
+    # Récupérer la liste des pages à partir des attributs du modèle Role
+    admin_pages = [attr.replace('admin_', '') for attr in vars(Role) if attr.startswith('admin_')]
     return render_template('/admin/security_add_role_form.html', admin_pages=admin_pages)
 
 @admin_security_bp.route('/admin/security/save_role', methods=['POST'])
