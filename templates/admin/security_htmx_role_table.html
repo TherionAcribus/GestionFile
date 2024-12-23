@@ -1,0 +1,84 @@
+<script src="{{ url_for('static', filename='js/permissions.js') }}"></script>
+
+
+
+        {% for role in roles %}
+        <div id="role-{{ role.id }}">
+            <div class="mb-3">
+                <label for="name-{{ role.id }}" class="form-label">Nom</label>
+                <input type="text" class="form-control" value="{{ role.name }}" id="name-{{ role.id }}">
+            </div>
+            <div class="mb-3">
+                <label for="description-{{ role.id }}" class="form-label">Description</label>
+                <input type="text" class="form-control" value="{{ role.description }}" id="description-{{ role.id }}">
+            </div>
+
+            <div>
+                <div class="row">
+                    {% for page, permission in role.to_dict()['permissions'].items() %}
+                    <div class="col-md-4">
+                        <div class="mb-2">
+                            <strong>{{ page.replace('admin_', '').title() }}:</strong>
+                            {% if role.name == "admin" %}
+                                <select class="form-select permission-select select-{{ permission }}">
+                                    <option value="write" 
+                                        selected>✏️ Écriture
+                                    </option>
+                                </select>
+                            {% else %}                            
+                                <select class="form-select permission-select select-{{ permission }}" 
+                                        id="{{ page }}-{{ role.id }}" 
+                                        data-permission="{{ page }}">
+                                    <option value="none" 
+                                        {{ 'selected' if permission == "none" else '' }}>🚫 Aucun
+                                    </option>
+                                    <option value="read" 
+                                        {{ 'selected' if permission == "read" else '' }}>👁️ Lecture
+                                    </option>
+                                    <option value="write" 
+                                        {{ 'selected' if permission == "write" else '' }}>✏️ Écriture
+                                    </option>
+                                </select>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <button class="btn btn-primary"
+                    {% if role.name == "admin" %} disabled {% endif %}
+                    hx-target="#invisible"
+                    hx-post="/admin/security/role_update/{{ role.id }}"
+                    hx-trigger="click"
+                    hx-swap="outerHTML"
+                    hx-vals='js:{
+                        "name": document.getElementById("name-{{ role.id }}").value,
+                        "description": document.getElementById("description-{{ role.id }}").value,
+                        "permissions": JSON.stringify(
+                            Object.fromEntries(
+                                Array.from(document.querySelectorAll("#role-{{ role.id }} .permission-select"))
+                                    .map(select => [select.dataset.permission, select.value])
+                            )
+                        )
+                    }'>
+                    Enregistrer
+                </button>
+
+                <button class="btn btn-danger"
+                    {% if role.name == "admin" %} disabled {% endif %}
+                    hx-get="/admin/security/confirm_delete_role/{{ role.id }}"
+                    hx-target="#modal-htmx"
+                    hx-trigger="click"
+                    data-bs-target="#modal_delete"
+                    data-bs-toggle="modal">
+                    Supprimer
+                </button> 
+
+            </div>
+        </div>
+
+        <hr>
+
+        {% endfor %}

@@ -1,20 +1,51 @@
 import os
 from flask import Blueprint, render_template, jsonify, redirect, url_for, request, current_app as app
-from flask_security import hash_password
 from datetime import datetime
-from models import User, db
+from models import User, db, Role
 from flask_mailman import EmailMessage
 from flask_login import logout_user
-from flask_security import Security, current_user, auth_required, hash_password, \
-    SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
+from flask_security import current_user, hash_password, login_required, login_user
 from wtforms import StringField, PasswordField, HiddenField
 from wtforms.validators import DataRequired
 from flask_security.forms import LoginForm, BooleanField
 from urllib.parse import urlparse, urljoin
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash
 from communication import communikation
+from functools import wraps
+from flask import flash
+from sqlalchemy import text
+import json
 
 admin_security_bp = Blueprint('admin_security', __name__)
+
+def require_permission(page, level='read'):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                return redirect(url_for('admin_security.login'))
+            
+            has_permission = False
+            for role in current_user.roles:
+                permission = getattr(role, f'admin_{page}', 'none')
+                if (level == 'read' and permission in ['read', 'write']) or \
+                    (level == 'write' and permission == 'write'):
+                    has_permission = True
+                    break
+            
+            if not has_permission:
+                flash('Vous n\'avez pas les permissions nécessaires pour accéder à cette page.', 'error')
+                return redirect(url_for('admin_security.home'))
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+@admin_security_bp.route('/admin/security/role/table')
+def display_security_role_table():
+    roles = Role.query.all()
+    return render_template('admin/security_htmx_role_table.html', roles=roles)
 
 @admin_security_bp.route('/admin/security')
 def admin_security():
@@ -42,7 +73,6 @@ def display_security_table():
 def add_user_form():
     return render_template('/admin/security_add_user_form.html')
 
-from werkzeug.security import generate_password_hash
 
 @admin_security_bp.route('/admin/security/add_new_user', methods=['POST'])
 def add_new_user():
@@ -91,7 +121,9 @@ def add_new_user():
         communikation('update_admin', data={"action": "delete_add_rule_form"})
         app.display_toast(success=True, message="Utilisateur ajouté avec succès")
 
-        return display_security_table()
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_user_form"></div>"""
+        return f"{display_security_table()}{clear_form_html}"
 
     except Exception as e:
         db.session.rollback()
@@ -139,6 +171,12 @@ def confirm_delete_user(user_id):
     user = User.query.get(user_id)
     print(user)
     return render_template('/admin/security_modal_confirm_delete_user.html', user=user)
+
+# affiche la modale pour confirmer la suppression d'un membre
+@admin_security_bp.route('/admin/security/confirm_delete_role/<int:role_id>', methods=['GET'])
+def confirm_delete_role(role_id):
+    role = Role.query.get(role_id)
+    return render_template('/admin/security_modal_confirm_delete_role.html', role=role)
 
 
 # supprime un utilisateur
@@ -260,21 +298,64 @@ def logout():
     return redirect(url_for('admin_security.login'))
 
 
-def create_default_user():
-        if User.query.count() == 0:
-            app.logger.info("Creating admin user...")
-            #admin_role = Role.query.filter_by(name='admin').first()
-            #if not admin_role:
-                #admin_role = Role(name='admin', description='Administrator')
-                #db.session.add(admin_role)
-                #db.session.commit()
+def reset_roles_table():
+    """Réinitialise la table des rôles"""
+    """ A Supprimer quand toutes les BDD sont à jour"""
+    try:
+        # Suppression de la table roles_users
+        db.session.execute(text('DROP TABLE IF EXISTS roles_users'))
+        # Suppression de la table role
+        db.session.execute(text('DROP TABLE IF EXISTS role'))
+        db.session.commit()
+        
+        # Recréation des tables
+        db.create_all()
+        app.logger.info("Roles table reset successfully")
+        return True
+    except Exception as e:
+        app.logger.error(f"Error resetting roles table: {str(e)}")
+        db.session.rollback()
+        return False
 
-            hashed_password = generate_password_hash('admin', method='pbkdf2:sha256')
-            admin_user = User(email='admin', username='admin', password=hashed_password, active=True, confirmed_at=datetime.now())
-            #admin_user.roles.append(admin_role)
-            db.session.add(admin_user)
-            db.session.commit()
-
+def create_default_role():
+    """Crée le rôle admin par défaut s'il n'existe pas"""
+    try:
+        # Vérifie si la table role existe et a la bonne structure
+        admin_role = Role.query.filter_by(name='admin').first()
+        if not admin_role:
+            app.logger.info("Creating admin role...")
+            admin_role = Role(
+                name='admin',
+                description='Administrateur avec tous les droits'
+            )
+            # Attribution de toutes les permissions en écriture
+            admin_pages = ['security', 'counter', 'activity', 'schedule', 'algo', 
+                          'translation', 'options', 'music', 'dashboard', 'app']
+            for page in admin_pages:
+                setattr(admin_role, f'admin_{page}', 'write')
+            
+            db.session.add(admin_role)
+            try:
+                db.session.commit()
+                app.logger.info("Admin role created successfully")
+            except Exception as commit_error:
+                app.logger.error(f"Error committing admin role: {str(commit_error)}")
+                db.session.rollback()
+                if "Unknown column" in str(commit_error):
+                    app.logger.info("Resetting roles table due to missing columns...")
+                    if reset_roles_table():
+                        return create_default_role()  # Réessayer après la réinitialisation
+                return None
+        return admin_role
+    except Exception as e:
+        app.logger.error(f"Error in create_default_role: {str(e)}")
+        db.session.rollback()
+        # Si l'erreur est due à une colonne manquante, réinitialiser la table
+        if "Unknown column" in str(e):
+            app.logger.info("Resetting roles table due to missing columns...")
+            if reset_roles_table():
+                return create_default_role()  # Réessayer après la réinitialisation
+        return None
 
 @admin_security_bp.route('/admin/check_default_admin', methods=['GET'])
 def check_default_admin():
@@ -313,3 +394,170 @@ def reset_admin():
             "success": False,
             "message": f"Erreur lors de la réinitialisation : {str(e)}"
         }), 500
+
+
+
+@admin_security_bp.route('/admin/security/role_update/<int:role_id>', methods=['POST'])
+def security_update_role(role_id):
+    try:
+        role = Role.query.get(role_id)
+        if role:
+            # Récupérer les données JSON ou form-data
+            data = request.get_json() if request.is_json else request.form
+            app.logger.info(f"Received data: {data}")
+
+            if not data.get('name'):
+                app.display_toast(success=False, message="Le nom est obligatoire")
+                return ""
+
+            # Mise à jour des informations de base
+            role.name = data.get('name', role.name)
+            role.description = data.get('description', role.description)
+            app.logger.info(f"Updated name to: {role.name}, description to: {role.description}")
+
+            # Mise à jour des permissions
+            permissions_str = data.get('permissions', '{}')
+            if isinstance(permissions_str, str):
+                try:
+                    permissions = json.loads(permissions_str)
+                except json.JSONDecodeError:
+                    permissions = {}
+
+            app.logger.info(f"Permissions before update: {role.to_dict()['permissions']}")
+            app.logger.info(f"Received permissions: {permissions}")
+            
+            if isinstance(permissions, dict):
+                for page, permission in permissions.items():
+                    if hasattr(role, page):
+                        old_value = getattr(role, page)
+                        setattr(role, page, permission)
+                        app.logger.info(f"Updated {page} from {old_value} to {permission}")
+
+            try:
+                db.session.commit()
+                app.logger.info("Changes committed successfully")
+                app.logger.info(f"Permissions after update: {role.to_dict()['permissions']}")
+                app.display_toast(success=True, message="Mise à jour réussie")
+            except Exception as commit_error:
+                app.logger.error(f"Error committing changes: {str(commit_error)}")
+                db.session.rollback()
+                app.display_toast(success=False, message=f"Erreur lors de la sauvegarde : {str(commit_error)}")
+                return ""
+            
+            return ""
+
+        else:
+            app.display_toast(success=False, message="Role introuvable")
+            return ""
+
+    except Exception as e:
+        app.display_toast(success=False, message="erreur : " + str(e))
+        app.logger.error(f"Error in security_update_role: {str(e)}")
+        return jsonify(status="error", message=str(e)), 500
+
+
+@admin_security_bp.route('/admin/security/delete_role/<int:role_id>', methods=['GET'])
+@require_permission('security', 'write')
+# supprime un utilisateur
+def delete_role(role_id):
+    try:
+        role = Role.query.get(role_id)
+        print("role", role)
+        if not role:
+            app.display_toast(success=False, message="Role non trouvé")
+            return display_security_role_table()
+
+        db.session.delete(role)
+        db.session.commit()
+
+        app.display_toast(success=True, message="Role supprimé")
+        return display_security_role_table()
+
+    except Exception as e:
+        app.display_toast(success=False, message="erreur : " + str(e))
+        return display_security_role_table()  
+
+def create_default_user():
+    """Crée l'utilisateur admin par défaut s'il n'existe pas"""
+    try:
+        if User.query.count() == 0:
+            app.logger.info("Creating admin user...")
+            
+            # Création du rôle admin
+            admin_role = create_default_role()
+            if not admin_role:
+                app.logger.error("Failed to create admin role")
+                return False
+            
+            # Création de l'utilisateur admin
+            hashed_password = generate_password_hash('admin', method='pbkdf2:sha256')
+            admin_user = User(
+                email='admin',
+                username='admin',
+                password=hashed_password,
+                active=True,
+                confirmed_at=datetime.now()
+            )
+            
+            # Attribution du rôle admin
+            admin_user.roles.append(admin_role)
+            
+            db.session.add(admin_user)
+            db.session.commit()
+            
+            app.logger.info("Admin user created successfully with admin role")
+            return True
+        return True
+    except Exception as e:
+        app.logger.error(f"Error in create_default_user: {str(e)}")
+        return False
+
+@admin_security_bp.route('/admin/security/add_role_form')
+def add_role_form():
+    admin_pages = ['security', 'counter', 'activity', 'schedule', 'algo', 
+                   'translation', 'options', 'music', 'dashboard', 'app']
+    return render_template('/admin/security_add_role_form.html', admin_pages=admin_pages)
+
+@admin_security_bp.route('/admin/security/save_role', methods=['POST'])
+def save_role():
+    try:
+        # Récupérer les données JSON
+        data = request.get_json() if request.is_json else request.form
+        
+        if not data.get('name'):
+            app.display_toast(success=False, message="Le nom est obligatoire")
+            return ""
+
+        # Créer le nouveau rôle
+        role = Role(
+            name=data.get('name'),
+            description=data.get('description', '')
+        )
+
+        print("permissions", data.get('permissions'))
+        # Définir les permissions
+        permissions = data.get('permissions', {})
+        if isinstance(permissions, str):
+            try:
+                permissions = json.loads(permissions)
+            except json.JSONDecodeError:
+                permissions = {}
+
+        if isinstance(permissions, dict):
+            for page, permission in permissions.items():
+                if hasattr(role, page):
+                    setattr(role, page, permission)
+
+        db.session.add(role)
+        db.session.commit()
+        
+        app.display_toast(success=True, message="Rôle créé avec succès")        
+
+        # Effacer le formulaire via swap-oob
+        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_role_form"></div>"""
+        return f"{display_security_role_table()}{clear_form_html}"
+
+    except Exception as e:
+        app.display_toast(success=False, message=f"Erreur lors de la création : {str(e)}")
+        app.logger.error(f"Error in save_role: {str(e)}")
+        return jsonify(status="error", message=str(e)), 500

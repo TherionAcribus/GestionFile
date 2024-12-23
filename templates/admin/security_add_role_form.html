@@ -1,0 +1,55 @@
+<style>
+
+</style>
+
+<script src="{{ url_for('static', filename='js/permissions.js') }}"></script>
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Nouveau rôle</h5>
+        <div class="mb-3">
+            <label for="name" class="form-label">Nom</label>
+            <input type="text" class="form-control" id="name" required>
+        </div>
+        <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <input type="text" class="form-control" id="description">
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Permissions</label>
+            <div class="row">
+                {% for page in admin_pages %}
+                <div class="col-md-4">
+                    <div class="mb-2">
+                        <strong>{{ page.title() }}:</strong>
+                        <select class="form-select permission-select select-none" 
+                                id="admin_{{ page }}" 
+                                data-permission="admin_{{ page }}">
+                            <option value="none" selected>🚫 Aucun</option>
+                            <option value="read">👁️ Lecture</option>
+                            <option value="write">✏️ Écriture</option>
+                        </select>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button class="btn btn-primary"
+            hx-post="/admin/security/save_role"
+            hx-target="#div_role_table"
+            hx-vals='js:{
+                "name": document.getElementById("name").value,
+                "description": document.getElementById("description").value,
+                "permissions": JSON.stringify(
+                    Object.fromEntries(
+                        Array.from(document.querySelectorAll(".permission-select"))
+                            .map(select => [select.dataset.permission, select.value])
+                    )
+                )
+            }'>
+            Créer le rôle
+        </button>
+    </div>
+</div>

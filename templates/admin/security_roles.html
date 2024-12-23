@@ -1,0 +1,24 @@
+<div class="card">
+    <div class="card-header">
+        <h5>Gestion des rôles</h5>
+    </div>
+    <div class="card-body">
+        <div id="div_role_table" hx-get="/admin/security/role/table" hx-trigger="load">
+            <!-- La table sera chargée ici -->
+        </div>
+        <a class="btn btn-primary"
+        hx-get="/admin/security/add_role_form"
+        hx-target="#div_add_role_form"
+        hx-swap="innerHTML">
+        Créer un nouveau rôle
+        </a>    
+        <div id="div_add_role_form"></div>
+    </div>
+</div>
+
+<!-- Modal Structure -->
+<div id="modal_delete_role" class="modal">
+</div>
+
+<!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+<div id="invisible" style="display:none;"></div>

@@ -1,0 +1,10 @@
+<p>Vous vous appretez à supprimer le role {{role.name}} définitivement. Confirmez-vous la suppression ? </p>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <button type="button" class="btn btn-danger"
+    hx-get="/admin/security/delete_role/{{ role.id }}"
+    hx-target="#div_role_table"
+    data-bs-dismiss="modal"
+    >Supprimer</button>
+</div>

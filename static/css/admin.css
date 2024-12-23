@@ -49,6 +49,37 @@
 }
 
 
+/* PERMISSIONS */
+
+
+.select-none {
+    background-color: #e9ecef !important;
+    color: #6c757d !important;
+}
+.select-read {
+    background-color: #cff4fc !important;
+    color: #055160 !important;
+}
+.select-write {
+    background-color: #d1e7dd !important;
+    color: #0a3622 !important;
+}
+.permission-select option[value="none"] {
+    background-color: #e9ecef;
+    color: #6c757d;
+}
+.permission-select option[value="read"] {
+    background-color: #cff4fc;
+    color: #055160;
+}
+.permission-select option[value="write"] {
+    background-color: #d1e7dd;
+    color: #0a3622;
+}
+
+
+
+
 /* DASHBOARD */
 
 .dashboard-flex {

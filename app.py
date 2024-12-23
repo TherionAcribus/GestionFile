@@ -73,7 +73,7 @@ from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
-from routes.admin_security import admin_security_bp, ExtendedLoginForm, create_default_user
+from routes.admin_security import admin_security_bp, ExtendedLoginForm, create_default_user, create_default_role
 from routes.admin_music import admin_music_bp, is_spotipy_connected
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -276,9 +276,9 @@ def start_fonctions(app):
 
     init_database(database, db)
 
-    # Check if the user table is empty and create an admin user if it is
-
-    create_default_user()
+    # Création du rôle admin et de l'utilisateur admin par défaut
+    create_default_role()  # Toujours créer le rôle admin s'il n'existe pas
+    create_default_user()  # Crée l'utilisateur admin seulement s'il n'y a pas d'utilisateurs
 
     init_days_of_week_db_from_json()
     init_activity_schedules_db_from_json()
@@ -1798,4 +1798,3 @@ if __name__ == "__main__":
     #app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
 
     app.logger.info("Starting Flask app...")
-

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, current_app as app
+from flask import Blueprint, render_template, request, current_app as app, jsonify
 from routes.admin_security import send_test_email
 from models import DashboardCard
 

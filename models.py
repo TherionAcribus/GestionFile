@@ -11,18 +11,51 @@ from config import time_tz
 
 db = SQLAlchemy()
 
-"""
-roles_users = db.Table(
-    'roles_users',
-    db.Column('user_id', db.Integer(), db.ForeignKey('user.id')),
+# Table d'association entre User et Role
+roles_users = db.Table('roles_users',
+    db.Column('user_id', db.Integer(), db.ForeignKey('app_users.id')),
     db.Column('role_id', db.Integer(), db.ForeignKey('role.id'))
 )
-"""
 
 class Role(db.Model, RoleMixin):
+    __tablename__ = 'role'
     id = db.Column(db.Integer(), primary_key=True)
     name = db.Column(db.String(80), unique=True)
     description = db.Column(db.String(255))
+    
+    # Permissions pour les différentes pages admin
+    admin_security = db.Column(db.String(10), nullable=False, default='none')
+    admin_counter = db.Column(db.String(10), nullable=False, default='none')
+    admin_activity = db.Column(db.String(10), nullable=False, default='none')
+    admin_schedule = db.Column(db.String(10), nullable=False, default='none')
+    admin_algo = db.Column(db.String(10), nullable=False, default='none')
+    admin_translation = db.Column(db.String(10), nullable=False, default='none')
+    admin_options = db.Column(db.String(10), nullable=False, default='none')
+    admin_music = db.Column(db.String(10), nullable=False, default='none')
+    admin_dashboard = db.Column(db.String(10), nullable=False, default='none')
+    admin_app = db.Column(db.String(10), nullable=False, default='none')
+
+    def __repr__(self):
+        return f'<Role {self.name}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'permissions': {
+                'admin_security': self.admin_security,
+                'admin_counter': self.admin_counter,
+                'admin_activity': self.admin_activity,
+                'admin_schedule': self.admin_schedule,
+                'admin_algo': self.admin_algo,
+                'admin_translation': self.admin_translation,
+                'admin_options': self.admin_options,
+                'admin_music': self.admin_music,
+                'admin_dashboard': self.admin_dashboard,
+                'admin_app': self.admin_app
+            }
+        }
 
 class User(db.Model, UserMixin):
     __tablename__ = 'app_users'
@@ -38,7 +71,7 @@ class User(db.Model, UserMixin):
     active = db.Column(db.Boolean())
     fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     confirmed_at = db.Column(db.DateTime())
-    #roles = db.relationship('Role', secondary='roles_users', backref=db.backref('users', lazy='dynamic'))
+    roles = db.relationship('Role', secondary='roles_users', backref=db.backref('users', lazy='dynamic'))
 
     def verify_password(self, password):
         return check_password_hash(self.password, password)
@@ -313,7 +346,6 @@ class AlgoRule(db.Model):
         return (f'<PriorityRule for Activity ID {self.activity_id} with Priority {self.priority_level} '
                 f'from {self.start_time.strftime("%H:%M")} to {self.end_time.strftime("%H:%M")} '
                 f'on {self.days_of_week}>')
-
 
 class ConfigOption(db.Model):
     id = db.Column(db.Integer, Sequence('config_option_id_seq'), primary_key=True)
