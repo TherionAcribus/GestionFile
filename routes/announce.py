@@ -38,8 +38,7 @@ def patient_list_for_init_display():
     for patient in patients:
         call_patient = {
             'id': patient.id,
-            'text': replace_balise_announces(announce_call_text, patient),
-            'counter_id': patient.counter_id
+            'text': replace_balise_announces(announce_call_text, patient)
         }
         call_patients.append(call_patient)
     return call_patients
