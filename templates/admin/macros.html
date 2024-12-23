@@ -317,7 +317,7 @@ function handleAfterRequestConfig(source, variable) {
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalDeleteabel">Confirmation de la suppression</h5>
+                <h5 class="modal-title" id="modalDeleteLabel">Confirmation de la suppression</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="modal-htmx">
@@ -328,15 +328,16 @@ function handleAfterRequestConfig(source, variable) {
 </div>
 {% endmacro %}
 
+
 {% macro modal_generic(title) %}
 <div class="modal fade" id="modal_generic" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalDeleteabel">{{title}}</h5>
+                <h5 class="modal-title" id="modalDeleteLabel">{{title}}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="modal-generic-htmx">
+            <div class="modal-body" id="modalBodyGeneric">
                 <!-- Le contenu de la modale est chargé dynamiquement ici : body + footer -->
             </div>
         </div>

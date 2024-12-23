@@ -15,11 +15,22 @@
             <td><input type="text" id="username"></td>
             <td>
                 <div class="input-field">
+                    <select class="form-select" id="role" required>
+                        <option value="">Sélectionner un rôle</option>
+                        {% for role in roles %}
+                        <option value="{{ role.id }}">{{ role.name }} - {{ role.description }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
+
+            <td> 
+                <div class="input-field">
                     <input id="email" type="email" class="validate">
                     <label for="email">Email</label>
                 </div>
             </td>
-
+            
             <td> 
                 <div class="input-field">
                     <input id="password1" type="password" class="validate">
@@ -36,7 +47,8 @@
                     hx-vals='js:{"username": document.getElementById("username").value,
                                 "email": document.getElementById("email").value,
                                 "password1": document.getElementById("password1").value,
-                                "password2": document.getElementById("password2").value
+                                "password2": document.getElementById("password2").value,
+                                "role_id": document.getElementById("role").value
                             }'>
                     Enregistrer
                 </button>

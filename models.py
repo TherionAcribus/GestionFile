@@ -6,7 +6,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from config import time_tz
 
 db = SQLAlchemy()
@@ -60,8 +60,8 @@ class Role(db.Model, RoleMixin):
 class User(db.Model, UserMixin):
     __tablename__ = 'app_users'
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(255), unique=True, nullable=True)  # Rendre email nullable
-    username = db.Column(db.String(255), unique=True, nullable=False)  # Le username devient obligatoire
+    email = db.Column(db.String(255), unique=True, nullable=True)  
+    username = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     last_login_at = db.Column(db.DateTime())
     current_login_at = db.Column(db.DateTime())
@@ -74,7 +74,25 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary='roles_users', backref=db.backref('users', lazy='dynamic'))
 
     def verify_password(self, password):
-        return check_password_hash(self.password, password)
+        from flask import current_app as app
+        app.logger.info(f"=== Vérification du mot de passe pour {self.username} ===")
+        app.logger.info(f"Hash stocké en base: {self.password}")
+        
+        # Créer un hash test avec le même mot de passe
+        test_hash = generate_password_hash(password, method='pbkdf2:sha256')
+        app.logger.info(f"Hash test (pour info): {test_hash}")
+        
+        # Vérifier si le mot de passe correspond au hash stocké
+        result = check_password_hash(self.password, password)
+        app.logger.info(f"Résultat de la vérification: {result}")
+        return result
+
+    def set_password(self, password):
+        from flask import current_app as app
+        app.logger.info(f"=== Définition du mot de passe pour {self.username} ===")
+        self.password = generate_password_hash(password, method='pbkdf2:sha256')
+        app.logger.info(f"Nouveau hash généré: {self.password}")
+        self.active = True  # Activer l'utilisateur lors de la définition du mot de passe
 
 class Patient(db.Model):
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)

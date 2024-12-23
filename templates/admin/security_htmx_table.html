@@ -1,54 +1,64 @@
-<table id="algo_table" class="striped">
+<table class="table">
     <thead>
         <tr>
             <th>Nom</th>
-            <th>Rôle</th>
             <th>Email</th>
-            <th>Mot de Passe</th>
-            <th>Action</th>
+            <th>Rôle</th>
+            <th>Actions</th>
         </tr>
     </thead>
     <tbody>
         {% for user in users %}
-        <tr>
-            <td><input type="text" class="form-control" value="{{ user.username }}" id="username-{{ user.id }}"></td>
-            <td>A venir</td>
+        <tr id="user-{{ user.id }}">
             <td>
-                <div class="input-field">
-                    <input id="email-{{ user.id }}" type="email" class="form-control" class="validate" value="{{ user.email }}">
-                </div>
+                <input type="text" class="form-control" value="{{ user.username }}" id="username-{{ user.id }}">
             </td>
-
-            <td> 
-                <div class="input-field">
-                    <input id="password1-{{ user.id }}" type="password" class="form-control" class="validate">
-                    <label for="password2-{{ user.id }}">Répeter</label>
-                    <input id="password2-{{ user.id }}" type="password" class="form-control" class="validate"> 
-                </div>
+            <td>
+                <input type="email" class="form-control" value="{{ user.email or '' }}" id="email-{{ user.id }}">
             </td>
-
+            <td>
+                <select class="form-select" id="role-{{ user.id }}">
+                    {% for role in roles %}
+                    <option value="{{ role.id }}" 
+                        {% if role in user.roles %}selected{% endif %}>
+                        {{ role.name }} - {{ role.description }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </td>
             <td>
                 <button class="btn btn-primary"
+                    {% if user.username == "admin" %}disabled{% endif %}
                     hx-target="#invisible"
                     hx-post="/admin/security/user_update/{{ user.id }}"
-                    hx-vals='js:{"username": document.getElementById("username-{{ user.id }}").value,
-                                "email": document.getElementById("email-{{ user.id }}").value,
-                                "password1": document.getElementById("password1-{{ user.id }}").value,
-                                "password2": document.getElementById("password2-{{ user.id }}").value
-                            }'>
+                    hx-trigger="click"
+                    hx-vals='js:{
+                        "username": document.getElementById("username-{{ user.id }}").value,
+                        "email": document.getElementById("email-{{ user.id }}").value,
+                        "role_id": document.getElementById("role-{{ user.id }}").value
+                    }'>
                     Enregistrer
                 </button>
 
+                <button class="btn btn-warning"
+                    hx-get="/admin/security/change_password/{{ user.id }}"
+                    hx-target="#modalBodyGeneric"
+                    hx-trigger="click"
+                    data-bs-target="#modal_generic"
+                    data-bs-toggle="modal">
+                    Mot de passe
+                </button>
+
                 <button class="btn btn-danger"
+                    {% if user.username == "admin" %}disabled{% endif %}
                     hx-get="/admin/security/confirm_delete_user/{{ user.id }}"
                     hx-target="#modal-htmx"
                     hx-trigger="click"
                     data-bs-target="#modal_delete"
                     data-bs-toggle="modal">
-                Supprimer
-                </button> 
+                    Supprimer
+                </button>
             </td>
-
         </tr>
         {% endfor %}
     </tbody>
