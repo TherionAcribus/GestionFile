@@ -395,43 +395,29 @@ def reset_roles_table():
 
 def create_default_role():
     """Crée le rôle admin par défaut s'il n'existe pas"""
-    try:
-        # Vérifie si la table role existe et a la bonne structure
-        admin_role = Role.query.filter_by(name='admin').first()
-        if not admin_role:
-            app.logger.info("Creating admin role...")
-            admin_role = Role(
-                name='admin',
-                description='Administrateur avec tous les droits'
-            )
-            # Attribution de toutes les permissions en écriture
-            admin_pages = ['security', 'counter', 'activity', 'schedule', 'algo', 
-                          'translation', 'options', 'music', 'dashboard', 'app']
-            for page in admin_pages:
-                setattr(admin_role, f'admin_{page}', 'write')
-            
-            db.session.add(admin_role)
-            try:
-                db.session.commit()
-                app.logger.info("Admin role created successfully")
-            except Exception as commit_error:
-                app.logger.error(f"Error committing admin role: {str(commit_error)}")
-                db.session.rollback()
-                if "Unknown column" in str(commit_error):
-                    app.logger.info("Resetting roles table due to missing columns...")
-                    if reset_roles_table():
-                        return create_default_role()  # Réessayer après la réinitialisation
-                return None
-        return admin_role
-    except Exception as e:
-        app.logger.error(f"Error in create_default_role: {str(e)}")
-        db.session.rollback()
-        # Si l'erreur est due à une colonne manquante, réinitialiser la table
-        if "Unknown column" in str(e):
-            app.logger.info("Resetting roles table due to missing columns...")
-            if reset_roles_table():
-                return create_default_role()  # Réessayer après la réinitialisation
-        return None
+    app.logger.info("=== Création du rôle admin par défaut ===")
+    
+    # Vérifie si le rôle admin existe déjà
+    role = Role.query.filter_by(name='admin').first()
+    
+    if role is None:
+        app.logger.info("Le rôle admin n'existe pas, création...")
+        
+        # Créer le rôle admin avec toutes les permissions
+        role = Role(name='admin', description='Administrateur')
+        
+        # Définir toutes les permissions sur 'write'
+        admin_pages = [attr for attr in vars(Role) if attr.startswith('admin_')]
+        for page in admin_pages:
+            setattr(role, page, 'write')
+        
+        db.session.add(role)
+        db.session.commit()
+        app.logger.info("Rôle admin créé avec succès")
+        return True
+    
+    app.logger.info("Le rôle admin existe déjà")
+    return False
 
 @admin_security_bp.route('/admin/check_default_admin', methods=['GET'])
 def check_default_admin():
