@@ -5,6 +5,8 @@ from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, session, current_app as app
 from models import db, ConfigOption, DashboardCard
 from communication import communikation
+from routes.admin_security import require_permission
+from flask_login import current_user
 
 admin_music_bp = Blueprint('admin_music', __name__)
 
@@ -24,12 +26,16 @@ class SpotifyFlaskCacheHandler(spotipy.CacheHandler):
 
 @admin_music_bp.route('/admin/music')
 @admin_music_bp.route('/admin/music/<tab>')
+@require_permission('music', 'read')
 def admin_music(tab=None):
     valid_tabs = ['player', 'options']
     tab = request.args.get('tab', 'player')
     if tab not in valid_tabs:
         tab = 'player'
 
+    # Vérifier les permissions pour chaque section
+    can_write = any(role.has_permission('music', 'write') for role in current_user.roles)
+    
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
     print("spotify", spotify_connected)
@@ -46,7 +52,9 @@ def admin_music(tab=None):
                                 music_announce_action = app.config["MUSIC_ANNOUNCE_ACTION"],
                                 spotify_connected=spotify_connected,
                                 track_infos = get_spotify_current_track_info(),
-                                playlists=playlists['items'])
+                                playlists=playlists['items'],
+                                active_tab=tab,
+                                can_write=can_write)
 
     else:
         return render_template('/admin/music.html',
@@ -57,7 +65,9 @@ def admin_music(tab=None):
                                 music_announce_volume = app.config["MUSIC_ANNOUNCE_VOLUME"],
                                 music_announce_action = app.config["MUSIC_ANNOUNCE_ACTION"],
                                 spotify_connected=spotify_connected,
-                                playlists=[])
+                                playlists=[],
+                                active_tab=tab,
+                                can_write=can_write)
     
 
 
@@ -279,6 +289,17 @@ def play_playlist():
     #socketio.emit('play_playlist', {'playlist_uri': playlist_uri}, namespace='/announce')
 
     return redirect(url_for('admin_music.admin_music'))
+
+@admin_music_bp.route('/admin/music/save_options', methods=['POST'])
+@require_permission('music', 'write')
+def save_music_options():
+    """Sauvegarde les options de musique"""
+    try:
+        # Code existant...
+        pass
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde des options de musique : {e}")
+        return '', 500
 
 def get_spotify_token():
     token_info = session.get('token_info', None)

@@ -34,6 +34,7 @@ class Role(db.Model, RoleMixin):
     admin_music = db.Column(db.String(10), nullable=False, default='none')
     admin_dashboard = db.Column(db.String(10), nullable=False, default='none')
     admin_app = db.Column(db.String(10), nullable=False, default='none')
+    admin_queue = db.Column(db.String(10), nullable=False, default='none')
 
     def __repr__(self):
         return f'<Role {self.name}>'
@@ -53,9 +54,23 @@ class Role(db.Model, RoleMixin):
                 'admin_options': self.admin_options,
                 'admin_music': self.admin_music,
                 'admin_dashboard': self.admin_dashboard,
-                'admin_app': self.admin_app
+                'admin_app': self.admin_app,
+                'admin_queue': self.admin_queue
             }
         }
+
+    def has_permission(self, resource, action):
+        """Vérifie si le rôle a la permission demandée pour la ressource"""
+        permission_field = f'admin_{resource}'
+        if not hasattr(self, permission_field):
+            return False
+            
+        permission = getattr(self, permission_field)
+        if action == 'read':
+            return permission in ['read', 'write']
+        elif action == 'write':
+            return permission == 'write'
+        return False
 
 class User(db.Model, UserMixin):
     __tablename__ = 'app_users'

@@ -18,7 +18,8 @@ import json
 
 admin_security_bp = Blueprint('admin_security', __name__)
 
-def require_permission(page, level='read'):
+# gère les permissions sur les pages
+def require_permission(resource, action):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
@@ -27,15 +28,13 @@ def require_permission(page, level='read'):
             
             has_permission = False
             for role in current_user.roles:
-                permission = getattr(role, f'admin_{page}', 'none')
-                if (level == 'read' and permission in ['read', 'write']) or \
-                    (level == 'write' and permission == 'write'):
+                if role.has_permission(resource, action):
                     has_permission = True
                     break
             
             if not has_permission:
-                flash('Vous n\'avez pas les permissions nécessaires pour accéder à cette page.', 'error')
-                return redirect(url_for('admin_security.home'))
+                error_message = f"Vous n'avez pas les permissions nécessaires pour l'action '{action}' sur la page '{resource}'."
+                return render_template('admin/permission_error.html', error_message=error_message)
             
             return f(*args, **kwargs)
         return decorated_function

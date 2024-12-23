@@ -9,27 +9,49 @@
 <div class="row">
     <div class="col-12">
         <!-- Nav tabs -->
-        <ul class="nav nav-tabs" id="securityTab" role="tablist">
+        <ul class="nav nav-tabs" id="musicTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="player-tab" data-bs-toggle="tab" data-bs-target="#tab_player" type="button" role="tab" aria-controls="tab_player" aria-selected="true">Lecture</button>
+                <button class="nav-link {% if active_tab == 'player' %}active{% endif %}" 
+                        id="player-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab_player" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="tab_player" 
+                        aria-selected="{{ 'true' if active_tab == 'player' else 'false' }}">Lecture</button>
             </li>
+            {% if can_write %}
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="options-tab" data-bs-toggle="tab" data-bs-target="#tab_options" type="button" role="tab" aria-controls="tab_options" aria-selected="false">Options</button>
+                <button class="nav-link {% if active_tab == 'options' %}active{% endif %}" 
+                        id="options-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#tab_options" 
+                        type="button" 
+                        role="tab" 
+                        aria-controls="tab_options" 
+                        aria-selected="{{ 'true' if active_tab == 'options' else 'false' }}">Options</button>
             </li>
+            {% endif %}
         </ul>
 
         <!-- Tab content -->
         <div class="tab-content" id="securityTabContent">
-            <div class="tab-pane fade show active" id="tab_player" role="tabpanel" aria-labelledby="player-tab">
+            <div class="tab-pane fade {% if active_tab == 'player' %}show active{% endif %}" 
+                 id="tab_player" 
+                 role="tabpanel" 
+                 aria-labelledby="player-tab">
                 {% include 'admin/music_playlists.html' %}
             </div>
-            <div class="tab-pane fade" id="tab_options" role="tabpanel" aria-labelledby="options-tab">
+            {% if can_write %}
+            <div class="tab-pane fade {% if active_tab == 'options' %}show active{% endif %}" 
+                 id="tab_options" 
+                 role="tabpanel" 
+                 aria-labelledby="options-tab">
                 {% include 'admin/music_options.html' %}       
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
-
 {% endblock %}
-

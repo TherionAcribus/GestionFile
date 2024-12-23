@@ -5,6 +5,15 @@
 {% block content %}
     <h3 class="text-center">File d'attente</h3>
 
+    {% if not can_write %}
+    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+        <i class="fas fa-info-circle me-2"></i>
+        <div>
+            Mode lecture seule - Vous n'avez pas les permissions nécessaires pour modifier les données.
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Select patient filter  -->
     <div class="input-field">
         <select multiple
@@ -46,26 +55,24 @@
 
     <br>
 
+    {% if can_write %}
     <button 
         class="btn btn-warning"
         hx-get="/admin/database/confirm_delete_patient_table_with_saving"
-        hx-target="#modal-htmx"
-        hx-trigger="click"
-        data-bs-target="#modal_delete"
-        data-bs-toggle="modal">
-        Supprimer toute la liste AVEC copie dans l'historique
+        hx-target="#modal_delete_patient_table"
+        data-bs-toggle="modal" 
+        data-bs-target="#modal_delete_patient_table">
+        Supprimer tous les patients (avec sauvegarde)
     </button>
-
     <button 
         class="btn btn-danger"
         hx-get="/admin/database/confirm_delete_patient_table_without_saving"
-        hx-target="#modal-htmx"
-        hx-trigger="click"
-        data-bs-target="#modal_delete"
-        data-bs-toggle="modal">
-        Supprimer toute la liste SANS copie dans l'historique
+        hx-target="#modal_delete_patient_table"
+        data-bs-toggle="modal" 
+        data-bs-target="#modal_delete_patient_table">
+        Supprimer tous les patients (sans sauvegarde)
     </button>
-    
+
     <br><br>
 
     <h3>Ajouter un patient</h3>
@@ -94,6 +101,19 @@
             </button>
         </div>
     </div>
+
+    {% endif %}
+
+    <!-- Modal -->
+    <div id="modal_delete_patient_table" class="modal">
+    </div>
+
+    <!-- Modal -->
+    <div id="modal_delete_patient" class="modal">
+    </div>
+
+    <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
+    <div id="invisible" style="display:none;"></div>
 
     <script>
 

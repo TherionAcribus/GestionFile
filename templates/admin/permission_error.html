@@ -1,0 +1,13 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="alert alert-danger" role="alert">
+        <h4 class="alert-heading">Accès refusé</h4>
+        <p>{{ error_message }}</p>
+        <hr>
+        <p class="mb-0">Contactez un administrateur si vous pensez que c'est une erreur.</p>
+        <p class="mb-0">Les permissions se configurent dans la partie "Sécurité".</p>
+    </div>
+</div>
+{% endblock %}
