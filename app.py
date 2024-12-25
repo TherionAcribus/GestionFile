@@ -1780,21 +1780,25 @@ if __name__ == "__main__":
         #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 5000)), app)
         socketio.run(app, host='0.0.0.0', port=5000)   
 
+# Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
+@app.context_processor
+def inject_user():
+    return dict(current_user=current_user)
 
-    # Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
-    port = int(os.environ.get("PORT", 5000))
-    # Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
-    debug = os.environ.get("DEBUG", "False") == "True"
+# Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
+port = int(os.environ.get("PORT", 5000))
+# Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
+debug = os.environ.get("DEBUG", "False") == "True"
 
-    # creation BDD si besoin et initialise certaines tables (Activités)
-    def initialize_data():
-        pass
+# creation BDD si besoin et initialise certaines tables (Activités)
+def initialize_data():
+    pass
             
-    initialize_data()
+initialize_data()
 
-    print("Starting Flask...")
-    app.logger.info(f"Starting Flask on port {port} with debug={debug}")
+print("Starting Flask...")
+app.logger.info(f"Starting Flask on port {port} with debug={debug}")
 
-    #app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
+#app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
 
-    app.logger.info("Starting Flask app...")
+app.logger.info("Starting Flask app...")

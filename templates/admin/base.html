@@ -52,7 +52,11 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/logout">
-                                Se déconnecter
+                                {% if current_user.is_authenticated %}
+                                    -= {{ current_user.username | capitalize}} =- <br> Se déconnecter
+                                {% else %}
+                                    Se déconnecter
+                                {% endif %}
                             </a>
                         </li>
                         <li class="nav-item">
@@ -105,7 +109,7 @@
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/patient">
-                                Page patient
+                                Page Patient
                             </a>
                         </li>
                         <li class="nav-item">
@@ -176,7 +180,7 @@
           <div class="row">
             <div class="col-md-4">
               <h5>PharmaFile</h5>
-              <p>Attention, à tout moment ce site peut exploser !</p>
+              <p>Attention, ce site peut exploser à tout moment !</p>
             </div>
             <div class="col-md-4">
               <h5>Autres pages</h5>
