@@ -26,7 +26,7 @@ class SpotifyFlaskCacheHandler(spotipy.CacheHandler):
 
 @admin_music_bp.route('/admin/music')
 @admin_music_bp.route('/admin/music/<tab>')
-@require_permission('music', 'read')
+@require_permission('music')
 def admin_music(tab=None):
     valid_tabs = ['player', 'options']
     tab = request.args.get('tab', 'player')
@@ -291,7 +291,7 @@ def play_playlist():
     return redirect(url_for('admin_music.admin_music'))
 
 @admin_music_bp.route('/admin/music/save_options', methods=['POST'])
-@require_permission('music', 'write')
+@require_permission('music')
 def save_music_options():
     """Sauvegarde les options de musique"""
     try:

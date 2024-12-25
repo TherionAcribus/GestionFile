@@ -1,8 +1,10 @@
 from flask import Blueprint, render_template, current_app as app
+from routes.admin_security import require_permission
 
 admin_phone_bp = Blueprint('admin_phone', __name__)
 
 @admin_phone_bp.route('/admin/phone')
+@require_permission('phone')
 def admin_phone():
 
     phone_lines = {

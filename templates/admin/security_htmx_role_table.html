@@ -1,5 +1,3 @@
-<script src="{{ url_for('static', filename='js/permissions.js') }}"></script>
-
 
 
         {% for role in roles %}
@@ -18,28 +16,16 @@
                     {% for page, permission in role.to_dict()['permissions'].items() %}
                     <div class="col-md-4">
                         <div class="mb-2">
-                            <strong>{{ page.replace('admin_', '').title() }}:</strong>
-                            {% if role.name == "admin" %}
-                                <select class="form-select permission-select select-{{ permission }}">
-                                    <option value="write" 
-                                        selected>✏️ Écriture
-                                    </option>
-                                </select>
-                            {% else %}                            
-                                <select class="form-select permission-select select-{{ permission }}" 
-                                        id="{{ page }}-{{ role.id }}" 
-                                        data-permission="{{ page }}">
-                                    <option value="none" 
-                                        {{ 'selected' if permission == "none" else '' }}>🚫 Aucun
-                                    </option>
-                                    <option value="read" 
-                                        {{ 'selected' if permission == "read" else '' }}>👁️ Lecture
-                                    </option>
-                                    <option value="write" 
-                                        {{ 'selected' if permission == "write" else '' }}>✏️ Écriture
-                                    </option>
-                                </select>
-                            {% endif %}
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input permission-checkbox" 
+                                    id="{{ page }}-{{ role.id }}"
+                                    data-permission="{{ page }}"
+                                    {% if permission %}checked{% endif %}
+                                    {% if role.name == "admin" %}disabled{% endif %}>
+                                <label class="form-check-label" for="{{ page }}-{{ role.id }}">
+                                    {{ page.replace('admin_', '').title() }}
+                                </label>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}
@@ -58,8 +44,8 @@
                         "description": document.getElementById("description-{{ role.id }}").value,
                         "permissions": JSON.stringify(
                             Object.fromEntries(
-                                Array.from(document.querySelectorAll("#role-{{ role.id }} .permission-select"))
-                                    .map(select => [select.dataset.permission, select.value])
+                                Array.from(document.querySelectorAll("#role-{{ role.id }} .permission-checkbox"))
+                                    .map(checkbox => [checkbox.dataset.permission, checkbox.checked ? true : false])
                             )
                         )
                     }'>

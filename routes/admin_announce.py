@@ -7,6 +7,7 @@ import gtts
 from models import ConfigOption, Activity, Counter, Language, db
 from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
 from communication import communikation
+from routes.admin_security import require_permission
 import time
 
 def allowed_json_file(filename):
@@ -16,6 +17,7 @@ admin_announce_bp = Blueprint('admin_announce', __name__)
 
 @admin_announce_bp.route('/admin/announce')
 @admin_announce_bp.route('/admin/announce/<tab>')
+@require_permission('announce')
 def announce_page(tab=None):
     valid_tabs = ['visual', 'audio', 'gallery', 'googleVoice']
     if tab not in valid_tabs:

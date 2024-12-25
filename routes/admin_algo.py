@@ -1,15 +1,19 @@
 from flask import Blueprint, render_template, request, jsonify, current_app as app
 from datetime import datetime
 from models import AlgoRule, Activity, ConfigOption, db
+from routes.admin_security import require_permission
 
 admin_algo_bp = Blueprint('admin_algo', __name__)
 
 # page de base
 @admin_algo_bp.route('/admin/algo')
+@require_permission('algo')
 def admin_algo():
     algo_overtaken_limit = app.config['ALGO_OVERTAKEN_LIMIT']
+    can_write = any(role.has_permission('algo') for role in current_user.roles)
     return render_template('/admin/algo.html',
-                            algo_overtaken_limit=algo_overtaken_limit)
+                            algo_overtaken_limit=algo_overtaken_limit,
+                            can_write=can_write)
 
 @admin_algo_bp.route('/admin/algo/table')
 def display_algo_table():

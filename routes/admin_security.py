@@ -4,13 +4,11 @@ from datetime import datetime
 from models import User, db, Role
 from flask_mailman import EmailMessage
 from flask_login import logout_user
-from flask_security import current_user, hash_password, login_required, login_user
+from flask_security import current_user, login_required, login_user
 from wtforms import StringField, PasswordField, HiddenField, BooleanField
 from flask_wtf import FlaskForm
 from wtforms.validators import DataRequired
 from urllib.parse import urlparse, urljoin
-from werkzeug.security import generate_password_hash
-from communication import communikation
 from functools import wraps
 from flask import flash
 from sqlalchemy import text
@@ -19,23 +17,37 @@ import json
 admin_security_bp = Blueprint('admin_security', __name__)
 
 # gère les permissions sur les pages
-def require_permission(resource, action):
+def require_permission(resource):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if not current_user.is_authenticated:
-                return redirect(url_for('admin_security.login'))
-            
+                app.logger.warning("Utilisateur non authentifié tentant d'accéder à une ressource protégée")
+                return redirect(url_for('security.login'))
+
+            # Vérifier si l'utilisateur a un rôle
+            if not current_user.roles:
+                error_message = f"Vous n'avez pas les permissions nécessaires pour pour accéder à la page '{resource}'."
+                return render_template('admin/permission_error.html', error_message=error_message)
+
+            # Vérifier si au moins un des rôles de l'utilisateur a la permission
             has_permission = False
             for role in current_user.roles:
-                if role.has_permission(resource, action):
-                    has_permission = True
-                    break
-            
+                app.logger.debug(f"Vérification du rôle {role.name} pour la ressource {resource}")
+                app.logger.debug(f"Permissions du rôle: {role.get_permissions()}")
+                
+                permission_field = f'admin_{resource}'
+                if hasattr(role, permission_field):
+                    permission_value = getattr(role, permission_field)
+                    app.logger.debug(f"Valeur de la permission {permission_field}: {permission_value}")
+                    if permission_value == 'write':
+                        has_permission = True
+                        break
+
             if not has_permission:
-                error_message = f"Vous n'avez pas les permissions nécessaires pour l'action '{action}' sur la page '{resource}'."
+                error_message = f"Vous n'avez pas les permissions nécessaires pour accéder à la page '{resource}'."
                 return render_template('admin/permission_error.html', error_message=error_message)
-            
+
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -390,34 +402,43 @@ def reset_roles_table():
         return True
     except Exception as e:
         app.logger.error(f"Error resetting roles table: {str(e)}")
-        db.session.rollback()
         return False
 
 def create_default_role():
-    """Crée le rôle admin par défaut s'il n'existe pas"""
-    app.logger.info("=== Création du rôle admin par défaut ===")
-    
-    # Vérifie si le rôle admin existe déjà
-    role = Role.query.filter_by(name='admin').first()
-    
-    if role is None:
-        app.logger.info("Le rôle admin n'existe pas, création...")
-        
+    """Crée le rôle admin par défaut avec toutes les permissions"""
+    try:
+        # Vérifier si le rôle admin existe déjà
+        admin_role = Role.query.filter_by(name='admin').first()
+        if admin_role:
+            app.logger.info("Le rôle admin existe déjà")
+            return True
+
         # Créer le rôle admin avec toutes les permissions
-        role = Role(name='admin', description='Administrateur')
-        
-        # Définir toutes les permissions sur 'write'
-        admin_pages = [attr for attr in vars(Role) if attr.startswith('admin_')]
-        for page in admin_pages:
-            setattr(role, page, 'write')
-        
-        db.session.add(role)
+        admin_role = Role(
+            name='admin',
+            description='Administrateur avec toutes les permissions',
+            admin_security='write',
+            admin_counter='write',
+            admin_activity='write',
+            admin_schedule='write',
+            admin_algo='write',
+            admin_translation='write',
+            admin_options='write',
+            admin_music='write',
+            admin_dashboard='write',
+            admin_app='write',
+            admin_queue='write',
+            admin_stats='write'
+        )
+
+        db.session.add(admin_role)
         db.session.commit()
         app.logger.info("Rôle admin créé avec succès")
         return True
-    
-    app.logger.info("Le rôle admin existe déjà")
-    return False
+
+    except Exception as e:
+        app.logger.error(f"Erreur lors de la création du rôle admin: {str(e)}")
+        return False
 
 @admin_security_bp.route('/admin/check_default_admin', methods=['GET'])
 def check_default_admin():
@@ -445,7 +466,6 @@ def reset_admin_user():
         app.logger.info("All users have been deleted")
         return True
     except Exception as e:
-        db.session.rollback()
         app.logger.error(f"Error in reset_admin_user: {str(e)}")
         return False
 
@@ -473,64 +493,151 @@ def reset_admin():
 @admin_security_bp.route('/admin/security/role_update/<int:role_id>', methods=['POST'])
 def security_update_role(role_id):
     try:
+        app.logger.info(f"=== Début de la mise à jour du rôle {role_id} ===")
+        app.logger.info(f"Request data: {request.data}")
+        app.logger.info(f"Request form: {request.form}")
+        app.logger.info(f"Request content type: {request.content_type}")
+        
+        # Récupérer les données du formulaire
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+            
+        app.logger.info(f"Data after parsing: {data}")
+        
+        name = data.get('name')
+        description = data.get('description')
+        permissions_str = data.get('permissions', '{}')
+        
+        app.logger.info(f"Permissions string: {permissions_str}")
+        
+        try:
+            permissions = json.loads(permissions_str)
+        except json.JSONDecodeError as e:
+            app.logger.error(f"Erreur de décodage JSON: {str(e)}")
+            app.logger.error(f"Contenu qui a causé l'erreur: {permissions_str}")
+            return jsonify({'error': 'Invalid JSON format for permissions'}), 400
+
+        app.logger.info(f"Permissions parsed: {permissions}")
+
+        # Récupérer le rôle
         role = Role.query.get(role_id)
-        if role:
-            # Récupérer les données JSON ou form-data
-            data = request.get_json() if request.is_json else request.form
-            app.logger.info(f"Received data: {data}")
+        if not role:
+            app.logger.error(f"Rôle {role_id} non trouvé")
+            return jsonify({'error': 'Role not found'}), 404
 
-            if not data.get('name'):
-                app.display_toast(success=False, message="Le nom est obligatoire")
-                return ""
+        # Mise à jour des données de base
+        role.name = name
+        role.description = description
 
-            # Mise à jour des informations de base
-            role.name = data.get('name', role.name)
-            role.description = data.get('description', role.description)
-            app.logger.info(f"Updated name to: {role.name}, description to: {role.description}")
+        # Mise à jour des permissions
+        app.logger.info(f"Permissions avant mise à jour: {role.get_permissions()}")
+        for permission_name, value in permissions.items():
+            if hasattr(role, permission_name):
+                app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
+                new_value = 'write' if value else 'none'
+                app.logger.info(f"Setting {permission_name} to {new_value} (type: {type(value)})")
+                setattr(role, permission_name, new_value)
 
-            # Mise à jour des permissions
-            permissions_str = data.get('permissions', '{}')
-            if isinstance(permissions_str, str):
-                try:
-                    permissions = json.loads(permissions_str)
-                except json.JSONDecodeError:
-                    permissions = {}
+        app.logger.info(f"Permissions après mise à jour: {role.get_permissions()}")
 
-            app.logger.info(f"Permissions before update: {role.to_dict()['permissions']}")
-            app.logger.info(f"Received permissions: {permissions}")
-            
-            if isinstance(permissions, dict):
-                for page, permission in permissions.items():
-                    if hasattr(role, page):
-                        old_value = getattr(role, page)
-                        setattr(role, page, permission)
-                        app.logger.info(f"Updated {page} from {old_value} to {permission}")
+        try:
+            db.session.commit()
+            app.logger.info("Rôle mis à jour avec succès")
+            app.logger.info(f"Permissions finales du rôle: {role.to_dict()['permissions']}")
+            app.display_toast(success=True, message="Rôle mis à jour avec succès")
+            return jsonify({'success': True})
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Erreur lors du commit: {str(e)}")
+            app.logger.error(f"Type d'erreur: {type(e)}")
+            app.display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
+            return jsonify({'error': str(e)}), 500
 
-            try:
-                db.session.commit()
-                app.logger.info("Changes committed successfully")
-                app.logger.info(f"Permissions after update: {role.to_dict()['permissions']}")
-                app.display_toast(success=True, message="Mise à jour réussie")
-            except Exception as commit_error:
-                app.logger.error(f"Error committing changes: {str(commit_error)}")
-                db.session.rollback()
-                app.display_toast(success=False, message=f"Erreur lors de la sauvegarde : {str(commit_error)}")
-                return ""
-            
+    except Exception as e:
+        app.logger.error(f"Erreur générale: {str(e)}")
+        app.logger.error(f"Type d'erreur: {type(e)}")
+        app.display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
+        return jsonify({'error': str(e)}), 500
+
+@admin_security_bp.route('/admin/security/save_role', methods=['POST'])
+def save_role():
+    try:
+        data = request.get_json() if request.is_json else request.form
+        name = data.get('name')
+        description = data.get('description')
+        
+        if not name:
+            app.logger.error("Le nom est requis")
+            app.display_toast(success=False, message="Le nom est requis")
             return ""
 
-        else:
-            app.display_toast(success=False, message="Role introuvable")
+        permissions_str = data.get('permissions', '{}')
+        try:
+            permissions = json.loads(permissions_str)
+        except json.JSONDecodeError:
+            app.logger.error("Format de permissions invalide")
+            app.display_toast(success=False, message="Format de permissions invalide")
+            return ""
+
+        app.logger.info(f"Création d'un nouveau rôle - name: {name}, description: {description}")
+        app.logger.info(f"Permissions: {permissions}")
+
+        # Création du rôle avec toutes les permissions à 'none' par défaut
+        role = Role(
+            name=name,
+            description=description,
+            admin_security='none',
+            admin_counter='none',
+            admin_activity='none',
+            admin_schedule='none',
+            admin_algo='none',
+            admin_translation='none',
+            admin_options='none',
+            admin_music='none',
+            admin_dashboard='none',
+            admin_app='none',
+            admin_queue='none',
+            admin_stats='none'
+        )
+
+        # Attribution des permissions
+        for permission_name, value in permissions.items():
+            if hasattr(role, permission_name):
+                app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
+                new_value = 'write' if value else 'none'
+                app.logger.info(f"Setting {permission_name} to {new_value} (type: {type(value)})")
+                setattr(role, permission_name, new_value)
+                app.logger.info(f"Nouvelle valeur de {permission_name}: {getattr(role, permission_name)}")
+
+        try:
+            db.session.add(role)
+            db.session.commit()
+            app.logger.info("Rôle créé avec succès")
+            app.logger.info(f"Permissions finales du rôle: {role.to_dict()['permissions']}")
+            app.display_toast(success=True, message="Rôle créé avec succès")
+            return ""
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Erreur lors de la création du rôle: {str(e)}")
+            app.display_toast(success=False, message="Erreur lors de la création du rôle")
             return ""
 
     except Exception as e:
-        app.display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(f"Error in security_update_role: {str(e)}")
-        return jsonify(status="error", message=str(e)), 500
+        app.logger.error(f"Erreur lors de la création du rôle: {str(e)}")
+        app.display_toast(success=False, message="Erreur lors de la création du rôle")
+        return ""
 
+@admin_security_bp.route('/admin/security/add_role_form')
+def add_role_form():
+    """Affiche le formulaire d'ajout de rôle"""
+    # Récupérer la liste des pages à partir des attributs du modèle Role
+    admin_pages = [attr.replace('admin_', '') for attr in vars(Role) if attr.startswith('admin_')]
+    return render_template('/admin/security_add_role_form.html', admin_pages=admin_pages)
 
 @admin_security_bp.route('/admin/security/delete_role/<int:role_id>', methods=['GET'])
-@require_permission('security', 'write')
+@require_permission('security')
 # supprime un utilisateur
 def delete_role(role_id):
     try:
@@ -599,14 +706,8 @@ def create_default_user():
     """Crée l'utilisateur admin par défaut s'il n'existe pas"""
     try:
         if User.query.count() == 0:
-            app.logger.info("Creating admin user...")
-            
-            # Création du rôle admin
-            admin_role = create_default_role()
-            if not admin_role:
-                app.logger.error("Failed to create admin role")
-                return False
-            
+            app.logger.info("Creating admin user...")            
+           
             # Création de l'utilisateur admin
             admin_user = User(
                 email='admin',
@@ -618,6 +719,7 @@ def create_default_user():
             print(f"Hash du mot de passe admin: {admin_user.password}")
             
             # Attribution du rôle admin
+            admin_role = Role.query.filter_by(name='admin').first()
             admin_user.roles.append(admin_role)
             
             db.session.add(admin_user)
@@ -629,53 +731,3 @@ def create_default_user():
     except Exception as e:
         app.logger.error(f"Error in create_default_user: {str(e)}")
         return False
-
-@admin_security_bp.route('/admin/security/add_role_form')
-def add_role_form():
-    # Récupérer la liste des pages à partir des attributs du modèle Role
-    admin_pages = [attr.replace('admin_', '') for attr in vars(Role) if attr.startswith('admin_')]
-    return render_template('/admin/security_add_role_form.html', admin_pages=admin_pages)
-
-@admin_security_bp.route('/admin/security/save_role', methods=['POST'])
-def save_role():
-    try:
-        # Récupérer les données JSON
-        data = request.get_json() if request.is_json else request.form
-        
-        if not data.get('name'):
-            app.display_toast(success=False, message="Le nom est obligatoire")
-            return ""
-
-        # Créer le nouveau rôle
-        role = Role(
-            name=data.get('name'),
-            description=data.get('description', '')
-        )
-
-        print("permissions", data.get('permissions'))
-        # Définir les permissions
-        permissions = data.get('permissions', {})
-        if isinstance(permissions, str):
-            try:
-                permissions = json.loads(permissions)
-            except json.JSONDecodeError:
-                permissions = {}
-
-        if isinstance(permissions, dict):
-            for page, permission in permissions.items():
-                if hasattr(role, page):
-                    setattr(role, page, permission)
-
-        db.session.add(role)
-        db.session.commit()
-        
-        app.display_toast(success=True, message="Rôle créé avec succès")        
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_role_form"></div>"""
-        return f"{display_security_role_table()}{clear_form_html}"
-
-    except Exception as e:
-        app.display_toast(success=False, message=f"Erreur lors de la création : {str(e)}")
-        app.logger.error(f"Error in save_role: {str(e)}")
-        return jsonify(status="error", message=str(e)), 500

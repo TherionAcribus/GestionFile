@@ -7,10 +7,12 @@ from wtforms import MultipleFileField, SubmitField
 from flask_wtf import FlaskForm
 from werkzeug.utils import secure_filename
 from communication import communikation
+from routes.admin_security import require_permission
 
 admin_gallery_bp = Blueprint('admin_gallery', __name__)
 
 @admin_gallery_bp.route('/admin/info')
+@require_permission('gallery')
 def admin_info():
     return render_template('/admin/gallery.html',
                             galleries = os.listdir(app.config['ANNOUNCE_GALLERY_FOLDERS']))

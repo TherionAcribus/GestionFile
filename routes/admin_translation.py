@@ -4,11 +4,13 @@ from flask import Blueprint, render_template, request, jsonify, url_for, current
 from models import ConfigOption, Button, Activity, Language, Translation, db
 from werkzeug.utils import secure_filename
 from communication import communikation
+from routes.admin_security import require_permission
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
 
 @admin_translation_bp.route('/admin/translations')
+@require_permission('translations')
 def admin_translation():
     valid_tabs = ['languages', 'texts']
     tab = request.args.get('tab', 'languages')

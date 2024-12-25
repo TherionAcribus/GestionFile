@@ -13,7 +13,7 @@ admin_queue_bp = Blueprint('admin_queue', __name__)
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
 @admin_queue_bp.route('/admin/queue')
-@require_permission('queue', 'read')
+@require_permission('queue')
 def admin_queue():
     activities = Activity.query.all()
     can_write = any(role.has_permission('queue', 'write') for role in current_user.roles)
@@ -21,7 +21,7 @@ def admin_queue():
 
 # affiche le tableau des patients
 @admin_queue_bp.route('/admin/queue/table', methods=['POST'])
-@require_permission('queue', 'read')
+@require_permission('queue')
 def display_queue_table():
     # Récupération des statuts en une liste pour tri ultérieur
     filters = [status for status, value in request.form.items() if value == 'true']
@@ -45,20 +45,20 @@ def display_queue_table():
 
 # affiche la modale pour confirmer la suppression de toute la table patient
 @admin_queue_bp.route('/admin/database/confirm_delete_patient_table_without_saving')
-@require_permission('queue', 'write')
+@require_permission('queue')
 def confirm_delete_patient_table_without_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
                             saving=False)
 
 # affiche la modale pour confirmer la suppression de toute la table patient
 @admin_queue_bp.route('/admin/database/confirm_delete_patient_table_with_saving')
-@require_permission('queue', 'write')
+@require_permission('queue')
 def confirm_delete_patient_table_with_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
                             saving=True)
 
 @admin_queue_bp.route('/admin/database/clear_all_patients_with_saving')
-@require_permission('queue', 'write')
+@require_permission('queue')
 def clear_all_patients_from_db_with_saving():
     success = transfer_patients_to_history()
     if success:
@@ -68,7 +68,7 @@ def clear_all_patients_from_db_with_saving():
         current_app.display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
 
 @admin_queue_bp.route('/admin/database/clear_all_patients')
-@require_permission('queue', 'write')
+@require_permission('queue')
 def clear_all_patients_from_db(app_context=None):
     print("Suppression de la table Patient")
     # je dois passer le contexte dans le cas d'APscheduler car dans un Thread différent d'où "app_context", 
@@ -95,7 +95,7 @@ def clear_all_patients_from_db(app_context=None):
 
 # mise à jour des informations d'un patient
 @admin_queue_bp.route('/admin/queue/patient_update/<int:patient_id>', methods=['POST'])
-@require_permission('queue', 'write')
+@require_permission('queue')
 def update_patient(patient_id):
     try:
         patient = Patient.query.get(patient_id)
@@ -131,7 +131,7 @@ def update_patient(patient_id):
 
 # affiche la modale pour confirmer la suppression d'un patient particulier
 @admin_queue_bp.route('/admin/queue/confirm_delete_patient/<int:patient_id>', methods=['GET'])
-@require_permission('queue', 'write')
+@require_permission('queue')
 def confirm_delete_patient(patient_id):
     patient = Patient.query.get(patient_id)
     return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient)
@@ -139,7 +139,7 @@ def confirm_delete_patient(patient_id):
 
 # supprime un patient
 @admin_queue_bp.route('/admin/queue/delete_patient/<int:patient_id>', methods=['GET'])
-@require_permission('queue', 'write')
+@require_permission('queue')
 def delete_patient(patient_id):
     print("id", patient_id)
     try:
@@ -164,7 +164,7 @@ def delete_patient(patient_id):
 
 
 @admin_queue_bp.route('/admin/queue/create_new_patient_auto', methods=['POST'])
-@require_permission('queue', 'write')
+@require_permission('queue')
 def create_new_patient_auto():
     if request.form.get('activity_id') == "":
         current_app.display_toast(success=False, message="Veuillez choisir un motif")
@@ -181,7 +181,7 @@ def create_new_patient_auto():
 
 
 @admin_queue_bp.route('/admin/queue/dashboard')
-@require_permission('queue', 'read')
+@require_permission('queue')
 def dashboard_queue():
     patients = Patient.query.filter(Patient.status != "done").all()
     dashboardcard = DashboardCard.query.filter_by(name="queue").first()

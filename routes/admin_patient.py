@@ -7,12 +7,14 @@ from python.engine import get_futur_patient, create_qr_code
 from utils import format_ticket_text
 from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
+from routes.admin_security import require_permission
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
 
 @admin_patient_bp.route('/admin/patient')
 @admin_patient_bp.route('/admin/patient/<tab>')
+@require_permission('patient')
 def admin_patient(tab=None):
 
     valid_tabs = ['text', 'buttons', 'ticket', 'qrcode', 'interface']

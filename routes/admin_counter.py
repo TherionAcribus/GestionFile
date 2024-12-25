@@ -2,11 +2,13 @@ from flask import Blueprint, render_template, request, current_app as app
 from models import Counter, Activity, DashboardCard, db
 from routes.admin_activity import display_activity_table
 from communication import communikation
+from routes.admin_security import require_permission
 
 admin_counter_bp = Blueprint('admin_counter', __name__)
 
 # page de base
 @admin_counter_bp.route('/admin/counter')
+@require_permission('counter')
 def admin_counter():
     return render_template('/admin/counter.html',
                             counter_order = app.config['COUNTER_ORDER'])

@@ -1,10 +1,12 @@
 from flask import Blueprint, render_template, request, jsonify, current_app as app
 from models import Pharmacist, Activity, DashboardCard, db
+from routes.admin_security import require_permission
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
 
 # base
 @admin_staff_bp.route('/admin/staff')
+@require_permission('staff')
 def admin_staff():    
     return render_template('/admin/staff.html',
                             activities = Activity.query.all())

@@ -3,13 +3,16 @@ from flask import Blueprint, render_template, request, jsonify, current_app as a
 from sqlalchemy import func, text
 from datetime import datetime, timedelta
 from models import DashboardCard, Activity, Language, Counter, Patient, PatientHistory, db
+from routes.admin_security import require_permission
 import pytz
 
 admin_stats_bp = Blueprint('admin_stats', __name__)
 
 time_tz = pytz.timezone('Europe/Paris')
 
+
 @admin_stats_bp.route('/admin/stats')
+@require_permission('stats')
 def admin_stats():
     counters = Counter.query.all()
     activities = Activity.query.all()
@@ -110,7 +113,7 @@ def apply_filters(query, model, request_args, is_history=False):
 
     # Filtre par jour de la semaine (uniquement pour l'historique)
     if is_history:
-        day_of_week_filter = request_args.getlist('day_of_week_filter')
+        day_of_week_filter = request.args.getlist('day_of_week_filter')
         if day_of_week_filter:
             days = [int(d) for d in day_of_week_filter]
             # Pour MySQL: DAYOFWEEK() retourne 1 pour Dimanche, 2 pour Lundi, etc.

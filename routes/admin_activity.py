@@ -2,11 +2,13 @@ from datetime import datetime, time
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
 from models import Activity, ActivitySchedule, Pharmacist, Button, DashboardCard, db
 from sqlalchemy.orm import joinedload
+from routes.admin_security import require_permission
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
 
 # page de base
 @admin_activity_bp.route('/admin/activity')
+@require_permission('activity')
 def admin_activity():
     valid_tabs = ['activity', 'schedule']
     tab = request.args.get('tab', 'activity')

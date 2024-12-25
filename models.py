@@ -35,6 +35,34 @@ class Role(db.Model, RoleMixin):
     admin_dashboard = db.Column(db.String(10), nullable=False, default='none')
     admin_app = db.Column(db.String(10), nullable=False, default='none')
     admin_queue = db.Column(db.String(10), nullable=False, default='none')
+    admin_stats = db.Column(db.String(10), nullable=False, default='none')
+
+    # Surcharge de la méthode get_permissions de RoleMixin
+    def get_permissions(self):
+        perms = {}
+        for attr in dir(self):
+            if attr.startswith('admin_'):
+                perms[attr] = getattr(self, attr) == 'write'
+        return perms
+
+    # Surcharge de la méthode add_permissions de RoleMixin
+    def add_permissions(self, permissions):
+        for permission, value in permissions.items():
+            if hasattr(self, permission):
+                setattr(self, permission, 'write' if value else 'none')
+
+    # Surcharge de la méthode remove_permissions de RoleMixin
+    def remove_permissions(self, permissions):
+        for permission in permissions:
+            if hasattr(self, permission):
+                setattr(self, permission, 'none')
+
+    def has_permission(self, resource, action=None):
+        """Vérifie si le rôle a la permission demandée pour la ressource"""
+        permission_field = f'admin_{resource}'
+        if not hasattr(self, permission_field):
+            return False
+        return getattr(self, permission_field) == 'write'
 
     def __repr__(self):
         return f'<Role {self.name}>'
@@ -44,33 +72,8 @@ class Role(db.Model, RoleMixin):
             'id': self.id,
             'name': self.name,
             'description': self.description,
-            'permissions': {
-                'admin_security': self.admin_security,
-                'admin_counter': self.admin_counter,
-                'admin_activity': self.admin_activity,
-                'admin_schedule': self.admin_schedule,
-                'admin_algo': self.admin_algo,
-                'admin_translation': self.admin_translation,
-                'admin_options': self.admin_options,
-                'admin_music': self.admin_music,
-                'admin_dashboard': self.admin_dashboard,
-                'admin_app': self.admin_app,
-                'admin_queue': self.admin_queue
-            }
+            'permissions': self.get_permissions()
         }
-
-    def has_permission(self, resource, action):
-        """Vérifie si le rôle a la permission demandée pour la ressource"""
-        permission_field = f'admin_{resource}'
-        if not hasattr(self, permission_field):
-            return False
-            
-        permission = getattr(self, permission_field)
-        if action == 'read':
-            return permission in ['read', 'write']
-        elif action == 'write':
-            return permission == 'write'
-        return False
 
 class User(db.Model, UserMixin):
     __tablename__ = 'app_users'

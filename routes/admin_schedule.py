@@ -2,12 +2,14 @@ from flask import Blueprint, render_template, request, current_app as app
 from models import ActivitySchedule, Activity, Weekday, activity_schedule_link, db
 from utils import parse_time
 from routes.admin_activity import update_bouton_after_scheduler_changed
+from routes.admin_security import require_permission
 from communication import communikation
 
 admin_schedule_bp = Blueprint('admin_schedule', __name__)
 
 # affiche le tableau des plages horaires
 @admin_schedule_bp.route('/admin/schedule/table')
+@require_permission('schedule')
 def display_schedule_table():
     schedules = ActivitySchedule.query.all()
     weekdays = Weekday.query.all()
