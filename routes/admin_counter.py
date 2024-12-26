@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, current_app as app
 from models import Counter, Activity, DashboardCard, db
 from routes.admin_activity import display_activity_table
 from communication import communikation
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_dashboard
 
 admin_counter_bp = Blueprint('admin_counter', __name__)
 
@@ -164,6 +164,7 @@ def update_counter_order():
         app.display_toast(success=False, message=f"Erreur: {e}")
 
 @admin_counter_bp.route('/admin/counter/dashboard')
+@require_permission_dashboard('counter')
 def dashboard_counter():
     counters = Counter.query.all()
 

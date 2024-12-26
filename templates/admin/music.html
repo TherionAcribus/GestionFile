@@ -10,6 +10,7 @@
     <div class="col-12">
         <!-- Nav tabs -->
         <ul class="nav nav-tabs" id="musicTab" role="tablist">
+            {% if can_access_player %}
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if active_tab == 'player' %}active{% endif %}" 
                         id="player-tab" 
@@ -20,7 +21,9 @@
                         aria-controls="tab_player" 
                         aria-selected="{{ 'true' if active_tab == 'player' else 'false' }}">Lecture</button>
             </li>
-            {% if can_write %}
+            {% endif %}
+
+            {% if can_access_options %}
             <li class="nav-item" role="presentation">
                 <button class="nav-link {% if active_tab == 'options' %}active{% endif %}" 
                         id="options-tab" 
@@ -36,13 +39,16 @@
 
         <!-- Tab content -->
         <div class="tab-content" id="securityTabContent">
+            {% if can_access_player %}
             <div class="tab-pane fade {% if active_tab == 'player' %}show active{% endif %}" 
                  id="tab_player" 
                  role="tabpanel" 
                  aria-labelledby="player-tab">
                 {% include 'admin/music_playlists.html' %}
             </div>
-            {% if can_write %}
+            {% endif %}
+            
+            {% if can_access_options %}
             <div class="tab-pane fade {% if active_tab == 'options' %}show active{% endif %}" 
                  id="tab_options" 
                  role="tabpanel" 

@@ -7,7 +7,7 @@ from python.engine import get_futur_patient, create_qr_code
 from utils import format_ticket_text
 from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_dashboard
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -458,6 +458,7 @@ def admin_patient_qr_code_modal():
 
 
 @admin_patient_bp.route('/admin/button/dashboard')
+@require_permission_dashboard('patient')
 def dashboard_button():
     # Récupérer tous les boutons
     all_buttons = Button.query.all()
@@ -560,6 +561,7 @@ def admin_printer_status():
 
 
 @admin_patient_bp.route('/admin/printer/dashboard')
+@require_permission_dashboard('patient')
 def dashboard_staff():
     dashboardcard = DashboardCard.query.filter_by(name="staff").first()
     if not app.config["PRINTER_INFOS"]:

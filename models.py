@@ -31,11 +31,16 @@ class Role(db.Model, RoleMixin):
     admin_algo = db.Column(db.String(10), nullable=False, default='none')
     admin_translation = db.Column(db.String(10), nullable=False, default='none')
     admin_options = db.Column(db.String(10), nullable=False, default='none')
-    admin_music = db.Column(db.String(10), nullable=False, default='none')
-    admin_dashboard = db.Column(db.String(10), nullable=False, default='none')
+    admin_music_play = db.Column(db.String(10), nullable=False, default='none')
+    admin_music_options = db.Column(db.String(10), nullable=False, default='none')
     admin_app = db.Column(db.String(10), nullable=False, default='none')
     admin_queue = db.Column(db.String(10), nullable=False, default='none')
     admin_stats = db.Column(db.String(10), nullable=False, default='none')
+    admin_staff= db.Column(db.String(10), nullable=False, default='none')
+    admin_phone = db.Column(db.String(10), nullable=False, default='none')
+    admin_announce = db.Column(db.String(10), nullable=False, default='none')
+    admin_patient = db.Column(db.String(10), nullable=False, default='none')
+    admin_gallery = db.Column(db.String(10), nullable=False, default='none')
 
     # Surcharge de la méthode get_permissions de RoleMixin
     def get_permissions(self):

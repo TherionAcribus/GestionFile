@@ -10,7 +10,7 @@ admin_translation_bp = Blueprint('admin_translation', __name__)
 
 
 @admin_translation_bp.route('/admin/translations')
-@require_permission('translations')
+@require_permission('translation')
 def admin_translation():
     valid_tabs = ['languages', 'texts']
     tab = request.args.get('tab', 'languages')

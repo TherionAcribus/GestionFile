@@ -1,17 +1,15 @@
 import os
-from flask import Blueprint, render_template, jsonify, redirect, url_for, request, current_app as app
-from datetime import datetime
-from models import User, db, Role
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app as app
+from flask_login import current_user
+from functools import wraps
+from models import db, Role, User, DashboardCard
 from flask_mailman import EmailMessage
-from flask_login import logout_user
-from flask_security import current_user, login_required, login_user
+from flask_security import login_required, login_user
 from wtforms import StringField, PasswordField, HiddenField, BooleanField
 from flask_wtf import FlaskForm
 from wtforms.validators import DataRequired
 from urllib.parse import urlparse, urljoin
-from functools import wraps
-from flask import flash
-from sqlalchemy import text
+from datetime import datetime
 import json
 
 admin_security_bp = Blueprint('admin_security', __name__)
@@ -48,6 +46,46 @@ def require_permission(resource):
                 error_message = f"Vous n'avez pas les permissions nécessaires pour accéder à la page '{resource}'."
                 return render_template('admin/permission_error.html', error_message=error_message)
 
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def require_permission_dashboard(resource):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                app.logger.warning("Utilisateur non authentifié tentant d'accéder à une ressource protégée")
+                return redirect(url_for('security.login'))
+
+            # Vérifier si au moins un des rôles de l'utilisateur a la permission
+            has_permission = False
+            for role in current_user.roles:
+                app.logger.debug(f"Vérification du rôle {role.name} pour la ressource {resource}")
+                app.logger.debug(f"Permissions du rôle: {role.get_permissions()}")
+                
+                permission_field = f'admin_{resource}'
+                if hasattr(role, permission_field):
+                    permission_value = getattr(role, permission_field)
+                    app.logger.debug(f"Valeur de la permission {permission_field}: {permission_value}")
+                    if permission_value == 'write':
+                        has_permission = True
+                        break
+
+            if not has_permission:
+                app.logger.warning(f"Utilisateur {current_user.username} n'a pas la permission {resource}")
+                # Récupérer le dashboardcard depuis les arguments de la fonction
+                # On suppose que la fonction originale utilise DashboardCard.query.filter_by(name=...)
+                dashboardcard = DashboardCard.query.filter_by(name=resource).first()
+                
+                # Renvoyer uniquement le template avec le message d'erreur
+                return render_template('/admin/dashboard_base.html',
+                                    dashboardcard=dashboardcard,
+                                    error_message="Vous n'avez pas les permissions nécessaires pour accéder à cette partie.",
+                                    title=resource)
+
+            # Si l'utilisateur a la permission, exécuter la fonction normalement
             return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -413,7 +451,7 @@ def create_default_role():
             app.logger.info("Le rôle admin existe déjà")
             return True
 
-        # Créer le rôle admin avec toutes les permissions
+        # Créer le rôle admin avec toutes les permissions à 'none' par défaut
         admin_role = Role(
             name='admin',
             description='Administrateur avec toutes les permissions',

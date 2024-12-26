@@ -1,11 +1,12 @@
 from flask import Blueprint, render_template, request, current_app as app, jsonify
-from routes.admin_security import send_test_email
+from routes.admin_security import send_test_email, require_permission, require_permission_dashboard
 from models import DashboardCard
 
 admin_app_bp = Blueprint('admin_app', __name__)
 
 @admin_app_bp.route('/admin/app')
 @admin_app_bp.route('/admin/app/<tab>')
+@require_permission('app')
 def admin_app(tab=None):
     valid_tabs = ['general', 'backups', 'mail', 'connexion']
     tab = request.args.get('tab', 'general')
@@ -48,6 +49,7 @@ def admin_app_mail_test():
 
 
 @admin_app_bp.route('/admin/communication/dashboard')
+@require_permission_dashboard('app')
 def dashboard_communication():
     dashboardcard = DashboardCard.query.filter_by(name="connection").first()
     return render_template('/admin/dashboard_connection.html',

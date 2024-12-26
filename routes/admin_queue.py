@@ -5,7 +5,7 @@ from python.engine import add_patient, get_next_call_number
 from routes.announce import announce_refresh
 from communication import communikation
 from bdd import transfer_patients_to_history
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_dashboard
 from flask_login import current_user
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
@@ -16,8 +16,7 @@ status_list = ['ongoing', 'standing', 'done', 'calling']
 @require_permission('queue')
 def admin_queue():
     activities = Activity.query.all()
-    can_write = any(role.has_permission('queue', 'write') for role in current_user.roles)
-    return render_template('admin/queue.html', activities=activities, can_write=can_write)
+    return render_template('admin/queue.html', activities=activities)
 
 # affiche le tableau des patients
 @admin_queue_bp.route('/admin/queue/table', methods=['POST'])
@@ -32,15 +31,12 @@ def display_queue_table():
         patients = Patient.query.filter(Patient.status.in_(filters)).all()
     else:
         patients = Patient.query.all()
-
-    can_write = any(role.has_permission('queue', 'write') for role in current_user.roles)
-    
+   
     return render_template('admin/queue_htmx_table.html', 
                             patients=patients, 
                             activities=Activity.query.all(),
                             status_list=status_list,
-                            counters=Counter.query.all(),
-                            can_write=can_write)
+                            counters=Counter.query.all())
 
 
 # affiche la modale pour confirmer la suppression de toute la table patient
@@ -181,7 +177,7 @@ def create_new_patient_auto():
 
 
 @admin_queue_bp.route('/admin/queue/dashboard')
-@require_permission('queue')
+@require_permission_dashboard('queue')
 def dashboard_queue():
     patients = Patient.query.filter(Patient.status != "done").all()
     dashboardcard = DashboardCard.query.filter_by(name="queue").first()

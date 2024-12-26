@@ -6,23 +6,16 @@
         <th>Heure d'Enregistrement</th>
         <th>Statut</th>
         <th>Comptoir</th>
-        {% if can_write %}
         <th>Actions</th>
-        {% endif %}
     </tr>
     </thead>
     <tbody>
         {% for patient in patients %}
         <tr>
             <td>
-                {% if can_write %}
                 <input type="text" class="form-control" name="call_number" value="{{ patient.call_number }}" id="call_number-{{ patient.id }}">
-                {% else %}
-                {{ patient.call_number }}
-                {% endif %}
             </td>
             <td>
-                {% if can_write %}
                 <div class="input-field">
                     <select class="form-select" id="activity-{{ patient.id }}">               
                         {% for activity in activities %}
@@ -30,13 +23,9 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% else %}
-                {{ patient.activity.name }}
-                {% endif %}
             </td>
             <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>
-                {% if can_write %}
                 <div class="input-field">
                     <select class="form-select" id="status-{{ patient.id }}">               
                         {% for status in status_list %}
@@ -44,12 +33,8 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% else %}
-                {{ patient.status }}
-                {% endif %}
             </td>
             <td>
-                {% if can_write %}
                 <div class="input-field">
                     <select class="form-select" id="counter-{{ patient.id }}"> 
                         <option value="None">None</option>              
@@ -58,11 +43,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% else %}
-                {{ patient.counter.name if patient.counter else 'None' }}
-                {% endif %}
             </td>
-            {% if can_write %}
             <td>
                 <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
@@ -82,7 +63,6 @@
                     Supprimer
                 </button>
             </td>
-            {% endif %}
         </tr>
         {% endfor %}
     </tbody>

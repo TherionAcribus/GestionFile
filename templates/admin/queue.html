@@ -5,14 +5,6 @@
 {% block content %}
     <h3 class="text-center">File d'attente</h3>
 
-    {% if not can_write %}
-    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
-        <div>
-            Mode lecture seule - Vous n'avez pas les permissions nécessaires pour modifier les données.
-        </div>
-    </div>
-    {% endif %}
-
     <!-- Select patient filter  -->
     <div class="input-field">
         <select multiple
@@ -54,7 +46,6 @@
 
     <br>
 
-    {% if can_write %}
     <button 
         class="btn btn-warning"
         hx-get="/admin/database/confirm_delete_patient_table_with_saving"
@@ -100,8 +91,6 @@
             </button>
         </div>
     </div>
-
-    {% endif %}
 
     <!-- Modal -->
     <div id="modal_delete_patient_table" class="modal">

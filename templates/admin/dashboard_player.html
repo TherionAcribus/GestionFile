@@ -1,4 +1,3 @@
-
 <div id="card-{{ dashboardcard.id }}" class="dashboard-card size-18">
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -17,11 +16,17 @@
             </div>
         </div>
         <div class="card-body">
-            {% if spotify_connected %}
-                {% include 'admin/music_player.html' %}
+            {% if error_message %}
+                <div class="text-center">
+                    {{ error_message }}
+                </div>
             {% else %}
-                <p>Connectez-vous à Spotify pour utiliser ce service</p>
-                <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
+                {% if spotify_connected %}
+                    {% include 'admin/music_player.html' %}
+                {% else %}
+                    <p>Connectez-vous à Spotify pour utiliser ce service</p>
+                    <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
+                {% endif %}
             {% endif %}
         </div>
     </div>

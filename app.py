@@ -82,6 +82,7 @@ from routes.admin_stats import admin_stats_bp
 from routes.patient import patient_bp
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
 from python.engine import engine_bp
+from routes.admin_security import require_permission, require_permission_dashboard
 
 # adresse production
 rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
@@ -1068,6 +1069,7 @@ def check_balises_after_validation(value):
 # --------  ADMIN -> DataBase  ---------
 
 @app.route('/admin/database')
+@require_permission('schedule')
 def admin_database():
     return render_template('/admin/database.html',
                         cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
@@ -1127,6 +1129,7 @@ def display_schedule_tasks_list():
 
 
 @app.route('/admin/appschedule/dashboard')
+@require_permission_dashboard('schedule')
 def dashboard_counter():
     jobs = scheduler.get_jobs()
     main_jobs_info = []

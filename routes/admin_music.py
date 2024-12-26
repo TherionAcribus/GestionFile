@@ -2,10 +2,10 @@ import spotipy
 import time as tm
 from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, session, current_app as app
+from flask import Blueprint, render_template, request, redirect, url_for, session, current_app as app, flash
 from models import db, ConfigOption, DashboardCard
 from communication import communikation
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_dashboard
 from flask_login import current_user
 
 admin_music_bp = Blueprint('admin_music', __name__)
@@ -26,16 +26,35 @@ class SpotifyFlaskCacheHandler(spotipy.CacheHandler):
 
 @admin_music_bp.route('/admin/music')
 @admin_music_bp.route('/admin/music/<tab>')
-@require_permission('music')
 def admin_music(tab=None):
-    valid_tabs = ['player', 'options']
-    tab = request.args.get('tab', 'player')
-    if tab not in valid_tabs:
-        tab = 'player'
+    # Vérifier les permissions pour chaque onglet
+    can_access_player = any(role.has_permission('music_play') for role in current_user.roles)
+    can_access_options = any(role.has_permission('music_options') for role in current_user.roles)
 
-    # Vérifier les permissions pour chaque section
-    can_write = any(role.has_permission('music', 'write') for role in current_user.roles)
-    
+    if not (can_access_player or can_access_options):
+        error_message = f"Vous n'avez pas les permissions nécessaires pour pour accéder à la partie 'musique'."
+        return render_template('admin/permission_error.html', error_message=error_message)
+
+    # Déterminer l'onglet actif en fonction des permissions
+    valid_tabs = []
+    if can_access_player:
+        valid_tabs.append('player')
+    if can_access_options:
+        valid_tabs.append('options')
+
+    # Si aucun onglet n'est spécifié ou si l'onglet spécifié n'est pas valide,
+    # utiliser le premier onglet accessible
+    if not tab or tab not in valid_tabs:
+        tab = valid_tabs[0] if valid_tabs else None
+
+    # Si l'utilisateur essaie d'accéder à un onglet pour lequel il n'a pas la permission
+    if tab == 'player' and not can_access_player:
+        error_message = f"Vous n'avez pas les permissions nécessaires pour pour accéder au lecteur audio'."
+        return render_template('admin/permission_error.html', error_message=error_message)
+    elif tab == 'options' and not can_access_options:
+        error_message = f"Vous n'avez pas les permissions nécessaires pour pour accéder aux options de la musique'."
+        return render_template('admin/permission_error.html', error_message=error_message)
+
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
     print("spotify", spotify_connected)
@@ -54,7 +73,8 @@ def admin_music(tab=None):
                                 track_infos = get_spotify_current_track_info(),
                                 playlists=playlists['items'],
                                 active_tab=tab,
-                                can_write=can_write)
+                                can_access_player=can_access_player,
+                                can_access_options=can_access_options)
 
     else:
         return render_template('/admin/music.html',
@@ -67,8 +87,42 @@ def admin_music(tab=None):
                                 spotify_connected=spotify_connected,
                                 playlists=[],
                                 active_tab=tab,
-                                can_write=can_write)
-    
+                                can_access_player=can_access_player,
+                                can_access_options=can_access_options)
+
+
+@admin_music_bp.route('/admin/music/player/<action>', methods=['POST'])
+@require_permission('music_play')
+def player_action(action):
+    if action == 'shuffle':
+        return shuffle_playlist()
+    elif action == 'pause':
+        return pause_music()
+    elif action == 'resume':
+        return resume_music()
+    elif action == 'next':
+        return next_track()
+    elif action == 'previous':
+        return previous_track()
+    elif action == 'change_volume':
+        return change_volume()
+    elif action == 'start_announce':
+        return start_announce_music()
+    elif action == 'stop_announce':
+        return stop_announce_music()
+    elif action == 'play_playlist':
+        return play_playlist()
+
+@admin_music_bp.route('/admin/music/save_options', methods=['POST'])
+@require_permission('music_options')
+def save_music_options():
+    """Sauvegarde les options de musique"""
+    try:
+        # Code existant...
+        pass
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde des options de musique : {e}")
+        return '', 500
 
 
 def get_spotify_oauth():
@@ -290,17 +344,6 @@ def play_playlist():
 
     return redirect(url_for('admin_music.admin_music'))
 
-@admin_music_bp.route('/admin/music/save_options', methods=['POST'])
-@require_permission('music')
-def save_music_options():
-    """Sauvegarde les options de musique"""
-    try:
-        # Code existant...
-        pass
-    except Exception as e:
-        print(f"Erreur lors de la sauvegarde des options de musique : {e}")
-        return '', 500
-
 def get_spotify_token():
     token_info = session.get('token_info', None)
     if not token_info:
@@ -367,17 +410,20 @@ def get_spotify_current_track_info():
 
 
 @admin_music_bp.route('/admin/music/dashboard')
+@require_permission_dashboard('music_play')
 def dashboard_music():
     token_info, authorized = get_spotify_token()
+    spotify_connected = authorized
+    print("spotify", spotify_connected)
     dashboardcard = DashboardCard.query.filter_by(name="player").first()
-    print("spotify", authorized)
-    if authorized:
+    
+    if spotify_connected:
         track_infos = get_spotify_current_track_info()
         return render_template('/admin/dashboard_player.html',
-                                spotify_connected=authorized,
-                                track_infos=track_infos,
-                                dashboardcard=dashboardcard)
+                             spotify_connected=spotify_connected,
+                             track_infos=track_infos,
+                             dashboardcard=dashboardcard)
     else:
-        return render_template('/admin/dashboard_player.html', 
-                                spotify_connected=authorized,
-                                dashboardcard=dashboardcard)
+        return render_template('/admin/dashboard_player.html',
+                             spotify_connected=spotify_connected,
+                             dashboardcard=dashboardcard)

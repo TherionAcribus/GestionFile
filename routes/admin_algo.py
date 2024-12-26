@@ -10,10 +10,8 @@ admin_algo_bp = Blueprint('admin_algo', __name__)
 @require_permission('algo')
 def admin_algo():
     algo_overtaken_limit = app.config['ALGO_OVERTAKEN_LIMIT']
-    can_write = any(role.has_permission('algo') for role in current_user.roles)
     return render_template('/admin/algo.html',
-                            algo_overtaken_limit=algo_overtaken_limit,
-                            can_write=can_write)
+                            algo_overtaken_limit=algo_overtaken_limit)
 
 @admin_algo_bp.route('/admin/algo/table')
 def display_algo_table():

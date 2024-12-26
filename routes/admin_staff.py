@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, current_app as app
 from models import Pharmacist, Activity, DashboardCard, db
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_dashboard
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
 
@@ -146,6 +146,7 @@ def add_new_staff():
     
 
 @admin_staff_bp.route('/admin/staff/dashboard')
+@require_permission_dashboard('staff')
 def dashboard_staff():
     print("dashboard staff")
     staffs = Pharmacist.query.all()

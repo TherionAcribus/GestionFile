@@ -9,7 +9,6 @@ admin_schedule_bp = Blueprint('admin_schedule', __name__)
 
 # affiche le tableau des plages horaires
 @admin_schedule_bp.route('/admin/schedule/table')
-@require_permission('schedule')
 def display_schedule_table():
     schedules = ActivitySchedule.query.all()
     weekdays = Weekday.query.all()
