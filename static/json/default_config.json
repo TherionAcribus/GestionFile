@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.32",
+    "version": "0.33",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -85,6 +85,10 @@
             "page_patient_print_after_scan": false,
             "page_patient_print_after_print": true,
             "page_patient_timer_activity_inactive": 10,
+            "page_patient_button_print_ticket_display_picture": true,
+            "page_patient_button_cancel_display_picture": true,
+            "page_patient_button_print_ticket_picture": "",
+            "page_patient_button_cancel_picture": "",
             "ticket_header": "Bienvenue à la pharmacie Sainte-Agathe",
             "ticket_header_printer": "",
             "ticket_message": "Votre numéro d'appel : {N}",

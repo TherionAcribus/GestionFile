@@ -400,7 +400,72 @@
 
                 {{ macros.textarea_full("page_patient_interface_validate_print", page_patient_interface_validate_print, "Bouton 'Imprimer'") }}
 
-                {{ macros.textarea_full("page_patient_interface_validate_cancel", page_patient_interface_validate_cancel, "Bouton 'Annuler'") }}
+
+                <div class="d-flex align-items-center gap-3">
+
+                    <div id="div_image_print_button">
+                        {% if page_patient_button_print_ticket_picture %}
+                            <img src="{{ url_for('static', filename='images/buttons/' ~ page_patient_button_print_ticket_picture) }}" 
+                            alt="Button Image" 
+                            style="width: 100px;">
+                        {% else %}
+                            Pas d'image
+                        {% endif %}
+                    </div>
+
+                    <div>{{page_patient_button_print_ticket_picture}}</div>
+
+                <!-- Bouton pour ouvrir la modal -->
+                <button class="btn btn-primary"
+                        hx-get="/admin/patient/gallery_button_images/print_button"
+                        hx-target="#modal_display_gallery_for_interface .modal-content"
+                        hx-trigger="click"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modal_display_gallery_for_interface">
+                    Galerie
+                </button>
+
+                {{ macros.switch("page_patient_button_print_ticket_display_picture",
+                                page_patient_button_print_ticket_display_picture, 
+                                "Afficher l'image sur le bouton 'Imprimer'")
+                }} 
+
+            </div>
+
+            {{ macros.textarea_full("page_patient_interface_validate_cancel", page_patient_interface_validate_cancel, "Bouton 'Annuler'") }}
+
+            <div class="d-flex align-items-center gap-3">
+
+
+                <div id="div_image_cancel_button">
+                    {% if page_patient_button_cancel_picture %}
+                        <img src="{{ url_for('static', filename='images/buttons/' ~ page_patient_button_cancel_picture) }}" 
+                        alt="Button Image" 
+                        style="width: 100px;">
+                    {% else %}
+                        Pas d'image
+                    {% endif %}
+                </div>
+
+                {{page_patient_button_cancel_picture}}              
+
+                <!-- Bouton pour ouvrir la modal -->
+                <button class="btn btn-primary"
+                        hx-get="/admin/patient/gallery_button_images/cancel_button"
+                        hx-target="#modal_display_gallery_for_interface .modal-content"
+                        hx-trigger="click"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modal_display_gallery_for_interface">
+                    Galerie
+                </button>
+
+                {{ macros.switch("page_patient_button_cancel_display_picture",
+                                page_patient_button_cancel_display_picture, 
+                                "Afficher l'image sur le bouton 'Annuler'")
+                }}
+
+            </div>
+
 
                 <strong>square du bouton</strong>
                 <div class="admin_css_textbloc">
@@ -425,7 +490,12 @@
                 <div class="admin_css_textbloc">                
                     {{ macros.css_unit_bloc("patient", "validation_button_text_border_size", validation_button_text_border_size, "Taille", "px") }}
                     {{ macros.css_color_bloc("patient", "validation_button_text_border_color", validation_button_text_border_color, "Couleur") }}
-                </div>                
+                </div>        
+                
+                <strong>Taille des images</strong>
+                <div class="admin_css_textbloc">                
+                    {{ macros.css_unit_bloc("patient", "validation_button_picture_size", validation_button_picture_size, "Taille", "px") }}
+                </div>   
 
             </div>
         </div>
@@ -501,3 +571,13 @@
       </div>
     </div>
   </div>
+
+
+  <!-- Modal Structure Galerie-->
+<div class="modal fade" id="modal_display_gallery_for_interface" tabindex="-1" aria-labelledby="modalGalleryLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <!-- Le contenu de la modale sera chargé ici par HTMX -->
+        </div>
+    </div>
+</div>

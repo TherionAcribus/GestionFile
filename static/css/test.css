@@ -66,7 +66,8 @@
     --validation_button_text_size: 30px;
     --validation_button_text_color: #008B8B;
     --validation_button_text_border_size: 0px;
-    --validation_button_text_border_color: black;    
+    --validation_button_text_border_color: black;   
+    --validation_button_picture_size: 200px; 
     --confirmation_text_font_color:darkcyan;
     --confirmation_text_font_size: 50px;
     --confirmation_text_border_size: 0px;
@@ -339,6 +340,31 @@ html, body {
     border-style: solid;
 }
 
+.div_validation_one_button_with_img{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color:var(--validation_button_color);
+    height: var(--validation_button_height);
+    width: var(--validation_button_width);
+    border-radius: 5%;
+    box-shadow: 5px 5px 5px #888888;
+    color: var(--validation_button_text_color);
+    text-align: center;
+    margin: 30px ;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-color: var(--validation_button_border_color);
+    border-width: var(--validation_button_border_size);
+    border-style: solid;
+}
+
+.img_for_div_validation {
+    max-width: var(--validation_button_picture_size);
+    height: auto;
+    object-fit: contain;
+}
+
 .validation_button {
     font-size: var(--validation_button_text_size);
     font-weight: 500;
@@ -455,3 +481,5 @@ html, body {
     -webkit-text-stroke-width: var(--subtitle_specific_message_border_size);
     font-weight: bold;
 }
+
+

@@ -2,7 +2,7 @@ import os
 import datetime
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
 from werkzeug.utils import secure_filename
-from models import Button, Activity, DashboardCard, Language, db
+from models import Button, Activity, DashboardCard, Language, ConfigOption, db
 from python.engine import get_futur_patient, create_qr_code 
 from utils import format_ticket_text
 from communication import communikation, send_app_notification
@@ -57,6 +57,10 @@ def admin_patient(tab=None):
                             page_patient_interface_done_print = app.config['PAGE_PATIENT_INTERFACE_DONE_PRINT'],
                             page_patient_interface_done_extend = app.config['PAGE_PATIENT_INTERFACE_DONE_EXTEND'],
                             page_patient_interface_done_back = app.config['PAGE_PATIENT_INTERFACE_DONE_BACK'], 
+                            page_patient_button_print_ticket_display_picture = app.config['PAGE_PATIENT_BUTTON_PRINT_TICKET_DISPLAY_PICTURE'],
+                            page_patient_button_print_ticket_picture = app.config['PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE'],
+                            page_patient_button_cancel_display_picture = app.config['PAGE_PATIENT_BUTTON_CANCEL_DISPLAY_PICTURE'],
+                            page_patient_button_cancel_picture = app.config['PAGE_PATIENT_BUTTON_CANCEL_PICTURE'],
                             activities = Activity.query.all(),
                             languages = Language.query.all(),
                             # CSS
@@ -140,6 +144,7 @@ def admin_patient(tab=None):
                             validation_button_text_color=app.css_variable_manager.get_variable('patient', 'validation_button_text_color'),
                             validation_button_text_border_size=app.css_variable_manager.get_variable('patient', 'validation_button_text_border_size'),
                             validation_button_text_border_color=app.css_variable_manager.get_variable('patient', 'validation_button_text_border_color'),
+                            validation_button_picture_size=app.css_variable_manager.get_variable('patient', 'validation_button_picture_size'),
                             #confirmation
                             confirmation_text_font_color=app.css_variable_manager.get_variable('patient', 'confirmation_text_font_color'),
                             confirmation_text_font_size=app.css_variable_manager.get_variable('patient', 'confirmation_text_font_size'),
@@ -384,6 +389,33 @@ def upload_image(button_id):
     return "Invalid file", 400
 
 
+@admin_patient_bp.route('/upload_image_for_interface/<button_id>', methods=['POST'])
+def upload_image_for_interface(button_id):
+    """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
+    if 'file' not in request.files:
+        return "No file part", 400
+    file = request.files['file']
+    if file.filename == '':
+        return "No selected file", 400
+    if file and allowed_image_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.static_folder, 'images/buttons',  filename)
+        file.save(file_path)
+        if button_id == "print_button":
+            key = "page_patient_button_print_ticket_picture"
+        elif button_id == "cancel_button":
+            key = "page_patient_button_cancel_picture"
+        app.config[key.upper()] = filename
+        config_option = ConfigOption.query.filter_by(config_key=key).first()
+        if config_option:
+            print("CONFIG OPTION")
+            config_option.value_str = filename
+        db.session.commit()
+        # Retour à la page admin/patient
+        return redirect("/admin/patient", code=302)
+    return "Invalid file", 400
+
+
 # Permet de définir le type de fichiers autorisés pour l'ajout d'images
 def allowed_image_file(filename):
     return '.' in filename and \
@@ -399,6 +431,14 @@ def gallery_button_images(button_id):
     return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
 
 
+@admin_patient_bp.route('/admin/patient/gallery_button_images/<button_id>', methods=['GET'])
+def gallery_button_images_for_interface(button_id):
+    directory = os.path.join(app.static_folder, 'images/buttons')
+    images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    print(images)
+    return render_template('/admin/patient_page_button_modal_gallery_for_interface.html', images=images, button_id=button_id)
+
+
 @admin_patient_bp.route('/admin/patient/update_button_image_from_gallery', methods=['POST'])
 def update_button_image_from_gallery():
     button_id = request.form.get('button_id')
@@ -408,6 +448,23 @@ def update_button_image_from_gallery():
     button.image_url = image_url
     db.session.commit()
     return """<img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">"""
+
+
+@admin_patient_bp.route('/admin/patient/update_button_image_from_gallery_for_interface', methods=['POST'])
+def update_button_image_from_gallery_for_interface():
+    button_id = request.form.get('button_id')
+    image_url = request.form.get('image')
+    print("REQUEST_imae", request.form)
+    if button_id == "print_button":
+        key = "page_patient_button_print_ticket_picture"
+    elif button_id == "cancel_button":
+        key = "page_patient_button_cancel_picture"
+    config_option = ConfigOption.query.filter_by(config_key=key).first()
+    config_option.value_str = image_url
+    db.session.commit()
+    app.config[key.upper()] = image_url
+    html = f"""<img src="/static/images/buttons/{image_url}" alt="Button Image" style="width: 100px;">"""
+    return html
 
 
 @admin_patient_bp.route('/admin/patient/delete_button_image/<int:button_id>', methods=['GET'])

@@ -1,7 +1,7 @@
 {
     "name": "gf_patient_css_variables",
     "type": "default",
-    "version": "0.16",
+    "version": "0.17",
     "timestamp": "2024-11-04 14:35:26",
     "comments": "Version initiale",
     "variables": {
@@ -79,6 +79,7 @@
         "validation_button_text_color": "#008B8B",
         "validation_button_text_border_size": "0px",
         "validation_button_text_border_color": "black",
+        "validation_button_picture_size": "200px",
         "confirmation_text_font_color": "#008B8B",
         "confirmation_text_font_size": "50px",
         "confirmation_text_border_size": "0px",

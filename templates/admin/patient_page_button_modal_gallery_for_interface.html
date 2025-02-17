@@ -1,0 +1,65 @@
+<div class="modal-header">
+    <h5 class="modal-title">Choix d'une image {{button_id}}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <p>Choisissez une image dans la galerie en cliquant dessus puis en validant ou ajoutant une image depuis votre ordinateur. </p>
+    <div class="image-grid">
+        {% for image in images %}
+        <img src="{{ url_for('static', filename='images/buttons/' + image) }}"
+            id="img_{{ image }}"
+            alt="Button Image"
+            style="width: 100px; cursor: pointer;"
+            onclick="selectImage('{{ image }}');">
+        {% endfor %}
+    </div>
+</div>
+
+<form action="{{ url_for('admin_patient.upload_image_for_interface', button_id=button_id) }}" method="post"
+    enctype="multipart/form-data"
+    hx-post="{{ url_for('admin_patient.upload_image_for_interface', button_id=button_id) }}"
+    hx-target=".image-grid"
+    hx-swap="outerHTML"
+    hx-encoding="multipart/form-data">
+    <div class="file-upload">
+        <button type="btn btn-primary">Ouvrir une image depuis votre ordinateur</button>
+        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">
+    </div>
+</form>
+
+<div class="modal-footer">
+    <span id="image_name_field"></span>
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    <a href="#!" 
+        class="btn btn-primary"
+        hx-post="/admin/patient/update_button_image_from_gallery_for_interface"
+        hx-vals='js:{"button_id": "{{button_id}}", "image": document.getElementById("image_name_field").innerText}'
+        {% if button_id == "print_button" %}
+            hx-target="#div_image_print_button"
+        {% elif button_id == "cancel_button" %}
+            hx-target="#div_image_cancel_button"
+        {% endif %}
+        hx-swap="innerHTML"
+        data-bs-target="#modal_display_gallery_for_interface"
+        data-bs-toggle="modal"
+        >
+        Confirmer</a>
+</div>
+
+<script>
+    // le js est dans l'html car ne doit être chargé que quand l'est l'html
+    function selectImage(imageName) {
+        // Mettre à jour l'URL de l'image dans le formulaire
+        document.getElementById('image_name_field').innerText = imageName;
+        // Cadre bleu autour de l'image
+        if (document.getElementsByClassName('selected-image')) {         
+        for (element of document.getElementsByClassName('selected-image')) {
+            element.classList.remove('selected-image');
+        }
+    }
+        document.getElementById('img_' + imageName).classList.add('selected-image');
+        // Fermer la modal
+    }
+
+</script>
