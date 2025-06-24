@@ -8,6 +8,7 @@ from flask_security import UserMixin, RoleMixin
 from sqlalchemy.dialects.mysql import JSON
 from werkzeug.security import check_password_hash, generate_password_hash
 from config import time_tz
+import bcrypt
 
 db = SQLAlchemy()
 
@@ -100,21 +101,36 @@ class User(db.Model, UserMixin):
         from flask import current_app as app
         app.logger.info(f"=== Vérification du mot de passe pour {self.username} ===")
         app.logger.info(f"Hash stocké en base: {self.password}")
-        
-        # Créer un hash test avec le même mot de passe
-        test_hash = generate_password_hash(password, method='pbkdf2:sha256')
-        app.logger.info(f"Hash test (pour info): {test_hash}")
-        
-        # Vérifier si le mot de passe correspond au hash stocké
-        result = check_password_hash(self.password, password)
-        app.logger.info(f"Résultat de la vérification: {result}")
-        return result
+
+        stored_hash = self.password or ""
+
+        # Première tentative : formats gérés par Werkzeug (pbkdf2, scrypt, etc.)
+        try:
+            result = check_password_hash(stored_hash, password)
+            app.logger.info(f"Résultat de la vérification (Werkzeug): {result}")
+            return result
+        except ValueError as e:
+            # Si le format n'est pas reconnu par Werkzeug (ex : bcrypt)
+            app.logger.warning(f"Format de hash non géré par Werkzeug → tentative bcrypt: {e}")
+
+        # Seconde tentative : bcrypt ($2b$, $2a$, $2y$)
+        try:
+            if stored_hash.startswith(("$2b$", "$2a$", "$2y$")):
+                result = bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+                app.logger.info(f"Résultat de la vérification (bcrypt): {result}")
+                return result
+        except Exception as e:
+            app.logger.error(f"Erreur lors de la vérification bcrypt: {e}")
+
+        # Par défaut, échec
+        return False
 
     def set_password(self, password):
         from flask import current_app as app
         app.logger.info(f"=== Définition du mot de passe pour {self.username} ===")
-        self.password = generate_password_hash(password, method='pbkdf2:sha256')
-        app.logger.info(f"Nouveau hash généré: {self.password}")
+        # Utilise bcrypt par défaut pour rester cohérent avec Flask-Security
+        self.password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        app.logger.info(f"Nouveau hash généré (bcrypt): {self.password}")
         self.active = True  # Activer l'utilisateur lors de la définition du mot de passe
 
 class Patient(db.Model):
