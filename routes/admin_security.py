@@ -462,8 +462,8 @@ def create_default_role():
             admin_algo='write',
             admin_translation='write',
             admin_options='write',
-            admin_music='write',
-            admin_dashboard='write',
+            admin_music_play='write',
+            admin_music_options='write',
             admin_app='write',
             admin_queue='write',
             admin_stats='write'
@@ -633,8 +633,8 @@ def save_role():
             admin_algo='none',
             admin_translation='none',
             admin_options='none',
-            admin_music='none',
-            admin_dashboard='none',
+            admin_music_play='none',
+            admin_music_options='none',
             admin_app='none',
             admin_queue='none',
             admin_stats='none'
