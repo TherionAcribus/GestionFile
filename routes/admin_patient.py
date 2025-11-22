@@ -41,6 +41,7 @@ def admin_patient(tab=None):
                             page_patient_end_timer = app.config['PAGE_PATIENT_END_TIMER'],
                             page_patient_display_button_scan = app.config["PAGE_PATIENT_DISPLAY_BUTTON_SCAN"],
                             page_patient_display_specific_message = app.config['PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE'],
+                            page_patient_direct_print = app.config.get('PAGE_PATIENT_DIRECT_PRINT', False),
                             page_patient_print_after_scan = app.config['PAGE_PATIENT_PRINT_AFTER_SCAN'],
                             page_patient_print_after_print = app.config['PAGE_PATIENT_PRINT_AFTER_PRINT'],
                             page_patient_display_translations=app.config['PAGE_PATIENT_DISPLAY_TRANSLATIONS'],

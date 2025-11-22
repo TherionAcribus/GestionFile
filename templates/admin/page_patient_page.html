@@ -32,6 +32,11 @@
 
 
 
+{{ macros.switch("page_patient_direct_print", 
+                page_patient_direct_print,
+                "Imprimer directement le ticket sans passer par l'écran de validation (QR/Print)")
+}}
+
 {{ macros.switch("page_patient_print_after_print", 
                 page_patient_print_after_print,
                 "Afficher la page pour réimprimer après le clic sur 'Print'")

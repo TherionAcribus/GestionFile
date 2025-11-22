@@ -148,6 +148,8 @@ def display_validation_after_choice(request):
 
     # Si le bouton contient bien une activité
     if activity_id != "":
+        if app.config.get("PAGE_PATIENT_DIRECT_PRINT", False):
+             return patient_return_validation_page_and_print_data(print_ticket=True)
         activity = Activity.query.get(activity_id)
         #socketio.emit('trigger_valide_activity', {'activity': activity.id})
         return left_page_validate_patient(activity)

@@ -177,6 +177,7 @@ def load_configuration(app):
         "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
         "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
         "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
+        "page_patient_direct_print": ("PAGE_PATIENT_DIRECT_PRINT", "value_bool"),
         "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
         "page_patient_interface_validate_print": ("PAGE_PATIENT_INTERFACE_VALIDATE_PRINT", "value_str"),
         "page_patient_interface_validate_scan": ("PAGE_PATIENT_INTERFACE_VALIDATE_SCAN", "value_str"),
