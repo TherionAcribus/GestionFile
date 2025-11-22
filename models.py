@@ -25,50 +25,50 @@ class Role(db.Model, RoleMixin):
     description = db.Column(db.String(255))
     
     # Permissions pour les différentes pages admin
-    admin_security = db.Column(db.String(10), nullable=False, default='none')
-    admin_counter = db.Column(db.String(10), nullable=False, default='none')
-    admin_activity = db.Column(db.String(10), nullable=False, default='none')
-    admin_schedule = db.Column(db.String(10), nullable=False, default='none')
-    admin_algo = db.Column(db.String(10), nullable=False, default='none')
-    admin_translation = db.Column(db.String(10), nullable=False, default='none')
-    admin_options = db.Column(db.String(10), nullable=False, default='none')
-    admin_music_play = db.Column(db.String(10), nullable=False, default='none')
-    admin_music_options = db.Column(db.String(10), nullable=False, default='none')
-    admin_app = db.Column(db.String(10), nullable=False, default='none')
-    admin_queue = db.Column(db.String(10), nullable=False, default='none')
-    admin_stats = db.Column(db.String(10), nullable=False, default='none')
-    admin_staff= db.Column(db.String(10), nullable=False, default='none')
-    admin_phone = db.Column(db.String(10), nullable=False, default='none')
-    admin_announce = db.Column(db.String(10), nullable=False, default='none')
-    admin_patient = db.Column(db.String(10), nullable=False, default='none')
-    admin_gallery = db.Column(db.String(10), nullable=False, default='none')
+    admin_security = db.Column(db.Boolean, nullable=False, default=False)
+    admin_counter = db.Column(db.Boolean, nullable=False, default=False)
+    admin_activity = db.Column(db.Boolean, nullable=False, default=False)
+    admin_schedule = db.Column(db.Boolean, nullable=False, default=False)
+    admin_algo = db.Column(db.Boolean, nullable=False, default=False)
+    admin_translation = db.Column(db.Boolean, nullable=False, default=False)
+    admin_options = db.Column(db.Boolean, nullable=False, default=False)
+    admin_music_play = db.Column(db.Boolean, nullable=False, default=False)
+    admin_music_options = db.Column(db.Boolean, nullable=False, default=False)
+    admin_app = db.Column(db.Boolean, nullable=False, default=False)
+    admin_queue = db.Column(db.Boolean, nullable=False, default=False)
+    admin_stats = db.Column(db.Boolean, nullable=False, default=False)
+    admin_staff= db.Column(db.Boolean, nullable=False, default=False)
+    admin_phone = db.Column(db.Boolean, nullable=False, default=False)
+    admin_announce = db.Column(db.Boolean, nullable=False, default=False)
+    admin_patient = db.Column(db.Boolean, nullable=False, default=False)
+    admin_gallery = db.Column(db.Boolean, nullable=False, default=False)
 
     # Surcharge de la méthode get_permissions de RoleMixin
     def get_permissions(self):
         perms = {}
         for attr in dir(self):
             if attr.startswith('admin_'):
-                perms[attr] = getattr(self, attr) == 'write'
+                perms[attr] = bool(getattr(self, attr))
         return perms
 
     # Surcharge de la méthode add_permissions de RoleMixin
     def add_permissions(self, permissions):
         for permission, value in permissions.items():
             if hasattr(self, permission):
-                setattr(self, permission, 'write' if value else 'none')
+                setattr(self, permission, bool(value))
 
     # Surcharge de la méthode remove_permissions de RoleMixin
     def remove_permissions(self, permissions):
         for permission in permissions:
             if hasattr(self, permission):
-                setattr(self, permission, 'none')
+                setattr(self, permission, False)
 
     def has_permission(self, resource, action=None):
         """Vérifie si le rôle a la permission demandée pour la ressource"""
         permission_field = f'admin_{resource}'
         if not hasattr(self, permission_field):
             return False
-        return getattr(self, permission_field) == 'write'
+        return bool(getattr(self, permission_field))
 
     def __repr__(self):
         return f'<Role {self.name}>'

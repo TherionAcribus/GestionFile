@@ -38,7 +38,7 @@ def require_permission(resource):
                 if hasattr(role, permission_field):
                     permission_value = getattr(role, permission_field)
                     app.logger.debug(f"Valeur de la permission {permission_field}: {permission_value}")
-                    if permission_value == 'write':
+                    if permission_value:
                         has_permission = True
                         break
 
@@ -69,7 +69,7 @@ def require_permission_dashboard(resource):
                 if hasattr(role, permission_field):
                     permission_value = getattr(role, permission_field)
                     app.logger.debug(f"Valeur de la permission {permission_field}: {permission_value}")
-                    if permission_value == 'write':
+                    if permission_value:
                         has_permission = True
                         break
 
@@ -451,22 +451,22 @@ def create_default_role():
             app.logger.info("Le rôle admin existe déjà")
             return True
 
-        # Créer le rôle admin avec toutes les permissions à 'none' par défaut
+        # Créer le rôle admin avec toutes les permissions à True par défaut
         admin_role = Role(
             name='admin',
             description='Administrateur avec toutes les permissions',
-            admin_security='write',
-            admin_counter='write',
-            admin_activity='write',
-            admin_schedule='write',
-            admin_algo='write',
-            admin_translation='write',
-            admin_options='write',
-            admin_music_play='write',
-            admin_music_options='write',
-            admin_app='write',
-            admin_queue='write',
-            admin_stats='write'
+            admin_security=True,
+            admin_counter=True,
+            admin_activity=True,
+            admin_schedule=True,
+            admin_algo=True,
+            admin_translation=True,
+            admin_options=True,
+            admin_music_play=True,
+            admin_music_options=True,
+            admin_app=True,
+            admin_queue=True,
+            admin_stats=True
         )
 
         db.session.add(admin_role)
@@ -574,7 +574,7 @@ def security_update_role(role_id):
         for permission_name, value in permissions.items():
             if hasattr(role, permission_name):
                 app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
-                new_value = 'write' if value else 'none'
+                new_value = bool(value)
                 app.logger.info(f"Setting {permission_name} to {new_value} (type: {type(value)})")
                 setattr(role, permission_name, new_value)
 
@@ -622,29 +622,29 @@ def save_role():
         app.logger.info(f"Création d'un nouveau rôle - name: {name}, description: {description}")
         app.logger.info(f"Permissions: {permissions}")
 
-        # Création du rôle avec toutes les permissions à 'none' par défaut
+        # Création du rôle avec toutes les permissions à False par défaut
         role = Role(
             name=name,
             description=description,
-            admin_security='none',
-            admin_counter='none',
-            admin_activity='none',
-            admin_schedule='none',
-            admin_algo='none',
-            admin_translation='none',
-            admin_options='none',
-            admin_music_play='none',
-            admin_music_options='none',
-            admin_app='none',
-            admin_queue='none',
-            admin_stats='none'
+            admin_security=False,
+            admin_counter=False,
+            admin_activity=False,
+            admin_schedule=False,
+            admin_algo=False,
+            admin_translation=False,
+            admin_options=False,
+            admin_music_play=False,
+            admin_music_options=False,
+            admin_app=False,
+            admin_queue=False,
+            admin_stats=False
         )
 
         # Attribution des permissions
         for permission_name, value in permissions.items():
             if hasattr(role, permission_name):
                 app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
-                new_value = 'write' if value else 'none'
+                new_value = bool(value)
                 app.logger.info(f"Setting {permission_name} to {new_value} (type: {type(value)})")
                 setattr(role, permission_name, new_value)
                 app.logger.info(f"Nouvelle valeur de {permission_name}: {getattr(role, permission_name)}")
