@@ -20,6 +20,14 @@ def call_next(counter_id, attempts=0):
     # pour éviter des boucles infinies, on considère qu'après x (5) essais on abandonne. Peut probable que 5 comptoirs appellent en même temps des patients.
     max_attempts = 5
 
+    # Nettoyage des patients précédents en statut 'calling' pour ce comptoir
+    if attempts == 0:
+        previous_patients = Patient.query.filter_by(status='calling', counter_id=counter_id).all()
+        for patient in previous_patients:
+            patient.status = 'done'
+            app.logger.info(f"Patient {patient.id} status updated to 'done' for counter {counter_id} (fallback)")
+        db.session.commit()
+
     if attempts >= max_attempts:
         app.logger.warning(f"Max attempts reached for counter {counter_id}")
         return False, "max_loop"

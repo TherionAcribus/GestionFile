@@ -443,6 +443,7 @@ async function add_calling(msg) {
     newListItem.id = 'patient-' + patient.id;
     newListItem.className = 'text_patient_calling hidden'; // Caché initialement   
     newListItem.textContent = patient.text;
+    newListItem.setAttribute('data-counter', counterId);
 
     // Ajouter le nouvel élément à la liste
     patientList.appendChild(newListItem);
