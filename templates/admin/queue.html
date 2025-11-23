@@ -46,20 +46,20 @@
 
     <br>
 
-    <button 
+    <button
         class="btn btn-warning"
         hx-get="/admin/database/confirm_delete_patient_table_with_saving"
-        hx-target="#modal_delete_patient_table"
-        data-bs-toggle="modal" 
-        data-bs-target="#modal_delete_patient_table">
+        hx-target="#modal-htmx"
+        data-bs-toggle="modal"
+        data-bs-target="#modal_delete">
         Supprimer tous les patients (avec sauvegarde)
     </button>
-    <button 
+    <button
         class="btn btn-danger"
         hx-get="/admin/database/confirm_delete_patient_table_without_saving"
-        hx-target="#modal_delete_patient_table"
-        data-bs-toggle="modal" 
-        data-bs-target="#modal_delete_patient_table">
+        hx-target="#modal-htmx"
+        data-bs-toggle="modal"
+        data-bs-target="#modal_delete">
         Supprimer tous les patients (sans sauvegarde)
     </button>
 
@@ -90,10 +90,6 @@
                 Création rapide
             </button>
         </div>
-    </div>
-
-    <!-- Modal -->
-    <div id="modal_delete_patient_table" class="modal">
     </div>
 
     <!-- Modal -->
