@@ -77,6 +77,7 @@ from routes.admin_security import admin_security_bp, ExtendedLoginForm, create_d
 from routes.admin_music import admin_music_bp, is_spotipy_connected
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
+from routes.admin_data import admin_data_bp
 from routes.announce import announce_bp
 from routes.admin_stats import admin_stats_bp
 from routes.patient import patient_bp
@@ -371,6 +372,7 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
     app.register_blueprint(admin_stats_bp, url_prefix='')
     app.register_blueprint(admin_app_bp, url_prefix='')
+    app.register_blueprint(admin_data_bp, url_prefix='')
     app.register_blueprint(engine_bp, url_prefix='')
 
     return app

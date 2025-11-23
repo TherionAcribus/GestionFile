@@ -199,6 +199,33 @@ class PatientHistory(db.Model):
             "language_id": self.language_id,
         }
 
+class AggregatedStats(db.Model):
+    __tablename__ = 'aggregated_stats'
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, index=True)
+    category_type = db.Column(db.String(50), nullable=False)  # 'global', 'activity', 'language', 'counter'
+    category_id = db.Column(db.Integer, nullable=True)  # ID de l'entité concernée (null si global)
+    count = db.Column(db.Integer, default=0)
+    avg_waiting_time = db.Column(db.Float, nullable=True)  # En secondes
+    avg_counter_time = db.Column(db.Float, nullable=True)  # En secondes
+    avg_total_time = db.Column(db.Float, nullable=True)    # En secondes
+
+    __table_args__ = (
+        db.Index('idx_aggregated_stats_date_type', 'date', 'category_type'),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "date": self.date.strftime('%Y-%m-%d'),
+            "category_type": self.category_type,
+            "category_id": self.category_id,
+            "count": self.count,
+            "avg_waiting_time": self.avg_waiting_time,
+            "avg_counter_time": self.avg_counter_time,
+            "avg_total_time": self.avg_total_time
+        }
+
 class Counter(db.Model):
     id = db.Column(db.Integer, Sequence('counter_id_seq'), primary_key=True)
     name = db.Column(db.String(20), nullable=False)

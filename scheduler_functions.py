@@ -1,8 +1,9 @@
 import os
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import current_app
-from models import db, Button, Activity, Patient, JobExecutionLog
+from sqlalchemy import func, text
+from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats, Language, Counter
 from routes.admin_queue import clear_all_patients_from_db
 from bdd import transfer_patients_to_history
 from app_holder import AppHolder
@@ -335,3 +336,162 @@ def clear_announces_call():
         current_app.display_toast(success=False, message=error_message)
         current_app.logger.error(error_message)
         raise  # Relance l'exception pour le logging dans clear_announce_calls_job
+
+def auto_archive_job():
+    """Tâche planifiée pour l'archivage automatique"""
+    app = AppHolder.get_app()
+    
+    with app.app_context():
+        try:
+            days = app.config.get('DATA_ARCHIVE_DAYS', 365)
+            compress = app.config.get('DATA_ARCHIVE_COMPRESSED', True)
+            
+            if days is not None:
+                result = archive_data(days, compress)
+                
+                log = JobExecutionLog(
+                    job_id='Auto Archive Data',
+                    status='success',
+                    error_message=result
+                )
+                db.session.add(log)
+                db.session.commit()
+                app.logger.info(f"Auto archive job completed: {result}")
+            
+        except Exception as e:
+            log = JobExecutionLog(
+                job_id='Auto Archive Data',
+                status='failed',
+                error_message=str(e)
+            )
+            db.session.add(log)
+            db.session.commit()
+            app.logger.error(f"Auto archive job failed: {str(e)}")
+
+def archive_data(older_than_days, compress=True):
+    """Archive les données plus vieilles que X jours"""
+    cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
+    
+    # Récupérer les dates distinctes concernées
+    dates_to_process = db.session.query(func.date(PatientHistory.timestamp)).filter(
+        PatientHistory.timestamp < cutoff_date
+    ).distinct().all()
+    
+    dates_to_process = [d[0] for d in dates_to_process]
+    
+    total_archived = 0
+    
+    for process_date in dates_to_process:
+        # Filtre pour la journée en cours
+        day_start = datetime.combine(process_date, datetime.min.time())
+        day_end = datetime.combine(process_date, datetime.max.time())
+        
+        patients_query = PatientHistory.query.filter(
+            PatientHistory.timestamp.between(day_start, day_end)
+        )
+        
+        count = patients_query.count()
+        if count == 0:
+            continue
+            
+        if compress:
+            create_daily_stats(process_date, patients_query)
+            
+        # Suppression des données
+        patients_query.delete(synchronize_session=False)
+        total_archived += count
+        db.session.commit()
+        
+    return f"Archived {total_archived} records from {len(dates_to_process)} days."
+
+def create_daily_stats(date, base_query):
+    """Crée les statistiques agrégées pour une journée donnée"""
+    
+    # Helper pour calculer les moyennes
+    def get_avgs(query):
+        return query.with_entities(
+            func.count(PatientHistory.id).label('count'),
+            func.avg(func.timestampdiff(text('SECOND'), PatientHistory.timestamp, PatientHistory.timestamp_counter)).label('avg_waiting'),
+            func.avg(func.timestampdiff(text('SECOND'), PatientHistory.timestamp_counter, PatientHistory.timestamp_end)).label('avg_counter'),
+            func.avg(func.timestampdiff(text('SECOND'), PatientHistory.timestamp, PatientHistory.timestamp_end)).label('avg_total')
+        ).first()
+
+    # 1. Global
+    stats = get_avgs(base_query)
+    if stats.count > 0:
+        db.session.add(AggregatedStats(
+            date=date,
+            category_type='global',
+            count=stats.count,
+            avg_waiting_time=stats.avg_waiting,
+            avg_counter_time=stats.avg_counter,
+            avg_total_time=stats.avg_total
+        ))
+
+    # 2. Par Activité
+    activities = db.session.query(PatientHistory.activity_id).filter(
+        PatientHistory.timestamp.between(
+            datetime.combine(date, datetime.min.time()),
+            datetime.combine(date, datetime.max.time())
+        )
+    ).distinct().all()
+    
+    for act_id in activities:
+        act_query = base_query.filter(PatientHistory.activity_id == act_id[0])
+        stats = get_avgs(act_query)
+        if stats.count > 0:
+            db.session.add(AggregatedStats(
+                date=date,
+                category_type='activity',
+                category_id=act_id[0],
+                count=stats.count,
+                avg_waiting_time=stats.avg_waiting,
+                avg_counter_time=stats.avg_counter,
+                avg_total_time=stats.avg_total
+            ))
+
+    # 3. Par Langue
+    languages = db.session.query(PatientHistory.language_id).filter(
+        PatientHistory.timestamp.between(
+            datetime.combine(date, datetime.min.time()),
+            datetime.combine(date, datetime.max.time())
+        )
+    ).distinct().all()
+    
+    for lang_id in languages:
+        if lang_id[0] is None: continue
+        lang_query = base_query.filter(PatientHistory.language_id == lang_id[0])
+        stats = get_avgs(lang_query)
+        if stats.count > 0:
+            db.session.add(AggregatedStats(
+                date=date,
+                category_type='language',
+                category_id=lang_id[0],
+                count=stats.count,
+                avg_waiting_time=stats.avg_waiting,
+                avg_counter_time=stats.avg_counter,
+                avg_total_time=stats.avg_total
+            ))
+
+    # 4. Par Comptoir
+    counters = db.session.query(PatientHistory.counter_id).filter(
+        PatientHistory.timestamp.between(
+            datetime.combine(date, datetime.min.time()),
+            datetime.combine(date, datetime.max.time())
+        )
+    ).distinct().all()
+    
+    for count_id in counters:
+        if count_id[0] is None: continue
+        count_query = base_query.filter(PatientHistory.counter_id == count_id[0])
+        stats = get_avgs(count_query)
+        if stats.count > 0:
+            db.session.add(AggregatedStats(
+                date=date,
+                category_type='counter',
+                category_id=count_id[0],
+                count=stats.count,
+                avg_waiting_time=stats.avg_waiting,
+                avg_counter_time=stats.avg_counter,
+                avg_total_time=stats.avg_total
+            ))

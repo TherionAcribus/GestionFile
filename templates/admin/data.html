@@ -1,0 +1,246 @@
+{% extends '/admin/base.html' %}
+{% block title %}Gestion des données{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Gestion des données</h1>
+</div>
+
+<!-- Stats Card -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        Statistiques de la base de données
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card bg-light mb-3">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Patients Actuels</h5>
+                        <p class="card-text display-4">{{ stats.patient_count }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light mb-3">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Historique (lignes)</h5>
+                        <p class="card-text display-4">{{ stats.history_count }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light mb-3">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Stats Agrégées (lignes)</h5>
+                        <p class="card-text display-4">{{ stats.aggregated_count }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-light mb-3">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Taille BDD (estimée)</h5>
+                        <p class="card-text display-4 fs-3">{{ db_size }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Action Card -->
+<div class="card mb-4">
+    <div class="card-header bg-warning text-dark">
+        Archivage Manuel
+    </div>
+    <div class="card-body">
+        <form id="manualArchiveForm">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <label for="daysInput" class="col-form-label">Archiver les données plus anciennes que (jours) :</label>
+                </div>
+                <div class="col-auto">
+                    <input type="number" id="daysInput" name="days" class="form-control" value="365" min="1">
+                </div>
+                <div class="col-auto">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="compressCheck" name="compress" value="true" checked>
+                        <label class="form-check-label" for="compressCheck">
+                            Compresser (agréger) les données
+                        </label>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-warning" onclick="triggerManualArchive()">Lancer l'archivage</button>
+                </div>
+            </div>
+        </form>
+        <div id="manualResult" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- Delete Aggregated Stats Card -->
+<div class="card mb-4">
+    <div class="card-header bg-danger text-white">
+        Suppression des Statistiques Agrégées
+    </div>
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label for="aggregatedDaysInput" class="col-form-label">Supprimer les statistiques agrégées plus anciennes que (jours) :</label>
+            </div>
+            <div class="col-auto">
+                <input type="number" id="aggregatedDaysInput" class="form-control" value="730" min="1">
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteAggregated()">Supprimer</button>
+            </div>
+        </div>
+        <div id="deleteAggregatedResult" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- Automatic Configuration Card -->
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white">
+        Configuration Automatique
+    </div>
+    <div class="card-body">
+        <form id="autoConfigForm">
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="autoArchiveEnabled" name="auto_archive_enabled" value="true" {% if config.auto_archive_enabled %}checked{% endif %}>
+                    <label class="form-check-label" for="autoArchiveEnabled">Activer l'archivage automatique quotidien (à 03h30)</label>
+                </div>
+            </div>
+            <div class="mb-3 row">
+                <label for="autoDays" class="col-sm-4 col-form-label">Jours de rétention avant archivage :</label>
+                <div class="col-sm-2">
+                    <input type="number" class="form-control" id="autoDays" name="archive_days" value="{{ config.archive_days }}">
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="autoCompress" name="archive_compressed" value="true" {% if config.archive_compressed %}checked{% endif %}>
+                    <label class="form-check-label" for="autoCompress">
+                        Compresser lors de l'archivage automatique
+                    </label>
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="saveAutoConfig()">Enregistrer la configuration</button>
+        </form>
+        <div id="configResult" class="mt-3"></div>
+    </div>
+</div>
+
+<script>
+function triggerManualArchive() {
+    const btn = document.querySelector('#manualArchiveForm button');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Traitement...';
+    
+    const days = document.getElementById('daysInput').value;
+    const compress = document.getElementById('compressCheck').checked;
+    
+    fetch('/admin/data/manual', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `days=${days}&compress=${compress}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultDiv = document.getElementById('manualResult');
+        if (data.success) {
+            resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
+            btn.disabled = false;
+            btn.textContent = "Lancer l'archivage";
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        btn.disabled = false;
+        btn.textContent = "Lancer l'archivage";
+    });
+}
+
+function saveAutoConfig() {
+    const days = document.getElementById('autoDays').value;
+    const compress = document.getElementById('autoCompress').checked;
+    const enabled = document.getElementById('autoArchiveEnabled').checked;
+    
+    fetch('/admin/data/config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `archive_days=${days}&archive_compressed=${compress}&auto_archive_enabled=${enabled}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultDiv = document.getElementById('configResult');
+        if (data.success) {
+            resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
+        }
+    });
+}
+
+function confirmDeleteAggregated() {
+    const days = document.getElementById('aggregatedDaysInput').value;
+    const modal = new bootstrap.Modal(document.getElementById('modal_delete'));
+    const modalBody = document.getElementById('modal-htmx');
+    
+    // Configure modal content
+    document.getElementById('modalDeleteLabel').textContent = 'Confirmer la suppression';
+    modalBody.innerHTML = `
+        <p>Êtes-vous sûr de vouloir supprimer les statistiques agrégées plus anciennes que <strong>${days} jours</strong> ?</p>
+        <p class="text-danger">Cette action est irréversible.</p>
+        <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+            <button type="button" class="btn btn-danger" onclick="deleteAggregated(${days})">Confirmer la suppression</button>
+        </div>
+    `;
+    
+    modal.show();
+}
+
+function deleteAggregated(days) {
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modal_delete'));
+    const resultDiv = document.getElementById('deleteAggregatedResult');
+    
+    // Close modal
+    modal.hide();
+    
+    // Show loading state
+    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Suppression en cours...';
+    
+    fetch('/admin/data/delete_aggregated', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `days=${days}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            resultDiv.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        resultDiv.innerHTML = `<div class="alert alert-danger">Erreur réseau</div>`;
+    });
+}
+</script>
+{% endblock %}
