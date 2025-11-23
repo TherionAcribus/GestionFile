@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.34",
+    "version": "0.35",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -41,6 +41,9 @@
             "announce_call_text_transition": "slide",
             "announce_ongoing_display": true,
             "announce_ongoing_text": "Comptoir {C} : Patient {N}",
+            "announce_next_patients_display": false,
+            "announce_next_patients_text": "Prochains patients :",
+            "announce_next_patients_alignment": "center",
             "announce_call_sound": "Le patient {N} est invité au comptoir {C}",
             "announce_call_translation": "vo",
             "announce_infos_display": true,

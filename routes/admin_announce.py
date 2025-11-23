@@ -38,6 +38,7 @@ def announce_page(tab=None):
                             announce_ongoing_text=app.config['ANNOUNCE_ONGOING_TEXT'],
                             announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),
                             announce_next_patients_text=app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :"),
+                            announce_next_patients_alignment=app.config.get('ANNOUNCE_NEXT_PATIENTS_ALIGNMENT', 'center'),
                             announce_title=app.config['ANNOUNCE_TITLE'],
                             announce_title_size=app.config["ANNOUNCE_TITLE_SIZE"],
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],

@@ -60,6 +60,7 @@ def patients_ongoing():
 @announce_bp.route('/announce/patients_next')
 def patients_next():
     announce_next_patients_text = app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :")
+    announce_next_patients_alignment = app.config.get('ANNOUNCE_NEXT_PATIENTS_ALIGNMENT', 'center')
     
     # Use the global queue algorithm instead of simple timestamp sort
     patients = get_global_patient_queue()
@@ -67,6 +68,7 @@ def patients_next():
     next_patients = [p.call_number for p in patients]
     return render_template('announce/patients_next.html', 
                            announce_next_patients_text=announce_next_patients_text,
+                           announce_next_patients_alignment=announce_next_patients_alignment,
                            next_patients=next_patients)
 
 @announce_bp.route('/announce/init_gallery')

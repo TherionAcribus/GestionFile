@@ -263,6 +263,20 @@
                 "Afficher la liste des prochains patients")
             }}        
 
+            <!-- Select alignement texte prochains patients -->
+            <div class="input-field col s12">
+                <select
+                class="form-select"
+                id="announce_next_patients_alignment"
+                hx-post="/admin/update_select"
+                hx-target="#invisible"
+                hx-vals='js:{"key": "announce_next_patients_alignment", "value": document.getElementById("announce_next_patients_alignment").value}'>
+                <option value="center" {% if announce_next_patients_alignment == "center" %}selected{% endif %}>Centré</option>
+                <option value="left" {% if announce_next_patients_alignment == "left" %}selected{% endif %}>Gauche</option>
+                </select>
+                <label>Alignement du texte</label>
+            </div>
+
             <strong>Police du texte</strong>
             <div class="admin_css_textbloc">
                 {{ macros.css_unit_bloc("announce", "next_patients_font_size", next_patients_font_size, "Taille", "px") }}

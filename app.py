@@ -155,6 +155,7 @@ def load_configuration(app):
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
         "announce_next_patients_display": ("ANNOUNCE_NEXT_PATIENTS_DISPLAY", "value_bool"),
         "announce_next_patients_text": ("ANNOUNCE_NEXT_PATIENTS_TEXT", "value_str"),
+        "announce_next_patients_alignment": ("ANNOUNCE_NEXT_PATIENTS_ALIGNMENT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
         "announce_call_translation": ("ANNOUNCE_CALL_TRANSLATION", "value_str"),
         "counter_order": ("COUNTER_ORDER", "value_str"),

@@ -207,10 +207,6 @@ html, body {
 
 #div_footer {
     background-color: var(--next_patients_background_color);
-    color: var(--next_patients_font_color);
-    font-size: var(--next_patients_font_size);
-    -webkit-text-stroke-color: var(--next_patients_font_border_color);
-    -webkit-text-stroke-width: var(--next_patients_font_border_size);
     text-align: center;
     padding: 10px;
     width: 100%;
@@ -221,8 +217,16 @@ html, body {
 .next_patients_label {
     font-weight: bold;
     margin-right: 10px;
+    font-size: var(--next_patients_font_size);
+    color: var(--next_patients_font_color);
+    -webkit-text-stroke-color: var(--next_patients_font_border_color);
+    -webkit-text-stroke-width: var(--next_patients_font_border_size);
 }
 
 .next_patients_list {
-    font-weight: normal;
+    font-weight: bold;
+    font-size: var(--next_patients_font_size);
+    color: var(--next_patients_font_color);
+    -webkit-text-stroke-color: var(--next_patients_font_border_color);
+    -webkit-text-stroke-width: var(--next_patients_font_border_size);
 }
