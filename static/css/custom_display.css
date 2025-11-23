@@ -27,7 +27,7 @@
     --calling_font_border_size: 2px;
     --calling_font_border_color: #858585;
     --calling_background_color: #C9C5C5;
-    --ongoing_background_color: #C9C5C5;
+    --ongoing_background_color: #D03E3E;
     --ongoing_font_color: #FFFFFF;
     --ongoing_font_size: 75px;
     --ongoing_font_border_size: 0px;
@@ -37,4 +37,9 @@
     --announce_third_color: #FFFFFF;
     --announce_fourth_color: #C9C5C5;
     --announce_border_color: #858585;
+    --next_patients_font_color: #FF0505;
+    --next_patients_font_size: 100px;
+    --next_patients_font_border_size: 2px;
+    --next_patients_font_border_color: #C71585;
+    --next_patients_background_color: #FFC0CB;
 }

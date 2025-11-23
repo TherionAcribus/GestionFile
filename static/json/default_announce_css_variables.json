@@ -1,7 +1,7 @@
 {
     "name": "gf_announce_css_variables",
     "type": "default",
-    "version": "0.8",
+    "version": "0.9",
     "timestamp": "2024-11-10 14:35:26",
     "comments": "Version initiale",
     "variables": {
@@ -39,6 +39,11 @@
         "ongoing_font_color": "#FFFFFF",
         "ongoing_font_size": "75px",
         "ongoing_font_border_size": "0px",
-        "ongoing_font_border_color": "black"
+        "ongoing_font_border_color": "black",
+        "next_patients_font_color": "#FFFFFF",
+        "next_patients_font_size": "50px",
+        "next_patients_font_border_size": "0px",
+        "next_patients_font_border_color": "black",
+        "next_patients_background_color": "#008B8B"
     }
 }

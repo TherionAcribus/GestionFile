@@ -5,6 +5,7 @@ from models import Patient, ConfigOption
 from utils import replace_balise_announces
 from routes.admin_music import is_spotipy_connected
 from communication import communikation
+from python.engine import get_global_patient_queue
 
 announce_bp = Blueprint('announce', __name__)
 
@@ -27,7 +28,8 @@ def display():
                             call_patients = patient_list_for_init_display(),
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
                             announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
-                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],)
+                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],
+                            announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),)
 
 
 def patient_list_for_init_display():
@@ -54,6 +56,18 @@ def patients_ongoing():
         print("ONGOINT", ongoing_patients)
         print(patient)
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
+
+@announce_bp.route('/announce/patients_next')
+def patients_next():
+    announce_next_patients_text = app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :")
+    
+    # Use the global queue algorithm instead of simple timestamp sort
+    patients = get_global_patient_queue()
+    
+    next_patients = [p.call_number for p in patients]
+    return render_template('announce/patients_next.html', 
+                           announce_next_patients_text=announce_next_patients_text,
+                           next_patients=next_patients)
 
 @announce_bp.route('/announce/init_gallery')
 def announce_init_gallery():

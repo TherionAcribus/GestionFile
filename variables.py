@@ -73,9 +73,16 @@ class MultiCssVariableManager:
             var = source.model.query.filter_by(variable=variable_name).first()
             if var:
                 var.value = new_value
-                db.session.commit()
-                # Mise à jour dans app.config
-                current_app.config[source.config_key][variable_name] = new_value
+            else:
+                # Création si n'existe pas
+                var = source.model(variable=variable_name, value=new_value)
+                db.session.add(var)
+            
+            db.session.commit()
+            # Mise à jour dans app.config
+            if source.config_key not in current_app.config:
+                current_app.config[source.config_key] = {}
+            current_app.config[source.config_key][variable_name] = new_value
 
     def reload_source(self, source_name: str) -> None:
         """Recharge toutes les variables d'une source spécifique"""

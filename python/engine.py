@@ -145,6 +145,105 @@ def algo_choice_next_patient(counter_id):
 
     return next_patient
 
+def get_global_patient_queue():
+    """
+    Simulates the patient selection algorithm to determine the order of all waiting patients.
+    Returns an ordered list of patients.
+    """
+    # 1. Fetch all standing patients
+    all_patients = Patient.query.filter_by(status='standing').all()
+    
+    # Working copy of the list to manipulate
+    waiting_patients = list(all_patients)
+    ordered_queue = []
+    
+    # Get current context for rules
+    if app.config['ALGO_IS_ACTIVATED']:
+        current_time = datetime.now().time()
+        number_of_patients = len(waiting_patients)
+        
+        # Find applicable rules based on current time and total number of patients
+        # Note: We don't filter by days_of_week here as it's commented out in original algo, 
+        # and we check rules against the global state
+        applicable_rules = AlgoRule.query.filter(
+            AlgoRule.start_time <= current_time,
+            AlgoRule.end_time >= current_time,
+            AlgoRule.min_patients <= number_of_patients,
+            AlgoRule.max_patients >= number_of_patients
+        ).all()
+    else:
+        applicable_rules = []
+
+    # Loop until all patients are ordered
+    while waiting_patients:
+        selected_patient = None
+        
+        # If algorithm is active and we have rules, try to find a priority patient
+        if app.config['ALGO_IS_ACTIVATED'] and applicable_rules:
+            
+            # Check if any patient has waited too long (overtaken limit)
+            # In the simulation, we use the current 'overtaken' value from DB.
+            # Ideally, the simulation should track 'overtaken' dynamically as we build the queue,
+            # but for a display estimation, using the snapshot is acceptable and safer/simpler.
+            is_patient_waiting_too_long = any(
+                p.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"] for p in waiting_patients
+            )
+            
+            if not is_patient_waiting_too_long:
+                # Iterate through priority levels
+                for level in range(1, 6):
+                    rules_at_level = [r for r in applicable_rules if r.priority_level == level]
+                    if not rules_at_level:
+                        continue
+                        
+                    activity_ids_from_rules = [rule.activity_id for rule in rules_at_level]
+                    
+                    # Candidates matching this priority level
+                    priority_candidates = [
+                        p for p in waiting_patients 
+                        if p.activity_id in activity_ids_from_rules
+                    ]
+                    
+                    # Sort by timestamp to find the "oldest" candidate for this priority
+                    priority_candidates.sort(key=lambda p: p.timestamp)
+                    
+                    for candidate in priority_candidates:
+                        # Count how many people would be overtaken
+                        # (People in waiting_patients with older timestamp than candidate)
+                        patients_ahead_count = sum(
+                            1 for p in waiting_patients 
+                            if p.timestamp < candidate.timestamp
+                        )
+                        
+                        # Get max_overtaken from the rules applicable to this patient's activity
+                        # We take the minimum of max_overtaken from all matching rules for this activity
+                        # (mimicking the logic: max_overtaken = min(rule.max_overtaken for rule in patient.activity.priority_rules))
+                        # We use the rules_at_level we already fetched which match the activity
+                        relevant_rules = [r for r in rules_at_level if r.activity_id == candidate.activity_id]
+                        if not relevant_rules:
+                            continue # Should not happen given logic above
+                            
+                        max_overtaken_limit = min(r.max_overtaken for r in relevant_rules)
+                        
+                        if patients_ahead_count < max_overtaken_limit:
+                            selected_patient = candidate
+                            break
+                    
+                    if selected_patient:
+                        break
+        
+        # Fallback: if no patient selected by rules (or algo disabled), pick the one with oldest timestamp
+        if not selected_patient:
+            # Sort remaining by timestamp
+            waiting_patients.sort(key=lambda p: p.timestamp)
+            selected_patient = waiting_patients[0]
+            
+        # Add to ordered list and remove from working set
+        ordered_queue.append(selected_patient)
+        waiting_patients.remove(selected_patient)
+        
+    return ordered_queue
+
 def patient_overtaken(next_patient):
     """ Met a jour le nombre de fois que le patient a été doublé"""
     patients_overtaken = Patient.query.filter(

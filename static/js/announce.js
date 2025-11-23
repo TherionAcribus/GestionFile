@@ -68,6 +68,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
     screenSocket.on('add_calling', function(msg) {
         console.log("Received screen message:", msg);
         add_calling(msg);
+        var nextPatientsDiv = document.getElementById('div_next_patients');
+        if (nextPatientsDiv) {
+            htmx.trigger(nextPatientsDiv, 'refresh_next_patients');
+        }
     });
 
     screenSocket.on('spotify_status', function(msg) {
@@ -127,6 +131,10 @@ window.onunload = function() {
 function refresh_calling_list() {
     //htmx.trigger('#div_calling', 'refresh_calling', {target: '#div_calling'});
     //htmx.trigger('#div_ongoing', 'refresh_ongoing', {target: '#div_ongoing'});
+    var nextPatientsDiv = document.getElementById('div_next_patients');
+    if (nextPatientsDiv) {
+        htmx.trigger(nextPatientsDiv, 'refresh_next_patients');
+    }
 }
 
 let isSpotifyConnected = false;

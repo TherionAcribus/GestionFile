@@ -97,7 +97,13 @@
 
 
         <div id="div_footer">
-            <!-- FOOTER -->
+            {% if announce_next_patients_display %}
+                <div id="div_next_patients"
+                     hx-trigger="refresh_next_patients, load" 
+                     hx-get="/announce/patients_next" 
+                     hx-swap="innerHTML">
+                </div>
+            {% endif %}
         </div>
 
     </div>

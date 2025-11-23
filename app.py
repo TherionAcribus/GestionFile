@@ -152,6 +152,8 @@ def load_configuration(app):
         "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),
         "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
         "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
+        "announce_next_patients_display": ("ANNOUNCE_NEXT_PATIENTS_DISPLAY", "value_bool"),
+        "announce_next_patients_text": ("ANNOUNCE_NEXT_PATIENTS_TEXT", "value_str"),
         "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
         "announce_call_translation": ("ANNOUNCE_CALL_TRANSLATION", "value_str"),
         "counter_order": ("COUNTER_ORDER", "value_str"),
@@ -849,13 +851,17 @@ def update_switch():
         config_option = ConfigOption.query.filter_by(config_key=key).first()
         # MAJ Config 
         app.config[key.upper()] = True if value == "true" else False
+        
         if config_option:
             config_option.value_bool = True if value == "true" else False
-            db.session.commit()
-            call_function_with_switch(key, value)
-            return display_toast(success=True, message="Option mise à jour.")
         else:
-            return display_toast(success=False, message="Option non trouvée.")
+            config_option = ConfigOption(config_key=key, value_bool=True if value == "true" else False)
+            db.session.add(config_option)
+            
+        db.session.commit()
+        call_function_with_switch(key, value)
+        return display_toast(success=True, message="Option mise à jour.")
+
     except Exception as e:
             print(e)
             return display_toast(success=False, message=str(e))
@@ -987,17 +993,21 @@ def update_input():
                 config_option.value_int = value
             else:
                 config_option.value_str = value
-            db.session.commit()
-
-            # pour les actions à faire après un changement
-            special_functions_with_input(key)
-
-            display_toast(success=True, message="Option mise à jour.")
-
-            return "", 204
         else:
-            display_toast(success=False, message="Option non trouvée.")
-            return "", 204
+            if check == "int":
+                config_option = ConfigOption(config_key=key, value_int=value)
+            else:
+                config_option = ConfigOption(config_key=key, value_str=value)
+            db.session.add(config_option)
+
+        db.session.commit()
+
+        # pour les actions à faire après un changement
+        special_functions_with_input(key)
+
+        display_toast(success=True, message="Option mise à jour.")
+
+        return "", 204
 
     except Exception as e:
             app.logger.error(e)

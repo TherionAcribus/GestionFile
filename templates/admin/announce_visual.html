@@ -246,5 +246,44 @@
 </div>
 
 
+<!-- Next Patients -->
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-NextPatientsAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-NextPatientsAnnounce">
+            <h3>Liste des prochains patients</h3>
+        </button>
+    </h2>
+    <div id="panelsStayOpen-NextPatientsAnnounce" class="accordion-collapse collapse">
+        <div class="accordion-body">
+
+            {{ macros.textbloc_after_call("announce_next_patients_text", announce_next_patients_text, "Texte affiché avant la liste des prochains patients") }}
+
+            {{ macros.switch("announce_next_patients_display", 
+                announce_next_patients_display,
+                "Afficher la liste des prochains patients")
+            }}        
+
+            <strong>Police du texte</strong>
+            <div class="admin_css_textbloc">
+                {{ macros.css_unit_bloc("announce", "next_patients_font_size", next_patients_font_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "next_patients_font_color", next_patients_font_color, "Couleur") }}    
+            </div>
+
+            <strong>Contour du texte</strong>
+            <div class="admin_css_textbloc">                
+                {{ macros.css_unit_bloc("announce", "next_patients_font_border_size", next_patients_font_border_size, "Taille", "px") }}
+                {{ macros.css_color_bloc("announce", "next_patients_font_border_color", next_patients_font_border_color, "Couleur") }}
+            </div>
+
+            <strong>Fond</strong>
+            <div class="admin_css_textbloc">              
+                {{ macros.css_color_bloc("announce", "next_patients_background_color", next_patients_background_color, "Couleur") }}
+            </div>
+
+        </div>
+    </div>
+</div>
+
+
 
 </div>

@@ -36,6 +36,8 @@ def announce_page(tab=None):
                             announce_call_text_transition=app.config['ANNOUNCE_CALL_TEXT_TRANSITION'],
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
                             announce_ongoing_text=app.config['ANNOUNCE_ONGOING_TEXT'],
+                            announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),
+                            announce_next_patients_text=app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :"),
                             announce_title=app.config['ANNOUNCE_TITLE'],
                             announce_title_size=app.config["ANNOUNCE_TITLE_SIZE"],
                             announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
@@ -98,6 +100,12 @@ def announce_page(tab=None):
                             ongoing_font_size=app.css_variable_manager.get_variable('announce', 'ongoing_font_size'),
                             ongoing_font_border_size = app.css_variable_manager.get_variable('announce', 'ongoing_font_border_size'),    
                             ongoing_font_border_color = app.css_variable_manager.get_variable('announce', 'ongoing_font_border_color'),
+                            #next patients
+                            next_patients_background_color = app.css_variable_manager.get_variable('announce', 'next_patients_background_color'),
+                            next_patients_font_color=app.css_variable_manager.get_variable('announce', 'next_patients_font_color'),
+                            next_patients_font_size=app.css_variable_manager.get_variable('announce', 'next_patients_font_size'),
+                            next_patients_font_border_size = app.css_variable_manager.get_variable('announce', 'next_patients_font_border_size'),    
+                            next_patients_font_border_color = app.css_variable_manager.get_variable('announce', 'next_patients_font_border_color'),
                             )
 
 

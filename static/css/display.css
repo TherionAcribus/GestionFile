@@ -31,6 +31,11 @@
     --ongoing_font_border_size: 0px;
     --ongoing_font_border_color: black;
     --ongoing_background_color: #008B8B;
+    --next_patients_font_color: #FFFFFF;
+    --next_patients_font_size: 50px;
+    --next_patients_font_border_size: 0px;
+    --next_patients_font_border_color: black;
+    --next_patients_background_color: #008B8B;
 }
 
 
@@ -43,6 +48,7 @@ html, body {
 
 #full_page {
     height: 100%; /* Prend toute la hauteur disponible */
+    display: flex; /* Ajout de flexbox pour gérer la hauteur des enfants */
     flex-direction: column;
     overflow: hidden; /* Empêche le défilement */
 }
@@ -70,9 +76,10 @@ html, body {
 }
 
 .div_center{
-    height: 85%;
+    flex-grow: 1; /* Prend l'espace restant disponible */
     display: grid;
     background-color: var(--announce_secondary_color);
+    overflow: auto; /* Permet le défilement si le contenu dépasse */
 }
 
 #div_center_divided {
@@ -196,4 +203,26 @@ html, body {
     width: 100%;
     height: 100%;
     object-fit: contain; /* Cela garantit que l'image couvre la diapositive mais conserve ses proportions */
+}
+
+#div_footer {
+    background-color: var(--next_patients_background_color);
+    color: var(--next_patients_font_color);
+    font-size: var(--next_patients_font_size);
+    -webkit-text-stroke-color: var(--next_patients_font_border_color);
+    -webkit-text-stroke-width: var(--next_patients_font_border_size);
+    text-align: center;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box; /* Assure que le padding est inclus dans la largeur */
+    flex-shrink: 0; /* Empêche de réduire la taille du footer */
+}
+
+.next_patients_label {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.next_patients_list {
+    font-weight: normal;
 }
