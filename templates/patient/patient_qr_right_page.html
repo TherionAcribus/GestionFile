@@ -3,13 +3,23 @@
         <p id="text_call_number" class="text_summary">{{page_patient_validation_message}}</p>
     </div>
 
-    <div class="div_qr_plus_buttons">
+    <div class="div_qr_plus_buttons"
+        {% if not page_patient_display_qrcode %}
+            style="display: flex; justify-content: center;"
+        {% endif %}
+    >
         
+        {% if page_patient_display_qrcode %}
         <div id="div_qr_code" class="div_qr_code">
             <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
         </div>
+        {% endif %}
 
-        <div class="div_validation_buttons">
+        <div class="div_validation_buttons"
+            {% if not page_patient_display_qrcode %}
+                style="margin-left: 0;"
+            {% endif %}
+        >
 
             <div
                 id="print_and_validate"
@@ -47,7 +57,7 @@
                 </div>
             {% endif %}
 
-            {% if page_patient_display_scan_explanation %}
+            {% if page_patient_display_scan_explanation and page_patient_display_qrcode %}
                 <div class="div_explanation">
                     {{page_patient_interface_scan_explanation}}
                 </div>

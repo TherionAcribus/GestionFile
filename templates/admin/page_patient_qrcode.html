@@ -1,23 +1,7 @@
 <h3>QR Code</h3>
 <p>Le Qr Code permet au patient de scanner son numéro de passage</p>
 
-<div class="switch">
-    <span>Masquer ou Afficher le Qr Code</span>
-    <label>
-    Masquer
-    <input id="page_patient_display_qrcode" 
-            type="checkbox"
-            {% if page_patient_display_qrcode == True %}checked{% endif %}
-            hx-post="/admin/update_switch"
-            hx-target="#invisible"
-            hx-vals='js:{"key": "page_patient_display_qrcode",
-                        "value": document.getElementById("page_patient_display_qrcode").checked}'>
-    <span class="lever"></span>
-    Afficher
-    </label>
-</div>
-
-{{ macros.switch("page_patient_display_qrcode", 
+{{ macros.switch("page_patient_qrcode_display", 
             page_patient_display_qrcode, 
             "Afficher le Qr Code")
 }}

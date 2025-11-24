@@ -6,13 +6,23 @@
         </p>
     </div>
 
-    <div class="div_qr_plus_buttons">
+    <div class="div_qr_plus_buttons" 
+    {% if not page_patient_display_qrcode %}
+        style="display: flex; justify-content: center;"
+    {% endif %}
+    >
 
+        {% if page_patient_display_qrcode %}
         <div id="div_qr_code" class="div_qr_code">
             <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
         </div>
+        {% endif %}
 
-        <div class="div_validation_buttons">
+        <div class="div_validation_buttons"
+        {% if not page_patient_display_qrcode %}
+            style="margin-left: 0;"
+        {% endif %}
+        >
             
             <div
                 id="print_btn"

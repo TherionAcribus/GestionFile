@@ -159,6 +159,7 @@ def display_validation_after_choice(request):
 
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
+    print("CONFIG QRCODE:", app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     call_number = get_next_call_number(activity)
     #new_patient = add_patient(call_number, activity)
     futur_patient = get_futur_patient(call_number, activity)
@@ -183,7 +184,8 @@ def left_page_validate_patient(activity):
                             image_name_qr=image_name_qr, 
                             text=text,
                             activity=activity,
-                            futur_patient=futur_patient,                            
+                            futur_patient=futur_patient,
+                            page_patient_display_qrcode=app.config["PAGE_PATIENT_QRCODE_DISPLAY"],
                             page_patient_display_button_scan=app.config["PAGE_PATIENT_DISPLAY_BUTTON_SCAN"],
                             page_patient_display_scan_explanation=app.config["PAGE_PATIENT_DISPLAY_SCAN_EXPLANATION"],
                             page_patient_validation_message=page_patient_validation_message,
@@ -277,6 +279,7 @@ def cancel_patient():
 
 @patient_bp.route('/patient/conclusion_page/<call_number>')
 def patient_conclusion_page(call_number, print_ticket, print_data=None):
+    print("CONFIG QRCODE CONCLUSION:", app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     image_name_qr = f"qr_patient-{call_number}.png" 
 
     patient = Patient.query.filter_by(call_number=call_number).first()
@@ -293,6 +296,7 @@ def patient_conclusion_page(call_number, print_ticket, print_data=None):
                         image_name_qr=image_name_qr,
                         page_patient_confirmation_message=page_patient_confirmation_message,
                         page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
+                        page_patient_display_qrcode=app.config["PAGE_PATIENT_QRCODE_DISPLAY"],
                         page_patient_interface_done_print=choose_text_translation("page_patient_interface_done_print"),
                         page_patient_interface_done_extend=choose_text_translation("page_patient_interface_done_extend"),
                         page_patient_interface_done_back=choose_text_translation("page_patient_interface_done_back"),
