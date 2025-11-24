@@ -56,7 +56,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
 // refresh page pour appliquer les modifications
 function refresh_page() {
     console.log("Refresh page...");
-    eventSource.close(); // Ferme la connexion SSE
     window.location.reload();
 }
 
