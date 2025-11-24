@@ -214,7 +214,32 @@ html, body {
     flex-shrink: 0; /* Empêche de réduire la taille du footer */
 }
 
+#div_next_patients_content {
+    display: flex;
+    width: 100%;
+    overflow: hidden;
+}
+
+.next_patients_wrapper {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    max-width: 100%;
+    width: 100%;
+}
+
+.next_patients_wrapper.align-center {
+    width: auto;
+    margin: 0 auto;
+}
+
+.next_patients_wrapper.align-right {
+    width: auto;
+    margin-left: auto;
+}
+
 .next_patients_label {
+    flex-shrink: 0;
     font-weight: bold;
     margin-right: 10px;
     font-size: var(--next_patients_font_size);
@@ -224,6 +249,9 @@ html, body {
 }
 
 .next_patients_list {
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: bold;
     font-size: var(--next_patients_font_size);
     color: var(--next_patients_font_color);

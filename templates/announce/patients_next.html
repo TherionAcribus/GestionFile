@@ -1,10 +1,12 @@
 {% if next_patients %}
-<div id="div_next_patients_content" style="text-align: {{ announce_next_patients_alignment }};">
-    <span class="next_patients_label">{{ announce_next_patients_text }}</span>
-    <span class="next_patients_list">
-        {% for patient in next_patients %}
-            {{ patient }}{% if not loop.last %}, {% endif %}
-        {% endfor %}
-    </span>
+<div id="div_next_patients_content">
+    <div class="next_patients_wrapper {% if announce_next_patients_alignment == 'center' %}align-center{% elif announce_next_patients_alignment == 'right' %}align-right{% endif %}">
+        <span class="next_patients_label">{{ announce_next_patients_text }}</span>
+        <span class="next_patients_list">
+            {% for patient in next_patients %}
+                {{ patient }}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        </span>
+    </div>
 </div>
 {% endif %}
