@@ -45,6 +45,7 @@ from wtforms.validators import DataRequired
 
 import jwt
 from dotenv import load_dotenv
+from markupsafe import escape
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
@@ -601,23 +602,30 @@ def send_message():
 
 @app.errorhandler(404)
 def page_not_found(e):
-    return f"""
-    <!doctype html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <title>404 Not Found</title>
-    </head>
-    <body>
-        <h1>404 Not Found</h1>
-        <p>The requested URL was not found on the server.</p>
-        <p>Error: {e}</p>
-        <p>Request Path: {request.path}</p>
-        <p>Request Method: {request.method}</p>
-        <p>Request Headers: {request.headers}</p>
-    </body>
-    </html>
-    """, 404
+    if has_request_context():
+        app.logger.info("404 Not Found: %s %s", request.method, request.path)
+        safe_path = escape(request.path)
+        safe_method = escape(request.method)
+        details = f"<p>Request: {safe_method} {safe_path}</p>"
+    else:
+        details = ""
+
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>404 Not Found</title>
+</head>
+<body>
+  <h1>404 Not Found</h1>
+  <p>The requested URL was not found on the server.</p>
+  {details}
+</body>
+</html>"""
+
+    response = make_response(html, 404)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route('/send')
