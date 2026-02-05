@@ -10,3 +10,5 @@ static/css/custom_phone.css
 .env
 out/*.*
 temp_google_credentials.json
+instance/flask_secret_key.txt
+instance/security_password_salt.txt

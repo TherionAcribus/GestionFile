@@ -2,6 +2,8 @@ import os
 import boto3
 import bleach
 import pytz
+import secrets
+from pathlib import Path
 from dotenv import load_dotenv
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
@@ -17,6 +19,33 @@ load_dotenv()
 def uia_username_mapper(identity):
     return bleach.clean(identity, strip=True)
 
+def _load_or_create_secret(env_name: str, instance_filename: str, *, token_bytes: int = 48) -> str:
+    """
+    Returns a stable secret value for a given env var.
+
+    Priority:
+    1) environment variable
+    2) file persisted under ./instance/
+    3) generated ephemeral value (last resort)
+    """
+    value = os.getenv(env_name)
+    if value:
+        return value
+
+    instance_dir = Path(__file__).resolve().parent / "instance"
+    secret_path = instance_dir / instance_filename
+    try:
+        instance_dir.mkdir(parents=True, exist_ok=True)
+        if secret_path.exists():
+            persisted = secret_path.read_text(encoding="utf-8").strip()
+            if persisted:
+                return persisted
+        generated = secrets.token_urlsafe(token_bytes)
+        secret_path.write_text(generated, encoding="utf-8")
+        return generated
+    except OSError:
+        return secrets.token_urlsafe(token_bytes)
+
 def get_parameter(name):
     """ Récupération des paramètres pour AWS"""
     ssm = boto3.client('ssm', region_name='eu-west-3')  
@@ -24,11 +53,10 @@ def get_parameter(name):
     return response['Parameter']['Value']
 
 class Config:
-    print(print("CREATE_APP_CONFIG:", os.getenv('MYSQL_HOST')))
-    SECRET_KEY = 'your_secret_key'
-    SECURITY_PASSWORD_SALT = os.getenv('SECURITY_PASSWORD_SALT', 'default_salt')
+    SECRET_KEY = _load_or_create_secret("SECRET_KEY", "flask_secret_key.txt")
+    SECURITY_PASSWORD_SALT = _load_or_create_secret("SECURITY_PASSWORD_SALT", "security_password_salt.txt")
     SECURITY_PASSWORD_HASH = 'bcrypt'
-    SECURITY_PASSWORD_SINGLE_HASH = 'plaintext'
+    SECURITY_PASSWORD_SINGLE_HASH = False
     SECURITY_USER_IDENTITY_ATTRIBUTES = [{'username': {'case_insensitive': False}}]
     SECURITY_USERNAME_ENABLE = True
     SECURITY_USERNAME_REQUIRED = False
@@ -41,6 +69,7 @@ class Config:
     # Définir les valeurs par défaut ici
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement
     site = os.getenv('SITE', 'prod')
+    DEBUG = os.getenv("FLASK_DEBUG", "").strip() in {"1", "true", "True", "yes", "on"}
 
     if database == "mysql":
 
@@ -53,14 +82,12 @@ class Config:
             RABBITMQ_URL = get_parameter("RABBITMQ_URL")
 
         else:
-            print("Using local environment variables")
             MYSQL_USER = os.getenv('MYSQL_USER')
             MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD')
             HOST = os.getenv('MYSQL_HOST')
             DB_NAME = os.getenv('MYSQL_DATABASE')
             BASE32_KEY = os.getenv('BASE32_KEY')
             RABBITMQ_URL = os.getenv("RABBITMQ_URL")
-            print("TEST_USER", MYSQL_USER, MYSQL_PASSWORD, HOST, DB_NAME, BASE32_KEY)
 
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'

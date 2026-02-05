@@ -324,15 +324,13 @@ def start_fonctions(app):
 def create_app(config_class=Config):
     app = Flask(__name__)
 
-    print("CREATE_APP_HOST:", os.getenv('MYSQL_HOST'))
-
     # Charger la configuration avant toute initialisation
     AppHolder.set_app(app)
     app.config.from_object(config_class)
-    app.debug = True
+    app.debug = bool(app.config.get("DEBUG", False))
 
     # Initialiser le logging
-    logging.basicConfig(level=logging.DEBUG,
+    logging.basicConfig(level=(logging.DEBUG if app.debug else logging.INFO),
                         format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
 
     db.init_app(app)
@@ -345,7 +343,6 @@ def create_app(config_class=Config):
     # Initialiser le mail avec l'application
     app.mail = Mail(app)
 
-    print("CONFIG_CLASS", config_class.SECURITY_PASSWORD_HASH)
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
     with app.app_context():
@@ -379,11 +376,7 @@ def create_app(config_class=Config):
     return app
 
 load_dotenv()
-print("MYSQL_USER:", os.getenv('MYSQL_USER'))
-print("MYSQL_PASSWORD:", os.getenv('MYSQL_PASSWORD'))
-print("MYSQL_HOST:", os.getenv('MYSQL_HOST'))
 app = create_app(config_class=Config)
-print("App configuration:", app.config)
 
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 #start_rabbitmq_consumer(app)
