@@ -47,6 +47,8 @@ import jwt
 from dotenv import load_dotenv
 from markupsafe import escape
 
+from auth_utils import require_app_token_or_login
+
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
 from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
@@ -583,6 +585,7 @@ def disconnect_phone():
         leave_room(f"call_{call_number}")
 
 @app.route('/send_message', methods=['POST'])
+@require_app_token_or_login
 def send_message():
     message = request.json.get('message', 'Hello from server')
     try:
@@ -629,6 +632,7 @@ def page_not_found(e):
 
 
 @app.route('/send')
+@require_app_token_or_login
 def send_message_old():
     url = rabbitMQ_url
     params = pika.URLParameters(url)
@@ -655,6 +659,7 @@ def send_message_old():
 
 
 @app.route('/test')
+@require_app_token_or_login
 def rabbitmq_status():
     url = rabbitMQ_url
     params = pika.URLParameters(url)
@@ -675,6 +680,7 @@ db_session = scoped_session(sessionmaker(autocommit=False,
 """
 
 @app.route('/test_local')
+@require_app_token_or_login
 def rabbitmq_status_local():
     rabbitmq_url = 'amqp://guest:guest@127.0.0.1:5672'
     params = pika.URLParameters(rabbitmq_url)
@@ -837,10 +843,7 @@ def require_login_for_admin():
             return redirect(url_for('admin_security.login', next=request.url))
     elif request.path.startswith('/app'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not (current_user.is_authenticated or is_valid_app_request):
-            if is_valid_app_request:
-                return jsonify({"error": "Unauthorized"}), 401
-            else:
-                return redirect(url_for('admin_security.login', next=request.url))
+            return jsonify({"error": "Unauthorized"}), 401
         
 
 
@@ -1201,50 +1204,47 @@ def patient_right_page_default():
     return render_template('htmx/patient_right_page_default.html')
 
 
-@app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>')
-def call_specific_patient(counter_id, patient_id):
-
+def call_specific_patient_action(counter_id, patient_id):
     validate_current_patient(counter_id)
 
-    # Récupération du patient spécifique
     next_patient = Patient.query.get(patient_id)
+    if not next_patient:
+        return False, {"error": "not_found"}, 404
 
-    # Cas d'un patient appelé en même temps par un autre comptoir. On empêche double selection et retourne une info
     if next_patient.status != "standing":
         app.logger.info("Already called")
         send_app_notification(origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient})
-        return "Already called", 423
-    
-    if next_patient:
-        print("Appel du patient :", patient_id, "au comptoir", counter_id)
-        # Mise à jour du statut du patient
-        next_patient.status = 'calling'
-        next_patient.counter_id = counter_id
-        db.session.commit()
+        return False, {"error": "already_called"}, 423
 
-        # mise à jour du comptoir:
-        counter_become_active(counter_id)
+    next_patient.status = "calling"
+    next_patient.counter_id = counter_id
+    db.session.commit()
 
-        # Notifier tous les clients et mettre à jour le comptoir
-        communikation("update_patient")
+    counter_become_active(counter_id)
+    communikation("update_patient")
 
-        text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
-        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
+    text = replace_balise_announces(app.config["ANNOUNCE_CALL_TEXT"], next_patient)
+    communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
 
-        language_code = next_patient.language.code
-        print("language_code_pour_audio", language_code)
-        audio_url = generate_audio_calling(counter_id, next_patient, language_code)
-        communikation("update_audio", event="audio", data=audio_url)
+    language_code = next_patient.language.code
+    audio_url = generate_audio_calling(counter_id, next_patient, language_code)
+    communikation("update_audio", event="audio", data=audio_url)
 
-        return jsonify(next_patient.to_dict()), 200  
-    else:
-        print("Aucun patient trouvé avec l'ID :", patient_id)
-    
-    # Redirection vers la page du comptoir ou une autre page appropriée
-    return "", 200
+    return True, next_patient.to_dict(), 200
+
+
+@app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>', methods=['GET', 'POST'])
+@require_app_token_or_login
+def call_specific_patient(counter_id, patient_id):
+    if request.method == "GET":
+        app.logger.warning("Deprecated GET /call_specific_patient (use POST).")
+
+    ok, payload, status_code = call_specific_patient_action(counter_id, patient_id)
+    return jsonify(payload), status_code
 
 
 @app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
+@require_app_token_or_login
 def validate_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
     print("validation", patient_id)
@@ -1261,8 +1261,7 @@ def validate_patient(counter_id, patient_id):
     communikation("update_patient")
     communikation("update_screen", event="remove_calling", data={"id": patient_id})
 
-    if isinstance(current_patient, Patient):
-        current_patient_pyside = current_patient.to_dict()
+    current_patient_pyside = current_patient.to_dict() if isinstance(current_patient, Patient) else {"id": None, "counter_id": counter_id}
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return jsonify(current_patient_pyside), 200  
@@ -1429,6 +1428,7 @@ def counter_refresh_buttons(counter_id):
 
 
 @app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
+@require_app_token_or_login
 def validate_and_call_next(counter_id):
     print('validate_and_call_next', counter_id)
 
@@ -1475,6 +1475,7 @@ def validate_current_patient(counter_id):
 
 
 @app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
+@require_app_token_or_login
 def pause_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
     print("pause_patient")
@@ -1635,6 +1636,7 @@ def display_toast(success=True, message=None):
 # ---------------- FONCTIONS Généralistes > Communication avec Pyside ---------------- 
 
 @app.route('/api/counters', methods=['GET'])
+@require_app_token_or_login
 def get_counters():
     counters = Counter.query.all()
     counters_list = [{'id': counter.id, 'name': counter.name} for counter in counters]
@@ -1691,6 +1693,7 @@ def current_patients():
 
 
 @app.route('/add_counter', methods=['POST'])
+@require_permission('counter')
 def add_counter():
     if request.method == 'POST':
         name = request.form['name']
@@ -1708,6 +1711,7 @@ def patients_queue():
 
 
 @app.route('/pharmacists')
+@require_permission('staff')
 def pharmacists():
     all_pharmacists = Pharmacist.query.all()
     print("ALL", all_pharmacists)
@@ -1715,6 +1719,7 @@ def pharmacists():
 
 
 @app.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
+@require_permission('staff')
 def update_pharmacist(pharmacist_id):
     pharmacist = Pharmacist.query.get(pharmacist_id)
     if pharmacist:
@@ -1728,6 +1733,7 @@ def update_pharmacist(pharmacist_id):
 
 
 @app.route('/add_pharmacist', methods=['POST'])
+@require_permission('staff')
 def add_pharmacist():
     name = request.form.get('name')
     initials = request.form.get('initials')
@@ -1741,6 +1747,7 @@ def add_pharmacist():
 
 
 @app.route('/new_pharmacist_form')
+@require_permission('staff')
 def new_pharmacist_form():
     print("new_pharmacist_form")
     return render_template('htmx/menu_admin_new_pharmacist_form.html')
@@ -1772,7 +1779,7 @@ request_started.connect(load_colors, app)
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
 app.display_toast = display_toast
-app.call_specific_patient = call_specific_patient
+app.call_specific_patient = call_specific_patient_action
 app.allowed_image_file = allowed_image_file
 app.mail = mail
 app.auto_calling = auto_calling

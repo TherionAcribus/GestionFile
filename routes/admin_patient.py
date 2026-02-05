@@ -8,6 +8,7 @@ from utils import format_ticket_text
 from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
 from routes.admin_security import require_permission, require_permission_dashboard
+from auth_utils import require_app_token_or_login
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -371,6 +372,7 @@ def delete_button(button_id):
 
 
 @admin_patient_bp.route('/upload_image/<int:button_id>', methods=['POST'])
+@require_permission('patient')
 def upload_image(button_id):
     """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
     button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -391,6 +393,7 @@ def upload_image(button_id):
 
 
 @admin_patient_bp.route('/upload_image_for_interface/<button_id>', methods=['POST'])
+@require_permission('patient')
 def upload_image_for_interface(button_id):
     """ Pas réussi à faire sans rechargement de page, car problème pour passer image sans formulaire """
     if 'file' not in request.files:
@@ -577,6 +580,7 @@ def activate_button(button_id):
 
 
 @admin_patient_bp.route('/api/printer/status', methods=['POST'])
+@require_app_token_or_login
 def admin_printer_status():
     # Récupérer les données envoyées par la requête POST
     printer_error_code = request.json.get('error')

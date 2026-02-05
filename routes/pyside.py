@@ -1,9 +1,11 @@
 from flask import Blueprint, current_app as app
 from models import Patient
+from auth_utils import require_app_token_or_login
 
 pyside_bp = Blueprint('pyside', __name__)
 
 @pyside_bp.route('/api/patients_list_for_pyside', methods=['GET'])
+@require_app_token_or_login
 def create_patients_list_for_pyside():
     patients = Patient.query.filter_by(status="standing").all()
     patients_list = [{"id": patient.id, 

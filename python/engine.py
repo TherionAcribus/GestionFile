@@ -1,6 +1,6 @@
 import os
 import qrcode
-from flask import Blueprint, url_for, request, session, current_app as app
+from flask import Blueprint, url_for, request, session, current_app as app, jsonify
 from datetime import datetime, date
 from sqlalchemy import and_
 from cryptography.fernet import Fernet
@@ -10,11 +10,27 @@ from gtts import gTTS
 from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
 from communication import communikation, notify_patient_phone
 from config import time_tz
+from auth_utils import require_app_token_or_login
 
 engine_bp = Blueprint('engine', __name__)
 
 
-@engine_bp.route('/call_next/<int:counter_id>')
+@engine_bp.route('/call_next/<int:counter_id>', methods=['GET', 'POST'])
+@require_app_token_or_login
+def call_next_http(counter_id):
+    if request.method == "GET":
+        app.logger.warning("Deprecated GET /call_next (use POST).")
+
+    ok, result = call_next(counter_id)
+    if ok:
+        return jsonify(result.to_dict()), 200
+
+    if result in {"no_patient", "no_patient_for_counter"}:
+        return "", 204
+
+    return jsonify({"error": result}), 409
+
+
 def call_next(counter_id, attempts=0):
     # pour éviter de prendre deux fois le même patient, en vérifie en l'appelant qu'il est toujours en attente sinon on rappelle un patient.
     # pour éviter des boucles infinies, on considère qu'après x (5) essais on abandonne. Peut probable que 5 comptoirs appellent en même temps des patients.

@@ -6,6 +6,7 @@ from python.engine import call_next
 from utils import replace_balise_announces
 from python.engine import counter_become_active, counter_become_inactive
 from communication import communikation, send_app_notification, notify_patient_phone
+from auth_utils import require_app_token_or_login
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -118,6 +119,7 @@ def is_staff_on_counter(counter_id):
 
 
 @counter_bp.route('/api/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
+@require_app_token_or_login
 def api_is_staff_on_counter(counter_id):
     counter = Counter.query.get(counter_id)
     if counter.staff:
@@ -168,6 +170,7 @@ def deconnect_staff_from_all_counters(staff):
     print(f"Déconnexion réussie de {len(affected_counters)} comptoir(s).")
 
 @counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
+@require_app_token_or_login
 def app_is_patient_on_counter(counter_id):
     """ Renvoie les informations du patient actuel au comptoir (pour le client) pour l'App (démarrage)"""
     patient = Patient.query.filter(
@@ -341,21 +344,33 @@ def relaunch_patient_call(counter_id):
     return '', 204
 
 
-@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>/<int:activity_id>', methods=['GET'])
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>/<int:activity_id>', methods=['GET', 'POST'])
+@require_app_token_or_login
 def put_waiting_list_with_activity(patient_id, activity_id):
+    if request.method == "GET":
+        app.logger.warning("Deprecated GET /api/counter/put_standing_list (use POST).")
     return handle_patient_from_app(patient_id, action="standing", activity_id=activity_id)
 
 
-@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>', methods=['GET'])
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>', methods=['GET', 'POST'])
+@require_app_token_or_login
 def put_waiting_list(patient_id):
+    if request.method == "GET":
+        app.logger.warning("Deprecated GET /api/counter/put_standing_list (use POST).")
     return handle_patient_from_app(patient_id, action="standing")
 
-@counter_bp.route('/api/counter/validate_patient/<int:patient_id>', methods=['GET'])
+@counter_bp.route('/api/counter/validate_patient/<int:patient_id>', methods=['GET', 'POST'])
+@require_app_token_or_login
 def validate_patient_from_app(patient_id):
+    if request.method == "GET":
+        app.logger.warning("Deprecated GET /api/counter/validate_patient (use POST).")
     return handle_patient_from_app(patient_id, action="validate")
 
-@counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['GET'])
+@counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['GET', 'POST'])
+@require_app_token_or_login
 def delete_patient_from_app(patient_id):
+    if request.method == "GET":
+        app.logger.warning("Deprecated GET /api/counter/delete_patient (use POST).")
     return handle_patient_from_app(patient_id, action="delete")
 
 def handle_patient_from_app(patient_id, action, activity_id=None):    
