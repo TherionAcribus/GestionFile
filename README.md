@@ -43,6 +43,23 @@ Le debug n’est **plus forcé** dans le code.
 - `FLASK_DEBUG=1` → debug Flask + logs DEBUG
 - sinon → logs INFO
 
+## Socket.IO (CORS)
+
+Par défaut, Socket.IO n’accepte que le **same-origin** (plus de `cors_allowed_origins="*"`).
+
+Si tu dois autoriser des clients web depuis d’autres origines (reverse-proxy, domaine différent, etc.), définis :
+
+```dotenv
+SOCKETIO_CORS_ALLOWED_ORIGINS=https://example.com,https://intranet.example.com
+```
+
+En dev uniquement, tu peux mettre `*` :
+
+```dotenv
+FLASK_DEBUG=1
+SOCKETIO_CORS_ALLOWED_ORIGINS=*
+```
+
 ## Secrets (IMPORTANT)
 
 Si `SECRET_KEY` / `SECURITY_PASSWORD_SALT` ne sont **pas** fournis via variables d’environnement, le serveur :
@@ -96,4 +113,3 @@ Note : selon ton environnement, tu devras ajuster `docker-compose.yaml` (ex: URL
 - `routes/` : blueprints (admin, comptoir, patient, etc.)
 - `python/engine.py` : logique “métier” (appel patient, audio, QR, etc.)
 - `models.py` : modèles SQLAlchemy
-

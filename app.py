@@ -47,7 +47,7 @@ import jwt
 from dotenv import load_dotenv
 from markupsafe import escape
 
-from auth_utils import require_app_token_or_login
+from auth_utils import is_authenticated_request, require_app_token_or_login
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
@@ -381,7 +381,10 @@ def create_app(config_class=Config):
 load_dotenv()
 app = create_app(config_class=Config)
 
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+_socketio_kwargs = {"async_mode": "eventlet"}
+if app.config.get("SOCKETIO_CORS_ALLOWED_ORIGINS") is not None:
+    _socketio_kwargs["cors_allowed_origins"] = app.config["SOCKETIO_CORS_ALLOWED_ORIGINS"]
+socketio = SocketIO(app, **_socketio_kwargs)
 #start_rabbitmq_consumer(app)
 
 # Définir le jobstore avec votre base de données
@@ -475,6 +478,16 @@ def get_and_register_socketio_username(request):
     return username
 
 
+def _socket_require(flag_name: str, namespace: str) -> bool:
+    if not app.config.get(flag_name, False):
+        return True
+    if is_authenticated_request():
+        return True
+
+    app.logger.warning("Unauthorized Socket.IO connect to %s (missing login/token).", namespace)
+    return False
+
+
 @socketio.on('connect', namespace='/socket_update_patient')
 def connect_general():
     username = get_and_register_socketio_username(request)
@@ -487,6 +500,8 @@ def disconnect_general():
 
 @socketio.on('connect', namespace='/socket_update_screen')
 def connect_screen():
+    if not _socket_require("SECURITY_LOGIN_SCREEN", "/socket_update_screen"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info("Client connected to screen namespace")
 
@@ -497,6 +512,8 @@ def disconnect_screen():
 
 @socketio.on('connect', namespace='/socket_admin', )
 def connect_admin():
+    if not _socket_require("SECURITY_LOGIN_ADMIN", "/socket_admin"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info(f"Client connected to admin namespace with SID {request.sid} and username {username}")
     logging.info("Client connected to screen namespace")
@@ -508,6 +525,8 @@ def disconnect_admin():
 
 @socketio.on('connect', namespace='/socket_patient')
 def connect_patient():
+    if not _socket_require("SECURITY_LOGIN_PATIENT", "/socket_patient"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info("Client connected to update patient namespace")
 
@@ -518,6 +537,8 @@ def disconnect_patient():
 
 @socketio.on('connect', namespace='/socket_app_counter')
 def connect_app_counter():
+    if not _socket_require("SECURITY_LOGIN_COUNTER", "/socket_app_counter"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info("Client connected to app counter namespace")
 
@@ -528,6 +549,8 @@ def disconnect_app_counter():
 
 @socketio.on('connect', namespace='/socket_app_patient')
 def connect_app_patient():
+    if not _socket_require("SECURITY_LOGIN_PATIENT", "/socket_app_patient"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info("Client connected to test namespace")
 
@@ -538,6 +561,8 @@ def disconnect_app_patient():
 
 @socketio.on('connect', namespace='/socket_app_screen')
 def connect_app_screen():
+    if not _socket_require("SECURITY_LOGIN_SCREEN", "/socket_app_screen"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info("Client connected to test namespace")
 
@@ -548,6 +573,8 @@ def disconnect_app_screen():
 
 @socketio.on('connect', namespace='/socket_counter')
 def connect_counter():
+    if not _socket_require("SECURITY_LOGIN_COUNTER", "/socket_counter"):
+        return False
     username = get_and_register_socketio_username(request)
     logging.info("Client connected to counter namespace")
 
@@ -1807,7 +1834,7 @@ if __name__ == "__main__":
     
     if communication_mode == "websocket":
         #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 5000)), app)
-        socketio.run(app, host='0.0.0.0', port=5000)   
+        socketio.run(app, host='0.0.0.0', port=5000, debug=app.debug)
 
 # Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
 @app.context_processor

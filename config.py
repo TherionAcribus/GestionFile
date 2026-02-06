@@ -71,6 +71,14 @@ class Config:
     site = os.getenv('SITE', 'prod')
     DEBUG = os.getenv("FLASK_DEBUG", "").strip() in {"1", "true", "True", "yes", "on"}
 
+    _socketio_cors_raw = os.getenv("SOCKETIO_CORS_ALLOWED_ORIGINS", "").strip()
+    if not _socketio_cors_raw:
+        SOCKETIO_CORS_ALLOWED_ORIGINS = None
+    elif _socketio_cors_raw == "*":
+        SOCKETIO_CORS_ALLOWED_ORIGINS = "*" if DEBUG else None
+    else:
+        SOCKETIO_CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _socketio_cors_raw.split(",") if origin.strip()]
+
     if database == "mysql":
 
         if site == "aws":
