@@ -46,6 +46,13 @@ def admin_phone():
                             phone_main_color=app.css_variable_manager.get_variable('phone', 'phone_main_color'),
                             phone_secondary_color=app.css_variable_manager.get_variable('phone', 'phone_secondary_color'),
                             phone_third_color=app.css_variable_manager.get_variable('phone', 'phone_third_color'),
+                            phone_border_color=app.css_variable_manager.get_variable('phone', 'phone_border_color') or '#000000',
+                            # CSS your turn
+                            phone_your_turn_main_color=app.css_variable_manager.get_variable('phone', 'phone_your_turn_main_color') or '#B1F1F1',
+                            phone_your_turn_third_color=app.css_variable_manager.get_variable('phone', 'phone_your_turn_third_color') or '#000000',
+                            phone_your_turn_border_color=app.css_variable_manager.get_variable('phone', 'phone_your_turn_border_color') or '#000000',
+                            phone_your_turn_lines_font_size=app.css_variable_manager.get_variable('phone', 'phone_your_turn_lines_font_size') or '20px',
+                            phone_your_turn_lines_font_weight=app.css_variable_manager.get_variable('phone', 'phone_your_turn_lines_font_weight') or '400',
                             phone_lines_font_size=app.css_variable_manager.get_variable('phone', 'phone_lines_font_size'),
                             phone_lines_font_weight=app.css_variable_manager.get_variable('phone', 'phone_lines_font_weight'),
                             # titre

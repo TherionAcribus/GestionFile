@@ -622,6 +622,48 @@ const colorMappings = {
             'phone_specific_message_font_color'
         ]
     },
+    'phone_border_color': {
+        targets: [
+            'phone_title_border_color',
+            'phone_line1_border_color',
+            'phone_line2_border_color',
+            'phone_line3_border_color',
+            'phone_line4_border_color',
+            'phone_line5_border_color',
+            'phone_line6_border_color',
+            'phone_specific_message_border_color'
+        ]
+    },
+    'phone_your_turn_main_color': {
+        targets: [
+            'phone_your_turn_line1_background_color',
+            'phone_your_turn_line2_background_color',
+            'phone_your_turn_line3_background_color',
+            'phone_your_turn_line4_background_color',
+            'phone_your_turn_line5_background_color',
+            'phone_your_turn_line6_background_color'
+        ]
+    },
+    'phone_your_turn_third_color': {
+        targets: [
+            'phone_your_turn_line1_font_color',
+            'phone_your_turn_line2_font_color',
+            'phone_your_turn_line3_font_color',
+            'phone_your_turn_line4_font_color',
+            'phone_your_turn_line5_font_color',
+            'phone_your_turn_line6_font_color'
+        ]
+    },
+    'phone_your_turn_border_color': {
+        targets: [
+            'phone_your_turn_line1_border_color',
+            'phone_your_turn_line2_border_color',
+            'phone_your_turn_line3_border_color',
+            'phone_your_turn_line4_border_color',
+            'phone_your_turn_line5_border_color',
+            'phone_your_turn_line6_border_color'
+        ]
+    },
 };
 
 const variableDescriptions = {
@@ -675,7 +717,54 @@ const variableDescriptions = {
     'square_button_border_color': 'Bordure bouton rectangulaire',
     'square_cancel_button_border_color': 'Bordure bouton annuler',
     'validation_button_border_color': 'Bordure bouton validation',
-    // ... ajoutez les autres descriptions
+    // phone_border_color (Contours du texte)
+    'phone_title_border_color': 'Contour titre téléphone',
+    'phone_line1_border_color': 'Contour ligne 1',
+    'phone_line2_border_color': 'Contour ligne 2',
+    'phone_line3_border_color': 'Contour ligne 3',
+    'phone_line4_border_color': 'Contour ligne 4',
+    'phone_line5_border_color': 'Contour ligne 5',
+    'phone_line6_border_color': 'Contour ligne 6',
+    'phone_specific_message_border_color': 'Contour message spécifique',
+    // phone_main_color
+    'phone_title_background_color': 'Fond titre téléphone',
+    // phone_secondary_color
+    'phone_line1_background_color': 'Fond ligne 1',
+    'phone_line2_background_color': 'Fond ligne 2',
+    'phone_line3_background_color': 'Fond ligne 3',
+    'phone_line4_background_color': 'Fond ligne 4',
+    'phone_line5_background_color': 'Fond ligne 5',
+    'phone_line6_background_color': 'Fond ligne 6',
+    'phone_specific_message_background_color': 'Fond message spécifique',
+    // phone_third_color
+    'phone_line1_font_color': 'Texte ligne 1',
+    'phone_line2_font_color': 'Texte ligne 2',
+    'phone_line3_font_color': 'Texte ligne 3',
+    'phone_line4_font_color': 'Texte ligne 4',
+    'phone_line5_font_color': 'Texte ligne 5',
+    'phone_line6_font_color': 'Texte ligne 6',
+    'phone_specific_message_font_color': 'Texte message spécifique',
+    // phone_your_turn_main_color
+    'phone_your_turn_line1_background_color': 'Fond ligne 1 (votre tour)',
+    'phone_your_turn_line2_background_color': 'Fond ligne 2 (votre tour)',
+    'phone_your_turn_line3_background_color': 'Fond ligne 3 (votre tour)',
+    'phone_your_turn_line4_background_color': 'Fond ligne 4 (votre tour)',
+    'phone_your_turn_line5_background_color': 'Fond ligne 5 (votre tour)',
+    'phone_your_turn_line6_background_color': 'Fond ligne 6 (votre tour)',
+    // phone_your_turn_third_color
+    'phone_your_turn_line1_font_color': 'Texte ligne 1 (votre tour)',
+    'phone_your_turn_line2_font_color': 'Texte ligne 2 (votre tour)',
+    'phone_your_turn_line3_font_color': 'Texte ligne 3 (votre tour)',
+    'phone_your_turn_line4_font_color': 'Texte ligne 4 (votre tour)',
+    'phone_your_turn_line5_font_color': 'Texte ligne 5 (votre tour)',
+    'phone_your_turn_line6_font_color': 'Texte ligne 6 (votre tour)',
+    // phone_your_turn_border_color
+    'phone_your_turn_line1_border_color': 'Contour ligne 1 (votre tour)',
+    'phone_your_turn_line2_border_color': 'Contour ligne 2 (votre tour)',
+    'phone_your_turn_line3_border_color': 'Contour ligne 3 (votre tour)',
+    'phone_your_turn_line4_border_color': 'Contour ligne 4 (votre tour)',
+    'phone_your_turn_line5_border_color': 'Contour ligne 5 (votre tour)',
+    'phone_your_turn_line6_border_color': 'Contour ligne 6 (votre tour)',
 };
 
 // Fonction pour générer les checkboxes pour une couleur spécifique
