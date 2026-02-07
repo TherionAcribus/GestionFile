@@ -530,7 +530,8 @@ const colorMappings = {
     'announce_main_color':{
         targets : [
             'title_background_color',
-            'text_up_background_color',        
+            'text_up_background_color',
+            'next_patients_background_color',        
         ]
     },
     'announce_third_color': {
@@ -541,6 +542,7 @@ const colorMappings = {
             'calling_font_color',
             'text_down_font_color',
             'ongoing_font_color',
+            'next_patients_font_color',
             // ... autres variables
         ]
     },
@@ -560,6 +562,7 @@ const colorMappings = {
             'calling_font_border_color',
             'text_down_font_border_color',
             'ongoing_font_border_color',
+            'next_patients_font_border_color',
             // ... autres variables
         ]
     },
@@ -599,6 +602,9 @@ const variableDescriptions = {
     'square_button_color': 'Couleur des boutons carrés',
     'square_cancel_button_color': 'Couleur des boutons d\'annulation',
     'confirmation_text_font_color': 'Couleur du texte de confirmation',
+    'next_patients_background_color': 'Fond des prochains patients',
+    'next_patients_font_color': 'Texte des prochains patients',
+    'next_patients_font_border_color': 'Contour du texte des prochains patients',
     // ... ajoutez les autres descriptions
 };
 
