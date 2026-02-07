@@ -1,5 +1,5 @@
 from flask import Blueprint,render_template, request, current_app as app
-from models import DashboardCard, db
+from models import DashboardCard, db, Pharmacist, Patient, Counter, Button
 from communication import communikation
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
@@ -120,8 +120,6 @@ def add_dashboard_card():
 
 @admin_dashboard_bp.route('/admin/dashboard/save_configuration', methods=['POST'])
 def save_dashboard_configuration():
-    from models import Pharmacist, Patient, Counter
-    
     data = request.get_json()
     visible_cards = data.get('visible_cards', [])
     card_order = data.get('card_order', [])
@@ -152,8 +150,78 @@ def save_dashboard_configuration():
         
         if dashboardcard.name == 'staff':
             context['staffs'] = Pharmacist.query.all()
+            
         elif dashboardcard.name == 'queue':
             context['patients'] = Patient.query.all()
+            
+        elif dashboardcard.name == 'button':
+            # Logique pour les boutons (copié depuis admin_patient.py)
+            all_buttons = Button.query.all()
+            grouped_buttons = {}
+            other_buttons = []
+            
+            for button in all_buttons:
+                if button.parent_button_id:
+                    parent_id = button.parent_button_id
+                    if parent_id not in grouped_buttons:
+                        parent_button = Button.query.get(parent_id)
+                        grouped_buttons[parent_id] = {
+                            'parent': parent_button,
+                            'children': []
+                        }
+                    grouped_buttons[parent_id]['children'].append(button)
+                elif button.is_parent:
+                    if button.id not in grouped_buttons:
+                        grouped_buttons[button.id] = {
+                            'parent': button,
+                            'children': []
+                        }
+                else:
+                    other_buttons.append(button)
+            
+            sorted_groups = sorted(grouped_buttons.values(), key=lambda x: x['parent'].label.lower())
+            for group in sorted_groups:
+                group['children'].sort(key=lambda x: x.label.lower())
+            
+            other_buttons.sort(key=lambda x: x.label.lower())
+            
+            context['grouped_buttons'] = sorted_groups
+            context['other_buttons'] = other_buttons
+            
+        elif dashboardcard.name == 'counter':
+            context['counters'] = Counter.query.all()
+            
+        elif dashboardcard.name == 'connection':
+            context['namespaces'] = list(app.active_connections.keys())
+            
+        elif dashboardcard.name == 'appschedule':
+            # Logique pour les planifications (copié depuis app.py)
+            from scheduler import scheduler
+            from models import SchedulerLog
+            
+            jobs = scheduler.get_jobs()
+            main_jobs_info = []
+            other_jobs_info = []
+            MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
+            
+            for job in jobs:
+                last_execution = SchedulerLog.query.filter_by(job_id=job.id).order_by(SchedulerLog.time.desc()).first()
+                job_info = {
+                    'id': job.id,
+                    'next_run_time': job.next_run_time,
+                    'last_execution': {
+                        'time': last_execution.time,
+                        'status': last_execution.status
+                    } if last_execution else None
+                }
+                
+                if job.id in MAIN_JOBS:
+                    main_jobs_info.append(job_info)
+                else:
+                    other_jobs_info.append(job_info)
+            
+            context['main_jobs'] = main_jobs_info
+            context['other_jobs'] = other_jobs_info
         
         # Utiliser le template avec contenu, pas le wrapper
         template_name = f'admin/dashboard_{dashboardcard.name}.html'
