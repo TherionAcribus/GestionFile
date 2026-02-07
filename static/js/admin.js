@@ -547,6 +547,15 @@ const colorMappings = {
             // ... autres variables
         ]
     },
+    'patient_button_border_color': {
+        targets: [
+            'circle_button_border_color',
+            'square_button_border_color',
+            'square_cancel_button_border_color',
+            'validation_button_border_color',
+            // ... autres variables
+        ]
+    },
     'announce_main_color':{
         targets : [
             'title_background_color',
@@ -661,6 +670,11 @@ const variableDescriptions = {
     'square_button_text_border_color': 'Contour texte bouton rectangulaire',
     'square_cancel_button_text_border_color': 'Contour texte bouton annuler',
     'validation_button_text_border_color': 'Contour texte bouton validation',
+    // patient_button_border_color (Bordures des boutons)
+    'circle_button_border_color': 'Bordure bouton circulaire',
+    'square_button_border_color': 'Bordure bouton rectangulaire',
+    'square_cancel_button_border_color': 'Bordure bouton annuler',
+    'validation_button_border_color': 'Bordure bouton validation',
     // ... ajoutez les autres descriptions
 };
 

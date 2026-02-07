@@ -44,6 +44,7 @@
         "patient_secondary_color": "#b6f5f5",
         "patient_third_color": "white",
         "patient_border_color": "#000000",
+        "patient_button_border_color": "#000000",
         "patient_title_font_size": "80px",
         "patient_title_font_color": "white",
         "patient_title_border_size": "0",

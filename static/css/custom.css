@@ -32,7 +32,7 @@
     --circle_button_text_size: 30px;
     --circle_button_text_color: #5707A6;
     --circle_button_border_size: 10px;
-    --circle_button_border_color: #E31C1C;
+    --circle_button_border_color: #00AAFF;
     --circle_button_text_border_size: 0px;
     --circle_button_text_border_color: #C91313;
     --patient_title_background_height: 150px;
@@ -60,7 +60,7 @@
     --square_button_size: 200px;
     --square_button_color: #FFD700;
     --square_button_border_size: 5px;
-    --square_button_border_color: #000000;
+    --square_button_border_color: #00AAFF;
     --square_button_image_size: 120px;
     --square_button_text_size: 50px;
     --square_button_text_color: #5707A6;
@@ -72,7 +72,7 @@
     --square_cancel_button_width: 500px;
     --square_cancel_button_color: #FFD700;
     --square_cancel_button_border_size: 5px;
-    --square_cancel_button_border_color: #000000;
+    --square_cancel_button_border_color: #00AAFF;
     --square_cancel_button_image_size: 120px;
     --square_cancel_button_text_size: 50px;
     --square_cancel_button_text_color: #5707A6;
@@ -82,7 +82,7 @@
     --validation_button_width: 800px;
     --validation_button_color: #FFD700;
     --validation_button_border_size: 5px;
-    --validation_button_border_color: #000000;
+    --validation_button_border_color: #00AAFF;
     --validation_button_text_size: 50px;
     --validation_button_text_color: #5707A6;
     --validation_button_text_border_size: 0px;
@@ -106,4 +106,5 @@
     --text_down_font_border_color: black;
     --validation_button_picture_size: 200px;
     --patient_border_color: #C91313;
+    --patient_button_border_color: #00AAFF;
 }

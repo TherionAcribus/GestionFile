@@ -1,4 +1,5 @@
 :root {
+    --patient_button_border_color: #000000;
     --circle_button_size: 200px;
     --circle_button_color: darkcyan;
     --circle_button_border_size: 0px;

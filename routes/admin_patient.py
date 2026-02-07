@@ -71,6 +71,7 @@ def admin_patient(tab=None):
                             patient_secondary_color=app.css_variable_manager.get_variable('patient', 'patient_secondary_color'),
                             patient_third_color=app.css_variable_manager.get_variable('patient', 'patient_third_color'),
                             patient_border_color=app.css_variable_manager.get_variable('patient', 'patient_border_color') or '#000000',
+                            patient_button_border_color=app.css_variable_manager.get_variable('patient', 'patient_button_border_color') or '#000000',
                             #button circle
                             circle_button_size=app.css_variable_manager.get_variable('patient', 'circle_button_size'),
                             circle_button_color=app.css_variable_manager.get_variable('patient', 'circle_button_color'),
