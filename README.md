@@ -36,6 +36,22 @@ SECRET_KEY=change-me
 SECURITY_PASSWORD_SALT=change-me
 ```
 
+### Démarrage sans MySQL (SQLite)
+
+Si MySQL n’est pas disponible sur la machine, tu peux démarrer en SQLite :
+
+```dotenv
+DATABASE_TYPE=sqlite
+```
+
+## Dépannage MySQL
+
+Erreur typique :
+
+- `Can't connect to MySQL server on 'localhost' ([Errno 10061] WSAECONNREFUSED)`
+
+Signifie que MySQL **n’écoute pas** sur le port (souvent service arrêté). Sur Windows, vérifie le service MySQL (ex: `MySQL80`) dans `services.msc` et démarre-le avec les droits admin, ou lance ton MySQL via Docker.
+
 ### Mode debug
 
 Le debug n’est **plus forcé** dans le code.

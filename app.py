@@ -96,7 +96,7 @@ rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
 site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
-database = "mysql"
+database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
@@ -330,6 +330,7 @@ def create_app(config_class=Config):
     # Charger la configuration avant toute initialisation
     AppHolder.set_app(app)
     app.config.from_object(config_class)
+    app.config["DATABASE_TYPE"] = os.getenv("DATABASE_TYPE", getattr(config_class, "database", "mysql"))
     app.debug = bool(app.config.get("DEBUG", False))
 
     # Initialiser le logging

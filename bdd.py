@@ -2,6 +2,7 @@ import pymysql
 from flask import current_app as app
 from models import Patient, PatientHistory, db
 import os
+import logging
 
 def init_database(database, db):
     if database == "mysql":
@@ -17,16 +18,27 @@ def init_database(database, db):
 
 def create_database_if_not_exists(engine_url, database_name):
     """ Création des BDD MYSQL si elles n'existent pas"""
-    print("create_database_if_not_exists", engine_url)
     app.config["MYSQL_USER"] = os.getenv('MYSQL_USER')
     app.config["MYSQL_PASSWORD"] = os.getenv('MYSQL_PASSWORD')
     app.config["HOST"] = os.getenv('MYSQL_HOST')
-    print(app.config["MYSQL_USER"], app.config["MYSQL_PASSWORD"])
 
-    connection = pymysql.connect(host=app.config["HOST"], user=app.config["MYSQL_USER"], password=app.config["MYSQL_PASSWORD"])
-    cursor = connection.cursor()
-    cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name}")
-    connection.close()
+    try:
+        connection = pymysql.connect(
+            host=app.config["HOST"],
+            user=app.config["MYSQL_USER"],
+            password=app.config["MYSQL_PASSWORD"],
+        )
+        cursor = connection.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {database_name}")
+        connection.close()
+    except pymysql.err.OperationalError as e:
+        logging.error(
+            "Can't connect to MySQL (%s) to init database '%s': %s",
+            app.config.get("HOST"),
+            database_name,
+            e,
+        )
+        raise
 
 
 def transfer_patients_to_history():
