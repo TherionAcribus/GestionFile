@@ -1,4 +1,5 @@
-<div id="card-{{ dashboardcard.name }}"
+<div id="card-wrapper-{{ dashboardcard.id }}"
     hx-get="/admin/counter/dashboard"
-    hx-trigger="load, refresh_counter_dashboard">
+    hx-trigger="load, refresh_counter_dashboard"
+    hx-swap="innerHTML">
 </div>

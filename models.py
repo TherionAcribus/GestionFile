@@ -592,7 +592,7 @@ class DashboardCard(db.Model):
     name = db.Column(db.String(50), nullable=False)
     visible = db.Column(db.Boolean, default=True)
     position = db.Column(db.Integer, nullable=False)  # Pour gérer l'ordre des cards
-    size = db.Column(db.String(20), nullable=False, default='col-md-6')  # Taille avec classes Bootstrap
+    size = db.Column(db.String(20), nullable=False, default='36')  # Taille: 18 (25%), 24 (33%), 36 (50%), 48 (66%)
     color = db.Column(db.String(20), default='bg-white')  # Couleur de fond
     settings = db.Column(JSON)  # Champ JSON pour des réglages spécifiques à chaque card
 

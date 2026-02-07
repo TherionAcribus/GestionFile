@@ -5,8 +5,9 @@
         hx-post="/admin/dashboard/valide_select"
         hx-vals='js:{"dashboard_options": Array.from(document.querySelectorAll("#closed-cards-select option:checked")).map(option => option.value)}'
         hx-headers='{"Content-Type": "application/json"}'
-        hx-target="#invisible"
-        hx-on="htmx:afterRequest: console.log('Requête envoyée'), window.location.reload()">
+        hx-target="#sortable-dashboard"
+        hx-swap="innerHTML"
+        hx-on="htmx:afterRequest: htmx.trigger('#sortable-dashboard', 'cardsUpdated')">
         {% for card in all_dashboardcards %}
             <option class="dashboard_options" value="{{ card.name }}"
             {% if card.visible %} selected {% endif %}

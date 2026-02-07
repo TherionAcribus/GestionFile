@@ -24,23 +24,32 @@
 
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    var sortable = new Sortable(document.getElementById('sortable-dashboard'), {
-        handle: '.card-header',  // Seule la partie header de la card est draggable
-        animation: 150,  // Animation fluide
+var sortableInstance = null;
+
+function initializeSortable() {
+    var dashboardEl = document.getElementById('sortable-dashboard');
+    if (!dashboardEl) return;
+    
+    if (sortableInstance) {
+        sortableInstance.destroy();
+    }
+    
+    sortableInstance = new Sortable(dashboardEl, {
+        handle: '.card-header',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
         onEnd: function (evt) {
             var order = [];
-            console.log(evt);
             document.querySelectorAll('#sortable-dashboard .dashboard-card').forEach(function (item, index) {
-                // On envoie le nom directement, sans essayer de le convertir en entier
+                var cardId = parseInt(item.id.replace('card-', ''));
                 order.push({
-                    id: item.id.replace('card-', ''),  // Extraire le nom ou l'ID de la card
-                    position: index + 1  // Position basée sur l'ordre actuel
+                    id: cardId,
+                    position: index + 1
                 });
-                console.log(item.id.replace('card-', ''), index + 1);
             });
 
-            // Envoyer l'ordre au serveur
             fetch('/admin/dashboard/save_order', {
                 method: 'POST',
                 headers: {
@@ -49,14 +58,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify({ order: order })
             }).then(response => {
                 if (response.ok) {
-                    console.log('Order saved successfully!');
+                    console.log('Ordre des cartes sauvegardé');
                 } else {
-                    console.error('Failed to save order');
+                    console.error('Erreur lors de la sauvegarde de l\'ordre');
+                    alert('Erreur lors de la sauvegarde de l\'ordre des cartes');
                 }
+            }).catch(error => {
+                console.error('Erreur réseau:', error);
+                alert('Erreur de connexion lors de la sauvegarde');
             });
         }
     });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    initializeSortable();
 });
+
+// Réinitialiser Sortable après mise à jour HTMX
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'sortable-dashboard') {
+        initializeSortable();
+    }
+});
+
 </script>
 
 

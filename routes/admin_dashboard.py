@@ -14,38 +14,38 @@ def admin():
 def hide_dashboard_card():
     card_name = request.form.get('card_name')
     
-    # Rechercher la card dans la base de données
     card = DashboardCard.query.filter_by(name=card_name).first()
 
     if card:
-        # Modifier la visibilité de la card
         card.visible = False
         db.session.commit()
         communikation("admin", event="refresh_dashboard_select")
-        return '', 200  # Réponse vide 
+        return '', 200
     else:
         return 'Card non trouvée', 404
     
 
 @admin_dashboard_bp.route('/admin/dashboard/valide_select', methods=['POST'])
 def dashboard_valid_select():
-    data = request.form.getlist('dashboard_options')  # Récupérer les options envoyées
+    data = request.form.getlist('dashboard_options')
 
-    # Récupérer toutes les cartes dans la base de données
     all_cards = DashboardCard.query.all()
 
-    # Mettre à jour la visibilité de chaque carte
     for card in all_cards:
-        # Si la carte est dans la sélection, elle est visible
         if card.name in data:
             card.visible = True
         else:
-            # Sinon, elle est invisible
             card.visible = False
 
-    db.session.commit()  # Appliquer les changements à la base de données
+    db.session.commit()
+    communikation("admin", event="refresh_dashboard_select")
 
-    return "", 200  # Retourner une réponse vide avec un code 200
+    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
+    html = ""
+    for dashboardcard in dashboardcards:
+        template_name = f'admin/dashboard_load_{dashboardcard.name}.html'
+        html += render_template(template_name, dashboardcard=dashboardcard)
+    return html, 200
 
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])
 def dashboard_display_select():
@@ -59,12 +59,61 @@ def save_dashboard_order():
     data = request.get_json()  # Récupérer les données JSON envoyées depuis le frontend
     if 'order' in data:
         for card_data in data['order']:
-            card_name = card_data['id']  # Maintenant on utilise 'id' comme le nom de la card
+            card_id = int(card_data['id'])
             position = int(card_data['position'])
-            card = DashboardCard.query.filter_by(id=card_name).first()
+            card = DashboardCard.query.filter_by(id=card_id).first()
             if card:
                 card.position = position  # Mettre à jour la position
         db.session.commit()  # Sauvegarder les modifications dans la base de données
         return '', 204  # Réponse vide avec succès
     return 'Invalid data', 400
+
+@admin_dashboard_bp.route('/admin/dashboard/resize', methods=['POST'])
+def resize_dashboard_card():
+    data = request.get_json()
+    card_id = data.get('card_id')
+    new_size = data.get('size')
     
+    if not card_id or not new_size:
+        return 'Missing card_id or size', 400
+    
+    if new_size not in ['18', '24', '36', '48']:
+        return 'Invalid size', 400
+    
+    card = DashboardCard.query.filter_by(id=card_id).first()
+    if card:
+        card.size = new_size
+        db.session.commit()
+        return '', 204
+    else:
+        return 'Card non trouvée', 404
+
+@admin_dashboard_bp.route('/admin/dashboard/add', methods=['POST'])
+def add_dashboard_card():
+    data = request.get_json()
+    name = data.get('name')
+    
+    if not name:
+        return 'Missing name', 400
+    
+    # Vérifier si la carte existe déjà
+    existing_card = DashboardCard.query.filter_by(name=name).first()
+    if existing_card:
+        return 'Card already exists', 409
+    
+    # Trouver la position maximale actuelle
+    max_position = db.session.query(db.func.max(DashboardCard.position)).scalar() or 0
+    
+    # Créer la nouvelle carte
+    new_card = DashboardCard(
+        name=name,
+        visible=True,
+        position=max_position + 1,
+        size='36',
+        color='bg-white'
+    )
+    
+    db.session.add(new_card)
+    db.session.commit()
+    
+    return '', 201

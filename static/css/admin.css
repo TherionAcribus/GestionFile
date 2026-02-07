@@ -90,38 +90,56 @@
 }
 
 .dashboard-card {
-    flex-grow: 0;
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    width: 400px;
+    min-width: 300px;
+    max-width: 600px;
     margin-bottom: 1rem;
+    box-sizing: border-box;
 }
 
 .dashboard-card .card {
     height: 100%;
+    width: 100%;
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
 }
 
 .dashboard-card .card-body {
     flex-grow: 1;
     overflow-y: auto;
-}
-
-/* Tailles de cartes */
-.dashboard-card.size-18 { flex-basis: calc(25% - 1rem); }
-.dashboard-card.size-24 { flex-basis: calc(33.333% - 1rem); }
-.dashboard-card.size-36 { flex-basis: calc(50% - 1rem); }
-.dashboard-card.size-48 { flex-basis: calc(66.666% - 1rem); }
-
-/* Responsive */
-@media (max-width: 1200px) {
-    .dashboard-card.size-18,
-    .dashboard-card.size-24 { flex-basis: calc(33.333% - 1rem); }
-    .dashboard-card.size-36,
-    .dashboard-card.size-48 { flex-basis: calc(50% - 1rem); }
+    overflow-x: hidden;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
     .dashboard-card {
-        flex-basis: 100% !important;
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
     }
+}
+
+.sortable-ghost {
+    opacity: 0.4;
+    background: #f8f9fa;
+}
+
+.sortable-chosen {
+    cursor: grabbing !important;
+}
+
+.sortable-drag {
+    opacity: 0.8;
+}
+
+.dashboard-card .card-header {
+    cursor: grab;
+    user-select: none;
+}
+
+.dashboard-card .card-header:active {
+    cursor: grabbing;
 }
