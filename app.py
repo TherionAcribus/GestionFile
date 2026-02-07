@@ -85,6 +85,7 @@ from routes.announce import announce_bp
 from routes.admin_stats import admin_stats_bp
 from routes.patient import patient_bp
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
+from routes.home import home_bp
 from python.engine import engine_bp
 from routes.admin_security import require_permission, require_permission_dashboard
 
@@ -353,6 +354,7 @@ def create_app(config_class=Config):
         start_fonctions(app)
 
     # Enregistrement des blueprints
+    app.register_blueprint(home_bp, url_prefix='')
     app.register_blueprint(admin_announce_bp, url_prefix='')
     app.register_blueprint(admin_counter_bp, url_prefix='')
     app.register_blueprint(admin_activity_bp, url_prefix='')

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PharmaFile - Accueil</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/bootstrap-icons/font/bootstrap-icons.min.css') }}">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+        
+        .header-section {
+            text-align: center;
+            color: white;
+            margin-bottom: 3rem;
+        }
+        
+        .header-section h1 {
+            font-size: 3.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header-section p {
+            font-size: 1.3rem;
+            opacity: 0.95;
+        }
+        
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            max-width: 900px;
+            width: 100%;
+        }
+        
+        .nav-button {
+            background: white;
+            border: none;
+            border-radius: 20px;
+            padding: 3rem 2rem;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+        
+        .nav-button:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            color: #667eea;
+        }
+        
+        .nav-button i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        .nav-button .title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .nav-button .description {
+            font-size: 1rem;
+            color: #666;
+            text-align: center;
+        }
+        
+        .btn-admin { color: #dc3545; }
+        .btn-admin:hover { color: #dc3545; }
+        
+        .btn-patient { color: #28a745; }
+        .btn-patient:hover { color: #28a745; }
+        
+        .btn-display { color: #007bff; }
+        .btn-display:hover { color: #007bff; }
+        
+        .btn-counter { color: #ffc107; }
+        .btn-counter:hover { color: #ffc107; }
+        
+        .btn-docs { color: #6c757d; }
+        .btn-docs:hover { color: #6c757d; }
+        
+        footer {
+            background: rgba(0,0,0,0.2);
+            color: white;
+            text-align: center;
+            padding: 1.5rem;
+            margin-top: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .buttons-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            
+            .header-section h1 {
+                font-size: 2.5rem;
+            }
+            
+            .nav-button {
+                padding: 2rem 1.5rem;
+                min-height: 150px;
+            }
+            
+            .nav-button i {
+                font-size: 3rem;
+            }
+            
+            .nav-button .title {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <h1>🏥 PharmaFile</h1>
+            <p>Système de gestion de file d'attente pour pharmacie</p>
+        </div>
+        
+        <div class="buttons-grid">
+            <a href="/admin" class="nav-button btn-admin">
+                <i class="bi bi-shield-lock-fill"></i>
+                <div class="title">Administration</div>
+                <div class="description">Gérer le système et les paramètres</div>
+            </a>
+            
+            <a href="/patient" class="nav-button btn-patient">
+                <i class="bi bi-person-fill"></i>
+                <div class="title">Borne Patient</div>
+                <div class="description">Interface pour prendre un ticket</div>
+            </a>
+            
+            <a href="/display" class="nav-button btn-display">
+                <i class="bi bi-tv-fill"></i>
+                <div class="title">Affichage</div>
+                <div class="description">Écran d'affichage des appels</div>
+            </a>
+            
+            <a href="/counter/1" class="nav-button btn-counter">
+                <i class="bi bi-shop"></i>
+                <div class="title">Comptoir</div>
+                <div class="description">Interface pharmacien</div>
+            </a>
+            
+            <a href="#" class="nav-button btn-docs" onclick="alert('Documentation à venir prochainement !'); return false;">
+                <i class="bi bi-book-fill"></i>
+                <div class="title">Documentation</div>
+                <div class="description">Guide d'utilisation (à venir)</div>
+            </a>
+        </div>
+    </div>
+    
+    <footer>
+        <p>PharmaFile - Système de gestion de file d'attente</p>
+        <small>CC-BY-SA</small>
+    </footer>
+    
+    <script src="{{ url_for('static', filename='js/libs/bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>

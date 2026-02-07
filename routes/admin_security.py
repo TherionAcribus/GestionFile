@@ -411,12 +411,6 @@ def logout_all():
     return redirect(url_for('admin_security.login'))
 
 
-# POSITION TEMPORAIRE -> FAIRE UNE VRAIE PAGE D'ACCEUIL AVEC TOUTES LES PAGES + DOC
-@admin_security_bp.route('/')
-@login_required
-def home():
-    return "Bonjour la pharmacie!"
-
 @admin_security_bp.route('/logout')
 def logout():
     logout_user()
