@@ -486,6 +486,149 @@ eventSource.onmessage = function(event) {
         document.getElementById('div_add_activity_form_staff').innerHTML = "";
     }
 };
+
+// ---------------- COPY COLORS BETWEEN PAGES ----------------
+
+// Mapping des rôles de couleurs entre les pages
+// Chaque "page" a un label, une source CSS, et ses variables parentes par rôle
+const pageColorRoles = {
+    'patient': {
+        label: 'Page Patient',
+        source: 'patient',
+        roles: {
+            'main': 'patient_main_color',
+            'secondary': 'patient_secondary_color',
+            'text': 'patient_third_color',
+            'border': 'patient_border_color',
+        }
+    },
+    'announce': {
+        label: 'Page Annonce',
+        source: 'announce',
+        roles: {
+            'main': 'announce_main_color',
+            'secondary': 'announce_secondary_color',
+            'text': 'announce_third_color',
+            'border': 'announce_border_color',
+        }
+    },
+    'phone': {
+        label: 'Téléphone - Page principale',
+        source: 'phone',
+        roles: {
+            'main': 'phone_main_color',
+            'secondary': 'phone_secondary_color',
+            'text': 'phone_third_color',
+            'border': 'phone_border_color',
+        }
+    },
+    'phone_your_turn': {
+        label: 'Téléphone - Votre tour',
+        source: 'phone',
+        roles: {
+            'main': 'phone_your_turn_main_color',
+            'text': 'phone_your_turn_third_color',
+            'border': 'phone_your_turn_border_color',
+        }
+    }
+};
+
+function showCopyColorsModal(title, message, onConfirm) {
+    const modalEl = document.getElementById('modal_copy_colors');
+    const modalTitle = document.getElementById('modal_copy_colors_title');
+    const modalBody = document.getElementById('modal_copy_colors_body');
+    const confirmBtn = document.getElementById('modal_copy_colors_confirm');
+    const cancelBtn = document.getElementById('modal_copy_colors_cancel');
+
+    modalTitle.textContent = title;
+    modalBody.innerHTML = message;
+
+    if (onConfirm) {
+        confirmBtn.style.display = '';
+        cancelBtn.textContent = 'Annuler';
+        confirmBtn.onclick = function() {
+            bootstrap.Modal.getInstance(modalEl).hide();
+            onConfirm();
+        };
+    } else {
+        confirmBtn.style.display = 'none';
+        cancelBtn.textContent = 'Fermer';
+    }
+
+    new bootstrap.Modal(modalEl).show();
+}
+
+function copyColorsFromPage(targetPageKey) {
+    const selectEl = document.getElementById(`copy_colors_select_${targetPageKey}`);
+    if (!selectEl) return;
+
+    const sourcePageKey = selectEl.value;
+    if (!sourcePageKey) {
+        showCopyColorsModal('Attention', 'Veuillez sélectionner une page source.', null);
+        return;
+    }
+
+    const sourcePage = pageColorRoles[sourcePageKey];
+    const targetPage = pageColorRoles[targetPageKey];
+    if (!sourcePage || !targetPage) return;
+
+    // Construire les mappings pour les rôles communs
+    const mappings = [];
+    for (const role in targetPage.roles) {
+        if (sourcePage.roles[role]) {
+            const sourceVar = sourcePage.roles[role];
+            const targetVar = targetPage.roles[role];
+            
+            // Récupérer les dépendances depuis colorMappings
+            const deps = colorMappings[targetVar] ? colorMappings[targetVar].targets : [];
+
+            mappings.push({
+                source_var: sourceVar,
+                target_var: targetVar,
+                source_source: sourcePage.source,
+                target_source: targetPage.source,
+                dependencies: deps
+            });
+        }
+    }
+
+    if (mappings.length === 0) {
+        showCopyColorsModal('Attention', 'Aucune couleur commune à copier.', null);
+        return;
+    }
+
+    // Confirmation via modale
+    showCopyColorsModal(
+        'Confirmation',
+        `Copier les couleurs de <strong>"${sourcePage.label}"</strong> vers <strong>"${targetPage.label}"</strong> ?<br><small class="text-muted">Cela écrasera les couleurs actuelles.</small>`,
+        function() {
+            // Appel au backend
+            fetch('/admin/copy_colors', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_page: sourcePageKey,
+                    target_page: targetPageKey,
+                    mappings: mappings
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showCopyColorsModal('Succès', 'Couleurs copiées avec succès ! La page va se recharger.', null);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showCopyColorsModal('Erreur', 'Erreur : ' + (data.message || 'Erreur inconnue'), null);
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                showCopyColorsModal('Erreur', 'Erreur lors de la copie des couleurs.', null);
+            });
+        }
+    );
+}
+
 // ---------------- COLORS PICKERS ----------------  
 
 const colorMappings = {

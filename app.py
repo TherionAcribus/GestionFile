@@ -978,6 +978,47 @@ def update_css_variable():
     })
 
 
+@app.route('/admin/copy_colors', methods=['POST'])
+def copy_colors():
+    """Copie les couleurs parentes d'une page source vers une page cible"""
+    try:
+        data = request.get_json()
+        source_page = data.get('source_page')
+        target_page = data.get('target_page')
+        mappings = data.get('mappings', [])
+
+        if not all([source_page, target_page, mappings]):
+            return jsonify({'status': 'error', 'message': 'Données manquantes'}), 400
+
+        # Pour chaque mapping, lire la valeur source et l'écrire dans la cible
+        for mapping in mappings:
+            source_var = mapping.get('source_var')
+            target_var = mapping.get('target_var')
+            source_source = mapping.get('source_source')  # ex: 'patient', 'announce', 'phone'
+            target_source = mapping.get('target_source')
+
+            value = app.css_variable_manager.get_variable(source_source, source_var)
+            if value:
+                # Met à jour la variable parente cible
+                app.css_variable_manager.update_variable(target_source, target_var, value)
+
+                # Met à jour aussi les variables dépendantes via colorMappings (côté client)
+                dep_variables = mapping.get('dependencies', [])
+                for dep_var in dep_variables:
+                    app.css_variable_manager.update_variable(target_source, dep_var, value)
+
+        # Régénère le CSS pour la/les source(s) cible(s)
+        target_sources = set(m.get('target_source') for m in mappings)
+        for ts in target_sources:
+            variables = app.css_variable_manager.get_all_variables(ts)
+            app.css_manager.generate_css(variables, mode=ts)
+
+        return jsonify({'status': 'success', 'message': 'Couleurs copiées avec succès'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/admin/update_input', methods=['POST'])
 def update_input():
     """ Mise à jour des input d'options de l'application """
