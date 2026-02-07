@@ -289,7 +289,7 @@
     <div class="accordion-item">
         <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-SubtitlePatientPage" aria-expanded="false" aria-controls="panelsStayOpen-SubtitlePatientPage">
-                <h3></h3>Texte en bas de la page</h3>
+                <h3>Texte en bas de la page</h3>
             </button>
         </h2>
         <div id="panelsStayOpen-SubtitlePatientPage" class="accordion-collapse collapse">
@@ -341,11 +341,11 @@
     <!-- Scan explanation -->
     <div class="accordion-item">
         <h2 class="accordion-header">
-            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-ScanExplanation" aria-expanded="true" aria-controls="panelsStayOpen-ScanExplanation">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-ScanExplanation" aria-expanded="false" aria-controls="panelsStayOpen-ScanExplanation">
                 <h3>Texte d'explication pour le Scan du QR-Code</h3>
             </button>
         </h2>        
-        <div id="panelsStayOpen-ScanExplanation" class="accordion-collapse collapse show">
+        <div id="panelsStayOpen-ScanExplanation" class="accordion-collapse collapse">
             <div class="accordion-body">
                 {{ macros.switch("page_patient_display_scan_explanation", 
                 page_patient_display_scan_explanation,
