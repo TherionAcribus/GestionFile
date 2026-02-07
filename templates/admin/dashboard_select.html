@@ -1,47 +1,210 @@
-<div class="input-field">
-    <select multiple
-        class="form-select"
-        id="closed-cards-select"
-        hx-post="/admin/dashboard/valide_select"
-        hx-vals='js:{"dashboard_options": Array.from(document.querySelectorAll("#closed-cards-select option:checked")).map(option => option.value)}'
-        hx-headers='{"Content-Type": "application/json"}'
-        hx-target="#sortable-dashboard"
-        hx-swap="innerHTML"
-        hx-on="htmx:afterRequest: htmx.trigger('#sortable-dashboard', 'cardsUpdated')">
-        {% for card in all_dashboardcards %}
-            <option class="dashboard_options" value="{{ card.name }}"
-            {% if card.visible %} selected {% endif %}
-                >{{ card.name }}</option>
-        {% endfor %}
-    </select>
-    <label>Sélectionner les cartes visibles :</label>
+<div class="card-manager">
+    <div class="card-manager-header" onclick="toggleCardManager(event)" style="cursor: pointer;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-1"><i class="bi bi-layout-wtf"></i> Gestion des cartes du dashboard</h5>
+                <p class="text-muted small mb-0">Cliquez pour ouvrir/fermer</p>
+            </div>
+            <i id="card-manager-toggle-icon" class="bi bi-chevron-down" style="font-size: 1.5rem; transition: transform 0.3s;"></i>
+        </div>
+    </div>
+    
+    <div id="card-manager-content" style="display: none;">
+        <div class="card-manager-instructions">
+            <small class="text-muted">
+                <i class="bi bi-grip-vertical"></i> Glissez-déposez pour réorganiser • 
+                <i class="bi bi-eye"></i> Cliquez sur l'œil pour afficher/masquer
+            </small>
+        </div>
+        
+        <div id="card-list-sortable" class="card-list">
+            {% for card in all_dashboardcards %}
+            <div class="card-item {% if not card.visible %}card-item-hidden{% endif %}" 
+                 data-card-id="{{ card.id }}" 
+                 data-card-name="{{ card.name }}">
+                <div class="card-item-drag-handle">
+                    <i class="bi bi-grip-vertical"></i>
+                </div>
+                <div class="card-item-content">
+                    <span class="card-item-name">{{ card.name }}</span>
+                </div>
+                <div class="card-item-actions">
+                    <button class="btn-toggle-visibility" 
+                            onclick="event.stopPropagation(); toggleCardVisibility('{{ card.id }}', this)"
+                            title="{% if card.visible %}Masquer{% else %}Afficher{% endif %}">
+                        <i class="bi bi-eye{% if not card.visible %}-slash{% endif %}"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="card-manager-footer">
+            <button class="btn btn-primary btn-sm" onclick="saveCardConfiguration(event)">
+                <i class="bi bi-check-lg"></i> Appliquer les modifications
+            </button>
+        </div>
+    </div>
 </div>
-<div id="invisible"></div>
 
 <script>
-    function initializeSelect2() {
-        $('#closed-cards-select').select2({
-            width: '100%',
-            placeholder: "Sélectionner des cards à rouvrir",
-            allowClear: true
-        });
+var cardListSortable = null;
+var isCardManagerOpen = false;
 
-        // Ajoute des événements pour détecter la sélection et la désélection
-        $('#closed-cards-select').on('select2:select select2:unselect', function (e) {
-            // Déclencher HTMX manuellement en simulant le changement d'état
-            this.dispatchEvent(new Event('change', { bubbles: true }));
-        });
+function toggleCardManager(evt) {
+    if (evt) evt.stopPropagation();
+    
+    var content = document.getElementById('card-manager-content');
+    var icon = document.getElementById('card-manager-toggle-icon');
+    
+    console.log('toggleCardManager - état actuel:', isCardManagerOpen);
+    
+    if (isCardManagerOpen) {
+        content.style.display = 'none';
+        icon.style.transform = 'rotate(0deg)';
+        isCardManagerOpen = false;
+        console.log('Panneau fermé');
+    } else {
+        content.style.display = 'block';
+        icon.style.transform = 'rotate(180deg)';
+        isCardManagerOpen = true;
+        console.log('Panneau ouvert');
+        
+        // Initialiser Sortable quand on ouvre
+        setTimeout(function() {
+            initializeCardListSortable();
+        }, 150);
     }
+}
 
-    // Initialisation de Select2 au chargement
-    $(document).ready(function() {
-        initializeSelect2();
-    });
+function initializeCardListSortable() {
+    var cardListEl = document.getElementById('card-list-sortable');
+    if (!cardListEl) {
+        console.error('Element card-list-sortable non trouvé');
+        return;
+    }
+    
+    if (cardListSortable) {
+        console.log('Destruction de l\'ancien Sortable');
+        cardListSortable.destroy();
+        cardListSortable = null;
+    }
+    
+    console.log('Initialisation de Sortable sur card-list-sortable');
+    console.log('Nombre de cartes:', cardListEl.children.length);
+    
+    try {
+        cardListSortable = new Sortable(cardListEl, {
+            handle: '.card-item-drag-handle',
+            animation: 150,
+            ghostClass: 'card-item-ghost',
+            chosenClass: 'card-item-chosen',
+            dragClass: 'card-item-drag',
+            forceFallback: false,
+            fallbackTolerance: 3,
+            onStart: function(evt) {
+                console.log('Début du drag depuis index:', evt.oldIndex);
+            },
+            onEnd: function(evt) {
+                console.log('Carte déplacée de', evt.oldIndex, 'vers', evt.newIndex);
+            }
+        });
+        console.log('Sortable initialisé avec succès');
+    } catch(e) {
+        console.error('Erreur lors de l\'initialisation de Sortable:', e);
+    }
+}
 
-    // Réinitialisation de Select2 après un swap HTMX
-    document.body.addEventListener('htmx:afterSwap', function(evt) {
-        if (evt.detail.target.id === "closed-cards-select") {
-            initializeSelect2();
+function toggleCardVisibility(cardId, button) {
+    var cardItem = button.closest('.card-item');
+    var icon = button.querySelector('i');
+    
+    cardItem.classList.toggle('card-item-hidden');
+    
+    if (cardItem.classList.contains('card-item-hidden')) {
+        icon.className = 'bi bi-eye-slash';
+        button.title = 'Afficher';
+    } else {
+        icon.className = 'bi bi-eye';
+        button.title = 'Masquer';
+    }
+}
+
+function saveCardConfiguration(evt) {
+    if (evt) evt.stopPropagation();
+    
+    var cardItems = document.querySelectorAll('.card-item');
+    var visibleCards = [];
+    var cardOrder = [];
+    
+    cardItems.forEach(function(item, index) {
+        var cardName = item.getAttribute('data-card-name');
+        var isVisible = !item.classList.contains('card-item-hidden');
+        
+        cardOrder.push({
+            id: parseInt(item.getAttribute('data-card-id')),
+            position: index + 1
+        });
+        
+        if (isVisible) {
+            visibleCards.push(cardName);
         }
     });
+    
+    console.log('Sauvegarde:', { visible_cards: visibleCards, card_order: cardOrder });
+    
+    var btn = evt ? evt.target.closest('button') : document.querySelector('.card-manager-footer button');
+    
+    fetch('/admin/dashboard/save_configuration', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            visible_cards: visibleCards,
+            card_order: cardOrder
+        })
+    }).then(response => {
+        if (response.ok) {
+            return response.text();
+        } else {
+            throw new Error('Erreur lors de la sauvegarde');
+        }
+    }).then(html => {
+        document.getElementById('sortable-dashboard').innerHTML = html;
+        if (typeof htmx !== 'undefined') {
+            htmx.trigger('#sortable-dashboard', 'cardsUpdated');
+        }
+        
+        if (btn) {
+            var originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Sauvegardé !';
+            btn.classList.add('btn-success');
+            btn.classList.remove('btn-primary');
+            
+            setTimeout(function() {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-primary');
+            }, 2000);
+        }
+    }).catch(error => {
+        console.error('Erreur:', error);
+        alert('Erreur lors de la sauvegarde de la configuration');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded - Card Manager');
+    console.log('Sortable disponible:', typeof Sortable !== 'undefined');
+});
+
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'card-list-sortable') {
+        console.log('HTMX afterSwap sur card-list-sortable');
+        if (isCardManagerOpen) {
+            initializeCardListSortable();
+        }
+    }
+});
 </script>

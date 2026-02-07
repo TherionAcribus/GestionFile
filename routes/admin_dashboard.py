@@ -117,3 +117,51 @@ def add_dashboard_card():
     db.session.commit()
     
     return '', 201
+
+@admin_dashboard_bp.route('/admin/dashboard/save_configuration', methods=['POST'])
+def save_dashboard_configuration():
+    from models import Pharmacist, Patient, Counter
+    
+    data = request.get_json()
+    visible_cards = data.get('visible_cards', [])
+    card_order = data.get('card_order', [])
+    
+    # Mettre à jour la visibilité
+    all_cards = DashboardCard.query.all()
+    for card in all_cards:
+        card.visible = card.name in visible_cards
+    
+    # Mettre à jour l'ordre
+    for card_data in card_order:
+        card_id = int(card_data['id'])
+        position = int(card_data['position'])
+        card = DashboardCard.query.filter_by(id=card_id).first()
+        if card:
+            card.position = position
+    
+    db.session.commit()
+    communikation("admin", event="refresh_dashboard_select")
+    
+    # Retourner le HTML des cartes visibles avec leur contenu
+    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
+    html = ""
+    
+    for dashboardcard in dashboardcards:
+        # Préparer les données nécessaires pour chaque type de carte
+        context = {'dashboardcard': dashboardcard}
+        
+        if dashboardcard.name == 'staff':
+            context['staffs'] = Pharmacist.query.all()
+        elif dashboardcard.name == 'queue':
+            context['patients'] = Patient.query.all()
+        
+        # Utiliser le template avec contenu, pas le wrapper
+        template_name = f'admin/dashboard_{dashboardcard.name}.html'
+        try:
+            html += render_template(template_name, **context)
+        except Exception as e:
+            print(f"Erreur lors du rendu de {template_name}: {e}")
+            # Fallback sur le wrapper si le template n'existe pas
+            html += render_template(f'admin/dashboard_load_{dashboardcard.name}.html', dashboardcard=dashboardcard)
+    
+    return html, 200
