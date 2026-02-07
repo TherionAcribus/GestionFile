@@ -486,8 +486,6 @@ eventSource.onmessage = function(event) {
         document.getElementById('div_add_activity_form_staff').innerHTML = "";
     }
 };
-
-
 // ---------------- COLORS PICKERS ----------------  
 
 const colorMappings = {
@@ -496,17 +494,19 @@ const colorMappings = {
         targets: [
             'patient_title_background_color',
             'circle_button_color',
-            'circle_button_text_color',
             'square_button_color',
             'square_cancel_button_color',
-            'confirmation_text_font_color',
             'validation_button_color',
             'subtitle_background_color',
-            'scan_explanation_font_color',
             'subtitle_specific_message_background_color',
             'subtitle_no_activity_background_color',
-            'validation_text_font_color'
-
+            'scan_explanation_background_color',
+            'validation_text_background_color',
+            'confirmation_text_background_color',
+            'circle_button_text_background_color',
+            'square_button_text_background_color',
+            'square_cancel_button_text_background_color',
+            'validation_button_text_background_color',
             // ... autres variables
         ]
     },
@@ -521,9 +521,29 @@ const colorMappings = {
             'subtitle_font_color',
             'subtitle_no_activity_font_color',
             'subtitle_specific_message_font_color',
+            'scan_explanation_font_color',
+            'validation_text_font_color',
+            'confirmation_text_font_color',
             'validation_button_text_color',
             'square_cancel_button_text_color',
             'square_button_text_color',
+            'circle_button_text_color',
+            // ... autres variables
+        ]
+    },
+    'patient_border_color': {
+        targets: [
+            'patient_title_border_color',
+            'subtitle_border_color',
+            'subtitle_no_activity_border_color',
+            'subtitle_specific_message_border_color',
+            'scan_explanation_border_color',
+            'validation_text_border_color',
+            'confirmation_text_border_color',
+            'circle_button_text_border_color',
+            'square_button_text_border_color',
+            'square_cancel_button_text_border_color',
+            'validation_button_text_border_color',
             // ... autres variables
         ]
     },
@@ -598,13 +618,49 @@ const colorMappings = {
 const variableDescriptions = {
     'patient_title_background_color': 'Couleur de fond du titre',
     'circle_button_color': 'Couleur des boutons circulaires',
-    'circle_button_text_color': 'Couleur du texte des boutons circulaires',
+    'circle_button_text_color': 'Texte bouton circulaire',
     'square_button_color': 'Couleur des boutons carrés',
     'square_cancel_button_color': 'Couleur des boutons d\'annulation',
-    'confirmation_text_font_color': 'Couleur du texte de confirmation',
     'next_patients_background_color': 'Fond des prochains patients',
     'next_patients_font_color': 'Texte des prochains patients',
     'next_patients_font_border_color': 'Contour du texte des prochains patients',
+    // patient_third_color (Couleur des textes)
+    'patient_title_font_color': 'Texte du titre',
+    'subtitle_font_color': 'Texte en bas de la page',
+    'subtitle_no_activity_font_color': 'Texte activité inactive',
+    'subtitle_specific_message_font_color': 'Texte spécifique activité',
+    'scan_explanation_font_color': 'Texte explication Scan QR',
+    'validation_text_font_color': 'Texte page de validation',
+    'confirmation_text_font_color': 'Texte de confirmation',
+    'validation_button_text_color': 'Texte boutons de validation',
+    'square_cancel_button_text_color': 'Texte bouton annuler',
+    'square_button_text_color': 'Texte bouton rectangulaire',
+    // patient_border_color (Couleur des bordures)
+    'patient_title_border_color': 'Contour du titre',
+    'subtitle_border_color': 'Contour texte bas de page',
+    'subtitle_no_activity_border_color': 'Contour texte activité inactive',
+    'subtitle_specific_message_border_color': 'Contour texte spécifique activité',
+    'scan_explanation_border_color': 'Contour texte explication Scan QR',
+    'validation_text_border_color': 'Contour texte page de validation',
+    'confirmation_text_border_color': 'Contour texte de confirmation',
+    // patient_main_color (Couleur principale) - fonds
+    'subtitle_background_color': 'Fond texte bas de page',
+    'subtitle_no_activity_background_color': 'Fond texte activité inactive',
+    'subtitle_specific_message_background_color': 'Fond texte spécifique activité',
+    'scan_explanation_background_color': 'Fond texte explication Scan QR',
+    'validation_text_background_color': 'Fond texte page de validation',
+    'confirmation_text_background_color': 'Fond texte de confirmation',
+    'validation_button_color': 'Couleur bouton de validation',
+    // Fond du texte des boutons
+    'circle_button_text_background_color': 'Fond texte bouton circulaire',
+    'square_button_text_background_color': 'Fond texte bouton rectangulaire',
+    'square_cancel_button_text_background_color': 'Fond texte bouton annuler',
+    'validation_button_text_background_color': 'Fond texte bouton validation',
+    // Contour texte des boutons
+    'circle_button_text_border_color': 'Contour texte bouton circulaire',
+    'square_button_text_border_color': 'Contour texte bouton rectangulaire',
+    'square_cancel_button_text_border_color': 'Contour texte bouton annuler',
+    'validation_button_text_border_color': 'Contour texte bouton validation',
     // ... ajoutez les autres descriptions
 };
 

@@ -70,6 +70,7 @@ def admin_patient(tab=None):
                             patient_main_color=app.css_variable_manager.get_variable('patient', 'patient_main_color'),
                             patient_secondary_color=app.css_variable_manager.get_variable('patient', 'patient_secondary_color'),
                             patient_third_color=app.css_variable_manager.get_variable('patient', 'patient_third_color'),
+                            patient_border_color=app.css_variable_manager.get_variable('patient', 'patient_border_color') or '#000000',
                             #button circle
                             circle_button_size=app.css_variable_manager.get_variable('patient', 'circle_button_size'),
                             circle_button_color=app.css_variable_manager.get_variable('patient', 'circle_button_color'),
@@ -80,6 +81,7 @@ def admin_patient(tab=None):
                             circle_button_text_color=app.css_variable_manager.get_variable('patient', 'circle_button_text_color'),
                             circle_button_text_border_size=app.css_variable_manager.get_variable('patient', 'circle_button_text_border_size'),
                             circle_button_text_border_color=app.css_variable_manager.get_variable('patient', 'circle_button_text_border_color'),
+                            circle_button_text_background_color=app.css_variable_manager.get_variable('patient', 'circle_button_text_background_color') or 'transparent',
                             #button_square
                             square_button_height=app.css_variable_manager.get_variable('patient', 'square_button_height'),
                             square_button_width=app.css_variable_manager.get_variable('patient', 'square_button_width'),
@@ -91,6 +93,7 @@ def admin_patient(tab=None):
                             square_button_text_color=app.css_variable_manager.get_variable('patient', 'square_button_text_color'),
                             square_button_text_border_size=app.css_variable_manager.get_variable('patient', 'square_button_text_border_size'),
                             square_button_text_border_color=app.css_variable_manager.get_variable('patient', 'square_button_text_border_color'),
+                            square_button_text_background_color=app.css_variable_manager.get_variable('patient', 'square_button_text_background_color') or 'transparent',
                             #button_cancel_square
                             square_cancel_button_height=app.css_variable_manager.get_variable('patient', 'square_button_height'),
                             square_cancel_button_width=app.css_variable_manager.get_variable('patient', 'square_button_width'),
@@ -102,6 +105,7 @@ def admin_patient(tab=None):
                             square_cancel_button_text_color=app.css_variable_manager.get_variable('patient', 'square_button_text_color'),
                             square_cancel_button_text_border_size=app.css_variable_manager.get_variable('patient', 'square_button_text_border_size'),
                             square_cancel_button_text_border_color=app.css_variable_manager.get_variable('patient', 'square_button_text_border_color'),
+                            square_cancel_button_text_background_color=app.css_variable_manager.get_variable('patient', 'square_cancel_button_text_background_color') or 'transparent',
                             #titre
                             patient_title_font_size=app.css_variable_manager.get_variable('patient', 'patient_title_font_size'),
                             patient_title_font_color=app.css_variable_manager.get_variable('patient', 'patient_title_font_color'),
@@ -146,12 +150,18 @@ def admin_patient(tab=None):
                             validation_button_text_color=app.css_variable_manager.get_variable('patient', 'validation_button_text_color'),
                             validation_button_text_border_size=app.css_variable_manager.get_variable('patient', 'validation_button_text_border_size'),
                             validation_button_text_border_color=app.css_variable_manager.get_variable('patient', 'validation_button_text_border_color'),
+                            validation_button_text_background_color=app.css_variable_manager.get_variable('patient', 'validation_button_text_background_color') or 'transparent',
                             validation_button_picture_size=app.css_variable_manager.get_variable('patient', 'validation_button_picture_size'),
+                            #scan_explanation
+                            scan_explanation_background_color=app.css_variable_manager.get_variable('patient', 'scan_explanation_background_color') or '#008B8B',
+                            #validation
+                            validation_text_background_color=app.css_variable_manager.get_variable('patient', 'validation_text_background_color') or '#008B8B',
                             #confirmation
                             confirmation_text_font_color=app.css_variable_manager.get_variable('patient', 'confirmation_text_font_color'),
                             confirmation_text_font_size=app.css_variable_manager.get_variable('patient', 'confirmation_text_font_size'),
                             confirmation_text_border_size=app.css_variable_manager.get_variable('patient', 'confirmation_text_border_size'),
                             confirmation_text_border_color=app.css_variable_manager.get_variable('patient', 'confirmation_text_border_color'),
+                            confirmation_text_background_color=app.css_variable_manager.get_variable('patient', 'confirmation_text_background_color') or '#008B8B',
                             #drapeaux
                             flag_size=app.css_variable_manager.get_variable('patient', 'flag_size'),
                             flag_border_size=app.css_variable_manager.get_variable('patient', 'flag_border_size'),

@@ -4,7 +4,9 @@
 
 {{ macros.css_color_bloc("patient", "patient_secondary_color", patient_secondary_color, "Couleur secondaire") }}
 
-{{ macros.parent_css_color_bloc("patient", "patient_third_color", patient_third_color, "Couleur tertiaire") }}
+{{ macros.parent_css_color_bloc("patient", "patient_third_color", patient_third_color, "Couleur des textes") }}
+
+{{ macros.parent_css_color_bloc("patient", "patient_border_color", patient_border_color, "Couleur des bordures") }}
 
 
 <div class="mb-3">
@@ -142,6 +144,11 @@
                         {{ macros.css_unit_bloc("patient", "circle_button_text_border_size", circle_button_text_border_size, "Taille", "px") }}
                         {{ macros.css_color_bloc("patient", "circle_button_text_border_color", circle_button_text_border_color, "Couleur") }}
                     </div>
+
+                    <strong>Fond du texte</strong>
+                    <div class="admin_css_textbloc">
+                        {{ macros.css_color_bloc("patient", "circle_button_text_background_color", circle_button_text_background_color, "Couleur") }}
+                    </div>
                     
                     <strong>Taille de l'image</strong>
                     {{ macros.css_unit_bloc("patient", "circle_button_image_size", circle_button_image_size, "Taille", "px") }}
@@ -184,6 +191,11 @@
                         {{ macros.css_unit_bloc("patient", "square_button_text_border_size", square_button_text_border_size, "Taille", "px") }}
                         {{ macros.css_color_bloc("patient", "square_button_text_border_color", square_button_text_border_color, "Couleur") }}
                     </div>
+
+                    <strong>Fond du texte</strong>
+                    <div class="admin_css_textbloc">
+                        {{ macros.css_color_bloc("patient", "square_button_text_background_color", square_button_text_background_color, "Couleur") }}
+                    </div>
                     
                     <strong>Taille de l'image</strong>
                     {{ macros.css_unit_bloc("patient", "square_button_image_size", square_button_image_size, "Taille", "px") }}
@@ -192,7 +204,6 @@
             </div>
         </div>
 
-    
         <!-- Bouton square -->
         <div class="accordion-item">
             <h2 class="accordion-header">
@@ -226,6 +237,11 @@
                     <div class="admin_css_textbloc">                
                         {{ macros.css_unit_bloc("patient", "square_cancel_button_text_border_size", square_cancel_button_text_border_size, "Taille", "px") }}
                         {{ macros.css_color_bloc("patient", "square_cancel_button_text_border_color", square_cancel_button_text_border_color, "Couleur") }}
+                    </div>
+
+                    <strong>Fond du texte</strong>
+                    <div class="admin_css_textbloc">
+                        {{ macros.css_color_bloc("patient", "square_cancel_button_text_background_color", square_cancel_button_text_background_color, "Couleur") }}
                     </div>
                     
                     <strong>Taille de l'image</strong>
@@ -291,49 +307,9 @@
                 </div>
 
                 <strong>Fond</strong>
-                <div class="admin_css_textbloc"> 
+                <div class="admin_css_textbloc">
                     {{ macros.css_unit_bloc("patient", "subtitle_background_height", subtitle_background_height, "Taille", "px") }}
                     {{ macros.css_color_bloc("patient", "subtitle_background_color", subtitle_background_color, "Couleur") }}
-                </div>
-
-                <h2>Texte qui s'affiche par défaut si l'activité n'est pas en cours</h2>
-
-                {{ macros.textbloc_before_call("page_patient_disable_default_message", page_patient_disable_default_message, "Texte")}}
-
-                {{ macros.textbloc_int("page_patient_timer_activity_inactive", page_patient_timer_activity_inactive, "Durée du timer (en secondes)") }}
-
-                <strong>Police du texte</strong>
-                <div class="admin_css_textbloc">
-                    {{ macros.css_unit_bloc("patient", "subtitle_no_activity_font_size", subtitle_no_activity_font_size, "Taille", "px") }}
-                    {{ macros.css_color_bloc("patient", "subtitle_no_activity_font_color", subtitle_no_activity_font_color, "Couleur") }}    
-                </div>
-
-                <strong>Contour du texte</strong>
-                <div class="admin_css_textbloc">                
-                    {{ macros.css_unit_bloc("patient", "subtitle_no_activity_border_size", subtitle_no_activity_border_size, "Taille", "px") }}
-                    {{ macros.css_color_bloc("patient", "subtitle_no_activity_border_color", subtitle_no_activity_border_color, "Couleur") }}
-                </div>
-
-                <strong>Couleur de fond</strong>
-                {{ macros.css_color_bloc("patient", "subtitle_no_activity_background_color", subtitle_no_activity_background_color, "Couleur") }}
-
-                <h2>Texte spécifique à une activité (voir Activité)</h2>
-
-                <strong>Police du texte</strong>
-                <div class="admin_css_textbloc">
-                    {{ macros.css_unit_bloc("patient", "subtitle_specific_message_font_size", subtitle_specific_message_font_size, "Taille", "px") }}
-                    {{ macros.css_color_bloc("patient", "subtitle_specific_message_font_color", subtitle_specific_message_font_color, "Couleur") }}    
-                </div>
-
-                <strong>Contour du texte</strong>
-                <div class="admin_css_textbloc">                
-                    {{ macros.css_unit_bloc("patient", "subtitle_specific_message_border_size", subtitle_specific_message_border_size, "Taille", "px") }}
-                    {{ macros.css_color_bloc("patient", "subtitle_specific_message_border_color", subtitle_specific_message_border_color, "Couleur") }}
-                </div>
-
-                <strong>Couleur de fond</strong>
-                <div class="admin_css_textbloc">
-                    {{ macros.css_color_bloc("patient", "subtitle_specific_message_background_color", subtitle_specific_message_background_color, "Couleur") }}
                 </div>
 
             </div>
@@ -386,6 +362,11 @@
                 <div class="admin_css_textbloc">                
                     {{ macros.css_unit_bloc("patient", "scan_explanation_border_size", scan_explanation_border_size, "Taille", "px") }}
                     {{ macros.css_color_bloc("patient", "scan_explanation_border_color", scan_explanation_border_color, "Couleur") }}
+                </div>
+
+                <strong>Fond</strong>
+                <div class="admin_css_textbloc">
+                    {{ macros.css_color_bloc("patient", "scan_explanation_background_color", scan_explanation_background_color, "Couleur") }}
                 </div>
 
             </div>
@@ -495,7 +476,12 @@
                 <div class="admin_css_textbloc">                
                     {{ macros.css_unit_bloc("patient", "validation_button_text_border_size", validation_button_text_border_size, "Taille", "px") }}
                     {{ macros.css_color_bloc("patient", "validation_button_text_border_color", validation_button_text_border_color, "Couleur") }}
-                </div>        
+                </div>
+
+                <strong>Fond du texte</strong>
+                <div class="admin_css_textbloc">
+                    {{ macros.css_color_bloc("patient", "validation_button_text_background_color", validation_button_text_background_color, "Couleur") }}
+                </div>
                 
                 <strong>Taille des images</strong>
                 <div class="admin_css_textbloc">                
@@ -529,6 +515,11 @@
                         {{ macros.css_unit_bloc("patient", "validation_text_border_size", validation_text_border_size, "Taille", "px") }}
                         {{ macros.css_color_bloc("patient", "validation_text_border_color", validation_text_border_color, "Couleur") }}
                     </div>
+
+                    <strong>Fond</strong>
+                    <div class="admin_css_textbloc">
+                        {{ macros.css_color_bloc("patient", "validation_text_background_color", validation_text_background_color, "Couleur") }}
+                    </div>
                     
             </div>
         </div>
@@ -556,6 +547,11 @@
                     <div class="admin_css_textbloc">
                         {{ macros.css_unit_bloc("patient", "confirmation_text_border_size", confirmation_text_border_size, "Taille", "px") }}
                         {{ macros.css_color_bloc("patient", "confirmation_text_border_color", confirmation_text_border_color, "Couleur") }}
+                    </div>
+
+                    <strong>Fond</strong>
+                    <div class="admin_css_textbloc">
+                        {{ macros.css_color_bloc("patient", "confirmation_text_background_color", confirmation_text_background_color, "Couleur") }}
                     </div>
             </div>
         </div>
