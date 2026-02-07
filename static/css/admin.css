@@ -271,3 +271,66 @@
     border-top: 1px solid #e9ecef;
     text-align: right;
 }
+
+/* Staff buttons styling */
+.staff-button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.staff-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    letter-spacing: 0.05em;
+}
+
+.staff-initials {
+font-weight: 700;
+}
+
+.staff-name {
+font-weight: 500;
+}
+
+/* Connexions card styling */
+.connection-card h6 {
+font-size: 0.95rem;
+font-weight: 600;
+}
+
+.connection-card .btn {
+font-size: 0.85rem;
+padding: 0.25rem 0.5rem;
+}
+
+.connection-label {
+font-size: 0.8rem;
+text-transform: uppercase;
+letter-spacing: 0.05em;
+color: #6c757d;
+margin-bottom: 0.5rem;
+display: block;
+}
+
+.connection-select {
+width: 100%;
+}
+
+.connection-card .select2-container .select2-selection--multiple {
+min-height: 38px;
+border-radius: 4px;
+border-color: #dee2e6;
+}
+
+.connection-list {
+margin-top: 1rem;
+font-size: 0.85rem;
+}
+
+.connection-namespace {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 1rem;
+}

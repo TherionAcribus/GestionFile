@@ -1,5 +1,5 @@
 {% for namespace, clients in connections.items() %}
-    <h2>{{ namespace }}</h2>
+    <h6 class="connection-namespace">{{ namespace }}</h6>
     <ul>
     {% for client in clients %}
         <li>{{ client.username }} (SID: {{ client.sid }})</li>

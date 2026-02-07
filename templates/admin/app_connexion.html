@@ -1,14 +1,20 @@
-<h1>Connexions actives</h1>
+<div class="connection-card">
+    <div class="connection-card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Connexions actives</h6>
+        <button class="btn btn-outline-primary btn-sm" id="refreshButton">Rafraîchir</button>
+    </div>
 
-<select id="namespaceSelect" name="namespaces[]" multiple="multiple" style="width: 100%">
-    {% for namespace in namespaces %}
-        <option value="{{ namespace }}">{{ namespace }}</option>
-    {% endfor %}
-</select>
+    <div class="connection-card-body">
+        <label for="namespaceSelect" class="connection-label">Namespaces</label>
+        <select id="namespaceSelect" name="namespaces[]" multiple="multiple" class="connection-select">
+            {% for namespace in namespaces %}
+                <option value="{{ namespace }}">{{ namespace }}</option>
+            {% endfor %}
+        </select>
+    </div>
 
-<button class="btn btn-primary" id="refreshButton">Rafraîchir</button>
-
-<div id="connectionList"></div>
+    <div id="connectionList" class="connection-list"></div>
+</div>
 
 <script>
 $(document).ready(function() {

@@ -16,9 +16,14 @@
             </div>
         </div>
         <div class="card-body">
-            {% for staff in staffs %}
-                <button class="btn btn_primary">{{ staff.name }}</button>
-            {% endfor %}
+            <div class="staff-button-group">
+                {% for staff in staffs %}
+                    <button class="btn btn-primary text-uppercase staff-button">
+                        <span class="staff-initials">{{ staff.initials }}</span>
+                        <span class="staff-name">{{ staff.name }}</span>
+                    </button>
+                {% endfor %}
+            </div>
         </div>
     </div>
 </div>
