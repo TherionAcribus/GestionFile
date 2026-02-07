@@ -632,5 +632,5 @@ def dashboard_staff():
     return render_template('/admin/dashboard_printer.html', 
                             dashboardcard=dashboardcard,
                             printer_error=app.config["PRINTER_ERROR"],
-                            printer_infos=app.config["PRINTER_INFOS"])
+                            printer_infos=app.config["PRINTER_INFOS"]) 
 

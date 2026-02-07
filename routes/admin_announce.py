@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, jsonify
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
@@ -9,9 +10,14 @@ from python.engine import get_futur_patient, generate_audio_calling, get_google_
 from communication import communikation
 from routes.admin_security import require_permission
 import time
+from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
+
+
+def _signals_dir() -> Path:
+    return to_abs_base_dir(Path("static") / "audio" / "signals", root_dir=app.root_path)
 
 admin_announce_bp = Blueprint('admin_announce', __name__)
 
@@ -111,16 +117,23 @@ def announce_page(tab=None):
 
 
 @admin_announce_bp.route('/admin/announce/gallery_audio')
+@require_permission('announce')
 def gallery_audio():    
     return render_template('/admin/announce_audio_gallery.html',
                             announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
 
 
 @admin_announce_bp.route("/admin/announce/audio/gallery_list", methods=["GET", "DELETE"])
+@require_permission('announce')
 def gallery_audio_list():
     # il faut garder la methode DELETE car appeler par delete/<sound_filename> pour réafficher la galerie
     # Lister tous les fichiers wav dans le répertoire SOUND_FOLDER
-    sounds = [f for f in os.listdir("static/audio/signals") if f.endswith('.wav') or f.endswith('.mp3')]
+    signals_dir = _signals_dir()
+    try:
+        signals_dir.mkdir(parents=True, exist_ok=True)
+        sounds = [p.name for p in signals_dir.iterdir() if p.is_file() and p.suffix.lower() in {".wav", ".mp3"}]
+    except OSError:
+        sounds = []
     print("sounds", sounds)
     return render_template("admin/announce_audio_gallery_list.html",
                             announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],
@@ -131,33 +144,43 @@ def serve_sound(filename):
     return send_from_directory("static/audio/signals", filename)
 
 @admin_announce_bp.route("/admin/announce/audio/delete/<sound_filename>", methods=["DELETE"])
+@require_permission('announce')
 def delete_sound(sound_filename):
-    sound_path = os.path.join("static/audio/signals", sound_filename)    
     try:
+        validate_path_segment(sound_filename, what="sound filename")
+        if not allowed_audio_file(sound_filename):
+            app.display_toast(success=False, message="Format de fichier non autorisé")
+            return "Invalid file type", 400
+        sound_path = safe_path_under(_signals_dir(), sound_filename)
         # on empeche de supprimer le son en cours d'utilisation
         if sound_filename == app.config["ANNOUNCE_ALERT_FILENAME"]:
             app.display_toast(success=False, message="Impossible de supprimer le son courant. Selectionner un autre son et valider avant de supprimer celui-ci.")
             return "", 204
         # Vérifier si le fichier existe avant de le supprimer
-        if os.path.exists(sound_path):
-            os.remove(sound_path)
+        if sound_path.exists() and sound_path.is_file():
+            sound_path.unlink()
             app.logger.info(f"Son supprimé : {sound_filename}")
             return redirect (url_for('gallery_audio_list'))
         else:
             app.logger.error(f"Fichier non trouvé : {sound_filename}")
             app.display_toast(success=False, message="Fichier non trouvé")
             return "Fichier non trouvé", 404
+    except UnsafePathError:
+        app.display_toast(success=False, message="Nom de fichier invalide")
+        return "Invalid filename", 400
     except Exception as e:
         app.logger.error(f"Erreur lors de la suppression du fichier : {str(e)}")
         return "Erreur lors de la suppression du fichier", 500
 
 @admin_announce_bp.route('/admin/announce/audio/current_signal')
+@require_permission('announce')
 def current_signal():
     return render_template('/admin/announce_audio_current_signal.html',
                             announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],)
 
 
 @admin_announce_bp.route('/admin/announce/audio/save_selected_sound', methods=['POST'])
+@require_permission('announce')
 def select_signal():
     print(request.values)
     filename = request.form.get('selected_sound')
@@ -178,6 +201,7 @@ def allowed_audio_file(filename):
 
 
 @admin_announce_bp.route('/admin/announce/audio/upload', methods=['POST'])
+@require_permission('announce')
 def upload_signal_file():
     if 'file' not in request.files:
         return redirect(request.url)
@@ -185,13 +209,34 @@ def upload_signal_file():
     if file.filename == '':
         return redirect(request.url)
     if file and allowed_audio_file(file.filename):
-        filename = file.filename
-        file.save(os.path.join("static/audio/signals", filename))
+        signals_dir = _signals_dir()
+        signals_dir.mkdir(parents=True, exist_ok=True)
+
+        filename = secure_filename(file.filename)
+        if not filename:
+            app.display_toast(success=False, message="Nom de fichier invalide")
+            return redirect(url_for('gallery_audio_list'))
+        if not allowed_audio_file(filename):
+            app.display_toast(success=False, message="Format de fichier non autorisé")
+            return redirect(url_for('gallery_audio_list'))
+
+        try:
+            target_path = safe_path_under(signals_dir, filename)
+        except UnsafePathError:
+            app.display_toast(success=False, message="Nom de fichier invalide")
+            return redirect(url_for('gallery_audio_list'))
+
+        if target_path.exists():
+            app.display_toast(success=False, message="Un fichier avec ce nom existe déjà")
+            return redirect(url_for('gallery_audio_list'))
+
+        file.save(str(target_path))
     
     return redirect(url_for('gallery_audio_list'))
 
 
 @admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['GET'])
+@require_permission('announce')
 def announce_audio_test(scope):
     language_code = request.args.get('language_code', 'fr')
     call_number = request.args.get('call_number', 'A-1')
