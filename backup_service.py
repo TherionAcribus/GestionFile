@@ -342,9 +342,86 @@ class ConfigSection(BackupSection):
                 db.session.add(option)
         db.session.commit()
         try:
-            current_app.load_configuration()
+            current_app.load_configuration(current_app)
         except Exception:
             pass
+
+
+# ---------------------------------------------------------------------------
+# Per-page Config (ConfigOption filtered by prefix)
+# ---------------------------------------------------------------------------
+
+class _PageConfigSection(BackupSection):
+    """Base for page-specific config sections (filters ConfigOption by prefixes)."""
+    prefixes = []
+
+    def _match(self, key):
+        return any(key.startswith(p) for p in self.prefixes)
+
+    def export_data(self):
+        options = ConfigOption.query.all()
+        result = {}
+        for o in options:
+            if not self._match(o.config_key):
+                continue
+            if o.value_bool is not None:
+                result[o.config_key] = o.value_bool
+            elif o.value_int is not None:
+                result[o.config_key] = o.value_int
+            elif o.value_text is not None:
+                result[o.config_key] = o.value_text
+            elif o.value_str is not None:
+                result[o.config_key] = o.value_str
+            elif o.value_json is not None:
+                result[o.config_key] = o.value_json
+            else:
+                result[o.config_key] = None
+        return result
+
+    def restore_data(self, data):
+        for key, value in data.items():
+            if not self._match(key):
+                continue
+            option = ConfigOption.query.filter_by(config_key=key).first()
+            if option:
+                option.value_str = value if isinstance(value, str) and len(value) < 200 else None
+                option.value_int = value if isinstance(value, int) and not isinstance(value, bool) else None
+                option.value_bool = value if isinstance(value, bool) else None
+                option.value_text = value if isinstance(value, str) and len(value) >= 200 else None
+                option.value_json = value if isinstance(value, (dict, list)) else None
+            else:
+                option = ConfigOption(
+                    config_key=key,
+                    value_str=value if isinstance(value, str) and len(value) < 200 else None,
+                    value_int=value if isinstance(value, int) and not isinstance(value, bool) else None,
+                    value_bool=value if isinstance(value, bool) else None,
+                    value_text=value if isinstance(value, str) and len(value) >= 200 else None,
+                    value_json=value if isinstance(value, (dict, list)) else None,
+                )
+                db.session.add(option)
+        db.session.commit()
+        try:
+            current_app.load_configuration(current_app)
+        except Exception:
+            pass
+
+
+class ConfigPatientSection(_PageConfigSection):
+    key = "config_patient"
+    label = "Textes & options page Patient"
+    prefixes = ["page_patient_"]
+
+
+class ConfigAnnounceSection(_PageConfigSection):
+    key = "config_announce"
+    label = "Textes & options page Annonce"
+    prefixes = ["announce_"]
+
+
+class ConfigPhoneSection(_PageConfigSection):
+    key = "config_phone"
+    label = "Textes & options page Téléphone"
+    prefixes = ["phone_"]
 
 
 # ---------------------------------------------------------------------------
@@ -688,6 +765,9 @@ SECTION_CLASSES = [
     AlgoRuleSection,
     ButtonSection,
     ConfigSection,
+    ConfigPatientSection,
+    ConfigAnnounceSection,
+    ConfigPhoneSection,
     CssPatientSection,
     CssAnnounceSection,
     CssPhoneSection,
@@ -706,7 +786,7 @@ BACKUP_SECTIONS = {cls.key: cls for cls in SECTION_CLASSES}
 SECTION_GROUPS = {
     "Structure": ["staff", "counters", "activities", "schedules", "algorules", "buttons"],
     "Configuration": ["config", "dashboard"],
-    "Visuel": ["css_patient", "css_announce", "css_phone"],
+    "Pages": ["config_patient", "css_patient", "config_announce", "css_announce", "config_phone", "css_phone"],
     "Textes & Traductions": ["languages", "texts", "text_interface", "translations"],
     "Images": ["images_buttons", "images_gallery"],
 }

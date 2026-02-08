@@ -111,7 +111,7 @@ def backup_import():
     report = restore_sections(backup_data, sections_param)
 
     try:
-        current_app.load_configuration()
+        current_app.load_configuration(current_app)
     except Exception:
         pass
 
@@ -142,6 +142,61 @@ def backup_import():
         return f'<div class="alert alert-danger">{error_msg}</div>'
 
 
+@admin_backup_bp.route('/admin/backup/import_multi', methods=['POST'])
+@require_permission('app')
+def backup_import_multi():
+    """Restore multiple sections from an uploaded backup file (for per-page restore with CSS + config)."""
+    file = request.files.get('file')
+    sections_param = request.form.get('sections', '')
+
+    if not file or not file.filename.endswith('.json'):
+        return '<div class="alert alert-danger">Fichier invalide.</div>'
+
+    requested_keys = [s.strip() for s in sections_param.split(',') if s.strip()]
+    if not requested_keys:
+        return '<div class="alert alert-danger">Aucune section spécifiée.</div>'
+
+    try:
+        backup_data = json.load(file)
+    except Exception:
+        return '<div class="alert alert-danger">Impossible de lire le fichier JSON.</div>'
+
+    if backup_data.get("app") != "GestionFile":
+        return '<div class="alert alert-danger">Fichier de sauvegarde invalide.</div>'
+
+    available = backup_data.get("sections", [])
+    keys_to_restore = [k for k in requested_keys if k in available and k in BACKUP_SECTIONS]
+
+    if not keys_to_restore:
+        return '<div class="alert alert-warning">Aucune des sections demandées n\'est présente dans ce fichier.</div>'
+
+    report = restore_sections(backup_data, keys_to_restore)
+
+    try:
+        current_app.load_configuration(current_app)
+    except Exception:
+        pass
+
+    if report.get("restored"):
+        restored_labels = []
+        for key in report.get("restored", []):
+            cls = BACKUP_SECTIONS.get(key)
+            restored_labels.append(cls.label if cls else key)
+        msg = f"Restauration réussie : {', '.join(restored_labels)}"
+        if report.get("errors"):
+            msg += f" (erreurs : {'; '.join(report['errors'])})"
+        try:
+            current_app.display_toast(success=True, message=msg)
+        except Exception:
+            pass
+        resp = make_response(f'<div class="alert alert-success">{msg}</div>')
+        resp.headers['HX-Refresh'] = 'true'
+        return resp
+    else:
+        error_msg = "; ".join(report.get("errors", ["Erreur inconnue"]))
+        return f'<div class="alert alert-danger">{error_msg}</div>'
+
+
 @admin_backup_bp.route('/admin/backup/import_single', methods=['POST'])
 @require_permission('app')
 def backup_import_single():
@@ -169,7 +224,7 @@ def backup_import_single():
     report = restore_sections(backup_data, [section_key])
 
     try:
-        current_app.load_configuration()
+        current_app.load_configuration(current_app)
     except Exception:
         pass
 
