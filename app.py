@@ -50,10 +50,11 @@ from markupsafe import escape
 from auth_utils import is_authenticated_request, require_app_token_or_login
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, restore_config_table_from_json, init_staff_data_from_json, restore_staff, restore_counters, init_counters_data_from_json, restore_schedules, restore_algorules, restore_activities, init_default_activities_db_from_json, restore_buttons, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_staff_data_from_json, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
 from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
-from backup import backup_config_all, backup_staff, backup_counters, backup_schedules, backup_algorules, backup_activities, backup_buttons, backup_databases
+from backup import backup_databases
+from routes.admin_backup import admin_backup_bp
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
 from config import Config, time_tz
@@ -378,6 +379,7 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_app_bp, url_prefix='')
     app.register_blueprint(admin_data_bp, url_prefix='')
     app.register_blueprint(engine_bp, url_prefix='')
+    app.register_blueprint(admin_backup_bp, url_prefix='')
 
     return app
 
@@ -725,13 +727,9 @@ def rabbitmq_status_local():
 
 
 
-"""with app.app_context():
-    app.add_url_rule('/admin/backup/config', 'backup_config_all', backup_config_all(ConfigOption, ConfigVersion))
-"""
-
 # ROUTES 
 
-# Sauvegardes / Restaurations
+# Sauvegardes / Restaurations (base de données brute uniquement, le reste est dans admin_backup_bp)
 
 app.add_url_rule('/admin/database/backup', 'backup_databases', 
                 partial(backup_databases, database), 
@@ -739,62 +737,6 @@ app.add_url_rule('/admin/database/backup', 'backup_databases',
 
 app.add_url_rule('/admin/database/restore', 'restore_databases', 
                 partial(restore_databases, request, database), 
-                methods=['GET', 'POST'])
-
-app.add_url_rule('/admin/backup/config', 'backup_config_all', 
-                partial(backup_config_all, ConfigOption, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/restore/config', 'restore_config_all', 
-                partial(restore_config_table_from_json, db, ConfigVersion, ConfigOption, request), 
-                methods=['POST'])
-
-app.add_url_rule('/admin/staff/backup', 'backup_staff', 
-                partial(backup_staff, Pharmacist, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/staff/restore', 'restore_staff', 
-                partial(restore_staff, db, ConfigVersion, Pharmacist, Activity, request), 
-                methods=['GET', 'POST'])
-
-app.add_url_rule('/admin/counter/backup', 'backup_counter', 
-                partial(backup_counters, Counter, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/counter/restore', 'restore_counter', 
-                partial(restore_counters, db, ConfigVersion, Counter, Activity, request), 
-                methods=['GET', 'POST'])
-
-app.add_url_rule('/admin/schedules/backup', 'backup_schedules', 
-                partial(backup_schedules, ActivitySchedule, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/schedules/restore', 'restore_schedules', 
-                partial(restore_schedules, db, ConfigVersion, ActivitySchedule, Activity, Weekday, request), 
-                methods=['GET', 'POST'])
-
-app.add_url_rule('/admin/activities/backup', 'backup_activities', 
-                partial(backup_activities, Activity, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/activities/restore', 'restore_activities', 
-                partial(restore_activities, db, ConfigVersion, Activity, ActivitySchedule, request), 
-                methods=['GET', 'POST'])
-
-app.add_url_rule('/admin/algorules/backup', 'backup_algorules', 
-                partial(backup_algorules, AlgoRule, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/algorules/restore', 'restore_algorules', 
-                partial(restore_algorules, db, ConfigVersion, AlgoRule, request), 
-                methods=['GET', 'POST'])
-
-app.add_url_rule('/admin/buttons/backup', 'backup_buttons', 
-                partial(backup_buttons, Button, ConfigVersion), 
-                methods=['GET'])
-
-app.add_url_rule('/admin/buttons/restore', 'restore_buttons', 
-                partial(restore_buttons, db, ConfigVersion, Button, Activity, request), 
                 methods=['GET', 'POST'])
 
 

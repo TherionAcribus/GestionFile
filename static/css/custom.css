@@ -107,4 +107,11 @@
     --validation_button_picture_size: 200px;
     --patient_border_color: #C91313;
     --patient_button_border_color: #00AAFF;
+    --scan_explanation_background_color: #000000;
+    --validation_text_background_color: #000000;
+    --confirmation_text_background_color: #000000;
+    --circle_button_text_background_color: #000000;
+    --square_button_text_background_color: #000000;
+    --square_cancel_button_text_background_color: #000000;
+    --validation_button_text_background_color: #000000;
 }

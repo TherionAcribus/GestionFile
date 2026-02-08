@@ -1,6 +1,127 @@
-<h3> Sauvegarde / Restauration de toute la base de données de l'App</h3>
-{{ macros.save_restore("databases", "") }}
+<h3>Sauvegarde / Restauration de la configuration</h3>
 
+<!-- ===== EXPORT ===== -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-download"></i> Exporter</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">Sélectionnez les sections à sauvegarder puis cliquez sur "Exporter".</p>
 
-<h3> Sauvegarde / Restauration de la configuration de l'App</h3>
-{{ macros.save_restore("config_all", "config_backup") }}
+        <form id="exportForm" method="get" action="/admin/backup/export">
+            <div class="mb-2">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="chk_export_all" checked
+                           onchange="toggleAllExportChecks(this.checked)">
+                    <label class="form-check-label fw-bold" for="chk_export_all">Tout sélectionner</label>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4 mb-2">
+                    <strong class="small text-muted">Structure</strong>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="staff" id="exp_staff" checked><label class="form-check-label" for="exp_staff">Équipe</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="counters" id="exp_counters" checked><label class="form-check-label" for="exp_counters">Comptoirs</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="activities" id="exp_activities" checked><label class="form-check-label" for="exp_activities">Activités</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="schedules" id="exp_schedules" checked><label class="form-check-label" for="exp_schedules">Plages horaires</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="algorules" id="exp_algorules" checked><label class="form-check-label" for="exp_algorules">Règles algorithme</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="buttons" id="exp_buttons" checked><label class="form-check-label" for="exp_buttons">Boutons patient</label></div>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <strong class="small text-muted">Configuration & Visuel</strong>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="config" id="exp_config" checked><label class="form-check-label" for="exp_config">Configuration générale</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="dashboard" id="exp_dashboard" checked><label class="form-check-label" for="exp_dashboard">Dashboard</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="css_patient" id="exp_css_patient" checked><label class="form-check-label" for="exp_css_patient">CSS Patient</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="css_announce" id="exp_css_announce" checked><label class="form-check-label" for="exp_css_announce">CSS Annonce</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="css_phone" id="exp_css_phone" checked><label class="form-check-label" for="exp_css_phone">CSS Téléphone</label></div>
+                </div>
+                <div class="col-md-4 mb-2">
+                    <strong class="small text-muted">Textes & Images</strong>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="languages" id="exp_languages" checked><label class="form-check-label" for="exp_languages">Langues</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="texts" id="exp_texts" checked><label class="form-check-label" for="exp_texts">Textes</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="text_interface" id="exp_text_interface" checked><label class="form-check-label" for="exp_text_interface">Textes interface</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="translations" id="exp_translations" checked><label class="form-check-label" for="exp_translations">Traductions</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="images_buttons" id="exp_images_buttons" checked><label class="form-check-label" for="exp_images_buttons">Images boutons</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="images_gallery" id="exp_images_gallery" checked><label class="form-check-label" for="exp_images_gallery">Galerie images</label></div>
+                </div>
+            </div>
+
+            <input type="hidden" name="sections" id="export_sections_input" value="all">
+            <button type="submit" class="btn btn-primary mt-2" onclick="prepareExport()">
+                <i class="bi bi-download"></i> Exporter la sauvegarde
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- ===== IMPORT ===== -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-upload"></i> Importer / Restaurer</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">Sélectionnez un fichier de sauvegarde .json pour voir son contenu et choisir les sections à restaurer.</p>
+
+        <form id="importPreviewForm"
+              hx-post="/admin/backup/preview"
+              hx-target="#importPreviewResult"
+              hx-swap="innerHTML"
+              hx-encoding="multipart/form-data">
+            <div class="mb-3">
+                <input class="form-control" type="file" name="file" id="importFileInput" accept=".json">
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-eye"></i> Prévisualiser le fichier
+            </button>
+        </form>
+
+        <div id="importPreviewResult" class="mt-3">
+            <!-- Le contenu de la prévisualisation sera chargé ici par HTMX -->
+        </div>
+
+        <form id="importForm" class="d-none"
+              hx-post="/admin/backup/import"
+              hx-target="#importResult"
+              hx-swap="innerHTML"
+              hx-encoding="multipart/form-data">
+            <input type="file" name="file" id="importFileHidden" class="d-none">
+        </form>
+        <div id="importResult" class="mt-2"></div>
+    </div>
+</div>
+
+<!-- ===== BACKUP BDD BRUTE ===== -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-hdd"></i> Sauvegarde / Restauration des bases de données</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">Sauvegarde complète des fichiers de base de données (ZIP). Inclut les données patients.</p>
+        {{ macros.save_restore("databases", "") }}
+    </div>
+</div>
+
+<script>
+function toggleAllExportChecks(checked) {
+    document.querySelectorAll('.export-chk').forEach(function(chk) {
+        chk.checked = checked;
+    });
+}
+
+function prepareExport() {
+    var checks = document.querySelectorAll('.export-chk:checked');
+    var sections = Array.from(checks).map(function(c) { return c.value; });
+    if (sections.length === document.querySelectorAll('.export-chk').length) {
+        document.getElementById('export_sections_input').value = 'all';
+    } else {
+        document.getElementById('export_sections_input').value = sections.join(',');
+    }
+}
+
+document.querySelectorAll('.export-chk').forEach(function(chk) {
+    chk.addEventListener('change', function() {
+        var allChecked = document.querySelectorAll('.export-chk').length === document.querySelectorAll('.export-chk:checked').length;
+        document.getElementById('chk_export_all').checked = allChecked;
+    });
+});
+</script>

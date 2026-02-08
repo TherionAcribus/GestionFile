@@ -17,11 +17,11 @@
         hx-get="/admin/staff/add_form"
         hx-target="#div_add_staff_form"
         hx-swap="innerHTML">
-    Ajouter un membre a l'équipe
+    Ajouter un membre à l'équipe
     </a>    
     <div id="div_add_staff_form"></div>
 
-    {{ macros.save_restore("staff", "gf_staff") }}
+    {{ macros.backup_buttons("staff", "Équipe") }}
 
     
 {% endblock %}
