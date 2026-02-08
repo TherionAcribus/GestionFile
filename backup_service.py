@@ -12,7 +12,9 @@ from models import (
     AlgoRule, Button, ConfigOption, ConfigVersion,
     PatientCssVariable, AnnounceCssVariable, PhoneCssVariable,
     Language, Text, TextTranslation, TextInterface, Translation,
-    DashboardCard
+    DashboardCard,
+    counters_activities, pharmacists_activities,
+    activity_schedule_link, activity_schedule_weekday,
 )
 
 FORMAT_VERSION = "2.0"
@@ -61,6 +63,7 @@ class StaffSection(BackupSection):
         ]
 
     def restore_data(self, data):
+        db.session.execute(pharmacists_activities.delete())
         db.session.query(Pharmacist).delete()
         db.session.flush()
         for item in data:
@@ -101,6 +104,7 @@ class CounterSection(BackupSection):
         ]
 
     def restore_data(self, data):
+        db.session.execute(counters_activities.delete())
         db.session.query(Counter).delete()
         db.session.flush()
         with db.session.no_autoflush:
@@ -142,6 +146,9 @@ class ActivitySection(BackupSection):
         ]
 
     def restore_data(self, data):
+        db.session.execute(counters_activities.delete())
+        db.session.execute(pharmacists_activities.delete())
+        db.session.execute(activity_schedule_link.delete())
         db.session.query(Activity).delete()
         db.session.flush()
         with db.session.no_autoflush:
@@ -171,6 +178,8 @@ class ScheduleSection(BackupSection):
         return [s.to_dict() for s in schedules]
 
     def restore_data(self, data):
+        db.session.execute(activity_schedule_weekday.delete())
+        db.session.execute(activity_schedule_link.delete())
         db.session.query(ActivitySchedule).delete()
         db.session.flush()
         for item in data:
