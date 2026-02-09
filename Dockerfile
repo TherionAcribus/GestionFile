@@ -12,7 +12,7 @@ RUN pip install -r requirements.txt
 COPY . .
 
 # Exposez le port sur lequel l'application Flask s'exécute
-EXPOSE 5000
+EXPOSE ${PORT:-5000}
 
 # Commande pour exécuter l'application Flask
 CMD ["python", "app.py"]
