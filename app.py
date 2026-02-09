@@ -716,6 +716,121 @@ def rabbitmq_status_local():
     return "", 204
 
 
+# ---------------------------------------------------------------------------
+# Endpoints de santé (Health checks)
+# ---------------------------------------------------------------------------
+#
+# Ces endpoints sont destinés aux orchestrateurs (Kubernetes, Coolify, Render,
+# Docker Compose, etc.) pour piloter le cycle de vie du conteneur.
+#
+# /healthz  – Liveness probe
+#   Répond 200 tant que le processus Python/Flask est vivant.
+#   Si cet endpoint ne répond plus, l'orchestrateur doit redémarrer le
+#   conteneur.  Aucune dépendance externe n'est vérifiée ici volontairement :
+#   un problème de base de données ne doit pas provoquer un redémarrage en
+#   boucle.
+#
+# /readyz   – Readiness probe
+#   Répond 200 uniquement si l'application est prête à traiter du trafic :
+#     • La base de données est joignable (SELECT 1).
+#     • RabbitMQ est joignable (si activé dans la configuration).
+#   Tant que /readyz renvoie 503, l'orchestrateur ne route pas de trafic
+#   vers cette instance, ce qui évite les erreurs utilisateur pendant un
+#   démarrage lent ou une panne transitoire d'un service amont.
+#
+# Configuration Coolify / Docker Compose :
+#   healthcheck:
+#     test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/healthz"]
+#     interval: 10s
+#     timeout: 5s
+#     retries: 3
+#     start_period: 30s
+# ---------------------------------------------------------------------------
+
+@app.route('/healthz')
+def healthz():
+    """Liveness probe – indique que le processus Flask est en vie.
+
+    Renvoie toujours HTTP 200 avec ``{"status": "alive"}``.
+    Utilisé par les orchestrateurs (Kubernetes, Coolify, Docker…) pour
+    détecter un processus bloqué et le redémarrer automatiquement.
+
+    Aucune dépendance externe (DB, RabbitMQ) n'est testée ici afin
+    d'éviter les redémarrages en cascade lors d'une panne transitoire
+    d'un service amont.
+
+    Returns:
+        tuple: (JSON body, HTTP 200)
+    """
+    return jsonify({"status": "alive"}), 200
+
+
+@app.route('/readyz')
+def readyz():
+    """Readiness probe – indique que l'application est prête à recevoir du trafic.
+
+    Vérifie les dépendances critiques avant de répondre 200 :
+      1. **Base de données** : exécute un ``SELECT 1`` pour confirmer que la
+         connexion SQL est opérationnelle.
+      2. **RabbitMQ** *(optionnel)* : si ``USE_RABBITMQ`` et ``START_RABBITMQ``
+         sont activés, ouvre puis ferme une connexion AMQP pour valider la
+         joignabilité du broker.
+
+    Si l'une des vérifications échoue, l'endpoint renvoie HTTP 503 avec le
+    détail des checks en erreur.  L'orchestrateur cessera alors de router
+    du trafic vers cette instance jusqu'à ce qu'elle redevienne saine.
+
+    Returns:
+        tuple: (JSON body, HTTP 200 | 503)
+
+    Exemple de réponse OK (200)::
+
+        {
+            "status": "ready",
+            "checks": {
+                "database": "ok",
+                "rabbitmq": "ok"
+            }
+        }
+
+    Exemple de réponse KO (503)::
+
+        {
+            "status": "not_ready",
+            "checks": {
+                "database": "ok",
+                "rabbitmq": "Connection refused"
+            }
+        }
+    """
+    checks = {}
+    ready = True
+
+    # --- Check base de données ---
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = str(e)
+        ready = False
+
+    # --- Check RabbitMQ (seulement si activé) ---
+    if app.config.get("USE_RABBITMQ") and app.config.get("START_RABBITMQ"):
+        try:
+            rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
+            connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
+            connection.close()
+            checks["rabbitmq"] = "ok"
+        except Exception as e:
+            checks["rabbitmq"] = str(e)
+            ready = False
+
+    status_code = 200 if ready else 503
+    return jsonify({
+        "status": "ready" if ready else "not_ready",
+        "checks": checks
+    }), status_code
+
 
 # ROUTES 
 

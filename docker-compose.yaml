@@ -28,4 +28,10 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     command: ["python", "app.py"]
