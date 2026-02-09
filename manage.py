@@ -73,6 +73,21 @@ def migrate() -> None:
             inspector = inspect(db.engine)
             tables = set(inspector.get_table_names())
 
+            # If a previous `alembic upgrade` attempt failed early, Alembic may have
+            # created `alembic_version` even though no app tables exist yet.
+            # In that case, treat the DB as empty and bootstrap from models.
+            has_patient = "patient" in tables
+            if not has_patient:
+                if not tables or tables.issubset({"alembic_version"}) or force_bootstrap:
+                    db.create_all()
+                    stamp(revision="head")
+                    return
+                raise RuntimeError(
+                    "Database has tables but no 'patient' table. Refusing to bootstrap automatically. "
+                    "Use a new/empty database, or set FORCE_BOOTSTRAP_DB=1 if you intend to bootstrap "
+                    "from current models and stamp Alembic head."
+                )
+
             if "alembic_version" in tables:
                 upgrade()
                 return
@@ -110,4 +125,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
