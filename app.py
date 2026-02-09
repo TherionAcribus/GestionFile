@@ -1,8 +1,15 @@
 # TODO : Si choix langue en etranger -> Diriger vers comptoir en etranger
 
-# deux lignes a appeler avant tout le reste (pour server Render)
-import eventlet
-eventlet.monkey_patch() #thread=True, time=True
+import os
+
+# eventlet must be monkey-patched before importing Flask/Werkzeug for the web server.
+# BUT: when `flask db ...` imports this module, Flask/Werkzeug are already loaded
+# by the CLI, and eventlet patching can crash due to LocalProxy objects.
+# Solution: skip patching during CLI/migrations (see Dockerfile/Procfile/compose).
+_skip_eventlet_patch = os.getenv("SKIP_EVENTLET_PATCH", "").strip().lower() in {"1", "true", "yes", "on"}
+if not _skip_eventlet_patch:
+    import eventlet
+    eventlet.monkey_patch()  # thread=True, time=True
 from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash, session
 
 from sqlalchemy.orm import sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
@@ -20,7 +27,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 import json
 
-import os
 from queue import Queue, Empty
 import logging
 import subprocess

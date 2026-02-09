@@ -21,10 +21,10 @@ Les migrations sont gerees par **Flask-Migrate** (Alembic). Elles sont
 executees **automatiquement au demarrage** de l'application :
 
 - **Docker / Coolify / docker-compose** : les roles `web` et `scheduler` executent
-  `SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py`. Les migrations sont appliquees avant
+  `SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade && python app.py`. Les migrations sont appliquees avant
   le demarrage du process.
 - **PaaS (Render, Heroku…)** : le `Procfile` contient egalement
-  `SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py`.
+  `SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade && python app.py`.
 - **Demarrage local** : lancer `SKIP_STARTUP_HOOKS=1 flask db upgrade`
   avant `python app.py`.
 
@@ -36,7 +36,7 @@ jouees (comportement standard d'Alembic).
 
 ```bash
 # Appliquer les migrations manuellement
-SKIP_STARTUP_HOOKS=1 flask db upgrade
+SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade
 
 # Voir l'etat actuel des migrations
 flask db current
