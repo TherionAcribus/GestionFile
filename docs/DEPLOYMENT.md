@@ -21,28 +21,35 @@ Les migrations sont gerees par **Flask-Migrate** (Alembic). Elles sont
 executees **automatiquement au demarrage** de l'application :
 
 - **Docker / Coolify / docker-compose** : les roles `web` et `scheduler` executent
-  `SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade && python app.py`. Les migrations sont appliquees avant
-  le demarrage du process.
-- **PaaS (Render, Heroku…)** : le `Procfile` contient egalement
-  `SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade && python app.py`.
-- **Demarrage local** : lancer `SKIP_STARTUP_HOOKS=1 flask db upgrade`
-  avant `python app.py`.
+  `python manage.py migrate && python app.py`.
+- **PaaS (Render, Heroku...)** : le `Procfile` contient egalement
+  `python manage.py migrate && python app.py`.
+- **Demarrage local** : lancer `python manage.py migrate` avant `python app.py`.
 
-Sur une **base vide**, la premiere execution creera toutes les tables.
-Sur une **base existante**, seules les migrations non encore appliquees seront
-jouees (comportement standard d'Alembic).
+Pourquoi `manage.py migrate` ? Les migrations existantes ne contiennent pas
+actuellement une "baseline" fiable pour creer toutes les tables sur une base
+totalement vide (ex: la revision initiale `cbc458...` fait un `ALTER TABLE patient`).
+
+Comportement:
+- **Base existante avec `alembic_version`**: applique `alembic upgrade` normalement.
+- **Base vide**: cree les tables depuis les modeles SQLAlchemy (`db.create_all()`),
+  puis "stamp" Alembic sur `head`.
+
+Note: si la base contient deja des tables mais pas `alembic_version`, le script
+refuse de "stamper" par defaut (pour eviter de casser une base legacy). Dans ce cas,
+utiliser une base vide ou definir `FORCE_BOOTSTRAP_DB=1` si vous savez ce que vous faites.
 
 ### Commandes manuelles utiles
 
 ```bash
-# Appliquer les migrations manuellement
-SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade
+# Appliquer les migrations / bootstrap manuellement
+python manage.py migrate
 
 # Voir l'etat actuel des migrations
-flask db current
+SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db current
 
 # Generer une nouvelle migration apres modification des modeles
-flask db migrate -m "description du changement"
+SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db migrate -m "description du changement"
 ```
 
 ## Option A - VPS + Coolify (recommande)

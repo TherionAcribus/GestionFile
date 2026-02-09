@@ -19,4 +19,4 @@ COPY . .
 EXPOSE ${PORT:-5000}
 
 # Appliquer les migrations puis lancer l'application Flask
-CMD ["sh", "-c", "SKIP_STARTUP_HOOKS=1 SKIP_EVENTLET_PATCH=1 flask db upgrade && python app.py"]
+CMD ["sh", "-c", "python manage.py migrate && python app.py"]
