@@ -70,6 +70,8 @@ class Config:
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement
     site = os.getenv('SITE', 'prod')
     DEBUG = os.getenv("FLASK_DEBUG", "").strip() in {"1", "true", "True", "yes", "on"}
+    database_url = os.getenv("DATABASE_URL")
+    scheduler_database_url = os.getenv("DATABASE_URL_SCHEDULER")
 
     _socketio_cors_raw = os.getenv("SOCKETIO_CORS_ALLOWED_ORIGINS", "").strip()
     if not _socketio_cors_raw:
@@ -79,7 +81,12 @@ class Config:
     else:
         SOCKETIO_CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _socketio_cors_raw.split(",") if origin.strip()]
 
-    if database == "mysql":
+    if database_url:
+
+        SQLALCHEMY_DATABASE_URI = database_url
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or database_url
+
+    elif database == "mysql":
 
         if site == "aws":
             MYSQL_USER = get_parameter('MYSQL_USER')
@@ -98,8 +105,9 @@ class Config:
             RABBITMQ_URL = os.getenv("RABBITMQ_URL")
 
         # MySQL Configuration
-        SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
-        SQLALCHEMY_DATABASE_URI_SCHEDULER = f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
+        SQLALCHEMY_DATABASE_URI = database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
+
         SQLALCHEMY_ENGINE_OPTIONS = {
             "pool_size": 5,  # Nombre maximum de connexions permanentes
             "max_overflow": 10,  # Connexions supplémentaires temporaires si nécessaire
@@ -133,7 +141,8 @@ class Config:
         JOBS = []
 
     elif database == "sqlite":
-        SQLALCHEMY_DATABASE_URI = 'sqlite:///queuedatabase.db'
+        SQLALCHEMY_DATABASE_URI = database_url or 'sqlite:///queuedatabase.db'
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or SQLALCHEMY_DATABASE_URI
         SQLALCHEMY_BINDS = {
             'users': 'sqlite:///userdatabase.db'
         }
