@@ -142,3 +142,4 @@ Fichiers fournis:
 - `.env.example` : variables d'environnement de base
 - `render.yaml` : blueprint Render
 - `Procfile` : fallback PaaS
+- `docker-compose.coolify.yaml` : split `web` + `scheduler` pour eviter les doublons de jobs en multi-worker

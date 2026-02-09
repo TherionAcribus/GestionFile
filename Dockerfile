@@ -15,4 +15,4 @@ COPY . .
 EXPOSE ${PORT:-5000}
 
 # Appliquer les migrations puis lancer l'application Flask
-CMD ["sh", "-c", "flask db upgrade && python app.py"]
+CMD ["sh", "-c", "SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py"]

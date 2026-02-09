@@ -20,13 +20,13 @@ Ce guide propose 2 chemins de deploiement:
 Les migrations sont gerees par **Flask-Migrate** (Alembic). Elles sont
 executees **automatiquement au demarrage** de l'application :
 
-- **Docker / Coolify / docker-compose** : la commande de demarrage est
-  `flask db upgrade && python app.py`. Les migrations sont appliquees avant
-  que le serveur ne demarre.
+- **Docker / Coolify / docker-compose** : les roles `web` et `scheduler` executent
+  `SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py`. Les migrations sont appliquees avant
+  le demarrage du process.
 - **PaaS (Render, Heroku…)** : le `Procfile` contient egalement
-  `flask db upgrade && python app.py`.
-- **Demarrage local** : `init_database()` dans `bdd.py` appelle
-  `flask_migrate.upgrade()` programmatiquement au boot pour MySQL.
+  `SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py`.
+- **Demarrage local** : lancer `SKIP_STARTUP_HOOKS=1 flask db upgrade`
+  avant `python app.py`.
 
 Sur une **base vide**, la premiere execution creera toutes les tables.
 Sur une **base existante**, seules les migrations non encore appliquees seront
@@ -36,7 +36,7 @@ jouees (comportement standard d'Alembic).
 
 ```bash
 # Appliquer les migrations manuellement
-flask db upgrade
+SKIP_STARTUP_HOOKS=1 flask db upgrade
 
 # Voir l'etat actuel des migrations
 flask db current
@@ -57,7 +57,7 @@ Objectif: installation la plus simple pour un client final, avec stack complete.
    `RABBITMQ_USER`, `RABBITMQ_PASSWORD`,
    `SECRET_KEY`, `SECURITY_PASSWORD_SALT`, `APP_SECRET`, `BASE32_KEY`.
 5. Deployer. Les migrations de base de donnees s'executent automatiquement
-   au demarrage du conteneur `web`.
+   au demarrage des conteneurs applicatifs.
 6. Verifier les probes:
    - Liveness: `GET /healthz` doit renvoyer `200`.
    - Readiness: `GET /readyz` doit renvoyer `200` quand DB (+ RabbitMQ si active) est prete.
@@ -65,6 +65,11 @@ Objectif: installation la plus simple pour un client final, avec stack complete.
 Notes:
 - `mysql` et `rabbitmq` sont inclus dans le compose Coolify pour un setup "tout-en-un".
 - RabbitMQ peut rester provisionne meme si desactive dans la config applicative.
+- Le compose separe les roles applicatifs:
+  - `web` (`APP_ROLE=web`): sert le trafic HTTP.
+  - `scheduler` (`APP_ROLE=scheduler`): execute les jobs APScheduler.
+- Pour scaler horizontalement, augmenter seulement `web` et garder
+  `scheduler` a **1 replica**.
 - La base `queuedatabase` est creee automatiquement par le conteneur MySQL
   grace a la variable `MYSQL_DATABASE`.
 - **Utilisateur MySQL non-root** : l'image MySQL cree automatiquement

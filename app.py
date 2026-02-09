@@ -96,6 +96,12 @@ database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
+APP_ROLE = os.getenv("APP_ROLE", "all").strip().lower()
+VALID_APP_ROLES = {"all", "web", "scheduler", "init"}
+if APP_ROLE not in VALID_APP_ROLES:
+    APP_ROLE = "all"
+SKIP_STARTUP_HOOKS = os.getenv("SKIP_STARTUP_HOOKS", "").strip().lower() in {"1", "true", "yes", "on"}
+
 server_port = int(os.environ.get("PORT", 5000))
 
 _rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
@@ -277,43 +283,50 @@ def load_configuration(app):
     #flask_thread.start()
 
 
-def start_fonctions(app):
+def _is_app_role(*roles):
+    return APP_ROLE == "all" or APP_ROLE in roles
 
-    init_database(database, db)
 
-    # Création du rôle admin et de l'utilisateur admin par défaut
-    create_default_role()  # Toujours créer le rôle admin s'il n'existe pas
-    create_default_user()  # Crée l'utilisateur admin seulement s'il n'y a pas d'utilisateurs
+def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_cleanup: bool):
+    if run_bootstrap:
+        init_database(database, db)
 
-    init_days_of_week_db_from_json()
-    init_activity_schedules_db_from_json()
-    init_default_activities_db_from_json()
-    init_counters_data_from_json()  # a verifier
-    #init_staff_data_from_json()  A refaire
-    init_default_options_db_from_json()
-    init_default_buttons_db_from_json()
-    init_default_languages_db_from_json()
-    init_or_update_default_texts_db_from_json()
-    init_update_default_translations_db_from_json()
-    init_default_algo_rules_db_from_json()
-    init_default_dashboard_db_from_json()
-    init_default_patient_css_variables_db_from_json()
-    init_default_announce_css_variables_db_from_json()
-    init_default_phone_css_variables_db_from_json()
-    load_configuration(app)
-    clear_old_patients_table(app)
+        # Création du rôle admin et de l'utilisateur admin par défaut
+        create_default_role()  # Toujours créer le rôle admin s'il n'existe pas
+        create_default_user()  # Crée l'utilisateur admin seulement s'il n'y a pas d'utilisateurs
 
-    clear_counter_table()
+        init_days_of_week_db_from_json()
+        init_activity_schedules_db_from_json()
+        init_default_activities_db_from_json()
+        init_counters_data_from_json()  # a verifier
+        #init_staff_data_from_json()  A refaire
+        init_default_options_db_from_json()
+        init_default_buttons_db_from_json()
+        init_default_languages_db_from_json()
+        init_or_update_default_texts_db_from_json()
+        init_update_default_translations_db_from_json()
+        init_default_algo_rules_db_from_json()
+        init_default_dashboard_db_from_json()
+        init_default_patient_css_variables_db_from_json()
+        init_default_announce_css_variables_db_from_json()
+        init_default_phone_css_variables_db_from_json()
 
-    # Pour gérer les app.config des CSS. A faire également pour mon Config général
-    css_variable_manager = MultiCssVariableManager(app)
+    if run_runtime:
+        load_configuration(app)
 
-    app.css_manager = CSSManager()
-    app.css_manager.init_app(app)
+    if run_startup_cleanup:
+        clear_old_patients_table(app)
+        clear_counter_table()
 
-    # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
-    if not app.config["START_RABBITMQ"]:
-        app.config["USE_RABBITMQ"] = False
+    if run_runtime:
+        # Pour gérer les app.config des CSS. A faire également pour mon Config général
+        css_variable_manager = MultiCssVariableManager(app)
+        app.css_manager = CSSManager()
+        app.css_manager.init_app(app)
+
+        # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
+        if not app.config.get("START_RABBITMQ", False):
+            app.config["USE_RABBITMQ"] = False
 
 
 def create_app(config_class=Config):
@@ -342,7 +355,13 @@ def create_app(config_class=Config):
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
     with app.app_context():
-        start_fonctions(app)
+        if not SKIP_STARTUP_HOOKS:
+            start_fonctions(
+                app,
+                run_bootstrap=_is_app_role("scheduler", "init"),
+                run_runtime=_is_app_role("web", "scheduler", "init"),
+                run_startup_cleanup=_is_app_role("scheduler", "init"),
+            )
 
     # Enregistrement des blueprints
     app.register_blueprint(home_bp, url_prefix='')
@@ -388,7 +407,12 @@ jobstores = {
 }
 scheduler = BackgroundScheduler(jobstores=jobstores)
 #scheduler.init_app(app)
-scheduler.start()
+
+
+def start_scheduler(active: bool):
+    if scheduler.running:
+        return
+    scheduler.start(paused=not active)
 
 def callback_update_patient(ch, method, properties, body):
     logging.debug(f"Received general message: {body}")
@@ -1922,10 +1946,30 @@ if __name__ == "__main__":
         threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_app_counter', callback_app_counter)).start()
         socketio.run(app, host='0.0.0.0', port=5000, debug=True) 
 """
-    
-    if communication_mode == "websocket":
-        #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
-        socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)
+
+    app.logger.info(f"Starting with APP_ROLE={APP_ROLE}")
+
+    if APP_ROLE == "init":
+        app.logger.info("Initialization role completed. Exiting process.")
+    else:
+        if APP_ROLE == "scheduler":
+            start_scheduler(active=True)
+            app.logger.info("Scheduler started in active mode (APP_ROLE=scheduler)")
+            try:
+                while True:
+                    tm.sleep(60)
+            except KeyboardInterrupt:
+                app.logger.info("Scheduler process interrupted, shutting down.")
+        elif communication_mode == "websocket":
+            if APP_ROLE == "web":
+                start_scheduler(active=False)
+                app.logger.info("Scheduler started in paused mode (APP_ROLE=web)")
+            else:
+                start_scheduler(active=True)
+                app.logger.info("Scheduler started in active mode (APP_ROLE=all)")
+
+            #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
+            socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)
 
 # Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
 @app.context_processor

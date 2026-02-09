@@ -49,6 +49,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-pharmaline}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F
+      APP_ROLE: web
     depends_on:
       mysql:
         condition: service_healthy
@@ -59,13 +60,39 @@ services:
     volumes:
       - instance_data:/app/instance
       - galleries_data:/app/static/galleries
-    command: ["sh", "-c", "flask db upgrade && python app.py"]
+    command: ["sh", "-c", "SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_TYPE: ${DATABASE_TYPE:-mysql}
+      SITE: ${SITE:-prod}
+      FLASK_DEBUG: ${FLASK_DEBUG:-0}
+      PORT: ${PORT:-5000}
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
+      MYSQL_USER: ${MYSQL_USER:-pharmaline}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F
+      APP_ROLE: scheduler
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - instance_data:/app/instance
+      - galleries_data:/app/static/galleries
+    command: ["sh", "-c", "SKIP_STARTUP_HOOKS=1 flask db upgrade && python app.py"]
 
 volumes:
   mysql_data:
