@@ -63,6 +63,7 @@ Objectif: installation la plus simple pour un client final, avec stack complete.
    `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`,
    `RABBITMQ_USER`, `RABBITMQ_PASSWORD`,
    `SECRET_KEY`, `SECURITY_PASSWORD_SALT`, `APP_SECRET`, `BASE32_KEY`.
+   Optionnel: `MYSQL_SCHEDULER_DATABASE` (par defaut, le scheduler utilise la meme base que l'app).
 5. Deployer. Les migrations de base de donnees s'executent automatiquement
    au demarrage des conteneurs applicatifs.
 6. Verifier les probes:

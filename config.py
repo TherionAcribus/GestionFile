@@ -125,7 +125,12 @@ class Config:
 
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
-        SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/queueschedulerdatabase'
+
+        # APScheduler jobstore database.
+        # Default: same database as the main app. Override with DATABASE_URL_SCHEDULER
+        # or MYSQL_SCHEDULER_DATABASE if you want a dedicated DB/schema.
+        SCHEDULER_DB_NAME = os.getenv("MYSQL_SCHEDULER_DATABASE") or DB_NAME
+        SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{SCHEDULER_DB_NAME}'
 
         SQLALCHEMY_ENGINE_OPTIONS = {
             "pool_size": 5,  # Nombre maximum de connexions permanentes
