@@ -19,8 +19,7 @@ services:
         value: prod
       - key: FLASK_DEBUG
         value: "0"
-      - key: PORT
-        value: "5000"
+      # PORT is injected automatically by Render — do not set it here.
 
       - key: MYSQL_HOST
         sync: false
