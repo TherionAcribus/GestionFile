@@ -4,6 +4,10 @@ FROM python:3.10.4
 # Définissez le répertoire de travail dans le conteneur
 WORKDIR /app
 
+# curl is used by container healthchecks (docker-compose.coolify.yaml).
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copiez le fichier requirements.txt et installez les dépendances
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
