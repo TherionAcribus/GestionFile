@@ -129,3 +129,16 @@ Note : selon ton environnement, tu devras ajuster `docker-compose.yaml` (ex: URL
 - `routes/` : blueprints (admin, comptoir, patient, etc.)
 - `python/engine.py` : logique “métier” (appel patient, audio, QR, etc.)
 - `models.py` : modèles SQLAlchemy
+
+## Deploiement simplifie
+
+Pour une installation "copier-coller" avec 2 options d'hebergement:
+
+- VPS + Coolify (recommande): `docs/DEPLOYMENT.md` + `docker-compose.coolify.yaml`
+- PaaS Render: `docs/DEPLOYMENT.md` + `render.yaml`
+
+Fichiers fournis:
+
+- `.env.example` : variables d'environnement de base
+- `render.yaml` : blueprint Render
+- `Procfile` : fallback PaaS

@@ -1,0 +1,46 @@
+# Render Blueprint for GestionFile
+# Usage:
+# 1) In Render: New + > Blueprint
+# 2) Select this repository
+# 3) Fill required env vars (sync: false)
+
+services:
+  - type: web
+    name: gestionfile-web
+    env: docker
+    plan: starter
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_TYPE
+        value: mysql
+      - key: SITE
+        value: prod
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: PORT
+        value: "5000"
+
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_DATABASE
+        value: queuedatabase
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+
+      - key: BASE32_KEY
+        sync: false
+      - key: APP_SECRET
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SECURITY_PASSWORD_SALT
+        generateValue: true
+
+      # Keep this if RabbitMQ is enabled in app configuration.
+      # If RabbitMQ is disabled, this value is not used.
+      - key: RABBITMQ_URL
+        sync: false
