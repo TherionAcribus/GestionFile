@@ -53,7 +53,8 @@ Objectif: installation la plus simple pour un client final, avec stack complete.
 2. Dans Coolify, creer une application de type `Docker Compose`.
 3. Utiliser le fichier `docker-compose.coolify.yaml`.
 4. Definir les variables d'environnement (UI Coolify ou `.env`):
-   `MYSQL_ROOT_PASSWORD`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`,
+   `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`,
+   `RABBITMQ_USER`, `RABBITMQ_PASSWORD`,
    `SECRET_KEY`, `SECURITY_PASSWORD_SALT`, `APP_SECRET`, `BASE32_KEY`.
 5. Deployer. Les migrations de base de donnees s'executent automatiquement
    au demarrage du conteneur `web`.
@@ -66,6 +67,11 @@ Notes:
 - RabbitMQ peut rester provisionne meme si desactive dans la config applicative.
 - La base `queuedatabase` est creee automatiquement par le conteneur MySQL
   grace a la variable `MYSQL_DATABASE`.
+- **Utilisateur MySQL non-root** : l'image MySQL cree automatiquement
+  l'utilisateur defini par `MYSQL_USER` / `MYSQL_PASSWORD` avec tous les
+  droits sur `MYSQL_DATABASE` uniquement. `MYSQL_ROOT_PASSWORD` sert
+  uniquement a l'administration du serveur MySQL et n'est pas utilise par
+  l'application.
 
 ## Option B - Render (PaaS)
 
