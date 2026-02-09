@@ -8,27 +8,6 @@ from flask import url_for, request, has_request_context, current_app
 from routes.pyside import create_patients_list_for_pyside
 from pika.exceptions import AMQPConnectionError, AMQPChannelError
 
-"""
-# Configuration RabbitMQ
-RABBITMQ_CONFIG = {
-    'production': {
-        'url': 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672',
-        'queue': 'socketio_messages'
-    },
-    'development': {
-        'url': 'amqp://guest:guest@localhost:5672/%2F',
-        'queue': 'socketio_messages'
-    }
-}
-
-
-# Choisissez l'environnement ('production' ou 'development')
-# Vous pouvez le définir via une variable d'environnement
-ENVIRONMENT = os.environ.get('FLASK_ENV', 'development')
-
-def get_rabbitmq_config():
-    return RABBITMQ_CONFIG[ENVIRONMENT]"""
-
 def with_rabbitmq_connection(func):
     @wraps(func)
     def wrapper(*args, **kwargs):

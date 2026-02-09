@@ -90,26 +90,14 @@ from routes.home import home_bp
 from python.engine import engine_bp
 from routes.admin_security import require_permission, require_permission_dashboard
 
-# adresse production
-rabbitMQ_url = 'amqp://rabbitmq:ojp5seyp@rabbitmq-7yig:5672'
-# adresse developement
-rabbitMQ_url = 'amqp://guest:guest@localhost:5672/%2F'
-
-site = "production"
 communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
-if site == "production":
-    credentials = pika.PlainCredentials('rabbitmq', 'ojp5seyp')
-    parameters = pika.ConnectionParameters('rabbitmq-7yig',
-                                    5672,
-                                    '/',
-                                    credentials)
-else:
-    parameters = pika.URLParameters('amqp://guest:guest@localhost:5672/%2F')
+_rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
+parameters = pika.URLParameters(_rabbitmq_url)
 
 mail = Mail()
 migrate = Migrate()
@@ -666,7 +654,7 @@ def page_not_found(e):
 @app.route('/send')
 @require_app_token_or_login
 def send_message_old():
-    url = rabbitMQ_url
+    url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
     params = pika.URLParameters(url)
     
     app.logger.info(f"Connecting to RabbitMQ at {url}")
@@ -693,7 +681,7 @@ def send_message_old():
 @app.route('/test')
 @require_app_token_or_login
 def rabbitmq_status():
-    url = rabbitMQ_url
+    url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
     params = pika.URLParameters(url)
     
     try:
@@ -714,7 +702,7 @@ db_session = scoped_session(sessionmaker(autocommit=False,
 @app.route('/test_local')
 @require_app_token_or_login
 def rabbitmq_status_local():
-    rabbitmq_url = 'amqp://guest:guest@127.0.0.1:5672'
+    rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
     params = pika.URLParameters(rabbitmq_url)
 
     try:
@@ -786,7 +774,7 @@ def verify_app_token(token):
 def get_app_token():
     # Ici, vous devriez implémenter une vérification des credentials de l'application
     # Par exemple, vérifier un secret partagé ou des identifiants spécifiques à l'application
-    if request.form.get('app_secret') == 'votre_secret_app':
+    if request.form.get('app_secret') == os.getenv('APP_SECRET', ''):
         token = generate_app_token()
         return jsonify({"token": token})
     else:
