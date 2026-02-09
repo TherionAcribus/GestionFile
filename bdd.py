@@ -1,11 +1,18 @@
 from flask import current_app as app
+from flask_migrate import upgrade as _alembic_upgrade
 from models import Patient, PatientHistory, db
 
 def init_database(database, db):
     if database == "sqlite":
         db.create_all()
     elif database == "mysql":
-        app.logger.info("Skipping database creation for MySQL, using migrations instead.")
+        app.logger.info("Running database migrations (flask db upgrade)...")
+        try:
+            _alembic_upgrade()
+            app.logger.info("Database migrations applied successfully.")
+        except Exception as e:
+            app.logger.error(f"Database migration failed: {e}")
+            raise
 
 def transfer_patients_to_history():
     try:

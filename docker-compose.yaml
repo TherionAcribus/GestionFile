@@ -34,4 +34,4 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    command: ["python", "app.py"]
+    command: ["sh", "-c", "flask db upgrade && python app.py"]

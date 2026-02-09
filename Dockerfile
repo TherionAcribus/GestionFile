@@ -14,5 +14,5 @@ COPY . .
 # Exposez le port sur lequel l'application Flask s'exécute
 EXPOSE ${PORT:-5000}
 
-# Commande pour exécuter l'application Flask
-CMD ["python", "app.py"]
+# Appliquer les migrations puis lancer l'application Flask
+CMD ["sh", "-c", "flask db upgrade && python app.py"]
