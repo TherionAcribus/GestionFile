@@ -96,6 +96,8 @@ database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
+server_port = int(os.environ.get("PORT", 5000))
+
 _rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
 parameters = pika.URLParameters(_rabbitmq_url)
 
@@ -1653,7 +1655,7 @@ def start_serveo():
         app.logger.info(f"Port {port} is open. Trying with port 8080.")
         port = 8080
     
-    command = ["ssh", "-i", os.path.expanduser("~/.ssh/id_rsa"), "-R", f"pharmaciesainteagathe:{port}:localhost:5000", "serveo.net"]
+    command = ["ssh", "-i", os.path.expanduser("~/.ssh/id_rsa"), "-R", f"pharmaciesainteagathe:{port}:localhost:{server_port}", "serveo.net"]
     subprocess.run(command)
     app.logger.info(f"Serveo tunnel started on port {port}")
 
@@ -1807,18 +1809,13 @@ if __name__ == "__main__":
 """
     
     if communication_mode == "websocket":
-        #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', 5000)), app)
-        socketio.run(app, host='0.0.0.0', port=5000, debug=app.debug)
+        #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
+        socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)
 
 # Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
 @app.context_processor
 def inject_user():
     return dict(current_user=current_user)
-
-# Utilisez la variable d'environnement PORT si disponible, sinon défaut à 5000
-port = int(os.environ.get("PORT", 5000))
-# Activez le mode debug basé sur une variable d'environnement (définissez-la à True en développement)
-debug = os.environ.get("DEBUG", "False") == "True"
 
 # creation BDD si besoin et initialise certaines tables (Activités)
 def initialize_data():
@@ -1827,8 +1824,8 @@ def initialize_data():
 initialize_data()
 
 print("Starting Flask...")
-app.logger.info(f"Starting Flask on port {port} with debug={debug}")
+app.logger.info(f"Starting Flask on port {server_port} with debug={app.debug}")
 
-#app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
+#app.run(host='0.0.0.0', port=server_port, debug=app.debug, threaded=True)
 
 app.logger.info("Starting Flask app...")
