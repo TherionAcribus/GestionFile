@@ -6,6 +6,8 @@ import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from sqlalchemy.engine import make_url, URL
+from sqlalchemy.exc import ArgumentError
 
 # mieux que datetime.timezone pour gérer les fuseaux horaires et les changements d'heure.
 # TODO permettre de choisir le fuseau horaire
@@ -52,6 +54,23 @@ def get_parameter(name):
     response = ssm.get_parameter(Name=name, WithDecryption=True)
     return response['Parameter']['Value']
 
+def _validate_sqlalchemy_url(value: str | None, env_name: str) -> str | None:
+    if not value:
+        return value
+    try:
+        url = make_url(value)
+        # SQLAlchemy treats "mysql://" as "mysql+mysqldb://" by default, which
+        # requires the `mysqlclient` (MySQLdb) package. We standardize on PyMySQL.
+        if url.drivername in {"mysql", "mysql+mysqldb"}:
+            url = url.set(drivername="mysql+pymysql")
+        return str(url)
+    except ArgumentError as e:
+        raise RuntimeError(
+            f"Invalid {env_name}={value!r}. Expected a SQLAlchemy URL like "
+            f"'mysql+pymysql://user:password@host:3306/dbname' (or unset it to use MYSQL_* vars). "
+            f"Note: 'mysql://...' defaults to MySQLdb; use 'mysql+pymysql://...'."
+        ) from e
+
 class Config:
     SECRET_KEY = _load_or_create_secret("SECRET_KEY", "flask_secret_key.txt")
     SECURITY_PASSWORD_SALT = _load_or_create_secret("SECURITY_PASSWORD_SALT", "security_password_salt.txt")
@@ -70,8 +89,8 @@ class Config:
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement
     site = os.getenv('SITE', 'prod')
     DEBUG = os.getenv("FLASK_DEBUG", "").strip() in {"1", "true", "True", "yes", "on"}
-    database_url = os.getenv("DATABASE_URL")
-    scheduler_database_url = os.getenv("DATABASE_URL_SCHEDULER")
+    database_url = _validate_sqlalchemy_url(os.getenv("DATABASE_URL"), "DATABASE_URL")
+    scheduler_database_url = _validate_sqlalchemy_url(os.getenv("DATABASE_URL_SCHEDULER"), "DATABASE_URL_SCHEDULER")
 
     _socketio_cors_raw = os.getenv("SOCKETIO_CORS_ALLOWED_ORIGINS", "").strip()
     if not _socketio_cors_raw:
