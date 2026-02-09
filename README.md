@@ -142,4 +142,4 @@ Fichiers fournis:
 - `.env.example` : variables d'environnement de base
 - `render.yaml` : blueprint Render
 - `Procfile` : fallback PaaS
-- `docker-compose.coolify.yaml` : split `web` + `scheduler` pour eviter les doublons de jobs en multi-worker
+- `docker-compose.coolify.yaml` : compose universel (MySQL/RabbitMQ externes par defaut, profil `bundled` en tout-en-un) + split `web`/`scheduler`

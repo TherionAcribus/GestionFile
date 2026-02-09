@@ -52,7 +52,7 @@ Objectif: installation la plus simple pour un client final, avec stack complete.
 1. Pousser le repo Git.
 2. Dans Coolify, creer une application de type `Docker Compose`.
 3. Utiliser le fichier `docker-compose.coolify.yaml`.
-4. Definir les variables d'environnement (UI Coolify ou `.env`):
+4. Definir les variables d'environnement dans l'UI Coolify:
    `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`,
    `RABBITMQ_USER`, `RABBITMQ_PASSWORD`,
    `SECRET_KEY`, `SECURITY_PASSWORD_SALT`, `APP_SECRET`, `BASE32_KEY`.
@@ -63,20 +63,19 @@ Objectif: installation la plus simple pour un client final, avec stack complete.
    - Readiness: `GET /readyz` doit renvoyer `200` quand DB (+ RabbitMQ si active) est prete.
 
 Notes:
-- `mysql` et `rabbitmq` sont inclus dans le compose Coolify pour un setup "tout-en-un".
-- RabbitMQ peut rester provisionne meme si desactive dans la config applicative.
+- Ce compose est **universel**: pas besoin de l'editer selon le client.
+- Mode par defaut: services externes (MySQL/RabbitMQ deja provisionnes dans Coolify).
+- Mode "tout-en-un": definir `COMPOSE_PROFILES=bundled` pour lancer aussi
+  les services `mysql` et `rabbitmq` inclus dans le compose.
 - Le compose separe les roles applicatifs:
   - `web` (`APP_ROLE=web`): sert le trafic HTTP.
   - `scheduler` (`APP_ROLE=scheduler`): execute les jobs APScheduler.
 - Pour scaler horizontalement, augmenter seulement `web` et garder
   `scheduler` a **1 replica**.
-- La base `queuedatabase` est creee automatiquement par le conteneur MySQL
-  grace a la variable `MYSQL_DATABASE`.
-- **Utilisateur MySQL non-root** : l'image MySQL cree automatiquement
-  l'utilisateur defini par `MYSQL_USER` / `MYSQL_PASSWORD` avec tous les
-  droits sur `MYSQL_DATABASE` uniquement. `MYSQL_ROOT_PASSWORD` sert
-  uniquement a l'administration du serveur MySQL et n'est pas utilise par
-  l'application.
+- Si tu utilises un MySQL externe, renseigner `MYSQL_HOST` avec l'host
+  interne Coolify de la ressource MySQL.
+- Si tu utilises `COMPOSE_PROFILES=bundled`, la base `queuedatabase` est
+  creee automatiquement par le conteneur MySQL grace a `MYSQL_DATABASE`.
 
 ## Option B - Render (PaaS)
 
@@ -97,7 +96,8 @@ Notes:
 ## Fichiers fournis
 
 - `.env.example`: exemple de configuration.
-- `docker-compose.coolify.yaml`: stack VPS/Coolify prete a deployer.
+- `docker-compose.coolify.yaml`: stack VPS/Coolify universelle
+  (mode externe par defaut, mode bundled via profil).
 - `render.yaml`: blueprint Render.
 - `Procfile`: commande de demarrage compatible PaaS.
 - `migrations/`: dossier Alembic contenant les scripts de migration.

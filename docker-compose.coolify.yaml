@@ -1,5 +1,6 @@
 services:
   mysql:
+    profiles: ["bundled"]
     image: mysql:8.0
     restart: unless-stopped
     command: --default-authentication-plugin=mysql_native_password
@@ -20,6 +21,7 @@ services:
       start_period: 30s
 
   rabbitmq:
+    profiles: ["bundled"]
     image: rabbitmq:3-management
     restart: unless-stopped
     environment:
@@ -37,24 +39,26 @@ services:
   web:
     build: .
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_URL_SCHEDULER: ${DATABASE_URL_SCHEDULER:-}
       DATABASE_TYPE: ${DATABASE_TYPE:-mysql}
       SITE: ${SITE:-prod}
       FLASK_DEBUG: ${FLASK_DEBUG:-0}
       PORT: ${PORT:-5000}
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
       MYSQL_USER: ${MYSQL_USER:-pharmaline}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F}
       APP_ROLE: web
     depends_on:
       mysql:
         condition: service_healthy
+        required: false
       rabbitmq:
         condition: service_healthy
+        required: false
     ports:
       - "${PORT:-5000}:${PORT:-5000}"
     volumes:
@@ -71,24 +75,26 @@ services:
   scheduler:
     build: .
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+      DATABASE_URL_SCHEDULER: ${DATABASE_URL_SCHEDULER:-}
       DATABASE_TYPE: ${DATABASE_TYPE:-mysql}
       SITE: ${SITE:-prod}
       FLASK_DEBUG: ${FLASK_DEBUG:-0}
       PORT: ${PORT:-5000}
-      MYSQL_HOST: mysql
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
       MYSQL_USER: ${MYSQL_USER:-pharmaline}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
-      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F}
       APP_ROLE: scheduler
     depends_on:
       mysql:
         condition: service_healthy
+        required: false
       rabbitmq:
         condition: service_healthy
+        required: false
     volumes:
       - instance_data:/app/instance
       - galleries_data:/app/static/galleries
