@@ -1,14 +1,15 @@
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
-    var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
-    var domain = document.domain;
-    var port = protocol === 'https:' ? '443' : '5000';
+    // Socket.IO expects an http(s) URL. Rely on same-origin host/port so this works behind reverse proxies (Coolify).
+    var socketProtocol = protocol === 'https:' ? 'https://' : 'http://';
+    var domain = window.location.host;
+    var baseUrl = socketProtocol + domain;
     
     // Connexion au namespace général
-    var generalSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient', 
-                                    { query: "username=admin_interface" });
+    var generalSocket = io.connect(baseUrl + '/socket_update_patient', 
+                                     { query: "username=admin_interface" });
     console.log("adresse")
-    console.log(socketProtocol + domain + ':' + port + '/socket_update_patient')
+    console.log(baseUrl + '/socket_update_patient')
 
     generalSocket.on('connect', function() {
         console.log('General WebSocket connected');
@@ -40,7 +41,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     // Connexion au namespace écran
-    var adminSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_admin',
+    var adminSocket = io.connect(baseUrl + '/socket_admin',
                     { query: "username=admin_interface" }
     );
 

@@ -1,11 +1,12 @@
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
-    var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
-    var domain = document.domain;
-    var port = protocol === 'https:' ? '443' : '5000';
+    // Socket.IO expects an http(s) URL. Use same-origin host/port for reverse proxies (Coolify).
+    var socketProtocol = protocol === 'https:' ? 'https://' : 'http://';
+    var domain = window.location.host;
+    var baseUrl = socketProtocol + domain;
     
     // Connexion au namespace général
-    var patientSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_patient');
+    var patientSocket = io.connect(baseUrl + '/socket_patient');
 
     patientSocket.on('connect', function() {
         console.log('Patient WebSocket connected');

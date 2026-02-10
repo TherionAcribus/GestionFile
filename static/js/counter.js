@@ -6,11 +6,12 @@ var eventSourceforCounter = new EventSource(`/events/update_counter/${counter_id
 
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
-    var socketProtocol = protocol === 'https:' ? 'wss://' : 'ws://';
-    var domain = document.domain;
-    var port = protocol === 'https:' ? '443' : '5000';
+    // Socket.IO expects an http(s) URL. Use same-origin host/port for reverse proxies (Coolify).
+    var socketProtocol = protocol === 'https:' ? 'https://' : 'http://';
+    var domain = window.location.host;
+    var baseUrl = socketProtocol + domain;
     
-    var socket = io.connect(socketProtocol + domain + ':' + port + '/socket_update_patient', 
+    var socket = io.connect(baseUrl + '/socket_update_patient', 
         { query: `username=counter ${counter_id} web` });
 
     socket.on('connect', function() {
@@ -49,7 +50,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     // Connexion au namespace écran
-    var counterSocket = io.connect(socketProtocol + domain + ':' + port + '/socket_counter', 
+    var counterSocket = io.connect(baseUrl + '/socket_counter', 
         { query: "username=counter web" });
 
     counterSocket.on('connect', function() {
