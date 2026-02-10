@@ -366,7 +366,13 @@ def login():
         
         next_url = request.args.get('next') or form.next.data
         if not next_url or not is_safe_url(next_url):
-            next_url = url_for('admin_security.home')
+            # Default post-login landing page.
+            # SECURITY_POST_LOGIN_VIEW is configured as a path (ex: "/admin"), so we
+            # prefer the known dashboard endpoint and fall back to the config value.
+            try:
+                next_url = url_for('admin_dashboard.admin')
+            except Exception:
+                next_url = app.config.get("SECURITY_POST_LOGIN_VIEW", "/admin")
         
         app.display_toast(success=True, message=f"Bienvenue {user.username} !")
         return redirect(next_url)
