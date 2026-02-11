@@ -96,6 +96,15 @@ def display_security_role_table():
     roles = Role.query.all()
     return render_template('admin/security_htmx_role_table.html', roles=roles)
 
+@admin_security_bp.route('/admin/security/dashboard')
+@require_permission_dashboard('security')
+def dashboard_security():
+    dashboardcard = DashboardCard.query.filter_by(name="security").first()
+    is_default = check_default_admin()
+    return render_template('/admin/dashboard_security.html',
+                            dashboardcard=dashboardcard,
+                            is_default_admin=is_default)
+
 @admin_security_bp.route('/admin/security')
 def admin_security():
 

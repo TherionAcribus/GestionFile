@@ -1,10 +1,18 @@
 {
     "name": "gf_dashboard",
     "type": "default",
-    "version": "0.6",
-    "timestamp": "2024-12-02 14:35:26",
-    "comments": "Ajout planifications",
+    "version": "0.7",
+    "timestamp": "2025-02-11 08:00:00",
+    "comments": "Ajout carte sécurité",
     "dashboard": [
+        {"id": 9, 
+        "name": "security",
+        "visible": true,
+        "position": 0,
+        "size": "col-md-6",
+        "color": "bg-primary", 
+        "htmx_triggers": {}
+        },
         {"id": 1, 
         "name": "staff",
         "visible": true,

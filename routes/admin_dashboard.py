@@ -1,11 +1,19 @@
 from flask import Blueprint,render_template, request, current_app as app
 from models import DashboardCard, db, Pharmacist, Patient, Counter, Button
 from communication import communikation
+from routes.admin_security import check_default_admin
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
 
 @admin_dashboard_bp.route('/admin')
 def admin():
+    # Auto-afficher la carte sécurité si le mot de passe par défaut est encore en place
+    security_card = DashboardCard.query.filter_by(name='security').first()
+    if security_card and not security_card.visible and check_default_admin():
+        security_card.visible = True
+        security_card.position = 0
+        db.session.commit()
+
     dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
     return render_template('/admin/admin.html',
                             dashboardcards=dashboardcards)
@@ -222,6 +230,9 @@ def save_dashboard_configuration():
             
             context['main_jobs'] = main_jobs_info
             context['other_jobs'] = other_jobs_info
+        
+        elif dashboardcard.name == 'security':
+            context['is_default_admin'] = check_default_admin()
         
         # Utiliser le template avec contenu, pas le wrapper
         template_name = f'admin/dashboard_{dashboardcard.name}.html'
