@@ -121,6 +121,9 @@ migrate = Migrate()
 def load_configuration(app):
     app.logger.info("Loading configuration from database")
 
+    # Valeur par défaut pour le thème de couleurs
+    app.config.setdefault("ADMIN_COLORS", "lumen")
+
     config_mappings = {
         "pharmacy_name": ("PHARMACY_NAME", "value_str"),
         "network_adress": ("NETWORK_ADRESS", "value_str"),
@@ -1919,7 +1922,7 @@ def load_colors(sender, **extra):
         try:
             session['admin_colors'] = app.config['ADMIN_COLORS']
         except KeyError:
-            session['admin_colors'] = "flatly"
+            session['admin_colors'] = "lumen"
 # Connecter le signal request_started à la fonction load_configuration
 request_started.connect(load_colors, app)
 
