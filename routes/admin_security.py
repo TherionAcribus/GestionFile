@@ -466,7 +466,12 @@ def create_default_role():
             admin_music_options=True,
             admin_app=True,
             admin_queue=True,
-            admin_stats=True
+            admin_stats=True,
+            admin_staff=True,
+            admin_phone=True,
+            admin_announce=True,
+            admin_patient=True,
+            admin_gallery=True
         )
 
         db.session.add(admin_role)
@@ -637,7 +642,12 @@ def save_role():
             admin_music_options=False,
             admin_app=False,
             admin_queue=False,
-            admin_stats=False
+            admin_stats=False,
+            admin_staff=False,
+            admin_phone=False,
+            admin_announce=False,
+            admin_patient=False,
+            admin_gallery=False
         )
 
         # Attribution des permissions
