@@ -320,6 +320,68 @@
         </div>
     </div>
 
+    <!-- Texte activité indisponible -->
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-SubtitleNoActivity" aria-expanded="false" aria-controls="panelsStayOpen-SubtitleNoActivity">
+                <h3>Texte quand l'activité est indisponible</h3>
+            </button>
+        </h2>
+        <div id="panelsStayOpen-SubtitleNoActivity" class="accordion-collapse collapse">
+            <div class="accordion-body">
+
+                <strong>Police du texte</strong>
+                <div class="admin_css_textbloc">
+                    {{ macros.css_unit_bloc("patient", "subtitle_no_activity_font_size", subtitle_no_activity_font_size, "Taille", "px") }}
+                    {{ macros.css_color_bloc("patient", "subtitle_no_activity_font_color", subtitle_no_activity_font_color, "Couleur") }}    
+                </div>
+
+                <strong>Contour du texte</strong>
+                <div class="admin_css_textbloc">                
+                    {{ macros.css_unit_bloc("patient", "subtitle_no_activity_border_size", subtitle_no_activity_border_size, "Taille", "px") }}
+                    {{ macros.css_color_bloc("patient", "subtitle_no_activity_border_color", subtitle_no_activity_border_color, "Couleur") }}
+                </div>
+
+                <strong>Fond</strong>
+                <div class="admin_css_textbloc">
+                    {{ macros.css_color_bloc("patient", "subtitle_no_activity_background_color", subtitle_no_activity_background_color, "Couleur") }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Texte message spécifique -->
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-SubtitleSpecificMessage" aria-expanded="false" aria-controls="panelsStayOpen-SubtitleSpecificMessage">
+                <h3>Texte pour le message spécifique</h3>
+            </button>
+        </h2>
+        <div id="panelsStayOpen-SubtitleSpecificMessage" class="accordion-collapse collapse">
+            <div class="accordion-body">
+
+                <strong>Police du texte</strong>
+                <div class="admin_css_textbloc">
+                    {{ macros.css_unit_bloc("patient", "subtitle_specific_message_font_size", subtitle_specific_message_font_size, "Taille", "px") }}
+                    {{ macros.css_color_bloc("patient", "subtitle_specific_message_font_color", subtitle_specific_message_font_color, "Couleur") }}    
+                </div>
+
+                <strong>Contour du texte</strong>
+                <div class="admin_css_textbloc">                
+                    {{ macros.css_unit_bloc("patient", "subtitle_specific_message_border_size", subtitle_specific_message_border_size, "Taille", "px") }}
+                    {{ macros.css_color_bloc("patient", "subtitle_specific_message_border_color", subtitle_specific_message_border_color, "Couleur") }}
+                </div>
+
+                <strong>Fond</strong>
+                <div class="admin_css_textbloc">
+                    {{ macros.css_color_bloc("patient", "subtitle_specific_message_background_color", subtitle_specific_message_background_color, "Couleur") }}
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <div class="accordion-item">
         <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-ScanButton" aria-expanded="false" aria-controls="panelsStayOpen-ScanButton">
