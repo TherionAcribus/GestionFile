@@ -18,7 +18,7 @@ class CSSManager:
         # Définit les configurations pour chaque mode
         self.css_configs = {
             "patient": {
-                "source": "test.css",
+                "source": "patient.css",
                 "custom": "custom.css"
             },
             "announce": {

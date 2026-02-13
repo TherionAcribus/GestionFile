@@ -454,6 +454,12 @@ html, body {
     border-style: solid;
     border-color: var(--flag_border_color);
     border-radius: 50%;
+    transition: scale 0.2s ease;
+}
+
+.language-selector img:hover {
+    box-shadow: 0px 0px 0px #888888;
+    scale: 0.95;
 }
 
 .div_explanation {
