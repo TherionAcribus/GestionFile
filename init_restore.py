@@ -879,6 +879,7 @@ def init_default_languages_db_from_json():
                     name=language['name'],
                     translation=language['translation'],
                     is_active=language['is_active'],
+                    flag_url=language.get('flag_url') or None,
                     sort_order=language['sort_order'],
                     voice_model=language['voice_model'],
                     voice_gtts_name=language['voice_gtts_name'],
@@ -891,6 +892,32 @@ def init_default_languages_db_from_json():
 
         else:
             print(f"Fichier {json_file} introuvable.")
+    else:
+        # Corriger les flag_url manquants ou invalides pour les langues existantes
+        _fix_missing_flag_urls(json_file)
+
+
+def _fix_missing_flag_urls(json_file):
+    """ Corrige les flag_url manquants (None, 'None', '') à partir du JSON par défaut. """
+    if not os.path.exists(json_file):
+        return
+    with open(json_file, 'r', encoding='utf-8') as f:
+        default_languages = json.load(f)
+
+    # Construire un mapping code -> flag_url depuis le JSON
+    flag_map = {lang['code']: lang.get('flag_url', '') for lang in default_languages}
+
+    updated = False
+    for language in Language.query.all():
+        if not language.flag_url or language.flag_url == 'None':
+            default_flag = flag_map.get(language.code)
+            if default_flag:
+                language.flag_url = default_flag
+                updated = True
+                print(f"Flag corrigé pour {language.code}: {default_flag}")
+
+    if updated:
+        db.session.commit()
 
 
 def init_or_update_default_texts_db_from_json():

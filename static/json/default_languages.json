@@ -4,7 +4,7 @@
         "name": "Français",
         "translation": "Français",
         "is_active": true,
-        "flag_url": "",
+        "flag_url": "france.png",
         "sort_order": 1,
         "voice_model": "gtts",
         "voice_gtts_name": "fr",
@@ -16,10 +16,22 @@
         "name": "Anglais",
         "translation": "English",
         "is_active": false,
-        "flag_url": "",
+        "flag_url": "royaume-uni.png",
         "sort_order": 2,
         "voice_model": "gtts",
         "voice_gtts_name": "en",
+        "voice_google_name": "",
+        "voice_google_region": ""
+    },
+    {
+        "code": "de",
+        "name": "Allemand",
+        "translation": "Deutsch",
+        "is_active": false,
+        "flag_url": "allemagne.png",
+        "sort_order": 3,
+        "voice_model": "gtts",
+        "voice_gtts_name": "de",
         "voice_google_name": "",
         "voice_google_region": ""
     }

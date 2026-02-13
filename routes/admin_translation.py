@@ -74,8 +74,9 @@ def update_language(language_id):
             image_url = request.form.get('image_url')
             print("image_url", image_url)
             if image_url:
-                language.flag_url = image_url.split('/')[-1]  # Extraire le nom du fichier depuis l'URL
-
+                extracted = image_url.split('/')[-1]
+                if extracted and extracted != 'None':
+                    language.flag_url = extracted
 
             db.session.commit()
             app.display_toast(success=True, message="Mise à jour réussie")
@@ -133,7 +134,8 @@ def add_new_language():
         voice_is_active = True if request.form.get('voice_is_active') == "true" else False
         image_url = request.form.get('image_url')
         if image_url:
-            flag_url = image_url.split('/')[-1]  # Extraire le nom du fichier depuis l'URL
+            extracted = image_url.split('/')[-1]
+            flag_url = extracted if extracted and extracted != 'None' else None
         else:
             flag_url = None
 
@@ -192,8 +194,10 @@ def upload_flag_image():
     
     if file and app.allowed_image_file(file.filename):
         filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['FLAG_FOLDER'], filename))
-        return {"url": url_for('static', filename='images/pays/' + filename)}
+        flag_folder = os.path.join(app.static_folder, 'images', 'flags')
+        os.makedirs(flag_folder, exist_ok=True)
+        file.save(os.path.join(flag_folder, filename))
+        return {"url": url_for('static', filename='images/flags/' + filename)}
     
     return {"error": "Invalid file type"}, 400  
 
