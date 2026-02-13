@@ -41,13 +41,13 @@
     --patient_button_border_color: #000000;
     --patient_title_font_size: 80px;
     --patient_title_font_color: white;
-    --patient_title_border_size: 0;
+    --patient_title_border_size: 0px;
     --patient_title_border_color: black;
     --patient_title_background_color: #008B8B;
     --patient_title_background_height: 200px;
-    --subtitle_font_size: 40;
+    --subtitle_font_size: 40px;
     --subtitle_font_color: white;
-    --subtitle_border_size: 0;
+    --subtitle_border_size: 0px;
     --subtitle_border_color: black;
     --subtitle_background_color: #008B8B;
     --subtitle_background_height: 200px;

@@ -31,8 +31,7 @@ def load_patient_css_variables_from_json(json_file, restore=False):
                     css_variable = PatientCssVariable.query.filter_by(variable=key).first()
                     
                     if css_variable:
-                        # pas encore ajouté à l'interface. A FAIRE + Gestion de la restauration / Sauvegarde
-                        if restore:
+                        if restore or css_variable.value != value:
                             current_app.logger.info(f"Mise à jour de {key}")
                             css_variable.value = value
                     else:
