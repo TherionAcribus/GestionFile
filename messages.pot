@@ -18,7 +18,7 @@ msgstr ""
 "Generated-By: Babel 2.14.0\n"
 
 #: templates/patients.html:14
-msgid "Bienvenue à la Pharmacie Sainte-Agathe"
+msgid "Bienvenue"
 msgstr ""
 
 #: templates/patients.html:15

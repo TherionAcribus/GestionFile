@@ -2,9 +2,9 @@
     "version": "0.0",
     "comments": "Version de test",
     "texts": {
-        "patient_page_title": {"fr": "Bienvenue à la Pharmacie Sainte-Agathe", "en": "Welcome to Pharmacie Sainte-Agathe"},
+        "patient_page_title": {"fr": "Bienvenue à la {P}", "en": "Welcome to {P}"},
         "patient_page_subtitle": {"fr": "Afin d'améliorer votre prise en charge, saisissez le motif de votre visite. Nous vous appelerons à votre tour.", "en": "Please hold the line. We will call you shortly."},
         "patient_page_right_page": {"fr": "Blabla", "en": "Blabla US"},
-        "announce_titre": {"fr": "Bienvenue à la Pharmacie Sainte-Agathe", "en": "Welcome to Pharmacie Sainte-Agathe"}
+        "announce_titre": {"fr": "Bienvenue à la {P}", "en": "Welcome to {P}"}
     }
 }

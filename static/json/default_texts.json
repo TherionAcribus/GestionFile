@@ -4,7 +4,7 @@
     "texts": [
         {
             "key": "patient_page_title",
-            "value": "Bienvenue à la Pharmacie Sainte-Agathe"
+            "value": "Bienvenue à la {P}"
         },
         {
             "key": "patient_page_subtitle",
@@ -16,7 +16,7 @@
         },
         {
             "key": "announce_titre",
-            "value": "Bienvenue à la Pharmacie Sainte-Agathe"
+            "value": "Bienvenue à la {P}"
         }
     ]
 }
