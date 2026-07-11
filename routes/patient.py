@@ -166,10 +166,11 @@ def left_page_validate_patient(activity):
     print("futur_patient", futur_patient.id)
     image_name_qr = create_qr_code(futur_patient)
     text = f"{activity.name}"
-    # rafraichissement des pages display et counter
-    # envoye de data pour être récupéré sous forme de liste par PySide
-    
-    communikation("update_patient")
+    # NB : pas d'émission ici. À ce stade le patient n'est que « futur »
+    # (get_futur_patient ne l'enregistre PAS en base) : la file n'a pas changé.
+    # Diffuser update_patient bumperait la révision et forcerait tous les
+    # clients à recharger un état identique. Le vrai update_patient part lors
+    # de l'enregistrement effectif (confirmation impression/scan).
 
     page_patient_validation_message = choose_text_translation("page_patient_validation_message")
     page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
