@@ -203,7 +203,7 @@ def api_counter_state(counter_id):
         Patient.status.in_(['ongoing', 'calling'])
     ).first()
 
-    standing = Patient.query.filter_by(status="standing").order_by(Patient.timestamp).all()
+    standing = Patient.query.filter_by(status="standing").order_by(Patient.timestamp, Patient.id).all()
     standing_list = [{
         "id": p.id,
         "call_number": p.call_number,
@@ -230,7 +230,7 @@ def api_counter_state(counter_id):
 
 @counter_bp.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
 def patients_queue_for_counter(counter_id):
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
+    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp, Patient.id).all()
     return render_template('/counter/patients_queue_for_counter.html', patients=patients, counter_id=counter_id)
 
 

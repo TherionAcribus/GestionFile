@@ -1832,7 +1832,7 @@ def add_counter():
 
 @app.route('/patients_queue')
 def patients_queue():
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp).all()
+    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp, Patient.id).all()
     return render_template('htmx/patients_queue.html', patients=patients)
 
 

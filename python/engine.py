@@ -218,8 +218,9 @@ def algo_choice_next_patient(counter_id):
 
     print('next_possible_patient', next_possible_patient)
     
-    # tri par date 
-    next_patient = next_possible_patient.order_by(Patient.timestamp).first()
+    # tri par date (id en départage déterministe si timestamps égaux, pour que
+    # l'ordre d'appel corresponde exactement à l'ordre affiché de la file)
+    next_patient = next_possible_patient.order_by(Patient.timestamp, Patient.id).first()
 
     if applicable_rules:
         patient_overtaken(next_patient)

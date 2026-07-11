@@ -25,6 +25,9 @@ def create_patients_list_for_pyside():
         .join(Activity, Patient.activity_id == Activity.id)
         .outerjoin(Language, Patient.language_id == Language.id)
         .filter(Patient.status == "standing")
+        # Ordre FIFO explicite et déterministe : timestamp, puis id comme
+        # départage stable quand deux patients partagent le même horodatage.
+        .order_by(Patient.timestamp, Patient.id)
         .all()
     )
     patients_list = [{"id": r.id,
