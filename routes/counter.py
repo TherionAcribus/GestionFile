@@ -41,7 +41,7 @@ def action_add_paper(add_paper, from_printer=False):
         print(e)
 
 
-@counter_bp.route('app/counter/paper_add', methods=['POST'])
+@counter_bp.route('/app/counter/paper_add', methods=['POST'])
 def app_paper_add():
     if request.form.get('action') is None:
         return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
@@ -336,11 +336,10 @@ def counter_select_patient(counter_id, patient_id):
     return '', 204
 
 
-@counter_bp.route('/counter/relaunch_patient_call/<int:counter_id>', methods=['GET'])
-def relaunch_patient_call(counter_id):
+def do_relaunch_patient_call(counter_id):
     patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
     if not patient:
-        return '', 204
+        return
 
     audiofile = f'patient_{patient.call_number}.mp3'
     audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)
@@ -356,9 +355,20 @@ def relaunch_patient_call(counter_id):
         # (re)génère de façon synchrone plutôt que de diffuser un lien mort.
         audio_url = generate_audio_calling(counter_id, patient, language_code=patient.language.code)
         if not audio_url:
-            return '', 204
+            return
 
     communikation("update_audio", event="audio", data=audio_url)
+
+
+@counter_bp.route('/counter/relaunch_patient_call/<int:counter_id>', methods=['GET'])
+def relaunch_patient_call(counter_id):
+    do_relaunch_patient_call(counter_id)
+    return '', 204
+
+
+@counter_bp.route('/app/counter/relaunch_patient_call/<int:counter_id>', methods=['POST'])
+def app_relaunch_patient_call(counter_id):
+    do_relaunch_patient_call(counter_id)
     return '', 204
 
 
