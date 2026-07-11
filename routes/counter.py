@@ -2,7 +2,7 @@ import os
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
-from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity
+from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get_queue_revision
 from python.engine import call_next, generate_audio_calling
 from utils import replace_balise_announces
 from python.engine import counter_become_active, counter_become_inactive
@@ -182,6 +182,50 @@ def app_is_patient_on_counter(counter_id):
         return jsonify(patient.to_dict()), 200
     else:
         return jsonify({"id": None, "counter_id": counter_id}), 200   
+
+
+@counter_bp.route('/api/counter/<int:counter_id>/state', methods=['GET'])
+@require_app_token_or_login
+def api_counter_state(counter_id):
+    """ État autoritatif complet du comptoir en une seule snapshot atomique.
+
+    Remplace, au démarrage de l'App et à la resynchronisation, la série de
+    requêtes séparées (patient en cours + liste des patients + init_app + staff)
+    qui pouvaient se chevaucher et laisser l'App dans un état incohérent (course
+    de démarrage). Renvoie aussi la révision courante de la file : le client la
+    mémorise pour, ensuite, détecter les évènements Socket.IO manqués. """
+    counter = Counter.query.get(counter_id)
+    if not counter:
+        return jsonify({"error": "counter not found"}), 404
+
+    current = Patient.query.filter(
+        Patient.counter.has(id=counter_id),
+        Patient.status.in_(['ongoing', 'calling'])
+    ).first()
+
+    standing = Patient.query.filter_by(status="standing").order_by(Patient.timestamp).all()
+    standing_list = [{
+        "id": p.id,
+        "call_number": p.call_number,
+        "activity_id": p.activity_id,
+        "activity": p.activity.name,
+        "activity_is_staff": p.activity.staff_id,
+        "language_code": p.language.code,
+    } for p in standing]
+
+    activity_staff = Activity.query.filter_by(is_staff=True).all()
+
+    return jsonify({
+        "revision": get_queue_revision(),
+        "counter_id": counter_id,
+        "counter_name": counter.name,
+        "current_patient": current.to_dict() if current else {"id": None, "counter_id": counter_id},
+        "standing_list": standing_list,
+        "autocalling": counter.auto_calling,
+        "add_paper": app.config["ADD_PAPER"],
+        "activities_staff": [activity.to_dict_for_app() for activity in activity_staff],
+        "staff": counter.staff.to_dict() if counter.staff else None,
+    }), 200
 
 
 @counter_bp.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])

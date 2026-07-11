@@ -3,6 +3,7 @@ import time
 import logging
 from flask import url_for, request, has_request_context, current_app
 from routes.pyside import create_patients_list_for_pyside
+from models import bump_queue_revision
 
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
@@ -18,10 +19,16 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
     logging.info(f"communikation called with stream={stream}, event={event}")
 
     if stream == "update_patient":
+        # Toute mutation de la file passe par ici pour diffuser la nouvelle liste
+        # complète : on incrémente donc la révision et on la joint à l'enveloppe.
+        # Le client (App comptoir) s'en sert pour écarter les messages
+        # périmés/dupliqués et détecter un trou (évènement manqué) qui déclenche
+        # un rechargement de l'état autoritatif via /api/counter/<id>/state.
+        revision = bump_queue_revision()
         patients = create_patients_list_for_pyside()
         print('PATIENT LIST', patients)
-        communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list")
-        communication_websocket("socket_update_patient", patients, event=event)
+        communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list", revision=revision)
+        communication_websocket("socket_update_patient", patients, event=event, revision=revision)
     elif stream == "update_audio":
         if event == "spotify":
             communication_websocket("socket_update_screen", data, flag, event="spotify")
@@ -42,7 +49,7 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
         communication_websocket(f"socket_{stream}", data, flag, event=event)
 
 
-def communication_websocket(stream, data=None, flag=None, client_id=None, event="update"):
+def communication_websocket(stream, data=None, flag=None, client_id=None, event="update", revision=None):
     logging.info(f'communication_websocket: stream={stream}, event={event}')
 
     if has_request_context():
@@ -53,7 +60,7 @@ def communication_websocket(stream, data=None, flag=None, client_id=None, event=
 
     try:
         namespace = f'/{stream}'
-        current_app.socketio.emit(event, {"flag": flag, 'data': message}, namespace=namespace)
+        current_app.socketio.emit(event, {"flag": flag, 'data': message, 'revision': revision}, namespace=namespace)
         logging.info(f"Message SocketIO envoyé: {namespace}")
         return "Message sent!"
     except Exception as e:

@@ -1,4 +1,5 @@
 import uuid
+import logging
 from datetime import datetime
 from flask import current_app as app
 from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint
@@ -612,6 +613,70 @@ class IdempotencyKey(db.Model):
 
     def __repr__(self):
         return f'<IdempotencyKey {self.key} ({self.status_code})>'
+
+
+class QueueRevision(db.Model):
+    """ Compteur de révision monotone de l'état de la file.
+
+    Socket.IO est une notification, pas la source de vérité : une panne entre le
+    commit SQL et l'emit, ou un message perdu hors coupure franche, peut laisser
+    un client périmé. On associe donc à chaque diffusion d'état de la file une
+    révision strictement croissante. Le client compare la révision reçue à la
+    sienne : plus petite ou égale -> message périmé/dupliqué ignoré ; trou ->
+    au moins un évènement manqué, il recharge l'état autoritatif via
+    /api/counter/<id>/state.
+
+    La révision vit en base (une seule ligne, id=1) et non en mémoire pour
+    rester monotone entre les process (web + scheduler), qui n'ont pas de
+    compteur partagé. """
+    __tablename__ = 'queue_revision'
+    id = db.Column(db.Integer, primary_key=True)  # toujours 1
+    revision = db.Column(db.BigInteger, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<QueueRevision {self.revision}>'
+
+
+def get_queue_revision():
+    """ Révision courante de la file (0 si absente/indisponible).
+
+    Tolérant aux pannes : si le magasin de révision est indisponible (table
+    absente, base injoignable...), on renvoie 0 plutôt que de faire échouer
+    l'endpoint d'état, qui reste utile sans la révision. """
+    try:
+        row = db.session.get(QueueRevision, 1)
+        return row.revision if row else 0
+    except Exception:
+        db.session.rollback()
+        return 0
+
+
+def bump_queue_revision():
+    """ Incrémente atomiquement la révision de la file et renvoie la nouvelle
+    valeur. L'incrément se fait via un UPDATE conditionnel (« SET revision =
+    revision + 1 ») pour rester correct sous des requêtes concurrentes : sous
+    InnoDB comme sous SQLite l'écriture est sérialisée. On committe pour rendre
+    la nouvelle révision visible aux autres process avant l'emit Socket.IO.
+
+    Tolérant aux pannes : si le magasin de révision est indisponible, on renvoie
+    None. Une diffusion sans révision fait simplement retomber le client sur son
+    comportement d'avant (appliquer le message reçu tel quel) : la file continue
+    de fonctionner, on perd seulement la détection des messages manqués. """
+    try:
+        updated = db.session.query(QueueRevision).filter_by(id=1).update(
+            {QueueRevision.revision: QueueRevision.revision + 1},
+            synchronize_session=False,
+        )
+        if not updated:
+            # Ligne absente (base pas encore initialisée par la migration) : on la
+            # crée à 1 pour ne jamais bloquer une diffusion sur un défaut d'amorçage.
+            db.session.add(QueueRevision(id=1, revision=1))
+        db.session.commit()
+        return get_queue_revision()
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Révision de file indisponible, diffusion sans révision: {e}")
+        return None
 
 
 class JobExecutionLog(db.Model):
