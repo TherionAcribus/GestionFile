@@ -40,7 +40,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('Patient WebSocket connection error:', err);
     });
 
-    patientSocket.on('reconnect', function(attempt) {
+    // En Socket.IO client v4, les évènements de reconnexion sont émis par le
+    // Manager (patientSocket.io), PAS par le socket lui-même. Écouter
+    // 'reconnect' sur patientSocket ne se déclenchait donc jamais : le
+    // rattrapage d'état ci-dessous ne s'exécutait pas.
+    patientSocket.io.on('reconnect', function(attempt) {
         console.log('Patient WebSocket reconnected after', attempt, 'attempts');
         // SocketIO ne rejoue pas les évènements manqués pendant la coupure :
         // on rattrape l'état (boutons/titre) au lieu de compter sur le
@@ -50,7 +54,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_title();
     });
 
-    patientSocket.on('reconnect_attempt', function(attempt) {
+    patientSocket.io.on('reconnect_attempt', function(attempt) {
         console.log('Patient WebSocket reconnect attempt', attempt);
     });
 

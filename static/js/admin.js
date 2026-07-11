@@ -28,13 +28,16 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('General WebSocket connection error:', err);
     });
 
-    generalSocket.on('reconnect', function(attempt) {
+    // En Socket.IO client v4, les évènements de reconnexion sont émis par le
+    // Manager (generalSocket.io), pas par le socket : sans le .io, ce rattrapage
+    // ne s'exécutait jamais.
+    generalSocket.io.on('reconnect', function(attempt) {
         console.log('General WebSocket reconnected after', attempt, 'attempts');
         // Rattrape les mises à jour manquées pendant la coupure.
         refresh_queue();
     });
 
-    generalSocket.on('reconnect_attempt', function(attempt) {
+    generalSocket.io.on('reconnect_attempt', function(attempt) {
         console.log('General WebSocket reconnect attempt', attempt);
     });
 
@@ -132,7 +135,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('Admin WebSocket connection error:', err);
     });
 
-    adminSocket.on('reconnect', function(attempt) {
+    // Évènements de reconnexion sur le Manager (adminSocket.io), cf. plus haut.
+    adminSocket.io.on('reconnect', function(attempt) {
         console.log('Admin WebSocket reconnected after', attempt, 'attempts');
         // Rattrape les mises à jour manquées pendant la coupure pour les
         // widgets "glanceable" du dashboard (état affiché sans action de
@@ -144,7 +148,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_schedule_tasks_list();
     });
 
-    adminSocket.on('reconnect_attempt', function(attempt) {
+    adminSocket.io.on('reconnect_attempt', function(attempt) {
         console.log('Admin WebSocket reconnect attempt', attempt);
     });
 

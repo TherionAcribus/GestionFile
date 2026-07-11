@@ -27,7 +27,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('General WebSocket connection error:', err);
     });
 
-    generalSocket.on('reconnect', function(attempt) {
+    // En Socket.IO client v4, les évènements de reconnexion sont émis par le
+    // Manager (generalSocket.io), pas par le socket : sans le .io, ce rattrapage
+    // ne s'exécutait jamais.
+    generalSocket.io.on('reconnect', function(attempt) {
         console.log('General WebSocket reconnected after', attempt, 'attempts');
         // Rattrape les mises à jour manquées pendant la coupure (cet écran
         // tourne sans surveillance, une coupure passée inaperçue le laisserait
@@ -35,7 +38,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_calling_list();
     });
 
-    generalSocket.on('reconnect_attempt', function(attempt) {
+    generalSocket.io.on('reconnect_attempt', function(attempt) {
         console.log('General WebSocket reconnect attempt', attempt);
     });
 
@@ -105,7 +108,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('Screen WebSocket connection error:', err);
     });
 
-    screenSocket.on('reconnect', function(attempt) {
+    // Évènements de reconnexion sur le Manager (screenSocket.io), cf. plus haut.
+    screenSocket.io.on('reconnect', function(attempt) {
         console.log('Screen WebSocket reconnected after', attempt, 'attempts');
         // Cet écran affiche un état ponctuel (bannières d'appel en cours) sans
         // endpoint de resynchronisation dédié : un rechargement complet est le
@@ -114,7 +118,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_page();
     });
 
-    screenSocket.on('reconnect_attempt', function(attempt) {
+    screenSocket.io.on('reconnect_attempt', function(attempt) {
         console.log('Screen WebSocket reconnect attempt', attempt);
     });
 

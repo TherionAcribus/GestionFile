@@ -41,7 +41,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('WebSocket connection error:', err);
     });
 
-    socket.on('reconnect', function(attempt) {
+    // En Socket.IO client v4, les évènements de reconnexion sont émis par le
+    // Manager (socket.io), pas par le socket : sans le .io, ce rattrapage ne
+    // s'exécutait jamais.
+    socket.io.on('reconnect', function(attempt) {
         console.log('WebSocket reconnected after', attempt, 'attempts');
         // Rattrape les mises à jour manquées pendant la coupure.
         refresh_buttons();
@@ -49,7 +52,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         safeTrigger("#patient_on_queue", 'refresh_queue', {target: "#patient_on_queue"});
     });
 
-    socket.on('reconnect_attempt', function(attempt) {
+    socket.io.on('reconnect_attempt', function(attempt) {
         console.log('WebSocket reconnect attempt', attempt);
     });
 
@@ -69,7 +72,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.error('Counter WebSocket connection error:', err);
     });
 
-    counterSocket.on('reconnect', function(attempt) {
+    // Évènements de reconnexion sur le Manager (counterSocket.io), cf. plus haut.
+    counterSocket.io.on('reconnect', function(attempt) {
         console.log('Counter WebSocket reconnected after', attempt, 'attempts');
         // Rattrape les mises à jour manquées pendant la coupure.
         refresh_buttons();
@@ -77,7 +81,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_auto_calling();
     });
 
-    counterSocket.on('reconnect_attempt', function(attempt) {
+    counterSocket.io.on('reconnect_attempt', function(attempt) {
         console.log('Counter WebSocket reconnect attempt', attempt);
     });
 
