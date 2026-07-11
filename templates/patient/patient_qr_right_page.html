@@ -31,6 +31,7 @@
                 hx-post="/patient/print_and_validate"
                 hx-vals='{"activity_id": "{{ activity.id }}"}'
                 hx-target="#div_buttons_parents"
+                hx-sync="this:drop"
             >
                 {% if page_patient_button_print_ticket_display_picture %}                
                     <img src="/static/images/buttons/{{ page_patient_button_print_ticket_picture }}"
@@ -44,7 +45,8 @@
                 <div class="div_validation_one_button"
                     hx-post="patient/scan_and_validate"
                     hx-target="#div_buttons_parents"
-                    hx-vals='{"activity_id": "{{ activity.id }}"}'>
+                    hx-vals='{"activity_id": "{{ activity.id }}"}'
+                    hx-sync="this:drop">
                     <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
                 </div>
             {% endif %}

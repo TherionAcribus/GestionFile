@@ -125,6 +125,65 @@ function sendPrintTicket(printData) {
 }
 
 
+// Confirme au serveur le résultat de l'impression de la PREMIÈRE impression
+// (pas la réimpression : le patient est alors déjà dans la file). C'est cette
+// confirmation qui fait passer l'inscription 'pending' -> 'standing' (succès)
+// ou l'annule (échec, selon la config serveur).
+function confirmPrintResult(printJobId, result) {
+    // Pas de print_job_id => mode scan / réimpression : rien à confirmer.
+    if (!printJobId) {
+        return;
+    }
+    var payload = {
+        print_job_id: printJobId,
+        success: !!(result && result.success),
+        code: result ? result.code : 'unknown',
+        message: result ? result.message : ''
+    };
+    fetch('/patient/confirm_print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            console.log('confirm_print:', data);
+            if (data.status === 'cancelled') {
+                // Échec d'impression + politique "annuler" : le patient n'est
+                // PAS dans la file. On l'indique clairement à l'écran.
+                showConclusionNotice(
+                    "Impression impossible. Veuillez vous adresser au personnel.",
+                    null
+                );
+            } else if (data.status === 'activated_no_ticket') {
+                // Échec d'impression + politique "conserver" : on affiche le
+                // numéro en grand puisqu'il n'y a pas de ticket papier.
+                showConclusionNotice(
+                    "Ticket non imprimé. Notez bien votre numéro :",
+                    data.call_number
+                );
+            }
+        })
+        .catch(function(error) {
+            console.error("Erreur lors de la confirmation d'impression:", error);
+        });
+}
+
+// Remplace le message de la page de conclusion (et affiche éventuellement le
+// numéro d'appel en grand) pour signaler un problème d'impression au patient.
+function showConclusionNotice(message, callNumber) {
+    var container = document.getElementById('conclusion_text');
+    if (!container) {
+        return;
+    }
+    var html = '<p class="text_summary">' + message + '</p>';
+    if (callNumber) {
+        html += '<p class="text_summary" style="font-size: 3em; font-weight: bold;">' + callNumber + '</p>';
+    }
+    container.innerHTML = html;
+}
+
+
 document.addEventListener('DOMContentLoaded', function() {
     // Écoute de l'événement htmx:afterSwap sur le document
     document.body.addEventListener('htmx:afterSwap', function(event) {
@@ -144,8 +203,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Vérifier si l'impression est demandée
                 if (printTicket !== "False") {
                     console.log("Données d'impression récupérées :", printData);
-                    // Point d'entrée unique, partagé avec la réimpression.
-                    sendPrintTicket(printData);
+                    var printJobId = printDataElement.getAttribute('data-print-job-id');
+                    // Point d'entrée unique, partagé avec la réimpression. On
+                    // confirme ensuite le résultat au serveur : c'est cette
+                    // confirmation qui active (ou annule) l'inscription pending.
+                    sendPrintTicket(printData).then(function(result) {
+                        confirmPrintResult(printJobId, result);
+                    });
                 } else {
                     console.log("Pas d'impression demandée");
                 }

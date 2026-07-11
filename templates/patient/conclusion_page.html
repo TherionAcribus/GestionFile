@@ -55,7 +55,7 @@
 
 </div>
 
-<div id="print_data" print-ticket="{{ print_ticket }}" data-print="{{ print_data | escape }}" style="display: none;"></div>
+<div id="print_data" print-ticket="{{ print_ticket }}" data-print="{{ print_data | escape }}" data-print-job-id="{{ print_job_id if print_job_id else '' }}" data-call-number="{{ call_number }}" style="display: none;"></div>
 
 <script>
 

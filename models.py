@@ -157,6 +157,11 @@ class Patient(db.Model):
     # ajout d'une référence à Language
     language_id = db.Column(db.Integer, db.ForeignKey('language.id', name='fk_patient_language_id'), nullable=True)
     language = db.relationship('Language', backref=db.backref('patients', lazy=True))
+    # Identifiant du travail d'impression : corrèle une inscription (créée en
+    # status='pending') avec le résultat d'impression renvoyé par la Borne via
+    # /patient/confirm_print. NULL pour les patients créés hors flux impression
+    # (scan, création manuelle). Unique pour servir de clé d'idempotence.
+    print_job_id = db.Column(db.String(64), nullable=True, unique=True, index=True)
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'

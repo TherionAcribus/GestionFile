@@ -2,7 +2,7 @@ import os
 import threading
 import qrcode
 from flask import Blueprint, url_for, request, session, current_app as app, jsonify, has_request_context
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlalchemy import and_
 from cryptography.fernet import Fernet
 from google.cloud import texttospeech
@@ -343,27 +343,83 @@ def patient_overtaken(next_patient):
         db.session.commit()
 
 
-def add_patient(call_number, activity):
-    """ CRéation d'un nouveau patient et ajout à la BDD"""
+def add_patient(call_number, activity, status='standing', print_job_id=None):
+    """ CRéation d'un nouveau patient et ajout à la BDD.
+
+    status='standing' : patient immédiatement dans la file (scan, création
+    directe). status='pending' : inscription en attente de confirmation
+    d'impression (voir register_pending_patient / activate_patient)."""
     language_code = session.get('language_code', 'fr')
     language = Language.query.filter_by(code=language_code).first()
     # Vérifier que la langue existe, sinon utiliser une langue par défaut
     if not language:
-        language = Language.query.filter_by(code='fr').first()  
+        language = Language.query.filter_by(code='fr').first()
 
     # Création d'un nouvel objet Patient
     new_patient = Patient(
         call_number= call_number,  # Vous devez définir cette fonction pour générer le numéro d'appel
         activity = activity,
         timestamp=datetime.now(time_tz),
-        status='standing',
-        language_id=language.id
-    )    
+        status=status,
+        language_id=language.id,
+        print_job_id=print_job_id
+    )
     # Ajout à la base de données
     db.session.add(new_patient)
     db.session.commit()  # Enregistrement des changements dans la base de données
 
     return new_patient
+
+
+# Durée de vie par défaut (secondes) d'une inscription 'pending' non confirmée.
+# Au-delà, elle est considérée abandonnée (borne fermée, JS en échec, patient
+# parti) et purgée. Elle n'a jamais rejoint la file, donc sa suppression ne
+# nécessite aucune diffusion temps réel.
+PENDING_PATIENT_TTL_SECONDS = 180
+
+
+def expire_stale_pending_patients(ttl_seconds=None):
+    """ Purge les inscriptions 'pending' jamais confirmées et trop anciennes.
+
+    Appelée paresseusement à chaque nouvelle inscription : robuste sans
+    dépendre d'un ordonnanceur (fonctionne quel que soit le rôle du process)."""
+    if ttl_seconds is None:
+        ttl_seconds = app.config.get("PENDING_PATIENT_TTL_SECONDS", PENDING_PATIENT_TTL_SECONDS)
+    cutoff = datetime.now(time_tz) - timedelta(seconds=ttl_seconds)
+    stale = Patient.query.filter(
+        Patient.status == 'pending',
+        Patient.timestamp < cutoff
+    ).all()
+    for patient in stale:
+        db.session.delete(patient)
+    if stale:
+        db.session.commit()
+        print(f"{len(stale)} inscription(s) pending expirée(s) purgée(s)")
+    return len(stale)
+
+
+def register_pending_patient(activity, print_job_id):
+    """ Crée une inscription EN ATTENTE (hors file) avant impression locale.
+
+    Contrairement à register_patient, on n'appelle NI auto_calling NI
+    communikation : le patient n'entre dans la file qu'après confirmation de
+    l'impression (activate_patient). Cela évite d'ajouter un patient qui ne
+    recevra jamais de ticket."""
+    expire_stale_pending_patients()
+    call_number = get_next_call_number(activity)
+    new_patient = add_patient(call_number, activity, status='pending', print_job_id=print_job_id)
+    return new_patient
+
+
+def activate_patient(patient):
+    """ Fait passer une inscription 'pending' dans la file (status='standing')
+    puis déclenche l'appel automatique et la diffusion temps réel. À appeler une
+    fois l'impression confirmée réussie (ou conservée malgré l'échec)."""
+    patient.status = 'standing'
+    db.session.commit()
+    app.auto_calling()
+    communikation("update_patient")
+    return patient
 
 def get_next_call_number(activity):
     """ Récupérer le numéro d'appel en fonction de la méthode choisie"""

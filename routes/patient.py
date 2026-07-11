@@ -1,8 +1,10 @@
+import uuid
+import datetime
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, Response, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
-from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
+from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, create_qr_code
 from communication import communikation, send_app_notification
 
 patient_bp = Blueprint('patient', __name__)
@@ -221,26 +223,47 @@ def patient_scan_and_validate():
 
 def patient_return_validation_page_and_print_data(print_ticket):
     """ Fournit le template pour la page conclusion et les données d'impressions
-    Les données d'impression sont fournies dans tous les cas, mais utilisées selon l'ordre d'impression. 
-    Le but est de pouvoir réimprimer facilement, même si on a choisi Scan au départ."""
+    Les données d'impression sont fournies dans tous les cas, mais utilisées selon l'ordre d'impression.
+    Le but est de pouvoir réimprimer facilement, même si on a choisi Scan au départ.
+
+    Mode impression (print_ticket=True) : l'inscription est créée EN ATTENTE
+    (status='pending', hors file) avec un print_job_id. Le patient n'entre
+    réellement dans la file qu'après confirmation de l'impression, via
+    /patient/confirm_print (voir confirm_print). Ainsi un patient n'est jamais
+    ajouté sans avoir reçu de ticket, et la page ne « valide » plus à l'aveugle.
+
+    Mode scan (print_ticket=False) : pas d'impression locale, donc inscription
+    immédiate dans la file (comportement inchangé)."""
 
     # Récupération et traitement des données comme avant
     activity_id = request.form.get('activity_id')
     activity = Activity.query.get(activity_id)
-    new_patient = register_patient(activity)
+
+    if print_ticket:
+        # Inscription en attente : elle sera activée à la confirmation d'impression.
+        print_job_id = str(uuid.uuid4())
+        new_patient = register_pending_patient(activity, print_job_id)
+    else:
+        # Scan : aucune impression, on active immédiatement (inchangé).
+        print_job_id = None
+        new_patient = register_patient(activity)
+
     print_data = format_ticket_text(new_patient, activity)
     print("print_data", print_data)
 
-    # Gestion des notifications si nécessaire
-    if activity.notification:
+    # Notification "nouveau patient" : uniquement quand il rejoint réellement la
+    # file. En mode impression, elle est différée jusqu'à l'activation (cf.
+    # confirm_print) pour ne pas annoncer un patient qui pourrait être annulé.
+    if activity.notification and not print_ticket:
         send_app_notification(origin="activity", data={"patient": new_patient, "activity": activity})
 
     if 'HX-Request' in request.headers:
         # Requête provenant de HTMX
         # Rendre le template de la page de conclusion
         html_content = patient_conclusion_page(new_patient.call_number,
-                                                print_ticket=print_ticket, 
-                                                print_data=print_data)
+                                                print_ticket=print_ticket,
+                                                print_data=print_data,
+                                                print_job_id=print_job_id)
 
         # Inclure les données d'impression dans un en-tête HX-Trigger si nécessaire (voir plus bas)
         response = make_response(html_content)
@@ -248,6 +271,93 @@ def patient_return_validation_page_and_print_data(print_ticket):
     else:
         # Redirection traditionnelle si pas de requête AJAX
         return redirect(url_for('patient.patient_conclusion_page', call_number=new_patient.call_number))
+
+
+def _alert_staff_print_failure(patient, code, message):
+    """ Signale au personnel qu'un ticket n'a pas pu être imprimé pour un
+    patient donné (notification comptoir + trace dans le tableau de bord
+    imprimante)."""
+    detail = f"Ticket non imprimé pour le patient {patient.call_number} ({code or 'inconnu'})"
+    try:
+        send_app_notification(origin="printer_error", data={"message": detail})
+    except Exception as e:
+        app.logger.error(f"Alerte personnel (impression) impossible: {e}")
+
+    # Trace horodatée dans le tableau de bord imprimante du staff.
+    try:
+        timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
+        infos = app.config.get("PRINTER_INFOS")
+        if infos is not None:
+            if len(infos) >= 10:
+                infos.pop(0)
+            infos.append({'error': True, 'message': detail, 'timestamp': timestamp})
+            communikation("admin", event="refresh_printer_dashboard")
+    except Exception as e:
+        app.logger.error(f"Journalisation dashboard imprimante impossible: {e}")
+
+
+@patient_bp.route('/patient/confirm_print', methods=['POST'])
+def confirm_print():
+    """ Confirme au serveur le résultat de l'impression locale d'un ticket.
+
+    Appelée par la Borne (patients.js) après l'appel à l'API d'impression. Selon
+    le résultat, active l'inscription pending (succès) ou l'annule/la conserve
+    (échec, selon le flag PAGE_PATIENT_KEEP_ON_PRINT_FAIL).
+
+    Idempotente : un second appel pour un patient déjà traité renvoie son état
+    courant sans rien ré-exécuter."""
+    data = request.get_json(silent=True) or request.form
+    print_job_id = data.get('print_job_id')
+    success = data.get('success')
+    # Tolère bool JSON, "true"/"false" (form), etc.
+    if isinstance(success, str):
+        success = success.lower() in ('true', '1', 'yes', 'on')
+    else:
+        success = bool(success)
+    code = data.get('code')
+    message = data.get('message')
+
+    if not print_job_id:
+        return jsonify({'status': 'error', 'reason': 'missing_print_job_id'}), 400
+
+    patient = Patient.query.filter_by(print_job_id=print_job_id).first()
+    if patient is None:
+        # Inconnu ou déjà purgé (inscription pending expirée).
+        return jsonify({'status': 'expired'}), 410
+
+    # Déjà confirmé : idempotence (renvoi réseau, double appel...).
+    if patient.status != 'pending':
+        return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
+
+    if success:
+        activate_patient(patient)
+        # Notification "nouveau patient" différée jusqu'à l'entrée réelle en file.
+        if patient.activity and patient.activity.notification:
+            send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})
+        return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200
+
+    # Échec d'impression : comportement piloté par la configuration.
+    keep = app.config.get("PAGE_PATIENT_KEEP_ON_PRINT_FAIL", False)
+    _alert_staff_print_failure(patient, code, message)
+    if keep:
+        # On conserve le patient dans la file malgré l'absence de ticket.
+        activate_patient(patient)
+        if patient.activity and patient.activity.notification:
+            send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})
+        return jsonify({
+            'status': 'activated_no_ticket',
+            'call_number': patient.call_number,
+            'keep': True
+        }), 200
+    else:
+        # On annule l'inscription : pas de ticket => pas de patient dans la file.
+        patient.status = 'print_failed'
+        db.session.commit()
+        return jsonify({
+            'status': 'cancelled',
+            'call_number': patient.call_number,
+            'keep': False
+        }), 200
         
 
 def patient_validate_scan(activity_id):
@@ -274,7 +384,7 @@ def cancel_patient():
     
 
 @patient_bp.route('/patient/conclusion_page/<call_number>')
-def patient_conclusion_page(call_number, print_ticket, print_data=None):
+def patient_conclusion_page(call_number, print_ticket, print_data=None, print_job_id=None):
     print("CONFIG QRCODE CONCLUSION:", app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     image_name_qr = f"qr_patient-{call_number}.png" 
 
@@ -298,6 +408,7 @@ def patient_conclusion_page(call_number, print_ticket, print_data=None):
                         page_patient_interface_done_back=choose_text_translation("page_patient_interface_done_back"),
                         print_data=print_data,
                         print_ticket=print_ticket,
+                        print_job_id=print_job_id,
                         reprint=reprint
                         )
 

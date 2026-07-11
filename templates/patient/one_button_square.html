@@ -11,9 +11,10 @@
                         hx-target="#div_buttons_parents"
                 {% else %}
                         hx-target="#div_buttons_children"
-                {% endif %}>
+                {% endif %}
+                hx-sync="this:drop">
 
-                        <div class="div_square_buttons 
+                        <div class="div_square_buttons
                                 {% if button.image_url %} grid_square_buttons {% endif %}
                                 ">
                                 {% if button.image_url %}

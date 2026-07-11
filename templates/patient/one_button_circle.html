@@ -10,6 +10,7 @@
                 {% else %}
                         hx-target="#div_buttons_children"
                 {% endif %}
+                hx-sync="this:drop"
         >
                 <div class="div_circle_buttons {% if button.is_active %} div_button_active {% else %} div_button_inactive {% endif %}">
                         <img class="img_btn {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}" 
