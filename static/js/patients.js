@@ -79,6 +79,52 @@ function refresh_title(){
 }
 
 
+// Point d'entrée UNIQUE pour l'impression, partagé entre la première
+// impression (htmx:afterSwap ci-dessous) et la réimpression
+// (conclusion_page.html). La Borne expose l'API sous
+// window.pywebview.api.printer.print_ticket — et non window.pywebview.api.print_ticket.
+// Le contrat de retour est { success, code, message } (voir printer.py).
+var _printInProgress = false;
+
+function sendPrintTicket(printData) {
+    // Protection contre les clics/déclenchements répétés : tant qu'une
+    // impression est en cours, toute nouvelle demande est ignorée pour éviter
+    // les doubles tickets.
+    if (_printInProgress) {
+        console.warn("Impression déjà en cours, demande ignorée.");
+        return Promise.resolve({ success: false, code: 'busy', message: 'Impression déjà en cours' });
+    }
+
+    if (!printData) {
+        console.error("Les données d'impression ne sont pas disponibles.");
+        return Promise.resolve({ success: false, code: 'no_data', message: "Données d'impression indisponibles" });
+    }
+
+    if (!(window.pywebview && window.pywebview.api && window.pywebview.api.printer)) {
+        console.error("L'API PyWebView (printer) n'est pas disponible.");
+        return Promise.resolve({ success: false, code: 'no_api', message: "API d'impression indisponible" });
+    }
+
+    _printInProgress = true;
+    return window.pywebview.api.printer.print_ticket(printData)
+        .then(function(result) {
+            if (result && result.success) {
+                console.log("Impression réussie:", result.message);
+            } else {
+                console.error("Échec de l'impression:", result ? result.message : result);
+            }
+            return result;
+        })
+        .catch(function(error) {
+            console.error("Erreur lors de l'impression:", error);
+            return { success: false, code: 'exception', message: String(error) };
+        })
+        .finally(function() {
+            _printInProgress = false;
+        });
+}
+
+
 document.addEventListener('DOMContentLoaded', function() {
     // Écoute de l'événement htmx:afterSwap sur le document
     document.body.addEventListener('htmx:afterSwap', function(event) {
@@ -97,28 +143,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Vérifier si l'impression est demandée
                 if (printTicket !== "False") {
-                    if (printData) {
-                        console.log("Données d'impression récupérées :", printData);
-
-                        // Vérifier que l'API PyWebView est disponible
-                        if (window.pywebview && window.pywebview.api) {
-                            window.pywebview.api.printer.print_ticket(printData)
-                                .then(function(result) {
-                                    if (result.success) {
-                                        console.log("Impression réussie:", result.message);
-                                    } else {
-                                        console.error("Échec de l'impression:", result.message);
-                                    }
-                                })
-                                .catch(function(error) {
-                                    console.error("Erreur lors de l'impression:", error);
-                                });
-                        } else {
-                            console.error("L'API PyWebView n'est pas disponible.");
-                        }
-                    } else {
-                        console.error("Les données d'impression ne sont pas disponibles.");
-                    }
+                    console.log("Données d'impression récupérées :", printData);
+                    // Point d'entrée unique, partagé avec la réimpression.
+                    sendPrintTicket(printData);
                 } else {
                     console.log("Pas d'impression demandée");
                 }

@@ -125,37 +125,38 @@
 
 
     function handlePrintButtonClick() {
-    // Récupérer les données d'impression
-    var printDataElement = document.getElementById('print_data');
-    if (printDataElement) {
+        // Récupérer les données d'impression
+        var printDataElement = document.getElementById('print_data');
+        if (!printDataElement) {
+            console.error("L'élément print_data est introuvable.");
+            return;
+        }
         var printData = printDataElement.getAttribute('data-print');
-        var printTicket = printDataElement.getAttribute('print-ticket');
 
-        if (printData) {
-            console.log("Données d'impression prêtes à être envoyées :", printData);
+        // sendPrintTicket est défini dans patients.js et constitue le point
+        // d'entrée UNIQUE partagé avec la première impression. On l'utilise ici
+        // pour la réimpression (l'ancien appel window.pywebview.api.print_ticket
+        // était erroné : l'API est exposée sous ...api.printer.print_ticket).
+        if (typeof sendPrintTicket !== 'function') {
+            console.error("La fonction d'impression centralisée est indisponible.");
+            return;
+        }
 
-            // Vérifier si l'API PyWebView est disponible
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebview.api.print_ticket(printData)
-                    .then(function(result) {
-                        if (result.success) {
-                            console.log("Réimpression réussie:", result.message);
-                        } else {
-                            console.error("Échec de la réimpression:", result.message);
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error("Erreur lors de la réimpression:", error);
-                    });
-            } else {
-                console.error("L'API PyWebView n'est pas disponible pour la réimpression.");
-            }
-        } else {
-            console.error("Les données d'impression ne sont pas disponibles.");
-        }            
-    } else {
-        console.error("L'élément print_data est introuvable.");
+        // Protection contre les clics répétés : on neutralise visuellement le
+        // bouton le temps de l'impression pour éviter les doubles tickets.
+        if (printBtn.dataset.printing === 'true') {
+            return;
+        }
+        printBtn.dataset.printing = 'true';
+        printBtn.style.pointerEvents = 'none';
+        printBtn.style.opacity = '0.6';
+
+        console.log("Données de réimpression prêtes à être envoyées :", printData);
+        sendPrintTicket(printData).finally(function() {
+            printBtn.dataset.printing = 'false';
+            printBtn.style.pointerEvents = '';
+            printBtn.style.opacity = '';
+        });
     }
-}      
 
 </script>
