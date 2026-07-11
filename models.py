@@ -133,6 +133,16 @@ class User(db.Model, UserMixin):
         self.active = True  # Activer l'utilisateur lors de la définition du mot de passe
 
 class Patient(db.Model):
+    __table_args__ = (
+        # La file est reconstruite à chaque mutation via un filtre status=...
+        # (le plus souvent 'standing'), fréquemment suivi d'un ORDER BY timestamp
+        # (liste pyside, sélection du prochain patient, affichages comptoir).
+        # La colonne de tête (status) sert aussi les filtres status=? / IN (...).
+        db.Index('ix_patient_status_timestamp', 'status', 'timestamp'),
+        # Requêtes propres à un comptoir : WHERE counter_id=? AND status ...
+        # (validate_and_call_next, validate_current_patient, boutons comptoir).
+        db.Index('ix_patient_counter_status', 'counter_id', 'status'),
+    )
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
