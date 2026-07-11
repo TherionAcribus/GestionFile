@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     socket.on('reconnect', function(attempt) {
         console.log('WebSocket reconnected after', attempt, 'attempts');
+        // Rattrape les mises à jour manquées pendant la coupure.
+        refresh_buttons();
+        safeTrigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});
+        safeTrigger("#patient_on_queue", 'refresh_queue', {target: "#patient_on_queue"});
     });
 
     socket.on('reconnect_attempt', function(attempt) {
@@ -67,6 +71,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     counterSocket.on('reconnect', function(attempt) {
         console.log('Counter WebSocket reconnected after', attempt, 'attempts');
+        // Rattrape les mises à jour manquées pendant la coupure.
+        refresh_buttons();
+        refresh_paper();
+        refresh_auto_calling();
     });
 
     counterSocket.on('reconnect_attempt', function(attempt) {

@@ -42,6 +42,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     patientSocket.on('reconnect', function(attempt) {
         console.log('Patient WebSocket reconnected after', attempt, 'attempts');
+        // SocketIO ne rejoue pas les évènements manqués pendant la coupure :
+        // on rattrape l'état (boutons/titre) au lieu de compter sur le
+        // prochain évènement poussé, qui peut ne jamais arriver si rien ne
+        // change côté serveur entretemps.
+        refresh_buttons();
+        refresh_title();
     });
 
     patientSocket.on('reconnect_attempt', function(attempt) {

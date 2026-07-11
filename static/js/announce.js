@@ -29,6 +29,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     generalSocket.on('reconnect', function(attempt) {
         console.log('General WebSocket reconnected after', attempt, 'attempts');
+        // Rattrape les mises à jour manquées pendant la coupure (cet écran
+        // tourne sans surveillance, une coupure passée inaperçue le laisserait
+        // figé indéfiniment sinon).
+        refresh_calling_list();
     });
 
     generalSocket.on('reconnect_attempt', function(attempt) {
@@ -103,6 +107,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     screenSocket.on('reconnect', function(attempt) {
         console.log('Screen WebSocket reconnected after', attempt, 'attempts');
+        // Cet écran affiche un état ponctuel (bannières d'appel en cours) sans
+        // endpoint de resynchronisation dédié : un rechargement complet est le
+        // moyen le plus sûr de rattraper ce qui a pu être manqué pendant la
+        // coupure. Même mécanisme que l'évènement "refresh" existant.
+        refresh_page();
     });
 
     screenSocket.on('reconnect_attempt', function(attempt) {

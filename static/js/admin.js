@@ -30,6 +30,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     generalSocket.on('reconnect', function(attempt) {
         console.log('General WebSocket reconnected after', attempt, 'attempts');
+        // Rattrape les mises à jour manquées pendant la coupure.
+        refresh_queue();
     });
 
     generalSocket.on('reconnect_attempt', function(attempt) {
@@ -132,6 +134,14 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     adminSocket.on('reconnect', function(attempt) {
         console.log('Admin WebSocket reconnected after', attempt, 'attempts');
+        // Rattrape les mises à jour manquées pendant la coupure pour les
+        // widgets "glanceable" du dashboard (état affiché sans action de
+        // l'admin). Les actions ponctuelles (édition de couleurs, galeries,
+        // ordre des boutons...) ne sont pas concernées : rien à "manquer" côté
+        // état pour elles, l'admin est de toute façon en train d'y interagir.
+        refresh_counter_dashboard();
+        refresh_printer_dashboard();
+        refresh_schedule_tasks_list();
     });
 
     adminSocket.on('reconnect_attempt', function(attempt) {
