@@ -12,3 +12,9 @@ out/*.*
 temp_google_credentials.json
 instance/flask_secret_key.txt
 instance/security_password_salt.txt
+
+# Bases de données SQLite (contiennent comptes, hashes, IP, config, patients)
+*.db
+*.sqlite
+*.sqlite3
+instance/*.db
