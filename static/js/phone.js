@@ -1,6 +1,41 @@
 document.addEventListener('DOMContentLoaded', (event) => {
     // Configuration du socket - on le déclare en dehors pour y avoir accès partout
     let phoneSocket = null;
+    // Évite un double affichage si l'évènement socket et la vérification de
+    // statut arrivent tous les deux peu après coup.
+    let yourTurnShown = false;
+
+    // Affiche l'écran "c'est votre tour" (vibration + swap HTMX de la div infos)
+    function showYourTurn() {
+        if (yourTurnShown) {
+            return;
+        }
+        yourTurnShown = true;
+
+        if ('vibrate' in navigator) {
+            navigator.vibrate([200, 100, 200]);
+        }
+
+        // Récupérer la div HTMX et ses données
+        const infosDiv = document.getElementById('div_infos');
+
+        // Créer un FormData pour envoyer les données
+        const formData = new FormData();
+        formData.append('activity_id', infosDiv.getAttribute('data-activity-id'));
+        formData.append('language_code', infosDiv.getAttribute('data-language-code'));
+        console.log('Activity ID:', infosDiv.getAttribute('data-activity-id'));
+
+        // Utiliser fetch au lieu de htmx.ajax pour débugger
+        fetch('/patient/phone/your_turn', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(html => {
+            infosDiv.outerHTML = html;
+        })
+        .catch(error => console.error('Error:', error));
+    }
 
     // Fonction pour initialiser le socket avec le call_number
     function initSocket(callNumber) {
@@ -15,49 +50,43 @@ document.addEventListener('DOMContentLoaded', (event) => {
         var domain = window.location.host;
         var baseUrl = socketProtocol + domain;
 
-        phoneSocket = io.connect(baseUrl + '/socket_phone', { 
+        phoneSocket = io.connect(baseUrl + '/socket_phone', {
             query: {
                 username: 'phone',
                 call_number: callNumber
             }
         });
 
+        // 'connect' se redéclenche à chaque reconnexion automatique du client
+        // Socket.IO (reconnection activée par défaut), pas seulement à la
+        // connexion initiale : on en profite pour rattraper une notification
+        // "your_turn" manquée pendant la coupure (fréquent sur mobile :
+        // verrouillage d'écran, bascule wifi/4G, mise en arrière-plan). Sans
+        // ça, un patient dont le téléphone a été brièvement déconnecté au
+        // mauvais moment ne saurait jamais que c'est son tour.
         phoneSocket.on('connect', function() {
             console.log('Phone WebSocket connected');
             console.log('Call number:', callNumber);
             console.log('Socket URI:', phoneSocket.io.uri);
+
+            fetch('/patient/phone/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'calling' && data.call_number === callNumber) {
+                        console.log('Statut "calling" détecté au (re)connect');
+                        showYourTurn();
+                    }
+                })
+                .catch(error => console.error('Erreur lors de la vérification du statut:', error));
         });
 
 
         phoneSocket.on('your_turn', function(msg) {
             console.log('YOUR TURN received:', msg);
-            
+
             if (msg.call_number === callNumber) {
                 console.log('This is our turn!');
-                
-                if ('vibrate' in navigator) {
-                    navigator.vibrate([200, 100, 200]);
-                }
-
-                // Récupérer la div HTMX et ses données
-                const infosDiv = document.getElementById('div_infos');
-                
-                // Créer un FormData pour envoyer les données
-                const formData = new FormData();
-                formData.append('activity_id', infosDiv.getAttribute('data-activity-id'));
-                formData.append('language_code', infosDiv.getAttribute('data-language-code'));
-                console.log('Activity ID:', infosDiv.getAttribute('data-activity-id'));
-
-                // Utiliser fetch au lieu de htmx.ajax pour débugger
-                fetch('/patient/phone/your_turn', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.text())
-                .then(html => {
-                    infosDiv.outerHTML = html;
-                })
-                .catch(error => console.error('Error:', error));
+                showYourTurn();
             }
         });
 

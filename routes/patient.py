@@ -1,5 +1,5 @@
 import markdown2
-from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, Response, current_app as app
+from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, Response, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, create_qr_code
@@ -341,6 +341,26 @@ def phone_patient(language_code, patient_id, activity_id):
                             patient_id=patient_id, 
                             activity_id=activity_id,
                             language_code=language_code)
+
+
+@patient_bp.route('/patient/phone/status', methods=['GET'])
+def phone_patient_status():
+    """ Permet au téléphone du patient de vérifier son statut réel.
+
+    Utilisé au (re)connect du WebSocket pour rattraper une notification
+    "your_turn" manquée pendant une coupure (SocketIO ne rejoue pas les
+    évènements manqués -- fréquent sur mobile : verrouillage d'écran,
+    bascule wifi/4G, mise en arrière-plan du navigateur).
+    """
+    patient_id = request.cookies.get('patient_id')
+    if not patient_id:
+        return jsonify({"status": None}), 200
+
+    patient = Patient.query.get(patient_id)
+    if not patient:
+        return jsonify({"status": None}), 200
+
+    return jsonify({"status": patient.status, "call_number": patient.call_number}), 200
 
 
 @patient_bp.route('/patient/phone/ping', methods=['POST'])
