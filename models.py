@@ -99,15 +99,14 @@ class User(db.Model, UserMixin):
 
     def verify_password(self, password):
         from flask import current_app as app
-        app.logger.info(f"=== Vérification du mot de passe pour {self.username} ===")
-        app.logger.info(f"Hash stocké en base: {self.password}")
+        app.logger.debug(f"Vérification du mot de passe pour {self.username}")
 
         stored_hash = self.password or ""
 
         # Première tentative : formats gérés par Werkzeug (pbkdf2, scrypt, etc.)
         try:
             result = check_password_hash(stored_hash, password)
-            app.logger.info(f"Résultat de la vérification (Werkzeug): {result}")
+            app.logger.debug(f"Résultat de la vérification (Werkzeug): {result}")
             return result
         except ValueError as e:
             # Si le format n'est pas reconnu par Werkzeug (ex : bcrypt)
@@ -117,7 +116,7 @@ class User(db.Model, UserMixin):
         try:
             if stored_hash.startswith(("$2b$", "$2a$", "$2y$")):
                 result = bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
-                app.logger.info(f"Résultat de la vérification (bcrypt): {result}")
+                app.logger.debug(f"Résultat de la vérification (bcrypt): {result}")
                 return result
         except Exception as e:
             app.logger.error(f"Erreur lors de la vérification bcrypt: {e}")
@@ -127,10 +126,9 @@ class User(db.Model, UserMixin):
 
     def set_password(self, password):
         from flask import current_app as app
-        app.logger.info(f"=== Définition du mot de passe pour {self.username} ===")
+        app.logger.debug(f"Définition du mot de passe pour {self.username}")
         # Utilise bcrypt par défaut pour rester cohérent avec Flask-Security
         self.password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-        app.logger.info(f"Nouveau hash généré (bcrypt): {self.password}")
         self.active = True  # Activer l'utilisateur lors de la définition du mot de passe
 
 class Patient(db.Model):

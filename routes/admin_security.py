@@ -177,8 +177,6 @@ def add_new_user():
         )
         user.set_password(password1)
         user.roles.append(role)
-        
-        app.logger.info(f"Hash du mot de passe pour le nouvel utilisateur: {user.password}")
 
         db.session.add(user)
         db.session.commit()
@@ -361,9 +359,8 @@ def login():
             app.display_toast(success=False, message="Nom d'utilisateur inconnu")
             return render_template('security/login.html', form=form)
             
-        app.logger.info(f"Hash stocké pour {user.username}: {user.password}")
-        app.logger.info(f"Tentative de connexion avec mot de passe: {form.password.data}")
-        
+        app.logger.info(f"Tentative de connexion pour {user.username}")
+
         if not user.verify_password(form.password.data):
             app.logger.error("Mot de passe incorrect")
             app.display_toast(success=False, message="Mot de passe incorrect")
@@ -773,8 +770,7 @@ def create_default_user():
                 confirmed_at=datetime.now()
             )
             admin_user.set_password('admin')
-            print(f"Hash du mot de passe admin: {admin_user.password}")
-            
+
             # Attribution du rôle admin
             admin_role = Role.query.filter_by(name='admin').first()
             admin_user.roles.append(admin_role)
