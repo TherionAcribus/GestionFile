@@ -57,7 +57,7 @@ from auth_utils import is_authenticated_request, require_app_token_or_login
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_staff_data_from_json, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
-from python.engine import generate_audio_calling, call_next, counter_become_inactive, counter_become_active
+from python.engine import call_next, counter_become_inactive, counter_become_active, trigger_async_audio_calling
 from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
 from backup import backup_databases
 from routes.admin_backup import admin_backup_bp
@@ -1335,8 +1335,7 @@ def call_specific_patient_action(counter_id, patient_id):
     communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
 
     language_code = next_patient.language.code
-    audio_url = generate_audio_calling(counter_id, next_patient, language_code)
-    communikation("update_audio", event="audio", data=audio_url)
+    trigger_async_audio_calling(counter_id, next_patient.id, language_code)
 
     return True, next_patient.to_dict(), 200
 

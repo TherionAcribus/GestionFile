@@ -1,6 +1,7 @@
 import os
+import threading
 import qrcode
-from flask import Blueprint, url_for, request, session, current_app as app, jsonify
+from flask import Blueprint, url_for, request, session, current_app as app, jsonify, has_request_context
 from datetime import datetime, date
 from sqlalchemy import and_
 from cryptography.fernet import Fernet
@@ -13,6 +14,13 @@ from config import time_tz
 from auth_utils import require_app_token_or_login
 
 engine_bp = Blueprint('engine', __name__)
+
+# Timeout (secondes) sur les appels réseau vers les services de synthèse
+# vocale externes (gTTS / Google Cloud TTS). Ils tournent désormais en tâche
+# de fond (cf. trigger_async_audio_calling), donc ce timeout ne bloque plus
+# jamais l'appel du patient suivant -- il évite juste qu'un thread de fond
+# reste accroché indéfiniment si le service externe ne répond plus.
+TTS_TIMEOUT_SECONDS = 8
 
 
 @engine_bp.route('/call_next/<int:counter_id>', methods=['GET', 'POST'])
@@ -72,8 +80,7 @@ def call_next(counter_id, attempts=0):
 
         language_code = next_patient.language.code
         print("language_code_pour_audio", language_code)
-        audio_url = generate_audio_calling(counter_id, next_patient, language_code=language_code)
-        communikation("update_audio", event="audio", data=audio_url)
+        trigger_async_audio_calling(counter_id, next_patient.id, language_code)
 
         notify_patient_phone(next_patient.call_number)
 
@@ -83,6 +90,37 @@ def call_next(counter_id, attempts=0):
         db.session.rollback()
         app.logger.error(f"Error updating patient status: {str(e)}")
         return call_next(counter_id, attempts=attempts+1)
+
+
+def trigger_async_audio_calling(counter_id, patient_id, language_code):
+    """ Lance la génération + diffusion du son d'appel en tâche de fond.
+
+    Ne doit jamais retarder l'appel du patient suivant : la génération TTS
+    (gTTS ou Google Cloud TTS) dépend d'un aller-retour réseau vers un service
+    externe, potentiellement lent ou indisponible. Dégradation attendue en cas
+    d'échec/lenteur : pas de son diffusé, mais le ticket a déjà avancé.
+    """
+    flask_app = app._get_current_object()
+    # Capturé pendant qu'on est encore dans la requête HTTP d'origine : le
+    # thread de fond n'aura pas de contexte de requête, mais url_for(_external=True)
+    # (utilisé pour construire l'URL du mp3) en a besoin pour connaître l'hôte.
+    base_url = request.host_url if has_request_context() else None
+
+    def _worker():
+        with flask_app.app_context(), flask_app.test_request_context(base_url=base_url):
+            try:
+                patient = Patient.query.get(patient_id)
+                if not patient:
+                    return
+                audio_url = generate_audio_calling(counter_id, patient, language_code=language_code)
+                if audio_url:
+                    communikation("update_audio", event="audio", data=audio_url)
+            except Exception as e:
+                flask_app.logger.error(
+                    f"Génération/diffusion du son d'appel échouée pour le patient {patient_id}: {e}"
+                )
+
+    threading.Thread(target=_worker, daemon=True).start()
 
 
 def algo_choice_next_patient(counter_id):
@@ -430,7 +468,7 @@ def create_tts_sound(next_patient, text, language_code):
 
     lang = voice_gtts_name
 
-    tts = gTTS(text, lang=lang)  
+    tts = gTTS(text, lang=lang, timeout=TTS_TIMEOUT_SECONDS)
 
     # Chemin de sauvegarde du fichier audio
     audiofile = f'patient_{next_patient.call_number}.mp3'
@@ -498,7 +536,8 @@ def create_google_tts_sound(next_patient, text, language_code):
 
     # Effectuer la requête à l'API
     response = client.synthesize_speech(
-        input=synthesis_input, voice=voice, audio_config=audio_config
+        input=synthesis_input, voice=voice, audio_config=audio_config,
+        timeout=TTS_TIMEOUT_SECONDS
     )
 
     # Chemin de sauvegarde du fichier audio
