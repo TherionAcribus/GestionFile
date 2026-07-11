@@ -1575,21 +1575,29 @@ def validate_and_call_next(counter_id):
 
 
 def validate_current_patient(counter_id):
-    current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
-    if current_patient:
-        communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
-    
-    # si patient actuel
-    patients_at_counter = Patient.query.filter_by(counter_id=counter_id).all()
-    if patients_at_counter:
-        print("patient dans le comptoir")
-        # Mise à jour du statut et du timestamp_end pour tous les patients au comptoir
-        for patient in patients_at_counter:
-            patient.status = 'done'
-            patient.timestamp_end = datetime.now(time_tz)        
-        db.session.commit()
-    else:
+    # On ne traite QUE les patients réellement en cours à ce comptoir
+    # (calling / ongoing). Filtrer sur le statut évite de recharger et de
+    # réécrire tous les patients déjà "done" de la journée : sinon le coût
+    # devient quadratique au fil des appels et les anciens timestamp_end sont
+    # écrasés par l'heure du dernier appel (statistiques de durée faussées).
+    # On garde volontairement counter_id sur les patients terminés : les stats
+    # du jour regroupent les patients "done" par comptoir (routes/admin_stats).
+    active_patients = Patient.query.filter(
+        Patient.counter_id == counter_id,
+        Patient.status.in_(("calling", "ongoing")),
+    ).all()
+
+    if not active_patients:
         print("pas de patient")
+        return
+
+    now = datetime.now(time_tz)
+    for patient in active_patients:
+        if patient.status == "calling":
+            communikation("update_screen", event="remove_calling", data={"id": patient.id})
+        patient.status = 'done'
+        patient.timestamp_end = now
+    db.session.commit()
 
 
 @app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
