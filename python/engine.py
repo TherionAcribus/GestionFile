@@ -66,30 +66,51 @@ def call_next(counter_id, attempts=0):
         app.logger.info(f"No next patient found for counter {counter_id}")
         return False, "no_patient_for_counter"
 
-    if next_patient.status != "standing":
-        app.logger.info(f"Patient {next_patient.id} not standing, retrying. Attempt {attempts + 1}")
-        return call_next(counter_id, attempts=attempts+1)
-
-    language_code = next_patient.language.code
-    print("language_code_pour_audio", language_code)
+    # Réclamation ATOMIQUE du patient.
+    #
+    # Auparavant on lisait next_patient.status ('standing') puis on écrivait
+    # 'calling' dans une seconde étape : deux comptoirs pouvaient sélectionner le
+    # même patient avant que l'un des deux ne committe, se retrouver tous les deux
+    # avec le même patient, et le dernier commit écrasait le counter_id de l'autre.
+    #
+    # On fait désormais un UPDATE conditionnel « ... WHERE id=? AND status='standing' »
+    # dont on vérifie le rowcount : sous InnoDB (MySQL 8) comme sous SQLite, un seul
+    # des comptoirs concurrents verra claimed == 1 ; l'autre verra 0 et réessaiera
+    # avec le candidat suivant. La transition du patient ET l'activation du comptoir
+    # sont validées dans la MÊME transaction (un seul commit).
     try:
-        next_patient.status = 'calling'
-        next_patient.counter_id = counter_id
+        claimed = (
+            db.session.query(Patient)
+            .filter(Patient.id == next_patient.id, Patient.status == "standing")
+            .update(
+                {"status": "calling", "counter_id": counter_id},
+                synchronize_session=False,
+            )
+        )
+        if claimed:
+            db.session.query(Counter).filter(Counter.id == counter_id).update(
+                {"is_active": True}, synchronize_session=False
+            )
         db.session.commit()
-        app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
-
-        language_code = next_patient.language.code
-        print("language_code_pour_audio", language_code)
-        trigger_async_audio_calling(counter_id, next_patient.id, language_code)
-
-        notify_patient_phone(next_patient.call_number)
-
-        return True, next_patient
-
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error updating patient status: {str(e)}")
+        app.logger.error(f"Error claiming patient {next_patient.id}: {str(e)}")
         return call_next(counter_id, attempts=attempts+1)
+
+    if not claimed:
+        # Le patient a été réclamé par un autre comptoir entre-temps : on réessaie
+        # avec le candidat suivant.
+        app.logger.info(f"Patient {next_patient.id} already claimed by another counter, retrying. Attempt {attempts + 1}")
+        return call_next(counter_id, attempts=attempts+1)
+
+    # Après le commit, next_patient est expiré : le prochain accès recharge l'état
+    # committé (status='calling', counter_id renseigné).
+    app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
+
+    trigger_async_audio_calling(counter_id, next_patient.id, next_patient.language.code)
+    notify_patient_phone(next_patient.call_number)
+
+    return True, next_patient
 
 
 def trigger_async_audio_calling(counter_id, patient_id, language_code):

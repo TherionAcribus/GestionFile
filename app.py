@@ -54,6 +54,7 @@ from dotenv import load_dotenv
 from markupsafe import escape
 
 from auth_utils import is_authenticated_request, require_app_token_or_login
+from idempotency import idempotent
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_staff_data_from_json, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
@@ -1319,16 +1320,25 @@ def call_specific_patient_action(counter_id, patient_id):
     if not next_patient:
         return False, {"error": "not_found"}, 404
 
-    if next_patient.status != "standing":
+    # Réclamation atomique (même logique que call_next) : on ne passe le patient
+    # à 'calling' que si il est TOUJOURS 'standing' en base. Sans ça, deux
+    # comptoirs cliquant le même patient pouvaient tous deux le « décrocher ».
+    claimed = (
+        db.session.query(Patient)
+        .filter(Patient.id == patient_id, Patient.status == "standing")
+        .update({"status": "calling", "counter_id": counter_id}, synchronize_session=False)
+    )
+    if claimed:
+        db.session.query(Counter).filter(Counter.id == counter_id).update(
+            {"is_active": True}, synchronize_session=False
+        )
+    db.session.commit()
+
+    if not claimed:
         app.logger.info("Already called")
         send_app_notification(origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient})
         return False, {"error": "already_called"}, 423
 
-    next_patient.status = "calling"
-    next_patient.counter_id = counter_id
-    db.session.commit()
-
-    counter_become_active(counter_id)
     communikation("update_patient")
 
     text = replace_balise_announces(app.config["ANNOUNCE_CALL_TEXT"], next_patient)
@@ -1536,6 +1546,7 @@ def counter_refresh_buttons(counter_id):
 
 @app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
 @require_app_token_or_login
+@idempotent
 def validate_and_call_next(counter_id):
     print('validate_and_call_next', counter_id)
 

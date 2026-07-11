@@ -599,6 +599,23 @@ class DashboardCard(db.Model):
     def __repr__(self):
         return f'<DashboardCard {self.name}>'
     
+class IdempotencyKey(db.Model):
+    """ Mémorise la réponse associée à une clé d'idempotence pour rendre les
+    commandes non rejouables (ex. « appeler le suivant ») insensibles aux
+    renvois : un même X-Idempotency-Key renvoie la réponse mémorisée au lieu de
+    ré-exécuter l'action et de faire avancer la file deux fois. """
+    __tablename__ = 'idempotency_key'
+    key = db.Column(db.String(64), primary_key=True)
+    counter_id = db.Column(db.Integer, nullable=True)
+    status_code = db.Column(db.Integer, nullable=True)  # None tant que l'exécution est en cours
+    response_body = db.Column(db.Text, nullable=True)
+    content_type = db.Column(db.String(100), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
+
+    def __repr__(self):
+        return f'<IdempotencyKey {self.key} ({self.status_code})>'
+
+
 class JobExecutionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.String(50))
