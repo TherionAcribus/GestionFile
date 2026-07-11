@@ -64,7 +64,7 @@ from routes.admin_backup import admin_backup_bp
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from bdd import init_database
 from config import Config, time_tz
-from communication import send_app_notification, start_rabbitmq_consumer, communikation
+from communication import send_app_notification, communikation
 from variables import MultiCssVariableManager
 from css_manager import CSSManager
 
@@ -95,8 +95,6 @@ from routes.pyside import pyside_bp, create_patients_list_for_pyside
 from routes.home import home_bp
 from python.engine import engine_bp
 from routes.admin_security import require_permission, require_permission_dashboard
-
-communication_mode = "websocket"  # websocket, sse or rabbitmq
 
 database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
@@ -129,7 +127,6 @@ def load_configuration(app):
         "network_adress": ("NETWORK_ADRESS", "value_str"),
         "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
         "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
-        "use_rabbitmq": ("USE_RABBITMQ", "value_bool"),
         "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
         "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
         "printer": ("PRINTER", "value_bool"),
@@ -333,10 +330,6 @@ def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_
         app.css_manager = CSSManager()
         app.css_manager.init_app(app)
 
-        # désactiver la possibilité d'utiliser rabbitMQ s'il n'est pas lancé
-        if not app.config.get("START_RABBITMQ", False):
-            app.config["USE_RABBITMQ"] = False
-
 
 def create_app(config_class=Config):
     app = Flask(__name__)
@@ -407,8 +400,20 @@ app = create_app(config_class=Config)
 _socketio_kwargs = {"async_mode": "eventlet"}
 if app.config.get("SOCKETIO_CORS_ALLOWED_ORIGINS") is not None:
     _socketio_kwargs["cors_allowed_origins"] = app.config["SOCKETIO_CORS_ALLOWED_ORIGINS"]
+
+# Message queue optionnel (RabbitMQ). Sans lui, chaque processus ne diffuse
+# qu'à ses propres clients connectés -- ce qui est le comportement historique
+# et reste parfaitement valide pour un déploiement mono-processus (aucune
+# infra supplémentaire requise). Avec lui, SocketIO relaie automatiquement les
+# messages entre tous les processus qui partagent le même message_queue,
+# y compris depuis un processus qui ne sert aucune connexion lui-même
+# (ex: le conteneur APP_ROLE=scheduler, cf. scheduler_functions.py).
+# Activé via le switch admin "Démarrer le serveur avec RabbitMQ" (nécessite
+# un redémarrage du process pour prendre effet).
+if app.config.get("START_RABBITMQ") and app.config.get("RABBITMQ_URL"):
+    _socketio_kwargs["message_queue"] = app.config["RABBITMQ_URL"]
+
 socketio = SocketIO(app, **_socketio_kwargs)
-#start_rabbitmq_consumer(app)
 
 # Définir le jobstore avec votre base de données
 jobstores = {
@@ -422,52 +427,6 @@ def start_scheduler(active: bool):
     if scheduler.running:
         return
     scheduler.start(paused=not active)
-
-def callback_update_patient(ch, method, properties, body):
-    logging.debug(f"Received general message: {body}")
-    if communication_mode == "websocket":
-        socketio.emit('general_message', {'data': body.decode()}, namespace='/socket_update_patient')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-def callback_sound(ch, method, properties, body):
-    logging.debug(f"Received screen message: {body}")
-    if communication_mode == "websocket":
-        socketio.emit('update', {'data': body.decode()}, namespace='/socket_update_screen')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-def callback_admin(ch, method, properties, body):
-    logging.debug(f"Received screen message: {body}")
-    if communication_mode == "websocket":
-        socketio.emit('update', {'data': body.decode()}, namespace='/socket_admin')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-def callback_app_counter(ch, method, properties, body):
-    logging.debug(f"Received screen message: {body}")
-    if communication_mode == "websocket":
-        socketio.emit('update', {'data': body.decode()}, namespace='/socket_app_counter')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-def callback_counter(ch, method, properties, body):
-    logging.debug(f"Received counter message: {body}")
-    if communication_mode == "websocket":
-        socketio.emit('update', {'data': body.decode()}, namespace='/socket_counter')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-def callback_phone(ch, method, properties, body):
-    logging.debug(f"Received counter message: {body}")
-    if communication_mode == "websocket":
-        socketio.emit('update', {'data': body.decode()}, namespace='/socket_phone')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
-
-# continuer les connexioNs Rabbit
-
-def consume_rabbitmq(connection, channel, queue_name, callback):
-    channel.queue_declare(queue=queue_name)
-    channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=False)
-    logging.info(f"Starting RabbitMQ consumption on {queue_name}")
-    while True:
-        connection.process_data_events(time_limit=None)
-
 
 # Dictionnaire pour suivre les connexions actives
 active_connections = {
@@ -650,7 +609,6 @@ def send_message():
         return f"Failed to send message: {e}", 500
 
 
-#threading.Thread(target=consume_rabbitmq).start()
 #socketio.run(app, host='0.0.0.0', port=5001)
 
 #socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
@@ -805,9 +763,8 @@ def readyz():
     Vérifie les dépendances critiques avant de répondre 200 :
       1. **Base de données** : exécute un ``SELECT 1`` pour confirmer que la
          connexion SQL est opérationnelle.
-      2. **RabbitMQ** *(optionnel)* : si ``USE_RABBITMQ`` et ``START_RABBITMQ``
-         sont activés, ouvre puis ferme une connexion AMQP pour valider la
-         joignabilité du broker.
+      2. **RabbitMQ** *(optionnel)* : si ``START_RABBITMQ`` est activé, ouvre
+         puis ferme une connexion AMQP pour valider la joignabilité du broker.
 
     Si l'une des vérifications échoue, l'endpoint renvoie HTTP 503 avec le
     détail des checks en erreur.  L'orchestrateur cessera alors de router
@@ -848,7 +805,7 @@ def readyz():
         ready = False
 
     # --- Check RabbitMQ (seulement si activé) ---
-    if app.config.get("USE_RABBITMQ") and app.config.get("START_RABBITMQ"):
+    if app.config.get("START_RABBITMQ"):
         try:
             rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
             connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
@@ -1940,22 +1897,6 @@ app.scheduler = scheduler
 
 if __name__ == "__main__":
 
-    # POUR L'instant RabbitMQ ne fonctionne pas avec Flask-SocketIO
-    # VOir https://github.com/sensibill/socket.io-amqp pour faire le lien
-
-    """
-    if communication_mode == "rabbitmq":
-        print("Starting RabbitMQ...", rabbitMQ_url)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        # Start threads for consuming different queues
-        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_patient', callback_update_patient)).start()
-        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_update_screen', callback_sound)).start()
-        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_admin', callback_admin)).start()
-        threading.Thread(target=consume_rabbitmq, args=(connection, channel, 'socket_app_counter', callback_app_counter)).start()
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True) 
-"""
-
     app.logger.info(f"Starting with APP_ROLE={APP_ROLE}")
 
     if APP_ROLE == "init":
@@ -1964,12 +1905,18 @@ if __name__ == "__main__":
         if APP_ROLE == "scheduler":
             start_scheduler(active=True)
             app.logger.info("Scheduler started in active mode (APP_ROLE=scheduler)")
+            # Ce process ne sert aucune connexion WebSocket (pas de socketio.run()),
+            # mais s'il partage un message_queue (START_RABBITMQ) avec les process
+            # "web", les communikation()/socketio.emit() appelés depuis les tâches
+            # planifiées (ex: scheduler_functions.py) sont bien relayés à leurs
+            # clients. Sans message_queue configuré, ces appels sont des no-op ici,
+            # ce qui reste acceptable : le scheduler ne fait que des tâches de fond.
             try:
                 while True:
                     tm.sleep(60)
             except KeyboardInterrupt:
                 app.logger.info("Scheduler process interrupted, shutting down.")
-        elif communication_mode == "websocket":
+        else:
             if APP_ROLE == "web":
                 start_scheduler(active=False)
                 app.logger.info("Scheduler started in paused mode (APP_ROLE=web)")
