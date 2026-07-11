@@ -41,6 +41,74 @@
 {{ macros.textbloc_int("page_patient_end_timer", page_patient_end_timer, "Temps avant le retour à l'accueil en s après le clic")}}
 
 
+<h5>Comportement en cas d'échec d'impression</h5>
+
+<div class="mb-3">
+    <label for="page_patient_print_fail_behavior" class="form-label">
+        Que se passe-t-il si le ticket ne peut pas être imprimé (imprimante absente, plus de papier…) ?
+    </label>
+    <select id="page_patient_print_fail_behavior" class="form-select"
+            hx-post="/admin/update_input"
+            hx-target="#invisible"
+            hx-trigger="change"
+            hx-vals='js:{"key": "page_patient_print_fail_behavior", "value": document.getElementById("page_patient_print_fail_behavior").value}'>
+        <option value="ask" {% if page_patient_print_fail_behavior == 'ask' %}selected{% endif %}>
+            Demander au patient (Réessayer / Appeler le personnel)
+        </option>
+        <option value="keep" {% if page_patient_print_fail_behavior == 'keep' %}selected{% endif %}>
+            Conserver le patient dans la file et afficher son numéro
+        </option>
+        <option value="cancel" {% if page_patient_print_fail_behavior == 'cancel' %}selected{% endif %}>
+            Annuler l'inscription (le patient n'entre pas dans la file)
+        </option>
+    </select>
+    <small class="text-muted">
+        En mode « Demander », l'écran ne revient pas automatiquement à l'accueil tant que le patient n'a pas choisi.
+    </small>
+</div>
+
+{{ macros.switch("page_patient_print_fail_show_retry",
+                page_patient_print_fail_show_retry,
+                "Mode « Demander » : afficher le bouton « Réessayer »")
+}}
+
+{{ macros.switch("page_patient_print_fail_show_staff",
+                page_patient_print_fail_show_staff,
+                "Mode « Demander » : afficher le bouton « Appeler le personnel »")
+}}
+
+{{ macros.textbloc_int("page_patient_print_fail_abandon_timer", page_patient_print_fail_abandon_timer,
+                "Mode « Demander » : délai en s avant retour auto à l'accueil si le patient ne choisit rien (0 = jamais)") }}
+
+
+<div class="accordion" id="accordionPrintFailTexts">
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#panelsStayOpen-PrintFailTexts" aria-expanded="false"
+                    aria-controls="panelsStayOpen-PrintFailTexts">
+                <h3>Textes affichés au patient pendant / après l'impression</h3>
+            </button>
+        </h2>
+        <div id="panelsStayOpen-PrintFailTexts" class="accordion-collapse collapse">
+            <div class="accordion-body">
+                <small class="text-muted">
+                    Langue française. Les autres langues utilisent la table des traductions
+                    (repli sur le français si absente).
+                </small>
+                {{ macros.textarea_full("page_patient_interface_printing", page_patient_interface_printing, "« Impression en cours »") }}
+                {{ macros.textarea_full("page_patient_interface_print_failed", page_patient_interface_print_failed, "Titre de l'écran d'échec (mode Demander)") }}
+                {{ macros.textarea_full("page_patient_interface_retry", page_patient_interface_retry, "Bouton « Réessayer »") }}
+                {{ macros.textarea_full("page_patient_interface_call_staff", page_patient_interface_call_staff, "Bouton « Appeler le personnel »") }}
+                {{ macros.textarea_full("page_patient_interface_staff_called", page_patient_interface_staff_called, "Message après « Appeler le personnel »") }}
+                {{ macros.textarea_full("page_patient_interface_no_ticket", page_patient_interface_no_ticket, "Message quand le patient est conservé sans ticket (mode Conserver)") }}
+                {{ macros.textarea_full("page_patient_interface_print_failed_staff", page_patient_interface_print_failed_staff, "Message d'échec renvoyant vers le personnel (mode Annuler)") }}
+            </div>
+        </div>
+    </div>
+</div>
+
+
 
 <div class="mb-3">
     <label for="page_patient_disable_default_message" class="form-label">Texte qui s'affiche par défaut quand l'activité n'est pas en cours</label>

@@ -123,6 +123,26 @@ def load_configuration(app):
     # Valeur par défaut pour le thème de couleurs
     app.config.setdefault("ADMIN_COLORS", "lumen")
 
+    # Comportement patient en cas d'échec d'impression (paramétrable en Admin,
+    # onglet Page Patient). Défauts appliqués si aucune ligne ConfigOption
+    # n'existe encore (installation neuve). 'ask' : proposer Réessayer / Appeler
+    # le personnel. 'keep' : garder le patient dans la file. 'cancel' : annuler.
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "ask")
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", True)
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)
+    # Délai (s) avant retour automatique à l'accueil sur l'écran d'échec en mode
+    # 'ask' si le patient ne choisit rien (garde-fou anti-blocage borne). 0 = jamais.
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60)
+    # Libellés patient du flux d'impression (traduisibles : FR = app.config,
+    # autres langues via la table Translation avec repli FR).
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINTING", "Impression en cours…")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_FAILED", "Impression impossible.")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_RETRY", "Réessayer")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_CALL_STAFF", "Appeler le personnel")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_STAFF_CALLED", "Le personnel a été prévenu. Veuillez noter votre numéro :")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_NO_TICKET", "Ticket non imprimé. Veuillez noter votre numéro :")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF", "Impression impossible. Veuillez vous adresser au personnel.")
+
     config_mappings = {
         "pharmacy_name": ("PHARMACY_NAME", "value_str"),
         "network_adress": ("NETWORK_ADRESS", "value_str"),
@@ -243,7 +263,18 @@ def load_configuration(app):
         "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
         "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
         "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
-        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int")
+        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
+        "page_patient_print_fail_behavior": ("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "value_str"),
+        "page_patient_print_fail_show_retry": ("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", "value_bool"),
+        "page_patient_print_fail_show_staff": ("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", "value_bool"),
+        "page_patient_print_fail_abandon_timer": ("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", "value_int"),
+        "page_patient_interface_printing": ("PAGE_PATIENT_INTERFACE_PRINTING", "value_str"),
+        "page_patient_interface_print_failed": ("PAGE_PATIENT_INTERFACE_PRINT_FAILED", "value_str"),
+        "page_patient_interface_retry": ("PAGE_PATIENT_INTERFACE_RETRY", "value_str"),
+        "page_patient_interface_call_staff": ("PAGE_PATIENT_INTERFACE_CALL_STAFF", "value_str"),
+        "page_patient_interface_staff_called": ("PAGE_PATIENT_INTERFACE_STAFF_CALLED", "value_str"),
+        "page_patient_interface_no_ticket": ("PAGE_PATIENT_INTERFACE_NO_TICKET", "value_str"),
+        "page_patient_interface_print_failed_staff": ("PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF", "value_str"),
     }
 
     for key, (config_name, value_type) in config_mappings.items():

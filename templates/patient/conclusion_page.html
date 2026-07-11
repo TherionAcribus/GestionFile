@@ -1,5 +1,9 @@
 <div id="div_conclusion" class="div_summary">
 
+  <!-- Contenu de confirmation "normal" : masqué pendant l'impression et en cas
+       d'échec (l'overlay #print_status_overlay prend le relais). -->
+  <div id="conclusion_normal">
+
     <div id="conclusion_text" class="div_text_summary">
         <p class="text_summary">
             {{page_patient_confirmation_message}}
@@ -53,9 +57,22 @@
         <div id="timer_gauge"></div>
     </div>
 
+  </div><!-- /#conclusion_normal -->
+
+  <!-- Overlay d'état d'impression (impression en cours / échec + choix).
+       Affiché/masqué et rempli par patients.js (runPrintFlow). -->
+  <div id="print_status_overlay"
+       style="display:none; flex-direction:column; align-items:center; justify-content:center; gap:24px; text-align:center; min-height:40vh;">
+      <div id="print_status_message" class="div_text_summary"></div>
+      <div id="print_status_buttons" class="div_validation_buttons"></div>
+  </div>
+
 </div>
 
 <div id="print_data" print-ticket="{{ print_ticket }}" data-print="{{ print_data | escape }}" data-print-job-id="{{ print_job_id if print_job_id else '' }}" data-call-number="{{ call_number }}" style="display: none;"></div>
+
+<!-- Libellés (traduits) du flux d'impression, lus par patients.js. -->
+<script id="print_ui_labels" type="application/json">{{ print_ui_labels | tojson }}</script>
 
 <script>
 
@@ -120,8 +137,26 @@
         stopTimer();
     });
 
-    // Ensure timer starts immediately without delay
-    startTimer();
+    // Contrôles du minuteur exposés à patients.js (flux d'impression). Le retour
+    // à l'accueil ne doit se produire qu'après succès ou décision du patient.
+    window.__conclusionTimer = {
+        start: function() { resetTimer(); },
+        stop: stopTimer,
+        goHome: goToCancelPatient
+    };
+
+    // Démarrage du minuteur : SAUF si une impression est en attente de
+    // confirmation. Dans ce cas, patients.js (runPrintFlow) le (re)démarrera
+    // seulement après un succès ou une décision explicite.
+    (function() {
+        var pd = document.getElementById('print_data');
+        var printPending = pd
+            && pd.getAttribute('print-ticket') !== 'False'
+            && pd.getAttribute('data-print-job-id');
+        if (!printPending) {
+            startTimer();
+        }
+    })();
 
 
     function handlePrintButtonClick() {

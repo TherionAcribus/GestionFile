@@ -301,8 +301,10 @@ def confirm_print():
     """ Confirme au serveur le résultat de l'impression locale d'un ticket.
 
     Appelée par la Borne (patients.js) après l'appel à l'API d'impression. Selon
-    le résultat, active l'inscription pending (succès) ou l'annule/la conserve
-    (échec, selon le flag PAGE_PATIENT_KEEP_ON_PRINT_FAIL).
+    le résultat, active l'inscription pending (succès) ou applique le
+    comportement d'échec configuré (PAGE_PATIENT_PRINT_FAIL_BEHAVIOR :
+    'ask' -> laisser le patient décider ; 'keep' -> conserver ; 'cancel' ->
+    annuler).
 
     Idempotente : un second appel pour un patient déjà traité renvoie son état
     courant sans rien ré-exécuter."""
@@ -330,35 +332,104 @@ def confirm_print():
         return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
 
     if success:
-        activate_patient(patient)
-        # Notification "nouveau patient" différée jusqu'à l'entrée réelle en file.
-        if patient.activity and patient.activity.notification:
-            send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})
+        _activate_and_notify(patient)
         return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200
 
-    # Échec d'impression : comportement piloté par la configuration.
-    keep = app.config.get("PAGE_PATIENT_KEEP_ON_PRINT_FAIL", False)
+    # Échec d'impression : comportement piloté par la configuration Admin
+    # (onglet Page Patient). 'cancel' | 'keep' | 'ask'.
+    behavior = app.config.get("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "ask")
     _alert_staff_print_failure(patient, code, message)
-    if keep:
+
+    if behavior == "keep":
         # On conserve le patient dans la file malgré l'absence de ticket.
-        activate_patient(patient)
-        if patient.activity and patient.activity.notification:
-            send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})
+        _activate_and_notify(patient)
         return jsonify({
             'status': 'activated_no_ticket',
-            'call_number': patient.call_number,
-            'keep': True
+            'call_number': patient.call_number
         }), 200
-    else:
+
+    if behavior == "cancel":
         # On annule l'inscription : pas de ticket => pas de patient dans la file.
         patient.status = 'print_failed'
         db.session.commit()
         return jsonify({
             'status': 'cancelled',
-            'call_number': patient.call_number,
-            'keep': False
+            'call_number': patient.call_number
         }), 200
-        
+
+    # behavior == "ask" (défaut) : on laisse l'inscription EN ATTENTE et on
+    # renvoie au patient les options à afficher (Réessayer / Appeler le
+    # personnel). La décision explicite du patient déclenchera soit une nouvelle
+    # tentative (re-print + confirm_print), soit /patient/print_call_staff.
+    # L'inscription pending abandonnée sera purgée par le TTL.
+    return jsonify({
+        'status': 'ask',
+        'call_number': patient.call_number,
+        'show_retry': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", True)),
+        'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
+        # Garde-fou anti-blocage : délai (s) avant retour auto à l'accueil si le
+        # patient ne choisit rien. 0 = jamais.
+        'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))
+    }), 200
+
+
+def _activate_and_notify(patient):
+    """ Active un patient pending (entrée en file) et émet la notification
+    'nouveau patient' si l'activité le demande (différée jusqu'à l'entrée réelle
+    en file, pour ne pas annoncer un patient qui aurait pu être annulé)."""
+    activate_patient(patient)
+    if patient.activity and patient.activity.notification:
+        send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})
+
+
+@patient_bp.route('/patient/print_call_staff', methods=['POST'])
+def print_call_staff():
+    """ Décision explicite du patient « Appeler le personnel » après un échec
+    d'impression (mode 'ask'). On alerte le personnel ET on ajoute le patient à
+    la file (il a demandé de l'aide, il doit être pris en charge malgré
+    l'absence de ticket). Idempotente."""
+    data = request.get_json(silent=True) or request.form
+    print_job_id = data.get('print_job_id')
+    if not print_job_id:
+        return jsonify({'status': 'error', 'reason': 'missing_print_job_id'}), 400
+
+    patient = Patient.query.filter_by(print_job_id=print_job_id).first()
+    if patient is None:
+        return jsonify({'status': 'expired'}), 410
+
+    if patient.status != 'pending':
+        # Déjà traité (idempotence).
+        return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
+
+    _alert_staff_print_failure(patient, 'call_staff', "Le patient demande de l'aide (ticket non imprimé)")
+    _activate_and_notify(patient)
+    return jsonify({
+        'status': 'activated_no_ticket',
+        'call_number': patient.call_number,
+        'staff_called': True
+    }), 200
+
+
+@patient_bp.route('/patient/print_abandon', methods=['POST'])
+def print_abandon():
+    """ Abandon de l'écran d'échec (mode 'ask') : le patient n'a rien choisi et
+    le garde-fou anti-blocage a expiré. On annule l'inscription pending (elle
+    n'entre pas dans la file) avant de renvoyer la borne à l'accueil. Idempotente."""
+    data = request.get_json(silent=True) or request.form
+    print_job_id = data.get('print_job_id')
+    if not print_job_id:
+        return jsonify({'status': 'error', 'reason': 'missing_print_job_id'}), 400
+
+    patient = Patient.query.filter_by(print_job_id=print_job_id).first()
+    if patient is None:
+        return jsonify({'status': 'expired'}), 410
+
+    if patient.status == 'pending':
+        patient.status = 'print_failed'
+        db.session.commit()
+    return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
+
+
 
 def patient_validate_scan(activity_id):
     """ Fct appelée lors du scan du QRCode (validation) """
@@ -397,7 +468,22 @@ def patient_conclusion_page(call_number, print_ticket, print_data=None, print_jo
     if (print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_PRINT"]) or (not print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_SCAN"]):
         reprint = True
 
+    # Libellés du flux d'impression, résolus dans la langue courante du patient
+    # (repli FR). Injectés dans la page pour que patients.js (qui construit
+    # l'overlay dynamiquement) les utilise au lieu de textes codés en dur.
+    print_ui_labels = {
+        "printing": choose_text_translation("page_patient_interface_printing"),
+        "print_failed": choose_text_translation("page_patient_interface_print_failed"),
+        "retry": choose_text_translation("page_patient_interface_retry"),
+        "call_staff": choose_text_translation("page_patient_interface_call_staff"),
+        "staff_called": choose_text_translation("page_patient_interface_staff_called"),
+        "no_ticket": choose_text_translation("page_patient_interface_no_ticket"),
+        "print_failed_staff": choose_text_translation("page_patient_interface_print_failed_staff"),
+        "back": choose_text_translation("page_patient_interface_done_back"),
+    }
+
     return render_template('patient/conclusion_page.html',
+                        print_ui_labels=print_ui_labels,
                         call_number=call_number,
                         image_name_qr=image_name_qr,
                         page_patient_confirmation_message=page_patient_confirmation_message,
