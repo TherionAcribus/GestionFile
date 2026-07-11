@@ -27,8 +27,7 @@ def patients_front_page():
 
     return render_template('patient/patient_front_page.html',
                             languages=languages,
-                            page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+                            page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"])
 
 
 @patient_bp.route('/patient/change_language/<language_code>')
@@ -64,8 +63,7 @@ def patient_right_page():
     buttons_content = render_template('patient/patient_buttons_left.html', 
                             buttons=buttons,
                             max_length=max_length,
-                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"])
+                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel)
     
     subtitle_content = render_template(
         'patient/patient_default_subtitle.html', 
@@ -107,7 +105,6 @@ def display_activity_inactive(request):
     return render_template('patient/activity_inactive.html',
                             page_patient_disable_default_message=message,
                             default_subtitle=default_subtitle,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             page_patient_timer_activity_inactive=app.config["PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE"])
 
 
@@ -138,7 +135,6 @@ def display_children_buttons_for_right_page(request):
                             buttons=children_buttons,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             max_length=max_length,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             children=True)
 
 # affiche la page de validation pour page gauche et droite
@@ -190,7 +186,6 @@ def left_page_validate_patient(activity):
                             page_patient_display_button_scan=app.config["PAGE_PATIENT_DISPLAY_BUTTON_SCAN"],
                             page_patient_display_scan_explanation=app.config["PAGE_PATIENT_DISPLAY_SCAN_EXPLANATION"],
                             page_patient_validation_message=page_patient_validation_message,
-                            page_patient_structure=app.config["PAGE_PATIENT_STRUCTURE"],
                             page_patient_button_print_ticket_display_picture=app.config["PAGE_PATIENT_BUTTON_PRINT_TICKET_DISPLAY_PICTURE"],
                             page_patient_button_print_ticket_picture=app.config["PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE"],
                             page_patient_button_cancel_display_picture=app.config["PAGE_PATIENT_BUTTON_CANCEL_DISPLAY_PICTURE"],

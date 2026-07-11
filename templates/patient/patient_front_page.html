@@ -9,13 +9,7 @@
     {# Les surcharges personnalisées sont chargées après #}
     <link rel="stylesheet" href="{{ get_css_url() }}">    
 
-    {% if page_patient_structure == "full" %}
-        <link rel="stylesheet" href="../static/css/patient_full.css">
-    {% elif page_patient_structure == "vertical" %}
-        <link rel="stylesheet" href="../static/css/patient_vertical.css">
-    {% elif page_patient_structure == "horizontal" %}
-        <link rel="stylesheet" href="../static/css/patient_horizontal.css">
-    {% endif %}
+    <link rel="stylesheet" href="../static/css/patient_full.css">
     <script src="https://cdn.jsdelivr.net/npm/qwebchannel@6.2.0/qwebchannel.min.js"></script>
     <script src="https://unpkg.com/htmx.org"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
@@ -37,12 +31,6 @@
             hx-target="#div_buttons_parents"
             hx-swap="innerHTML">
         </div>
-
-        {% if page_patient_structure == "vertical" or page_patient_structure == "horizontal"%}
-            <div id="div_intermediaire">
-                
-            </div>
-        {% endif %}
 
             <div id="div_buttons_children"
                 class="buttons_children_active"

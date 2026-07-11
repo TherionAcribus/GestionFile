@@ -173,7 +173,6 @@ def load_configuration(app):
         "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),        
         "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
         "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
-        "page_patient_structure" : ("PAGE_PATIENT_STRUCTURE", "value_str"),
         "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
         "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
         "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),

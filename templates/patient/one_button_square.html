@@ -7,12 +7,8 @@
                         "is_active": "{{ button.is_active }}",
                         "button_id": "{{ button.id }}"
                         }'
-                {% if page_patient_structure == "full" %}
-                        {% if button.is_active %}
-                                hx-target="#div_buttons_parents"
-                        {% else %}
-                                hx-target="#div_buttons_children"
-                        {% endif %}
+                {% if button.is_active %}
+                        hx-target="#div_buttons_parents"
                 {% else %}
                         hx-target="#div_buttons_children"
                 {% endif %}>

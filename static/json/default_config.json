@@ -61,7 +61,6 @@
             "music_spotify": false,
             "music_spotify_user": "your spotify user",
             "music_spotify_key": "your spotify key",
-            "page_patient_structure": "full",
             "page_patient_disable_button": true,
             "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",
             "page_patient_title": "Bienvenue à la {P}",

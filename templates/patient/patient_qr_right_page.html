@@ -30,12 +30,8 @@
                         {% endif %}"
                 hx-post="/patient/print_and_validate"
                 hx-vals='{"activity_id": "{{ activity.id }}"}'
-                {% if page_patient_structure == "full" %}
-                    hx-target="#div_buttons_parents"
-                {% else %}
-                    hx-target="#div_buttons_children"
-                {% endif %}
-            >   
+                hx-target="#div_buttons_parents"
+            >
                 {% if page_patient_button_print_ticket_display_picture %}                
                     <img src="/static/images/buttons/{{ page_patient_button_print_ticket_picture }}"
                     class="img_for_div_validation"
@@ -47,11 +43,7 @@
             {% if page_patient_display_button_scan %}
                 <div class="div_validation_one_button"
                     hx-post="patient/scan_and_validate"
-                    {% if page_patient_structure=="full"%}
-                        hx-target="#div_buttons_parents"
-                    {% else %}
-                        hx-target="#div_buttons_children"
-                    {% endif %}
+                    hx-target="#div_buttons_parents"
                     hx-vals='{"activity_id": "{{ activity.id }}"}'>
                     <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
                 </div>
@@ -67,45 +59,24 @@
                 id="div_for_scan"
                 hx-trigger="qrcode_is_scanned"
                 hx-post="patient/scan_already_validate"
-                {% if page_patient_structure=="full"%}
-                    hx-target="#div_buttons_parents"
-                {% else %}
-                    hx-target="#div_buttons_children"
-                {% endif %}
+                hx-target="#div_buttons_parents"
                 hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}"}'>
             </div>
     
-            {% if page_patient_structure=="full"%}
-                <div class="{% if page_patient_button_cancel_display_picture %} 
-                        div_validation_one_button_with_img 
-                    {% else %} 
-                        div_validation_one_button 
-                    {% endif %}"
-                    hx-get="/patient/patient_cancel"
-                    hx-target="#div_buttons_parents">
-                    {% if page_patient_button_cancel_display_picture %}                
-                        <img src="/static/images/buttons/{{ page_patient_button_cancel_picture }}"
-                        class="img_for_div_validation"
-                    >
-                {% endif %}
-                    <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
-                </div>
-            {% else %}
-                <div class="{% if page_patient_button_cancel_display_picture %} 
-                        div_validation_one_button_with_img 
-                    {% else %} 
-                        div_validation_one_button 
-                    {% endif %}"
-                    hx-get="/patient/patient_cancel"
-                    hx-target="#div_buttons_parents">
-                    <div id="second_action"
-                        hx-get="patient/default_subtitle"
-                        hx-target="#div_buttons_children"
-                        hx-swap="innerHTML">
-                        <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
-                    </div>
-                </div>
+            <div class="{% if page_patient_button_cancel_display_picture %}
+                    div_validation_one_button_with_img
+                {% else %}
+                    div_validation_one_button
+                {% endif %}"
+                hx-get="/patient/patient_cancel"
+                hx-target="#div_buttons_parents">
+                {% if page_patient_button_cancel_display_picture %}
+                    <img src="/static/images/buttons/{{ page_patient_button_cancel_picture }}"
+                    class="img_for_div_validation"
+                >
             {% endif %}
+                <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
+            </div>
         </div>
     </div>
 

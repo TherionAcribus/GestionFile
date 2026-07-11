@@ -26,7 +26,6 @@ def admin_patient(tab=None):
     buttons = Button.query.all()
 
     return render_template('/admin/patient_page.html', buttons=buttons,
-                            page_patient_structure = app.config['PAGE_PATIENT_STRUCTURE'],
                             page_patient_disable_button = app.config['PAGE_PATIENT_DISABLE_BUTTON'],
                             page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
                             page_patient_title = app.config['PAGE_PATIENT_TITLE'],

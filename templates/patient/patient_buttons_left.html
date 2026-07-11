@@ -1,47 +1,37 @@
-{% if page_patient_structure == "full" %}
-    {% if buttons|length > max_length %}
-        {% set half_length = (buttons|length // 2) + (buttons|length % 2) %}
-        <div class="outer-grid-container">
-            <div class="inner-grid-container" style="grid-template-columns: repeat({{ half_length }}, 1fr);">
-                {% for button in buttons[:half_length] %}
-                    {% if button.shape == "square" %}
-                        {% include "patient/one_button_square.html"%}
-                    {% else %}
-                        {% include "patient/one_button_circle.html"%}
-                    {% endif %}
-                {% endfor %}
-            </div>
-            <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length - half_length }}, 1fr);">
-                {% for button in buttons[half_length:] %}
-                    {% if button.shape == "square" %}
-                        {% include "patient/one_button_square.html"%}
-                    {% else %}
-                        {% include "patient/one_button_circle.html"%}
-                    {% endif %}
-                {% endfor %}
-            </div>
+{% if buttons|length > max_length %}
+    {% set half_length = (buttons|length // 2) + (buttons|length % 2) %}
+    <div class="outer-grid-container">
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ half_length }}, 1fr);">
+            {% for button in buttons[:half_length] %}
+                {% if button.shape == "square" %}
+                    {% include "patient/one_button_square.html"%}
+                {% else %}
+                    {% include "patient/one_button_circle.html"%}
+                {% endif %}
+            {% endfor %}
         </div>
-    {% else %}
-        <div class="outer-grid-container">
-            <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length }}, 1fr);">
-                {% for button in buttons %}
-                    {% if button.shape == "square" %}
-                        {% include "patient/one_button_square.html"%}
-                    {% else %}
-                        {% include "patient/one_button_circle.html"%}
-                    {% endif %}
-                {% endfor %}
-            </div>
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length - half_length }}, 1fr);">
+            {% for button in buttons[half_length:] %}
+                {% if button.shape == "square" %}
+                    {% include "patient/one_button_square.html"%}
+                {% else %}
+                    {% include "patient/one_button_circle.html"%}
+                {% endif %}
+            {% endfor %}
         </div>
-    {% endif %}
+    </div>
 {% else %}
-    {% for button in buttons %}
-        {% if button.shape == "square" %}
-            {% include "patient/one_button_square.html"%}
-        {% else %}
-            {% include "patient/one_button_circle.html"%}
-        {% endif %}
-    {% endfor %}
+    <div class="outer-grid-container">
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length }}, 1fr);">
+            {% for button in buttons %}
+                {% if button.shape == "square" %}
+                    {% include "patient/one_button_square.html"%}
+                {% else %}
+                    {% include "patient/one_button_circle.html"%}
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
 {% endif %}
 
 {% if children %}
