@@ -2,18 +2,28 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    {# Content Security Policy : bloque tout chargement de ressource depuis une
+       origine EXTERNE (script/style/image/police/connexion). C'est le cœur de la
+       résilience hors ligne de la borne : plus aucune dépendance à un CDN. Les
+       scripts/styles inline restent autorisés ('unsafe-inline') car les partiels
+       patient chargés par HTMX (conclusion, QR, activité inactive) en contiennent
+       ; l'important ici n'est pas l'anti-XSS mais l'absence de dépendance réseau
+       externe. connect-src autorise les WebSocket (Socket.IO) vers le serveur. #}
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'">
     <title>Enregistrement de la file d'attente</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    {# Dépendances hébergées LOCALEMENT et à versions figées pour que la borne
+       reste utilisable si Internet est coupé mais le serveur local accessible :
+       Materialize 1.0.0, HTMX 2.0.2, Socket.IO 4.7.4. #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
     {# CSS par défaut pour être sûr d'avoir quelque chose #}
-    <link rel="stylesheet" href="../static/css/patient.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/patient.css') }}">
     {# Les surcharges personnalisées sont chargées après #}
-    <link rel="stylesheet" href="{{ get_css_url() }}">    
+    <link rel="stylesheet" href="{{ get_css_url() }}">
 
-    <link rel="stylesheet" href="../static/css/patient_full.css">
-    <script src="https://cdn.jsdelivr.net/npm/qwebchannel@6.2.0/qwebchannel.min.js"></script>
-    <script src="https://unpkg.com/htmx.org"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
-    <script src="https://cdn.socket.io/4.7.4/socket.io.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/patient_full.css') }}">
+    <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/libs/socket.io-4.7.4.min.js') }}"></script>
 </head>
 <body>
 
@@ -52,9 +62,8 @@
 
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="{{ url_for('static', filename='js/libs/materialize.min.js') }}"></script>
 
-
-    <script src="../static/js/patients.js"></script>
+    <script src="{{ url_for('static', filename='js/patients.js') }}"></script>
 </body>
 </html>
