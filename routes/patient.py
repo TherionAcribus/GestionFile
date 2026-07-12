@@ -249,7 +249,8 @@ def patient_return_validation_page_and_print_data(print_ticket):
         new_patient = register_patient(activity)
 
     print_data = format_ticket_text(new_patient, activity)
-    print("print_data", print_data)
+    # On ne journalise PAS le contenu du ticket, seulement sa taille encodée.
+    print(f"print_data généré ({len(print_data)} caractères base64)")
 
     # Notification "nouveau patient" : uniquement quand il rejoint réellement la
     # file. En mode impression, elle est différée jusqu'à l'activation (cf.
