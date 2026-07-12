@@ -53,7 +53,7 @@ import jwt
 from dotenv import load_dotenv
 from markupsafe import escape
 
-from auth_utils import is_authenticated_request, require_app_token_or_login, check_app_secret, is_valid_app_secret_config
+from auth_utils import require_app_token_or_login, check_app_secret, is_valid_app_secret_config, is_socket_connection_authorized
 from idempotency import idempotent
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
@@ -514,13 +514,10 @@ def get_and_register_socketio_username(request):
 
 
 def _socket_require(flag_name: str, namespace: str) -> bool:
-    if not app.config.get(flag_name, False):
-        return True
-    if is_authenticated_request():
-        return True
-
-    app.logger.warning("Unauthorized Socket.IO connect to %s (missing login/token).", namespace)
-    return False
+    allowed = is_socket_connection_authorized(app.config.get(flag_name, False))
+    if not allowed:
+        app.logger.warning("Unauthorized Socket.IO connect to %s (missing login/token).", namespace)
+    return allowed
 
 
 @socketio.on('connect', namespace='/socket_update_patient')

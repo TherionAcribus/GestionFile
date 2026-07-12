@@ -70,6 +70,20 @@ def is_authenticated_request() -> bool:
     return bool(getattr(current_user, "is_authenticated", False))
 
 
+def is_socket_connection_authorized(flag_active: bool) -> bool:
+    """Décision d'autorisation d'une connexion Socket.IO.
+
+    - Si la sécurité du namespace est désactivée (``flag_active`` faux), la
+      connexion est autorisée (comportement historique).
+    - Sinon, elle exige une preuve d'identité valide : jeton applicatif
+      (X-App-Token présenté à la poignée de main) ou session connectée. C'est la
+      même règle que pour les routes REST (``is_authenticated_request``), ce qui
+      referme la faille du header ``username`` (simple libellé, non prouvant)."""
+    if not flag_active:
+        return True
+    return is_authenticated_request()
+
+
 def require_app_token_or_login(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
