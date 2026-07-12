@@ -1384,17 +1384,14 @@ def call_specific_patient_action(counter_id, patient_id):
     return True, next_patient.to_dict(), 200
 
 
-@app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>', methods=['GET', 'POST'])
+@app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def call_specific_patient(counter_id, patient_id):
-    if request.method == "GET":
-        app.logger.warning("Deprecated GET /call_specific_patient (use POST).")
-
     ok, payload, status_code = call_specific_patient_action(counter_id, patient_id)
     return jsonify(payload), status_code
 
 
-@app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
+@app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def validate_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
@@ -1578,7 +1575,7 @@ def counter_refresh_buttons(counter_id):
     return render_template('/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
 
 
-@app.route('/validate_and_call_next/<int:counter_id>', methods=['POST', 'GET'])
+@app.route('/validate_and_call_next/<int:counter_id>', methods=['POST'])
 @require_app_token_or_login
 @idempotent
 def validate_and_call_next(counter_id):
@@ -1634,7 +1631,7 @@ def validate_current_patient(counter_id):
     db.session.commit()
 
 
-@app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST', 'GET'])
+@app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def pause_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain

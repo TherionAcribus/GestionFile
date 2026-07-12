@@ -421,33 +421,27 @@ def app_relaunch_patient_call(counter_id):
     return '', 204
 
 
-@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>/<int:activity_id>', methods=['GET', 'POST'])
+# Ces actions modifient l'état : POST uniquement. Un ancien GET reçoit 405
+# (Method Not Allowed), renvoyé automatiquement par Flask.
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>/<int:activity_id>', methods=['POST'])
 @require_app_token_or_login
 def put_waiting_list_with_activity(patient_id, activity_id):
-    if request.method == "GET":
-        app.logger.warning("Deprecated GET /api/counter/put_standing_list (use POST).")
     return handle_patient_from_app(patient_id, action="standing", activity_id=activity_id)
 
 
-@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>', methods=['GET', 'POST'])
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def put_waiting_list(patient_id):
-    if request.method == "GET":
-        app.logger.warning("Deprecated GET /api/counter/put_standing_list (use POST).")
     return handle_patient_from_app(patient_id, action="standing")
 
-@counter_bp.route('/api/counter/validate_patient/<int:patient_id>', methods=['GET', 'POST'])
+@counter_bp.route('/api/counter/validate_patient/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def validate_patient_from_app(patient_id):
-    if request.method == "GET":
-        app.logger.warning("Deprecated GET /api/counter/validate_patient (use POST).")
     return handle_patient_from_app(patient_id, action="validate")
 
-@counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['GET', 'POST'])
+@counter_bp.route('/api/counter/delete_patient/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def delete_patient_from_app(patient_id):
-    if request.method == "GET":
-        app.logger.warning("Deprecated GET /api/counter/delete_patient (use POST).")
     return handle_patient_from_app(patient_id, action="delete")
 
 def handle_patient_from_app(patient_id, action, activity_id=None):    
