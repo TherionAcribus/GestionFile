@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from functools import wraps
 
 import jwt
@@ -9,6 +10,38 @@ try:
     from flask_security import current_user
 except Exception:  # pragma: no cover
     current_user = None
+
+
+# Valeurs qui ne doivent JAMAIS être acceptées comme un vrai secret partagé :
+# chaîne vide et placeholders bien connus (cf. .env.example). Un secret laissé à
+# l'une de ces valeurs équivaut à « non configuré ».
+_WEAK_APP_SECRETS = {"", "changez_moi", "change_me", "changeme", "secret", "password"}
+
+
+def is_valid_app_secret_config(secret) -> bool:
+    """True si APP_SECRET est configuré avec une vraie valeur.
+
+    Refuse une valeur absente/None, vide, uniquement des espaces, ou un
+    placeholder connu. Sert à la fois à la validation de démarrage (le serveur
+    refuse de démarrer sans secret) et à la défense en profondeur dans
+    l'émission de token (ne jamais authentifier sur un secret vide)."""
+    if not secret:
+        return False
+    return str(secret).strip().lower() not in _WEAK_APP_SECRETS
+
+
+def check_app_secret(provided, configured) -> bool:
+    """Vérifie le secret fourni par un client face au secret serveur configuré.
+
+    - Refuse toujours si le secret serveur n'est pas réellement configuré
+      (empêche qu'un APP_SECRET absent/vide accepte un secret vide côté client).
+    - Refuse un secret fourni vide.
+    - Comparaison en temps constant pour éviter les attaques temporelles."""
+    if not is_valid_app_secret_config(configured):
+        return False
+    if not provided:
+        return False
+    return hmac.compare_digest(str(provided), str(configured))
 
 
 def verify_app_token(token: str) -> bool:

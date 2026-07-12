@@ -74,6 +74,12 @@ def _validate_sqlalchemy_url(value: str | None, env_name: str) -> str | None:
 class Config:
     SECRET_KEY = _load_or_create_secret("SECRET_KEY", "flask_secret_key.txt")
     SECURITY_PASSWORD_SALT = _load_or_create_secret("SECURITY_PASSWORD_SALT", "security_password_salt.txt")
+    # Secret partagé attendu des applications (App_Comptoir, imprimante, borne)
+    # pour obtenir un token via /api/get_app_token. Contrairement à SECRET_KEY, on
+    # ne le génère PAS automatiquement : il doit être configuré explicitement et
+    # correspondre à la valeur saisie côté clients. Le serveur refuse de démarrer
+    # si cette valeur est absente (voir validation dans create_app).
+    APP_SECRET = os.getenv("APP_SECRET", "")
     SECURITY_PASSWORD_HASH = 'bcrypt'
     SECURITY_PASSWORD_SINGLE_HASH = False
     SECURITY_USER_IDENTITY_ATTRIBUTES = [{'username': {'case_insensitive': False}}]

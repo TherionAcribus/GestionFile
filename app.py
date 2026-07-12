@@ -53,7 +53,7 @@ import jwt
 from dotenv import load_dotenv
 from markupsafe import escape
 
-from auth_utils import is_authenticated_request, require_app_token_or_login
+from auth_utils import is_authenticated_request, require_app_token_or_login, check_app_secret, is_valid_app_secret_config
 from idempotency import idempotent
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
@@ -374,6 +374,24 @@ def create_app(config_class=Config):
     # Initialiser le logging
     logging.basicConfig(level=(logging.DEBUG if app.debug else logging.INFO),
                         format='%(asctime)s %(levelname)s %(name)s %(threadName)s : %(message)s')
+
+    # Refus de démarrage si le secret applicatif n'est pas configuré.
+    # Sans APP_SECRET, /api/get_app_token ne peut de toute façon plus émettre de
+    # token (check_app_secret refuse un secret serveur vide), donc l'App et
+    # l'imprimante ne pourraient pas s'authentifier : autant échouer tôt et
+    # clairement. On saute ce contrôle pour les commandes hors-serveur
+    # (migrations, CLI, tests) qui posent SKIP_STARTUP_HOOKS, et en debug on se
+    # contente d'un avertissement pour ne pas gêner le développement local.
+    if not is_valid_app_secret_config(app.config.get("APP_SECRET")):
+        message = ("APP_SECRET n'est pas configuré (absent, vide ou placeholder). "
+                   "Définissez une valeur forte et unique dans l'environnement "
+                   "(variable APP_SECRET) identique au secret saisi côté clients.")
+        if SKIP_STARTUP_HOOKS:
+            app.logger.warning("%s [ignoré : SKIP_STARTUP_HOOKS]", message)
+        elif app.debug:
+            app.logger.warning("%s [toléré en debug : aucune émission de token possible]", message)
+        else:
+            raise RuntimeError(message)
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -897,9 +915,11 @@ def verify_app_token(token):
 
 @app.route('/api/get_app_token', methods=['POST'])
 def get_app_token():
-    # Ici, vous devriez implémenter une vérification des credentials de l'application
-    # Par exemple, vérifier un secret partagé ou des identifiants spécifiques à l'application
-    if request.form.get('app_secret') == os.getenv('APP_SECRET', ''):
+    # check_app_secret compare en temps constant le secret fourni au secret
+    # configuré (app.config["APP_SECRET"]) et refuse TOUJOURS si le secret serveur
+    # n'est pas réellement configuré (absent/vide/placeholder). Cela ferme la
+    # faille où un APP_SECRET absent (chaîne vide) acceptait un secret vide.
+    if check_app_secret(request.form.get('app_secret'), app.config.get("APP_SECRET")):
         token = generate_app_token()
         return jsonify({"token": token})
     else:
