@@ -466,7 +466,6 @@ active_connections = {
     '/socket_admin': set(),
     '/socket_patient': set(),
     '/socket_app_counter': set(),
-    '/socket_app_patient': set(),
     '/socket_app_screen': set(),
     '/socket_counter': set(),
     '/socket_phone': set(),
@@ -564,18 +563,6 @@ def connect_app_counter():
 def disconnect_app_counter():
     app.connected_clients_info.pop(request.sid, None)
     logging.info("Client disconnected from app counter namespace")
-
-@socketio.on('connect', namespace='/socket_app_patient')
-def connect_app_patient():
-    if not _socket_require("SECURITY_LOGIN_PATIENT", "/socket_app_patient"):
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to test namespace")
-
-@socketio.on('disconnect', namespace='/socket_app_patient')
-def disconnect_app_patient():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from test namespace")
 
 @socketio.on('connect', namespace='/socket_app_screen')
 def connect_app_screen():
