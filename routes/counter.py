@@ -42,6 +42,7 @@ def action_add_paper(add_paper, from_printer=False):
 
 
 @counter_bp.route('/app/counter/paper_add', methods=['POST'])
+@require_app_token_or_login
 def app_paper_add():
     if request.form.get('action') is None:
         return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
@@ -64,6 +65,7 @@ def app_paper_add():
 
 
 @counter_bp.route('/app/counter/update_staff', methods=['POST'])
+@require_app_token_or_login
 def app_update_counter_staff():
     return update_counter_staff()
 
@@ -296,6 +298,7 @@ def update_switch_auto_calling():
 
 
 @counter_bp.route('/app/counter/auto_calling', methods=['POST'])
+@require_app_token_or_login
 def app_auto_calling():
     counter_id = request.form.get('counter_id')
     action = request.form.get('action')
@@ -334,6 +337,7 @@ def app_init_app():
 
 
 @counter_bp.route('/app/counter/remove_staff', methods=['POST'])
+@require_app_token_or_login
 def app_remove_counter_staff():
     print("deconnction")
     remove_counter_staff()
@@ -411,6 +415,7 @@ def relaunch_patient_call(counter_id):
 
 
 @counter_bp.route('/app/counter/relaunch_patient_call/<int:counter_id>', methods=['POST'])
+@require_app_token_or_login
 def app_relaunch_patient_call(counter_id):
     do_relaunch_patient_call(counter_id)
     return '', 204
