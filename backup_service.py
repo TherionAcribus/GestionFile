@@ -21,9 +21,95 @@ from models import (
 FORMAT_VERSION = "2.0"
 APP_NAME = "GestionFile"
 
+# Versions de format acceptées à l'import (rejet strict des autres).
+SUPPORTED_FORMAT_VERSIONS = {"2.0"}
+
 # Seules ces extensions d'images peuvent être écrites lors d'une restauration.
 # Toute autre extension (scripts, exécutables, .py, etc.) est refusée.
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"}
+
+# ---------------------------------------------------------------------------
+# Limites de sécurité pour les fichiers de sauvegarde importés
+# ---------------------------------------------------------------------------
+# Taille maximale du fichier JSON téléversé (avant décodage). Les images y sont
+# encodées en base64, d'où une marge confortable, mais bornée.
+MAX_BACKUP_FILE_BYTES = 64 * 1024 * 1024          # 64 Mo
+# Nombre maximal de sections déclarées dans un fichier.
+MAX_SECTIONS = 100
+# Nombre maximal de fichiers image dans une section d'images.
+MAX_IMAGE_FILES = 5000
+# Taille maximale (après décodage base64) d'un fichier image individuel.
+MAX_DECODED_FILE_BYTES = 16 * 1024 * 1024         # 16 Mo
+# Taille totale maximale (après décodage) restaurée par section d'images.
+MAX_TOTAL_DECODED_BYTES = 128 * 1024 * 1024       # 128 Mo
+
+
+class BackupValidationError(Exception):
+    """Erreur de validation d'un fichier de sauvegarde importé.
+
+    Le message est **sûr pour l'affichage** : il ne contient jamais de détail
+    technique interne (chemin, trace, exception d'origine)."""
+
+
+def _safe_b64decode(b64content, *, max_bytes: int) -> bytes:
+    """Décode du base64 en bornant la taille résultante.
+
+    Rejette (ValueError) le contenu non-str, invalide, ou dont la taille décodée
+    dépasse ``max_bytes`` — la borne est vérifiée sur la longueur encodée
+    **avant** d'allouer, pour éviter une bombe de décompression."""
+    if not isinstance(b64content, str):
+        raise ValueError("contenu base64 non textuel")
+    # 4 caractères base64 -> 3 octets ; on majore avant de décoder.
+    if len(b64content) > (max_bytes // 3 + 1) * 4 + 4:
+        raise ValueError("contenu image trop volumineux")
+    decoded = base64.b64decode(b64content, validate=True)
+    if len(decoded) > max_bytes:
+        raise ValueError("contenu image trop volumineux")
+    return decoded
+
+
+def load_and_validate_backup(raw) -> dict:
+    """Parse et valide **structurellement** une charge utile de sauvegarde.
+
+    ``raw`` est ``bytes`` ou ``str`` (dont la taille a déjà été bornée par
+    l'appelant). Renvoie le dict de sauvegarde validé. Lève
+    :class:`BackupValidationError` avec un message sûr pour l'utilisateur (aucun
+    détail interne) en cas de problème."""
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise BackupValidationError("Fichier illisible (encodage non UTF-8).")
+    if not isinstance(raw, str):
+        raise BackupValidationError("Fichier de sauvegarde invalide.")
+
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        raise BackupValidationError("Fichier JSON illisible ou mal formé.")
+
+    if not isinstance(data, dict):
+        raise BackupValidationError("Structure de sauvegarde invalide.")
+
+    if data.get("app") != APP_NAME:
+        raise BackupValidationError("Ce fichier n'est pas une sauvegarde GestionFile.")
+
+    if data.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
+        raise BackupValidationError("Version de format de sauvegarde non prise en charge.")
+
+    sections = data.get("sections")
+    if not isinstance(sections, list) or not all(isinstance(s, str) for s in sections):
+        raise BackupValidationError("Structure de sauvegarde invalide (sections).")
+    if len(sections) > MAX_SECTIONS:
+        raise BackupValidationError("Sauvegarde invalide : trop de sections.")
+
+    payload = data.get("data")
+    if not isinstance(payload, dict):
+        raise BackupValidationError("Structure de sauvegarde invalide (données).")
+    if len(payload) > MAX_SECTIONS:
+        raise BackupValidationError("Sauvegarde invalide : trop de sections de données.")
+
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -715,9 +801,14 @@ class ImagesButtonsSection(BackupSection):
         return files
 
     def restore_data(self, data):
+        if not isinstance(data, dict):
+            raise BackupValidationError("Section 'Images boutons' invalide.")
+        if len(data) > MAX_IMAGE_FILES:
+            raise BackupValidationError("Section 'Images boutons' : trop de fichiers.")
         base_dir = self._get_dir()
         os.makedirs(base_dir, exist_ok=True)
         skipped = 0
+        total = 0
         for rel_path, b64content in data.items():
             try:
                 full_path = safe_relative_path(
@@ -732,12 +823,23 @@ class ImagesButtonsSection(BackupSection):
                     f"Restore images_buttons: chemin refusé {rel_path!r}: {e}"
                 )
                 continue
+            try:
+                content = _safe_b64decode(b64content, max_bytes=MAX_DECODED_FILE_BYTES)
+            except ValueError as e:
+                skipped += 1
+                current_app.logger.warning(
+                    f"Restore images_buttons: contenu refusé {rel_path!r}: {e}"
+                )
+                continue
+            total += len(content)
+            if total > MAX_TOTAL_DECODED_BYTES:
+                raise BackupValidationError("Section 'Images boutons' : volume total trop important.")
             full_path.parent.mkdir(parents=True, exist_ok=True)
             with open(full_path, "wb") as f:
-                f.write(base64.b64decode(b64content))
+                f.write(content)
         if skipped:
             current_app.logger.warning(
-                f"Restore images_buttons: {skipped} chemin(s) refusé(s) (traversée/extension)."
+                f"Restore images_buttons: {skipped} fichier(s) refusé(s) (traversée/extension/taille)."
             )
 
 
@@ -768,12 +870,17 @@ class ImagesGallerySection(BackupSection):
         return files
 
     def restore_data(self, data):
+        if not isinstance(data, dict):
+            raise BackupValidationError("Section 'Galerie images' invalide.")
+        if len(data) > MAX_IMAGE_FILES:
+            raise BackupValidationError("Section 'Galerie images' : trop de fichiers.")
         static_folder = current_app.static_folder
         # Répertoires réellement autorisés à la restauration (résolus en absolu).
         allowed_roots = [
             os.path.realpath(base_dir) for _prefix, base_dir in self._get_dirs()
         ]
         skipped = 0
+        total = 0
         for rel_path, b64content in data.items():
             try:
                 full_path = safe_relative_path(
@@ -800,12 +907,23 @@ class ImagesGallerySection(BackupSection):
                     f"Restore images_gallery: chemin hors périmètre {rel_path!r}."
                 )
                 continue
+            try:
+                content = _safe_b64decode(b64content, max_bytes=MAX_DECODED_FILE_BYTES)
+            except ValueError as e:
+                skipped += 1
+                current_app.logger.warning(
+                    f"Restore images_gallery: contenu refusé {rel_path!r}: {e}"
+                )
+                continue
+            total += len(content)
+            if total > MAX_TOTAL_DECODED_BYTES:
+                raise BackupValidationError("Section 'Galerie images' : volume total trop important.")
             full_path.parent.mkdir(parents=True, exist_ok=True)
             with open(full_path, "wb") as f:
-                f.write(base64.b64decode(b64content))
+                f.write(content)
         if skipped:
             current_app.logger.warning(
-                f"Restore images_gallery: {skipped} chemin(s) refusé(s) (traversée/extension/périmètre)."
+                f"Restore images_gallery: {skipped} fichier(s) refusé(s) (traversée/extension/périmètre/taille)."
             )
 
 
@@ -875,8 +993,11 @@ def export_sections(section_keys: list[str]) -> dict:
 
 def restore_sections(backup_data: dict, section_keys: list[str] | None = None) -> dict:
     """Restore sections from a backup dict. Returns a report."""
-    if backup_data.get("app") != APP_NAME:
+    if not isinstance(backup_data, dict) or backup_data.get("app") != APP_NAME:
         return {"success": False, "error": "Fichier de sauvegarde invalide (app inconnue)."}
+
+    if backup_data.get("format_version") not in SUPPORTED_FORMAT_VERSIONS:
+        return {"success": False, "error": "Version de format de sauvegarde non prise en charge."}
 
     available = backup_data.get("sections", [])
     data = backup_data.get("data", {})
