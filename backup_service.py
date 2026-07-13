@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from io import BytesIO
 from flask import current_app
+from path_security import UnsafePathError, safe_relative_path
 from models import (
     db, Pharmacist, Counter, Activity, ActivitySchedule, Weekday,
     AlgoRule, Button, ConfigOption, ConfigVersion,
@@ -19,6 +20,10 @@ from models import (
 
 FORMAT_VERSION = "2.0"
 APP_NAME = "GestionFile"
+
+# Seules ces extensions d'images peuvent être écrites lors d'une restauration.
+# Toute autre extension (scripts, exécutables, .py, etc.) est refusée.
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico"}
 
 
 # ---------------------------------------------------------------------------
@@ -712,11 +717,28 @@ class ImagesButtonsSection(BackupSection):
     def restore_data(self, data):
         base_dir = self._get_dir()
         os.makedirs(base_dir, exist_ok=True)
+        skipped = 0
         for rel_path, b64content in data.items():
-            full_path = os.path.join(base_dir, rel_path)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            try:
+                full_path = safe_relative_path(
+                    base_dir,
+                    rel_path,
+                    allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+                    what="image path",
+                )
+            except UnsafePathError as e:
+                skipped += 1
+                current_app.logger.warning(
+                    f"Restore images_buttons: chemin refusé {rel_path!r}: {e}"
+                )
+                continue
+            full_path.parent.mkdir(parents=True, exist_ok=True)
             with open(full_path, "wb") as f:
                 f.write(base64.b64decode(b64content))
+        if skipped:
+            current_app.logger.warning(
+                f"Restore images_buttons: {skipped} chemin(s) refusé(s) (traversée/extension)."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -746,11 +768,45 @@ class ImagesGallerySection(BackupSection):
         return files
 
     def restore_data(self, data):
+        static_folder = current_app.static_folder
+        # Répertoires réellement autorisés à la restauration (résolus en absolu).
+        allowed_roots = [
+            os.path.realpath(base_dir) for _prefix, base_dir in self._get_dirs()
+        ]
+        skipped = 0
         for rel_path, b64content in data.items():
-            full_path = os.path.join(current_app.static_folder, rel_path)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            try:
+                full_path = safe_relative_path(
+                    static_folder,
+                    rel_path,
+                    allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+                    what="image path",
+                )
+            except UnsafePathError as e:
+                skipped += 1
+                current_app.logger.warning(
+                    f"Restore images_gallery: chemin refusé {rel_path!r}: {e}"
+                )
+                continue
+            # En plus de rester sous static/, confiner aux seuls sous-dossiers
+            # galleries/ et images/annonces/ (pas d'écriture ailleurs sous static).
+            resolved = os.path.realpath(str(full_path))
+            if not any(
+                resolved == root or resolved.startswith(root + os.sep)
+                for root in allowed_roots
+            ):
+                skipped += 1
+                current_app.logger.warning(
+                    f"Restore images_gallery: chemin hors périmètre {rel_path!r}."
+                )
+                continue
+            full_path.parent.mkdir(parents=True, exist_ok=True)
             with open(full_path, "wb") as f:
                 f.write(base64.b64decode(b64content))
+        if skipped:
+            current_app.logger.warning(
+                f"Restore images_gallery: {skipped} chemin(s) refusé(s) (traversée/extension/périmètre)."
+            )
 
 
 # ---------------------------------------------------------------------------
