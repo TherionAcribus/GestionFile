@@ -17,6 +17,7 @@ from sqlalchemy import func, CheckConstraint, and_, Boolean, DateTime, Column, I
 from flask_migrate import Migrate
 from flask.signals import request_started
 from flask_mailman import Mail
+from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_socketio import SocketIO, join_room, leave_room
 from datetime import datetime, time, timedelta
 import time as tm
@@ -115,6 +116,14 @@ parameters = pika.URLParameters(_rabbitmq_url)
 
 mail = Mail()
 migrate = Migrate()
+# Protection CSRF (Flask-WTF). Initialisée dans create_app. On désactive la
+# vérification automatique globale (WTF_CSRF_CHECK_DEFAULT=False) et on décide
+# nous-mêmes, requête par requête, ce qui doit être protégé : les requêtes
+# navigateur (session + cookie) le sont, les requêtes machine (App_Comptoir,
+# borne, imprimante — authentifiées par jeton applicatif) et le transport
+# Socket.IO en sont exemptés. Voir csrf_protect_browser_requests() et
+# _csrf_is_exempt().
+csrf = CSRFProtect()
 
 
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
@@ -267,6 +276,17 @@ def create_app(config_class=Config):
 
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # --- Protection CSRF ---
+    # On protège les requêtes navigateur (voir csrf_protect_browser_requests).
+    # WTF_CSRF_CHECK_DEFAULT=False : pas de vérification automatique sur toutes
+    # les vues ; on l'applique sélectivement pour ne pas casser les clients
+    # machine (jeton applicatif) ni Socket.IO.
+    # WTF_CSRF_TIME_LIMIT=None : le jeton reste valide le temps de la session
+    # (évite les faux rejets sur les longues sessions d'administration).
+    app.config.setdefault("WTF_CSRF_CHECK_DEFAULT", False)
+    app.config.setdefault("WTF_CSRF_TIME_LIMIT", None)
+    csrf.init_app(app)
 
     user_datastore = SQLAlchemyUserDatastore(db, User, Role)
     security = Security(app, user_datastore, register_blueprint=True)
@@ -818,7 +838,55 @@ def require_login_for_admin():
     elif request.path.startswith('/app'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not (current_user.is_authenticated or is_valid_app_request):
             return jsonify({"error": "Unauthorized"}), 401
-        
+
+
+# Préfixes de chemins exemptés de CSRF : transport Socket.IO et endpoints
+# machine/kiosque (App_Comptoir, borne, imprimante). Ces clients ne sont pas des
+# navigateurs porteurs de session : ils s'authentifient par jeton applicatif
+# (X-App-Token) ou sont des bornes publiques. Documenté dans docs/SECURITY.md.
+_CSRF_EXEMPT_PREFIXES = (
+    "/socket.io",   # transport Socket.IO (polling POST)
+    "/api/",        # API machine (jeton) : get_app_token, counter, printer...
+    "/app/",        # routes App_Comptoir (jeton)
+    "/patient",     # borne/kiosque patient + /patients_submit + /patient/phone
+)
+
+
+def _csrf_is_exempt():
+    """Vrai si la requête courante ne doit PAS être soumise au contrôle CSRF."""
+    path = request.path
+    if path.startswith(_CSRF_EXEMPT_PREFIXES):
+        return True
+    # Requêtes des applications clientes (App_Comptoir, borne, imprimante) :
+    # présence d'un en-tête personnalisé X-App-Token. Un formulaire cross-site ne
+    # peut pas positionner d'en-tête personnalisé (protection intrinsèque), et le
+    # jeton est de toute façon revérifié par la route (@require_app_token_or_login).
+    if request.headers.get("X-App-Token"):
+        return True
+    return False
+
+
+@app.before_request
+def csrf_protect_browser_requests():
+    """Applique la vérification CSRF aux seules requêtes navigateur mutatrices.
+
+    Les requêtes GET/HEAD/OPTIONS et les endpoints machine/kiosque exemptés ne
+    sont pas contrôlés ; tout le reste (formulaires HTMX et fetch d'admin, pages
+    comptoir navigateur) doit présenter un jeton CSRF valide, sous peine de 400.
+    """
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return
+    if _csrf_is_exempt():
+        return
+    csrf.protect()
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(error):
+    """Refus explicite d'une requête sans jeton CSRF valide (400)."""
+    app.logger.warning("CSRF refusé sur %s %s : %s", request.method, request.path, error.description)
+    return jsonify({"error": "CSRF validation failed", "reason": error.description}), 400
+
 
 
 def authorize_config_change(key, expected_value_type=None):
