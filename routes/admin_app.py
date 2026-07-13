@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, current_app as app, jsonify
-from routes.admin_security import send_test_email, require_permission, require_permission_dashboard
+from routes.admin_security import send_test_email, require_permission, require_permission_dashboard, require_permission_api
 from models import DashboardCard
 
 admin_app_bp = Blueprint('admin_app', __name__)
@@ -30,15 +30,15 @@ def admin_app(tab=None):
                             namespaces = list(app.active_connections.keys())
     )
 
-@admin_app_bp.route('/admin/app/mail/test')
+@admin_app_bp.route('/admin/app/mail/test', methods=['POST'])
+@require_permission_api('app')
 def admin_app_mail_test():
+    # Envoi d'un e-mail = action : POST uniquement, permission 'app' requise.
     mail_adress = request.values.get('mail_adress')
 
-    print("mail adress", mail_adress)
+    if not mail_adress:
+        return app.display_toast(success=False, message="Veuillez entrer une adresse email")
 
-    if mail_adress == "":
-        app.display_toast(success=False, message="Veuillez entrer une adresse email")
-        
     if send_test_email(mail_adress):
         app.display_toast(success=True, message="Email envoyé")
     else:
@@ -57,6 +57,7 @@ def dashboard_communication():
 
 
 @admin_app_bp.route('/admin/app/get_connections', methods=['POST'])
+@require_permission_api('app')
 def get_connections():
     # on récupere les namespaces selectionnes, si aucun : on les affiche tous
     selected_namespaces = request.form.getlist('namespaces[]')

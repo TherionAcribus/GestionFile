@@ -14,6 +14,25 @@ import json
 
 admin_security_bp = Blueprint('admin_security', __name__)
 
+
+def user_has_permission(user, resource):
+    """Indique si ``user`` possède la permission ``admin_<resource>``.
+
+    Source de vérité unique pour toutes les vérifications de permission (pages
+    et API). Un utilisateur non authentifié ou sans rôle n'a aucune permission.
+    """
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    if not getattr(user, "roles", None):
+        return False
+
+    permission_field = f'admin_{resource}'
+    for role in user.roles:
+        if getattr(role, permission_field, False):
+            return True
+    return False
+
+
 # gère les permissions sur les pages
 def require_permission(resource):
     def decorator(f):
@@ -28,23 +47,35 @@ def require_permission(resource):
                 error_message = f"Vous n'avez pas les permissions nécessaires pour pour accéder à la page '{resource}'."
                 return render_template('admin/permission_error.html', error_message=error_message)
 
-            # Vérifier si au moins un des rôles de l'utilisateur a la permission
-            has_permission = False
-            for role in current_user.roles:
-                app.logger.debug(f"Vérification du rôle {role.name} pour la ressource {resource}")
-                app.logger.debug(f"Permissions du rôle: {role.get_permissions()}")
-                
-                permission_field = f'admin_{resource}'
-                if hasattr(role, permission_field):
-                    permission_value = getattr(role, permission_field)
-                    app.logger.debug(f"Valeur de la permission {permission_field}: {permission_value}")
-                    if permission_value:
-                        has_permission = True
-                        break
-
-            if not has_permission:
+            if not user_has_permission(current_user, resource):
                 error_message = f"Vous n'avez pas les permissions nécessaires pour accéder à la page '{resource}'."
                 return render_template('admin/permission_error.html', error_message=error_message)
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def require_permission_api(resource):
+    """Comme ``require_permission`` mais pour les endpoints AJAX/HTMX.
+
+    Renvoie des réponses JSON avec statut explicite au lieu d'une redirection :
+    - **401** si l'utilisateur n'est pas connecté ;
+    - **403** si l'utilisateur est connecté mais sans la permission requise.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                app.logger.warning(
+                    "Accès non authentifié refusé (permission API '%s')", resource)
+                return jsonify({"error": "Unauthorized"}), 401
+
+            if not user_has_permission(current_user, resource):
+                app.logger.warning(
+                    "Permission '%s' refusée à %s", resource,
+                    getattr(current_user, "username", "?"))
+                return jsonify({"error": "Forbidden"}), 403
 
             return f(*args, **kwargs)
         return decorated_function
@@ -59,21 +90,7 @@ def require_permission_dashboard(resource):
                 app.logger.warning("Utilisateur non authentifié tentant d'accéder à une ressource protégée")
                 return redirect(url_for('security.login'))
 
-            # Vérifier si au moins un des rôles de l'utilisateur a la permission
-            has_permission = False
-            for role in current_user.roles:
-                app.logger.debug(f"Vérification du rôle {role.name} pour la ressource {resource}")
-                app.logger.debug(f"Permissions du rôle: {role.get_permissions()}")
-                
-                permission_field = f'admin_{resource}'
-                if hasattr(role, permission_field):
-                    permission_value = getattr(role, permission_field)
-                    app.logger.debug(f"Valeur de la permission {permission_field}: {permission_value}")
-                    if permission_value:
-                        has_permission = True
-                        break
-
-            if not has_permission:
+            if not user_has_permission(current_user, resource):
                 app.logger.warning(f"Utilisateur {current_user.username} n'a pas la permission {resource}")
                 # Récupérer le dashboardcard depuis les arguments de la fonction
                 # On suppose que la fonction originale utilise DashboardCard.query.filter_by(name=...)

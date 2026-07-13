@@ -19,8 +19,8 @@
     </div>
     
     <div class="col-auto">
-        <button class="btn btn-success"
-                hx-get="/admin/app/mail/test"
+        <button type="button" class="btn btn-success"
+                hx-post="/admin/app/mail/test"
                 hx-target="#invisible"
                 hx-include="closest form"
                 >Envoyer un mail de test</button>

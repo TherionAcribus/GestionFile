@@ -95,7 +95,8 @@ from routes.patient import patient_bp
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
 from routes.home import home_bp
 from python.engine import engine_bp
-from routes.admin_security import require_permission, require_permission_dashboard
+from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission
+from params_registry import CONFIG_MAPPINGS, BALISE_LETTERS, get_spec
 
 database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
@@ -143,139 +144,10 @@ def load_configuration(app):
     app.config.setdefault("PAGE_PATIENT_INTERFACE_NO_TICKET", "Ticket non imprimé. Veuillez noter votre numéro :")
     app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF", "Impression impossible. Veuillez vous adresser au personnel.")
 
-    config_mappings = {
-        "pharmacy_name": ("PHARMACY_NAME", "value_str"),
-        "network_adress": ("NETWORK_ADRESS", "value_str"),
-        "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
-        "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
-        "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
-        "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
-        "printer": ("PRINTER", "value_bool"),
-        "printer_width": ("PRINTER_WIDTH", "value_int"),
-        "add_paper": ("ADD_PAPER", "value_bool"),
-        "admin_colors": ("ADMIN_COLORS", "value_str"),
-        "announce_title": ("ANNOUNCE_TITLE", "value_str"),
-        "announce_title_size": ("ANNOUNCE_TITLE_SIZE", "value_int"),
-        "announce_subtitle": ("ANNOUNCE_SUBTITLE", "value_str"),
-        "announce_text_up_patients": ("ANNOUNCE_TEXT_UP_PATIENTS", "value_str"),
-        "announce_text_up_patients_display": ("ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY", "value_str"),
-        "announce_text_up_patients_size": ("ANNOUNCE_TEXT_UP_PATIENTS_SIZE", "value_int"),
-        "announce_text_down_patients": ("ANNOUNCE_TEXT_DOWN_PATIENTS", "value_str"),
-        "announce_text_down_patients_display": ("ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY", "value_str"),
-        "announce_text_down_patients_size": ("ANNOUNCE_TEXT_DOWN_PATIENTS_SIZE", "value_int"),
-        "announce_sound": ("ANNOUNCE_SOUND", "value_bool"),
-        "announce_alert": ("ANNOUNCE_ALERT", "value_bool"),
-        "announce_alert_filename": ("ANNOUNCE_ALERT_FILENAME", "value_str"),
-        "announce_style": ("ANNOUNCE_STYLE", "value_str"),
-        "announce_player": ("ANNOUNCE_PLAYER", "value_str"),
-        "announce_infos_display": ("ANNOUNCE_INFOS_DISPLAY", "value_bool"),
-        "announce_infos_display_time": ("ANNOUNCE_INFOS_DISPLAY_TIME", "value_int"),
-        "announce_infos_transition": ("ANNOUNCE_INFOS_TRANSITION", "value_str"),
-        "announce_infos_gallery": ("ANNOUNCE_INFOS_GALLERY", "value_str"),
-        "announce_gallery_folders": ("ANNOUNCE_GALLERY_FOLDERS", "value_str"),
-        "announce_infos_mix_folders": ("ANNOUNCE_INFOS_MIX_FOLDERS", "value_bool"),
-        "announce_infos_width": ("ANNOUNCE_INFOS_WIDTH", "value_int"),
-        "announce_infos_height": ("ANNOUNCE_INFOS_HEIGHT", "value_int"),
-        "announce_call_text": ("ANNOUNCE_CALL_TEXT", "value_str"),
-        "announce_call_text_size": ("ANNOUNCE_CALL_TEXT_SIZE", "value_int"),
-        "announce_call_text_transition": ("ANNOUNCE_CALL_TEXT_TRANSITION", "value_str"),
-        "announce_ongoing_display": ("ANNOUNCE_ONGOING_DISPLAY", "value_bool"),
-        "announce_ongoing_text": ("ANNOUNCE_ONGOING_TEXT", "value_str"),
-        "announce_next_patients_display": ("ANNOUNCE_NEXT_PATIENTS_DISPLAY", "value_bool"),
-        "announce_next_patients_text": ("ANNOUNCE_NEXT_PATIENTS_TEXT", "value_str"),
-        "announce_next_patients_alignment": ("ANNOUNCE_NEXT_PATIENTS_ALIGNMENT", "value_str"),
-        "announce_call_sound": ("ANNOUNCE_CALL_SOUND", "value_str"),
-        "announce_call_translation": ("ANNOUNCE_CALL_TRANSLATION", "value_str"),
-        "counter_order": ("COUNTER_ORDER", "value_str"),
-        "music_volume": ("MUSIC_VOLUME", "value_int"),
-        "music_announce_volume": ("MUSIC_ANNOUNCE_VOLUME", "value_int"),
-        "music_announce_action": ("MUSIC_ANNOUNCE_ACTION", "value_str"),
-        "music_spotify": ("MUSIC_SPOTIFY", "value_bool"),        
-        "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
-        "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
-        "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
-        "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
-        "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
-        "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
-        "page_patient_validation_message": ("PAGE_PATIENT_VALIDATION_MESSAGE", "value_str"),
-        "page_patient_confirmation_message": ("PAGE_PATIENT_CONFIRMATION_MESSAGE", "value_str"),
-        "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
-        "page_patient_display_button_scan" : ("PAGE_PATIENT_DISPLAY_BUTTON_SCAN", "value_bool"),
-        "page_patient_display_scan_explanation": ("PAGE_PATIENT_DISPLAY_SCAN_EXPLANATION", "value_bool"),
-        "page_patient_qrcode_web_page": ("PAGE_PATIENT_QRCODE_WEB_PAGE", "value_bool"),
-        "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
-        "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "page_patient_print_ticket_display": ("PAGE_PATIENT_PRINT_TICKET_DISPLAY", "value_bool"),
-        "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
-        "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "page_patient_direct_print": ("PAGE_PATIENT_DIRECT_PRINT", "value_bool"),
-        "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
-        "page_patient_interface_validate_print": ("PAGE_PATIENT_INTERFACE_VALIDATE_PRINT", "value_str"),
-        "page_patient_interface_validate_scan": ("PAGE_PATIENT_INTERFACE_VALIDATE_SCAN", "value_str"),
-        "page_patient_interface_scan_explanation": ("PAGE_PATIENT_INTERFACE_SCAN_EXPLANATION", "value_str"),
-        "page_patient_interface_validate_cancel": ("PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL", "value_str"),
-        "page_patient_interface_done_print": ("PAGE_PATIENT_INTERFACE_DONE_PRINT", "value_str"),
-        "page_patient_interface_done_extend": ("PAGE_PATIENT_INTERFACE_DONE_EXTEND", "value_str"),
-        "page_patient_interface_done_back": ("PAGE_PATIENT_INTERFACE_DONE_BACK", "value_str"),
-        "page_patient_print_after_scan": ("PAGE_PATIENT_PRINT_AFTER_SCAN", "value_bool"),
-        "page_patient_print_after_print": ("PAGE_PATIENT_PRINT_AFTER_PRINT", "value_bool"),
-        "page_patient_timer_activity_inactive": ("PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE", "value_int"),
-        "page_patient_button_print_ticket_display_picture": ("PAGE_PATIENT_BUTTON_PRINT_TICKET_DISPLAY_PICTURE", "value_bool"),
-        "page_patient_button_print_ticket_picture": ("PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE", "value_str"),
-        "page_patient_button_cancel_display_picture": ("PAGE_PATIENT_BUTTON_CANCEL_DISPLAY_PICTURE", "value_bool"),
-        "page_patient_button_cancel_picture": ("PAGE_PATIENT_BUTTON_CANCEL_PICTURE", "value_str"),
-        "ticket_header": ("TICKET_HEADER", "value_str"),
-        "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
-        "ticket_message": ("TICKET_MESSAGE", "value_str"),
-        "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
-        "ticket_footer": ("TICKET_FOOTER", "value_str"),
-        "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
-        "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "mail_server": ("MAIL_SERVER", "value_str"),
-        "mail_port": ("MAIL_PORT", "value_int"),
-        "mail_username": ("MAIL_USERNAME", "value_str"),
-        "mail_password": ("MAIL_PASSWORD", "value_str"),
-        "mail_default_sender": ("MAIL_DEFAULT_SENDER", "value_str"),
-        "mail_use_tls": ("MAIL_USE_TLS", "value_bool"),
-        "mail_use_ssl": ("MAIL_USE_SSL", "value_bool"),
-        "phone_center": ("PHONE_CENTER", "value_bool"),
-        "phone_title": ("PHONE_TITLE", "value_str"),
-        "phone_line1": ("PHONE_LINE1", "value_str"),
-        "phone_line2": ("PHONE_LINE2", "value_str"),
-        "phone_line3": ("PHONE_LINE3", "value_str"),
-        "phone_line4": ("PHONE_LINE4", "value_str"),
-        "phone_line5": ("PHONE_LINE5", "value_str"),
-        "phone_line6": ("PHONE_LINE6", "value_str"),
-        "phone_display_your_turn": ("PHONE_DISPLAY_YOUR_TURN", "value_bool"),
-        "phone_your_turn_line1": ("PHONE_YOUR_TURN_LINE1", "value_str"),
-        "phone_your_turn_line2": ("PHONE_YOUR_TURN_LINE2", "value_str"),
-        "phone_your_turn_line3": ("PHONE_YOUR_TURN_LINE3", "value_str"),
-        "phone_your_turn_line4": ("PHONE_YOUR_TURN_LINE4", "value_str"),
-        "phone_your_turn_line5": ("PHONE_YOUR_TURN_LINE5", "value_str"),
-        "phone_your_turn_line6": ("PHONE_YOUR_TURN_LINE6", "value_str"),
-        "phone_display_specific_message": ("PHONE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
-        "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
-        "cron_transfer_patient_to_history": ("CRON_TRANSFER_PATIENT_TO_HISTORY", "value_bool"),
-        "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
-        "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
-        "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
-        "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
-        "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
-        "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),
-        "security_login_patient": ("SECURITY_LOGIN_PATIENT", "value_bool"),
-        "security_remember_duration": ("SECURITY_REMEMBER_DURATION", "value_int"),
-        "page_patient_print_fail_behavior": ("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "value_str"),
-        "page_patient_print_fail_show_retry": ("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", "value_bool"),
-        "page_patient_print_fail_show_staff": ("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", "value_bool"),
-        "page_patient_print_fail_abandon_timer": ("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", "value_int"),
-        "page_patient_interface_printing": ("PAGE_PATIENT_INTERFACE_PRINTING", "value_str"),
-        "page_patient_interface_print_failed": ("PAGE_PATIENT_INTERFACE_PRINT_FAILED", "value_str"),
-        "page_patient_interface_retry": ("PAGE_PATIENT_INTERFACE_RETRY", "value_str"),
-        "page_patient_interface_call_staff": ("PAGE_PATIENT_INTERFACE_CALL_STAFF", "value_str"),
-        "page_patient_interface_staff_called": ("PAGE_PATIENT_INTERFACE_STAFF_CALLED", "value_str"),
-        "page_patient_interface_no_ticket": ("PAGE_PATIENT_INTERFACE_NO_TICKET", "value_str"),
-        "page_patient_interface_print_failed_staff": ("PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF", "value_str"),
-    }
+    # Table clé -> (nom app.config, colonne ConfigOption) : dérivée du registre
+    # centralisé (params_registry) afin que « clés chargées » et « clés
+    # modifiables » restent strictement identiques.
+    config_mappings = CONFIG_MAPPINGS
 
     for key, (config_name, value_type) in config_mappings.items():
         config_option = ConfigOption.query.filter_by(config_key=key).first()
@@ -949,24 +821,67 @@ def require_login_for_admin():
         
 
 
+def authorize_config_change(key, expected_value_type=None):
+    """Contrôle d'accès commun aux routes de modification des paramètres.
+
+    Retourne ``(spec, None)`` si la modification est autorisée, sinon
+    ``(None, (réponse, statut))`` à renvoyer tel quel :
+
+    - **401** si l'utilisateur n'est pas authentifié ;
+    - **400** si la clé est absente du registre (``PARAM_REGISTRY``) ou d'un
+      type incompatible avec la route appelée ;
+    - **403** si l'utilisateur n'a pas la permission associée à la clé.
+
+    Aucune confiance n'est accordée aux données du navigateur : la permission
+    et le type proviennent exclusivement du registre serveur.
+    """
+    if not current_user.is_authenticated:
+        app.logger.warning("Modification de paramètre refusée (non authentifié) : %r", key)
+        return None, (jsonify({"error": "Unauthorized"}), 401)
+
+    spec = get_spec(key)
+    if spec is None:
+        app.logger.warning("Modification de paramètre refusée (clé inconnue) : %r", key)
+        return None, (jsonify({"error": "Unknown parameter"}), 400)
+
+    if expected_value_type is not None and spec.value_type != expected_value_type:
+        app.logger.warning(
+            "Modification de paramètre refusée (type %s attendu pour %s, registre=%s)",
+            expected_value_type, key, spec.value_type)
+        return None, (jsonify({"error": "Invalid parameter type"}), 400)
+
+    if not user_has_permission(current_user, spec.permission):
+        app.logger.warning(
+            "Modification de '%s' refusée à %s (permission '%s' requise)",
+            key, getattr(current_user, "username", "?"), spec.permission)
+        return None, (jsonify({"error": "Forbidden"}), 403)
+
+    return spec, None
+
+
 @app.route('/admin/update_switch', methods=['POST'])
 def update_switch():
     """ Mise à jour des switches d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
-    print("key, value", key, value)
+
+    spec, error = authorize_config_change(key, expected_value_type="value_bool")
+    if error:
+        return error
+
+    bool_value = value == "true"
     try:
         # MAJ BDD
         config_option = ConfigOption.query.filter_by(config_key=key).first()
-        # MAJ Config 
-        app.config[key.upper()] = True if value == "true" else False
-        
+        # MAJ Config
+        app.config[spec.config_name] = bool_value
+
         if config_option:
-            config_option.value_bool = True if value == "true" else False
+            config_option.value_bool = bool_value
         else:
-            config_option = ConfigOption(config_key=key, value_bool=True if value == "true" else False)
+            config_option = ConfigOption(config_key=key, value_bool=bool_value)
             db.session.add(config_option)
-            
+
         db.session.commit()
         call_function_with_switch(key, value)
         return display_toast(success=True, message="Option mise à jour.")
@@ -1096,29 +1011,28 @@ def update_input():
     """ Mise à jour des input d'options de l'application """
     key = request.values.get('key')
     value = request.values.get('value')
-    check = request.values.get('check')
-    print("ZINPUT", key, value, check)
 
-    if check:
-        if check == "int":
-            if value.isdigit():
-                value = int(value)
-            else:
-                return display_toast(success=False, message="L'entrée doit être un nombre.")
+    spec, error = authorize_config_change(key)
+    if error:
+        return error
+
+    # Le type de validation vient du registre serveur, jamais du paramètre
+    # ``check`` envoyé par le navigateur.
+    validator = spec.validator
+    if value is None:
+        value = ""
+
+    if validator == "int":
+        if value.isdigit():
+            value = int(value)
         else:
-            authorized_letters = ""
-            if check == "welcome":
-                authorized_letters = "PDH"
-            elif check == "before_call":
-                authorized_letters = "PDHAN"
-            elif check == "after_call":
-                authorized_letters = "PDHANMC"
-            text_check = validate_and_transform_text(value, authorized_letters)
-            
-            if text_check["success"]:
-                value = text_check["value"]
-            else:
-                return display_toast(success=False, message=text_check["value"])
+            return display_toast(success=False, message="L'entrée doit être un nombre.")
+    elif validator in BALISE_LETTERS:
+        text_check = validate_and_transform_text(value, BALISE_LETTERS[validator])
+        if text_check["success"]:
+            value = text_check["value"]
+        else:
+            return display_toast(success=False, message=text_check["value"])
 
     if key.startswith("ticket_"):
         escpos_text = convert_markdown_to_escpos(value)
@@ -1133,18 +1047,19 @@ def update_input():
 
     try:
         # MAJ Config
-        app.config[key.upper()] = value
+        app.config[spec.config_name] = value
 
-        # MAJ BDD
-        config_option = ConfigOption.query.filter_by(config_key=key).first()        
+        # MAJ BDD — la colonne cible est déterminée par le registre serveur.
+        is_int = spec.value_type == "value_int"
+        config_option = ConfigOption.query.filter_by(config_key=key).first()
 
         if config_option:
-            if check == "int":
+            if is_int:
                 config_option.value_int = value
             else:
                 config_option.value_str = value
         else:
-            if check == "int":
+            if is_int:
                 config_option = ConfigOption(config_key=key, value_int=value)
             else:
                 config_option = ConfigOption(config_key=key, value_str=value)
@@ -1178,18 +1093,22 @@ def special_functions_with_input(key):
 @app.route('/admin/update_select', methods=['POST'])
 def update_select():
     """ Mise à jour des selects d'options de l'application """
-    print(request.form)
     key = request.values.get('key')
     value = request.values.get('value')
+
+    spec, error = authorize_config_change(key, expected_value_type="value_str")
+    if error:
+        return error
+
     try:
         # MAJ BDD
-        config_option = ConfigOption.query.filter_by(config_key=key).first()        
+        config_option = ConfigOption.query.filter_by(config_key=key).first()
         # MAJ Config
-        app.config[key.upper()] = value
+        app.config[spec.config_name] = value
         if config_option:
             config_option.value_str = value
             db.session.commit()
-            call_function_with_select(key, value)         
+            call_function_with_select(key, value)
             return display_toast(success=True)
         else:
             return display_toast(success=False, message="Option non trouvée.")
