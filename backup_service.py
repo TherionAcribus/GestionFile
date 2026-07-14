@@ -21,10 +21,20 @@ from models import (
 )
 
 FORMAT_VERSION = "2.0"
+# Format des sauvegardes ZIP (point 13) : manifeste JSON + images en fichiers
+# binaires. Les sauvegardes ne contenant aucune image restent au format JSON
+# « plat » historique (2.0) ; dès qu'une section d'images est incluse, l'export
+# produit une archive 3.0 pour ne pas charger les images encodées base64 dans un
+# énorme JSON.
+ARCHIVE_FORMAT_VERSION = "3.0"
 APP_NAME = "GestionFile"
 
 # Versions de format acceptées à l'import (rejet strict des autres).
-SUPPORTED_FORMAT_VERSIONS = {"2.0"}
+SUPPORTED_FORMAT_VERSIONS = {"2.0", "3.0"}
+
+# Nom du manifeste et préfixe des fichiers binaires dans une archive 3.0.
+MANIFEST_NAME = "manifest.json"
+FILES_ARC_PREFIX = "files"
 
 # Seules ces extensions d'images peuvent être écrites lors d'une restauration.
 # Toute autre extension (scripts, exécutables, .py, etc.) est refusée.
@@ -44,6 +54,24 @@ MAX_IMAGE_FILES = 5000
 MAX_DECODED_FILE_BYTES = 16 * 1024 * 1024         # 16 Mo
 # Taille totale maximale (après décodage) restaurée par section d'images.
 MAX_TOTAL_DECODED_BYTES = 128 * 1024 * 1024       # 128 Mo
+
+# ---------------------------------------------------------------------------
+# Limites propres aux archives ZIP (format 3.0, point 13)
+# ---------------------------------------------------------------------------
+# Nombre maximal d'entrées dans l'archive (manifeste + fichiers binaires).
+MAX_ARCHIVE_ENTRIES = 2 * MAX_IMAGE_FILES + 50
+# Taille maximale du manifeste JSON contenu dans l'archive.
+MAX_MANIFEST_BYTES = MAX_BACKUP_FILE_BYTES
+# Taille cumulée maximale (non compressée) autorisée dans une archive : garde
+# anti-bombe de décompression, vérifiée à l'ouverture avant toute extraction.
+MAX_ARCHIVE_UNCOMPRESSED_BYTES = 2 * MAX_TOTAL_DECODED_BYTES
+# Taille maximale du fichier ZIP téléversé (les images y sont brutes, donc plus
+# compactes que le base64 : borne alignée sur le volume décompressé autorisé).
+MAX_ARCHIVE_FILE_BYTES = MAX_ARCHIVE_UNCOMPRESSED_BYTES
+
+# Au-delà de ce volume d'images, l'interface avertit que l'export sera lourd et
+# ne coche pas les images par défaut (point 13).
+EXPORT_IMAGE_WARNING_BYTES = 15 * 1024 * 1024      # 15 Mo
 
 
 class BackupValidationError(Exception):
@@ -70,26 +98,11 @@ def _safe_b64decode(b64content, *, max_bytes: int) -> bytes:
     return decoded
 
 
-def load_and_validate_backup(raw) -> dict:
-    """Parse et valide **structurellement** une charge utile de sauvegarde.
+def _validate_backup_structure(data) -> dict:
+    """Valide **structurellement** un dict de sauvegarde (JSON plat ou manifeste
+    d'archive). Commun aux formats 2.0 (JSON) et 3.0 (ZIP).
 
-    ``raw`` est ``bytes`` ou ``str`` (dont la taille a déjà été bornée par
-    l'appelant). Renvoie le dict de sauvegarde validé. Lève
-    :class:`BackupValidationError` avec un message sûr pour l'utilisateur (aucun
-    détail interne) en cas de problème."""
-    if isinstance(raw, bytes):
-        try:
-            raw = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            raise BackupValidationError("Fichier illisible (encodage non UTF-8).")
-    if not isinstance(raw, str):
-        raise BackupValidationError("Fichier de sauvegarde invalide.")
-
-    try:
-        data = json.loads(raw)
-    except (ValueError, TypeError):
-        raise BackupValidationError("Fichier JSON illisible ou mal formé.")
-
+    Lève :class:`BackupValidationError` avec un message sûr pour l'utilisateur."""
     if not isinstance(data, dict):
         raise BackupValidationError("Structure de sauvegarde invalide.")
 
@@ -111,7 +124,42 @@ def load_and_validate_backup(raw) -> dict:
     if len(payload) > MAX_SECTIONS:
         raise BackupValidationError("Sauvegarde invalide : trop de sections de données.")
 
+    # Pour une archive 3.0, les sections d'images ne figurent pas dans ``data``
+    # (leurs octets sont des fichiers binaires) ; ``binary_sections`` déclare
+    # lesquelles. Champ optionnel, mais typé strictement s'il est présent.
+    binary_sections = data.get("binary_sections")
+    if binary_sections is not None:
+        if not isinstance(binary_sections, list) or not all(
+            isinstance(s, str) for s in binary_sections
+        ):
+            raise BackupValidationError("Structure de sauvegarde invalide (sections binaires).")
+        if len(binary_sections) > MAX_SECTIONS:
+            raise BackupValidationError("Sauvegarde invalide : trop de sections binaires.")
+
     return data
+
+
+def load_and_validate_backup(raw) -> dict:
+    """Parse et valide **structurellement** une charge utile de sauvegarde JSON.
+
+    ``raw`` est ``bytes`` ou ``str`` (dont la taille a déjà été bornée par
+    l'appelant). Renvoie le dict de sauvegarde validé. Lève
+    :class:`BackupValidationError` avec un message sûr pour l'utilisateur (aucun
+    détail interne) en cas de problème."""
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise BackupValidationError("Fichier illisible (encodage non UTF-8).")
+    if not isinstance(raw, str):
+        raise BackupValidationError("Fichier de sauvegarde invalide.")
+
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        raise BackupValidationError("Fichier JSON illisible ou mal formé.")
+
+    return _validate_backup_structure(data)
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +171,10 @@ class BackupSection(ABC):
 
     key: str = ""
     label: str = ""
+    # Sections dont le contenu est constitué de fichiers binaires (images).
+    # Dans une archive 3.0 (point 13), leurs octets sont stockés sous
+    # ``files/<key>/…`` plutôt qu'encodés base64 dans le manifeste.
+    is_binary: bool = False
 
     def __init__(self):
         # Cles secretes ecartees lors du dernier export_data (point 5). Les
@@ -819,76 +871,163 @@ class DashboardSection(BackupSection):
 
 
 # ---------------------------------------------------------------------------
+# Images — base commune (sections binaires)
+# ---------------------------------------------------------------------------
+
+class _ImageSection(BackupSection):
+    """Base des sections d'images (fichiers binaires).
+
+    Format 3.0 (point 13) : les octets sont exportés en fichiers binaires dans
+    l'archive (``iter_binary_files``) et restaurés depuis l'archive
+    (``restore_zip``). Format 2.0 : rétrocompatibilité base64 (``export_data`` /
+    ``restore_data``). Toute la logique d'écriture (limites, sûreté des chemins,
+    volume total) est mutualisée dans ``restore_files``."""
+
+    is_binary = True
+
+    # --- Description des répertoires source -------------------------------
+    def _source_dirs(self):
+        """Renvoie ``[(arc_prefix, base_dir), …]``.
+
+        ``arc_prefix`` (éventuellement vide) est préfixé au chemin relatif dans
+        l'archive/le manifeste, pour distinguer plusieurs répertoires source."""
+        raise NotImplementedError
+
+    def _safe_target(self, rel_path):
+        """Résout ``rel_path`` en un Path absolu **sûr** ou lève UnsafePathError.
+
+        Redéfini par les sous-classes (extension autorisée, confinement)."""
+        raise NotImplementedError
+
+    # --- Export -----------------------------------------------------------
+    def iter_binary_files(self):
+        """Itère ``(rel_path, full_path)`` pour chaque fichier à archiver.
+
+        ``rel_path`` utilise des séparateurs ``/`` et intègre l'``arc_prefix``
+        éventuel, afin que la restauration retrouve la cible sans ambiguïté."""
+        for prefix, base_dir in self._source_dirs():
+            if not os.path.exists(base_dir):
+                continue
+            for root, _dirs, filenames in os.walk(base_dir):
+                for fname in filenames:
+                    full_path = os.path.join(root, fname)
+                    rel = os.path.relpath(full_path, base_dir)
+                    arc_rel = os.path.join(prefix, rel) if prefix else rel
+                    yield arc_rel.replace(os.sep, "/"), full_path
+
+    def total_size_bytes(self):
+        """Somme des tailles sur disque des fichiers de la section (estimation)."""
+        total = 0
+        for _rel, full_path in self.iter_binary_files():
+            try:
+                total += os.path.getsize(full_path)
+            except OSError:
+                pass
+        return total
+
+    def export_data(self):
+        # Format 2.0 (JSON plat) : images encodées base64. Conservé pour la
+        # rétrocompatibilité ; l'export 3.0 ne passe jamais par ici.
+        files = {}
+        for rel_path, full_path in self.iter_binary_files():
+            with open(full_path, "rb") as f:
+                files[rel_path] = base64.b64encode(f.read()).decode("ascii")
+        return files
+
+    # --- Restauration -----------------------------------------------------
+    def restore_files(self, files):
+        """Écrit les images depuis un itérable ``(rel_path, content_bytes)``.
+
+        ``content_bytes`` est déjà décodé et borné individuellement par
+        l'appelant ; ``None`` signale un fichier déjà refusé et journalisé.
+        Applique les limites de nombre de fichiers, de sûreté de chemin et de
+        volume total ; ignore les entrées non sûres (journalisées) et lève
+        :class:`BackupValidationError` sur les limites dures."""
+        skipped = 0
+        total = 0
+        count = 0
+        for rel_path, content in files:
+            count += 1
+            if count > MAX_IMAGE_FILES:
+                raise BackupValidationError(f"Section '{self.label}' : trop de fichiers.")
+            if content is None:
+                skipped += 1
+                continue
+            try:
+                full_path = self._safe_target(rel_path)
+            except UnsafePathError as e:
+                skipped += 1
+                current_app.logger.warning(
+                    f"Restore {self.key}: chemin refusé {rel_path!r}: {e}"
+                )
+                continue
+            total += len(content)
+            if total > MAX_TOTAL_DECODED_BYTES:
+                raise BackupValidationError(f"Section '{self.label}' : volume total trop important.")
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(full_path, "wb") as f:
+                f.write(content)
+        if skipped:
+            current_app.logger.warning(
+                f"Restore {self.key}: {skipped} fichier(s) refusé(s) (traversée/extension/périmètre/taille)."
+            )
+
+    def restore_data(self, data):
+        # Format 2.0 : dict {rel_path: base64}. Décode chaque fichier (borné)
+        # puis délègue à restore_files ; None = fichier refusé (déjà journalisé).
+        if not isinstance(data, dict):
+            raise BackupValidationError(f"Section '{self.label}' invalide.")
+        if len(data) > MAX_IMAGE_FILES:
+            raise BackupValidationError(f"Section '{self.label}' : trop de fichiers.")
+
+        def _decoded():
+            for rel_path, b64content in data.items():
+                try:
+                    content = _safe_b64decode(b64content, max_bytes=MAX_DECODED_FILE_BYTES)
+                except ValueError as e:
+                    current_app.logger.warning(
+                        f"Restore {self.key}: contenu refusé {rel_path!r}: {e}"
+                    )
+                    yield rel_path, None
+                    continue
+                yield rel_path, content
+
+        self.restore_files(_decoded())
+
+    def restore_zip(self, archive, section_key):
+        # Format 3.0 : lire les fichiers binaires de l'archive sous
+        # files/<section_key>/… (taille par fichier bornée par l'archive).
+        self.restore_files(archive.iter_binary_files(section_key))
+
+
+# ---------------------------------------------------------------------------
 # Images — Buttons
 # ---------------------------------------------------------------------------
 
-class ImagesButtonsSection(BackupSection):
+class ImagesButtonsSection(_ImageSection):
     key = "images_buttons"
     label = "Images boutons"
 
     def _get_dir(self):
         return os.path.join(current_app.static_folder, "images", "buttons")
 
-    def export_data(self):
-        base_dir = self._get_dir()
-        files = {}
-        if os.path.exists(base_dir):
-            for root, dirs, filenames in os.walk(base_dir):
-                for fname in filenames:
-                    full_path = os.path.join(root, fname)
-                    rel_path = os.path.relpath(full_path, base_dir)
-                    with open(full_path, "rb") as f:
-                        files[rel_path] = base64.b64encode(f.read()).decode("ascii")
-        return files
+    def _source_dirs(self):
+        return [("", self._get_dir())]
 
-    def restore_data(self, data):
-        if not isinstance(data, dict):
-            raise BackupValidationError("Section 'Images boutons' invalide.")
-        if len(data) > MAX_IMAGE_FILES:
-            raise BackupValidationError("Section 'Images boutons' : trop de fichiers.")
-        base_dir = self._get_dir()
-        os.makedirs(base_dir, exist_ok=True)
-        skipped = 0
-        total = 0
-        for rel_path, b64content in data.items():
-            try:
-                full_path = safe_relative_path(
-                    base_dir,
-                    rel_path,
-                    allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
-                    what="image path",
-                )
-            except UnsafePathError as e:
-                skipped += 1
-                current_app.logger.warning(
-                    f"Restore images_buttons: chemin refusé {rel_path!r}: {e}"
-                )
-                continue
-            try:
-                content = _safe_b64decode(b64content, max_bytes=MAX_DECODED_FILE_BYTES)
-            except ValueError as e:
-                skipped += 1
-                current_app.logger.warning(
-                    f"Restore images_buttons: contenu refusé {rel_path!r}: {e}"
-                )
-                continue
-            total += len(content)
-            if total > MAX_TOTAL_DECODED_BYTES:
-                raise BackupValidationError("Section 'Images boutons' : volume total trop important.")
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(content)
-        if skipped:
-            current_app.logger.warning(
-                f"Restore images_buttons: {skipped} fichier(s) refusé(s) (traversée/extension/taille)."
-            )
+    def _safe_target(self, rel_path):
+        return safe_relative_path(
+            self._get_dir(),
+            rel_path,
+            allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+            what="image path",
+        )
 
 
 # ---------------------------------------------------------------------------
 # Images — Gallery (annonces + galleries)
 # ---------------------------------------------------------------------------
 
-class ImagesGallerySection(BackupSection):
+class ImagesGallerySection(_ImageSection):
     key = "images_gallery"
     label = "Galerie images"
 
@@ -898,74 +1037,29 @@ class ImagesGallerySection(BackupSection):
             ("images/annonces", os.path.join(current_app.static_folder, "images", "annonces")),
         ]
 
-    def export_data(self):
-        files = {}
-        for prefix, base_dir in self._get_dirs():
-            if os.path.exists(base_dir):
-                for root, dirs, filenames in os.walk(base_dir):
-                    for fname in filenames:
-                        full_path = os.path.join(root, fname)
-                        rel_path = os.path.join(prefix, os.path.relpath(full_path, base_dir))
-                        with open(full_path, "rb") as f:
-                            files[rel_path] = base64.b64encode(f.read()).decode("ascii")
-        return files
+    def _source_dirs(self):
+        return self._get_dirs()
 
-    def restore_data(self, data):
-        if not isinstance(data, dict):
-            raise BackupValidationError("Section 'Galerie images' invalide.")
-        if len(data) > MAX_IMAGE_FILES:
-            raise BackupValidationError("Section 'Galerie images' : trop de fichiers.")
+    def _safe_target(self, rel_path):
         static_folder = current_app.static_folder
-        # Répertoires réellement autorisés à la restauration (résolus en absolu).
+        full_path = safe_relative_path(
+            static_folder,
+            rel_path,
+            allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+            what="image path",
+        )
+        # En plus de rester sous static/, confiner aux seuls sous-dossiers
+        # galleries/ et images/annonces/ (pas d'écriture ailleurs sous static).
+        resolved = os.path.realpath(str(full_path))
         allowed_roots = [
             os.path.realpath(base_dir) for _prefix, base_dir in self._get_dirs()
         ]
-        skipped = 0
-        total = 0
-        for rel_path, b64content in data.items():
-            try:
-                full_path = safe_relative_path(
-                    static_folder,
-                    rel_path,
-                    allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
-                    what="image path",
-                )
-            except UnsafePathError as e:
-                skipped += 1
-                current_app.logger.warning(
-                    f"Restore images_gallery: chemin refusé {rel_path!r}: {e}"
-                )
-                continue
-            # En plus de rester sous static/, confiner aux seuls sous-dossiers
-            # galleries/ et images/annonces/ (pas d'écriture ailleurs sous static).
-            resolved = os.path.realpath(str(full_path))
-            if not any(
-                resolved == root or resolved.startswith(root + os.sep)
-                for root in allowed_roots
-            ):
-                skipped += 1
-                current_app.logger.warning(
-                    f"Restore images_gallery: chemin hors périmètre {rel_path!r}."
-                )
-                continue
-            try:
-                content = _safe_b64decode(b64content, max_bytes=MAX_DECODED_FILE_BYTES)
-            except ValueError as e:
-                skipped += 1
-                current_app.logger.warning(
-                    f"Restore images_gallery: contenu refusé {rel_path!r}: {e}"
-                )
-                continue
-            total += len(content)
-            if total > MAX_TOTAL_DECODED_BYTES:
-                raise BackupValidationError("Section 'Galerie images' : volume total trop important.")
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(full_path, "wb") as f:
-                f.write(content)
-        if skipped:
-            current_app.logger.warning(
-                f"Restore images_gallery: {skipped} fichier(s) refusé(s) (traversée/extension/périmètre/taille)."
-            )
+        if not any(
+            resolved == root or resolved.startswith(root + os.sep)
+            for root in allowed_roots
+        ):
+            raise UnsafePathError("resolved path outside allowed gallery roots")
+        return full_path
 
 
 # ---------------------------------------------------------------------------
@@ -1007,6 +1101,223 @@ SECTION_GROUPS = {
 }
 
 
+# Clés des sections binaires (images) : déterminent le choix du format d'export
+# (ZIP 3.0 vs JSON 2.0) et le traitement à la restauration.
+BINARY_SECTION_KEYS = {
+    key for key, cls in BACKUP_SECTIONS.items() if getattr(cls, "is_binary", False)
+}
+
+
+# ---------------------------------------------------------------------------
+# Archive ZIP (format 3.0) — lecture
+# ---------------------------------------------------------------------------
+
+class BackupArchive:
+    """Accès en lecture à une sauvegarde au format 3.0 (ZIP).
+
+    Détient la ``ZipFile`` ouverte et le manifeste validé. Fournit l'itération
+    des fichiers binaires d'une section avec garde de taille par fichier (les
+    octets ne sont jamais chargés tous ensemble)."""
+
+    def __init__(self, zip_ref, manifest: dict):
+        self._zip = zip_ref
+        self.manifest = manifest
+
+    def iter_binary_files(self, section_key: str):
+        """Itère ``(rel_path, content_bytes | None)`` pour une section binaire.
+
+        ``None`` signale un fichier refusé (trop volumineux / illisible) déjà
+        journalisé, que la restauration ignorera."""
+        prefix = f"{FILES_ARC_PREFIX}/{section_key}/"
+        for info in self._zip.infolist():
+            name = info.filename
+            if not name.startswith(prefix) or name.endswith("/"):
+                continue
+            rel_path = name[len(prefix):]
+            if not rel_path:
+                continue
+            # Garde anti-bombe : refuser sans lire un fichier dont la taille
+            # décompressée annoncée dépasse la limite par fichier.
+            if info.file_size > MAX_DECODED_FILE_BYTES:
+                current_app.logger.warning(
+                    f"Restore {section_key}: fichier {rel_path!r} trop volumineux (ignoré)."
+                )
+                yield rel_path, None
+                continue
+            try:
+                content = self._zip.read(info)
+            except Exception as e:
+                current_app.logger.warning(
+                    f"Restore {section_key}: lecture impossible {rel_path!r}: {e}"
+                )
+                yield rel_path, None
+                continue
+            yield rel_path, content
+
+    def close(self):
+        try:
+            self._zip.close()
+        except Exception:
+            pass
+
+
+def load_and_validate_archive(zip_ref) -> "BackupArchive":
+    """Valide une archive 3.0 ouverte (``zipfile.ZipFile``) et renvoie un
+    :class:`BackupArchive`.
+
+    Applique des gardes anti-bombe globales (nombre d'entrées, volume
+    décompressé cumulé, taille du manifeste) **avant** toute extraction, puis
+    valide structurellement le manifeste. Lève :class:`BackupValidationError`
+    avec un message sûr pour l'utilisateur."""
+    infos = zip_ref.infolist()
+    if len(infos) > MAX_ARCHIVE_ENTRIES:
+        raise BackupValidationError("Archive invalide : trop d'entrées.")
+    total = 0
+    for info in infos:
+        total += info.file_size
+        if total > MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+            raise BackupValidationError("Archive invalide : volume décompressé trop important.")
+
+    try:
+        manifest_info = zip_ref.getinfo(MANIFEST_NAME)
+    except KeyError:
+        raise BackupValidationError("Archive invalide : manifeste absent.")
+    if manifest_info.file_size > MAX_MANIFEST_BYTES:
+        raise BackupValidationError("Archive invalide : manifeste trop volumineux.")
+
+    try:
+        raw = zip_ref.read(MANIFEST_NAME)
+    except Exception:
+        raise BackupValidationError("Archive illisible.")
+    try:
+        manifest = json.loads(raw.decode("utf-8"))
+    except (ValueError, TypeError, UnicodeDecodeError):
+        raise BackupValidationError("Manifeste illisible ou mal formé.")
+
+    manifest = _validate_backup_structure(manifest)
+    return BackupArchive(zip_ref, manifest)
+
+
+# ---------------------------------------------------------------------------
+# Archive ZIP (format 3.0) — écriture
+# ---------------------------------------------------------------------------
+
+def selection_has_binary(section_keys) -> bool:
+    """Vrai si la sélection contient au moins une section d'images.
+
+    L'export produit alors une archive ZIP (3.0) plutôt qu'un JSON plat (2.0)."""
+    return any(k in BINARY_SECTION_KEYS for k in section_keys)
+
+
+def write_backup_archive(section_keys, fileobj) -> dict:
+    """Écrit une sauvegarde 3.0 (ZIP) dans ``fileobj`` (binaire, en écriture).
+
+    Le manifeste JSON contient les métadonnées et les données des sections
+    **non binaires** ; les images sont écrites en fichiers binaires sous
+    ``files/<section>/…`` **directement depuis le disque** (jamais de base64 ni
+    de gros JSON en mémoire). Renvoie le manifeste écrit (utile aux tests)."""
+    data = {}
+    excluded_secrets: set[str] = set()
+    binary_sections: list[str] = []
+    binary_counts: dict[str, int] = {}
+    included: list[str] = []
+
+    with zipfile.ZipFile(fileobj, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+        for key in section_keys:
+            cls = BACKUP_SECTIONS.get(key)
+            if cls is None:
+                continue
+            section = cls()
+            if section.is_binary:
+                count = 0
+                try:
+                    for rel_path, full_path in section.iter_binary_files():
+                        arcname = f"{FILES_ARC_PREFIX}/{key}/{rel_path}"
+                        # Images déjà compressées (png/jpg/webp…) : ZIP_STORED
+                        # évite un recompressage inutile — copie en flux du disque.
+                        zf.write(full_path, arcname, zipfile.ZIP_STORED)
+                        count += 1
+                except Exception as e:
+                    current_app.logger.error(
+                        f"Backup export error for section '{key}': {e}", exc_info=True
+                    )
+                binary_sections.append(key)
+                binary_counts[key] = count
+                included.append(key)
+            else:
+                try:
+                    data[key] = section.export_data()
+                    excluded_secrets.update(section.excluded_secrets)
+                except Exception as e:
+                    current_app.logger.error(
+                        f"Backup export error for section '{key}': {e}", exc_info=True
+                    )
+                    data[key] = None
+                included.append(key)
+
+        manifest = {
+            "app": APP_NAME,
+            "format_version": ARCHIVE_FORMAT_VERSION,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "sections": included,
+            # Secrets volontairement exclus (nom seulement) : avertissement.
+            "excluded_secrets": sorted(excluded_secrets),
+            "binary_sections": binary_sections,
+            "binary_counts": binary_counts,
+            "data": data,
+        }
+        zf.writestr(MANIFEST_NAME, json.dumps(manifest, ensure_ascii=False, indent=2))
+
+    return manifest
+
+
+# ---------------------------------------------------------------------------
+# Estimation de taille (point 13 : avertir avant un export lourd)
+# ---------------------------------------------------------------------------
+
+def human_size(num_bytes: int) -> str:
+    """Formatte une taille en octets de façon lisible (o / Ko / Mo / Go / To)."""
+    size = float(num_bytes)
+    for unit in ("o", "Ko", "Mo", "Go", "To"):
+        if size < 1024 or unit == "To":
+            if unit == "o":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{int(num_bytes)} o"
+
+
+def estimate_export_size(section_keys) -> dict:
+    """Estime le volume des sections **d'images** sélectionnées (sur disque).
+
+    Sert à l'interface pour afficher une estimation et avertir lorsque l'export
+    serait lourd. Les sections non binaires (JSON) sont considérées légères et
+    ignorées de l'estimation."""
+    sections = []
+    images_bytes = 0
+    for key in section_keys:
+        cls = BACKUP_SECTIONS.get(key)
+        if cls is None or not getattr(cls, "is_binary", False):
+            continue
+        section = cls()
+        try:
+            size = section.total_size_bytes()
+        except Exception:
+            size = 0
+        images_bytes += size
+        sections.append(
+            {"key": key, "label": cls.label, "bytes": size, "human": human_size(size)}
+        )
+    return {
+        "images_bytes": images_bytes,
+        "images_human": human_size(images_bytes),
+        "heavy": images_bytes > EXPORT_IMAGE_WARNING_BYTES,
+        "warning_bytes": EXPORT_IMAGE_WARNING_BYTES,
+        "warning_human": human_size(EXPORT_IMAGE_WARNING_BYTES),
+        "sections": sections,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -1041,8 +1352,16 @@ def export_sections(section_keys: list[str]) -> dict:
     }
 
 
-def restore_sections(backup_data: dict, section_keys: list[str] | None = None) -> dict:
-    """Restore sections from a backup dict. Returns a report."""
+def restore_sections(
+    backup_data: dict,
+    section_keys: list[str] | None = None,
+    archive: "BackupArchive | None" = None,
+) -> dict:
+    """Restore sections from a backup dict. Returns a report.
+
+    ``archive`` (facultatif) est fourni pour une sauvegarde 3.0 (ZIP) : les
+    sections binaires (images) y sont restaurées depuis les fichiers de
+    l'archive plutôt que depuis ``data`` (base64, format 2.0)."""
     if not isinstance(backup_data, dict) or backup_data.get("app") != APP_NAME:
         return {"success": False, "error": "Fichier de sauvegarde invalide (app inconnue)."}
 
@@ -1058,7 +1377,7 @@ def restore_sections(backup_data: dict, section_keys: list[str] | None = None) -
     report = {"success": True, "restored": [], "errors": []}
 
     for key in section_keys:
-        if key not in available or key not in data:
+        if key not in available:
             report["errors"].append(f"Section '{key}' absente du fichier.")
             continue
         if key not in BACKUP_SECTIONS:
@@ -1067,7 +1386,15 @@ def restore_sections(backup_data: dict, section_keys: list[str] | None = None) -
 
         section = BACKUP_SECTIONS[key]()
         try:
-            section.restore_data(data[key])
+            if section.is_binary and archive is not None:
+                # Format 3.0 : lire les fichiers binaires depuis l'archive.
+                section.restore_zip(archive, key)
+            elif key in data:
+                # Format 2.0 (ou section non binaire) : données du manifeste.
+                section.restore_data(data[key])
+            else:
+                report["errors"].append(f"Section '{key}' absente du fichier.")
+                continue
             report["restored"].append(key)
         except Exception as e:
             db.session.rollback()
@@ -1082,12 +1409,21 @@ def restore_sections(backup_data: dict, section_keys: list[str] | None = None) -
 
 def preview_backup(backup_data: dict) -> dict:
     """Return metadata about a backup file without restoring."""
+    binary_counts = backup_data.get("binary_counts") or {}
     sections_info = []
     for key in backup_data.get("sections", []):
         cls = BACKUP_SECTIONS.get(key)
         label = cls.label if cls else key
         data = backup_data.get("data", {}).get(key)
-        count = len(data) if isinstance(data, (list, dict)) else 0
+        if isinstance(data, (list, dict)):
+            # Format 2.0 : données présentes dans le manifeste (base64 pour les
+            # images) → le nombre d'éléments donne le compte.
+            count = len(data)
+        elif isinstance(binary_counts.get(key), int):
+            # Format 3.0 : section binaire, compte fourni par le manifeste.
+            count = binary_counts[key]
+        else:
+            count = 0
         sections_info.append({"key": key, "label": label, "count": count})
 
     return {

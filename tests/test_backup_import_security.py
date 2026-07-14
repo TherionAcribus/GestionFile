@@ -79,7 +79,7 @@ def test_load_rejects_wrong_app():
         load_and_validate_backup(json.dumps(d))
 
 
-@pytest.mark.parametrize("version", ["1.0", "3.0", None, "", "2", 2.0])
+@pytest.mark.parametrize("version", ["1.0", "4.0", None, "", "2", 2.0])
 def test_load_rejects_unsupported_format_version(version):
     import json
     d = _valid_backup_dict()
@@ -343,6 +343,8 @@ def test_read_accepts_valid_backup(flask_app):
     from routes.admin_backup import _read_uploaded_backup
     content = json.dumps(_valid_backup_dict()).encode("utf-8")
     with _upload_ctx(flask_app, content=content):
-        data, err = _read_uploaded_backup()
+        upload, err = _read_uploaded_backup()
     assert err is None
-    assert data["app"] == "GestionFile"
+    assert upload.manifest["app"] == "GestionFile"
+    assert upload.archive is None
+    upload.close()

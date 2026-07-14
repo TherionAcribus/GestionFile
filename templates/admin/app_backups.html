@@ -16,10 +16,17 @@
             dans les pages « Application » et « Musique ».
         </div>
 
+        <div class="alert alert-secondary small">
+            <i class="bi bi-file-earmark-zip"></i>
+            Si vous incluez des images, la sauvegarde est produite sous forme
+            d'archive <strong>.zip</strong> (manifeste + images) — plus compacte
+            qu'un JSON. Sans image, un fichier <strong>.json</strong> est généré.
+        </div>
+
         <form id="exportForm" method="get" action="/admin/backup/export">
             <div class="mb-2">
                 <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="checkbox" id="chk_export_all" checked
+                    <input class="form-check-input" type="checkbox" id="chk_export_all"
                            onchange="toggleAllExportChecks(this.checked)">
                     <label class="form-check-label fw-bold" for="chk_export_all">Tout sélectionner</label>
                 </div>
@@ -49,10 +56,16 @@
                     <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="texts" id="exp_texts" checked><label class="form-check-label" for="exp_texts">Textes</label></div>
                     <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="text_interface" id="exp_text_interface" checked><label class="form-check-label" for="exp_text_interface">Textes interface</label></div>
                     <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="translations" id="exp_translations" checked><label class="form-check-label" for="exp_translations">Traductions</label></div>
-                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="images_buttons" id="exp_images_buttons" checked><label class="form-check-label" for="exp_images_buttons">Images boutons</label></div>
-                    <div class="form-check"><input class="form-check-input export-chk" type="checkbox" value="images_gallery" id="exp_images_gallery" checked><label class="form-check-label" for="exp_images_gallery">Galerie images</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk export-img-chk" type="checkbox" value="images_buttons" id="exp_images_buttons"><label class="form-check-label" for="exp_images_buttons">Images boutons</label></div>
+                    <div class="form-check"><input class="form-check-input export-chk export-img-chk" type="checkbox" value="images_gallery" id="exp_images_gallery"><label class="form-check-label" for="exp_images_gallery">Galerie images</label></div>
+                    <div class="form-text small text-muted">
+                        Les images ne sont pas cochées par défaut car elles peuvent
+                        alourdir l'export.
+                    </div>
                 </div>
             </div>
+
+            <div id="exportSizeEstimate" class="small mt-2"></div>
 
             <input type="hidden" name="sections" id="export_sections_input" value="all">
             <button type="submit" class="btn btn-primary mt-2" onclick="prepareExport()">
@@ -68,7 +81,7 @@
         <h5 class="mb-0"><i class="bi bi-upload"></i> Importer / Restaurer</h5>
     </div>
     <div class="card-body">
-        <p class="text-muted small">Sélectionnez un fichier de sauvegarde .json pour voir son contenu et choisir les sections à restaurer.</p>
+        <p class="text-muted small">Sélectionnez un fichier de sauvegarde <strong>.json</strong> ou <strong>.zip</strong> pour voir son contenu et choisir les sections à restaurer.</p>
 
         <form id="importPreviewForm"
               hx-post="/admin/backup/preview"
@@ -76,7 +89,7 @@
               hx-swap="innerHTML"
               hx-encoding="multipart/form-data">
             <div class="mb-3">
-                <input class="form-control" type="file" name="file" id="importFileInput" accept=".json">
+                <input class="form-control" type="file" name="file" id="importFileInput" accept=".json,.zip">
             </div>
             <button type="submit" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-eye"></i> Prévisualiser le fichier
@@ -114,11 +127,16 @@ function toggleAllExportChecks(checked) {
     document.querySelectorAll('.export-chk').forEach(function(chk) {
         chk.checked = checked;
     });
+    updateExportEstimate();
+}
+
+function selectedExportSections() {
+    var checks = document.querySelectorAll('.export-chk:checked');
+    return Array.from(checks).map(function(c) { return c.value; });
 }
 
 function prepareExport() {
-    var checks = document.querySelectorAll('.export-chk:checked');
-    var sections = Array.from(checks).map(function(c) { return c.value; });
+    var sections = selectedExportSections();
     if (sections.length === document.querySelectorAll('.export-chk').length) {
         document.getElementById('export_sections_input').value = 'all';
     } else {
@@ -126,10 +144,50 @@ function prepareExport() {
     }
 }
 
+// Estimation de la taille des images sélectionnées (point 13) : avertit
+// l'utilisateur avant un export lourd.
+function updateExportEstimate() {
+    var box = document.getElementById('exportSizeEstimate');
+    if (!box) { return; }
+    var imgSelected = Array.from(document.querySelectorAll('.export-img-chk:checked'))
+        .map(function(c) { return c.value; });
+    if (imgSelected.length === 0) {
+        box.innerHTML = '';
+        return;
+    }
+    box.innerHTML = '<span class="text-muted"><i class="bi bi-hourglass-split"></i> Estimation de la taille des images…</span>';
+    fetch('/admin/backup/estimate?sections=' + encodeURIComponent(imgSelected.join(',')), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+        .then(function(r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function(est) {
+            var cls = est.heavy ? 'alert alert-warning py-2' : 'alert alert-info py-2';
+            var icon = est.heavy ? 'bi-exclamation-triangle' : 'bi-info-circle';
+            var msg = '<i class="bi ' + icon + '"></i> Images sélectionnées : <strong>'
+                + est.images_human + '</strong>.';
+            if (est.heavy) {
+                msg += ' Cet export sera volumineux (seuil ' + est.warning_human
+                    + ') ; la sauvegarde sera produite en archive .zip.';
+            } else {
+                msg += ' La sauvegarde sera produite en archive .zip.';
+            }
+            box.innerHTML = '<div class="' + cls + ' mb-0">' + msg + '</div>';
+        })
+        .catch(function() {
+            box.innerHTML = '<span class="text-muted small">Estimation de taille indisponible.</span>';
+        });
+}
+
 document.querySelectorAll('.export-chk').forEach(function(chk) {
     chk.addEventListener('change', function() {
         var allChecked = document.querySelectorAll('.export-chk').length === document.querySelectorAll('.export-chk:checked').length;
         document.getElementById('chk_export_all').checked = allChecked;
+        updateExportEstimate();
     });
 });
+
+// État initial : les images sont décochées, donc « Tout sélectionner » aussi.
+document.getElementById('chk_export_all').checked =
+    document.querySelectorAll('.export-chk').length === document.querySelectorAll('.export-chk:checked').length;
+updateExportEstimate();
 </script>

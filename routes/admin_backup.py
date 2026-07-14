@@ -1,17 +1,50 @@
 import json
+import os
+import tempfile
+import zipfile
 from flask import (
     Blueprint, request, Response, current_app,
-    render_template_string, make_response,
+    render_template_string, make_response, jsonify, stream_with_context,
 )
 from datetime import datetime
 from routes.admin_security import require_permission
 from backup_service import (
     BACKUP_SECTIONS, SECTION_GROUPS, export_sections,
     restore_sections, preview_backup,
-    load_and_validate_backup, BackupValidationError, MAX_BACKUP_FILE_BYTES,
+    load_and_validate_backup, load_and_validate_archive,
+    BackupValidationError, MAX_BACKUP_FILE_BYTES, MAX_ARCHIVE_FILE_BYTES,
+    selection_has_binary, write_backup_archive, estimate_export_size,
 )
 
 admin_backup_bp = Blueprint('admin_backup', __name__)
+
+
+def _safe_unlink(path):
+    """Supprime un fichier temporaire sans jamais lever."""
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+class _BackupUpload:
+    """Sauvegarde téléversée, prête à être prévisualisée ou restaurée.
+
+    ``manifest`` a la même forme quel que soit le format (2.0 JSON plat ou 3.0
+    manifeste d'archive). ``archive`` est un :class:`BackupArchive` pour les
+    fichiers 3.0 (accès aux images binaires), ``None`` sinon. ``close()`` libère
+    l'archive et le fichier temporaire éventuels."""
+
+    def __init__(self, manifest, archive=None, tmp_path=None):
+        self.manifest = manifest
+        self.archive = archive
+        self.tmp_path = tmp_path
+
+    def close(self):
+        if self.archive is not None:
+            self.archive.close()
+        if self.tmp_path is not None:
+            _safe_unlink(self.tmp_path)
 
 
 # Message générique renvoyé à l'utilisateur lorsqu'une restauration échoue :
@@ -69,32 +102,86 @@ def _alert(kind: str, message: str) -> str:
     )
 
 
-def _read_uploaded_backup():
-    """Lit, borne et valide le fichier de sauvegarde téléversé.
+def _load_zip_upload(raw):
+    """Écrit l'archive téléversée sur disque, l'ouvre et valide son manifeste.
 
-    Renvoie ``(backup_data, None)`` en cas de succès, ou ``(None, message)`` où
+    Renvoie ``(_BackupUpload, None)`` ou ``(None, message sûr)``. Le fichier
+    temporaire et la ``ZipFile`` sont libérés par ``_BackupUpload.close()`` (ou
+    immédiatement supprimés en cas d'erreur)."""
+    tmp = tempfile.NamedTemporaryFile(prefix="gf_restore_", suffix=".zip", delete=False)
+    try:
+        tmp.write(raw)
+        tmp.flush()
+    except Exception:
+        tmp.close()
+        _safe_unlink(tmp.name)
+        return None, "Fichier illisible."
+    finally:
+        if not tmp.closed:
+            tmp.close()
+
+    if not zipfile.is_zipfile(tmp.name):
+        _safe_unlink(tmp.name)
+        return None, "Fichier ZIP invalide."
+
+    try:
+        zf = zipfile.ZipFile(tmp.name, "r")
+    except Exception:
+        _safe_unlink(tmp.name)
+        return None, "Fichier ZIP invalide."
+
+    try:
+        archive = load_and_validate_archive(zf)
+    except BackupValidationError as e:
+        try:
+            zf.close()
+        except Exception:
+            pass
+        _safe_unlink(tmp.name)
+        return None, str(e)
+
+    return _BackupUpload(manifest=archive.manifest, archive=archive, tmp_path=tmp.name), None
+
+
+def _read_uploaded_backup():
+    """Lit, borne et valide le fichier de sauvegarde téléversé (.json ou .zip).
+
+    Renvoie ``(_BackupUpload, None)`` en cas de succès, ou ``(None, message)`` où
     ``message`` est sûr pour l'affichage (aucun détail interne). Vérifie
-    l'extension, la taille maximale de la requête et du fichier, puis délègue la
-    validation structurelle stricte à :func:`load_and_validate_backup`."""
+    l'extension et la taille maximale, puis délègue la validation structurelle
+    stricte selon le format (JSON plat 2.0 ou archive ZIP 3.0)."""
     file = request.files.get('file')
-    if not file or not file.filename or not file.filename.lower().endswith('.json'):
-        return None, "Fichier invalide. Sélectionnez un fichier .json."
+    if not file or not file.filename:
+        return None, "Fichier invalide. Sélectionnez un fichier .json ou .zip."
+
+    name = file.filename.lower()
+    is_zip = name.endswith('.zip')
+    is_json = name.endswith('.json')
+    if not (is_zip or is_json):
+        return None, "Fichier invalide. Sélectionnez un fichier .json ou .zip."
+
+    # Les archives (images brutes) peuvent être plus volumineuses que les JSON
+    # (base64) : borne dédiée par format.
+    limit = MAX_ARCHIVE_FILE_BYTES if is_zip else MAX_BACKUP_FILE_BYTES
 
     # Refus rapide via l'en-tête Content-Length (borne supérieure de la requête).
-    if request.content_length is not None and request.content_length > MAX_BACKUP_FILE_BYTES:
+    if request.content_length is not None and request.content_length > limit:
         return None, "Fichier trop volumineux."
 
-    # Lecture bornée : au plus MAX+1 octets, pour détecter le dépassement même
+    # Lecture bornée : au plus limit+1 octets, pour détecter le dépassement même
     # si Content-Length est absent ou mensonger.
-    raw = file.read(MAX_BACKUP_FILE_BYTES + 1)
-    if len(raw) > MAX_BACKUP_FILE_BYTES:
+    raw = file.read(limit + 1)
+    if len(raw) > limit:
         return None, "Fichier trop volumineux."
+
+    if is_zip:
+        return _load_zip_upload(raw)
 
     try:
         data = load_and_validate_backup(raw)
     except BackupValidationError as e:
         return None, str(e)
-    return data, None
+    return _BackupUpload(manifest=data), None
 
 
 def _labels_for(keys):
@@ -106,20 +193,82 @@ def _labels_for(keys):
     return labels
 
 
+def _section_keys_from_request():
+    """Sections demandées via ``?sections=`` (``all`` ou liste séparée par des virgules)."""
+    sections_param = request.args.get('sections', 'all')
+    if sections_param == 'all':
+        return list(BACKUP_SECTIONS.keys())
+    return [s.strip() for s in sections_param.split(',') if s.strip()]
+
+
+def _stream_and_delete(path):
+    """Génère le contenu d'un fichier par blocs puis le supprime (streaming)."""
+    try:
+        with open(path, "rb") as fh:
+            while True:
+                chunk = fh.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+    finally:
+        _safe_unlink(path)
+
+
+@admin_backup_bp.route('/admin/backup/estimate')
+@require_permission('app')
+def backup_estimate():
+    """Estimation de la taille (images) d'un export, pour avertir l'utilisateur.
+
+    Renvoie du JSON consommé par l'interface pour afficher une estimation et un
+    avertissement lorsque l'export serait lourd (point 13)."""
+    return jsonify(estimate_export_size(_section_keys_from_request()))
+
+
 @admin_backup_bp.route('/admin/backup/export')
 @require_permission('app')
 def backup_export():
-    """Export selected sections as a JSON file download."""
-    sections_param = request.args.get('sections', 'all')
+    """Export selected sections.
 
-    if sections_param == 'all':
-        section_keys = list(BACKUP_SECTIONS.keys())
-    else:
-        section_keys = [s.strip() for s in sections_param.split(',') if s.strip()]
+    Format ZIP (3.0) dès qu'une section d'images est incluse — le manifeste et
+    les images (fichiers binaires) sont produits en flux via un fichier
+    temporaire, sans charger d'énorme JSON base64 en mémoire (point 13). Sinon,
+    JSON plat (2.0) rétrocompatible."""
+    section_keys = _section_keys_from_request()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if selection_has_binary(section_keys):
+        tmp = tempfile.NamedTemporaryFile(prefix="gf_export_", suffix=".zip", delete=False)
+        try:
+            write_backup_archive(section_keys, tmp)
+            tmp.flush()
+        except Exception:
+            if not tmp.closed:
+                tmp.close()
+            _safe_unlink(tmp.name)
+            current_app.logger.exception("Backup export archive failed")
+            return "L'export a échoué. Consultez les journaux du serveur.", 500
+        finally:
+            if not tmp.closed:
+                tmp.close()
+
+        if len(section_keys) == 1:
+            filename = f"gf_backup_{section_keys[0]}_{timestamp}.zip"
+        else:
+            filename = f"gf_backup_{timestamp}.zip"
+
+        # Content-Length calculé avant streaming (le fichier existe encore) ; le
+        # générateur supprime le fichier temporaire une fois envoyé.
+        size = os.path.getsize(tmp.name)
+        return Response(
+            stream_with_context(_stream_and_delete(tmp.name)),
+            mimetype='application/zip',
+            headers={
+                'Content-Disposition': f'attachment; filename={filename}',
+                'Content-Length': str(size),
+            },
+        )
 
     backup_data = export_sections(section_keys)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if len(section_keys) == 1:
         filename = f"gf_backup_{section_keys[0]}_{timestamp}.json"
     else:
@@ -136,27 +285,32 @@ def backup_export():
 @require_permission('app')
 def backup_preview():
     """Preview the contents of an uploaded backup file (HTMX endpoint)."""
-    backup_data, error = _read_uploaded_backup()
+    upload, error = _read_uploaded_backup()
     if error:
         return _alert("danger", error)
-
-    info = preview_backup(backup_data)
-    return render_template_string(_PREVIEW_TEMPLATE, info=info)
+    try:
+        info = preview_backup(upload.manifest)
+        return render_template_string(_PREVIEW_TEMPLATE, info=info)
+    finally:
+        upload.close()
 
 
 @admin_backup_bp.route('/admin/backup/import', methods=['POST'])
 @require_permission('app')
 def backup_import():
     """Restore sections from an uploaded backup file."""
-    backup_data, error = _read_uploaded_backup()
+    upload, error = _read_uploaded_backup()
     if error:
         return _alert("danger", error)
 
-    sections_param = request.form.getlist('restore_sections')
-    if not sections_param:
-        sections_param = None
+    try:
+        sections_param = request.form.getlist('restore_sections')
+        if not sections_param:
+            sections_param = None
 
-    report = restore_sections(backup_data, sections_param)
+        report = restore_sections(upload.manifest, sections_param, archive=upload.archive)
+    finally:
+        upload.close()
 
     try:
         current_app.load_configuration(current_app)
@@ -197,17 +351,20 @@ def backup_import_multi():
     if not requested_keys:
         return _alert("danger", "Aucune section spécifiée.")
 
-    backup_data, error = _read_uploaded_backup()
+    upload, error = _read_uploaded_backup()
     if error:
         return _alert("danger", error)
 
-    available = backup_data.get("sections", [])
-    keys_to_restore = [k for k in requested_keys if k in available and k in BACKUP_SECTIONS]
+    try:
+        available = upload.manifest.get("sections", [])
+        keys_to_restore = [k for k in requested_keys if k in available and k in BACKUP_SECTIONS]
 
-    if not keys_to_restore:
-        return _alert("warning", "Aucune des sections demandées n'est présente dans ce fichier.")
+        if not keys_to_restore:
+            return _alert("warning", "Aucune des sections demandées n'est présente dans ce fichier.")
 
-    report = restore_sections(backup_data, keys_to_restore)
+        report = restore_sections(upload.manifest, keys_to_restore, archive=upload.archive)
+    finally:
+        upload.close()
 
     try:
         current_app.load_configuration(current_app)
@@ -241,17 +398,20 @@ def backup_import_single():
     if not section_key or section_key not in BACKUP_SECTIONS:
         return _alert("danger", "Section inconnue.")
 
-    backup_data, error = _read_uploaded_backup()
+    upload, error = _read_uploaded_backup()
     if error:
         return _alert("danger", error)
 
     cls = BACKUP_SECTIONS.get(section_key)
     label = cls.label if cls else section_key
 
-    if section_key not in backup_data.get("sections", []):
-        return _alert("danger", f"La section « {label} » est absente de ce fichier.")
+    try:
+        if section_key not in upload.manifest.get("sections", []):
+            return _alert("danger", f"La section « {label} » est absente de ce fichier.")
 
-    report = restore_sections(backup_data, [section_key])
+        report = restore_sections(upload.manifest, [section_key], archive=upload.archive)
+    finally:
+        upload.close()
 
     try:
         current_app.load_configuration(current_app)
