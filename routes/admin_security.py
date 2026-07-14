@@ -144,14 +144,16 @@ def display_security_table():
     roles = Role.query.all()
     return render_template('admin/security_htmx_table.html', users=users, roles=roles)
 
-# affiche le formulaire pour ajouter une regle de l'algo
+# affiche le formulaire pour ajouter un utilisateur
 @admin_security_bp.route('/admin/security/add_user_form')
+@require_permission('security')
 def add_user_form():
     roles = Role.query.all()
     return render_template('/admin/security_add_user_form.html', roles=roles)
 
 
 @admin_security_bp.route('/admin/security/add_new_user', methods=['POST'])
+@require_permission('security')
 def add_new_user():
     """Ajoute un nouvel utilisateur"""
     try:

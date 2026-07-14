@@ -86,7 +86,12 @@ class Config:
     SECURITY_USERNAME_ENABLE = True
     SECURITY_USERNAME_REQUIRED = False
     SECURITY_EMAIL_REQUIRED = False  # Désactiver l'obligation d'un email
-    SECURITY_REGISTERABLE = True  # Activer l'enregistrement manuel des utilisateurs (si besoin)
+    # Inscription publique DÉSACTIVÉE (point 1.1). Avec register_blueprint=True,
+    # Flask-Security n'enregistre PAS la route /register quand ce drapeau est
+    # False : un GET /register renvoie donc 404. La création d'utilisateurs passe
+    # exclusivement par la page d'administration protégée par la permission
+    # `security` (voir routes/admin_security.py : add_user_form / add_new_user).
+    SECURITY_REGISTERABLE = False
     SECURITY_LOGIN_URL = '/admin_security/login'
     SECURITY_POST_LOGIN_VIEW = '/admin'
     SECURITY_REDIRECT_BEHAVIOR = 'spa'
