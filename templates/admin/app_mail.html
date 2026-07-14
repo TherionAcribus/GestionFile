@@ -2,7 +2,7 @@
 
 {{ macros.textarea_full("mail_username", mail_username, "Nom d'utilisateur") }}
 
-{{ macros.textarea_full("mail_password", mail_password, "Mot de passe") }}
+{{ macros.secret_full("mail_password", mail_password_set, "Mot de passe") }}
 
 {{ macros.textarea_full("mail_default_sender", mail_default_sender, "Expediteur") }}
 

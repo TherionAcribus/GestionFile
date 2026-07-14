@@ -45,6 +45,14 @@ _PREVIEW_TEMPLATE = """
             <i class="bi bi-exclamation-triangle"></i>
             Attention : les données existantes des sections sélectionnées seront remplacées !
         </div>
+        {% if info.excluded_secrets %}
+        <div class="alert alert-info mb-2">
+            <i class="bi bi-shield-lock"></i>
+            Cette sauvegarde <strong>ne contient aucun secret</strong>
+            ({{ info.excluded_secrets|length }} exclu(s) : {{ info.excluded_secrets|join(', ') }}).
+            Après restauration, ressaisissez-les manuellement dans les pages concernées.
+        </div>
+        {% endif %}
         <button type="submit" class="btn btn-danger btn-sm" id="btn_confirm_restore">
             Restaurer les sections sélectionnées
         </button>

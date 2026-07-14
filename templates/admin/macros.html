@@ -162,6 +162,50 @@ function handleAfterRequestConfig(source, variable) {
 </div>
 {% endmacro %}
 
+{# Macro de base pour un champ SECRET (mot de passe / clé d'API).
+   La valeur courante n'est JAMAIS rendue dans le HTML : le champ est toujours
+   vide. On indique seulement si un secret est déjà défini. Laisser le champ
+   vide et enregistrer conserve la valeur actuelle (cf. update_input côté
+   serveur) ; saisir une valeur la remplace. #}
+{% macro secret_field(key, is_set, label) %}
+<div class="flex-grow-1">
+    <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
+    <input
+        type="password"
+        id="{{ key }}"
+        class="form-control"
+        value=""
+        autocomplete="new-password"
+        placeholder="{% if is_set %}•••••••• (défini — laisser vide pour conserver){% else %}Non défini{% endif %}"
+        oninput="handleInputChangeConfig('{{ key }}')"
+        onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+        data-initial-value=""
+    >
+    <small class="form-text text-muted">
+        {% if is_set %}Un secret est enregistré. Laissez ce champ vide pour le conserver, ou saisissez-en un nouveau pour le remplacer.
+        {% else %}Aucun secret enregistré.{% endif %}
+        Cette valeur n'est jamais réaffichée ni incluse dans les sauvegardes.
+    </small>
+</div>
+{% endmacro %}
+
+{# Champ secret pleine largeur avec bouton Enregistrer (équivalent de
+   textarea_full pour une valeur sensible). #}
+{% macro secret_full(key, is_set, label) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex align-items-start">
+            <div class="flex-grow-1">
+                {{ secret_field(key, is_set, label) }}
+            </div>
+            <div class="ms-3">
+                {{ button(key) }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
 {# Macro de base pour input #}
 {% macro input_field(key, value, label) %}
 <div class="flex-grow-1">

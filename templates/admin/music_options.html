@@ -28,7 +28,7 @@
 
 {{ macros.textarea_full("music_spotify_user", music_spotify_user, "ID de l'utilisateur de Spotify") }}
 
-{{ macros.textarea_full("music_spotify_key", music_spotify_key, "Clef de l'utilisateur de Spotify") }}
+{{ macros.secret_full("music_spotify_key", music_spotify_key_set, "Clef de l'utilisateur de Spotify") }}
 
 {% if spotify_connected %}
     <p>Vous êtes connecté à Spotify</p>

@@ -23,7 +23,9 @@ def admin_app(tab=None):
                             mail_server = app.config["MAIL_SERVER"],
                             mail_port=app.config["MAIL_PORT"],
                             mail_username=app.config["MAIL_USERNAME"],
-                            mail_password=app.config["MAIL_PASSWORD"],
+                            # Secret : on ne transmet JAMAIS la valeur au gabarit,
+                            # seulement l'information « défini / non défini ».
+                            mail_password_set=bool(app.config.get("MAIL_PASSWORD")),
                             mail_default_sender=app.config["MAIL_DEFAULT_SENDER"],
                             mail_use_tls=app.config["MAIL_USE_TLS"],
                             mail_use_ssl=app.config["MAIL_USE_SSL"],

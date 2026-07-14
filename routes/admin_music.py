@@ -65,7 +65,9 @@ def admin_music(tab=None):
         return render_template('/admin/music.html',
                                 music_spotify = app.config["MUSIC_SPOTIFY"],
                                 music_spotify_user = app.config["MUSIC_SPOTIFY_USER"],
-                                music_spotify_key = app.config["MUSIC_SPOTIFY_KEY"],
+                                # Secret : jamais transmis au gabarit, seulement
+                                # l'indicateur « défini / non défini ».
+                                music_spotify_key_set = bool(app.config.get("MUSIC_SPOTIFY_KEY")),
                                 music_volume = app.config["MUSIC_VOLUME"],
                                 music_announce_volume = app.config["MUSIC_ANNOUNCE_VOLUME"],
                                 music_announce_action = app.config["MUSIC_ANNOUNCE_ACTION"],
@@ -80,7 +82,9 @@ def admin_music(tab=None):
         return render_template('/admin/music.html',
                                 music_spotify = app.config["MUSIC_SPOTIFY"],
                                 music_spotify_user = app.config["MUSIC_SPOTIFY_USER"],
-                                music_spotify_key = app.config["MUSIC_SPOTIFY_KEY"],
+                                # Secret : jamais transmis au gabarit, seulement
+                                # l'indicateur « défini / non défini ».
+                                music_spotify_key_set = bool(app.config.get("MUSIC_SPOTIFY_KEY")),
                                 music_volume = app.config["MUSIC_VOLUME"],
                                 music_announce_volume = app.config["MUSIC_ANNOUNCE_VOLUME"],
                                 music_announce_action = app.config["MUSIC_ANNOUNCE_ACTION"],

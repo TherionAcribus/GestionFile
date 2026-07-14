@@ -8,6 +8,7 @@ from datetime import datetime
 from io import BytesIO
 from flask import current_app
 from path_security import UnsafePathError, safe_relative_path
+from params_registry import SECRET_CONFIG_KEYS, is_secret_key
 from models import (
     db, Pharmacist, Counter, Activity, ActivitySchedule, Weekday,
     AlgoRule, Button, ConfigOption, ConfigVersion,
@@ -121,6 +122,12 @@ class BackupSection(ABC):
 
     key: str = ""
     label: str = ""
+
+    def __init__(self):
+        # Cles secretes ecartees lors du dernier export_data (point 5). Les
+        # sections de configuration l'alimentent ; ``export_sections`` l'agrege
+        # pour prevenir l'utilisateur.
+        self.excluded_secrets: list[str] = []
 
     @abstractmethod
     def export_data(self) -> dict | list:
@@ -397,7 +404,14 @@ class ConfigSection(BackupSection):
     def export_data(self):
         options = ConfigOption.query.all()
         result = {}
+        self.excluded_secrets = []
         for o in options:
+            # Les secrets (mot de passe SMTP, clé Spotify...) ne sont JAMAIS
+            # exportés (point 5). On mémorise ceux qui étaient définis pour
+            # prévenir l'utilisateur (avertissement d'exclusion).
+            if is_secret_key(o.config_key):
+                self.excluded_secrets.append(o.config_key)
+                continue
             if o.value_bool is not None:
                 result[o.config_key] = o.value_bool
             elif o.value_int is not None:
@@ -414,6 +428,10 @@ class ConfigSection(BackupSection):
 
     def restore_data(self, data):
         for key, value in data.items():
+            # Un secret ne doit jamais être restauré depuis une sauvegarde (il
+            # n'y figure pas ; refuser tout de même une injection éventuelle).
+            if is_secret_key(key):
+                continue
             option = ConfigOption.query.filter_by(config_key=key).first()
             if option:
                 option.value_str = value if isinstance(value, str) and len(value) < 200 else None
@@ -452,8 +470,12 @@ class _PageConfigSection(BackupSection):
     def export_data(self):
         options = ConfigOption.query.all()
         result = {}
+        self.excluded_secrets = []
         for o in options:
             if not self._match(o.config_key):
+                continue
+            if is_secret_key(o.config_key):
+                self.excluded_secrets.append(o.config_key)
                 continue
             if o.value_bool is not None:
                 result[o.config_key] = o.value_bool
@@ -472,6 +494,8 @@ class _PageConfigSection(BackupSection):
     def restore_data(self, data):
         for key, value in data.items():
             if not self._match(key):
+                continue
+            if is_secret_key(key):
                 continue
             option = ConfigOption.query.filter_by(config_key=key).first()
             if option:
@@ -971,13 +995,19 @@ SECTION_GROUPS = {
 # ---------------------------------------------------------------------------
 
 def export_sections(section_keys: list[str]) -> dict:
-    """Export the requested sections into a backup dict."""
+    """Export the requested sections into a backup dict.
+
+    Les valeurs secrètes (cf. ``SECRET_CONFIG_KEYS``) ne sont jamais incluses.
+    La liste de celles qui ont été écartées est jointe sous ``excluded_secrets``
+    pour permettre un avertissement explicite à l'utilisateur (point 5)."""
     data = {}
+    excluded_secrets: set[str] = set()
     for key in section_keys:
         if key in BACKUP_SECTIONS:
             section = BACKUP_SECTIONS[key]()
             try:
                 data[key] = section.export_data()
+                excluded_secrets.update(section.excluded_secrets)
             except Exception as e:
                 current_app.logger.error(f"Backup export error for section '{key}': {e}", exc_info=True)
                 data[key] = None
@@ -987,6 +1017,9 @@ def export_sections(section_keys: list[str]) -> dict:
         "format_version": FORMAT_VERSION,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "sections": [k for k in section_keys if k in data],
+        # Secrets volontairement exclus de cette sauvegarde (jamais leur valeur,
+        # seulement leur nom) : sert d'avertissement à la restauration.
+        "excluded_secrets": sorted(excluded_secrets),
         "data": data,
     }
 
@@ -1045,4 +1078,6 @@ def preview_backup(backup_data: dict) -> dict:
         "format_version": backup_data.get("format_version"),
         "timestamp": backup_data.get("timestamp"),
         "sections": sections_info,
+        # Secrets absents de la sauvegarde (avertissement à la restauration).
+        "excluded_secrets": backup_data.get("excluded_secrets", []),
     }

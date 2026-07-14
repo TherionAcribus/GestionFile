@@ -1090,6 +1090,13 @@ def update_input():
     if value is None:
         value = ""
 
+    # Secrets (mot de passe SMTP, clé Spotify...) : le formulaire n'affiche
+    # jamais la valeur courante et envoie un champ vide par défaut. Un envoi vide
+    # signifie donc « conserver la valeur actuelle » — on n'efface pas un secret
+    # au seul motif que le champ était vide. On ne journalise jamais la valeur.
+    if spec.secret and value.strip() == "":
+        return display_toast(success=True, message="Secret inchangé (valeur actuelle conservée).")
+
     if validator == "int":
         if value.isdigit():
             value = int(value)
@@ -1143,6 +1150,11 @@ def update_input():
         return "", 204
 
     except Exception as e:
+            # Pour une clé secrète, ne jamais renvoyer/journaliser le détail
+            # technique (il pourrait, selon le backend, contenir la valeur).
+            if spec.secret:
+                app.logger.error("Échec de mise à jour du paramètre secret %r", key)
+                return display_toast(success=False, message="La mise à jour du secret a échoué.")
             app.logger.error(e)
             return display_toast(success=False, message=str(e))
 

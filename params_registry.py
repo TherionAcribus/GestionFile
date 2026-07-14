@@ -187,6 +187,28 @@ _RESTART_REQUIRED = {
 
 
 # ---------------------------------------------------------------------------
+# Clés SECRÈTES (point 5 — protection des secrets)
+# ---------------------------------------------------------------------------
+# Ces valeurs (mot de passe SMTP, clé d'API Spotify...) ne doivent JAMAIS :
+#   * être renvoyées au navigateur (les templates n'affichent plus la valeur,
+#     seulement un indicateur « défini / non défini ») ;
+#   * être incluses dans une sauvegarde exportée (cf. backup_service) ;
+#   * être écrites dans un journal ou un message d'erreur.
+# Côté écriture (``/admin/update_input``), une valeur VIDE soumise pour une clé
+# secrète signifie « conserver la valeur actuelle » (on n'efface pas un secret
+# parce que le champ du formulaire est vide, cf. app.update_input).
+SECRET_CONFIG_KEYS: frozenset[str] = frozenset({
+    "mail_password",
+    "music_spotify_key",
+})
+
+
+def is_secret_key(key) -> bool:
+    """``True`` si ``key`` désigne une valeur secrète à ne jamais exposer."""
+    return isinstance(key, str) and key in SECRET_CONFIG_KEYS
+
+
+# ---------------------------------------------------------------------------
 # Balises autorisées par famille de texte (repris des macros des templates).
 # Détermine, côté serveur, quels marqueurs {P} {D} {H} {A} {N} {M} {C} sont
 # acceptés dans un champ texte. Le client n'a plus voix au chapitre.
@@ -293,6 +315,7 @@ class ParamSpec:
     validator: str           # bool | int | text | welcome | before_call | after_call
     kind: str                # switch | input | select
     restart_required: bool = False
+    secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)
 
 
 def _build_registry() -> dict[str, ParamSpec]:
@@ -306,6 +329,7 @@ def _build_registry() -> dict[str, ParamSpec]:
             validator=_validator_for(key, value_type),
             kind=_kind_for(value_type),
             restart_required=key in _RESTART_REQUIRED,
+            secret=key in SECRET_CONFIG_KEYS,
         )
     return registry
 

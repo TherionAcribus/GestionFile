@@ -8,6 +8,14 @@
     <div class="card-body">
         <p class="text-muted small">Sélectionnez les sections à sauvegarder puis cliquez sur "Exporter".</p>
 
+        <div class="alert alert-info small">
+            <i class="bi bi-shield-lock"></i>
+            <strong>Secrets non inclus :</strong> pour votre sécurité, le mot de passe SMTP
+            et la clé Spotify ne sont <strong>jamais</strong> intégrés aux sauvegardes.
+            Après une restauration sur une nouvelle installation, ressaisissez-les
+            dans les pages « Application » et « Musique ».
+        </div>
+
         <form id="exportForm" method="get" action="/admin/backup/export">
             <div class="mb-2">
                 <div class="form-check form-check-inline">
