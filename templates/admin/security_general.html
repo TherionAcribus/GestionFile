@@ -8,10 +8,14 @@
 <p>Il est fortement recommandé d'activer les mots de passe sur les pages "critiques".</p>
 
 
-{{ macros.switch("security_login_admin", 
-                security_login_admin, 
-                "Mot de passe sur les pages 'Administrateur'")
-}}
+<div class="alert alert-secondary d-flex align-items-center" role="status">
+    <i class="fas fa-lock me-2" aria-hidden="true"></i>
+    <div>
+        <strong>Pages « Administrateur » : authentification toujours requise.</strong><br>
+        L'accès à l'administration exige systématiquement une connexion : ce
+        réglage a été retiré et ne peut plus rendre l'administration anonyme.
+    </div>
+</div>
 
 {{ macros.switch("security_login_counter", 
 security_login_counter, 

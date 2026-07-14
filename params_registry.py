@@ -160,6 +160,11 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
     "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
     "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
+    # DÉPRÉCIÉ (point 1.2) : conservé pour compatibilité ascendante (la clé peut
+    # exister en base et rester modifiable dans l'UI), mais IGNORÉ pour la garde
+    # d'administration. L'accès à /admin exige désormais TOUJOURS une session
+    # authentifiée, quelle que soit sa valeur (cf. require_login_for_admin et le
+    # namespace Socket.IO /socket_admin dans app.py). Ne plus s'appuyer dessus.
     "security_login_admin": ("SECURITY_LOGIN_ADMIN", "value_bool"),
     "security_login_counter": ("SECURITY_LOGIN_COUNTER", "value_bool"),
     "security_login_screen": ("SECURITY_LOGIN_SCREEN", "value_bool"),

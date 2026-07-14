@@ -54,7 +54,7 @@ import jwt
 from dotenv import load_dotenv
 from markupsafe import escape
 
-from auth_utils import require_app_token_or_login, check_app_secret, is_valid_app_secret_config, is_socket_connection_authorized
+from auth_utils import require_app_token_or_login, check_app_secret, is_valid_app_secret_config, is_socket_connection_authorized, is_authenticated_request, wants_json_response
 from idempotency import idempotent
 
 from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
@@ -454,7 +454,11 @@ def disconnect_screen():
 
 @socketio.on('connect', namespace='/socket_admin', )
 def connect_admin():
-    if not _socket_require("SECURITY_LOGIN_ADMIN", "/socket_admin"):
+    # Admin : authentification TOUJOURS requise (point 1.2). SECURITY_LOGIN_ADMIN
+    # est déprécié et n'est plus consulté pour le namespace d'administration :
+    # il ne peut plus rendre l'admin anonyme.
+    if not is_authenticated_request():
+        app.logger.warning("Unauthorized Socket.IO connect to /socket_admin (missing login).")
         return False
     username = get_and_register_socketio_username(request)
     logging.info(f"Client connected to admin namespace with SID {request.sid} and username {username}")
@@ -832,17 +836,33 @@ def get_app_token():
     else:
         return jsonify({"error": "Unauthorized"}), 401
 
+def _deny_unauthenticated_access():
+    """Refus d'accès faute de session authentifiée, sous la forme adaptée au
+    client : **401 JSON** pour un appel AJAX/HTMX (que le JS peut traiter),
+    **redirection** vers la page de connexion pour une navigation navigateur."""
+    if wants_json_response(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    return redirect(url_for('admin_security.login', next=request.url))
+
+
 @app.before_request
 def require_login_for_admin():
-    """ Défini les règles de login """
+    """Applique les règles d'authentification par zone de l'application.
+
+    L'administration (``/admin``) exige **toujours** une session authentifiée
+    (point 1.2). Le paramètre ``SECURITY_LOGIN_ADMIN`` est **déprécié** : il n'est
+    plus consulté ici et ne peut donc plus rendre l'administration anonyme. Les
+    autres zones (comptoir, écran, patient, app) restent gouvernées par leurs
+    paramètres respectifs, inchangés.
+    """
 
     app_token = request.headers.get('X-App-Token')
     is_valid_app_request = app_token and verify_app_token(app_token)
 
     if request.path.startswith('/admin'):
-        if app.config["SECURITY_LOGIN_ADMIN"] and not current_user.is_authenticated:
-            print("SECURITY_LOGIN_ADMIN", request.url)
-            return redirect(url_for('admin_security.login', next=request.url))
+        # Authentification OBLIGATOIRE et inconditionnelle pour toute l'admin.
+        if not current_user.is_authenticated:
+            return _deny_unauthenticated_access()
     elif request.path.startswith('/counter'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not current_user.is_authenticated:
             return redirect(url_for('admin_security.login', next=request.url))

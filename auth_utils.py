@@ -70,6 +70,28 @@ def is_authenticated_request() -> bool:
     return bool(getattr(current_user, "is_authenticated", False))
 
 
+def wants_json_response(req) -> bool:
+    """True si la requête est un appel programmatique (AJAX/HTMX/JSON) et non une
+    navigation navigateur classique.
+
+    Sert à choisir la forme d'un refus d'accès : un appel programmatique doit
+    recevoir un **401/403 JSON** (exploitable côté client), tandis qu'une
+    navigation navigateur doit être **redirigée** vers la page de connexion.
+
+    Détection :
+    - en-tête ``HX-Request`` (HTMX) ;
+    - en-tête ``X-Requested-With: XMLHttpRequest`` (fetch/jQuery) ;
+    - négociation de contenu : le client préfère explicitement ``application/json``
+      à ``text/html`` (un navigateur qui navigue envoie ``text/html`` en tête)."""
+    if req.headers.get("HX-Request"):
+        return True
+    if req.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return True
+    accept = req.accept_mimetypes
+    json_q = accept["application/json"]
+    return bool(json_q) and json_q >= accept["text/html"]
+
+
 def is_socket_connection_authorized(flag_active: bool) -> bool:
     """Décision d'autorisation d'une connexion Socket.IO.
 
