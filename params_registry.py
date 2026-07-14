@@ -179,9 +179,28 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
 }
 
 
-# Clés dont la valeur ne prend effet qu'après un redémarrage du serveur.
+# ---------------------------------------------------------------------------
+# Clés nécessitant un REDÉMARRAGE (point 11 — synchronisation entre processus)
+# ---------------------------------------------------------------------------
+# Distinction « dynamique » vs « nécessite un redémarrage » :
+#
+# * Un paramètre est **dynamique** si sa valeur est relue depuis ``app.config``
+#   à l'exécution (rendu de page, logique de route, tâche planifiée). Une
+#   modification est alors propagée aux autres processus par le compteur de
+#   génération (cf. config_sync) : ils rechargent ``app.config`` et l'appliquent
+#   sans redémarrage. C'est le cas de la grande majorité des clés — y compris
+#   ``network_adress`` (``NETWORK_ADRESS`` est lu en direct, cf. engine.set_server_url).
+#
+# * Un paramètre **nécessite un redémarrage** si sa valeur n'est consommée qu'à
+#   l'INITIALISATION du processus. C'est le cas de ``start_rabbitmq`` : la file
+#   de messages SocketIO (relais inter-processus) est câblée une seule fois au
+#   démarrage (cf. app.py, construction de ``SocketIO``). Recharger ``app.config``
+#   n'y changerait rien et rendrait la mémoire incohérente avec le transport réel.
+#
+# Pour ces clés, les routes ``update_*`` persistent la valeur mais N'incrémentent
+# PAS la génération, NE mutent PAS ``app.config``, et l'interface affiche
+# « Enregistré — redémarrage requis » plutôt que de prétendre l'application faite.
 _RESTART_REQUIRED = {
-    "network_adress",
     "start_rabbitmq",
 }
 
@@ -352,3 +371,18 @@ def get_spec(key):
 def is_known_key(key) -> bool:
     """``True`` si ``key`` est une clé de configuration autorisée."""
     return isinstance(key, str) and key in PARAM_REGISTRY
+
+
+#: Ensemble des clés nécessitant un redémarrage (miroir public de ``_RESTART_REQUIRED``).
+RESTART_REQUIRED_KEYS: frozenset[str] = frozenset(_RESTART_REQUIRED)
+
+
+def is_restart_required(key) -> bool:
+    """``True`` si ``key`` ne prend effet qu'après un redémarrage du serveur.
+
+    Point 11 : les routes ``update_*`` s'appuient dessus pour ne pas prétendre
+    qu'un tel paramètre est déjà appliqué (message « redémarrage requis ») et
+    pour ne pas propager le changement aux autres processus (qui ne peuvent pas
+    l'appliquer à chaud non plus)."""
+    spec = get_spec(key)
+    return bool(spec and spec.restart_required)

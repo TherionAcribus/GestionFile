@@ -9,6 +9,7 @@ from io import BytesIO
 from flask import current_app
 from path_security import UnsafePathError, safe_relative_path
 from params_registry import SECRET_CONFIG_KEYS, is_secret_key
+import config_sync
 from models import (
     db, Pharmacist, Counter, Activity, ActivitySchedule, Weekday,
     AlgoRule, Button, ConfigOption, ConfigVersion,
@@ -406,6 +407,10 @@ class ConfigSection(BackupSection):
         result = {}
         self.excluded_secrets = []
         for o in options:
+            # Clés techniques internes (ex. compteur de génération de config,
+            # point 11) : jamais exportées ni restaurées.
+            if config_sync.is_reserved_key(o.config_key):
+                continue
             # Les secrets (mot de passe SMTP, clé Spotify...) ne sont JAMAIS
             # exportés (point 5). On mémorise ceux qui étaient définis pour
             # prévenir l'utilisateur (avertissement d'exclusion).
@@ -428,6 +433,10 @@ class ConfigSection(BackupSection):
 
     def restore_data(self, data):
         for key, value in data.items():
+            # Clé technique interne (point 11) : jamais restaurée (une sauvegarde
+            # ne doit pas réinjecter un compteur de génération arbitraire).
+            if config_sync.is_reserved_key(key):
+                continue
             # Un secret ne doit jamais être restauré depuis une sauvegarde (il
             # n'y figure pas ; refuser tout de même une injection éventuelle).
             if is_secret_key(key):
@@ -449,9 +458,14 @@ class ConfigSection(BackupSection):
                     value_json=value if isinstance(value, (dict, list)) else None,
                 )
                 db.session.add(option)
+        # Point 11 : une restauration modifie massivement la configuration ;
+        # incrémenter la génération (même transaction) pour que les autres
+        # processus rechargent app.config.
+        config_sync.bump_generation()
         db.session.commit()
         try:
             current_app.load_configuration(current_app)
+            config_sync.mark_current_generation(current_app)
         except Exception:
             pass
 
@@ -514,9 +528,12 @@ class _PageConfigSection(BackupSection):
                     value_json=value if isinstance(value, (dict, list)) else None,
                 )
                 db.session.add(option)
+        # Point 11 : propager le changement aux autres processus.
+        config_sync.bump_generation()
         db.session.commit()
         try:
             current_app.load_configuration(current_app)
+            config_sync.mark_current_generation(current_app)
         except Exception:
             pass
 

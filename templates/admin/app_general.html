@@ -9,13 +9,13 @@
     start_rabbitmq,
             "Activer le relais RabbitMQ entre processus (RABBITMQ_URL doit être configurée)")
 }}
-ATTENTION OBLIGATOIRE DE RELANCER LE SERVEUR SI ON CHANGE CE SWITCH !!! (TEMPORAIRE)
+<div class="alert alert-warning" role="alert">
+    <strong>Redémarrage requis :</strong> ce paramètre n'est pris en compte qu'à
+    l'initialisation du serveur. Il est enregistré immédiatement, mais ne
+    s'applique (relais inter-processus) qu'après un redémarrage du serveur.
+</div>
 
-A METTRE AILLEURS !!!
 {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}
 
 {{ macros.textarea_full("network_adress", network_adress, "Adresse du serveur sur le réseau (si fonctionnement en local)") }}
-
-A FAIRE !!! 
-<div>Ajouter bouton redémarrage du serveur</div>
 

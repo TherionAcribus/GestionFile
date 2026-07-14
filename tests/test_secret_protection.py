@@ -147,10 +147,18 @@ def test_restore_skips_secret_keys(monkeypatch):
     monkeypatch.setattr(bs.db.session, "add", lambda o: added.append(o))
     monkeypatch.setattr(bs.db.session, "commit", lambda: None)
 
+    # Le bump de génération (point 11) touche ConfigOption ; hors sujet ici
+    # (ce test vérifie uniquement l'exclusion des secrets) : neutralisé, comme
+    # commit/add/load_configuration.
+    monkeypatch.setattr(bs.config_sync, "bump_generation", lambda *a, **k: None)
+
     # current_app.load_configuration est appelé en fin de restore : neutralisé.
     monkeypatch.setattr(
         bs, "current_app",
-        types.SimpleNamespace(load_configuration=lambda _app: None),
+        types.SimpleNamespace(
+            load_configuration=lambda _app: None,
+            _config_generation=0,
+        ),
     )
 
     section = bs.ConfigSection()

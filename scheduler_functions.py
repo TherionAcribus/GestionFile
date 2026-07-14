@@ -9,6 +9,20 @@ from bdd import transfer_patients_to_history
 from app_holder import AppHolder
 from config import time_tz
 from communication import communikation
+import config_sync
+
+
+def _refresh_config(app):
+    """Point 11 — recharge app.config si un autre processus l'a modifiée.
+
+    Le processus scheduler (``APP_ROLE=scheduler``) ne sert aucune requête HTTP :
+    le ``before_request`` de convergence n'y est jamais déclenché. On resynchronise
+    donc explicitement au début de chaque tâche (``force=True``, les tâches sont
+    peu fréquentes) afin que les options relues à l'exécution (transfert vers
+    l'historique, désactivation des boutons, archivage...) reflètent l'état courant
+    de la base. Ne lève jamais (config conservée en cas d'erreur base)."""
+    config_sync.maybe_reload_configuration(app, force=True)
+
 
 def with_app_context(f):
     @wraps(f)
@@ -21,13 +35,14 @@ def with_app_context(f):
 def disable_buttons_for_activity_job(activity_id):
     """Désactive les boutons pour une activité"""
     app = AppHolder.get_app()
-    
+
     with app.app_context():
+        _refresh_config(app)
         try:
             activity = Activity.query.get(activity_id)
             if not activity:
                 raise ValueError(f"Activity with id {activity_id} not found")
-                
+
             disable_buttons_for_activity(app, activity_id)
             
             # Log du succès
@@ -71,13 +86,14 @@ def disable_buttons_for_activity(app, activity_id):
 def enable_buttons_for_activity_job(activity_id):
     """Active les boutons pour une activité"""
     app = AppHolder.get_app()
-    
+
     with app.app_context():
+        _refresh_config(app)
         try:
             activity = Activity.query.get(activity_id)
             if not activity:
                 raise ValueError(f"Activity with id {activity_id} not found")
-                
+
             enable_buttons_for_activity(app, activity_id)
             
             # Log du succès
@@ -243,6 +259,7 @@ def clear_all_patients_job():
     print("Clear all patients")
 
     with app.app_context():
+        _refresh_config(app)
         try:
             success = True
             if app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"]:
@@ -285,8 +302,9 @@ def clear_all_patients_job():
 def clear_announce_calls_job():
     """Wrapper pour le nettoyage des annonces"""
     app = AppHolder.get_app()  # Récupérer l'instance de l'application
-    
+
     with app.app_context():
+        _refresh_config(app)
         try:
             clear_announces_call()
             
@@ -340,8 +358,9 @@ def clear_announces_call():
 def auto_archive_job():
     """Tâche planifiée pour l'archivage automatique"""
     app = AppHolder.get_app()
-    
+
     with app.app_context():
+        _refresh_config(app)
         try:
             days = app.config.get('DATA_ARCHIVE_DAYS', 365)
             compress = app.config.get('DATA_ARCHIVE_COMPRESSED', True)

@@ -98,6 +98,7 @@ from routes.home import home_bp
 from python.engine import engine_bp
 from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission
 from params_registry import CONFIG_MAPPINGS, BALISE_LETTERS, get_spec
+import config_sync
 
 database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 # A mettre dans la BDD ?
@@ -175,13 +176,17 @@ def load_configuration(app):
     app.config["VOICE_GOOGLE_REGION"] = french.voice_google_region
     print("VOICE_MODEL", app.config["VOICE_MODEL"])
 
-    # printer
-    app.config["PRINTER_INFOS"] = []
-    app.config["PRINTER_ERROR"] = {
+    # printer — état RUNTIME (historique du statut imprimante, poussé par l'App
+    # Patient et accumulé en mémoire). Point 11 : ``load_configuration`` peut être
+    # rappelée à chaud (rechargement après changement de config par un autre
+    # processus) ; on utilise ``setdefault`` pour NE PAS écraser cet état runtime
+    # à chaque rechargement (seul le tout premier chargement l'initialise).
+    app.config.setdefault("PRINTER_INFOS", [])
+    app.config.setdefault("PRINTER_ERROR", {
         'error': True,
         'message': "pas de connexion à l'App Patient",
         'timestamp': datetime.now(time_tz)
-    }
+    })
 
     # TMP FIX adresse galleries
     app.config["ANNOUNCE_GALLERY_FOLDERS"]= "static/galleries"
@@ -229,8 +234,17 @@ def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_
         init_default_announce_css_variables_db_from_json()
         init_default_phone_css_variables_db_from_json()
 
+        # Point 11 : garantir l'existence de la ligne de génération de config
+        # avant tout démarrage de réplique web (évite une insertion concurrente).
+        config_sync.ensure_generation_row()
+
     if run_runtime:
         load_configuration(app)
+        # Point 11 : mémoriser la génération de configuration chargée pour que la
+        # première requête ne déclenche pas un rechargement inutile, et que les
+        # comparaisons ultérieures (before_request web / tâches scheduler)
+        # détectent uniquement de vrais changements venus d'un autre processus.
+        config_sync.mark_current_generation(app)
 
     if run_startup_cleanup:
         clear_old_patients_table(app)
@@ -950,6 +964,13 @@ def update_switch():
             config_option = ConfigOption(config_key=key, value_bool=bool_value)
             db.session.add(config_option)
 
+        # Point 11 : incrémenter la génération de configuration DANS la même
+        # transaction, pour que les autres processus (répliques web, scheduler)
+        # rechargent app.config. On ne le fait PAS pour les paramètres nécessitant
+        # un redémarrage : ils ne s'appliquent qu'à l'initialisation du processus.
+        if not spec.restart_required:
+            config_sync.bump_generation()
+
         db.session.commit()
     except Exception as e:
         # Toute exception annule la transaction (rollback) : la base reste dans
@@ -957,6 +978,12 @@ def update_switch():
         db.session.rollback()
         app.logger.error("Échec de mise à jour du switch %r : %s", key, e)
         return display_toast(success=False, message=str(e))
+
+    # Paramètre nécessitant un redémarrage : la valeur est persistée mais n'est
+    # PAS appliquée à chaud (ni ici ni sur les autres processus). On ne mute donc
+    # pas app.config et on l'annonce clairement plutôt que de prétendre l'inverse.
+    if spec.restart_required:
+        return display_toast(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
 
     # Commit réussi : refléter en mémoire, puis déclencher les effets de bord.
     app.config[spec.config_name] = bool_value
@@ -1148,6 +1175,11 @@ def update_input():
                 printer_option = ConfigOption(config_key=key_printer, value_str=escpos_text)
                 db.session.add(printer_option)
 
+        # Point 11 : génération incrémentée dans la même transaction pour la
+        # convergence inter-processus (sauf paramètre nécessitant un redémarrage).
+        if not spec.restart_required:
+            config_sync.bump_generation()
+
         db.session.commit()
     except Exception as e:
         # Toute exception annule l'ensemble de la transaction : ni l'option ni la
@@ -1160,6 +1192,10 @@ def update_input():
             return display_toast(success=False, message="La mise à jour du secret a échoué.")
         app.logger.error("Échec de mise à jour de l'option %r : %s", key, e)
         return display_toast(success=False, message=str(e))
+
+    # Paramètre nécessitant un redémarrage : persisté mais non appliqué à chaud.
+    if spec.restart_required:
+        return display_toast(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
 
     # Commit réussi : refléter en mémoire (app.config) puis effets de bord.
     app.config[spec.config_name] = value
@@ -1200,11 +1236,19 @@ def update_select():
         # Mutation en base dans une transaction ; app.config n'est mis à jour
         # qu'APRÈS un commit réussi (point 10).
         config_option.value_str = value
+        # Point 11 : génération incrémentée dans la même transaction (convergence
+        # inter-processus), sauf paramètre nécessitant un redémarrage.
+        if not spec.restart_required:
+            config_sync.bump_generation()
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         app.logger.error("Échec de mise à jour du select %r : %s", key, e)
         return display_toast(success=False, message=str(e))
+
+    # Paramètre nécessitant un redémarrage : persisté mais non appliqué à chaud.
+    if spec.restart_required:
+        return display_toast(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
 
     app.config[spec.config_name] = value
     call_function_with_select(key, value)
@@ -1944,6 +1988,20 @@ def load_colors(sender, **extra):
             session['admin_colors'] = "lumen"
 # Connecter le signal request_started à la fonction load_configuration
 request_started.connect(load_colors, app)
+
+
+@app.before_request
+def _sync_configuration_across_processes():
+    """Point 11 — convergence des paramètres entre répliques web.
+
+    Vérification *throttlée* (au plus une lecture mono-ligne de la génération de
+    configuration toutes les ``CONFIG_SYNC_MIN_INTERVAL`` secondes) : si un autre
+    processus (autre réplique web, page d'admin) a modifié la configuration, on
+    recharge ``app.config`` depuis la base avant de traiter la requête. En cas
+    d'erreur base, la requête n'échoue pas : la configuration en mémoire est
+    conservée (cf. config_sync.maybe_reload_configuration).
+    """
+    config_sync.maybe_reload_configuration(app)
 
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
