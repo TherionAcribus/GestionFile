@@ -98,6 +98,7 @@ from routes.home import home_bp
 from python.engine import engine_bp
 from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission
 from params_registry import CONFIG_MAPPINGS, BALISE_LETTERS, get_spec
+from config_loader import load_config_options
 import config_sync
 
 database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
@@ -159,10 +160,13 @@ def load_configuration(app):
     # modifiables » restent strictement identiques.
     config_mappings = CONFIG_MAPPINGS
 
-    for key, (config_name, value_type) in config_mappings.items():
-        config_option = ConfigOption.query.filter_by(config_key=key).first()
-        if config_option:
-            app.config[config_name] = getattr(config_option, value_type)
+    # Point 12 (performances) : une SEULE requête pour toutes les options au lieu
+    # d'une par clé (~130 allers-retours). ``load_config_options`` récupère les
+    # lignes utiles d'un coup, les indexe par ``config_key`` et applique le
+    # registre typé en mémoire. On ne pose que les clés réellement présentes en
+    # base (les défauts déjà en place pour les clés absentes sont préservés).
+    for config_name, value in load_config_options(ConfigOption, config_mappings).items():
+        app.config[config_name] = value
 
     # Handling special case for cron_delete_patient_table_activated
     #if app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED'):
