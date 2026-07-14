@@ -45,6 +45,14 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
                 communication_websocket("socket_update_screen", data, event="audio")
             else:
                 communication_websocket("socket_app_screen", data, "sound")
+            # Ducking côté serveur : baisse/coupe la musique Spotify pendant
+            # l'annonce puis la relance automatiquement. Import différé pour
+            # éviter une dépendance circulaire (admin_music importe communikation).
+            try:
+                from routes.admin_music import duck_for_announcement
+                duck_for_announcement()
+            except Exception:
+                logging.exception("Échec du déclenchement du ducking Spotify")
     else:
         communication_websocket(f"socket_{stream}", data, flag, event=event)
 

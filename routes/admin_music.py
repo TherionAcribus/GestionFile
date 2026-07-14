@@ -1,27 +1,108 @@
+import os
+import json
 import spotipy
-import time as tm
 from spotipy.oauth2 import SpotifyOAuth, SpotifyOauthError
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, session, current_app as app, flash
-from models import db, ConfigOption, DashboardCard
+from flask import Blueprint, render_template, request, redirect, url_for, current_app as app, flash
+from models import db, ConfigOption, DashboardCard, SpotifyToken
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_dashboard
 from flask_login import current_user
+from spotify_support import (
+    SPOTIFY_SCOPE,
+    DuckController,
+    resolve_spotify_credentials,
+    resolve_redirect_uri,
+    run_duck_cycle,
+)
 
 admin_music_bp = Blueprint('admin_music', __name__)
 
-class SpotifyFlaskCacheHandler(spotipy.CacheHandler):
-    def __init__(self, session_key):
-        self.session_key = session_key
+# Durée par défaut de la mise en sourdine pendant une annonce (secondes). Sert de
+# borne de sécurité : la musique reprend au plus tard après ce délai même si un
+# évènement de fin d'annonce était manqué. Les annonces vocales sont courtes.
+DUCK_RESUME_SECONDS = 12
+
+# Contrôleur global de sourdine pendant les annonces (voir spotify_support).
+_duck_controller = DuckController()
+
+
+class SpotifyDBCacheHandler(spotipy.CacheHandler):
+    """Cache de jeton spotipy adossé à la base de données (côté serveur).
+
+    Remplace l'ancien stockage en session Flask (cookie signé côté client), qui
+    exposait les jetons d'accès et de rafraîchissement au navigateur. Le jeton
+    est conservé dans l'unique ligne ``SpotifyToken`` (``id == 1``).
+    """
 
     def get_cached_token(self):
-        return session.get(self.session_key)
+        row = SpotifyToken.query.get(1)
+        if not row or not row.token_info:
+            return None
+        try:
+            return json.loads(row.token_info)
+        except (ValueError, TypeError):
+            return None
 
     def save_token_to_cache(self, token_info):
-        session[self.session_key] = token_info
+        try:
+            row = SpotifyToken.query.get(1)
+            if row is None:
+                row = SpotifyToken(id=1)
+                db.session.add(row)
+            row.token_info = json.dumps(token_info)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Échec d'enregistrement du jeton Spotify")
 
     def delete_token_from_cache(self):
-        session.pop(self.session_key, None)
+        try:
+            row = SpotifyToken.query.get(1)
+            if row is not None:
+                row.token_info = None
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Échec de suppression du jeton Spotify")
+
+
+def _spotify_redirect_uri():
+    """URL de redirection OAuth, tolérante à l'absence de contexte de requête."""
+    external = None
+    try:
+        external = url_for('admin_music.spotify_callback', _external=True)
+    except RuntimeError:
+        # Hors contexte de requête (tâche de fond de rafraîchissement) : on
+        # reconstruit l'URL à partir de l'adresse réseau configurée.
+        external = None
+    return resolve_redirect_uri(external, app.config.get("NETWORK_ADRESS"))
+
+
+def build_spotify_oauth():
+    """Construit le client OAuth Spotify, ou ``None`` si non configuré.
+
+    L'identifiant et le secret client proviennent, dans l'ordre, des variables
+    d'environnement ``SPOTIFY_CLIENT_ID`` / ``SPOTIFY_CLIENT_SECRET`` (gestion
+    des secrets), puis de la configuration de l'officine. **Aucune valeur n'est
+    codée en dur.** Le jeton obtenu est mis en cache côté serveur.
+    """
+    creds = resolve_spotify_credentials(
+        os.environ.get("SPOTIFY_CLIENT_ID"),
+        os.environ.get("SPOTIFY_CLIENT_SECRET"),
+        app.config.get("MUSIC_SPOTIFY_USER"),
+        app.config.get("MUSIC_SPOTIFY_KEY"),
+    )
+    if creds is None:
+        return None
+    client_id, client_secret = creds
+    return SpotifyOAuth(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri=_spotify_redirect_uri(),
+        scope=SPOTIFY_SCOPE,
+        cache_handler=SpotifyDBCacheHandler(),
+    )
 
 
 @admin_music_bp.route('/admin/music')
@@ -57,7 +138,6 @@ def admin_music(tab=None):
 
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
-    print("spotify", spotify_connected)
     if spotify_connected:
         sp = spotipy.Spotify(auth=token_info['access_token'])
         playlists = sp.current_user_playlists()
@@ -124,32 +204,20 @@ def save_music_options():
     try:
         # Code existant...
         pass
-    except Exception as e:
-        print(f"Erreur lors de la sauvegarde des options de musique : {e}")
+    except Exception:
+        app.logger.exception("Erreur lors de la sauvegarde des options de musique")
         return '', 500
 
 
-def get_spotify_oauth():
-    cache_handler = SpotifyFlaskCacheHandler(session_key='token_info')
-    return SpotifyOAuth(
-        client_id="d061eca61b9b475dbffc3a15c57d6b5e",
-        client_secret="401f14a3f95e4c7fad1c525dfed3c808",
-        redirect_uri=url_for('admin_music.spotify_callback', _external=True),
-        scope="user-library-read user-read-playback-state user-modify-playback-state streaming",
-        cache_handler=cache_handler
-    )
-
-def spotify_authorized():
-    print("spotify_authorized", app.config["MUSIC_SPOTIFY_USER"], app.config["MUSIC_SPOTIFY_KEY"])
-    return SpotifyOAuth(client_id="d061eca61b9b475dbffc3a15c57d6b5e",
-                            client_secret = "401f14a3f95e4c7fad1c525dfed3c808",
-                            redirect_uri=url_for('admin_music.spotify_callback', _external=True),
-                            scope='user-library-read user-read-playback-state user-modify-playback-state streaming')
-
 @admin_music_bp.route('/spotify/login')
+@require_permission('music_options')
 def spotify_login():
-    # Initialiser le flux OAuth avec le cache personnalisé
-    sp_oauth = get_spotify_oauth()
+    # Initialiser le flux OAuth (identifiants lus depuis la config/env, jamais
+    # codés en dur). Si Spotify n'est pas configuré, on renvoie une erreur claire.
+    sp_oauth = build_spotify_oauth()
+    if sp_oauth is None:
+        flash("Spotify n'est pas configuré (identifiant/secret client manquant).")
+        return redirect(url_for('admin_music.admin_music', tab='options'))
     auth_url = sp_oauth.get_authorize_url()
     communikation("update_screen", event="spotify_status", data=True)
     # Rediriger l'utilisateur vers l'URL d'autorisation
@@ -157,40 +225,42 @@ def spotify_login():
 
 
 def clear_spotify_tokens():
-    # Supprimez les informations de token de la session
-    session.pop('token_info', None)
-    session.modified = True
+    """Supprime le jeton Spotify du stockage serveur."""
+    SpotifyDBCacheHandler().delete_token_from_cache()
+    _duck_controller.reset()
 
 @admin_music_bp.route('/spotify/logout')
+@require_permission('music_options')
 def spotify_logout():
-    sp_oauth = get_spotify_oauth()
-    sp_oauth.cache_handler.delete_token_from_cache()
+    clear_spotify_tokens()
     communikation("update_screen", event="spotify_status", data=False)
     return redirect(url_for('admin_music.admin_music'))
 
 @admin_music_bp.route('/spotify/callback')
+@require_permission('music_options')
 def spotify_callback():
-    sp_oauth = get_spotify_oauth()
+    sp_oauth = build_spotify_oauth()
+    if sp_oauth is None:
+        return redirect(url_for('admin_music.error_page'))
 
     # Obtenir le code de l'URL de redirection
     code = request.args.get('code')
 
     try:
-        # Echanger le code contre un token d'accès
-        token_info = sp_oauth.get_access_token(code)
-        # Stocker le token dans la session via le cache handler
-        session['token_info'] = token_info
-        session.modified = True
-    except SpotifyOauthError as e:
-        print(f"Error obtaining token: {e}")
+        # Échanger le code contre un jeton d'accès. Le cache_handler enregistre
+        # automatiquement le jeton côté serveur (table SpotifyToken).
+        sp_oauth.get_access_token(code, check_cache=False)
+    except SpotifyOauthError:
+        app.logger.warning("Échec de l'obtention du jeton Spotify (OAuth)")
         return redirect(url_for('admin_music.error_page'))
 
     return redirect(url_for('admin_music.admin_music'))  # Rediriger vers votre page d'administration ou autre
 
 @admin_music_bp.route('/show_saved_tracks')
+@require_permission('music_play')
 def show_saved_tracks():
-    token_info = session.get('token_info', None)
-    if not token_info:
+    token_info, authorized = get_spotify_token()
+    if not authorized:
         # Rediriger vers l'authentification si le token n'est pas présent
         return redirect(url_for('admin_music.spotify_login'))
 
@@ -237,6 +307,7 @@ def spotify_exception_handler(func):
     return wrapper
 
 @admin_music_bp.route('/spotify/shuffle', methods=['GET'])
+@require_permission('music_play')
 @spotify_exception_handler
 def shuffle_playlist():
     #TODO Ne semble plus fonctionner
@@ -260,6 +331,7 @@ def shuffle_playlist():
         return 'Aucun appareil actif trouvé pour activer le shuffle.', 400
 
 @admin_music_bp.route('/spotify/pause_music', methods=['GET'])
+@require_permission('music_play')
 @spotify_exception_handler
 def pause_music():
     sp = get_spotipy()
@@ -267,6 +339,7 @@ def pause_music():
     return '', 204
 
 @admin_music_bp.route('/spotify/resume_music', methods=['GET'])
+@require_permission('music_play')
 @spotify_exception_handler
 def resume_music():
     sp = get_spotipy()
@@ -274,6 +347,7 @@ def resume_music():
     return '', 204
 
 @admin_music_bp.route('/spotify/next_track', methods=['GET'])
+@require_permission('music_play')
 @spotify_exception_handler
 def next_track():
     sp = get_spotipy()
@@ -281,6 +355,7 @@ def next_track():
     return '', 204
 
 @admin_music_bp.route('/spotify/previous_track', methods=['GET'])
+@require_permission('music_play')
 @spotify_exception_handler
 def previous_track():
     sp = get_spotipy()
@@ -289,6 +364,7 @@ def previous_track():
 
 
 @admin_music_bp.route('/spotify/change_volume', methods=['POST'])
+@require_permission('music_play')
 def change_volume():
     """ Fonction appelée lorsque l'on change la valeur du slider de volume dans le lecteur 
     Enregistre la nouvelle valeur dans la BDD et change le volume du lecteur """
@@ -311,21 +387,61 @@ def set_volume(volume):
     sp.volume(volume)
     return '', 204
 
-@admin_music_bp.route('/spotify/start_announce', methods=['GET'])
+# NB : plus de routes HTTP publiques pour le ducking. Ces actions ne sont plus
+# déclenchées par l'écran d'annonce (navigateur public) mais pilotées côté
+# serveur (cf. duck_for_announcement), ce qui permet de protéger l'ensemble des
+# routes Spotify par une permission admin.
 def start_announce_music():
     if app.config["MUSIC_ANNOUNCE_ACTION"] == "pause":
         return pause_music()
     elif app.config["MUSIC_ANNOUNCE_ACTION"] == "down":
         return set_volume(app.config["MUSIC_ANNOUNCE_VOLUME"])
 
-@admin_music_bp.route('/spotify/stop_announce', methods=['GET'])
 def stop_announce_music():
     if app.config["MUSIC_ANNOUNCE_ACTION"] == "pause":
         return resume_music()
     elif app.config["MUSIC_ANNOUNCE_ACTION"] == "down":
         return set_volume(app.config["MUSIC_VOLUME"])
 
+
+def duck_for_announcement(duration=None):
+    """Met la musique en sourdine pendant une annonce, **côté serveur**.
+
+    Lancé dans une tâche de fond (hors du chemin de l'appel patient) : un
+    éventuel incident réseau Spotify n'affecte ni la latence ni la fiabilité de
+    l'appel. La reprise est automatique après ``duration`` secondes ; les
+    annonces qui se chevauchent prolongent la sourdine (cf. DuckController).
+    """
+    try:
+        app_obj = app._get_current_object()
+    except Exception:
+        return
+    socketio = getattr(app_obj, "socketio", None)
+    if socketio is None:
+        return
+    secs = DUCK_RESUME_SECONDS if duration is None else duration
+
+    def worker():
+        with app_obj.app_context():
+            try:
+                if not app_obj.config.get("MUSIC_SPOTIFY"):
+                    return
+                if not is_spotipy_connected():
+                    return
+                run_duck_cycle(
+                    _duck_controller,
+                    start_announce_music,
+                    stop_announce_music,
+                    socketio.sleep,
+                    secs,
+                )
+            except Exception:
+                app_obj.logger.exception("Échec du ducking Spotify pendant l'annonce")
+
+    socketio.start_background_task(worker)
+
 @admin_music_bp.route('/spotify/play_playlist', methods=['POST'])
+@require_permission('music_play')
 @spotify_exception_handler
 def play_playlist():
     sp = get_spotipy()
@@ -349,27 +465,30 @@ def play_playlist():
     return redirect(url_for('admin_music.admin_music'))
 
 def get_spotify_token():
-    token_info = session.get('token_info', None)
-    if not token_info:
+    """Retourne ``(token_info, authorized)`` en lisant le jeton côté serveur.
+
+    Le jeton est stocké en base (``SpotifyToken``) et non plus dans la session
+    Flask. spotipy gère automatiquement le rafraîchissement via le cache handler
+    lorsque le jeton est expiré ; le nouveau jeton est ré-enregistré en base.
+    """
+    sp_oauth = build_spotify_oauth()
+    if sp_oauth is None:
         return None, False
 
-    now = int(tm.time())
-    is_token_expired = token_info['expires_at'] - now < 60
+    try:
+        cached = sp_oauth.cache_handler.get_cached_token()
+        token_info = sp_oauth.validate_token(cached)
+    except SpotifyOauthError:
+        app.logger.warning("Échec du rafraîchissement du jeton Spotify")
+        return None, False
+    except Exception:
+        # Incident réseau/HTTP côté Spotify : on dégrade en « non connecté »
+        # plutôt que de faire échouer le rendu de page ou la tâche de ducking.
+        app.logger.warning("Erreur lors de la validation du jeton Spotify", exc_info=True)
+        return None, False
 
-    if is_token_expired:
-        try:
-            sp_oauth = SpotifyOAuth(
-        client_id = app.config["MUSIC_SPOTIFY_USER"],
-        client_secret = app.config["MUSIC_SPOTIFY_KEY"],
-        redirect_uri=url_for('admin_music.spotify_callback', _external=True),
-        scope='user-library-read user-read-playback-state user-modify-playback-state streaming'
-    )
-            token_info = sp_oauth.refresh_access_token(token_info['refresh_token'])
-            session['token_info'] = token_info
-        except SpotifyOauthError as e:
-            print(f"Error refreshing token: {e}")
-            #clear_spotify_tokens()
-            return None, False
+    if not token_info:
+        return None, False
 
     return token_info, True
 
@@ -418,7 +537,6 @@ def get_spotify_current_track_info():
 def dashboard_music():
     token_info, authorized = get_spotify_token()
     spotify_connected = authorized
-    print("spotify", spotify_connected)
     dashboardcard = DashboardCard.query.filter_by(name="player").first()
     
     if spotify_connected:

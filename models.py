@@ -458,6 +458,35 @@ class ConfigOption(db.Model):
         return f'<ConfigOption {self.config_key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
 
 
+class SpotifyToken(db.Model):
+    """Jeton OAuth Spotify de l'officine, stocké **côté serveur**.
+
+    L'officine ne connecte qu'un seul compte Spotify (le lecteur physique du
+    point de vente) : une unique ligne (``id == 1``) suffit. Conserver le jeton
+    ici plutôt que dans la session Flask (cookie signé côté client) évite d'en
+    exposer les jetons d'accès et de rafraîchissement au navigateur, et permet à
+    tout administrateur autorisé — pas seulement celui qui a réalisé
+    l'autorisation — de piloter le lecteur.
+
+    ``token_info`` contient le dictionnaire de jeton spotipy sérialisé en JSON.
+    Cette valeur est un secret : elle est exclue des sauvegardes (cf.
+    ``SECRET_CONFIG_KEYS`` n'agit que sur ``ConfigOption`` ; cette table n'est
+    tout simplement pas exportée) et ne doit jamais être journalisée.
+    """
+
+    __tablename__ = 'spotify_token'
+    id = db.Column(db.Integer, primary_key=True)
+    token_info = db.Column(db.Text)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(time_tz),
+        onupdate=lambda: datetime.now(time_tz),
+    )
+
+    def __repr__(self):
+        return f'<SpotifyToken id={self.id} set={bool(self.token_info)}>'
+
+
 class ConfigVersion(db.Model):
     id = db.Column(db.Integer, Sequence('config_version_id_seq'), primary_key=True)
     config_key = db.Column(db.String(50), unique=True, nullable=False)

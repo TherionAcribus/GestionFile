@@ -1,9 +1,8 @@
 import os
 import json
-from flask import Blueprint, render_template, jsonify, url_for, current_app as app
+from flask import Blueprint, render_template, url_for, current_app as app
 from models import Patient, ConfigOption
 from utils import replace_balise_announces
-from routes.admin_music import is_spotipy_connected
 from communication import communikation
 from python.engine import get_global_patient_queue
 
@@ -112,9 +111,3 @@ def announce_refresh():
     communikation("update_screen", event="refresh")
     print("Refresh DISPLAY!!")
     return '', 204
-
-@announce_bp.route('/announce/spotify/check_connection', methods=['GET'])
-def check_spotify_connection():
-    is_connected = is_spotipy_connected()
-    print("is_connected", is_connected)
-    return jsonify({'connected': is_connected})

@@ -70,3 +70,55 @@ Le CSRF ne protège pas les requêtes GET. La correction (passage de ces routes
 en POST, avec jeton) fait l'objet d'un point ultérieur ; elle n'est pas incluse
 dans l'activation du CSRF pour ne pas modifier le comportement des liens et
 modales de confirmation existants.
+
+## Intégration Spotify (musique d'ambiance)
+
+L'intégration Spotify pilote un **unique** compte Spotify (le lecteur physique
+du point de vente). Sa sécurisation repose sur quatre principes.
+
+### 1. Aucun secret client codé en dur
+
+L'identifiant (`client_id`) et le secret (`client_secret`) de l'application
+Spotify sont résolus par `spotify_support.resolve_spotify_credentials`, dans cet
+ordre :
+
+1. variables d'environnement `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`
+   (gestionnaire de secrets — **recommandé**) ;
+2. configuration de l'officine en base (`music_spotify_user` /
+   `music_spotify_key`, cette dernière marquée secrète : jamais rendue dans un
+   gabarit, exclue des sauvegardes).
+
+Si aucune source ne fournit les deux valeurs, Spotify est traité comme « non
+configuré » et aucune connexion n'est tentée. **Aucune valeur de repli n'est
+codée en dur dans le code.**
+
+> ⚠️ **Rotation obligatoire** — Une version antérieure contenait un
+> `client_secret` Spotify en clair dans le code source. Ce secret est
+> considéré comme **compromis** : il doit être **révoqué puis régénéré** dans le
+> [dashboard développeur Spotify](https://developer.spotify.com/dashboard) et la
+> nouvelle valeur fournie via `SPOTIFY_CLIENT_SECRET` (ou l'écran d'options).
+
+### 2. Jetons OAuth conservés côté serveur
+
+Les jetons d'accès et de rafraîchissement OAuth ne sont **plus** stockés dans la
+session Flask (cookie signé côté client). Ils vivent en base, dans la table
+`spotify_token` (unique ligne `id = 1`), via `SpotifyDBCacheHandler`. Ce jeton
+est un secret : il n'est jamais journalisé ni exporté dans les sauvegardes.
+
+### 3. Toutes les routes Spotify exigent une permission admin
+
+Les routes `/spotify/*` (connexion, déconnexion, callback, lecture,
+pause/reprise, volume, playlists, pistes enregistrées) sont protégées par
+`@require_permission('music_play')` ou `@require_permission('music_options')`.
+Elles ne sont plus accessibles sans session administrateur autorisée.
+
+Le **ducking** (baisser/couper la musique pendant les annonces vocales) était
+auparavant déclenché par l'écran d'annonce **public** via des routes Spotify
+ouvertes. Il est désormais piloté **côté serveur** (`duck_for_announcement`,
+lancé en tâche de fond à l'émission de l'audio) : l'écran d'annonce n'appelle
+plus aucune route Spotify, ce qui permet de toutes les protéger.
+
+### 4. Pas de journalisation de secret
+
+Le secret client et les jetons ne sont jamais imprimés ni journalisés (l'ancien
+`print` de `MUSIC_SPOTIFY_KEY` a été supprimé).

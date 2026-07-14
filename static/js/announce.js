@@ -151,22 +151,9 @@ function refresh_calling_list() {
     }
 }
 
-let isSpotifyConnected = false;
-
-// Fonction pour vérifier la connexion spotify au chargement de la page
-function checkSpotifyConnection() {
-    fetch('/announce/spotify/check_connection')
-        .then(response => response.json())
-        .then(data => {
-            isSpotifyConnected = data.connected;
-            console.log('Connexion Spotify:', data.connected);
-        })
-        .catch(error => console.error('Erreur:', error));
-}
-
-// Appeler cette fonction au chargement de la page
-document.addEventListener('DOMContentLoaded', checkSpotifyConnection);
-
+// Le ducking Spotify (baisser/couper la musique pendant les annonces) est
+// désormais géré côté serveur : l'écran d'annonce public n'appelle plus aucune
+// route Spotify (voir routes/admin_music.duck_for_announcement).
 
 const audioQueue = [];
 let isPlaying = false;
@@ -176,9 +163,6 @@ function receive_audio(msg) {
     const audioUrl = msg.data;
     console.log("Queueing audio...", audioUrl);
     queueAudio(audioUrl);
-    // Envoyer une requête à Flask pour mettre la musique en pause
-    if (isSpotifyConnected)
-        {pauseMusicOnSpotify();}
 }
 
 function queueAudio(audioUrl) {
@@ -192,8 +176,6 @@ function playNextAudio() {
     console.log("Playing next audio...", audioQueue);
     if (audioQueue.length === 0) {
         isPlaying = false;
-        if (isSpotifyConnected)
-            {resumeMusicOnSpotify();}
         return;
     }
     isPlaying = true;
@@ -212,43 +194,6 @@ function playAudio(audioUrl) {
         console.log("Audio ended");
         playNextAudio();
     }
-}
-
-function pauseMusicOnSpotify() {
-    fetch('/spotify/start_announce', {
-        method: 'GET',
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();  // or response.text() if you're not returning JSON
-    })
-    .then(data => {
-        console.log('Music paused successfully:', data);
-    })
-    .catch(error => {
-        console.error('Error while pausing music:', error);
-    });
-}
-
-
-function resumeMusicOnSpotify() {
-    fetch('/spotify/stop_announce', {
-        method: 'GET',
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        return response.json();  // or response.text() if you're not returning JSON
-    })
-    .then(data => {
-        console.log('Music resumed successfully:', data);
-    })
-    .catch(error => {
-        console.error('Error while resuming music:', error);
-    });
 }
 
 
