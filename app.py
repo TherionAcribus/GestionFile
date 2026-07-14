@@ -939,11 +939,11 @@ def update_switch():
 
     bool_value = value == "true"
     try:
-        # MAJ BDD
+        # Mutation en base dans une seule transaction. On ne touche PAS à
+        # app.config ici : la mémoire ne doit refléter le changement qu'APRÈS un
+        # commit réussi (point 10), pour ne pas diverger de la base si le commit
+        # échoue.
         config_option = ConfigOption.query.filter_by(config_key=key).first()
-        # MAJ Config
-        app.config[spec.config_name] = bool_value
-
         if config_option:
             config_option.value_bool = bool_value
         else:
@@ -951,12 +951,17 @@ def update_switch():
             db.session.add(config_option)
 
         db.session.commit()
-        call_function_with_switch(key, value)
-        return display_toast(success=True, message="Option mise à jour.")
-
     except Exception as e:
-            print(e)
-            return display_toast(success=False, message=str(e))
+        # Toute exception annule la transaction (rollback) : la base reste dans
+        # son état précédent et app.config n'a pas été modifié.
+        db.session.rollback()
+        app.logger.error("Échec de mise à jour du switch %r : %s", key, e)
+        return display_toast(success=False, message=str(e))
+
+    # Commit réussi : refléter en mémoire, puis déclencher les effets de bord.
+    app.config[spec.config_name] = bool_value
+    call_function_with_switch(key, value)
+    return display_toast(success=True, message="Option mise à jour.")
     
 
 @app.route('/admin/update_css_variable_old', methods=['POST'])
@@ -1097,6 +1102,7 @@ def update_input():
     if spec.secret and value.strip() == "":
         return display_toast(success=True, message="Secret inchangé (valeur actuelle conservée).")
 
+    # --- Validation de TOUTES les valeurs AVANT toute mutation (point 10) ---
     if validator == "int":
         if value.isdigit():
             value = int(value)
@@ -1109,25 +1115,18 @@ def update_input():
         else:
             return display_toast(success=False, message=text_check["value"])
 
-    if key.startswith("ticket_"):
-        escpos_text = convert_markdown_to_escpos(value)
-        print("escpos_text", escpos_text)
-        key_printer = key + "_printer"
-        app.config[key_printer.upper()] = escpos_text
-        config_option = ConfigOption.query.filter_by(config_key=key_printer).first()
-        if config_option:
-            print("escpos_text2", escpos_text)
-            config_option.value_str = escpos_text
-            db.session.commit()
+    # Cas particulier des tickets : la version ESC/POS est enregistrée dans la
+    # MÊME transaction que l'option principale (plus de commit intermédiaire pour
+    # une seule opération logique) et n'est reflétée dans app.config qu'après le
+    # commit final.
+    is_ticket = key.startswith("ticket_")
+    escpos_text = convert_markdown_to_escpos(value) if is_ticket else None
+    key_printer = (key + "_printer") if is_ticket else None
 
+    is_int = spec.value_type == "value_int"
     try:
-        # MAJ Config
-        app.config[spec.config_name] = value
-
-        # MAJ BDD — la colonne cible est déterminée par le registre serveur.
-        is_int = spec.value_type == "value_int"
+        # MAJ BDD — option principale. La colonne cible vient du registre serveur.
         config_option = ConfigOption.query.filter_by(config_key=key).first()
-
         if config_option:
             if is_int:
                 config_option.value_int = value
@@ -1140,23 +1139,35 @@ def update_input():
                 config_option = ConfigOption(config_key=key, value_str=value)
             db.session.add(config_option)
 
+        # MAJ BDD — version imprimante du ticket (même transaction, un seul commit).
+        if is_ticket:
+            printer_option = ConfigOption.query.filter_by(config_key=key_printer).first()
+            if printer_option:
+                printer_option.value_str = escpos_text
+            else:
+                printer_option = ConfigOption(config_key=key_printer, value_str=escpos_text)
+                db.session.add(printer_option)
+
         db.session.commit()
-
-        # pour les actions à faire après un changement
-        special_functions_with_input(key)
-
-        display_toast(success=True, message="Option mise à jour.")
-
-        return "", 204
-
     except Exception as e:
-            # Pour une clé secrète, ne jamais renvoyer/journaliser le détail
-            # technique (il pourrait, selon le backend, contenir la valeur).
-            if spec.secret:
-                app.logger.error("Échec de mise à jour du paramètre secret %r", key)
-                return display_toast(success=False, message="La mise à jour du secret a échoué.")
-            app.logger.error(e)
-            return display_toast(success=False, message=str(e))
+        # Toute exception annule l'ensemble de la transaction : ni l'option ni la
+        # version imprimante ne sont modifiées, et app.config reste intact.
+        db.session.rollback()
+        # Pour une clé secrète, ne jamais renvoyer/journaliser le détail technique
+        # (il pourrait, selon le backend, contenir la valeur).
+        if spec.secret:
+            app.logger.error("Échec de mise à jour du paramètre secret %r", key)
+            return display_toast(success=False, message="La mise à jour du secret a échoué.")
+        app.logger.error("Échec de mise à jour de l'option %r : %s", key, e)
+        return display_toast(success=False, message=str(e))
+
+    # Commit réussi : refléter en mémoire (app.config) puis effets de bord.
+    app.config[spec.config_name] = value
+    if is_ticket:
+        app.config[key_printer.upper()] = escpos_text
+    special_functions_with_input(key)
+    display_toast(success=True, message="Option mise à jour.")
+    return "", 204
 
 
 def special_functions_with_input(key):
@@ -1180,21 +1191,24 @@ def update_select():
     if error:
         return error
 
+    # Validation de l'existence de l'option AVANT toute mutation.
+    config_option = ConfigOption.query.filter_by(config_key=key).first()
+    if not config_option:
+        return display_toast(success=False, message="Option non trouvée.")
+
     try:
-        # MAJ BDD
-        config_option = ConfigOption.query.filter_by(config_key=key).first()
-        # MAJ Config
-        app.config[spec.config_name] = value
-        if config_option:
-            config_option.value_str = value
-            db.session.commit()
-            call_function_with_select(key, value)
-            return display_toast(success=True)
-        else:
-            return display_toast(success=False, message="Option non trouvée.")
+        # Mutation en base dans une transaction ; app.config n'est mis à jour
+        # qu'APRÈS un commit réussi (point 10).
+        config_option.value_str = value
+        db.session.commit()
     except Exception as e:
-            print(e)
-            return display_toast(success=False, message=str(e))
+        db.session.rollback()
+        app.logger.error("Échec de mise à jour du select %r : %s", key, e)
+        return display_toast(success=False, message=str(e))
+
+    app.config[spec.config_name] = value
+    call_function_with_select(key, value)
+    return display_toast(success=True)
 
 
 def call_function_with_select(key, value):

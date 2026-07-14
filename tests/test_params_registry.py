@@ -207,17 +207,53 @@ def test_api_authenticated_with_permission_gets_200():
 # 3. Régression statique sur le source
 # ---------------------------------------------------------------------------
 
+def _route_body(source, route):
+    """Corps de la fonction de route ``route`` (jusqu'au prochain def/@app.route)."""
+    m = re.search(r"def " + route + r"\(.*?\n(.*?)(?=\ndef |\n@app\.route)",
+                  source, re.DOTALL)
+    assert m, f"fonction {route} introuvable"
+    return m.group(1)
+
+
 def test_update_routes_call_the_guard():
     """Chaque route update_* doit appeler ``authorize_config_change`` : sans
     cet appel, la permission par clé n'est plus vérifiée."""
     source = _read("app.py")
     for route in ("update_switch", "update_input", "update_select"):
-        # def <route>( ... ) suivi, avant la prochaine def, d'un appel à la garde.
-        m = re.search(r"def " + route + r"\(.*?\n(.*?)(?=\ndef |\n@app\.route)",
-                      source, re.DOTALL)
-        assert m, f"fonction {route} introuvable"
-        assert "authorize_config_change(" in m.group(1), (
+        assert "authorize_config_change(" in _route_body(source, route), (
             f"{route} doit appeler authorize_config_change")
+
+
+def test_update_routes_rollback_on_exception():
+    """Écritures atomiques (point 10) : chaque route update_* doit annuler la
+    transaction (db.session.rollback()) en cas d'exception, pour ne pas laisser
+    la base dans un état partiel."""
+    source = _read("app.py")
+    for route in ("update_switch", "update_input", "update_select"):
+        assert "db.session.rollback()" in _route_body(source, route), (
+            f"{route} doit appeler db.session.rollback() sur exception")
+
+
+def test_update_input_has_single_commit():
+    """Une seule opération logique => un seul commit : la version imprimante du
+    ticket ne doit plus être committée séparément (pas de commit intermédiaire)."""
+    body = _route_body(_read("app.py"), "update_input")
+    assert body.count("db.session.commit()") == 1, (
+        "update_input ne doit avoir qu'un seul db.session.commit()")
+
+
+def test_update_routes_touch_app_config_after_commit():
+    """app.config n'est mis à jour qu'APRÈS un commit réussi (point 10) : la
+    mémoire ne doit pas refléter un changement non persisté."""
+    source = _read("app.py")
+    for route in ("update_switch", "update_input", "update_select"):
+        body = _route_body(source, route)
+        commit_idx = body.find("db.session.commit()")
+        cfg_idx = body.find("app.config[spec.config_name]")
+        assert commit_idx != -1, f"{route}: commit introuvable"
+        assert cfg_idx != -1, f"{route}: mise à jour app.config introuvable"
+        assert cfg_idx > commit_idx, (
+            f"{route} doit mettre à jour app.config APRÈS le commit, pas avant")
 
 
 def test_guard_returns_401_400_403():
