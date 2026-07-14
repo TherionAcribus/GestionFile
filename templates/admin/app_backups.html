@@ -83,31 +83,34 @@
     <div class="card-body">
         <p class="text-muted small">Sélectionnez un fichier de sauvegarde <strong>.json</strong> ou <strong>.zip</strong> pour voir son contenu et choisir les sections à restaurer.</p>
 
-        <form id="importPreviewForm"
-              hx-post="/admin/backup/preview"
-              hx-target="#importPreviewResult"
-              hx-swap="innerHTML"
-              hx-encoding="multipart/form-data">
+        <!-- Un SEUL formulaire porte le fichier ET les sections cochées : la
+             prévisualisation et la restauration l'utilisent toutes deux. En POST,
+             HTMX inclut automatiquement les inputs du formulaire englobant, si
+             bien que le bouton « Restaurer » (chargé dans la prévisualisation)
+             renvoie le fichier choisi ainsi que les cases cochées. -->
+        <form id="importForm" hx-encoding="multipart/form-data">
             <div class="mb-3">
                 <input class="form-control" type="file" name="file" id="importFileInput" accept=".json,.zip">
             </div>
-            <button type="submit" class="btn btn-outline-secondary btn-sm">
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    hx-post="/admin/backup/preview"
+                    hx-target="#importPreviewResult"
+                    hx-swap="innerHTML"
+                    hx-disabled-elt="this"
+                    hx-indicator="#importPreviewSpinner">
                 <i class="bi bi-eye"></i> Prévisualiser le fichier
+                <span id="importPreviewSpinner" class="htmx-indicator spinner-border spinner-border-sm ms-1" role="status"></span>
             </button>
+
+            <!-- La prévisualisation (cases des sections + bouton de restauration)
+                 est injectée ici, À L'INTÉRIEUR du formulaire. -->
+            <div id="importPreviewResult" class="mt-3">
+                <!-- Le contenu de la prévisualisation sera chargé ici par HTMX -->
+            </div>
         </form>
 
-        <div id="importPreviewResult" class="mt-3">
-            <!-- Le contenu de la prévisualisation sera chargé ici par HTMX -->
-        </div>
-
-        <form id="importForm" class="d-none"
-              hx-post="/admin/backup/import"
-              hx-target="#importResult"
-              hx-swap="innerHTML"
-              hx-encoding="multipart/form-data">
-            <input type="file" name="file" id="importFileHidden" class="d-none">
-        </form>
-        <div id="importResult" class="mt-2"></div>
+        <!-- Rapport de restauration (section par section). -->
+        <div id="importResult" class="mt-3"></div>
     </div>
 </div>
 
@@ -190,4 +193,12 @@ document.querySelectorAll('.export-chk').forEach(function(chk) {
 document.getElementById('chk_export_all').checked =
     document.querySelectorAll('.export-chk').length === document.querySelectorAll('.export-chk:checked').length;
 updateExportEstimate();
+
+// Changer de fichier invalide la prévisualisation et le dernier rapport : sans
+// cela, le bouton « Restaurer » enverrait le NOUVEAU fichier avec les sections
+// cochées de l'ANCIENNE prévisualisation.
+document.getElementById('importFileInput').addEventListener('change', function() {
+    document.getElementById('importPreviewResult').innerHTML = '';
+    document.getElementById('importResult').innerHTML = '';
+});
 </script>

@@ -86,11 +86,49 @@ _PREVIEW_TEMPLATE = """
             Après restauration, ressaisissez-les manuellement dans les pages concernées.
         </div>
         {% endif %}
-        <button type="submit" class="btn btn-danger btn-sm" id="btn_confirm_restore">
+        <button type="button" class="btn btn-danger btn-sm" id="btn_confirm_restore"
+                hx-post="/admin/backup/import"
+                hx-target="#importResult"
+                hx-swap="innerHTML"
+                hx-disabled-elt="this"
+                hx-indicator="#restoreSpinner"
+                hx-confirm="Confirmer la restauration ? Les données existantes des sections sélectionnées seront définitivement remplacées.">
+            <i class="bi bi-arrow-counterclockwise"></i>
             Restaurer les sections sélectionnées
+            <span id="restoreSpinner" class="htmx-indicator spinner-border spinner-border-sm ms-1" role="status"></span>
         </button>
     </div>
 </div>
+"""
+
+
+# Rapport de restauration : une ligne par section demandée, avec son état
+# (restaurée / non restaurée). Rendu via ``render_template_string`` (auto-échappé).
+# Aucun détail technique n'y figure : les erreurs restent dans les journaux.
+_RESTORE_REPORT_TEMPLATE = """
+<div class="alert alert-{{ tone }}">
+    <strong>{{ heading }}</strong>
+</div>
+<ul class="list-group mb-2">
+    {% for row in rows %}
+    <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+        <span>{{ row.label }}</span>
+        {% if row.ok %}
+        <span class="badge bg-success"><i class="bi bi-check-lg"></i> Restaurée</span>
+        {% else %}
+        <span class="badge bg-danger"><i class="bi bi-x-lg"></i> Non restaurée</span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% if any_restored %}
+<p class="small text-muted mb-1">
+    Rechargez la page pour visualiser les données restaurées dans l'interface.
+</p>
+<button type="button" class="btn btn-primary btn-sm" onclick="window.location.reload()">
+    <i class="bi bi-arrow-clockwise"></i> Recharger la page
+</button>
+{% endif %}
 """
 
 
@@ -191,6 +229,43 @@ def _labels_for(keys):
         cls = BACKUP_SECTIONS.get(key)
         labels.append(cls.label if cls else key)
     return labels
+
+
+def _render_restore_report(report: dict, requested_keys: list) -> str:
+    """Rend un rapport de restauration section par section.
+
+    ``requested_keys`` est l'ensemble des sections que l'utilisateur a demandé à
+    restaurer ; chacune est marquée « restaurée » ou « non restaurée » selon
+    ``report['restored']``. Le ton (success / warning / danger) et l'en-tête
+    reflètent fidèlement le résultat : jamais « réussie » si seule une partie a
+    été restaurée."""
+    restored = set(report.get("restored", []))
+    labels = _labels_for(requested_keys)
+    rows = [
+        {"label": label, "ok": key in restored}
+        for key, label in zip(requested_keys, labels)
+    ]
+    n_ok = sum(1 for r in rows if r["ok"])
+    n_total = len(rows)
+    n_fail = n_total - n_ok
+
+    if n_ok == 0:
+        tone = "danger"
+        heading = "Échec de la restauration : aucune section n'a été restaurée."
+    elif n_fail == 0:
+        tone = "success"
+        heading = f"Restauration réussie : {n_ok} section(s) restaurée(s)."
+    else:
+        tone = "warning"
+        heading = (
+            f"Restauration partielle : {n_ok} section(s) restaurée(s), "
+            f"{n_fail} en échec (voir les journaux du serveur)."
+        )
+
+    return render_template_string(
+        _RESTORE_REPORT_TEMPLATE,
+        tone=tone, heading=heading, rows=rows, any_restored=n_ok > 0,
+    )
 
 
 def _section_keys_from_request():
@@ -304,11 +379,15 @@ def backup_import():
         return _alert("danger", error)
 
     try:
-        sections_param = request.form.getlist('restore_sections')
-        if not sections_param:
-            sections_param = None
+        requested = request.form.getlist('restore_sections')
+        sections_param = requested if requested else None
 
         report = restore_sections(upload.manifest, sections_param, archive=upload.archive)
+
+        # Sections effectivement demandées, pour un rapport section par section.
+        # Sans sélection explicite, toutes les sections du fichier sont visées.
+        if sections_param is None:
+            requested = list(upload.manifest.get("sections", []))
     finally:
         upload.close()
 
@@ -320,26 +399,32 @@ def backup_import():
     if report.get("errors"):
         current_app.logger.error(f"Backup import errors: {report.get('errors')}")
 
-    if report.get("success"):
-        restored_labels = _labels_for(report.get("restored", []))
-        msg = f"Restauration réussie : {', '.join(restored_labels)}"
-        if report.get("errors"):
-            msg += " (certaines sections n'ont pas pu être restaurées)"
-
+    # Erreur fatale (app/format invalide) : pas de rapport section par section.
+    if "restored" not in report:
         try:
-            current_app.display_toast(success=True, message=msg)
+            current_app.display_toast(success=False, message=_GENERIC_RESTORE_ERROR)
         except Exception:
             pass
+        return _alert("danger", report.get("error") or _GENERIC_RESTORE_ERROR)
 
-        resp = make_response(_alert("success", msg))
-        resp.headers['HX-Refresh'] = 'true'
-        return resp
+    n_ok = len(report.get("restored", []))
+    n_total = len(requested)
 
+    # Toast global : « succès » seulement si TOUTES les sections demandées ont
+    # été restaurées ; sinon le caractère partiel (ou l'échec) est explicite.
+    if n_ok == 0:
+        toast_ok, toast_msg = False, _GENERIC_RESTORE_ERROR
+    elif n_ok == n_total:
+        toast_ok, toast_msg = True, "Restauration réussie de toutes les sections."
+    else:
+        toast_ok = False
+        toast_msg = f"Restauration partielle : {n_ok}/{n_total} section(s) restaurée(s)."
     try:
-        current_app.display_toast(success=False, message=_GENERIC_RESTORE_ERROR)
+        current_app.display_toast(success=toast_ok, message=toast_msg)
     except Exception:
         pass
-    return _alert("danger", _GENERIC_RESTORE_ERROR)
+
+    return _render_restore_report(report, requested)
 
 
 @admin_backup_bp.route('/admin/backup/import_multi', methods=['POST'])
