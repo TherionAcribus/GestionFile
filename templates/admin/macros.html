@@ -34,21 +34,67 @@ function handleKeyPressConfig(event, variable) {
     }
 }
 
-function handleAfterRequestConfig(source, variable) {
+// Désactive le bouton pendant la requête et remet la zone de résultat à zéro.
+function handleBeforeRequestConfig(variable) {
+    const button = document.getElementById(`${variable}_button`);
+    const result = document.getElementById(`${variable}_result`);
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Enregistrement…";
+    }
+    if (result) {
+        result.textContent = "";
+        result.className = "small mt-1";
+    }
+}
+
+function handleAfterRequestConfig(event, variable) {
     const input = document.getElementById(`${variable}`);
     const button = document.getElementById(`${variable}_button`);
-    
-    // Met à jour la valeur initiale
-    input.dataset.initialValue = input.value;
-    
-    // Désactive le bouton
-    button.disabled = true;
-    
-    // Feedback visuel temporaire
-    button.textContent = "Enregistré ✓";
-    setTimeout(() => {
+    const result = document.getElementById(`${variable}_result`);
+
+    // On ne considère la sauvegarde réussie que si htmx signale un succès ET
+    // que le statut HTTP est un 2xx. Le serveur renvoie 400 (+ message) en cas
+    // d'échec de validation, ce qui met event.detail.successful à false.
+    const detail = event && event.detail;
+    const xhr = detail && detail.xhr;
+    const status = xhr ? xhr.status : 0;
+    const ok = !!(detail && detail.successful) && status >= 200 && status < 300;
+    const serverMessage = (xhr && xhr.responseText ? xhr.responseText : "").trim();
+
+    if (button) {
         button.textContent = "Enregistrer";
-    }, 1000);
+    }
+
+    if (ok) {
+        // Succès : la valeur enregistrée devient la nouvelle valeur de référence,
+        // le bouton se désactive (plus rien à enregistrer) et on confirme.
+        if (input) {
+            input.dataset.initialValue = input.value;
+        }
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Enregistré ✓";
+            setTimeout(() => {
+                button.textContent = "Enregistrer";
+            }, 1500);
+        }
+        if (result) {
+            result.className = "small mt-1 text-success";
+            result.textContent = serverMessage || "Enregistré.";
+        }
+    } else {
+        // Échec : NE PAS toucher à la valeur initiale, garder le bouton actif
+        // pour réessayer, et afficher le message d'erreur près du champ.
+        if (button) {
+            button.disabled = false;
+        }
+        if (result) {
+            result.className = "small mt-1 text-danger";
+            result.textContent = serverMessage
+                || "Échec de l'enregistrement. Veuillez réessayer.";
+        }
+    }
 }
 
 </script>
@@ -129,22 +175,30 @@ function handleAfterRequestConfig(source, variable) {
 
 
 {# Macro pour le bouton universel #}
+{# hx-swap="none" : la réponse du serveur (message + statut HTTP) n'est PAS
+   injectée dans la page ; elle est lue par handleAfterRequestConfig, qui décide
+   du succès/échec à partir de event.detail.successful et du statut HTTP. Le
+   message est affiché près du champ (div _result) et non diffusé par WebSocket. #}
 {% macro button(key, check="text") %}
-<button
-    id="{{ key }}_button"
-    class="btn btn-primary"
-    disabled
-    hx-post="/admin/update_input"
-    hx-target="#invisible"
-    hx-vals='js:{
-        "key": "{{ key }}", 
-        "value": document.getElementById("{{ key }}").value,
-        "check": "{{ check }}"
-    }'
-    hx-on::after-request="handleAfterRequestConfig('', '{{ key }}')"
->
-    Enregistrer
-</button>
+<div class="d-flex flex-column align-items-start">
+    <button
+        id="{{ key }}_button"
+        class="btn btn-primary"
+        disabled
+        hx-post="/admin/update_input"
+        hx-swap="none"
+        hx-vals='js:{
+            "key": "{{ key }}",
+            "value": document.getElementById("{{ key }}").value,
+            "check": "{{ check }}"
+        }'
+        hx-on::before-request="handleBeforeRequestConfig('{{ key }}')"
+        hx-on::after-request="handleAfterRequestConfig(event, '{{ key }}')"
+    >
+        Enregistrer
+    </button>
+    <div id="{{ key }}_result" class="small mt-1" role="status" aria-live="polite"></div>
+</div>
 {% endmacro %}
 
 {# Macro de base pour textarea #}

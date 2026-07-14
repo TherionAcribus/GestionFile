@@ -1131,20 +1131,20 @@ def update_input():
     # signifie donc « conserver la valeur actuelle » — on n'efface pas un secret
     # au seul motif que le champ était vide. On ne journalise jamais la valeur.
     if spec.secret and value.strip() == "":
-        return display_toast(success=True, message="Secret inchangé (valeur actuelle conservée).")
+        return config_change_response(success=True, message="Secret inchangé (valeur actuelle conservée).")
 
     # --- Validation de TOUTES les valeurs AVANT toute mutation (point 10) ---
     if validator == "int":
         if value.isdigit():
             value = int(value)
         else:
-            return display_toast(success=False, message="L'entrée doit être un nombre.")
+            return config_change_response(success=False, message="L'entrée doit être un nombre.")
     elif validator in BALISE_LETTERS:
         text_check = validate_and_transform_text(value, BALISE_LETTERS[validator])
         if text_check["success"]:
             value = text_check["value"]
         else:
-            return display_toast(success=False, message=text_check["value"])
+            return config_change_response(success=False, message=text_check["value"])
 
     # Cas particulier des tickets : la version ESC/POS est enregistrée dans la
     # MÊME transaction que l'option principale (plus de commit intermédiaire pour
@@ -1193,21 +1193,22 @@ def update_input():
         # (il pourrait, selon le backend, contenir la valeur).
         if spec.secret:
             app.logger.error("Échec de mise à jour du paramètre secret %r", key)
-            return display_toast(success=False, message="La mise à jour du secret a échoué.")
+            return config_change_response(success=False, message="La mise à jour du secret a échoué.")
         app.logger.error("Échec de mise à jour de l'option %r : %s", key, e)
-        return display_toast(success=False, message=str(e))
+        return config_change_response(success=False, message="La mise à jour a échoué.")
 
     # Paramètre nécessitant un redémarrage : persisté mais non appliqué à chaud.
     if spec.restart_required:
-        return display_toast(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
+        return config_change_response(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
 
     # Commit réussi : refléter en mémoire (app.config) puis effets de bord.
     app.config[spec.config_name] = value
     if is_ticket:
         app.config[key_printer.upper()] = escpos_text
     special_functions_with_input(key)
-    display_toast(success=True, message="Option mise à jour.")
-    return "", 204
+    # Réponse directe à l'auteur de la requête (pas de diffusion WebSocket à
+    # tous les administrateurs pour une sauvegarde de champ individuelle).
+    return config_change_response(success=True, message="Option mise à jour.")
 
 
 def special_functions_with_input(key):
@@ -1849,6 +1850,27 @@ def display_toast(success=True, message=None):
     communikation("admin", data)
     return "", 204
     #return f'<script>display_toast({data})</script>'
+
+
+def config_change_response(success=True, message=None):
+    """Réponse renvoyée DIRECTEMENT à l'auteur d'une modification de paramètre.
+
+    Contrairement à :func:`display_toast`, qui diffuse le résultat par WebSocket
+    à TOUS les administrateurs connectés (chaque admin voit alors un toast pour
+    une action qu'il n'a pas faite), cette fonction ne répond qu'au client qui a
+    soumis la requête :
+
+    - le **statut HTTP** distingue succès (200) et échec (400), ce qui permet au
+      JavaScript (``handleAfterRequestConfig``) de tester ``event.detail.successful``
+      et de ne mettre à jour la valeur initiale du champ qu'en cas de succès ;
+    - le **corps** contient le message à afficher près du champ concerné.
+
+    Aucune diffusion WebSocket n'est effectuée ici.
+    """
+    if message is None:
+        message = "Enregistré." if success else "Échec de l'enregistrement."
+    status = 200 if success else 400
+    return message, status, {"Content-Type": "text/plain; charset=utf-8"}
 
 
 # ---------------- FONCTIONS Généralistes > Communication avec Pyside ---------------- 
