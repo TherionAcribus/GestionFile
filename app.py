@@ -96,7 +96,7 @@ from routes.patient import patient_bp
 from routes.pyside import pyside_bp, create_patients_list_for_pyside
 from routes.home import home_bp
 from python.engine import engine_bp
-from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission
+from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission, permission_error_response
 from params_registry import CONFIG_MAPPINGS, BALISE_LETTERS, get_spec
 from config_loader import load_config_options
 import config_sync
@@ -1015,6 +1015,18 @@ def update_switch():
     return display_toast(success=True, message="Option mise à jour.")
     
 
+# Chaque « source » de variables CSS correspond à une page d'administration : la
+# permission requise pour modifier son apparence est donc celle de cette page.
+# Source unique de vérité pour les routes CSS génériques ci-dessous, dont la
+# permission dépend de données de la requête (et ne peut donc pas être fixée par
+# un décorateur statique).
+CSS_SOURCE_PERMISSION = {
+    'patient': 'patient',
+    'announce': 'announce',
+    'phone': 'phone',
+}
+
+
 @app.route('/admin/update_css_variable_old', methods=['POST'])
 def update_css_variable_old():
     print(request.form)
@@ -1036,6 +1048,11 @@ def update_css_variable_old():
                 'status': 'error',
                 'message': 'Source invalide'
             }), 400
+
+        # Permission liée à la page ciblée par la variable CSS.
+        refusal = permission_error_response(CSS_SOURCE_PERMISSION[source], api=True)
+        if refusal is not None:
+            return refusal
 
         # Mise à jour via le gestionnaire
         app.css_variable_manager.update_variable(source, variable, value)
@@ -1065,7 +1082,15 @@ def update_css_variable():
     variable_name = request.form.get('variable')
     value = request.form.get('value')
     dependencies = json.loads(request.form.get('dependencies', '[]'))
-    
+
+    # Permission liée à la page ciblée par la variable CSS.
+    resource = CSS_SOURCE_PERMISSION.get(source_name)
+    if resource is None:
+        return jsonify({'status': 'error', 'message': 'Source invalide'}), 400
+    refusal = permission_error_response(resource, api=True)
+    if refusal is not None:
+        return refusal
+
     # Met à jour la variable dans la base de données
     app.css_variable_manager.update_variable(source_name, variable_name, value)
     
@@ -1100,6 +1125,16 @@ def copy_colors():
 
         if not all([source_page, target_page, mappings]):
             return jsonify({'status': 'error', 'message': 'Données manquantes'}), 400
+
+        # Permission : l'écriture porte sur chaque page cible ; l'utilisateur doit
+        # avoir la permission de modifier toutes les pages ciblées.
+        for target_source in {m.get('target_source') for m in mappings}:
+            resource = CSS_SOURCE_PERMISSION.get(target_source)
+            if resource is None:
+                return jsonify({'status': 'error', 'message': 'Source cible invalide'}), 400
+            refusal = permission_error_response(resource, api=True)
+            if refusal is not None:
+                return refusal
 
         # Pour chaque mapping, lire la valeur source et l'écrire dans la cible
         for mapping in mappings:

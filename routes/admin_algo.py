@@ -14,6 +14,7 @@ def admin_algo():
                             algo_overtaken_limit=algo_overtaken_limit)
 
 @admin_algo_bp.route('/admin/algo/table')
+@require_permission('algo')
 def display_algo_table():
     rules = AlgoRule.query.all()
     activities = Activity.query.all()
@@ -21,12 +22,14 @@ def display_algo_table():
 
 # affiche le formulaire activer ou desactiver l'algorithme
 @admin_algo_bp.route('/admin/button_des_activate_algo')
+@require_permission('algo')
 def button_des_activate_algo():
     return render_template("admin/algo_des_activate_buttons.html",
                             algo_activated= app.config['ALGO_IS_ACTIVATED'])
 
 # active ou desactive l'algorithme, enregistre l'info, retourne les boutons
 @admin_algo_bp.route('/admin/algo/toggle_activation')
+@require_permission('algo')
 def toggle_activation():
     action = request.args.get('action', 'activate')
     is_activated = action == 'activate'
@@ -41,6 +44,7 @@ def toggle_activation():
 
 
 @admin_algo_bp.route('/admin/algo/change_overtaken_limit', methods=['POST'])
+@require_permission('algo')
 def change_overtaken_limit():
     overtaken_limit = request.form.get('overtaken_limit')
 
@@ -57,6 +61,7 @@ def change_overtaken_limit():
 
 # affiche le formulaire pour ajouter une regle de l'algo
 @admin_algo_bp.route('/admin/algo/add_rule_form')
+@require_permission('algo')
 def add_rule_form():
     activities = Activity.query.all()
     return render_template('/admin/algo_add_rule_form.html', activities=activities)
@@ -64,6 +69,7 @@ def add_rule_form():
 
 # enregistre la regledans la Bdd
 @admin_algo_bp.route('/admin/algo/add_new_rule', methods=['POST'])
+@require_permission('algo')
 def add_new_rule():
     try:
         name = request.form.get('name')
@@ -110,6 +116,7 @@ def add_new_rule():
 
 # affiche la modale pour confirmer la suppression d'un membre
 @admin_algo_bp.route('/admin/algo/confirm_delete_rule/<int:rule_id>', methods=['GET'])
+@require_permission('algo')
 def confirm_delete_rule(rule_id):
     rule = AlgoRule.query.get(rule_id)
     return render_template('/admin/algo_modal_confirm_delete_rule.html', rule=rule)
@@ -117,6 +124,7 @@ def confirm_delete_rule(rule_id):
 
 # supprime une regle de l'algo
 @admin_algo_bp.route('/admin/algo/delete_rule/<int:algo_id>', methods=['GET'])
+@require_permission('algo')
 def delete_algo(algo_id):
     try:
         rule = AlgoRule.query.get(algo_id)
@@ -136,6 +144,7 @@ def delete_algo(algo_id):
 
 
 @admin_algo_bp.route('/admin/algo/rule_update/<int:rule_id>', methods=['POST'])
+@require_permission('algo')
 def update_algo_rule(rule_id):
     try:
         rule = AlgoRule.query.get(rule_id)

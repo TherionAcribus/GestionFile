@@ -1,10 +1,14 @@
 from flask import Blueprint,render_template, request, current_app as app
 from models import DashboardCard, db, Pharmacist, Patient, Counter, Button
 from communication import communikation
-from routes.admin_security import check_default_admin
+from routes.admin_security import check_default_admin, require_permission, require_permission_api
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
 
+# La page d'accueil du tableau de bord n'exige que l'authentification (garantie
+# par la garde globale ``/admin`` du point 1.2) : tout admin y accède et n'y voit
+# que les cartes de son ressort. Les sous-routes qui *modifient* la configuration
+# du tableau de bord exigent en revanche la permission 'options'.
 @admin_dashboard_bp.route('/admin')
 def admin():
     # Auto-afficher la carte sécurité si le mot de passe par défaut est encore en place
@@ -19,6 +23,7 @@ def admin():
                             dashboardcards=dashboardcards)
 
 @admin_dashboard_bp.route('/admin/dashboard/hide', methods=['POST'])
+@require_permission('options')
 def hide_dashboard_card():
     card_name = request.form.get('card_name')
     
@@ -34,6 +39,7 @@ def hide_dashboard_card():
     
 
 @admin_dashboard_bp.route('/admin/dashboard/valide_select', methods=['POST'])
+@require_permission('options')
 def dashboard_valid_select():
     data = request.form.getlist('dashboard_options')
 
@@ -56,6 +62,7 @@ def dashboard_valid_select():
     return html, 200
 
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])
+@require_permission('options')
 def dashboard_display_select():
     all_dashboardcards = DashboardCard.query.all()
     return render_template('/admin/dashboard_select.html',
@@ -63,6 +70,7 @@ def dashboard_display_select():
 
 
 @admin_dashboard_bp.route('/admin/dashboard/save_order', methods=['POST'])
+@require_permission_api('options')
 def save_dashboard_order():
     data = request.get_json()  # Récupérer les données JSON envoyées depuis le frontend
     if 'order' in data:
@@ -77,6 +85,7 @@ def save_dashboard_order():
     return 'Invalid data', 400
 
 @admin_dashboard_bp.route('/admin/dashboard/resize', methods=['POST'])
+@require_permission_api('options')
 def resize_dashboard_card():
     data = request.get_json()
     card_id = data.get('card_id')
@@ -97,6 +106,7 @@ def resize_dashboard_card():
         return 'Card non trouvée', 404
 
 @admin_dashboard_bp.route('/admin/dashboard/add', methods=['POST'])
+@require_permission_api('options')
 def add_dashboard_card():
     data = request.get_json()
     name = data.get('name')
@@ -127,6 +137,7 @@ def add_dashboard_card():
     return '', 201
 
 @admin_dashboard_bp.route('/admin/dashboard/save_configuration', methods=['POST'])
+@require_permission_api('options')
 def save_dashboard_configuration():
     data = request.get_json()
     visible_cards = data.get('visible_cards', [])

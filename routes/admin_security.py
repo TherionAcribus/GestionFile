@@ -33,82 +33,128 @@ def user_has_permission(user, resource):
     return False
 
 
-# gère les permissions sur les pages
+# ---------------------------------------------------------------------------
+# Contrôle d'accès centralisé (point 1.3)
+#
+# Toute la logique de décision d'autorisation vit ici, dans une source unique
+# (``_permission_status``), afin de ne pas la dupliquer dans chaque fonction ni
+# dans chaque décorateur. Les décorateurs ci-dessous ne font que choisir la
+# *forme* du refus (page HTML, JSON API, carte de tableau de bord).
+# ---------------------------------------------------------------------------
+
+
+def _permission_status(resource):
+    """État d'autorisation de l'utilisateur courant pour ``resource``.
+
+    Retourne ``None`` si l'accès est autorisé, sinon le code HTTP du refus :
+    - **401** : utilisateur non authentifié ;
+    - **403** : utilisateur authentifié mais sans la permission (rôle absent ou
+      permission ``admin_<resource>`` à False).
+    """
+    if not current_user.is_authenticated:
+        return 401
+    if not user_has_permission(current_user, resource):
+        return 403
+    return None
+
+
+def permission_error_response(resource, *, api):
+    """Réponse de refus prête à renvoyer, ou ``None`` si l'accès est autorisé.
+
+    Deux variantes, sélectionnées par ``api`` :
+    - ``api=True`` (API/HTMX) : **401/403 JSON**, exploitable côté client ;
+    - ``api=False`` (page HTML) : **redirection** vers la connexion pour un
+      anonyme, **page d'erreur 403** pour un utilisateur connecté sans droit.
+
+    Utilisable aussi bien par les décorateurs que directement en garde *inline*
+    lorsque la ressource dépend de données de la requête (ex. variables CSS dont
+    la permission dépend de la page ciblée).
+    """
+    status = _permission_status(resource)
+    if status is None:
+        return None
+
+    if api:
+        app.logger.warning(
+            "Permission API '%s' refusée (%s) à %s", resource, status,
+            getattr(current_user, "username", "anonyme"))
+        return jsonify({"error": "Unauthorized" if status == 401 else "Forbidden"}), status
+
+    if status == 401:
+        app.logger.warning(
+            "Accès non authentifié refusé (page '%s')", resource)
+        return redirect(url_for('security.login'))
+
+    app.logger.warning(
+        "Permission '%s' refusée à %s", resource,
+        getattr(current_user, "username", "?"))
+    error_message = f"Vous n'avez pas les permissions nécessaires pour accéder à la page '{resource}'."
+    return render_template('admin/permission_error.html', error_message=error_message), 403
+
+
+# gère les permissions sur les pages (variante PAGE HTML)
 def require_permission(resource):
+    """Protège une route servant une **page/fragment HTML**.
+
+    Anonyme → redirection connexion ; connecté sans droit → page d'erreur 403.
+    """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if not current_user.is_authenticated:
-                app.logger.warning("Utilisateur non authentifié tentant d'accéder à une ressource protégée")
-                return redirect(url_for('security.login'))
-
-            # Vérifier si l'utilisateur a un rôle
-            if not current_user.roles:
-                error_message = f"Vous n'avez pas les permissions nécessaires pour pour accéder à la page '{resource}'."
-                return render_template('admin/permission_error.html', error_message=error_message)
-
-            if not user_has_permission(current_user, resource):
-                error_message = f"Vous n'avez pas les permissions nécessaires pour accéder à la page '{resource}'."
-                return render_template('admin/permission_error.html', error_message=error_message)
-
-            return f(*args, **kwargs)
+            refusal = permission_error_response(resource, api=False)
+            return refusal if refusal is not None else f(*args, **kwargs)
         return decorated_function
     return decorator
 
 
 def require_permission_api(resource):
-    """Comme ``require_permission`` mais pour les endpoints AJAX/HTMX.
+    """Protège un endpoint **API/HTMX** : refus en **401/403 JSON**.
 
-    Renvoie des réponses JSON avec statut explicite au lieu d'une redirection :
-    - **401** si l'utilisateur n'est pas connecté ;
-    - **403** si l'utilisateur est connecté mais sans la permission requise.
+    À réserver aux endpoints appelés programmatiquement (fetch/AJAX) et à ceux
+    qui renvoient du JSON, pour lesquels une redirection HTML n'aurait pas de
+    sens côté client.
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if not current_user.is_authenticated:
-                app.logger.warning(
-                    "Accès non authentifié refusé (permission API '%s')", resource)
-                return jsonify({"error": "Unauthorized"}), 401
-
-            if not user_has_permission(current_user, resource):
-                app.logger.warning(
-                    "Permission '%s' refusée à %s", resource,
-                    getattr(current_user, "username", "?"))
-                return jsonify({"error": "Forbidden"}), 403
-
-            return f(*args, **kwargs)
+            refusal = permission_error_response(resource, api=True)
+            return refusal if refusal is not None else f(*args, **kwargs)
         return decorated_function
     return decorator
 
 
 def require_permission_dashboard(resource):
+    """Variante PAGE pour les cartes du tableau de bord.
+
+    Même décision d'autorisation que les autres variantes ; en cas de refus
+    « connecté sans droit », rend la carte avec un message plutôt qu'une page
+    d'erreur pleine, afin de rester intégrable dans le tableau de bord.
+    """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if not current_user.is_authenticated:
-                app.logger.warning("Utilisateur non authentifié tentant d'accéder à une ressource protégée")
+            status = _permission_status(resource)
+            if status == 401:
+                app.logger.warning(
+                    "Accès non authentifié refusé (dashboard '%s')", resource)
                 return redirect(url_for('security.login'))
-
-            if not user_has_permission(current_user, resource):
-                app.logger.warning(f"Utilisateur {current_user.username} n'a pas la permission {resource}")
-                # Récupérer le dashboardcard depuis les arguments de la fonction
-                # On suppose que la fonction originale utilise DashboardCard.query.filter_by(name=...)
+            if status == 403:
+                app.logger.warning(
+                    "Permission '%s' refusée à %s (dashboard)", resource,
+                    getattr(current_user, "username", "?"))
                 dashboardcard = DashboardCard.query.filter_by(name=resource).first()
-                
-                # Renvoyer uniquement le template avec le message d'erreur
                 return render_template('/admin/dashboard_base.html',
                                     dashboardcard=dashboardcard,
                                     error_message="Vous n'avez pas les permissions nécessaires pour accéder à cette partie.",
-                                    title=resource)
+                                    title=resource), 403
 
-            # Si l'utilisateur a la permission, exécuter la fonction normalement
             return f(*args, **kwargs)
         return decorated_function
     return decorator
 
 
 @admin_security_bp.route('/admin/security/role/table')
+@require_permission('security')
 def display_security_role_table():
     roles = Role.query.all()
     return render_template('admin/security_htmx_role_table.html', roles=roles)
@@ -123,6 +169,7 @@ def dashboard_security():
                             is_default_admin=is_default)
 
 @admin_security_bp.route('/admin/security')
+@require_permission('security')
 def admin_security():
 
     valid_tabs = ['general', 'users']
@@ -139,6 +186,7 @@ def admin_security():
                         is_default_admin = check_default_admin())
 
 @admin_security_bp.route('/admin/security/table')
+@require_permission('security')
 def display_security_table():
     users = User.query.all()
     roles = Role.query.all()
@@ -214,6 +262,7 @@ def add_new_user():
 
 
 @admin_security_bp.route('/admin/security/user_update/<int:user_id>', methods=['POST'])
+@require_permission('security')
 def security_update_user(user_id):
     try:
         user = User.query.get(user_id)
@@ -284,6 +333,7 @@ def count_admin_users():
     return User.query.filter(User.roles.contains(admin_role)).count()
 
 @admin_security_bp.route('/admin/security/delete_user/<int:user_id>', methods=['POST'])
+@require_permission('security')
 def delete_user2(user_id):
     try:
         user = User.query.get(user_id)
@@ -312,6 +362,7 @@ def delete_user2(user_id):
 
 # affiche la modale pour confirmer la suppression d'un membre
 @admin_security_bp.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
+@require_permission('security')
 def confirm_delete_user(user_id):
     user = User.query.get(user_id)
     print(user)
@@ -319,6 +370,7 @@ def confirm_delete_user(user_id):
 
 # affiche la modale pour confirmer la suppression d'un role
 @admin_security_bp.route('/admin/security/confirm_delete_role/<int:role_id>', methods=['GET'])
+@require_permission('security')
 def confirm_delete_role(role_id):
     role = Role.query.get(role_id)
     return render_template('/admin/security_modal_confirm_delete_role.html', role=role)
@@ -326,6 +378,7 @@ def confirm_delete_role(role_id):
 
 # supprime un utilisateur
 @admin_security_bp.route('/admin/security/delete_user/<int:user_id>', methods=['GET'])
+@require_permission('security')
 def delete_user(user_id):
     try:
         user = User.query.get(user_id)
@@ -344,7 +397,11 @@ def delete_user(user_id):
         return display_security_table()  
     
 
-@admin_security_bp.route('/send_test_email')
+# Fonction utilitaire (PAS une route) : l'envoi d'e-mail de test est déclenché
+# par la route POST protégée ``/admin/app/mail/test`` (require_permission_api).
+# L'ancienne route GET ``/send_test_email`` a été retirée : signature invalide
+# comme vue (argument positionnel sans convertisseur d'URL) et déclenchement
+# d'envoi d'e-mail sans authentification.
 def send_test_email(mail_adress):
     app.logger.info("Envoi d'un email de test")
     print("mail_adress", mail_adress)
@@ -425,6 +482,7 @@ class ExtendedLoginForm(FlaskForm):
         return True
     
 @admin_security_bp.route('/logout_all')
+@require_permission('security')
 def logout_all():
     """ Déconnexion de tous les utilisateurs 
     Cela permet de restaurer la base de données User """
@@ -508,7 +566,10 @@ def create_default_role():
         app.logger.error(f"Erreur lors de la création du rôle admin: {str(e)}")
         return False
 
-@admin_security_bp.route('/admin/check_default_admin', methods=['GET'])
+# Fonction utilitaire (PAS une route) : consultée en interne pour signaler la
+# présence des identifiants par défaut. L'ancienne route GET
+# ``/admin/check_default_admin`` a été retirée : elle renvoyait un booléen (vue
+# Flask invalide) et divulguait l'existence du compte admin/admin par défaut.
 def check_default_admin():
     """Check if the default admin/admin credentials still exist"""
     admin_user = User.query.filter_by(username='admin').first()
@@ -538,6 +599,7 @@ def reset_admin_user():
         return False
 
 @admin_security_bp.route('/admin/reset_admin', methods=['POST'])
+@require_permission('security')
 def reset_admin():
     """Reset the admin user and create a new one"""
     try:
@@ -559,6 +621,7 @@ def reset_admin():
         return display_security_table()
 
 @admin_security_bp.route('/admin/security/role_update/<int:role_id>', methods=['POST'])
+@require_permission_api('security')
 def security_update_role(role_id):
     try:
         app.logger.info(f"=== Début de la mise à jour du rôle {role_id} ===")
@@ -630,6 +693,7 @@ def security_update_role(role_id):
         return jsonify({'error': str(e)}), 500
 
 @admin_security_bp.route('/admin/security/save_role', methods=['POST'])
+@require_permission('security')
 def save_role():
     try:
         data = request.get_json() if request.is_json else request.form
@@ -703,6 +767,7 @@ def save_role():
         return ""
 
 @admin_security_bp.route('/admin/security/add_role_form')
+@require_permission('security')
 def add_role_form():
     """Affiche le formulaire d'ajout de rôle"""
     # Récupérer la liste des pages à partir des attributs du modèle Role
@@ -731,6 +796,7 @@ def delete_role(role_id):
         return display_security_role_table()  
 
 @admin_security_bp.route('/admin/security/change_password/<int:user_id>', methods=['GET'])
+@require_permission('security')
 def change_password_form(user_id):
     try:
         user = User.query.get(user_id)
@@ -745,6 +811,7 @@ def change_password_form(user_id):
         return ""
 
 @admin_security_bp.route('/admin/security/update_password/<int:user_id>', methods=['POST'])
+@require_permission('security')
 def update_password(user_id):
     try:
         user = User.query.get(user_id)

@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app as a
 from sqlalchemy import func, text, or_
 from datetime import datetime, timedelta
 from models import DashboardCard, Activity, Language, Counter, Patient, PatientHistory, AggregatedStats, db
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_api
 import pytz
 
 admin_stats_bp = Blueprint('admin_stats', __name__)
@@ -26,6 +26,7 @@ def admin_stats():
 
 
 @admin_stats_bp.route('/admin/stats/chart')
+@require_permission_api('stats')
 def get_chart_data():
     chart_type = request.args.get('chart_type', 'languages')
     chart_style = request.args.get('chart_style', 'pie')

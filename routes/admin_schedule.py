@@ -9,6 +9,7 @@ admin_schedule_bp = Blueprint('admin_schedule', __name__)
 
 # affiche le tableau des plages horaires
 @admin_schedule_bp.route('/admin/schedule/table')
+@require_permission('schedule')
 def display_schedule_table():
     schedules = ActivitySchedule.query.all()
     weekdays = Weekday.query.all()
@@ -19,6 +20,7 @@ def display_schedule_table():
 
 # mise à jour des informations d'une activité 
 @admin_schedule_bp.route('/admin/schedule/schedule_update/<int:schedule_id>', methods=['POST'])
+@require_permission('schedule')
 def update_schedule(schedule_id):
     try:
         schedule = ActivitySchedule.query.get(schedule_id)
@@ -60,6 +62,7 @@ def update_schedule(schedule_id):
 
 # affiche le formulaire pour ajouter un activité
 @admin_schedule_bp.route('/admin/schedule/add_form')
+@require_permission('schedule')
 def add_schedule_form():
     weekdays = Weekday.query.all()
     return render_template('/admin/schedule_add_form.html', weekdays=weekdays)
@@ -67,6 +70,7 @@ def add_schedule_form():
 
 # enregistre l'activité' dans la Bdd
 @admin_schedule_bp.route('/admin/schedule/add_new_schedule', methods=['POST'])
+@require_permission('schedule')
 def add_new_schedule():
     try:
         name = request.form.get('name_schedule')
@@ -111,12 +115,14 @@ def add_new_schedule():
 
 # affiche la modale pour confirmer la suppression d'une plage horaire
 @admin_schedule_bp.route('/admin/schedule/confirm_delete/<int:schedule_id>', methods=['GET'])
+@require_permission('schedule')
 def confirm_delete_schedule(schedule_id):
     schedule = ActivitySchedule.query.get(schedule_id)
     return render_template('/admin/schedule_modal_confirm_delete.html', schedule=schedule)
 
 
 @admin_schedule_bp.route('/admin/schedule/delete/<int:schedule_id>', methods=['GET'])
+@require_permission('schedule')
 def delete_schedule(schedule_id):
     try:
         schedule = ActivitySchedule.query.get(schedule_id)

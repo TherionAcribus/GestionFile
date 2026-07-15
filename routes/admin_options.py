@@ -1,9 +1,11 @@
 import os
 from flask import Blueprint, render_template, current_app as app
+from routes.admin_security import require_permission
 
 admin_options_bp = Blueprint('admin_options', __name__)
 
 @admin_options_bp.route('/admin/admin_options')
+@require_permission('options')
 def admin_admin():
     themes_path = os.path.join(app.static_folder, 'css/themes')
     

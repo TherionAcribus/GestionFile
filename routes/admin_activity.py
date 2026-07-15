@@ -19,6 +19,7 @@ def admin_activity():
 
 # affiche le tableau des activités 
 @admin_activity_bp.route('/admin/activity/table')
+@require_permission('activity')
 def display_activity_table():
     activities = Activity.query.filter_by(is_staff=False).all()
     schedules = ActivitySchedule.query.all()
@@ -29,6 +30,7 @@ def display_activity_table():
 
 # affiche le tableau des activités spécifique pour les membres de l'équipe
 @admin_activity_bp.route('/admin/activity/table_staff')
+@require_permission('activity')
 def display_activity_table_staff():
     activities = Activity.query.filter_by(is_staff=True).all()
     schedules = ActivitySchedule.query.all()
@@ -41,6 +43,7 @@ def display_activity_table_staff():
 
 # mise à jour des informations d'une activité 
 @admin_activity_bp.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
+@require_permission('activity')
 def update_activity(activity_id):
     activity = Activity.query.get(activity_id)
     old_schedules = activity.schedules
@@ -127,6 +130,7 @@ def update_bouton_after_scheduler_changed(activity):
 
 # affiche la modale pour confirmer la suppression d'une activité
 @admin_activity_bp.route('/admin/activity/confirm_delete/<int:activity_id>', methods=['GET'])
+@require_permission('activity')
 def confirm_delete_activity(activity_id):
     activity = Activity.query.get(activity_id)
     return render_template('/admin/activity_modal_confirm_delete.html', activity=activity)
@@ -134,6 +138,7 @@ def confirm_delete_activity(activity_id):
 
 # affiche la modale pour confirmer la suppression d'une activité quand c'est un membre de l'équipe
 @admin_activity_bp.route('/admin/activity/confirm_delete/staff/<int:activity_id>', methods=['GET'])
+@require_permission('activity')
 def confirm_delete_activity_staff(activity_id):
     activity = Activity.query.get(activity_id)
     return render_template('/admin/activity_modal_confirm_delete.html', activity=activity, staff=True)
@@ -141,6 +146,7 @@ def confirm_delete_activity_staff(activity_id):
 
 # supprime un membre de l'equipe
 @admin_activity_bp.route('/admin/activity/delete/<int:activity_id>', methods=['GET'])
+@require_permission('activity')
 def delete_activity(activity_id, staff=None):
     try:
         activity = Activity.query.get(activity_id)
@@ -161,11 +167,13 @@ def delete_activity(activity_id, staff=None):
 
 
 @admin_activity_bp.route('/admin/activity/delete/staff/<int:activity_id>', methods=['GET'])
+@require_permission('activity')
 def delete_activity_staff(activity_id, staff=None):
     return delete_activity(activity_id, staff=True)
 
 # affiche le formulaire pour ajouter un activité
 @admin_activity_bp.route('/admin/activity/add_form')
+@require_permission('activity')
 def add_activity_form():
     schedules = ActivitySchedule.query.all()
     return render_template('/admin/activity_add_form.html', schedules=schedules)
@@ -173,6 +181,7 @@ def add_activity_form():
 
 # affiche le formulaire pour ajouter un activité lié à un membre de l'équipe
 @admin_activity_bp.route('/admin/activity/add_staff_form')
+@require_permission('activity')
 def add_activity_staff_form():
 
     print(Pharmacist.query.all())
@@ -183,6 +192,7 @@ def add_activity_staff_form():
 
 # enregistre l'activité' dans la Bdd
 @admin_activity_bp.route('/admin/activity/add_new_activity', methods=['POST'])
+@require_permission('activity')
 def add_new_activity():
     try:
         name = request.form.get('name')

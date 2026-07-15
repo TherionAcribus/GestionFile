@@ -180,8 +180,9 @@ def admin_patient(tab=None):
                             )
 
 
-# affiche le tableau des boutons 
+# affiche le tableau des boutons
 @admin_patient_bp.route('/admin/patient/button_table')
+@require_permission('patient')
 def display_button_table():
     buttons = Button.query.order_by(Button.sort_order).all()
     activities = Activity.query.all()
@@ -189,6 +190,7 @@ def display_button_table():
 
 
 @admin_patient_bp.route('/admin/patient/order_buttons')
+@require_permission('patient')
 def order_button_table():
     buttons = Button.query.order_by(Button.sort_order).all()
     return render_template('admin/patient_page_order_buttons.html', buttons=buttons)
@@ -196,6 +198,7 @@ def order_button_table():
 
 # affiche la liste des boutons pour le 
 @admin_patient_bp.route('/admin/patient/display_parent_buttons/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def display_children_buttons(button_id):
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_parent=True).all()
     button = Button.query.get(button_id)
@@ -204,6 +207,7 @@ def display_children_buttons(button_id):
 
 # mise à jour des informations d'un bouton
 @admin_patient_bp.route('/admin/patient/button_update/<int:button_id>', methods=['POST'])
+@require_permission('patient')
 def update_button(button_id):
     try:
         button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -261,6 +265,7 @@ def update_button(button_id):
             return jsonify(status="error", message=str(e)), 500
 
 @admin_patient_bp.route('/admin/patient/update_button_order', methods=['POST'])
+@require_permission('patient')
 def update_button_order():
     try:
         order_data = request.form.getlist('order[]')
@@ -278,6 +283,7 @@ def update_button_order():
 
 # affiche le formulaire pour ajouter un membre
 @admin_patient_bp.route('/admin/button/add_form')
+@require_permission('patient')
 def add_button_form():
     activities = Activity.query.all()
     parent_buttons = Button.query.filter_by(is_parent=True).all()
@@ -286,6 +292,7 @@ def add_button_form():
                             parent_buttons=parent_buttons)
 
 @admin_patient_bp.route('/admin/patient/add_new_button', methods=['POST'])
+@require_permission('patient')
 def add_new_button():
     try:
         activity_id = request.form.get('activity')
@@ -363,6 +370,7 @@ def add_new_button():
 
 # affiche la modale pour confirmer la suppression d'un patient
 @admin_patient_bp.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def confirm_delete_button(button_id):
     button = Button.query.get(button_id)
     return render_template('/admin/patient_page_button_modal_confirm_delete.html', button=button)
@@ -370,6 +378,7 @@ def confirm_delete_button(button_id):
 
 # supprime un bouton
 @admin_patient_bp.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def delete_button(button_id):
     try:
         button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -448,6 +457,7 @@ def allowed_image_file(filename):
 
 
 @admin_patient_bp.route('/admin/patient/gallery_button_images/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def gallery_button_images(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
@@ -457,6 +467,7 @@ def gallery_button_images(button_id):
 
 
 @admin_patient_bp.route('/admin/patient/gallery_button_images/<button_id>', methods=['GET'])
+@require_permission('patient')
 def gallery_button_images_for_interface(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
@@ -465,6 +476,7 @@ def gallery_button_images_for_interface(button_id):
 
 
 @admin_patient_bp.route('/admin/patient/update_button_image_from_gallery', methods=['POST'])
+@require_permission('patient')
 def update_button_image_from_gallery():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
@@ -476,6 +488,7 @@ def update_button_image_from_gallery():
 
 
 @admin_patient_bp.route('/admin/patient/update_button_image_from_gallery_for_interface', methods=['POST'])
+@require_permission('patient')
 def update_button_image_from_gallery_for_interface():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
@@ -493,6 +506,7 @@ def update_button_image_from_gallery_for_interface():
 
 
 @admin_patient_bp.route('/admin/patient/delete_button_image/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def delete_button_image(button_id):
     button = Button.query.order_by(Button.sort_order).get(button_id)
     button.image_url = None
@@ -501,6 +515,7 @@ def delete_button_image(button_id):
 
 
 @admin_patient_bp.route("/admin/patient/print_test_ticket_size")
+@require_permission('patient')
 def print_ticket_test_size():
     text = "123456789012345678901234567890123456789012345678901234567890"
     print(text)
@@ -508,6 +523,7 @@ def print_ticket_test_size():
     return "", 204
 
 @admin_patient_bp.route("/admin/patient/print_ticket_test")
+@require_permission('patient')
 def print_ticket_test():
     call_number = request.values.get('call_number', 'A-1')
     activity_id = request.values.get('activity', 1)
@@ -522,6 +538,7 @@ def print_ticket_test():
 
 
 @admin_patient_bp.route('/admin/patient/qr_code/test', methods=['GET'])
+@require_permission('patient')
 def admin_patient_qr_code_modal():
     call_number = request.values.get('call_number', 'A-1')
     activity_id = request.values.get('activity', 1)
@@ -585,6 +602,7 @@ def dashboard_button():
 
 
 @admin_patient_bp.route('/admin/button/deactivate/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def deactivate_button(button_id):
     button = Button.query.get(button_id)
     button.is_active = False
@@ -593,6 +611,7 @@ def deactivate_button(button_id):
 
 
 @admin_patient_bp.route('/admin/button/activate/<int:button_id>', methods=['GET'])
+@require_permission('patient')
 def activate_button(button_id):
     button = Button.query.get(button_id)
     button.is_active = True

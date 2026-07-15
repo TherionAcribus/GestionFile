@@ -277,6 +277,7 @@ def announce_audio_test(scope):
 
 
 @admin_announce_bp.route('/admin/announce/google/add_key', methods=['POST'])
+@require_permission('announce')
 def upload_google_key():
 
     cipher_suite = Fernet(app.config["BASE32_KEY"])
@@ -308,6 +309,7 @@ def upload_google_key():
 
 
 @admin_announce_bp.route('/admin/announce/google/filter_voices', methods=['POST'])
+@require_permission('announce')
 def filter_voices():
     # Récupérer les filtres depuis le formulaire
     selected_language = request.form.get('voice_google_language', '')
@@ -384,6 +386,7 @@ def list_google_voices(credentials_json,language=None, gender=None, voice_type=N
 
 
 @admin_announce_bp.route('/admin/announce/save_google_voice', methods=['POST'])
+@require_permission('announce')
 def announce_save_google_voice():
     language_id = request.form.get('language_id')
     voice_data = request.form.get('voice_google_name', '').split('|')
@@ -412,6 +415,7 @@ def announce_save_google_voice():
 
 
 @admin_announce_bp.route('/admin/announce/select_language_voice', methods=['POST'])
+@require_permission('announce')
 def announce_select_language_voice():
     # Récupérer la voix sélectionnée dans le formulaire
     language_code = request.form.get('language_code', 'fr')
@@ -427,6 +431,7 @@ def announce_select_language_voice():
                         )
 
 @admin_announce_bp.route('/admin/announce/save_voice_model', methods=['POST'])
+@require_permission('announce')
 def announce_save_voice_model():
     # Récupérer la voix sélectionnée dans le formulaire
     language_id = request.form.get('language_id')
@@ -453,6 +458,7 @@ def announce_save_voice_model():
 
 
 @admin_announce_bp.route('/admin/announce/save_gtts_voice', methods=['POST'])
+@require_permission('announce')
 def announce_save_gtts_voice():
     # Récupérer la voix sélectionnée dans le formulaire
     language_id = request.form.get('language_id')
@@ -477,6 +483,7 @@ def announce_save_gtts_voice():
         return f"Erreur : {e}", 400
     
 @admin_announce_bp.route('/admin/announce/save_voice_is_active', methods=['POST'])
+@require_permission('announce')
 def announce_save_voice_is_active():
     # Récupérer la voix sélectionnée dans le formulaire
     language_id = request.form.get('language_id')

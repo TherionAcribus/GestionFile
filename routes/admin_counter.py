@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, request, current_app as app
 from models import Counter, Activity, DashboardCard, db
-from routes.admin_activity import display_activity_table
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_dashboard
 
@@ -16,6 +15,7 @@ def admin_counter():
 
 # affiche le tableau des counters 
 @admin_counter_bp.route('/admin/counter/table')
+@require_permission('counter')
 def display_counter_table():
     counters = Counter.query.all()
     activities = Activity.query.all()
@@ -24,6 +24,7 @@ def display_counter_table():
 
 # mise à jour des informations d'un counter
 @admin_counter_bp.route('/admin/counter/counter_update/<int:counter_id>', methods=['POST'])
+@require_permission('counter')
 def update_counter(counter_id):
     try:
         counter = Counter.query.get(counter_id)
@@ -58,6 +59,7 @@ def update_counter(counter_id):
 
 # affiche la modale pour confirmer la suppression d'un comptoir
 @admin_counter_bp.route('/admin/counter/confirm_delete/<int:counter_id>', methods=['GET'])
+@require_permission('counter')
 def confirm_delete_counter(counter_id):
     counter = Counter.query.get(counter_id)
     print("counter", counter)
@@ -66,6 +68,7 @@ def confirm_delete_counter(counter_id):
 
 # supprime un comptoir
 @admin_counter_bp.route('/admin/counter/delete/<int:counter_id>', methods=['GET'])
+@require_permission('counter')
 def delete_counter(counter_id):
     try:
         counter = Counter.query.get(counter_id)
@@ -89,6 +92,7 @@ def delete_counter(counter_id):
 
 # affiche le formulaire pour ajouter un counter
 @admin_counter_bp.route('/admin/counter/add_form')
+@require_permission('counter')
 def add_counter_form():
     activities = Activity.query.all()
     return render_template('/admin/counter_add_form.html', activities=activities)
@@ -96,6 +100,7 @@ def add_counter_form():
 
 # enregistre le comptoir dans la Bdd
 @admin_counter_bp.route('/admin/counter/add_new_counter', methods=['POST'])
+@require_permission('counter')
 def add_new_counter():
     try:
         name = request.form.get('name')
@@ -103,7 +108,7 @@ def add_new_counter():
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
             app.display_toast(success=False, message="Le nom est obligatoire")
-            return display_activity_table()
+            return display_counter_table()
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
         max_order_counter = Counter.query.order_by(Counter.sort_order.desc()).first()
@@ -139,16 +144,18 @@ def add_new_counter():
         db.session.rollback()
         app.display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
-        return display_activity_table()
+        return display_counter_table()
 
 
 @admin_counter_bp.route('/admin/counter/order_counter')
+@require_permission('counter')
 def order_counter_table():
     counters = Counter.query.order_by(Counter.sort_order).all()
     return render_template('admin/counter_order_counters.html', counters=counters)
 
 
 @admin_counter_bp.route('/admin/counter/update_counter_order', methods=['POST'])
+@require_permission('counter')
 def update_counter_order():
     try:
         order_data = request.form.getlist('order[]')

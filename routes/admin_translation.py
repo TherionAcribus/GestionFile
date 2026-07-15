@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, jsonify, url_for, current
 from models import ConfigOption, Button, Activity, Language, Translation, db
 from werkzeug.utils import secure_filename
 from communication import communikation
-from routes.admin_security import require_permission
+from routes.admin_security import require_permission, require_permission_api
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -23,6 +23,7 @@ def admin_translation():
 
 
 @admin_translation_bp.route('/admin/languages/table')
+@require_permission('translation')
 def display_languages_table():
     languages = Language.query.all()
     print("Llanguages", languages)
@@ -31,6 +32,7 @@ def display_languages_table():
 
 
 @admin_translation_bp.route('/admin/languages/language_update/<int:language_id>', methods=['POST'])
+@require_permission('translation')
 def update_language(language_id):
     try:
         language = Language.query.get(language_id)
@@ -91,6 +93,7 @@ def update_language(language_id):
 
 
 @admin_translation_bp.route('/admin/languages/confirm_delete/<int:language_id>', methods=['GET'])
+@require_permission('translation')
 def confirm_delete_language(language_id):
     language = Language.query.get(language_id)
     return render_template('/admin/translations_languages_modal_confirm_delete copy.html', language=language)
@@ -98,6 +101,7 @@ def confirm_delete_language(language_id):
 
 # supprime un membre de l'equipe
 @admin_translation_bp.route('/admin/languages/delete/<int:language_id>', methods=['GET'])
+@require_permission('translation')
 def delete_language(language_id):
     try:
         language = Language.query.get(language_id)
@@ -120,11 +124,13 @@ def delete_language(language_id):
 
 # affiche le formulaire pour ajouter un membre
 @admin_translation_bp.route('/admin/languages/add_form')
+@require_permission('translation')
 def add_language_form():
     return render_template('/admin/translations_language_add_form.html')
 
 # enregistre le membre dans la Bdd
 @admin_translation_bp.route('/admin/languages/add_new_language', methods=['POST'])
+@require_permission('translation')
 def add_new_language():
     try:
         code = request.form.get('code')
@@ -184,6 +190,7 @@ def add_new_language():
         return display_languages_table()
     
 @admin_translation_bp.route('/admin/languages/upload_flag_image', methods=['POST'])
+@require_permission_api('translation')
 def upload_flag_image():
     if 'file' not in request.files:
         return {"error": "No file part"}, 400
@@ -203,12 +210,14 @@ def upload_flag_image():
 
 
 @admin_translation_bp.route('/admin/languages/order_languages')
+@require_permission('translation')
 def order_languages_table():
     languages = Language.query.order_by(Language.sort_order).all()
     return render_template('admin/translations_languages_order.html', languages=languages)
 
 
 @admin_translation_bp.route('/admin/languages/update_languages_order', methods=['POST'])
+@require_permission('translation')
 def update_languages_order():
     try:
         order_data = request.form.getlist('order[]')
@@ -247,6 +256,7 @@ def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, 
     return False  # Aucune nouvelle traduction insérée
 
 @admin_translation_bp.route('/admin/translations/collect', methods=['GET'])
+@require_permission('translation')
 def translations_collect():
     # Définir la langue par défaut (vous pouvez adapter selon vos besoins)
     default_language_code = 'fr'
@@ -338,6 +348,7 @@ def load_config_keys_to_translate():
     
 
 @admin_translation_bp.route('/admin/translations/change_language_target', methods=['POST'])
+@require_permission('translation')
 def change_language_target():
     language_code = request.form.get("language_code")
     
@@ -388,6 +399,7 @@ def change_language_target():
 
 
 @admin_translation_bp.route('/admin/translations/save_translations', methods=['POST'])
+@require_permission('translation')
 def save_translations():
     print(request.form.get("language_code"))
     print("items", request.form.items())
