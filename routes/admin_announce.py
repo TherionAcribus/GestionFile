@@ -235,11 +235,11 @@ def upload_signal_file():
     return redirect(url_for('gallery_audio_list'))
 
 
-@admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['GET'])
+@admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['POST'])
 @require_permission('announce')
 def announce_audio_test(scope):
-    language_code = request.args.get('language_code', 'fr')
-    call_number = request.args.get('call_number', 'A-1')
+    language_code = request.values.get('language_code', 'fr')
+    call_number = request.values.get('call_number', 'A-1')
 
     # Création d'un patient temporaire pour le test
     activity = Activity.query.first()

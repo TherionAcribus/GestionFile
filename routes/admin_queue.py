@@ -53,7 +53,7 @@ def confirm_delete_patient_table_with_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
                             saving=True)
 
-@admin_queue_bp.route('/admin/database/clear_all_patients_with_saving')
+@admin_queue_bp.route('/admin/database/clear_all_patients_with_saving', methods=['POST'])
 @require_permission('queue')
 def clear_all_patients_from_db_with_saving():
     success = transfer_patients_to_history()
@@ -63,7 +63,7 @@ def clear_all_patients_from_db_with_saving():
         current_app.logger.error("Failed to transfer patients to history")
         current_app.display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
 
-@admin_queue_bp.route('/admin/database/clear_all_patients')
+@admin_queue_bp.route('/admin/database/clear_all_patients', methods=['POST'])
 @require_permission('queue')
 def clear_all_patients_from_db(app_context=None):
     print("Suppression de la table Patient")
@@ -134,7 +134,7 @@ def confirm_delete_patient(patient_id):
 
 
 # supprime un patient
-@admin_queue_bp.route('/admin/queue/delete_patient/<int:patient_id>', methods=['GET'])
+@admin_queue_bp.route('/admin/queue/delete_patient/<int:patient_id>', methods=['DELETE'])
 @require_permission('queue')
 def delete_patient(patient_id):
     print("id", patient_id)

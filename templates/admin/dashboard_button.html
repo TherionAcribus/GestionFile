@@ -21,10 +21,10 @@
                     <button 
                         {% if group.parent.is_active %} 
                             class="btn btn-primary text-uppercase"
-                            hx-get="/admin/button/deactivate/{{ group.parent.id }}"
+                            hx-post="/admin/button/deactivate/{{ group.parent.id }}"
                         {% else %}
                             class="btn btn-secondary text-uppercase"
-                            hx-get="/admin/button/activate/{{ group.parent.id }}"
+                            hx-post="/admin/button/activate/{{ group.parent.id }}"
                         {% endif %} 
                         hx-target="#card-{{ dashboardcard.id }}">
                         {{ group.parent.label }}
@@ -33,10 +33,10 @@
                         <button 
                             {% if button.is_active %} 
                                 class="btn btn-primary"
-                                hx-get="/admin/button/deactivate/{{ button.id }}"
+                                hx-post="/admin/button/deactivate/{{ button.id }}"
                             {% else %}
                                 class="btn btn-secondary"
-                                hx-get="/admin/button/activate/{{ button.id }}"
+                                hx-post="/admin/button/activate/{{ button.id }}"
                             {% endif %} 
                             hx-target="#card-{{ dashboardcard.id }}">
                             {{ button.label }}
@@ -51,10 +51,10 @@
                     <button 
                         {% if button.is_active %} 
                             class="btn btn-primary"
-                            hx-get="/admin/button/deactivate/{{ button.id }}"
+                            hx-post="/admin/button/deactivate/{{ button.id }}"
                         {% else %}
                             class="btn btn-secondary"
-                            hx-get="/admin/button/activate/{{ button.id }}"
+                            hx-post="/admin/button/activate/{{ button.id }}"
                         {% endif %} 
                         hx-target="#card-{{ dashboardcard.id }}">
                         {{ button.label }}

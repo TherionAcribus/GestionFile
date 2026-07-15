@@ -76,7 +76,7 @@ def confirm_delete(member_id):
 
 
 # supprime un membre de l'equipe
-@admin_staff_bp.route('/admin/staff/delete/<int:member_id>', methods=['GET'])
+@admin_staff_bp.route('/admin/staff/delete/<int:member_id>', methods=['DELETE'])
 @require_permission('staff')
 def delete_staff(member_id):
     try:

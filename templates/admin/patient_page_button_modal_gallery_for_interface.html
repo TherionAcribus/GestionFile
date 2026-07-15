@@ -22,6 +22,9 @@
     hx-target=".image-grid"
     hx-swap="outerHTML"
     hx-encoding="multipart/form-data">
+    <!-- Point 2.3 : soumission NATIVE via this.form.submit() -> jeton CSRF porté
+         par ce champ caché (non intercepté par HTMX/csrf.js). -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="file-upload">
         <button type="btn btn-primary">Ouvrir une image depuis votre ordinateur</button>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">

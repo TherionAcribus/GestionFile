@@ -378,26 +378,12 @@ def confirm_delete_role(role_id):
     return render_template('/admin/security_modal_confirm_delete_role.html', role=role)
 
 
-# supprime un utilisateur
-@admin_security_bp.route('/admin/security/delete_user/<int:user_id>', methods=['GET'])
-@require_permission('security')
-def delete_user(user_id):
-    try:
-        user = User.query.get(user_id)
-        if not user:
-            app.display_toast(success=False, message="Utilisateur non trouvé")
-            return display_security_table()
+# Point 2.1 : l'ancienne route GET ``/admin/security/delete_user`` a été retirée.
+# C'était un DOUBLON de ``delete_user2`` (POST, ci-dessus) qui, en plus d'être une
+# mutation exposée en GET (contournable par CSRF), ne portait PAS la protection
+# « dernier administrateur ». La suppression d'utilisateur passe désormais
+# exclusivement par la route POST protégée ``delete_user2``.
 
-        db.session.delete(user)
-        db.session.commit()
-
-        app.display_toast(success=True, message="Utilisateur supprimé")
-        return display_security_table()
-
-    except Exception as e:
-        app.display_toast(success=False, message="erreur : " + str(e))
-        return display_security_table()  
-    
 
 # Fonction utilitaire (PAS une route) : l'envoi d'e-mail de test est déclenché
 # par la route POST protégée ``/admin/app/mail/test`` (require_permission_api).
@@ -752,9 +738,9 @@ def add_role_form():
     return render_template('/admin/security_add_role_form.html',
                            permissions_by_category=permissions_by_category())
 
-@admin_security_bp.route('/admin/security/delete_role/<int:role_id>', methods=['GET'])
+@admin_security_bp.route('/admin/security/delete_role/<int:role_id>', methods=['DELETE'])
 @require_permission('security')
-# supprime un utilisateur
+# supprime un rôle
 def delete_role(role_id):
     try:
         role = Role.query.get(role_id)

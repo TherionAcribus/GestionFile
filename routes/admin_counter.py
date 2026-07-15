@@ -67,7 +67,7 @@ def confirm_delete_counter(counter_id):
 
 
 # supprime un comptoir
-@admin_counter_bp.route('/admin/counter/delete/<int:counter_id>', methods=['GET'])
+@admin_counter_bp.route('/admin/counter/delete/<int:counter_id>', methods=['DELETE'])
 @require_permission('counter')
 def delete_counter(counter_id):
     try:

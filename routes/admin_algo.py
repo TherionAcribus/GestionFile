@@ -28,7 +28,7 @@ def button_des_activate_algo():
                             algo_activated= app.config['ALGO_IS_ACTIVATED'])
 
 # active ou desactive l'algorithme, enregistre l'info, retourne les boutons
-@admin_algo_bp.route('/admin/algo/toggle_activation')
+@admin_algo_bp.route('/admin/algo/toggle_activation', methods=['POST'])
 @require_permission('algo')
 def toggle_activation():
     action = request.args.get('action', 'activate')
@@ -123,7 +123,7 @@ def confirm_delete_rule(rule_id):
 
 
 # supprime une regle de l'algo
-@admin_algo_bp.route('/admin/algo/delete_rule/<int:algo_id>', methods=['GET'])
+@admin_algo_bp.route('/admin/algo/delete_rule/<int:algo_id>', methods=['DELETE'])
 @require_permission('algo')
 def delete_algo(algo_id):
     try:

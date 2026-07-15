@@ -377,7 +377,7 @@ def confirm_delete_button(button_id):
 
 
 # supprime un bouton
-@admin_patient_bp.route('/admin/patient/delete_button/<int:button_id>', methods=['GET'])
+@admin_patient_bp.route('/admin/patient/delete_button/<int:button_id>', methods=['DELETE'])
 @require_permission('patient')
 def delete_button(button_id):
     try:
@@ -505,7 +505,7 @@ def update_button_image_from_gallery_for_interface():
     return html
 
 
-@admin_patient_bp.route('/admin/patient/delete_button_image/<int:button_id>', methods=['GET'])
+@admin_patient_bp.route('/admin/patient/delete_button_image/<int:button_id>', methods=['DELETE'])
 @require_permission('patient')
 def delete_button_image(button_id):
     button = Button.query.order_by(Button.sort_order).get(button_id)
@@ -514,7 +514,7 @@ def delete_button_image(button_id):
     return "<div>Pas d'image</div>"
 
 
-@admin_patient_bp.route("/admin/patient/print_test_ticket_size")
+@admin_patient_bp.route("/admin/patient/print_test_ticket_size", methods=['POST'])
 @require_permission('patient')
 def print_ticket_test_size():
     text = "123456789012345678901234567890123456789012345678901234567890"
@@ -522,7 +522,7 @@ def print_ticket_test_size():
     communikation(stream="app_patient", data=text, flag="print")
     return "", 204
 
-@admin_patient_bp.route("/admin/patient/print_ticket_test")
+@admin_patient_bp.route("/admin/patient/print_ticket_test", methods=['POST'])
 @require_permission('patient')
 def print_ticket_test():
     call_number = request.values.get('call_number', 'A-1')
@@ -601,7 +601,7 @@ def dashboard_button():
                             dashboardcard=dashboardcard)
 
 
-@admin_patient_bp.route('/admin/button/deactivate/<int:button_id>', methods=['GET'])
+@admin_patient_bp.route('/admin/button/deactivate/<int:button_id>', methods=['POST'])
 @require_permission('patient')
 def deactivate_button(button_id):
     button = Button.query.get(button_id)
@@ -610,7 +610,7 @@ def deactivate_button(button_id):
     return dashboard_button()
 
 
-@admin_patient_bp.route('/admin/button/activate/<int:button_id>', methods=['GET'])
+@admin_patient_bp.route('/admin/button/activate/<int:button_id>', methods=['POST'])
 @require_permission('patient')
 def activate_button(button_id):
     button = Button.query.get(button_id)

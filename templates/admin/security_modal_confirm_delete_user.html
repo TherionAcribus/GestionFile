@@ -3,7 +3,7 @@
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
     <button type="button" class="btn btn-danger"
-    hx-get="/admin/security/delete_user/{{ user.id }}"
+    hx-post="/admin/security/delete_user/{{ user.id }}"
     hx-target="#div_user_table"
     data-bs-dismiss="modal"
     >Supprimer</button>

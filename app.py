@@ -900,17 +900,32 @@ _CSRF_EXEMPT_PREFIXES = (
     "/patient",     # borne/kiosque patient + /patients_submit + /patient/phone
 )
 
+# Point 2.2 : routes « à double usage » (appelées à la fois par le navigateur ET
+# par un client machine) situées HORS des préfixes ci-dessus. Seules ces routes
+# peuvent être exemptées par un jeton applicatif VALIDE. L'administration
+# (/admin) et Spotify (/spotify) n'en font JAMAIS partie : un simple en-tête ne
+# doit jamais suffire à contourner le CSRF sur une route sensible.
+# Aujourd'hui la seule route concernée est /validate_and_call_next/<counter_id>,
+# partagée par le comptoir navigateur et App_Comptoir.
+_CSRF_APP_TOKEN_ELIGIBLE_PREFIXES = (
+    "/validate_and_call_next",
+)
+
 
 def _csrf_is_exempt():
     """Vrai si la requête courante ne doit PAS être soumise au contrôle CSRF."""
     path = request.path
     if path.startswith(_CSRF_EXEMPT_PREFIXES):
         return True
-    # Requêtes des applications clientes (App_Comptoir, borne, imprimante) :
-    # présence d'un en-tête personnalisé X-App-Token. Un formulaire cross-site ne
-    # peut pas positionner d'en-tête personnalisé (protection intrinsèque), et le
-    # jeton est de toute façon revérifié par la route (@require_app_token_or_login).
-    if request.headers.get("X-App-Token"):
+    # Requêtes des applications clientes (App_Comptoir) sur une route à double
+    # usage. L'exemption exige les TROIS conditions (point 2.2) :
+    #   1. un jeton applicatif présent ;
+    #   2. un jeton réellement VALIDE (vérifié ici, plus seulement présent) ;
+    #   3. une route explicitement prévue pour les clients machine (allowlist).
+    # Ainsi, un formulaire cross-site avec un en-tête bidon — ou pointant sur
+    # /admin — n'échappe jamais au contrôle CSRF.
+    token = request.headers.get("X-App-Token")
+    if token and verify_app_token(token) and path.startswith(_CSRF_APP_TOKEN_ELIGIBLE_PREFIXES):
         return True
     return False
 

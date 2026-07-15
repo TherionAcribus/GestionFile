@@ -100,7 +100,7 @@ def confirm_delete_language(language_id):
 
 
 # supprime un membre de l'equipe
-@admin_translation_bp.route('/admin/languages/delete/<int:language_id>', methods=['GET'])
+@admin_translation_bp.route('/admin/languages/delete/<int:language_id>', methods=['DELETE'])
 @require_permission('translation')
 def delete_language(language_id):
     try:

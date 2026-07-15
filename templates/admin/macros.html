@@ -463,6 +463,9 @@ function handleAfterRequestConfig(event, variable) {
             <div class="modal-body">
                 <div style="display:none;" id="json_tag_{{ table }}">{{ json_tag }}</div>
                 <form id="restoreForm_{{ table }}" action="{{ url_for('restore_' + table) }}" method="post" enctype="multipart/form-data">
+                    <!-- Point 2.3 : formulaire HTML classique soumis nativement
+                         (pas de HTMX) -> jeton CSRF porté par ce champ caché. -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="fileInput_{{ table }}" class="form-label">Choisir un fichier</label>
                         <input class="form-control" type="file" name="file" id="fileInput_{{ table }}"

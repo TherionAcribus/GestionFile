@@ -306,7 +306,7 @@ def spotify_exception_handler(func):
             return '', 500  # Code 500 pour une erreur serveur
     return wrapper
 
-@admin_music_bp.route('/spotify/shuffle', methods=['GET'])
+@admin_music_bp.route('/spotify/shuffle', methods=['POST'])
 @require_permission('music_play')
 @spotify_exception_handler
 def shuffle_playlist():
@@ -330,7 +330,7 @@ def shuffle_playlist():
     else:
         return 'Aucun appareil actif trouvé pour activer le shuffle.', 400
 
-@admin_music_bp.route('/spotify/pause_music', methods=['GET'])
+@admin_music_bp.route('/spotify/pause_music', methods=['POST'])
 @require_permission('music_play')
 @spotify_exception_handler
 def pause_music():
@@ -338,7 +338,7 @@ def pause_music():
     sp.pause_playback()
     return '', 204
 
-@admin_music_bp.route('/spotify/resume_music', methods=['GET'])
+@admin_music_bp.route('/spotify/resume_music', methods=['POST'])
 @require_permission('music_play')
 @spotify_exception_handler
 def resume_music():
@@ -346,7 +346,7 @@ def resume_music():
     sp.start_playback()
     return '', 204
 
-@admin_music_bp.route('/spotify/next_track', methods=['GET'])
+@admin_music_bp.route('/spotify/next_track', methods=['POST'])
 @require_permission('music_play')
 @spotify_exception_handler
 def next_track():
@@ -354,7 +354,7 @@ def next_track():
     sp.next_track()
     return '', 204
 
-@admin_music_bp.route('/spotify/previous_track', methods=['GET'])
+@admin_music_bp.route('/spotify/previous_track', methods=['POST'])
 @require_permission('music_play')
 @spotify_exception_handler
 def previous_track():

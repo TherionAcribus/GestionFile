@@ -136,7 +136,7 @@ function testAudio(scope) {
     let language_code = document.getElementById('language_code').value;
     let call_number = document.getElementById('call_number').value;
 
-    fetch(`/admin/announce/audio/test/${scope}?language_code=${language_code}&call_number=${call_number}`)
+    fetch(`/admin/announce/audio/test/${scope}?language_code=${language_code}&call_number=${call_number}`, { method: 'POST' })
         .then(response => response.json())
         .then(data => {
             updateGenerationTime(data.generation_time, scope);

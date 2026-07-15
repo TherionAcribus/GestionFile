@@ -5,10 +5,10 @@
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
     <button type="button" class="btn btn-danger"
     {% if staff %}
-        hx-get="/admin/activity/delete/staff/{{ activity.id }}"
+        hx-delete="/admin/activity/delete/staff/{{ activity.id }}"
         hx-target="#div_activity_staff_table"
     {% else %}
-        hx-get="/admin/activity/delete/{{ activity.id }}"
+        hx-delete="/admin/activity/delete/{{ activity.id }}"
         hx-target="#div_activity_table"
     {% endif %}
     hx-target="#div_counter_table"

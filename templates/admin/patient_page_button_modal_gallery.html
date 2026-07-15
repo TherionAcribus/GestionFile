@@ -22,6 +22,10 @@
     hx-target="#button-image-{{ button.id }}"
     hx-swap="outerHTML"
     hx-encoding="multipart/form-data">
+    <!-- Point 2.3 : `this.form.submit()` déclenche une soumission NATIVE que HTMX
+         n'intercepte pas (csrf.js n'injecte donc pas l'en-tête). Le jeton CSRF est
+         porté par ce champ caché, lu côté serveur par Flask-WTF (form.csrf_token). -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="file-upload">
         <button type="btn btn-primary">Ouvrir une image depuis votre ordinateur</button>
         <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">

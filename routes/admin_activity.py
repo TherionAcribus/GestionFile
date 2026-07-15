@@ -145,7 +145,7 @@ def confirm_delete_activity_staff(activity_id):
 
 
 # supprime un membre de l'equipe
-@admin_activity_bp.route('/admin/activity/delete/<int:activity_id>', methods=['GET'])
+@admin_activity_bp.route('/admin/activity/delete/<int:activity_id>', methods=['DELETE'])
 @require_permission('activity')
 def delete_activity(activity_id, staff=None):
     try:
@@ -166,7 +166,7 @@ def delete_activity(activity_id, staff=None):
         return return_good_display_activity(staff)
 
 
-@admin_activity_bp.route('/admin/activity/delete/staff/<int:activity_id>', methods=['GET'])
+@admin_activity_bp.route('/admin/activity/delete/staff/<int:activity_id>', methods=['DELETE'])
 @require_permission('activity')
 def delete_activity_staff(activity_id, staff=None):
     return delete_activity(activity_id, staff=True)

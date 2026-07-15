@@ -6,7 +6,7 @@
 {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
 
 <btn class="btn btn-primary"
-    hx-get="/admin/patient/print_test_ticket_size"
+    hx-post="/admin/patient/print_test_ticket_size"
     hx-target="#invisible"
     >
     Tester la largeur d'impression
@@ -25,7 +25,7 @@
 }}
 
 <form id="qrcode-form" 
-    hx-get="/admin/patient/print_ticket_test" 
+    hx-post="/admin/patient/print_ticket_test"
     hx-trigger="submit"
     class="row g-3 align-items-end">
     <div class="col-auto">
