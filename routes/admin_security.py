@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import current_user
 from functools import wraps
 from models import db, Role, User, DashboardCard
+from permissions_registry import PERMISSIONS, permissions_by_category
 from flask_mailman import EmailMessage
 from flask_security import login_required, login_user
 from wtforms import StringField, PasswordField, HiddenField, BooleanField
@@ -157,7 +158,8 @@ def require_permission_dashboard(resource):
 @require_permission('security')
 def display_security_role_table():
     roles = Role.query.all()
-    return render_template('admin/security_htmx_role_table.html', roles=roles)
+    return render_template('admin/security_htmx_role_table.html', roles=roles,
+                           permissions_by_category=permissions_by_category())
 
 @admin_security_bp.route('/admin/security/dashboard')
 @require_permission_dashboard('security')
@@ -534,28 +536,15 @@ def create_default_role():
             app.logger.info("Le rôle admin existe déjà")
             return True
 
-        # Créer le rôle admin avec toutes les permissions à True par défaut
+        # Créer le rôle admin avec TOUTES les permissions du registre à True.
+        # On dérive la liste du registre (source de vérité unique) plutôt que de
+        # la répéter ici : impossible d'oublier une permission ajoutée plus tard.
         admin_role = Role(
             name='admin',
             description='Administrateur avec toutes les permissions',
-            admin_security=True,
-            admin_counter=True,
-            admin_activity=True,
-            admin_schedule=True,
-            admin_algo=True,
-            admin_translation=True,
-            admin_options=True,
-            admin_music_play=True,
-            admin_music_options=True,
-            admin_app=True,
-            admin_queue=True,
-            admin_stats=True,
-            admin_staff=True,
-            admin_phone=True,
-            admin_announce=True,
-            admin_patient=True,
-            admin_gallery=True
         )
+        for perm in PERMISSIONS:
+            setattr(admin_role, perm.field, True)
 
         db.session.add(admin_role)
         db.session.commit()
@@ -716,30 +705,15 @@ def save_role():
         app.logger.info(f"Création d'un nouveau rôle - name: {name}, description: {description}")
         app.logger.info(f"Permissions: {permissions}")
 
-        # Création du rôle avec toutes les permissions à False par défaut
+        # Création du rôle : les colonnes admin_* du modèle valent False par
+        # défaut, inutile de les répéter ici. On n'active que ce qui est soumis.
         role = Role(
             name=name,
             description=description,
-            admin_security=False,
-            admin_counter=False,
-            admin_activity=False,
-            admin_schedule=False,
-            admin_algo=False,
-            admin_translation=False,
-            admin_options=False,
-            admin_music_play=False,
-            admin_music_options=False,
-            admin_app=False,
-            admin_queue=False,
-            admin_stats=False,
-            admin_staff=False,
-            admin_phone=False,
-            admin_announce=False,
-            admin_patient=False,
-            admin_gallery=False
         )
 
-        # Attribution des permissions
+        # Attribution des permissions. On restreint aux champs réellement connus
+        # du modèle (hasattr) : une clé parasite venue du formulaire est ignorée.
         for permission_name, value in permissions.items():
             if hasattr(role, permission_name):
                 app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
@@ -769,10 +743,14 @@ def save_role():
 @admin_security_bp.route('/admin/security/add_role_form')
 @require_permission('security')
 def add_role_form():
-    """Affiche le formulaire d'ajout de rôle"""
-    # Récupérer la liste des pages à partir des attributs du modèle Role
-    admin_pages = [attr.replace('admin_', '') for attr in vars(Role) if attr.startswith('admin_')]
-    return render_template('/admin/security_add_role_form.html', admin_pages=admin_pages)
+    """Affiche le formulaire d'ajout de rôle.
+
+    Les cases à cocher sont générées à partir du registre de permissions (source
+    de vérité unique), groupées par catégorie : plus aucune liste codée en dur
+    dans le gabarit, donc plus de divergence possible avec le modèle.
+    """
+    return render_template('/admin/security_add_role_form.html',
+                           permissions_by_category=permissions_by_category())
 
 @admin_security_bp.route('/admin/security/delete_role/<int:role_id>', methods=['GET'])
 @require_permission('security')

@@ -1,7 +1,3 @@
-<style>
-
-</style>
-
 <div class="card">
     <div class="card-body">
         <h5 class="card-title">Nouveau rôle</h5>
@@ -13,107 +9,32 @@
             <label for="description" class="form-label">Description</label>
             <input type="text" class="form-control" id="description" name="description">
         </div>
-        
+
         <div class="mb-3">
             <label class="form-label">Permissions</label>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_security" data-permission="admin_security">
-                            <label class="form-check-label" for="admin_security">Security</label>
+            {# Cases générées depuis le registre de permissions (source de vérité
+               unique) : plus aucune liste codée en dur ici. #}
+            {% for category, permissions in permissions_by_category.items() %}
+            <fieldset class="mb-3">
+                <legend class="col-form-label fw-semibold pt-0">{{ category }}</legend>
+                <div class="row">
+                    {% for perm in permissions %}
+                    <div class="col-md-4">
+                        <div class="mb-2">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input permission-checkbox"
+                                    id="{{ perm.field }}" data-permission="{{ perm.field }}">
+                                <label class="form-check-label" for="{{ perm.field }}"
+                                    title="{{ perm.description }}">
+                                    {{ perm.label }}
+                                </label>
+                            </div>
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_counter" data-permission="admin_counter">
-                            <label class="form-check-label" for="admin_counter">Counter</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_activity" data-permission="admin_activity">
-                            <label class="form-check-label" for="admin_activity">Activity</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_schedule" data-permission="admin_schedule">
-                            <label class="form-check-label" for="admin_schedule">Schedule</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_algo" data-permission="admin_algo">
-                            <label class="form-check-label" for="admin_algo">Algo</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_translation" data-permission="admin_translation">
-                            <label class="form-check-label" for="admin_translation">Translation</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_options" data-permission="admin_options">
-                            <label class="form-check-label" for="admin_options">Options</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_music" data-permission="admin_music">
-                            <label class="form-check-label" for="admin_music">Music</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_dashboard" data-permission="admin_dashboard">
-                            <label class="form-check-label" for="admin_dashboard">Dashboard</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_app" data-permission="admin_app">
-                            <label class="form-check-label" for="admin_app">App</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_queue" data-permission="admin_queue">
-                            <label class="form-check-label" for="admin_queue">Queue</label>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="mb-2">
-                        <div class="form-check">
-                            <input type="checkbox" class="form-check-input permission-checkbox" id="admin_stats" data-permission="admin_stats">
-                            <label class="form-check-label" for="admin_stats">Stats</label>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </fieldset>
+            {% endfor %}
         </div>
 
         <button class="btn btn-primary"

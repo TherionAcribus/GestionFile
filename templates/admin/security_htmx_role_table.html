@@ -11,25 +11,34 @@
                 <input type="text" class="form-control" value="{{ role.description }}" id="description-{{ role.id }}">
             </div>
 
+            {# Cases générées depuis le registre (libellés français, groupées par
+               catégorie) ; l'état coché vient des valeurs réelles du rôle. #}
+            {% set role_perms = role.to_dict()['permissions'] %}
             <div>
-                <div class="row">
-                    {% for page, permission in role.to_dict()['permissions'].items() %}
-                    <div class="col-md-4">
-                        <div class="mb-2">
-                            <div class="form-check">
-                                <input type="checkbox" class="form-check-input permission-checkbox" 
-                                    id="{{ page }}-{{ role.id }}"
-                                    data-permission="{{ page }}"
-                                    {% if permission %}checked{% endif %}
-                                    {% if role.name == "admin" %}disabled{% endif %}>
-                                <label class="form-check-label" for="{{ page }}-{{ role.id }}">
-                                    {{ page.replace('admin_', '').title() }}
-                                </label>
+                {% for category, permissions in permissions_by_category.items() %}
+                <fieldset class="mb-2">
+                    <legend class="col-form-label fw-semibold pt-0">{{ category }}</legend>
+                    <div class="row">
+                        {% for perm in permissions %}
+                        <div class="col-md-4">
+                            <div class="mb-2">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input permission-checkbox"
+                                        id="{{ perm.field }}-{{ role.id }}"
+                                        data-permission="{{ perm.field }}"
+                                        {% if role_perms.get(perm.field) %}checked{% endif %}
+                                        {% if role.name == "admin" %}disabled{% endif %}>
+                                    <label class="form-check-label" for="{{ perm.field }}-{{ role.id }}"
+                                        title="{{ perm.description }}">
+                                        {{ perm.label }}
+                                    </label>
+                                </div>
                             </div>
                         </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
-                </div>
+                </fieldset>
+                {% endfor %}
             </div>
 
             <div>
