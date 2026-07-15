@@ -223,6 +223,82 @@ def test_all_spotify_routes_are_permission_protected():
     assert offenders == [], f"Routes Spotify non protégées : {offenders}"
 
 
+#: Permission attendue par route /spotify/* (point 1.4). Les commandes de lecture
+#: exigent ``music_play`` ; l'OAuth et la configuration exigent ``music_options``.
+_EXPECTED_SPOTIFY_PERMISSIONS = {
+    # OAuth / configuration -> music_options
+    "/spotify/login": "music_options",
+    "/spotify/logout": "music_options",
+    "/spotify/callback": "music_options",
+    # Commandes de lecture -> music_play
+    "/spotify/shuffle": "music_play",
+    "/spotify/pause_music": "music_play",
+    "/spotify/resume_music": "music_play",
+    "/spotify/next_track": "music_play",
+    "/spotify/previous_track": "music_play",
+    "/spotify/change_volume": "music_play",
+    "/spotify/play_playlist": "music_play",
+}
+
+
+def _spotify_route_permissions():
+    """Extrait ``{chemin_/spotify: permission}`` de admin_music.py.
+
+    Pour chaque ``@admin_music_bp.route('/spotify/...')``, cherche le premier
+    ``@require_permission('...')`` avant le ``def`` de la vue.
+    """
+    src = _music_src()
+    lines = src.splitlines()
+    route_re = re.compile(r"@admin_music_bp\.route\(\s*['\"](/spotify/[^'\"]*)['\"]")
+    perm_re = re.compile(r"require_permission\(\s*['\"]([^'\"]+)['\"]\s*\)")
+    mapping = {}
+    for i, line in enumerate(lines):
+        m = route_re.search(line)
+        if not m:
+            continue
+        path = m.group(1)
+        perm = None
+        for j in range(i + 1, len(lines)):
+            if lines[j].lstrip().startswith("def "):
+                break
+            pm = perm_re.search(lines[j])
+            if pm:
+                perm = pm.group(1)
+                break
+        mapping.setdefault(path, perm)
+    return mapping
+
+
+def test_spotify_command_and_oauth_permissions_match_expected():
+    """Chaque route /spotify/* exige la bonne permission (play vs options)."""
+    actual = _spotify_route_permissions()
+    # Toutes les routes attendues existent et portent la permission prévue.
+    for path, expected in _EXPECTED_SPOTIFY_PERMISSIONS.items():
+        assert actual.get(path) == expected, (
+            f"{path} devrait exiger {expected!r}, obtenu {actual.get(path)!r}")
+    # Aucune route /spotify/* inconnue ne doit apparaître sans être cartographiée
+    # (garde-fou : une nouvelle route doit être classée play/options explicitement).
+    unknown = {p: perm for p, perm in actual.items()
+               if p not in _EXPECTED_SPOTIFY_PERMISSIONS}
+    assert unknown == {}, f"Routes /spotify non cartographiées : {unknown}"
+    # Et chaque permission relevée est bien l'une des deux permissions musique.
+    assert set(actual.values()) <= {"music_play", "music_options"}
+
+
+def test_spotify_prefix_requires_authentication_structurally():
+    """L'authentification /spotify est imposée en amont des décorateurs.
+
+    Régression du point 1.4 : ``require_login_for_admin`` (app.py) doit contenir
+    une branche ``/spotify`` refusant l'accès non authentifié, afin que la
+    sécurité ne dépende pas de la seule présence des décorateurs de permission.
+    """
+    src = _read("app.py")
+    idx = src.index("def require_login_for_admin")
+    body = src[idx:idx + 2000]
+    assert "startswith('/spotify')" in body or 'startswith("/spotify")' in body
+    assert "_deny_unauthenticated_access" in body
+
+
 def test_show_saved_tracks_protected():
     src = _music_src()
     # La route show_saved_tracks doit aussi être protégée.

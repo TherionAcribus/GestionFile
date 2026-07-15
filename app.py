@@ -863,6 +863,17 @@ def require_login_for_admin():
         # Authentification OBLIGATOIRE et inconditionnelle pour toute l'admin.
         if not current_user.is_authenticated:
             return _deny_unauthenticated_access()
+    elif request.path.startswith('/spotify'):
+        # Point 1.4 : les routes /spotify/* (lecteur + OAuth) sont hors du préfixe
+        # /admin. Elles exigent chacune une permission via @require_permission,
+        # mais on ne veut PAS que leur sécurité repose sur la seule présence de ce
+        # décorateur. On impose donc ici, structurellement, une session
+        # authentifiée pour tout le préfixe /spotify (défense en profondeur : une
+        # future route /spotify oubliée ne sera jamais anonyme). La permission
+        # fine — music_play pour les commandes de lecture, music_options pour
+        # l'OAuth/config — reste appliquée par le décorateur de chaque route.
+        if not current_user.is_authenticated:
+            return _deny_unauthenticated_access()
     elif request.path.startswith('/counter'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not current_user.is_authenticated:
             return redirect(url_for('admin_security.login', next=request.url))
