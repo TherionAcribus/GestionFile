@@ -156,6 +156,7 @@
     </div>
 
     <div class="bg-white rounded-lg shadow p-6">
+        <div id="chart-error" class="alert alert-warning d-none" role="alert"></div>
         <div id="chart-container" class="w-full" style="height: 400px;">
             <canvas id="statsChart"></canvas>
         </div>
@@ -219,6 +220,7 @@
         if (!canvas) return;
         
         const ctx = canvas.getContext('2d');
+        const errorBox = document.getElementById('chart-error');
         let data;
         try {
             data = JSON.parse(evt.detail.elt.textContent);
@@ -226,11 +228,23 @@
             console.error('Error parsing JSON:', error);
             return;
         }
-        
+
+        // Réponse d'erreur validée côté serveur (paramètre invalide, période
+        // trop longue pour la granularité…) : on l'affiche au lieu de planter.
+        if (data && data.error) {
+            if (chart) { chart.destroy(); chart = null; }
+            if (errorBox) {
+                errorBox.textContent = data.error;
+                errorBox.classList.remove('d-none');
+            }
+            return;
+        }
+        if (errorBox) { errorBox.textContent = ''; errorBox.classList.add('d-none'); }
+
         if (chart) {
             chart.destroy();
         }
-        
+
         const chartType = document.getElementById('chart-type-selector').value;
         const config = createChartConfig(chartType, data);
         chart = new Chart(ctx, config);

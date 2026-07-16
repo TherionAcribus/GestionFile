@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from models import DashboardCard, Activity, Language, Counter, Patient, PatientHistory, AggregatedStats, db
 from routes.admin_security import require_permission, require_permission_api
 from pagination import parse_page_params, paginate_query
+from stats_params import parse_chart_request
 import pytz
 
 admin_stats_bp = Blueprint('admin_stats', __name__)
@@ -81,66 +82,43 @@ def display_history_table():
 @admin_stats_bp.route('/admin/stats/chart')
 @require_permission_api('stats')
 def get_chart_data():
-    chart_type = request.args.get('chart_type', 'languages')
-    chart_style = request.args.get('chart_style', 'pie')
-    time_granularity = request.args.get('time_granularity', 'day')
-    date_type = request.args.get('date_type', 'current')
-    
-    start_date, end_date = get_date_range(date_type, request.args)
-    if not start_date:
-        return jsonify({'error': 'Dates manquantes'}), 400
+    # Validation stricte + bornage de période (point 5.4) dans le cœur pur.
+    req = parse_chart_request(request.args, now=datetime.now(time_tz))
+    if not req.ok:
+        return jsonify({'error': req.error}), 400
 
-    is_history = (date_type == 'history')
-    
+    chart_type = req.chart_type
+    chart_style = req.chart_style
+    time_granularity = req.time_granularity
+    start_date, end_date = req.start_date, req.end_date
+
     # 1. Fetch Detailed Data (Patient or PatientHistory)
-    if is_history:
+    if req.is_history:
         model = PatientHistory
-        detailed_data = fetch_detailed_data(model, start_date, end_date, chart_type, request.args, chart_style, time_granularity)
+        detailed_data = fetch_detailed_data(model, start_date, end_date, chart_type, req, chart_style, time_granularity)
     else:
         model = Patient
-        detailed_data = fetch_detailed_data(model, start_date, end_date, chart_type, request.args, chart_style, time_granularity, join_models=True)
+        detailed_data = fetch_detailed_data(model, start_date, end_date, chart_type, req, chart_style, time_granularity, join_models=True)
 
     # 2. Fetch Compressed Data (AggregatedStats) - Only for history
     compressed_data = []
-    if is_history:
+    if req.is_history:
         compressed_data = fetch_compressed_data(start_date, end_date, chart_type, chart_style, time_granularity)
 
     # 3. Merge Data
-    merged_data = merge_datasets(detailed_data, compressed_data, '_times' in chart_type)
+    merged_data = merge_datasets(detailed_data, compressed_data, req.is_time)
 
     # 4. Format for Chart.js
     response_data = format_chart_data(merged_data, chart_type, chart_style, start_date, end_date, time_granularity)
-    
+
     return jsonify(response_data)
 
 
-def get_date_range(date_type, args):
-    if date_type == 'history':
-        period_type = args.get('period_type', '7')
-        if period_type == 'custom':
-            start_str = args.get('start_date')
-            end_str = args.get('end_date')
-            if not start_str or not end_str:
-                return None, None
-            start_date = datetime.strptime(start_str, '%Y-%m-%d')
-            end_date = datetime.strptime(end_str, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)
-        else:
-            days = int(period_type)
-            end_date = datetime.now(time_tz)
-            start_date = end_date - timedelta(days=days)
-    else:
-        today = datetime.now(time_tz).date()
-        start_date = datetime.combine(today, datetime.min.time())
-        end_date = datetime.combine(today, datetime.max.time())
-    
-    return start_date, end_date
-
-
-def fetch_detailed_data(model, start_date, end_date, chart_type, filters, chart_style, time_granularity, join_models=False):
+def fetch_detailed_data(model, start_date, end_date, chart_type, req, chart_style, time_granularity, join_models=False):
     """Fetches data from Patient or PatientHistory tables."""
-    
+
     base_query = db.session.query(model).filter(model.timestamp.between(start_date, end_date))
-    base_query = apply_filters(base_query, model, filters, not join_models)
+    base_query = apply_filters(base_query, model, req)
 
     # Prepare metrics and grouping
     date_func = get_date_func(model.timestamp, time_granularity, chart_style)
@@ -324,22 +302,27 @@ def format_chart_data(data, chart_type, chart_style, start_date, end_date, time_
         # Organize by category
         categories = set(d.category for d in data)
         datasets = []
-        
+
+        # Index (date, catégorie) -> valeur, construit en une passe. Remplace la
+        # recherche linéaire ``next(...)`` refaite pour chaque case du produit
+        # cartésien dates × catégories (point 5.4) : on passe d'un coût
+        # O(dates × catégories × lignes) à un accès dictionnaire O(1).
+        value_by_key = {(str(d.date), d.category): d.value for d in data}
+
         # Generate all dates
         all_dates = []
         current = start_date
         fmt = '%Y-%m-%d %H:00:00' if time_granularity == 'hour' else '%Y-%m-%d'
         increment = timedelta(hours=1) if time_granularity == 'hour' else timedelta(days=1)
-        
+
         while current <= end_date:
             all_dates.append(current.strftime(fmt))
             current += increment
-            
+
         for cat in categories:
             cat_data = []
             for date in all_dates:
-                # Find matching row
-                val = next((d.value for d in data if str(d.date) == date and d.category == cat), 0)
+                val = value_by_key.get((date, cat), 0)
                 if is_time: val = val / 60 # Minutes
                 cat_data.append({'x': date, 'y': val})
                 
@@ -375,27 +358,27 @@ def format_chart_data(data, chart_type, chart_style, start_date, end_date, time_
         }
 
 
-def apply_filters(query, model, request_args, is_history=False):
-    # Filtre par comptoir
-    counter_filter = request_args.getlist('counter_filter')
-    if counter_filter:
-        query = query.filter(model.counter_id.in_([int(c) for c in counter_filter]))
+def apply_filters(query, model, req):
+    """Applique les filtres numériques déjà validés (point 5.4).
 
-    # Filtre par activité
-    activity_filter = request_args.getlist('activity_filter')
-    if activity_filter:
-        query = query.filter(model.activity_id.in_([int(a) for a in activity_filter]))
+    Les identifiants proviennent de ``parse_chart_request`` : ce sont des
+    entiers, dédoublonnés, avec les jours de semaine bornés à 1..7. Plus aucune
+    conversion ``int(...)`` non gardée ici (elle levait auparavant une 500 sur
+    une saisie forgée).
+    """
+    if req.counter_ids:
+        query = query.filter(model.counter_id.in_(req.counter_ids))
+    if req.activity_ids:
+        query = query.filter(model.activity_id.in_(req.activity_ids))
+    if req.language_ids:
+        query = query.filter(model.language_id.in_(req.language_ids))
 
-    # Filtre par langue
-    language_filter = request_args.getlist('language_filter')
-    if language_filter:
-        query = query.filter(model.language_id.in_([int(l) for l in language_filter]))
-
-    if is_history:
-        day_of_week_filter = request_args.getlist('day_of_week_filter')
-        if day_of_week_filter:
-            days = [int(d) for d in day_of_week_filter]
-            query = query.filter(func.dayofweek(model.timestamp).in_([d + 1 if d < 7 else 1 for d in days]))
+    # Le jour de la semaine n'a de sens que sur l'historique (colonne dérivée
+    # d'un balayage temporel long) ; on le réserve au modèle PatientHistory.
+    if req.is_history and req.day_of_week:
+        # Gabarit : 1=lundi … 7=dimanche ; MySQL DAYOFWEEK : 1=dimanche … 7=samedi.
+        days = [d + 1 if d < 7 else 1 for d in req.day_of_week]
+        query = query.filter(func.dayofweek(model.timestamp).in_(days))
 
     return query
 
