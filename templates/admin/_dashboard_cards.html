@@ -1,0 +1,44 @@
+{# Point 5.3 — enveloppe de chargement différé d'une carte du tableau de bord.
+
+   Objectif : réduire le nombre de requêtes déclenchées au chargement de la page.
+
+   - `hx-trigger="revealed once"` : la carte n'émet SA requête que lorsqu'elle
+     entre dans la fenêtre. Les cartes visibles au chargement se chargent tout de
+     suite ; celles hors écran ne déclenchent RIEN tant qu'on ne les fait pas
+     défiler. `once` évite un rechargement à chaque re-défilement.
+   - `extra_triggers` : évènements HTMX temps réel propres à la carte
+     (ex. `refresh_queue_patient`) — conservés tels quels.
+   - En attendant la réponse : un squelette occupe la place (pas de saut de mise
+     en page). En cas d'échec réseau/serveur : un état d'erreur avec bouton
+     « Réessayer » (voir les gestionnaires htmx:responseError / htmx:sendError et
+     dashboardCardRetry dans admin.html). #}
+
+{% macro card_slot(dashboardcard, url, extra_triggers='') %}
+<div id="card-wrapper-{{ dashboardcard.id }}"
+     class="dashboard-card-slot"
+     data-card-id="{{ dashboardcard.id }}"
+     data-card-url="{{ url }}"
+     hx-get="{{ url }}"
+     hx-trigger="revealed once{% if extra_triggers %}, {{ extra_triggers }}{% endif %}"
+     hx-swap="innerHTML">
+    {{ skeleton(dashboardcard) }}
+</div>
+{% endmacro %}
+
+{# Squelette affiché tant que la carte n'a pas répondu. Il reprend la coquille
+   `dashboard-card > card` pour garder la même empreinte (largeur, poignée de
+   drag `.card-header`) que la carte réelle qui le remplacera. #}
+{% macro skeleton(dashboardcard) %}
+<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }} card-skeleton" aria-busy="true">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="skeleton-bar skeleton-title"></span>
+        </div>
+        <div class="card-body">
+            <span class="skeleton-bar"></span>
+            <span class="skeleton-bar"></span>
+            <span class="skeleton-bar skeleton-bar-short"></span>
+        </div>
+    </div>
+</div>
+{% endmacro %}

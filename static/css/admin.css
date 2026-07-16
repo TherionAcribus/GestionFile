@@ -144,6 +144,50 @@
     cursor: grabbing;
 }
 
+/* Point 5.3 — squelette de chargement différé d'une carte.
+   Occupe la même empreinte que la carte réelle pour éviter tout saut de mise
+   en page ; les barres « scintillent » en attendant la réponse. */
+.card-skeleton .card-header,
+.card-skeleton .card-body {
+    cursor: default;
+}
+
+.card-skeleton .skeleton-bar {
+    display: block;
+    height: 0.85rem;
+    margin: 0.5rem 0;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #e9ecef 25%, #f5f6f8 37%, #e9ecef 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shimmer 1.4s ease infinite;
+}
+
+.card-skeleton .skeleton-title {
+    width: 40%;
+    height: 1rem;
+    margin: 0.25rem 0;
+}
+
+.card-skeleton .skeleton-bar-short {
+    width: 60%;
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card-skeleton .skeleton-bar {
+        animation: none;
+    }
+}
+
+/* État d'erreur d'une carte (échec de chargement) */
+.card-load-error .card {
+    border-color: var(--bs-danger, #dc3545);
+}
+
 /* Card Manager - Interface de gestion des cartes */
 .card-manager {
     background: white;

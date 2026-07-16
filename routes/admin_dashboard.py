@@ -220,33 +220,13 @@ def save_dashboard_configuration():
             context['namespaces'] = list(app.active_connections.keys())
             
         elif dashboardcard.name == 'appschedule':
-            # Logique pour les planifications (copié depuis app.py)
+            # Mêmes infos que la route /admin/appschedule/dashboard, via le même
+            # assembleur : une seule requête pour toutes les dernières exécutions
+            # (au lieu d'une par tâche) — cf. scheduler_dashboard, point 5.3.
             from scheduler import scheduler
-            from models import SchedulerLog
-            
-            jobs = scheduler.get_jobs()
-            main_jobs_info = []
-            other_jobs_info = []
-            MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
-            
-            for job in jobs:
-                last_execution = SchedulerLog.query.filter_by(job_id=job.id).order_by(SchedulerLog.time.desc()).first()
-                job_info = {
-                    'id': job.id,
-                    'next_run_time': job.next_run_time,
-                    'last_execution': {
-                        'time': last_execution.time,
-                        'status': last_execution.status
-                    } if last_execution else None
-                }
-                
-                if job.id in MAIN_JOBS:
-                    main_jobs_info.append(job_info)
-                else:
-                    other_jobs_info.append(job_info)
-            
-            context['main_jobs'] = main_jobs_info
-            context['other_jobs'] = other_jobs_info
+            from scheduler_dashboard import build_jobs_info
+
+            context['main_jobs'], context['other_jobs'] = build_jobs_info(scheduler.get_jobs())
         
         elif dashboardcard.name == 'security':
             context['is_default_admin'] = check_default_admin()

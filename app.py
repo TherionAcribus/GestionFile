@@ -64,6 +64,7 @@ from utils import validate_and_transform_text, parse_time, convert_markdown_to_e
 from backup import backup_databases
 from routes.admin_backup import admin_backup_bp
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
+from scheduler_dashboard import build_jobs_info
 from bdd import init_database
 from config import Config, time_tz
 from communication import send_app_notification, communikation
@@ -1439,33 +1440,9 @@ def display_schedule_tasks_list():
 @app.route('/admin/appschedule/dashboard')
 @require_permission_dashboard('schedule')
 def dashboard_counter():
-    jobs = scheduler.get_jobs()
-    main_jobs_info = []
-    other_jobs_info = []
-    MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
-    
-    for job in jobs:
-        # Récupérer la dernière exécution
-        last_execution = JobExecutionLog.query.filter_by(
-            job_id=job.id
-        ).order_by(
-            JobExecutionLog.execution_time.desc()
-        ).first()
-        
-        job_info = {
-            'id': job.id,
-            'next_run_time': job.next_run_time,
-            'last_execution': {
-                'time': last_execution.execution_time if last_execution else None,
-                'status': last_execution.status if last_execution else None,
-                'error': last_execution.error_message if last_execution else None
-            } if last_execution else None
-        }
-        
-        if job.id in MAIN_JOBS:
-            main_jobs_info.append(job_info)
-        else:
-            other_jobs_info.append(job_info)
+    # Une seule requête pour la dernière exécution de toutes les tâches (au lieu
+    # d'une par tâche — cf. scheduler_dashboard, point 5.3).
+    main_jobs_info, other_jobs_info = build_jobs_info(scheduler.get_jobs())
 
     dashboardcard = DashboardCard.query.filter_by(name="appschedule").first()
     

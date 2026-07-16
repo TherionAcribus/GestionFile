@@ -1,5 +1,2 @@
-<div id="card-wrapper-{{ dashboardcard.id }}"
-    hx-get="/admin/counter/dashboard"
-    hx-trigger="load, refresh_counter_dashboard"
-    hx-swap="innerHTML">
-</div>
+{% from 'admin/_dashboard_cards.html' import card_slot %}
+{{ card_slot(dashboardcard, '/admin/counter/dashboard', 'refresh_counter_dashboard') }}
