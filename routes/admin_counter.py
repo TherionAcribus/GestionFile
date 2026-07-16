@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, current_app as app
+from sqlalchemy.orm import joinedload
 from models import Counter, Activity, DashboardCard, db
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_dashboard
@@ -173,7 +174,8 @@ def update_counter_order():
 @admin_counter_bp.route('/admin/counter/dashboard')
 @require_permission_dashboard('counter')
 def dashboard_counter():
-    counters = Counter.query.all()
+    # Le gabarit lit counter.staff.name par ligne : joinedload évite un N+1.
+    counters = Counter.query.options(joinedload(Counter.staff)).all()
 
     dashboardcard = DashboardCard.query.filter_by(name="counter").first()
 

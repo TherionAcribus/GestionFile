@@ -1,8 +1,16 @@
+{% import '/admin/pagination.html' as pg %}
+{% set user_defaults = {'search': '', 'per_page': 25, 'sort': 'username', 'direction': 'asc'} %}
+{{ pg.list_toolbar('users', '/admin/security/table', 'get', '#div_user_table', user_defaults, '', 'Rechercher (nom, email)…') }}
+
 <div id="div_user_table"
 hx-get="/admin/security/table"
 hx-trigger="load"
 hx-target="#div_user_table"
-hx-swap="innerHTML">        
+hx-swap="innerHTML"
+hx-vals='js:{"search": (document.getElementById("users-search")||{}).value || "",
+            "per_page": (document.getElementById("users-per_page")||{}).value || "",
+            "sort": (document.getElementById("users-sort")||{}).value || "",
+            "dir": (document.getElementById("users-dir")||{}).value || ""}'>
 </div>
 
 <a class="btn btn-primary"

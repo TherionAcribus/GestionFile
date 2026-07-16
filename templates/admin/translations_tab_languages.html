@@ -1,8 +1,15 @@
+{% import '/admin/pagination.html' as pg %}
+{% set lang_defaults = {'search': '', 'per_page': 25, 'sort': 'code', 'direction': 'asc'} %}
+{{ pg.list_toolbar('languages', '/admin/languages/table', 'get', '#div_languages_table', lang_defaults, '', 'Rechercher (code, nom)…') }}
 <div id="div_languages_table"
     hx-get="/admin/languages/table"
     hx-trigger="load, refresh_languages_table"
     hx-target="#div_languages_table"
-    hx-swap="innerHTML">        
+    hx-swap="innerHTML"
+    hx-vals='js:{"search": (document.getElementById("languages-search")||{}).value || "",
+                "per_page": (document.getElementById("languages-per_page")||{}).value || "",
+                "sort": (document.getElementById("languages-sort")||{}).value || "",
+                "dir": (document.getElementById("languages-dir")||{}).value || ""}'>
 </div>
 
 <!-- Ajout nouvelle activité -->

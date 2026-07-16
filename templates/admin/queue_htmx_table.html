@@ -1,10 +1,16 @@
+{% import '/admin/pagination.html' as pg %}
+{%- set status_vals -%}
+"ongoing": (document.getElementById('ongoing')||{}).selected, "standing": (document.getElementById('standing')||{}).selected, "calling": (document.getElementById('calling')||{}).selected, "done": (document.getElementById('done')||{}).selected
+{%- endset -%}
+{% set url = '/admin/queue/table' %}
+{% set target = '#div_queue_table' %}
 <table id="queue_table" class="striped">
-    <thead>             
+    <thead>
     <tr>
-        <th>Numéro d'Appel</th>
-        <th>Motif de Visite</th>
-        <th>Heure d'Enregistrement</th>
-        <th>Statut</th>
+        {{ pg.sort_th("Numéro d'Appel", 'call_number', 'queue', params, url, 'post', target, status_vals) }}
+        {{ pg.sort_th("Motif de Visite", 'activity', 'queue', params, url, 'post', target, status_vals) }}
+        {{ pg.sort_th("Heure d'Enregistrement", 'timestamp', 'queue', params, url, 'post', target, status_vals) }}
+        {{ pg.sort_th("Statut", 'status', 'queue', params, url, 'post', target, status_vals) }}
         <th>Comptoir</th>
         <th>Actions</th>
     </tr>
@@ -17,7 +23,7 @@
             </td>
             <td>
                 <div class="input-field">
-                    <select class="form-select" id="activity-{{ patient.id }}">               
+                    <select class="form-select" id="activity-{{ patient.id }}">
                         {% for activity in activities %}
                         <option value="{{ activity.id }}" {{ 'selected' if activity.id == patient.activity.id else '' }}>{{ activity.name }} </option>
                         {% endfor %}
@@ -27,7 +33,7 @@
             <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>
                 <div class="input-field">
-                    <select class="form-select" id="status-{{ patient.id }}">               
+                    <select class="form-select" id="status-{{ patient.id }}">
                         {% for status in status_list %}
                             <option value="{{ status }}" {{ 'selected' if status == patient.status else '' }}>{{ status }}</option>
                         {% endfor %}
@@ -36,8 +42,8 @@
             </td>
             <td>
                 <div class="input-field">
-                    <select class="form-select" id="counter-{{ patient.id }}"> 
-                        <option value="None">None</option>              
+                    <select class="form-select" id="counter-{{ patient.id }}">
+                        <option value="None">None</option>
                         {% for counter in counters %}
                             <option value="{{ counter.id }}" {{ 'selected' if counter.id == patient.counter.id else '' }}>{{ counter.name }} </option>
                         {% endfor %}
@@ -64,6 +70,10 @@
                 </button>
             </td>
         </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted">Aucun patient</td></tr>
         {% endfor %}
     </tbody>
 </table>
+
+{{ pg.pagination_nav(pager, 'queue', url, 'post', target, status_vals) }}

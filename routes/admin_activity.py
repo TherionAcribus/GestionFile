@@ -1,7 +1,7 @@
 from datetime import datetime, time
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
 from models import Activity, ActivitySchedule, Pharmacist, Button, DashboardCard, db
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from routes.admin_security import require_permission
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
@@ -21,7 +21,9 @@ def admin_activity():
 @admin_activity_bp.route('/admin/activity/table')
 @require_permission('activity')
 def display_activity_table():
-    activities = Activity.query.filter_by(is_staff=False).all()
+    # Le gabarit teste `schedule in activity.schedules` pour chaque activité :
+    # selectinload charge les horaires en une requête IN groupée (évite un N+1).
+    activities = Activity.query.options(selectinload(Activity.schedules)).filter_by(is_staff=False).all()
     schedules = ActivitySchedule.query.all()
     return render_template('admin/activity_htmx_table.html',
                             activities=activities,
@@ -32,7 +34,7 @@ def display_activity_table():
 @admin_activity_bp.route('/admin/activity/table_staff')
 @require_permission('activity')
 def display_activity_table_staff():
-    activities = Activity.query.filter_by(is_staff=True).all()
+    activities = Activity.query.options(selectinload(Activity.schedules)).filter_by(is_staff=True).all()
     schedules = ActivitySchedule.query.all()
     staff = Pharmacist.query.all()
     return render_template('admin/activity_htmx_table.html',

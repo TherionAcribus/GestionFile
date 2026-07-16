@@ -1,4 +1,5 @@
 {% extends '/admin/base.html' %}
+{% import '/admin/pagination.html' as pg %}
 
 {% block title %}File{% endblock %}
 
@@ -18,7 +19,12 @@
                 "ongoing": $("#select_patient_filter").val().includes("ongoing"),
                 "standing": $("#select_patient_filter").val().includes("standing"),
                 "calling": $("#select_patient_filter").val().includes("calling"),
-                "done": $("#select_patient_filter").val().includes("done")
+                "done": $("#select_patient_filter").val().includes("done"),
+                "search": (document.getElementById("queue-search")||{}).value || "",
+                "per_page": (document.getElementById("queue-per_page")||{}).value || "",
+                "sort": (document.getElementById("queue-sort")||{}).value || "",
+                "dir": (document.getElementById("queue-dir")||{}).value || "",
+                "page": 1
             }'
         >
             <option id="ongoing" selected value="ongoing">En cours</option>
@@ -31,6 +37,11 @@
 
     <br>
 
+    <!-- Barre d'outils pagination/tri/recherche (état persistant hors fragment) -->
+    {% set queue_defaults = {'search': '', 'per_page': 25, 'sort': 'timestamp', 'direction': 'asc'} %}
+    {% set status_vals %}"ongoing": (document.getElementById('ongoing')||{}).selected, "standing": (document.getElementById('standing')||{}).selected, "calling": (document.getElementById('calling')||{}).selected, "done": (document.getElementById('done')||{}).selected{% endset %}
+    {{ pg.list_toolbar('queue', '/admin/queue/table', 'post', '#div_queue_table', queue_defaults, status_vals, 'Rechercher (n° d\'appel, motif, statut)…') }}
+
     <!-- Queue table -->
     <div id="div_queue_table"
         hx-post="/admin/queue/table"
@@ -40,7 +51,11 @@
         hx-vals='js:{"ongoing": document.getElementById("ongoing").selected,
                     "standing": document.getElementById("standing").selected,
                     "calling": document.getElementById("calling").selected,
-                    "done": document.getElementById("done").selected}'
+                    "done": document.getElementById("done").selected,
+                    "search": (document.getElementById("queue-search")||{}).value || "",
+                    "per_page": (document.getElementById("queue-per_page")||{}).value || "",
+                    "sort": (document.getElementById("queue-sort")||{}).value || "",
+                    "dir": (document.getElementById("queue-dir")||{}).value || ""}'
         >
     </div>
 

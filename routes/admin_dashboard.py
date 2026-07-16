@@ -1,4 +1,5 @@
 from flask import Blueprint,render_template, request, current_app as app
+from sqlalchemy.orm import joinedload
 from models import DashboardCard, db, Pharmacist, Patient, Counter, Button
 from communication import communikation
 from routes.admin_security import check_default_admin, require_permission, require_permission_api
@@ -171,19 +172,23 @@ def save_dashboard_configuration():
             context['staffs'] = Pharmacist.query.all()
             
         elif dashboardcard.name == 'queue':
-            context['patients'] = Patient.query.all()
+            # dashboard_queue.html lit patient.activity.name par ligne → joinedload.
+            context['patients'] = Patient.query.options(joinedload(Patient.activity)).all()
             
         elif dashboardcard.name == 'button':
             # Logique pour les boutons (copié depuis admin_patient.py)
             all_buttons = Button.query.all()
+            # Index id -> bouton : évite une requête par groupe pour retrouver le
+            # parent (déjà chargé dans all_buttons) — cf. admin_patient.dashboard_button.
+            buttons_by_id = {button.id: button for button in all_buttons}
             grouped_buttons = {}
             other_buttons = []
-            
+
             for button in all_buttons:
                 if button.parent_button_id:
                     parent_id = button.parent_button_id
                     if parent_id not in grouped_buttons:
-                        parent_button = Button.query.get(parent_id)
+                        parent_button = buttons_by_id.get(parent_id)
                         grouped_buttons[parent_id] = {
                             'parent': parent_button,
                             'children': []
@@ -208,7 +213,8 @@ def save_dashboard_configuration():
             context['other_buttons'] = other_buttons
             
         elif dashboardcard.name == 'counter':
-            context['counters'] = Counter.query.all()
+            # dashboard_counter.html lit counter.staff.name par ligne → joinedload.
+            context['counters'] = Counter.query.options(joinedload(Counter.staff)).all()
             
         elif dashboardcard.name == 'connection':
             context['namespaces'] = list(app.active_connections.keys())

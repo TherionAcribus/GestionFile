@@ -1,0 +1,41 @@
+{% import '/admin/pagination.html' as pg %}
+{% set url = '/admin/stats/history/table' %}
+{% set target = '#div_history_table' %}
+<div class="table-responsive">
+<table class="table striped">
+    <thead>
+        <tr>
+            {{ pg.sort_th("N° d'appel", 'call_number', 'history', params, url, 'get', target) }}
+            {{ pg.sort_th("Enregistrement", 'timestamp', 'history', params, url, 'get', target) }}
+            <th>Au comptoir</th>
+            <th>Fin</th>
+            {{ pg.sort_th("Statut", 'status', 'history', params, url, 'get', target) }}
+            {{ pg.sort_th("Jour", 'day_of_week', 'history', params, url, 'get', target) }}
+            <th>Activité</th>
+            <th>Comptoir</th>
+            <th>Langue</th>
+            <th>Dépassé</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.call_number }}</td>
+            <td>{{ row.timestamp.strftime('%Y-%m-%d %H:%M:%S') if row.timestamp else '' }}</td>
+            <td>{{ row.timestamp_counter.strftime('%Y-%m-%d %H:%M:%S') if row.timestamp_counter else '' }}</td>
+            <td>{{ row.timestamp_end.strftime('%Y-%m-%d %H:%M:%S') if row.timestamp_end else '' }}</td>
+            <td>{{ row.status }}</td>
+            <td>{{ row.day_of_week }}</td>
+            <td>{{ activity_names.get(row.activity_id, row.activity_id) }}</td>
+            <td>{{ counter_names.get(row.counter_id, '') if row.counter_id else '' }}</td>
+            <td>{{ language_names.get(row.language_id, '') if row.language_id else '' }}</td>
+            <td>{{ row.overtaken }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="text-center text-muted">Aucun historique</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{{ pg.pagination_nav(pager, 'history', url, 'get', target) }}

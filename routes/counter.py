@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get_queue_revision
 from python.engine import call_next, generate_audio_calling
 from utils import replace_balise_announces
@@ -232,7 +233,15 @@ def api_counter_state(counter_id):
 
 @counter_bp.route('/counter/patients_queue_for_counter/<int:counter_id>', methods=['GET'])
 def patients_queue_for_counter(counter_id):
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp, Patient.id).all()
+    # Le gabarit lit patient.activity.name et patient.language.code par ligne :
+    # joinedload charge ces deux relations en amont pour éviter un N+1.
+    patients = (
+        Patient.query
+        .filter_by(status='standing')
+        .options(joinedload(Patient.activity), joinedload(Patient.language))
+        .order_by(Patient.timestamp, Patient.id)
+        .all()
+    )
     return render_template('/counter/patients_queue_for_counter.html', patients=patients, counter_id=counter_id)
 
 

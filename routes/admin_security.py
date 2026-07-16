@@ -2,6 +2,7 @@ import os
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app as app
 from flask_login import current_user
 from functools import wraps
+from sqlalchemy.orm import selectinload
 from models import db, Role, User, DashboardCard
 from permissions_registry import PERMISSIONS, permissions_by_category
 from flask_mailman import EmailMessage
@@ -13,7 +14,58 @@ from urllib.parse import urlparse, urljoin
 from datetime import datetime
 import json
 
+from pagination import parse_page_params, paginate_query
+from login_guard import (
+    get_shared_throttle,
+    ip_key,
+    identity_key,
+    worst_retry_after,
+)
+from login_audit import (
+    build_login_audit,
+    format_login_audit,
+    OUTCOME_SUCCESS,
+    OUTCOME_FAILURE,
+    OUTCOME_BLOCKED,
+)
+from password_policy import validate_password
+
 admin_security_bp = Blueprint('admin_security', __name__)
+
+# Message unique présenté à l'utilisateur quel que soit le motif d'échec
+# (identifiant inconnu OU mot de passe erroné) : ne pas révéler lequel des deux
+# est faux évite l'énumération des comptes.
+GENERIC_LOGIN_ERROR = "Identifiants incorrects"
+
+
+def _client_ip():
+    """Adresse IP source de la requête de connexion.
+
+    Utilise ``remote_addr``. On ne fait PAS confiance à ``X-Forwarded-For`` par
+    défaut : derrière un proxy non maîtrisé, un client pourrait forger cet
+    en-tête pour se soustraire à la limitation ou empoisonner l'audit. Si un
+    reverse proxy de confiance est en place, il doit réécrire ``remote_addr``
+    (ProxyFix) plutôt que de compter sur l'en-tête ici.
+    """
+    return request.remote_addr
+
+
+def _audit_login(outcome, *, username=None, retry_after=None):
+    """Émet une ligne d'audit de connexion (sans aucun secret)."""
+    record = build_login_audit(
+        outcome,
+        username=username,
+        ip=_client_ip(),
+        user_agent=request.headers.get('User-Agent'),
+        retry_after=retry_after,
+    )
+    # WARNING pour un refus/blocage (repérable dans les alertes), INFO pour un
+    # succès. Le mot de passe n'est jamais passé à build_login_audit.
+    line = format_login_audit(record)
+    if outcome == OUTCOME_SUCCESS:
+        app.logger.info(line)
+    else:
+        app.logger.warning(line)
 
 
 def user_has_permission(user, resource):
@@ -154,11 +206,36 @@ def require_permission_dashboard(resource):
     return decorator
 
 
+# Colonnes de tri autorisées (liste blanche) — cf. pagination.parse_page_params.
+USER_SORT_COLUMNS = {
+    'username': User.username,
+    'email': User.email,
+}
+ROLE_SORT_COLUMNS = {
+    'name': Role.name,
+    'description': Role.description,
+}
+
+
 @admin_security_bp.route('/admin/security/role/table')
 @require_permission('security')
 def display_security_role_table():
-    roles = Role.query.all()
-    return render_template('admin/security_htmx_role_table.html', roles=roles,
+    # request.values : fonctionne que la table soit demandée en GET (nav/recherche)
+    # ou re-rendue après une mutation POST (delete_role) — dans ce dernier cas les
+    # paramètres sont absents et l'on retombe sur la première page par défaut.
+    params = parse_page_params(
+        request.values,
+        allowed_sort=tuple(ROLE_SORT_COLUMNS),
+        default_sort='name',
+    )
+    pager = paginate_query(
+        Role.query,
+        params,
+        sort_columns=ROLE_SORT_COLUMNS,
+        search_columns=[Role.name, Role.description],
+    )
+    return render_template('admin/security_htmx_role_table.html', roles=pager.items,
+                           pager=pager, params=params,
                            permissions_by_category=permissions_by_category())
 
 @admin_security_bp.route('/admin/security/dashboard')
@@ -190,9 +267,23 @@ def admin_security():
 @admin_security_bp.route('/admin/security/table')
 @require_permission('security')
 def display_security_table():
-    users = User.query.all()
+    params = parse_page_params(
+        request.values,
+        allowed_sort=tuple(USER_SORT_COLUMNS),
+        default_sort='username',
+    )
+    # Le gabarit lit user.roles pour chaque ligne (case cochée par rôle) :
+    # selectinload charge tous les rôles en une requête IN groupée, au lieu d'une
+    # requête par utilisateur (N+1).
+    pager = paginate_query(
+        User.query.options(selectinload(User.roles)),
+        params,
+        sort_columns=USER_SORT_COLUMNS,
+        search_columns=[User.username, User.email],
+    )
     roles = Role.query.all()
-    return render_template('admin/security_htmx_table.html', users=users, roles=roles)
+    return render_template('admin/security_htmx_table.html', users=pager.items,
+                           pager=pager, params=params, roles=roles)
 
 # affiche le formulaire pour ajouter un utilisateur
 @admin_security_bp.route('/admin/security/add_user_form')
@@ -223,6 +314,13 @@ def add_new_user():
         if password1 != password2:
             app.logger.error("Les mots de passe ne correspondent pas")
             app.display_toast(success=False, message="Les mots de passe ne correspondent pas")
+            return display_security_table()
+
+        # Politique minimale de mot de passe (point 3.4)
+        policy_problems = validate_password(password1, username=username)
+        if policy_problems:
+            app.logger.warning("Mot de passe refusé par la politique à la création d'utilisateur")
+            app.display_toast(success=False, message=" ".join(policy_problems))
             return display_security_table()
 
         # Vérification de l'unicité du nom d'utilisateur
@@ -413,27 +511,51 @@ def is_safe_url(target):
 def login():
     app.logger.info("=== Tentative de connexion ===")
     form = ExtendedLoginForm()
-    
-    if form.validate_on_submit():
-        app.logger.info(f"Formulaire soumis avec username: {form.username.data}")
-        user = User.query.filter_by(username=form.username.data).first()
-        
-        if user is None:
-            app.logger.error("Utilisateur non trouvé")
-            app.display_toast(success=False, message="Nom d'utilisateur inconnu")
-            return render_template('security/login.html', form=form)
-            
-        app.logger.info(f"Tentative de connexion pour {user.username}")
+    throttle = get_shared_throttle()
 
-        if not user.verify_password(form.password.data):
-            app.logger.error("Mot de passe incorrect")
-            app.display_toast(success=False, message="Mot de passe incorrect")
+    if form.validate_on_submit():
+        username = form.username.data
+        ip = _client_ip()
+
+        # 1) Limitation : si l'IP OU l'identité est en délai/verrouillage, on
+        #    refuse AVANT toute vérification de mot de passe. Message générique
+        #    (ne pas révéler qu'un blocage est actif ni sur quelle clé).
+        retry_after = worst_retry_after(throttle, ip, username)
+        if retry_after > 0:
+            _audit_login(OUTCOME_BLOCKED, username=username, retry_after=retry_after)
+            app.display_toast(success=False, message=GENERIC_LOGIN_ERROR)
             return render_template('security/login.html', form=form)
-            
-        remember = form.remember.data 
+
+        user = User.query.filter_by(username=username).first()
+
+        # 2) Vérification. Un utilisateur inconnu et un mot de passe erroné
+        #    produisent EXACTEMENT le même message et le même traitement
+        #    (anti-énumération). Si l'utilisateur est inconnu, on effectue tout
+        #    de même une vérification factice pour égaliser le temps de réponse
+        #    et ne pas trahir l'existence du compte par le timing.
+        password_ok = False
+        if user is not None:
+            password_ok = user.verify_password(form.password.data)
+        else:
+            _dummy_password_check(form.password.data)
+
+        if not password_ok:
+            # 3) Échec : on compte l'échec sur les deux clés (IP + identité) puis
+            #    on journalise. Le délai renvoyé sert au calcul mais n'est pas
+            #    divulgué à l'utilisateur.
+            throttle.register_failure(ip_key(ip))
+            delay = throttle.register_failure(identity_key(username))
+            _audit_login(OUTCOME_FAILURE, username=username, retry_after=delay)
+            app.display_toast(success=False, message=GENERIC_LOGIN_ERROR)
+            return render_template('security/login.html', form=form)
+
+        # 4) Succès : on réinitialise les compteurs des deux clés et on journalise.
+        throttle.register_success(ip_key(ip))
+        throttle.register_success(identity_key(username))
+        remember = form.remember.data
         login_user(user, remember=remember)
-        app.logger.info(f"Connexion réussie pour {user.username}")
-        
+        _audit_login(OUTCOME_SUCCESS, username=user.username)
+
         next_url = request.args.get('next') or form.next.data
         if not next_url or not is_safe_url(next_url):
             # Default post-login landing page.
@@ -443,15 +565,34 @@ def login():
                 next_url = url_for('admin_dashboard.admin')
             except Exception:
                 next_url = app.config.get("SECURITY_POST_LOGIN_VIEW", "/admin")
-        
+
         app.display_toast(success=True, message=f"Bienvenue {user.username} !")
         return redirect(next_url)
-    
+
     if form.errors:
-        app.logger.error(f"Erreurs de validation: {form.errors}")
-        app.display_toast(success=False, message="Identifiants incorrects")
-    
+        # Erreurs de validation de formulaire (champ vide, CSRF…) : même message
+        # générique, sans détailler le champ fautif au-delà de la validation WTForms.
+        app.logger.info(f"Erreurs de validation du formulaire de connexion: {list(form.errors)}")
+        app.display_toast(success=False, message=GENERIC_LOGIN_ERROR)
+
     return render_template('security/login.html', form=form)
+
+
+# Hash bcrypt figé d'une valeur arbitraire, utilisé uniquement pour consommer un
+# temps de calcul comparable à une vraie vérification lorsque l'utilisateur est
+# inconnu (défense anti-timing / anti-énumération). Ce n'est pas un secret.
+_DUMMY_BCRYPT_HASH = "$2b$12$Bw8tY3NUQeKVnA4/0sZ7budKVOtyCx7ULJ2uPOgUxudgzBjAU9UZO"
+
+
+def _dummy_password_check(candidate):
+    """Vérification factice à temps ~constant (utilisateur inexistant)."""
+    try:
+        import bcrypt
+        bcrypt.checkpw((candidate or "").encode("utf-8"),
+                       _DUMMY_BCRYPT_HASH.encode("utf-8"))
+    except Exception:
+        # Ne jamais faire échouer la connexion à cause de la vérif factice.
+        pass
 
 
 class ExtendedLoginForm(FlaskForm):
@@ -792,6 +933,13 @@ def update_password(user_id):
 
         if password1 != password2:
             app.display_toast(success=False, message="Les mots de passe ne correspondent pas")
+            return display_security_table()
+
+        # Politique minimale de mot de passe (point 3.4)
+        policy_problems = validate_password(password1, username=user.username)
+        if policy_problems:
+            app.logger.warning("Mot de passe refusé par la politique au changement de mot de passe")
+            app.display_toast(success=False, message=" ".join(policy_problems))
             return display_security_table()
 
         user.set_password(password1)

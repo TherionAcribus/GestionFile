@@ -1,9 +1,12 @@
+{% import '/admin/pagination.html' as pg %}
+{% set url = '/admin/languages/table' %}
+{% set target = '#div_languages_table' %}
 <table id="translation_table" class="striped">
     <thead>
         <tr>
-            <th>Code</th>
-            <th>Nom</th>
-            <th>Nom traduit</th>
+            {{ pg.sort_th('Code', 'code', 'languages', params, url, 'get', target) }}
+            {{ pg.sort_th('Nom', 'name', 'languages', params, url, 'get', target) }}
+            {{ pg.sort_th('Nom traduit', 'translation', 'languages', params, url, 'get', target) }}
             <th>Ecrit</th>
             <th>Audio</th>
             <th>Drapeau</th>
@@ -11,7 +14,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for language in languages %}        
+        {% for language in languages %}
         <tr>
             <td><input type="text" class="form-control" maxlength="2" name="code" value="{{ language.code }}" id="code-{{ language.id }}"></td>
             <td><input type="text" class="form-control" name="name" value="{{ language.name }}" id="name-{{ language.id }}"></td>
@@ -54,9 +57,13 @@
         </tr>
 
 
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted">Aucune langue</td></tr>
         {% endfor %}
     </tbody>
 </table>
+
+{{ pg.pagination_nav(pager, 'languages', url, 'get', target) }}
 
 
 <script>

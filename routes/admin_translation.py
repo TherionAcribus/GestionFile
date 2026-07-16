@@ -5,8 +5,16 @@ from models import ConfigOption, Button, Activity, Language, Translation, db
 from werkzeug.utils import secure_filename
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_api
+from pagination import parse_page_params, paginate_query
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
+
+# Colonnes de tri autorisées (liste blanche) — cf. pagination.parse_page_params.
+LANGUAGE_SORT_COLUMNS = {
+    'code': Language.code,
+    'name': Language.name,
+    'translation': Language.translation,
+}
 
 
 @admin_translation_bp.route('/admin/translations')
@@ -25,10 +33,19 @@ def admin_translation():
 @admin_translation_bp.route('/admin/languages/table')
 @require_permission('translation')
 def display_languages_table():
-    languages = Language.query.all()
-    print("Llanguages", languages)
-    return render_template('admin/translations_languages_htmx_table.html', 
-                            languages=languages)
+    params = parse_page_params(
+        request.values,
+        allowed_sort=tuple(LANGUAGE_SORT_COLUMNS),
+        default_sort='code',
+    )
+    pager = paginate_query(
+        Language.query,
+        params,
+        sort_columns=LANGUAGE_SORT_COLUMNS,
+        search_columns=[Language.code, Language.name, Language.translation],
+    )
+    return render_template('admin/translations_languages_htmx_table.html',
+                            languages=pager.items, pager=pager, params=params)
 
 
 @admin_translation_bp.route('/admin/languages/language_update/<int:language_id>', methods=['POST'])

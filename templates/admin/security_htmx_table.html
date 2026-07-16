@@ -1,8 +1,11 @@
+{% import '/admin/pagination.html' as pg %}
+{% set url = '/admin/security/table' %}
+{% set target = '#div_user_table' %}
 <table class="table">
     <thead>
         <tr>
-            <th>Nom</th>
-            <th>Email</th>
+            {{ pg.sort_th('Nom', 'username', 'users', params, url, 'get', target) }}
+            {{ pg.sort_th('Email', 'email', 'users', params, url, 'get', target) }}
             <th>Rôle</th>
             <th>Actions</th>
         </tr>
@@ -60,6 +63,10 @@
                 </button>
             </td>
         </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted">Aucun utilisateur</td></tr>
         {% endfor %}
     </tbody>
 </table>
+
+{{ pg.pagination_nav(pager, 'users', url, 'get', target) }}

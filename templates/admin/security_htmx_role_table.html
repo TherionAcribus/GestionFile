@@ -1,4 +1,4 @@
-
+{% import '/admin/pagination.html' as pg %}
 
         {% for role in roles %}
         <div id="role-{{ role.id }}">
@@ -76,4 +76,8 @@
 
         <hr>
 
+        {% else %}
+        <p class="text-center text-muted">Aucun rôle</p>
         {% endfor %}
+
+{{ pg.pagination_nav(pager, 'roles', '/admin/security/role/table', 'get', '#div_role_table') }}

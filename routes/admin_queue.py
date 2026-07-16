@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app
+from sqlalchemy.orm import contains_eager, joinedload
 from models import Patient, Activity, Counter, DashboardCard, db
 from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
@@ -6,11 +7,21 @@ from routes.announce import announce_refresh
 from communication import communikation
 from bdd import transfer_patients_to_history
 from routes.admin_security import require_permission, require_permission_dashboard
+from pagination import parse_page_params, paginate_query
 from flask_login import current_user
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
 status_list = ['ongoing', 'standing', 'done', 'calling']
+
+# Colonnes de tri autorisées (liste blanche) pour la table des patients :
+# clé exposée au client -> colonne SQLAlchemy. Voir pagination.parse_page_params.
+QUEUE_SORT_COLUMNS = {
+    'call_number': Patient.call_number,
+    'timestamp': Patient.timestamp,
+    'status': Patient.status,
+    'activity': Activity.name,
+}
 
 @admin_queue_bp.route('/admin/queue')
 @require_permission('queue')
@@ -22,18 +33,43 @@ def admin_queue():
 @admin_queue_bp.route('/admin/queue/table', methods=['POST'])
 @require_permission('queue')
 def display_queue_table():
-    # Récupération des statuts en une liste pour tri ultérieur
-    filters = [status for status, value in request.form.items() if value == 'true']
-    print("Filters received:", filters)
+    # Récupération des statuts cochés. On se restreint aux clés connues
+    # (status_list) : un autre champ du formulaire — search, per_page… — ne peut
+    # donc pas être confondu avec un filtre de statut.
+    filters = [status for status in status_list if request.form.get(status) == 'true']
 
-    # Filtrage des patients en fonction des statuts sélectionnés
+    # Pagination + tri + recherche (point 5.1). On joint Activity pour permettre
+    # le tri et la recherche sur le motif (nom d'activité).
+    params = parse_page_params(
+        request.form,
+        allowed_sort=tuple(QUEUE_SORT_COLUMNS),
+        default_sort='timestamp',
+    )
+
+    # Le gabarit lit patient.activity et patient.counter pour chaque ligne :
+    # on charge ces relations en amont pour éviter un N+1 (une requête par
+    # patient). Activity est déjà jointe pour le tri/la recherche → contains_eager
+    # réutilise cette jointure ; Counter est chargée via joinedload (scalaire
+    # many-to-one, compatible avec la pagination LIMIT).
+    query = (
+        Patient.query
+        .outerjoin(Activity, Patient.activity_id == Activity.id)
+        .options(contains_eager(Patient.activity), joinedload(Patient.counter))
+    )
     if filters:
-        patients = Patient.query.filter(Patient.status.in_(filters)).all()
-    else:
-        patients = Patient.query.all()
-   
-    return render_template('admin/queue_htmx_table.html', 
-                            patients=patients, 
+        query = query.filter(Patient.status.in_(filters))
+
+    pager = paginate_query(
+        query,
+        params,
+        sort_columns=QUEUE_SORT_COLUMNS,
+        search_columns=[Patient.call_number, Patient.status, Activity.name],
+    )
+
+    return render_template('admin/queue_htmx_table.html',
+                            patients=pager.items,
+                            pager=pager,
+                            params=params,
                             activities=Activity.query.all(),
                             status_list=status_list,
                             counters=Counter.query.all())
@@ -179,7 +215,14 @@ def create_new_patient_auto():
 @admin_queue_bp.route('/admin/queue/dashboard')
 @require_permission_dashboard('queue')
 def dashboard_queue():
-    patients = Patient.query.filter(Patient.status != "done").all()
+    # Le gabarit dashboard_queue.html affiche patient.activity.name par ligne :
+    # joinedload évite un N+1 sur l'activité.
+    patients = (
+        Patient.query
+        .filter(Patient.status != "done")
+        .options(joinedload(Patient.activity))
+        .all()
+    )
     dashboardcard = DashboardCard.query.filter_by(name="queue").first()
     return render_template('/admin/dashboard_queue.html', 
                             patients=patients, 

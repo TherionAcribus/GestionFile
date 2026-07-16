@@ -561,16 +561,20 @@ def admin_patient_qr_code_modal():
 def dashboard_button():
     # Récupérer tous les boutons
     all_buttons = Button.query.all()
-    
+
+    # Index id -> bouton : le parent d'un bouton enfant est déjà dans all_buttons,
+    # on le retrouve en mémoire au lieu de relancer une requête par groupe (N+1).
+    buttons_by_id = {button.id: button for button in all_buttons}
+
     # Regrouper les boutons par parent
     grouped_buttons = {}
     other_buttons = []
-    
+
     for button in all_buttons:
         if button.parent_button_id:
             parent_id = button.parent_button_id
             if parent_id not in grouped_buttons:
-                parent_button = Button.query.get(parent_id)
+                parent_button = buttons_by_id.get(parent_id)
                 grouped_buttons[parent_id] = {
                     'parent': parent_button,
                     'children': []

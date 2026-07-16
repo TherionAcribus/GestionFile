@@ -3,7 +3,14 @@
         <h5>Gestion des rôles</h5>
     </div>
     <div class="card-body">
-        <div id="div_role_table" hx-get="/admin/security/role/table" hx-trigger="load">
+        {% import '/admin/pagination.html' as pg %}
+        {% set role_defaults = {'search': '', 'per_page': 25, 'sort': 'name', 'direction': 'asc'} %}
+        {{ pg.list_toolbar('roles', '/admin/security/role/table', 'get', '#div_role_table', role_defaults, '', 'Rechercher (nom, description)…') }}
+        <div id="div_role_table" hx-get="/admin/security/role/table" hx-trigger="load"
+            hx-vals='js:{"search": (document.getElementById("roles-search")||{}).value || "",
+                        "per_page": (document.getElementById("roles-per_page")||{}).value || "",
+                        "sort": (document.getElementById("roles-sort")||{}).value || "",
+                        "dir": (document.getElementById("roles-dir")||{}).value || ""}'>
             <!-- La table sera chargée ici -->
         </div>
         <a class="btn btn-primary"

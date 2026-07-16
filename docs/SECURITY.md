@@ -122,3 +122,59 @@ plus aucune route Spotify, ce qui permet de toutes les protéger.
 
 Le secret client et les jetons ne sont jamais imprimés ni journalisés (l'ancien
 `print` de `MUSIC_SPOTIFY_KEY` a été supprimé).
+
+## Connexion durcie (point 3.4)
+
+La route de connexion (`routes/admin_security.py :: login`) applique cinq
+mesures complémentaires. Toute la décision est déportée dans trois modules
+**purs** (testables sans Flask ni MySQL) : `login_guard.py`,
+`password_policy.py`, `login_audit.py`.
+
+### 1. Message générique — anti-énumération
+
+Un identifiant inconnu et un mot de passe erroné renvoient **exactement** le
+même message (`« Identifiants incorrects »`) et le même traitement. On ne
+révèle plus lequel des deux est faux, ce qui empêche de découvrir quels comptes
+existent. Pour un utilisateur inconnu, une **vérification de hash factice** est
+tout de même exécutée afin d'égaliser le temps de réponse (défense anti-timing).
+
+### 2. Limitation des tentatives — par IP **et** par identité
+
+`login_guard.LoginThrottle` compte les échecs récents séparément par adresse IP
+et par nom d'utilisateur. La route interroge les deux clés et applique le délai
+**le plus contraignant**. Ainsi une IP qui balaye plusieurs comptes est freinée,
+et un compte visé depuis plusieurs adresses aussi.
+
+### 3. Délai progressif / verrouillage temporaire
+
+Chaque échec au-delà du premier repousse la prochaine tentative autorisée d'un
+délai qui **double** (2 s, 4 s, 8 s…) plafonné à 300 s : c'est à la fois le délai
+progressif et, après quelques échecs, un verrouillage temporaire de fait. Une
+connexion réussie **réinitialise** les compteurs ; les échecs plus vieux que la
+fenêtre glissante (15 min) sont oubliés (récupération automatique).
+
+> **Périmètre.** L'état de limitation est **en mémoire, par process**. Derrière
+> plusieurs workers, chaque worker a son propre compteur. Suffisant pour une
+> administration interne ; un stockage partagé (table/redis) reste possible sans
+> changer l'interface du module.
+
+### 4. Politique minimale de mot de passe
+
+`password_policy.validate_password` est appliquée à la **création** d'un
+utilisateur et au **changement** de mot de passe (pas à la connexion, qui
+vérifie seulement le hash existant) : longueur ≥ 10 caractères, refus des mots
+de passe notoirement faibles / par défaut (`admin`, `password`, `gestionfile`…),
+et interdiction d'un mot de passe identique au nom d'utilisateur.
+
+### 5. Journal d'audit — sans secret
+
+`login_audit.build_login_audit` produit une ligne normalisée pour **chaque**
+tentative — `success`, `failure`, `blocked` — avec l'issue, l'identifiant
+revendiqué, l'IP, une empreinte tronquée du User-Agent et le délai imposé. La
+fonction n'accepte **aucun** champ de mot de passe ; les retours à la ligne sont
+retirés (anti-injection de log) et les valeurs bornées. Les refus/blocages sont
+journalisés en `WARNING`, les succès en `INFO`.
+
+L'IP retenue est `request.remote_addr`. `X-Forwarded-For` n'est **pas** cru par
+défaut (un client pourrait le forger pour contourner la limitation) : un reverse
+proxy de confiance doit réécrire `remote_addr` (ProxyFix) en amont.

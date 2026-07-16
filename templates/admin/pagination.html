@@ -1,0 +1,119 @@
+{#
+  Contrôles de pagination / tri / recherche réutilisables (point 5.1).
+
+  Modèle d'état unique : une barre d'outils persistante (hors fragment) porte
+  la recherche, la taille de page et deux champs cachés (sort/dir). Toutes les
+  requêtes de fragment incluent ces champs, si bien que paginer préserve le tri
+  et la recherche, et trier préserve la recherche.
+
+  Conventions :
+  - `prefix`   : identifiant court unique par liste (ex. "queue", "users").
+                 Les contrôles ont les id `{prefix}-search`, `{prefix}-per_page`,
+                 `{prefix}-sort`, `{prefix}-dir`.
+  - `url`      : URL du fragment de table.
+  - `method`   : 'get' ou 'post' (verbe HTMX du fragment).
+  - `target`   : sélecteur CSS du conteneur à remplacer (ex. "#div_queue_table").
+  - `extra`    : fragment JS **brut** injecté dans hx-vals (filtres propres à la
+                 liste, ex. cases de statut de la file). Peut être vide.
+#}
+
+{#- Corps d'objet JS lisant les contrôles de la barre d'outils. `page`, `sort`
+    et `dir` sont fournis par l'appelant (littéraux ou lecture des champs). -#}
+{%- macro _read_controls(prefix, extra) -%}
+"per_page": (document.getElementById('{{ prefix }}-per_page')||{}).value || '',
+"search": (document.getElementById('{{ prefix }}-search')||{}).value || ''
+{%- if extra %}, {{ extra }}{% endif -%}
+{%- endmacro -%}
+
+{# Barre d'outils persistante : à placer sur la PAGE (hors du conteneur de
+   fragment) pour ne pas perdre le focus de la recherche à chaque rechargement. #}
+{% macro list_toolbar(prefix, url, method, target, params, extra='', search_placeholder='Rechercher…') %}
+<div class="list-toolbar d-flex align-items-center gap-2 mb-2" id="{{ prefix }}-toolbar">
+    <input type="search" class="form-control" style="max-width:16rem"
+           id="{{ prefix }}-search" name="search"
+           value="{{ params.search }}"
+           placeholder="{{ search_placeholder }}"
+           aria-label="{{ search_placeholder }}"
+           hx-{{ method }}="{{ url }}"
+           hx-target="{{ target }}"
+           hx-swap="innerHTML"
+           hx-trigger="keyup changed delay:300ms, search"
+           hx-vals='js:{ {{ _read_controls(prefix, extra) }}, "sort": (document.getElementById('{{ prefix }}-sort')||{}).value || '', "dir": (document.getElementById('{{ prefix }}-dir')||{}).value || '', "page": 1 }'>
+
+    <label class="ms-2 mb-0 small text-muted" for="{{ prefix }}-per_page">Par page</label>
+    <select class="form-select" style="max-width:6rem"
+            id="{{ prefix }}-per_page" name="per_page"
+            hx-{{ method }}="{{ url }}"
+            hx-target="{{ target }}"
+            hx-swap="innerHTML"
+            hx-trigger="change"
+            hx-vals='js:{ "search": (document.getElementById('{{ prefix }}-search')||{}).value || '', "sort": (document.getElementById('{{ prefix }}-sort')||{}).value || '', "dir": (document.getElementById('{{ prefix }}-dir')||{}).value || '', "page": 1{% if extra %}, {{ extra }}{% endif %} }'>
+        {% for size in [10, 25, 50, 100] %}
+        <option value="{{ size }}" {{ 'selected' if size == params.per_page else '' }}>{{ size }}</option>
+        {% endfor %}
+    </select>
+
+    {# État courant de tri, inclus dans chaque requête de fragment. #}
+    <input type="hidden" id="{{ prefix }}-sort" name="sort" value="{{ params.sort or '' }}">
+    <input type="hidden" id="{{ prefix }}-dir" name="dir" value="{{ params.direction }}">
+</div>
+{% endmacro %}
+
+{# En-tête de colonne triable (dans le FRAGMENT). Bascule asc/desc et met à jour
+   les champs cachés de la barre d'outils avant la requête. #}
+{% macro sort_th(label, key, prefix, params, url, method, target, extra='') %}
+{% set is_active = (params.sort == key) %}
+{% set next_dir = 'desc' if (is_active and params.direction == 'asc') else 'asc' %}
+<th class="sortable" role="button" style="cursor:pointer; white-space:nowrap"
+    aria-sort="{{ 'ascending' if (is_active and params.direction == 'asc') else ('descending' if is_active else 'none') }}"
+    onclick="var s=document.getElementById('{{ prefix }}-sort'); if(s){s.value='{{ key }}';} var d=document.getElementById('{{ prefix }}-dir'); if(d){d.value='{{ next_dir }}';}"
+    hx-{{ method }}="{{ url }}"
+    hx-target="{{ target }}"
+    hx-swap="innerHTML"
+    hx-vals='js:{ {{ _read_controls(prefix, extra) }}, "sort": "{{ key }}", "dir": "{{ next_dir }}", "page": 1 }'>
+    {{ label }}
+    {%- if is_active %} <span aria-hidden="true">{{ '▲' if params.direction == 'asc' else '▼' }}</span>{% endif -%}
+</th>
+{% endmacro %}
+
+{# Barre de navigation entre pages (dans le FRAGMENT). #}
+{% macro pagination_nav(pager, prefix, url, method, target, extra='') %}
+{%- set total_pages = pager.pages or 1 -%}
+<nav class="pagination-nav d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2"
+     aria-label="Pagination">
+    <span class="small text-muted">
+        {{ pager.total }} résultat{{ 's' if pager.total != 1 else '' }} — page {{ pager.page }} / {{ total_pages }}
+    </span>
+    {% if total_pages > 1 %}
+    <div class="btn-group btn-group-sm" role="group">
+        {% set base_vals %}{{ _read_controls(prefix, extra) }}, "sort": (document.getElementById('{{ prefix }}-sort')||{}).value || '', "dir": (document.getElementById('{{ prefix }}-dir')||{}).value || ''{% endset %}
+        <button type="button" class="btn btn-outline-secondary" {{ 'disabled' if not pager.has_prev else '' }}
+            aria-label="Première page"
+            hx-{{ method }}="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML"
+            hx-vals='js:{ {{ base_vals }}, "page": 1 }'>«</button>
+        <button type="button" class="btn btn-outline-secondary" {{ 'disabled' if not pager.has_prev else '' }}
+            aria-label="Page précédente"
+            hx-{{ method }}="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML"
+            hx-vals='js:{ {{ base_vals }}, "page": {{ pager.prev_num or 1 }} }'>‹</button>
+        {% for p in pager.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+            {% if p %}
+            <button type="button" class="btn {{ 'btn-primary' if p == pager.page else 'btn-outline-secondary' }}"
+                {{ 'aria-current=page' if p == pager.page else '' }}
+                hx-{{ method }}="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML"
+                hx-vals='js:{ {{ base_vals }}, "page": {{ p }} }'>{{ p }}</button>
+            {% else %}
+            <button type="button" class="btn btn-outline-secondary" disabled>…</button>
+            {% endif %}
+        {% endfor %}
+        <button type="button" class="btn btn-outline-secondary" {{ 'disabled' if not pager.has_next else '' }}
+            aria-label="Page suivante"
+            hx-{{ method }}="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML"
+            hx-vals='js:{ {{ base_vals }}, "page": {{ pager.next_num or total_pages }} }'>›</button>
+        <button type="button" class="btn btn-outline-secondary" {{ 'disabled' if not pager.has_next else '' }}
+            aria-label="Dernière page"
+            hx-{{ method }}="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML"
+            hx-vals='js:{ {{ base_vals }}, "page": {{ total_pages }} }'>»</button>
+    </div>
+    {% endif %}
+</nav>
+{% endmacro %}

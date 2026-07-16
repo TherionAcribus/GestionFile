@@ -1,0 +1,24 @@
+{% extends '/admin/base.html' %}
+{% import '/admin/pagination.html' as pg %}
+
+{% block title %}Historique détaillé{% endblock %}
+
+{% block content %}
+    <h3 class="text-center">Historique détaillé</h3>
+    <p class="text-muted text-center">Patients archivés (table <code>PatientHistory</code>).</p>
+
+    {# Défaut : tri par date décroissante (plus récents d'abord). #}
+    {% set history_defaults = {'search': '', 'per_page': 25, 'sort': 'timestamp', 'direction': 'desc'} %}
+    {{ pg.list_toolbar('history', '/admin/stats/history/table', 'get', '#div_history_table', history_defaults, '', 'Rechercher (n° d\'appel, statut, jour)…') }}
+
+    <div id="div_history_table"
+        hx-get="/admin/stats/history/table"
+        hx-trigger="load"
+        hx-target="#div_history_table"
+        hx-swap="innerHTML"
+        hx-vals='js:{"search": (document.getElementById("history-search")||{}).value || "",
+                    "per_page": (document.getElementById("history-per_page")||{}).value || "",
+                    "sort": (document.getElementById("history-sort")||{}).value || "",
+                    "dir": (document.getElementById("history-dir")||{}).value || ""}'>
+    </div>
+{% endblock %}

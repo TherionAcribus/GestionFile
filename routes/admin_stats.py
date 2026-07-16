@@ -4,11 +4,20 @@ from sqlalchemy import func, text, or_
 from datetime import datetime, timedelta
 from models import DashboardCard, Activity, Language, Counter, Patient, PatientHistory, AggregatedStats, db
 from routes.admin_security import require_permission, require_permission_api
+from pagination import parse_page_params, paginate_query
 import pytz
 
 admin_stats_bp = Blueprint('admin_stats', __name__)
 
 time_tz = pytz.timezone('Europe/Paris')
+
+# Colonnes de tri autorisées (liste blanche) pour l'historique détaillé.
+HISTORY_SORT_COLUMNS = {
+    'call_number': PatientHistory.call_number,
+    'timestamp': PatientHistory.timestamp,
+    'status': PatientHistory.status,
+    'day_of_week': PatientHistory.day_of_week,
+}
 
 
 @admin_stats_bp.route('/admin/stats')
@@ -23,6 +32,50 @@ def admin_stats():
                             counters=counters,
                             activities=activities,
                             languages=languages)
+
+
+@admin_stats_bp.route('/admin/stats/history')
+@require_permission('stats')
+def admin_history():
+    """Page de l'historique détaillé (table paginée des patients archivés)."""
+    return render_template('admin/history.html')
+
+
+@admin_stats_bp.route('/admin/stats/history/table')
+@require_permission('stats')
+def display_history_table():
+    """Fragment HTMX : table paginée + triée + recherchable de PatientHistory.
+
+    Les colonnes activité / comptoir / langue de PatientHistory sont des entiers
+    (pas de relation ORM) : on les résout en noms via des dictionnaires id→nom
+    construits en une requête chacun, plutôt que par jointure, pour garder la
+    pagination simple et le comptage exact sur PatientHistory.
+    """
+    params = parse_page_params(
+        request.values,
+        allowed_sort=tuple(HISTORY_SORT_COLUMNS),
+        default_sort='timestamp',
+    )
+    pager = paginate_query(
+        PatientHistory.query,
+        params,
+        sort_columns=HISTORY_SORT_COLUMNS,
+        search_columns=[
+            PatientHistory.call_number,
+            PatientHistory.status,
+            PatientHistory.day_of_week,
+        ],
+    )
+
+    activity_names = dict(db.session.query(Activity.id, Activity.name).all())
+    counter_names = dict(db.session.query(Counter.id, Counter.name).all())
+    language_names = dict(db.session.query(Language.id, Language.code).all())
+
+    return render_template('admin/history_htmx_table.html',
+                            rows=pager.items, pager=pager, params=params,
+                            activity_names=activity_names,
+                            counter_names=counter_names,
+                            language_names=language_names)
 
 
 @admin_stats_bp.route('/admin/stats/chart')
