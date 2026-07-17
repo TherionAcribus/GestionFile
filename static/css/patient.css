@@ -1,86 +1,86 @@
 :root {
     --patient_button_border_color: #000000;
-    --circle_button_size: 200px;
+    --circle_button_size: 150px;
     --circle_button_color: darkcyan;
     --circle_button_border_size: 0px;
     --circle_button_border_color: black;
-    --circle_button_image_size: 200px;
-    --circle_button_text_size: 30px;
+    --circle_button_image_size: 140px;
+    --circle_button_text_size: 24px;
     --circle_button_text_color: darkcyan;
     --circle_button_text_border_size: "0px";
     --circle_button_text_border_color: "black";
     --circle_button_text_background_color: transparent;
-    --square_button_width: 500px;
-    --square_button_height: 150px;
+    --square_button_width: 340px;
+    --square_button_height: 110px;
     --square_button_color: darkcyan;
     --square_button_border_size: 0px;
     --square_button_border_color: black;
-    --square_button_image_size: 200px;
-    --square_button_text_size: 30px;
+    --square_button_image_size: 85px;
+    --square_button_text_size: 24px;
     --square_button_text_color: white;
     --square_button_text_border_size: "0px";
     --square_button_text_border_color: "black";
     --square_button_text_background_color: transparent;
-    --square_cancel_button_width: 500px;
-    --square_cancel_button_height: 150px;
+    --square_cancel_button_width: 340px;
+    --square_cancel_button_height: 110px;
     --square_cancel_button_color: darkcyan;
     --square_cancel_button_border_size: 0px;
     --square_cancel_button_border_color: black;
-    --square_cancel_button_image_size: 200px;
-    --square_cancel_button_text_size: 30px;
+    --square_cancel_button_image_size: 85px;
+    --square_cancel_button_text_size: 24px;
     --square_cancel_button_text_color: #FFFFFF;
     --square_cancel_button_text_border_size: "0px";
     --square_cancel_button_text_border_color: "black";
     --square_cancel_button_text_background_color: transparent;
-    --scan_explanation_font_size: 80px;
+    --scan_explanation_font_size: 26px;
     --scan_explanation_font_color: #FFFFFF;
     --scan_explanation_border_size: 2px;
     --scan_explanation_border_color: #black;
     --scan_explanation_background_color: #008B8B;
-    --patient_title_font_size: 80px;
+    --patient_title_font_size: 52px;
     --patient_title_font_color: #FFFFFF;
     --patient_title_border_size: 2px;
     --patient_title_border_color: #000000;
     --patient_title_background_color: #008B8B;
-    --patient_title_background_height: 200px;
-    --subtitle_font_size: 50px;
+    --patient_title_background_height: 110px;
+    --subtitle_font_size: 28px;
     --subtitle_font_color: #FFFFFF;
     --subtitle_border_size: 0px;
     --subtitle_border_color: black;
-    --subtitle_no_activity_font_size: 40px;
+    --subtitle_no_activity_font_size: 28px;
     --subtitle_no_activity_font_color: white;
     --subtitle_no_activity_border_size: 0;
     --subtitle_no_activity_border_color: black;
-    --subtitle_specific_message_font_size: 40px;
+    --subtitle_specific_message_font_size: 28px;
     --subtitle_specific_message_font_color: white;
     --subtitle_specific_message_border_size: 0px;
     --subtitle_specific_message_border_color: black;
-    --subtitle_background_height: 200px;
+    --subtitle_background_height: 90px;
     --subtitle_background_color: #008B8B;
     --subtitle_no_activity_background_color: #008B8B;
     --subtitle_specific_message_background_color: #008B8B;
     --validation_text_font_color: #FFFFFF;
-    --validation_text_font_size: 50px;
+    --validation_text_font_size: 30px;
     --validation_text_border_size: 0px;
     --validation_text_border_color: black;
     --validation_text_background_color: #008B8B;
-    --validation_button_height: 150px;
-    --validation_button_width: 500px;
+    --validation_button_height: 90px;
+    --validation_button_width: 380px;
     --validation_button_color: #008B8B;
     --validation_button_border_size: 0px;
     --validation_button_border_color: black;
-    --validation_button_text_size: 30px;
+    --validation_button_text_size: 24px;
     --validation_button_text_color: #FFFFFF;
     --validation_button_text_border_size: 0px;
     --validation_button_text_border_color: black;
     --validation_button_text_background_color: transparent;
-    --validation_button_picture_size: 200px; 
+    --validation_button_picture_size: 70px; 
     --confirmation_text_font_color: #FFFFFF;
-    --confirmation_text_font_size: 50px;
+    --confirmation_text_font_size: 32px;
     --confirmation_text_border_size: 0px;
     --confirmation_text_border_color: black;
     --confirmation_text_background_color: #008B8B;
-    --flag_size: 100px;
+    --flag_size: 70px;
     --flag_border_color: black;
     --flag_border_size: 0px;
 }
@@ -335,6 +335,14 @@ html, body {
     width: 50%;
     text-align: center;
     padding-top: 1%;
+}
+
+/* Le QR est généré à sa taille native (~330-410px selon l'URL). Sans borne il
+   déborderait de sa colonne et chevaucherait les boutons. On le contraint à la
+   largeur de son conteneur. */
+#div_qr_code img {
+    max-width: 100%;
+    height: auto;
 }
 
 .div_validation_one_button{
