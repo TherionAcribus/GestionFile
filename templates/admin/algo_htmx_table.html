@@ -16,10 +16,10 @@
     <tbody>
         {% for rule in rules %}
         <tr>
-            <td><input type="text" class="form-control" value="{{ rule.name }}" id="name-{{ rule.id }}"></td>
+            <td><input type="text" class="form-control" value="{{ rule.name }}" id="name-{{ rule.id }}" aria-label="Nom de la règle"></td>
             <td>
                 <div class="input-field">
-                <select class="form-select" id="activity-{{ rule.id }}">               
+                <select class="form-select" id="activity-{{ rule.id }}" aria-label="Activité">
                     {% for activity in activities %}
                         <option value="{{ activity.id }}" {{ 'selected' if activity.id == rule.activity.id else '' }}>{{ activity.name }} </option>
                     {% endfor %}
@@ -28,7 +28,7 @@
             </td>
             <td>
                 <div class="input-field">
-                <select class="form-select" id="priority_level-{{ rule.id }}">               
+                <select class="form-select" id="priority_level-{{ rule.id }}" aria-label="Niveau de priorité">
                     {% for number in [1, 2, 3, 4, 5] %}
                         <option value="{{ number }}" {{ 'selected' if number == rule.priority_level else '' }}>{{ number }} </option>
                     {% endfor %}
@@ -36,16 +36,16 @@
                 </div>
             </td>
             <td>
-                <input type="text" class="form-control" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}">
+                <input type="text" class="form-control" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}" aria-label="Nombre minimum de patients">
             </td>
             <td>
-                <input type="text" class="form-control" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}">
+                <input type="text" class="form-control" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}" aria-label="Nombre maximum de patients">
             </td>
             <td>
-                <input type="text" class="form-control" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}">
+                <input type="text" class="form-control" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}" aria-label="Dépassement maximum">
             </td>
-            <td><input type="time" class="form-control" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}"></td>
-            <td><input type="time" class="form-control" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}"></td>
+            <td><input type="time" class="form-control" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}" aria-label="Heure de début"></td>
+            <td><input type="time" class="form-control" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}" aria-label="Heure de fin"></td>
 
             <td>
                 <button class="btn btn-primary btnSaveLine"

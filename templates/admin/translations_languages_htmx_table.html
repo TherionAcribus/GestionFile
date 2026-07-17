@@ -17,18 +17,18 @@
     <tbody>
         {% for language in languages %}
         <tr>
-            <td><input type="text" class="form-control" maxlength="2" name="code" value="{{ language.code }}" id="code-{{ language.id }}"></td>
-            <td><input type="text" class="form-control" name="name" value="{{ language.name }}" id="name-{{ language.id }}"></td>
-            <td><input type="text" class="form-control" name="translation" value="{{ language.translation }}" id="translation-{{ language.id }}"></td>
-            <td><input id ="is_active-{{ language.id }}" class="form-check-input" type="checkbox" {% if language.is_active %}checked{% endif %}></td>
-            <td><input id ="voice_is_active-{{ language.id }}" class="form-check-input" type="checkbox" {% if language.voice_is_active %}checked{% endif %}></td>
+            <td><input type="text" class="form-control" maxlength="2" name="code" value="{{ language.code }}" id="code-{{ language.id }}" aria-label="Code de la langue"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ language.name }}" id="name-{{ language.id }}" aria-label="Nom de la langue"></td>
+            <td><input type="text" class="form-control" name="translation" value="{{ language.translation }}" id="translation-{{ language.id }}" aria-label="Nom traduit"></td>
+            <td><input id ="is_active-{{ language.id }}" class="form-check-input" type="checkbox" aria-label="Écrit actif" {% if language.is_active %}checked{% endif %}></td>
+            <td><input id ="voice_is_active-{{ language.id }}" class="form-check-input" type="checkbox" aria-label="Audio actif" {% if language.voice_is_active %}checked{% endif %}></td>
             <td>
                 <!-- Afficher l'image du drapeau -->
                 {% if language.flag_url %}
                     <img src="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}" alt="{{ language.name }}" width="30">
                 {% endif %}
                 <!-- Champ pour télécharger une nouvelle image -->
-                <input type="file" name="flag_url" id="flag_url-{{ language.id }}" accept="image/*">
+                <input type="file" name="flag_url" id="flag_url-{{ language.id }}" accept="image/*" aria-label="Drapeau de la langue">
                 <!-- Champ caché pour stocker l'URL de l'image -->
                 <input type="hidden" name="image_url" id="image_url-{{ language.id }}" value="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}">
             </td>

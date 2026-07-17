@@ -15,13 +15,13 @@
         {% for user in users %}
         <tr id="user-{{ user.id }}">
             <td>
-                <input type="text" class="form-control" value="{{ user.username }}" id="username-{{ user.id }}">
+                <input type="text" class="form-control" value="{{ user.username }}" id="username-{{ user.id }}" aria-label="Nom d'utilisateur">
             </td>
             <td>
-                <input type="email" class="form-control" value="{{ user.email or '' }}" id="email-{{ user.id }}">
+                <input type="email" class="form-control" value="{{ user.email or '' }}" id="email-{{ user.id }}" aria-label="Adresse e-mail">
             </td>
             <td>
-                <select class="form-select" id="role-{{ user.id }}">
+                <select class="form-select" id="role-{{ user.id }}" aria-label="Rôle">
                     {% for role in roles %}
                     <option value="{{ role.id }}" 
                         {% if role in user.roles %}selected{% endif %}>

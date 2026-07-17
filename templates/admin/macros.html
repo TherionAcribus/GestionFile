@@ -102,61 +102,61 @@ function handleAfterRequestConfig(event, variable) {
 
 {% macro balises_before_call(key) %}
 <div>
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
-    pour le nom de la pharmacie,  
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</span>
-    pour le numéro du patient, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{A}</span>
-    pour l'activité, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</button>
+    pour le nom de la pharmacie,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</button>
+    pour le numéro du patient,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{A}</button>
+    pour l'activité,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</button>
     pour la date,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</button>
     pour l'heure.
 </div>
 {% endmacro %}
 
 {% macro balises_web(key) %}
 <div>
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '#')">#</span>
-    pour un titre 1,  
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '##')">##</span>
-    pour un titre 2, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '###')">###</span>
-    pour un titre 3, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '*italique*')">*italique*</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '#')">#</button>
+    pour un titre 1,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '##')">##</button>
+    pour un titre 2,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '###')">###</button>
+    pour un titre 3,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '*italique*')">*italique*</button>
     pour un texte en italique,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**gras**')">**gras**</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**gras**')">**gras**</button>
     pour un texte en gras,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '***')">***</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '***')">***</button>
     pour une séparation,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;')">&lt;p align="center"&gt;&lt;/p&gt;</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;')">&lt;p align="center"&gt;&lt;/p&gt;</button>
     pour centrer un texte. Les autres balises markdown sont également utilisables.
 </div>
 {% endmacro %}
 
 {% macro balises_for_printer(key) %}
 <div>
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[center][/center]')">Centrer</span>,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[double][/double]')">Double taille</span>,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**Texte en gras**')">Gras</span>,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '__Texte souligné__')">Souligné</span>,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[separator]')">Séparateur</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[center][/center]')">Centrer</button>,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[double][/double]')">Double taille</button>,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**Texte en gras**')">Gras</button>,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '__Texte souligné__')">Souligné</button>,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[separator]')">Séparateur</button>
 </div>
 {% endmacro %}
 
 {% macro balises_after_call(key) %}
 <div>
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
-    pour le nom de la pharmacie,  
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</span>
-    pour le numéro du patient, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{M}</span>
-    pour le membre de l'équipe, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{C}')">{C}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</button>
+    pour le nom de la pharmacie,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</button>
+    pour le numéro du patient,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{M}</button>
+    pour le membre de l'équipe,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{C}')">{C}</button>
     pour le comptoir,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</button>
     pour la date,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</button>
     pour l'heure.
 </div>
 {% endmacro %}
@@ -164,14 +164,22 @@ function handleAfterRequestConfig(event, variable) {
 
 {% macro balises_welcome(key) %}
 <div>
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</span>
-    pour le nom de la pharmacie, 
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</button>
+    pour le nom de la pharmacie,
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</button>
     pour la date,
-    <span class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</span>
+    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</button>
     pour l'heure.
 </div>
 {% endmacro %}
+
+
+{# Traduction des statuts techniques de la file en libellés lisibles.
+   La valeur technique (standing/calling/ongoing/done) reste utilisée côté
+   serveur et dans les `value=""` ; seul l'affichage est traduit. #}
+{% macro status_label(status) -%}
+{{ {'standing': 'En attente', 'calling': 'Appelé', 'ongoing': 'En cours', 'done': 'Servi'}.get(status, status) }}
+{%- endmacro %}
 
 
 {# Macro pour le bouton universel #}
@@ -428,11 +436,11 @@ function handleAfterRequestConfig(event, variable) {
 
 
 {% macro modal_generic(title) %}
-<div class="modal fade" id="modal_generic" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
+<div class="modal fade" id="modal_generic" tabindex="-1" aria-labelledby="modalGenericLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalDeleteLabel">{{title}}</h5>
+                <h5 class="modal-title" id="modalGenericLabel">{{title}}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="modalBodyGeneric">

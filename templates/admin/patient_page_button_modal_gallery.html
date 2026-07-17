@@ -7,11 +7,14 @@
     <p>Choisissez une image dans la galerie en cliquant dessus puis en validant ou ajoutant une image depuis votre ordinateur. </p>
     <div class="image-grid">
         {% for image in images %}
-        <img src="{{ url_for('static', filename='images/buttons/' + image) }}"
-            id="img_{{ image }}"
-            alt="Button Image"
-            style="width: 100px; cursor: pointer;"
-            onclick="selectImage('{{ image }}');">
+        <button type="button" class="image-select-btn p-0 border-0 bg-transparent"
+            onclick="selectImage('{{ image }}');"
+            aria-label="Choisir l'image {{ image }}">
+            <img src="{{ url_for('static', filename='images/buttons/' + image) }}"
+                id="img_{{ image }}"
+                alt=""
+                style="width: 100px;">
+        </button>
         {% endfor %}
     </div>
 </div>
@@ -27,8 +30,8 @@
          porté par ce champ caché, lu côté serveur par Flask-WTF (form.csrf_token). -->
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="file-upload">
-        <button type="btn btn-primary">Ouvrir une image depuis votre ordinateur</button>
-        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" onchange="this.form.submit()">
+        <button type="button" class="btn btn-primary" onclick="this.nextElementSibling.click()">Ouvrir une image depuis votre ordinateur</button>
+        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" aria-label="Choisir un fichier image" onchange="this.form.submit()">
     </div>
 </form>
 

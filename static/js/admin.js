@@ -359,13 +359,60 @@ function refresh_button_order(){
 
 function sortable(){
     var el = document.getElementById('list_order_buttons');
-    var sortable = Sortable.create(el, {
+    if (!el) return;
+    Sortable.create(el, {
         animation: 150, // ms, animation speed moving items when sorting, `0` — without animation
+        // Les commandes clavier (boutons monter/descendre) ne doivent pas
+        // déclencher un glissement ; `preventOnFilter: false` laisse toutefois
+        // le clic du bouton se propager normalement.
+        filter: '.order-move-controls, .order-move-controls *',
+        preventOnFilter: false,
         onEnd: function (/**Event*/evt) {
             var itemEl = evt.item;  // dragged HTMLElement
             console.log('New index: ' + evt.newIndex); // index of the new position
             // Vous pouvez ici ajouter une requête pour sauvegarder l'ordre
         }
+    });
+    // Alternative clavier au glisser-déposer : chaque élément reçoit des
+    // boutons « monter »/« descendre » qui réordonnent le DOM. Le bouton
+    // « Sauvegarder l'ordre » lit l'ordre du DOM, donc rien d'autre à changer.
+    addKeyboardReorderControls(el);
+}
+
+function addKeyboardReorderControls(listEl){
+    listEl.querySelectorAll('.button-order-item').forEach(function(item){
+        if (item.querySelector('.order-move-controls')) return; // pas de doublon
+
+        var controls = document.createElement('span');
+        controls.className = 'order-move-controls ms-2';
+
+        var up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'btn btn-sm btn-outline-secondary';
+        up.title = 'Monter';
+        up.setAttribute('aria-label', 'Monter cet élément');
+        up.innerHTML = '<i class="bi bi-arrow-up" aria-hidden="true"></i>';
+        up.addEventListener('click', function(){
+            var prev = item.previousElementSibling;
+            if (prev) listEl.insertBefore(item, prev);
+            up.focus();
+        });
+
+        var down = document.createElement('button');
+        down.type = 'button';
+        down.className = 'btn btn-sm btn-outline-secondary ms-1';
+        down.title = 'Descendre';
+        down.setAttribute('aria-label', 'Descendre cet élément');
+        down.innerHTML = '<i class="bi bi-arrow-down" aria-hidden="true"></i>';
+        down.addEventListener('click', function(){
+            var next = item.nextElementSibling;
+            if (next) listEl.insertBefore(next, item);
+            down.focus();
+        });
+
+        controls.appendChild(up);
+        controls.appendChild(down);
+        item.appendChild(controls);
     });
 }
 

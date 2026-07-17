@@ -11,12 +11,12 @@
     <tbody>
         {% for schedule in schedules %}
         <tr>
-            <td><input type="text" class="form-control" name="name" value="{{ schedule.name }}" id="name_schedule-{{ schedule.id }}"></td>
-            <td><input type="text" class="form-control" name="start_time" value="{{ schedule.start_time }}" id="start_time-{{ schedule.id }}"></td>
-            <td><input type="text" class="form-control" name="end_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ schedule.name }}" id="name_schedule-{{ schedule.id }}" aria-label="Nom de la plage horaire"></td>
+            <td><input type="text" class="form-control" name="start_time" value="{{ schedule.start_time }}" id="start_time-{{ schedule.id }}" aria-label="Heure de début"></td>
+            <td><input type="text" class="form-control" name="end_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}" aria-label="Heure de fin"></td>
             <td>
-                <div class="input-field col">   
-                    <select multiple id="weekdays-{{ schedule.id }}">
+                <div class="input-field col">
+                    <select multiple id="weekdays-{{ schedule.id }}" aria-label="Jours">
                         {% for weekday in weekdays %}
                             <option value="{{weekday.id}}"
                                     {% if weekday in schedule.weekdays %}selected{% endif %}>{{weekday.name}}</option>

@@ -23,9 +23,38 @@
     border: #007bff 5px solid;
 }
 
+/* Boutons enveloppant les vignettes de la galerie : rendent la sélection
+   d'image accessible au clavier (focus visible + activation Entrée/Espace). */
+.image-select-btn {
+    cursor: pointer;
+    line-height: 0;
+}
+.image-select-btn:focus-visible {
+    outline: 3px solid #0d6efd;
+    outline-offset: 2px;
+}
+
 .variables_calling {
     background-color: rgb(215, 242, 250);
     padding: 3px;
+    /* Ces éléments sont désormais de vrais <button> (accessibles au clavier) ;
+       on neutralise l'apparence par défaut pour conserver le rendu « balise »
+       en ligne d'origine. */
+    border: none;
+    border-radius: 3px;
+    font: inherit;
+    color: inherit;
+    line-height: inherit;
+    cursor: pointer;
+}
+
+.variables_calling:hover {
+    background-color: rgb(190, 232, 245);
+}
+
+.variables_calling:focus-visible {
+    outline: 2px solid #0d6efd;
+    outline-offset: 1px;
 }
 
 .button-order-item {
@@ -35,6 +64,10 @@
     border: black;
     border-style: solid;
     border-width: 1px;
+    /* Aligne le libellé et les commandes clavier monter/descendre. */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .galleries_list {

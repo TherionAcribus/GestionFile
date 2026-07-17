@@ -26,7 +26,7 @@
             {% if staff %}
             <td>
                 <div class="input-field col s10">   
-                    <select class="form-select" id="staff-{{ activity.id }}">
+                    <select class="form-select" id="staff-{{ activity.id }}" aria-label="Membre de l'équipe">
                         {% for member in staff %}
                             <option value="{{member.id}}"
                                 {% if member.id == activity.staff_id %}selected{% endif %}>{{member.name}}</option>
@@ -35,11 +35,11 @@
                 </div>
             </td>
             {% endif %}
-            <td><input type="text" class="form-control" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}"></td>
-            <td><input type="text" class="form-control" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}"></td>
+            <td><input type="text" class="form-control" name="name" value="{{ activity.name }}" id="name-{{ activity.id }}" aria-label="Nom de l'activité"></td>
+            <td><input type="text" class="form-control" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}" aria-label="Lettre"></td>
             <td>
                 <div class="mb-3 col-10">
-                    <select multiple id="schedules-{{ activity.id }}">
+                    <select multiple id="schedules-{{ activity.id }}" aria-label="Horaires">
                         {% for schedule in schedules %}
                             <option value="{{schedule.id}}"
                                     {% if schedule in activity.schedules %}selected{% endif %}>
@@ -50,15 +50,15 @@
                 </div>
             </td>
             <td>
-                <input type="text" class="form-control" name="inactivity_message" value="{{ activity.inactivity_message }}" id="inactivity_message-{{ activity.id }}">
+                <input type="text" class="form-control" name="inactivity_message" value="{{ activity.inactivity_message }}" id="inactivity_message-{{ activity.id }}" aria-label="Message si inactivité">
             </td>
             <td>
-                <input type="text" class="form-control" name="specific_message" value="{{ activity.specific_message }}" id="specific_message-{{ activity.id }}">
+                <input type="text" class="form-control" name="specific_message" value="{{ activity.specific_message }}" id="specific_message-{{ activity.id }}" aria-label="Message spécifique">
             </td>
             <td>
                 <p>
                     <label>
-                        <input id ="notification-{{ activity.id }}" class="form-check-input" type="checkbox" {% if activity.notification %}checked{% endif %}>
+                        <input id ="notification-{{ activity.id }}" class="form-check-input" type="checkbox" aria-label="Notification" {% if activity.notification %}checked{% endif %}>
                         <span></span>
                     </label>
                 </p>

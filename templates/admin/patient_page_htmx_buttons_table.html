@@ -13,13 +13,14 @@
     <tbody>
         {% for button in buttons %}
         <tr class="{% if loop.index0 % 2 == 0 %}table-secondary{% endif %}">
-            <td><input type="text" class="form-control" name="label" value="{{ button.label }}" id="label-{{ button.id }}"></td>
+            <td><input type="text" class="form-control" name="label" value="{{ button.label }}" id="label-{{ button.id }}" aria-label="Intitulé du bouton"></td>
             <td>
                 <p>
                     <label>
-                        <input 
+                        <input
                         class="form-check-input"
-                        id="is_present-{{ button.id }}" 
+                        id="is_present-{{ button.id }}"
+                        aria-label="Présence du bouton"
                         type="checkbox" {{ 'checked' if button.is_present == True else '' }}>
                     <span></span>
                     </label>
@@ -28,7 +29,7 @@
 
             <td>
                 <div class="input-field">
-                    <select class="form-select" id="shape-{{ button.id }}">
+                    <select class="form-select" id="shape-{{ button.id }}" aria-label="Forme du bouton">
                         <option value="" disabled selected>Forme du bouton</option>
                         <option value="circle" 
                             {{ 'selected' if button.shape == "circle" else '' }}>Cercle
@@ -42,7 +43,7 @@
             
             <td>
                 <div class="input-field">
-                    <select class="form-select" id="activity-{{ button.id }}">
+                    <select class="form-select" id="activity-{{ button.id }}" aria-label="Activité liée au bouton">
                         <option value="" disabled selected>Selectionnez une activité liée à ce bouton</option>
                         <option value="parent_button" 
                                 {{ 'selected' if button.is_parent == True else '' }}>BOUTON PARENT

@@ -9,13 +9,14 @@
     <tbody>
         {% for counter in counters %}
         <tr>
-            <td><input type="text" name="name" class="form-control" value="{{ counter.name }}" id="name-{{ counter.id }}"></td>
+            <td><input type="text" name="name" class="form-control" value="{{ counter.name }}" id="name-{{ counter.id }}" aria-label="Nom du comptoir"></td>
                             <!-- Affichage des checkboxes pour chaque activité -->
             <td>
                 <!-- Affichage des checkboxes pour chaque activité -->
                 {% for activity in activities %}
                     <span>
-                        <input class="activities-{{ counter.id }} form-check-input" type="checkbox" name="activities" value="{{ activity.id }}" 
+                        <input class="activities-{{ counter.id }} form-check-input" type="checkbox" name="activities" value="{{ activity.id }}"
+                                aria-label="Activité {{ activity.name }}"
                                 {% if activity in counter.activities %} checked {% endif %} />
                         <span class="form-check-label">{{ activity.name }}</span>
                     </span>
