@@ -1,10 +1,11 @@
-<table 
-    {% if staff %} 
-        id="staff_activity_table" 
-    {% else %} 
+<div class="table-responsive">
+<table
+    {% if staff %}
+        id="staff_activity_table"
+    {% else %}
         id="activity_table"
-    {% endif %} 
-    class="striped">
+    {% endif %}
+    class="table table-striped table-hover align-middle">
     <thead>
         <tr>
             {% if staff %}
@@ -74,11 +75,12 @@
                             "schedules": getSelectedOptions("schedules-{{ activity.id }}")
                             {% if staff %}, "staff_id": document.getElementById("staff-{{ activity.id }}").value{% endif %}
                             }'>
-                    Enregistrer
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
                 <button class="btn btn-danger"
-                        {% if staff %} 
+                        title="Supprimer cette activité"
+                        {% if staff %}
                             hx-get="/admin/activity/confirm_delete/staff/{{ activity.id }}"
                         {% else %}
                             hx-get="/admin/activity/confirm_delete/{{ activity.id }}"
@@ -87,7 +89,7 @@
                         hx-trigger="click"
                         data-bs-target="#modal_delete"
                         data-bs-toggle="modal">
-                    Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
             </td>
         </tr>
@@ -104,6 +106,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 
 
 <script>

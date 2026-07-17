@@ -1,3 +1,8 @@
+<input type="search" class="form-control table-filter mb-2"
+       placeholder="Rechercher une activité…"
+       aria-label="Filtrer la liste des activités"
+       data-filter-target="#div_activity_table">
+
 <div id="div_activity_table"
     hx-get="/admin/activity/table"
     hx-trigger="load, refresh_activity_table"
@@ -16,6 +21,11 @@
 
 <h3>Activité équipier</h3>
 <p>Cette partie permet d'ajouter une "activité" qui correspond à voir un membre de l'équipe. Pour plus de simplicité cette partie est mise à part du tableau principal.</p>
+<input type="search" class="form-control table-filter mb-2"
+       placeholder="Rechercher une activité équipier…"
+       aria-label="Filtrer la liste des activités équipier"
+       data-filter-target="#div_activity_staff_table">
+
 <div id="div_activity_staff_table"
     hx-get="/admin/activity/table_staff"
     hx-trigger="load, refresh_activity_staff_table"

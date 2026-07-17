@@ -320,4 +320,38 @@ document.body.addEventListener('htmx:afterSettle', function(event) {
             initializeTableBehaviors(tableId);
         }
     });
+    // Ré-appliquer les filtres après le remplacement d'un tableau (les
+    // lignes fraîchement injectées doivent respecter la recherche en cours).
+    applyAllTableFilters();
+});
+
+/* ------------------------------------------------------------------ */
+/*  Point 7.3 — Filtre client des tableaux de configuration           */
+/*                                                                    */
+/*  Un champ `<input class="table-filter" data-filter-target="#...">` */
+/*  masque en direct les lignes du tableau visé dont le texte ne      */
+/*  contient pas la recherche. 100 % côté navigateur : aucune route   */
+/*  n'est touchée et l'édition ligne par ligne reste intacte. Le      */
+/*  champ vit dans la page parente (hors fragment HTMX), donc son      */
+/*  état survit aux rechargements du tableau.                         */
+/* ------------------------------------------------------------------ */
+function applyTableFilter(input) {
+    const container = document.querySelector(input.dataset.filterTarget || '');
+    if (!container) return;
+    const query = input.value.trim().toLowerCase();
+    container.querySelectorAll('tbody tr').forEach(row => {
+        const matches = !query || row.textContent.toLowerCase().includes(query);
+        row.style.display = matches ? '' : 'none';
+    });
+}
+
+function applyAllTableFilters() {
+    document.querySelectorAll('.table-filter').forEach(applyTableFilter);
+}
+
+// Délégation : robuste aux ré-insertions HTMX, ne s'attache qu'une fois.
+document.addEventListener('input', function(event) {
+    if (event.target.classList && event.target.classList.contains('table-filter')) {
+        applyTableFilter(event.target);
+    }
 });

@@ -1,4 +1,5 @@
-<table id="buttons_table" class="table">
+<div class="table-responsive">
+<table id="buttons_table" class="table table-hover align-middle">
     <thead>
         <tr>
             <th>Intitulé</th>
@@ -75,18 +76,19 @@
                             "is_present": document.getElementById("is_present-{{ button.id }}").checked,
                             "shape": document.getElementById("shape-{{ button.id }}").value,
                             "activity": document.getElementById("activity-{{ button.id }}").value,
-                            "parent_btn": document.getElementById("parent-{{ button.id }}").value, 
+                            "parent_btn": document.getElementById("parent-{{ button.id }}").value,
                             }'>
-                    Enregistrer
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
                 <button class="btn btn-danger"
+                        title="Supprimer ce bouton"
                         hx-get="/admin/patient/confirm_delete_button/{{ button.id }}"
                         hx-target="#modal-htmx"
                         hx-trigger="click"
                         data-bs-target="#modal_delete"
                         data-bs-toggle="modal">
-                    Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
             </td>
         </tr>
@@ -110,26 +112,28 @@
                     hx-trigger="click"
                     data-bs-toggle="modal"
                     data-bs-target="#modal_display_gallery">
-                Galerie
+                <i class="bi bi-images" aria-hidden="true"></i> Galerie
             </button>
             </td>
 
             <td>
                 {% if button.image_url %}
                     <button class="btn btn-danger"
+                        title="Supprimer l'image de ce bouton"
                         hx-delete="/admin/patient/delete_button_image/{{ button.id }}"
                         hx-target="#button-image-{{ button.id }}"
                         hx-swap="innerHTML"
                         >
-                        Supprimer l'image
+                        <i class="bi bi-trash" aria-hidden="true"></i> Supprimer l'image
                     </button>
                 {% endif %}
             </td>
             <td></td>
             <td></td>
-            <td></td> 
+            <td></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>
 

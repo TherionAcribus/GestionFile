@@ -5,6 +5,11 @@
 {% block content %}
     <h3>Comptoirs</h3>
 
+    <input type="search" class="form-control table-filter mb-2"
+           placeholder="Rechercher un comptoir…"
+           aria-label="Filtrer la liste des comptoirs"
+           data-filter-target="#div_counter_table">
+
     <div id="div_counter_table"
         hx-get="/admin/counter/table"
         hx-trigger="load"

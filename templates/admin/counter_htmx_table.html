@@ -1,4 +1,5 @@
-<table id="counter_table" class="striped">
+<div class="table-responsive">
+<table id="counter_table" class="table table-striped table-hover align-middle">
     <thead>
         <tr>
             <th>Nom</th>
@@ -25,21 +26,23 @@
                     hx-target="#invisible"
                     hx-include=".activities-{{ counter.id }}"
                     hx-post="/admin/counter/counter_update/{{ counter.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ counter.id }}").value 
+                    hx-vals='js:{"name": document.getElementById("name-{{ counter.id }}").value
                             }'>
-                    Enregistrer
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
                 <button class="btn btn-danger"
+                        title="Supprimer ce comptoir"
                         hx-get="/admin/counter/confirm_delete/{{ counter.id }}"
                         hx-target="#modal-htmx"
                         hx-trigger="click"
                         data-bs-target="#modal_delete"
                         data-bs-toggle="modal">
-                    Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
             </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>

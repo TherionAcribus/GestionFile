@@ -17,6 +17,11 @@
     {{ macros.textbloc_int("algo_overtaken_limit", algo_overtaken_limit, "Nombre de dépassements d'un patient avant de bloquer l'algorithme :")}}
 
 
+    <input type="search" class="form-control table-filter mb-2"
+           placeholder="Rechercher une règle…"
+           aria-label="Filtrer la liste des règles"
+           data-filter-target="#div_algo_table">
+
     <div id="div_algo_table"
         hx-get="/admin/algo/table"
         hx-trigger="load"

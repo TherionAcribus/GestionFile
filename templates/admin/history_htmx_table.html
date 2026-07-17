@@ -1,8 +1,8 @@
 {% import '/admin/pagination.html' as pg %}
 {% set url = '/admin/stats/history/table' %}
 {% set target = '#div_history_table' %}
-<div class="table-responsive">
-<table class="table striped">
+<div class="table-responsive table-scroll">
+<table class="table table-striped table-hover align-middle">
     <thead>
         <tr>
             {{ pg.sort_th("N° d'appel", 'call_number', 'history', params, url, 'get', target) }}

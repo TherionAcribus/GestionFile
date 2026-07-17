@@ -1,4 +1,5 @@
-<table id="staff_table" class="striped">
+<div class="table-responsive">
+<table id="staff_table" class="table table-striped table-hover align-middle">
     <thead>
         <tr>
             <th>Nom</th>
@@ -29,20 +30,21 @@
                     hx-target="#invisible"
                     hx-include=".activities-{{ member.id }}"
                     hx-post="/admin/staff/member_update/{{ member.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ member.id }}").value, 
-                            "initials": document.getElementById("initials-{{ member.id }}").value, 
-                            "language": document.getElementById("language-{{ member.id }}").value, 
+                    hx-vals='js:{"name": document.getElementById("name-{{ member.id }}").value,
+                            "initials": document.getElementById("initials-{{ member.id }}").value,
+                            "language": document.getElementById("language-{{ member.id }}").value,
                             }'>
-                    Enregistrer
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
                 <button class="btn btn-danger"
+                    title="Supprimer ce membre"
                     hx-get="/admin/staff/confirm_delete/{{ member.id }}"
                     hx-target="#modal-htmx"
                     hx-trigger="click"
                     data-bs-target="#modal_delete"
                     data-bs-toggle="modal">
-                    Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
 
             </td>
@@ -50,3 +52,4 @@
         {% endfor %}
     </tbody>
 </table>
+</div>

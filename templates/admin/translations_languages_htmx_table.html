@@ -1,7 +1,8 @@
 {% import '/admin/pagination.html' as pg %}
 {% set url = '/admin/languages/table' %}
 {% set target = '#div_languages_table' %}
-<table id="translation_table" class="striped">
+<div class="table-responsive">
+<table id="translation_table" class="table table-striped table-hover align-middle">
     <thead>
         <tr>
             {{ pg.sort_th('Code', 'code', 'languages', params, url, 'get', target) }}
@@ -42,16 +43,17 @@
                             "voice_is_active": document.getElementById("voice_is_active-{{ language.id }}").checked,
                             "image_url": document.getElementById("image_url-{{ language.id }}").value
                             }'>
-                    Enregistrer
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
                 <button class="btn btn-danger"
+                        title="Supprimer cette langue"
                         hx-get="/admin/languages/confirm_delete/{{ language.id }}"
                         hx-target="#modal-htmx"
                         hx-trigger="click"
                         data-bs-target="#modal_delete"
                         data-bs-toggle="modal">
-                    Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
             </td>
         </tr>
@@ -62,6 +64,7 @@
         {% endfor %}
     </tbody>
 </table>
+</div>
 
 {{ pg.pagination_nav(pager, 'languages', url, 'get', target) }}
 

@@ -5,6 +5,11 @@
 {% block content %}
     <h3>Equipe</h3>
 
+    <input type="search" class="form-control table-filter mb-2"
+           placeholder="Rechercher un membre…"
+           aria-label="Filtrer la liste de l'équipe"
+           data-filter-target="#div_staff_table">
+
     <div id="div_staff_table"
         hx-get="/admin/staff/table"
         hx-trigger="load"
