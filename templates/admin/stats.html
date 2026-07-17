@@ -163,13 +163,18 @@
         <div id="chart-data" hx-swap-oob="true"></div>
     </div>
 </div>
+{% endblock %}
 
 
-<!-- Chargement des scripts dans le bon ordre -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+{# Scripts spécifiques aux statistiques : chargés uniquement sur cette page.
+   Les librairies de graphique (Chart.js, moment, adaptateur) ne sont utilisées
+   que dans des gestionnaires d'événements / DOMContentLoaded, jamais lors de
+   l'analyse : elles sont donc chargées en `defer` (ordre préservé). #}
+{% block scripts_end %}
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
 
 <script>
     function toggleDateOptions() {

@@ -1,159 +1,145 @@
-document.addEventListener('DOMContentLoaded', (event) => {
-    var protocol = window.location.protocol;
-    // Socket.IO expects an http(s) URL. Rely on same-origin host/port so this works behind reverse proxies (Coolify).
-    var socketProtocol = protocol === 'https:' ? 'https://' : 'http://';
-    var domain = window.location.host;
-    var baseUrl = socketProtocol + domain;
-    
-    // Connexion au namespace général
-    var generalSocket = io.connect(baseUrl + '/socket_update_patient', 
-                                     { query: "username=admin_interface" });
-    console.log("adresse")
-    console.log(baseUrl + '/socket_update_patient')
+// ============================================================================
+//  Couche de connexion temps réel partagée (point 6.2)
+//
+//  - Une seule connexion par namespace, créée à la demande (lazy) et
+//    réutilisée : plus de multiplication de Managers Socket.IO.
+//  - Chaque page ne s'abonne qu'aux évènements qui la concernent (présence
+//    d'un point d'ancrage DOM). Un namespace ciblé (ex. /socket_update_patient)
+//    n'est donc ouvert que si la page en a l'usage.
+//  - Aucun log verbeux en production : les traces onAny / (dé)connexion ne sont
+//    émises qu'en mode debug (window.ADMIN_RT_DEBUG === true, ou hôte local).
+//    Les erreurs de connexion restent, elles, toujours journalisées.
+// ============================================================================
+const AdminRealtime = (function () {
+    const DEBUG = (window.ADMIN_RT_DEBUG === true)
+        || /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/.test(window.location.hostname);
 
-    generalSocket.on('connect', function() {
-        console.log('General WebSocket connected');
-    });
+    const sockets = Object.create(null); // namespace -> socket (mémoïsé)
+    let baseUrl = null;
 
-    generalSocket.on('disconnect', function() {
-        console.log('General WebSocket disconnected');
-    });
+    function getBaseUrl() {
+        if (baseUrl === null) {
+            // Socket.IO attend une URL http(s) ; on s'appuie sur l'hôte courant
+            // pour rester compatible avec un reverse proxy (Coolify).
+            const proto = window.location.protocol === 'https:' ? 'https://' : 'http://';
+            baseUrl = proto + window.location.host;
+        }
+        return baseUrl;
+    }
 
-    generalSocket.on('update', function(msg) {
-        console.log("Received general message:", msg.flag);
-        refresh_queue();
-    });
+    // Ouvre (ou réutilise) la connexion vers un namespace.
+    function connect(namespace) {
+        let socket = sockets[namespace];
+        if (socket) {
+            return socket;
+        }
+        socket = io.connect(getBaseUrl() + namespace, { query: "username=admin_interface" });
+        sockets[namespace] = socket;
 
-    generalSocket.on('connect_error', function(err) {
-        console.error('General WebSocket connection error:', err);
-    });
+        // Les erreurs de connexion sont toujours utiles (faible volume).
+        socket.on('connect_error', function (err) {
+            console.error('WebSocket connection error', namespace, err);
+        });
 
-    // En Socket.IO client v4, les évènements de reconnexion sont émis par le
-    // Manager (generalSocket.io), pas par le socket : sans le .io, ce rattrapage
-    // ne s'exécutait jamais.
-    generalSocket.io.on('reconnect', function(attempt) {
-        console.log('General WebSocket reconnected after', attempt, 'attempts');
-        // Rattrape les mises à jour manquées pendant la coupure.
-        refresh_queue();
-    });
+        if (DEBUG) {
+            socket.on('connect', function () { console.log('WebSocket connected', namespace); });
+            socket.on('disconnect', function () { console.log('WebSocket disconnected', namespace); });
+            // En client v4, les évènements de (re)connexion sont émis par le
+            // Manager (socket.io), pas par le socket lui-même.
+            socket.io.on('reconnect', function (n) { console.log('WebSocket reconnected', namespace, 'after', n, 'attempts'); });
+            socket.io.on('reconnect_attempt', function (n) { console.log('WebSocket reconnect attempt', namespace, n); });
+            socket.onAny(function (event) { console.log('WebSocket event', namespace, event); });
+        }
+        return socket;
+    }
 
-    generalSocket.io.on('reconnect_attempt', function(attempt) {
-        console.log('General WebSocket reconnect attempt', attempt);
-    });
+    // S'abonne à un évènement. Si `anchor` est fourni et absent du DOM, on
+    // n'ouvre pas la connexion et on n'enregistre pas le handler : l'évènement
+    // n'est pas utile à cette page.
+    function on(namespace, event, handler, anchor) {
+        if (anchor && !document.querySelector(anchor)) {
+            return false;
+        }
+        connect(namespace).on(event, handler);
+        return true;
+    }
 
-    generalSocket.onAny((event, ...args) => {
-        console.log(`General WebSocket Event: ${event}`, args);
-    });
+    // Rattrapage à la reconnexion (émis par le Manager). Sans effet si la
+    // connexion n'a pas déjà été ouverte par un abonnement.
+    function onReconnect(namespace, handler) {
+        const socket = sockets[namespace];
+        if (socket) {
+            socket.io.on('reconnect', handler);
+        }
+    }
 
-    // Connexion au namespace écran
-    var adminSocket = io.connect(baseUrl + '/socket_admin',
-                    { query: "username=admin_interface" }
-    );
+    return { connect: connect, on: on, onReconnect: onReconnect, isDebug: function () { return DEBUG; } };
+})();
 
-    adminSocket.on('connect', function() {
-        console.log('Admin WebSocket connected');
-    });
 
-    adminSocket.on('disconnect', function() {
-        console.log('Admin WebSocket disconnected');
-    });
+// ----------------------------------------------------------------------------
+//  Abonnements temps réel de la page admin courante.
+//
+//  Chaque abonnement ciblé est conditionné à la présence de son point d'ancrage
+//  DOM : une page ne reçoit que les évènements qui la concernent, et le
+//  namespace file (/socket_update_patient) n'est ouvert que là où la file est
+//  affichée. Le namespace /socket_admin reste ouvert sur toutes les pages admin
+//  car il porte des évènements transversaux : toasts de retour d'action
+//  (display_toast, ~200 appels serveur) et changement de thème admin
+//  (refresh_colors, qui recharge la page pour appliquer le nouveau thème).
+// ----------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', function () {
+    const NS_QUEUE = '/socket_update_patient';
+    const NS_ADMIN = '/socket_admin';
 
-    adminSocket.on('update', function(msg) {
-        console.log("Received Admin message:", msg);
-        display_toast(msg);
-    });
+    // --- File des patients : uniquement sur la page de la file ---
+    if (document.querySelector('#div_queue_table')) {
+        AdminRealtime.on(NS_QUEUE, 'update', function () { refresh_queue(); });
+        // Rattrape les mises à jour manquées pendant une coupure.
+        AdminRealtime.onReconnect(NS_QUEUE, function () { refresh_queue(); });
+    }
 
-    adminSocket.on("refresh_activity_table", function(msg) {
-        console.log("refresh_activity_table:", msg);
+    // --- Évènements transversaux (toutes les pages admin) ---
+    AdminRealtime.on(NS_ADMIN, 'update', function (msg) { display_toast(msg); });
+    AdminRealtime.on(NS_ADMIN, 'refresh_colors', function () { refresh_page(); });
+
+    // --- Évènements ciblés (seulement si leur ancrage est présent) ---
+    AdminRealtime.on(NS_ADMIN, 'refresh_activity_table', function () {
         refresh_activity_table();
         refresh_activity_staff_table();
-    })
+    }, '#div_activity_table');
 
-    adminSocket.on("refresh_button_order", function(msg) {
-        console.log("refresh_button_order:", msg);
-        refresh_button_order();
-    })
+    AdminRealtime.on(NS_ADMIN, 'refresh_button_order', function () { refresh_button_order(); }, '#order_buttons');
+    AdminRealtime.on(NS_ADMIN, 'refresh_counter_order', function () { refresh_counter_order(); }, '#order_counters');
+    AdminRealtime.on(NS_ADMIN, 'refresh_languages_order', function () { refresh_languages_order(); }, '#order_languages');
+    AdminRealtime.on(NS_ADMIN, 'refresh_dashboard_select', function () { refresh_dashboard_select(); }, '#div_select_dashboard');
 
-    adminSocket.on("refresh_counter_order", function(msg) {
-        console.log("refresh_counter_order:", msg);
-        refresh_counter_order();
-    })
-
-    adminSocket.on("refresh_languages_order", function(msg) {
-        console.log("refresh_languages_order:", msg);
-        refresh_languages_order();
-    })
-
-    adminSocket.on("refresh_sound", function(msg) {
-        console.log("refresh_sound:", msg);
-        refresh_sound();
-    })
-
-    adminSocket.on("refresh_colors", function(msg) {
-        console.log("refresh_colors:", msg);
-        refresh_page();
-    })
-
-    adminSocket.on("refresh_dashboard_select", function(msg) {
-        console.log("refresh_dashboard_select:", msg);
-        refresh_dashboard_select();
-    })
-
-    adminSocket.on("display_new_gallery", function(msg) {
-        console.log("display_new_gallery:", msg);
-        document.getElementById("name").value = ""
+    // Galerie : liste + affichage d'une nouvelle galerie.
+    AdminRealtime.on(NS_ADMIN, 'refresh_gallery_list', function (msg) { refresh_gallery_list(msg); }, '#galleries_list');
+    AdminRealtime.on(NS_ADMIN, 'display_new_gallery', function (msg) {
+        const nameInput = document.getElementById('name');
+        if (nameInput) { nameInput.value = ''; }
         display_new_gallery(msg);
-    })
+    }, '#galleries_list');
 
-    adminSocket.on("refresh_gallery_list", function(msg) {
-        console.log("refresh_gallery_list:", msg);
-        refresh_gallery_list(msg);
-    })
+    // Annonce (onglet audio).
+    AdminRealtime.on(NS_ADMIN, 'refresh_sound', function () { refresh_sound(); }, '#announce_current_signal');
+    AdminRealtime.on(NS_ADMIN, 'audio_test', function (msg) { playAudio(msg); }, '#announce_current_signal');
 
-    adminSocket.on("refresh_schedule_tasks_list", function(msg) {
-        console.log("refresh_schedule_tasks_list:", msg);
-        refresh_schedule_tasks_list(msg);
-    })
+    // Dashboard : sélecteur de cartes et cartes "glanceable".
+    AdminRealtime.on(NS_ADMIN, 'refresh_printer_dashboard', function (msg) { refresh_printer_dashboard(msg); }, '#sortable-dashboard');
+    AdminRealtime.on(NS_ADMIN, 'refresh_counter_dashboard', function (msg) { refresh_counter_dashboard(msg); }, '#sortable-dashboard');
+    // Liste des tâches planifiées (page Planification).
+    AdminRealtime.on(NS_ADMIN, 'refresh_schedule_tasks_list', function (msg) { refresh_schedule_tasks_list(msg); }, '#div_schedule_tasks_list');
 
-    adminSocket.on("refresh_printer_dashboard", function(msg) {
-        console.log("refresh_printer_dashboard:", msg);
-        refresh_printer_dashboard(msg);
-    })
-
-    adminSocket.on("refresh_counter_dashboard", function(msg) {
-        console.log("refresh_counter_dashboard:", msg);
-        refresh_counter_dashboard(msg);
-    })
-
-    adminSocket.on("audio_test", function(msg) {
-        console.log("audio_test:", msg);
-        playAudio(msg);
-    })
-
-
-    adminSocket.on('connect_error', function(err) {
-        console.error('Admin WebSocket connection error:', err);
-    });
-
-    // Évènements de reconnexion sur le Manager (adminSocket.io), cf. plus haut.
-    adminSocket.io.on('reconnect', function(attempt) {
-        console.log('Admin WebSocket reconnected after', attempt, 'attempts');
-        // Rattrape les mises à jour manquées pendant la coupure pour les
-        // widgets "glanceable" du dashboard (état affiché sans action de
-        // l'admin). Les actions ponctuelles (édition de couleurs, galeries,
-        // ordre des boutons...) ne sont pas concernées : rien à "manquer" côté
-        // état pour elles, l'admin est de toute façon en train d'y interagir.
-        refresh_counter_dashboard();
-        refresh_printer_dashboard();
-        refresh_schedule_tasks_list();
-    });
-
-    adminSocket.io.on('reconnect_attempt', function(attempt) {
-        console.log('Admin WebSocket reconnect attempt', attempt);
-    });
-
-    adminSocket.onAny((event, ...args) => {
-        console.log(`Admin WebSocket Event: ${event}`, args);
+    // Rattrapage à la reconnexion pour l'état "glanceable" affiché sans action
+    // de l'admin, uniquement pour ce qui est réellement présent sur la page.
+    AdminRealtime.onReconnect(NS_ADMIN, function () {
+        if (document.querySelector('#div_schedule_tasks_list')) { refresh_schedule_tasks_list(); }
+        if (document.querySelector('#sortable-dashboard')) {
+            refresh_counter_dashboard();
+            refresh_printer_dashboard();
+        }
     });
 });
 
@@ -257,11 +243,11 @@ function display_toast(data) {
 
 // -------------- QUEUE  --------------
 
-var eventSource = new EventSource('/events/update_patients');
-eventSource.onmessage = function(event) {
-    htmx.trigger('#div_queue_table', 'refresh_queue_patient', {target: "#div_queue_table"});
-};
-
+// La mise à jour de la file passe désormais par Socket.IO (namespace
+// /socket_update_patient, abonnement géré par AdminRealtime plus haut).
+// L'ancien EventSource vers /events/update_patients (route supprimée côté
+// serveur) a été retiré : il générait une boucle de requêtes 404 sur chaque
+// page admin.
 
 function refresh_queue(){
     var queueTable = document.querySelector('#div_queue_table');
@@ -467,40 +453,12 @@ function refresh_schedule_tasks_list(data) {
 
 // ---------------- GENERAL ----------------
 
-// utiliser pour les communications spécifiques du serveur vers l'admin
-var eventSource = new EventSource('/events/update_admin_old');
-eventSource.onmessage = function(event) {
-    data = JSON.parse(event.data);
-    if (data.toast){
-        //display_toast(data);
-    }
-    else if (event.data === "schedule_tasks_list"){
-        htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
-    }
-    else if (data.action === "delete_add_activity_form"){
-        document.getElementById('div_add_activity_form').innerHTML = "";
-    }
-    else if (data.action === "delete_add_schedule_form"){
-        document.getElementById('div_add_schedule_form').innerHTML = "";
-    }
-    else if (data.action=== "delete_add_staff_form"){
-        document.getElementById('div_add_staff_form').innerHTML = "";
-    }
-    else if (data.action == "delete_add_rule_form"){
-        document.getElementById('div_add_rule_form').innerHTML = "";
-    }
-    else if (data.action == "delete_add_counter_form"){
-        document.getElementById('div_add_counter_form').innerHTML = "";
-    }
-    else if (data.action == "delete_add_button_form"){
-        console.log("delete_add_button_form");
-        document.getElementById('div_add_button_form').innerHTML = "";
-    }
-    else if (data.action === "delete_add_activity_form_staff"){
-        console.log("delete_add_activity_form_staff");
-        document.getElementById('div_add_activity_form_staff').innerHTML = "";
-    }
-};
+// L'ancien EventSource vers /events/update_admin_old (route inexistante côté
+// serveur) a été supprimé : il ne se déclenchait jamais (404 relancé en boucle)
+// et les traitements qu'il portait sont aujourd'hui assurés autrement — les
+// retours d'action (toast, liste des tâches planifiées) par Socket.IO
+// (/socket_admin), et le nettoyage des formulaires d'ajout par les réponses
+// HTMX qui remplacent leur contenu.
 
 // ---------------- COPY COLORS BETWEEN PAGES ----------------
 

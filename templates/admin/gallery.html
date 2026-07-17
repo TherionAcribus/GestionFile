@@ -2,9 +2,12 @@
 
 {% block title %}Galeries{% endblock %}
 
-{% block content %}
+{# CSS spécifique à la galerie : chargé uniquement sur cette page #}
+{% block styles %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
+{% endblock %}
 
+{% block content %}
 <h3>Galeries</h3>
 
 <div id="galleries_list"

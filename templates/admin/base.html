@@ -8,35 +8,44 @@
     <!-- Titre -->
     {% endblock %}
 
-    <!-- WebSocket -->
-    <script src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
+    {# ------------------------------------------------------------------ #}
+    {#  Point 6.1 — Ressources communes                                   #}
+    {#                                                                    #}
+    {#  Seules les dépendances réellement communes à TOUTES les pages     #}
+    {#  admin sont chargées ici. Les librairies spécifiques (Chart.js,    #}
+    {#  audio, CSS de galerie…) sont chargées par la page concernée via   #}
+    {#  les blocs `styles` / `scripts_head` / `scripts_end`.              #}
+    {#                                                                    #}
+    {#  Chargement bloquant minimal : seuls htmx, csrf.js et jQuery       #}
+    {#  restent synchrones en <head> car du code inline des pages les     #}
+    {#  utilise dès l'analyse du document (ex. `htmx.on` dans stats,      #}
+    {#  `$(...)` un peu partout). Toutes les autres librairies sont       #}
+    {#  reléguées en fin de <body> avec `defer` (voir plus bas) pour ne   #}
+    {#  plus bloquer le premier rendu.                                    #}
+    {# ------------------------------------------------------------------ #}
 
-    <!-- HTMX -->
-    <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
-    <!-- CSRF : doit être chargé avant tout appel HTMX/fetch mutateur -->
-    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
-    <!--<script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>-->
-
-    <!-- BoostStrap -->
+    <!-- CSS communes -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/bootstrap-icons/font/bootstrap-icons.min.css') }}">
-
-
     {% if session["admin_colors"] %}
         <link rel="stylesheet" href="../static/css/themes/{{ session['admin_colors'] }}.css">
     {% endif %}
-
-    <!-- Sortable -->
-    <script src="{{ url_for('static', filename='js/libs/Sortable.min.js') }}"></script>
-
-    <!-- CSS de la page -->
     <link rel="stylesheet" href="../static/css/admin.css">
-
-    <!-- Select2 -->
+    <!-- Select2 : le CSS reste commun (léger) ; le JS est chargé en fin de page -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/select2.min.css') }}">
 
-    <!-- JQuery -->
+    {# CSS spécifiques à la page (ex. gallery.css) #}
+    {% block styles %}{% endblock %}
+
+    <!-- HTMX (requis dès l'analyse : attributs hx-* et `htmx.on` inline) -->
+    <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
+    <!-- CSRF : doit être chargé avant tout appel HTMX/fetch mutateur -->
+    <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
+    <!-- jQuery (requis dès l'analyse : code inline `$(...)` de certaines pages) -->
     <script src="{{ url_for('static', filename='js/libs/jquery-3.7.1.min.js') }}"></script>
+
+    {# Scripts spécifiques à insérer en tête de page si nécessaire #}
+    {% block scripts_head %}{% endblock %}
 </head>
 
 <body>
@@ -218,13 +227,27 @@
       </footer>
 
 
-    <!-- Bootstrap JS (ensure this is after the closing </body> tag to avoid any rendering issues) -->
-    <script src="{{ url_for('static', filename='js/libs/bootstrap.bundle.min.js') }}"></script>
-    
-    <script src="{{ url_for('static', filename='js/libs/select2.min.js') }}"></script>
+    {# ------------------------------------------------------------------ #}
+    {#  Librairies non critiques au rendu — chargées en fin de <body>     #}
+    {#  avec `defer`. Les scripts `defer` s'exécutent dans l'ordre du      #}
+    {#  document, après l'analyse HTML et avant DOMContentLoaded ; l'ordre #}
+    {#  des dépendances est donc préservé :                               #}
+    {#    socket.io  → utilisé par admin.js (io.connect)                  #}
+    {#    Sortable   → utilisé par admin.js (fn `sortable()`)             #}
+    {#    select2    → étend jQuery (déjà chargé en tête), utilisé admin  #}
+    {#    admin.js   → dépend de io / $ / Sortable / select2 / htmx       #}
+    {# ------------------------------------------------------------------ #}
+    <script defer src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/libs/Sortable.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/libs/bootstrap.bundle.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/libs/select2.min.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/htmx_tables.js') }}"></script>
 
-    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
-
-    <script src="{{ url_for('static', filename='js/htmx_tables.js') }}"></script>
+    {# Scripts spécifiques à la page (Chart.js/stats, audio, galerie…).
+       Placés après les scripts communs : s'ils sont en `defer`, ils
+       s'exécutent après eux ; s'ils sont inline, ils s'exécutent lors de
+       l'analyse de ce bloc, une fois le contenu de la page déjà présent. #}
+    {% block scripts_end %}{% endblock %}
 </body>
 </html>
