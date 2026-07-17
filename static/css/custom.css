@@ -16,7 +16,7 @@
     --square_button_border_color: black;
     --square_button_image_size: 200px;
     --square_button_text_size: 30px;
-    --square_button_text_color: #008B8B;
+    --square_button_text_color: #FFFFFF;
     --square_button_text_border_size: 0px;
     --square_button_text_border_color: black;
     --square_button_text_background_color: transparent;
@@ -27,7 +27,7 @@
     --square_cancel_button_border_color: black;
     --square_cancel_button_image_size: 200px;
     --square_cancel_button_text_size: 30px;
-    --square_cancel_button_text_color: #008B8B;
+    --square_cancel_button_text_color: #FFFFFF;
     --square_cancel_button_text_border_size: 0px;
     --square_cancel_button_text_border_color: black;
     --square_cancel_button_text_background_color: transparent;
@@ -62,11 +62,11 @@
     --subtitle_specific_message_border_color: black;
     --subtitle_specific_message_background_color: #008B8B;
     --scan_explanation_font_size: 50px;
-    --scan_explanation_font_color: #008B8B;
+    --scan_explanation_font_color: #FFFFFF;
     --scan_explanation_border_size: 0px;
     --scan_explanation_border_color: black;
     --scan_explanation_background_color: #008B8B;
-    --validation_text_font_color: #008B8B;
+    --validation_text_font_color: #FFFFFF;
     --validation_text_font_size: 50px;
     --validation_text_border_size: 0px;
     --validation_text_border_color: black;
@@ -77,12 +77,12 @@
     --validation_button_border_size: 0px;
     --validation_button_border_color: black;
     --validation_button_text_size: 30px;
-    --validation_button_text_color: #008B8B;
+    --validation_button_text_color: #FFFFFF;
     --validation_button_text_border_size: 0px;
     --validation_button_text_border_color: black;
     --validation_button_text_background_color: transparent;
     --validation_button_picture_size: 200px;
-    --confirmation_text_font_color: #008B8B;
+    --confirmation_text_font_color: #FFFFFF;
     --confirmation_text_font_size: 50px;
     --confirmation_text_border_size: 0px;
     --confirmation_text_border_color: black;
