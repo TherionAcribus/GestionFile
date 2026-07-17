@@ -1,5 +1,9 @@
-<div class="grid-item div_bloc_activity" id="{{ button.activity.name | replace(' ', '_') }}"
-                hx-post="/patients_submit" 
+{# Un parent sans sous-bouton affiché est grisé et non cliquable (pas de hx-post) :
+   inutilisable pour le patient, mais visible pour signaler le problème. #}
+{% set is_empty_parent = empty_parent_ids is defined and button.id in empty_parent_ids %}
+<div class="grid-item div_bloc_activity {% if is_empty_parent %} div_button_disabled {% endif %}" id="{{ button.activity.name | replace(' ', '_') }}"
+                {% if not is_empty_parent %}
+                hx-post="/patients_submit"
                 hx-vals='{"activity_id": "{{ button.activity.id }}",
                         "is_parent": "{{ button.is_parent }}",
                         "is_active": "{{ button.is_active }}",
@@ -11,6 +15,7 @@
                         hx-target="#div_buttons_children"
                 {% endif %}
                 hx-sync="this:drop"
+                {% endif %}
         >
                 <div class="div_circle_buttons {% if button.is_active %} div_button_active {% else %} div_button_inactive {% endif %}">
                         <img class="img_btn {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}" 

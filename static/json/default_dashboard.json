@@ -1,11 +1,19 @@
 {
     "name": "gf_dashboard",
     "type": "default",
-    "version": "0.7",
-    "timestamp": "2025-02-11 08:00:00",
-    "comments": "Ajout carte sécurité",
+    "version": "0.8",
+    "timestamp": "2026-07-17 08:00:00",
+    "comments": "Ajout carte alertes/diagnostic",
     "dashboard": [
-        {"id": 9, 
+        {"id": 10,
+        "name": "alerts",
+        "visible": true,
+        "position": 0,
+        "size": "col-md-6",
+        "color": "bg-primary",
+        "htmx_triggers": {}
+        },
+        {"id": 9,
         "name": "security",
         "visible": true,
         "position": 0,

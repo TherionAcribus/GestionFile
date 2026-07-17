@@ -271,6 +271,16 @@ html, body {
     background-color:rgb(102, 105, 105);
 }
 
+/* Bouton parent sans sous-bouton affiché : grisé et non cliquable côté borne.
+   Le hx-post est déjà retiré côté gabarit ; pointer-events:none est une double
+   sécurité pour qu'aucun clic n'ait d'effet. */
+.div_button_disabled {
+    opacity: 0.4;
+    filter: grayscale(100%);
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
 .img_btn {
     height: var(--circle_button_image_size);
 }

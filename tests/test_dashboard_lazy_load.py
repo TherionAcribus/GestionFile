@@ -29,7 +29,7 @@ _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 _LOAD_CARDS = [
     "queue", "counter", "printer", "staff", "button",
-    "player", "connection", "security", "appschedule",
+    "player", "connection", "security", "appschedule", "alerts",
 ]
 
 

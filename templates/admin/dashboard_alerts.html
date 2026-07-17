@@ -1,0 +1,42 @@
+{# Carte « Alertes » : problèmes de configuration de la page borne détectés par
+   diagnostics.collect_patient_page_alerts. En-tête rouge s'il reste au moins une
+   alerte, vert sinon. Chaque alerte reprend son niveau (danger/warning/info). #}
+{% set has_alerts = alerts and alerts|length > 0 %}
+<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
+    <div class="card {% if has_alerts %}border-warning{% endif %}">
+        <div class="card-header d-flex justify-content-between align-items-center {% if has_alerts %}bg-warning{% endif %}">
+            <span><i class="bi bi-exclamation-triangle-fill"></i> Alertes
+                {% if has_alerts %}<span class="badge bg-danger">{{ alerts|length }}</span>{% endif %}
+            </span>
+            <div class="d-flex align-items-center">
+                <a href="/admin/patient?tab=buttons" target="_blank" class="btn btn-link p-0" title="Configurer les boutons">
+                    <i class="bi bi-arrow-up-right-square-fill"></i>
+                </a>
+                <a class="text-danger"
+                    hx-post="/admin/dashboard/hide"
+                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}'
+                    hx-target="#card-{{ dashboardcard.id }}"
+                    hx-swap="delete">
+                    <i class="bi bi-x-circle-fill"></i>
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if not has_alerts %}
+                <div class="text-center text-success">
+                    <i class="bi bi-check-circle-fill"></i> Aucun problème de configuration détecté sur la borne.
+                </div>
+            {% else %}
+                {% for alert in alerts %}
+                    <div class="alert alert-{{ alert.level }} d-flex align-items-start mb-2" role="alert">
+                        <i class="bi {% if alert.level == 'danger' %}bi-x-octagon-fill{% elif alert.level == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
+                        <div>{{ alert.message }}</div>
+                    </div>
+                {% endfor %}
+                <a href="/admin/patient?tab=buttons" class="btn btn-sm btn-outline-primary" target="_blank">
+                    <i class="bi bi-gear"></i> Configurer les boutons
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</div>

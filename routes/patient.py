@@ -60,11 +60,20 @@ def patient_right_page():
         page_patient_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
         page_patient_interface_validate_cancel = app.config['PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL']
 
-    max_length = 2 if buttons[0].shape == "square" else 4
+    max_length = 2 if buttons and buttons[0].shape == "square" else 4
 
-    buttons_content = render_template('patient/patient_buttons_left.html', 
+    # Boutons parents affichés sans sous-bouton affiché : ils seront grisés et
+    # rendus non cliquables par le gabarit (au lieu de mener à une page vide /
+    # de planter sur children_buttons[0]). Voir diagnostics.find_empty_present_parents.
+    empty_parent_ids = {
+        b.id for b in buttons
+        if b.is_parent and not any(child.is_present for child in b.dependent_buttons)
+    }
+
+    buttons_content = render_template('patient/patient_buttons_left.html',
                             buttons=buttons,
                             max_length=max_length,
+                            empty_parent_ids=empty_parent_ids,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel)
     
     subtitle_content = render_template(
@@ -132,8 +141,11 @@ def display_children_buttons_for_right_page(request):
     else:
         page_patient_interface_validate_cancel = app.config["PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL"]
 
-    max_length = 2 if children_buttons[0].shape == "square" else 4
-    return render_template('patient/patient_buttons_left.html', 
+    # Garde-fou : un parent sans sous-bouton affiché est normalement grisé côté
+    # borne (cf. patient_right_page), mais on protège quand même l'accès direct
+    # à cette route contre children_buttons[0] sur liste vide.
+    max_length = 2 if children_buttons and children_buttons[0].shape == "square" else 4
+    return render_template('patient/patient_buttons_left.html',
                             buttons=children_buttons,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             max_length=max_length,

@@ -230,7 +230,12 @@ def save_dashboard_configuration():
         
         elif dashboardcard.name == 'security':
             context['is_default_admin'] = check_default_admin()
-        
+
+        elif dashboardcard.name == 'alerts':
+            # Mêmes alertes que la route /admin/alerts/dashboard.
+            from routes.admin_patient import get_patient_page_alerts
+            context['alerts'] = get_patient_page_alerts()
+
         # Utiliser le template avec contenu, pas le wrapper
         template_name = f'admin/dashboard_{dashboardcard.name}.html'
         try:

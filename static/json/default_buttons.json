@@ -98,7 +98,7 @@
             "label": "Membre de l'équipe",
             "label_en": null,
             "is_active": true,
-            "is_present": true,
+            "is_present": false,
             "shape": "circle",
             "image_url": "equipe-medicale.png",
             "background_color": null,

@@ -3,7 +3,8 @@ import datetime
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
 from werkzeug.utils import secure_filename
 from models import Button, Activity, DashboardCard, Language, ConfigOption, db
-from python.engine import get_futur_patient, create_qr_code 
+from diagnostics import collect_patient_page_alerts
+from python.engine import get_futur_patient, create_qr_code
 from utils import format_ticket_text
 from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
@@ -554,6 +555,23 @@ def admin_patient_qr_code_modal():
 
     return render_template('/admin/patient_page_qr_code_test_modal.html',
                             qr_code=qr_code)
+
+
+def get_patient_page_alerts():
+    """Assemble les alertes de configuration de la page borne (helper partagé
+    entre la route de la carte et la reconstruction du tableau de bord)."""
+    return collect_patient_page_alerts(Button.query.all(), app.config)
+
+
+@admin_patient_bp.route('/admin/alerts/dashboard')
+@require_permission_dashboard('patient')
+def dashboard_alerts():
+    """Carte « Alertes » du tableau de bord : liste les problèmes de config de la
+    borne (boutons parents vides, aucun bouton utilisable, images manquantes…)."""
+    dashboardcard = DashboardCard.query.filter_by(name="alerts").first()
+    return render_template('/admin/dashboard_alerts.html',
+                            dashboardcard=dashboardcard,
+                            alerts=get_patient_page_alerts())
 
 
 @admin_patient_bp.route('/admin/button/dashboard')
