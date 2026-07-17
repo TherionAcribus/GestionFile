@@ -9,6 +9,8 @@ from bdd import transfer_patients_to_history
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
 from flask_login import current_user
+from audit_service import record_audit
+from audit_log import ACTION_DELETE, ACTION_CLEAR, OUTCOME_SUCCESS, OUTCOME_FAILURE
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
@@ -102,15 +104,16 @@ def clear_all_patients_from_db_with_saving():
 @admin_queue_bp.route('/admin/database/clear_all_patients', methods=['POST'])
 @require_permission('queue')
 def clear_all_patients_from_db(app_context=None):
-    print("Suppression de la table Patient")
-    # je dois passer le contexte dans le cas d'APscheduler car dans un Thread différent d'où "app_context", 
+    # je dois passer le contexte dans le cas d'APscheduler car dans un Thread différent d'où "app_context",
     # je ne peux pas utiliser simplement current_app. Par contre quand appelé par le bouton supprimé on utilise current_app
     app_context = current_app if not app_context else app_context
     with current_app.app_context():  # Nécessaire pour pouvoir effacer la table via le CRON
         try:
-            db.session.query(Patient).delete()
+            deleted = db.session.query(Patient).delete()
             db.session.commit()
             app_context.logger.info("La table Patient a été vidée")
+            record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_SUCCESS,
+                         details=f"{deleted} patient(s) supprimé(s)")
             communikation("update_patient")
             # rafraichissement de la page Announce
             announce_refresh()
@@ -121,6 +124,7 @@ def clear_all_patients_from_db(app_context=None):
         except Exception as e:
             db.session.rollback()
             app_context.logger.error(str(e))
+            record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE)
             app_context.display_toast(success = False, message=str(e))
             return "", 200
 
@@ -132,7 +136,6 @@ def update_patient(patient_id):
     try:
         patient = Patient.query.get(patient_id)
         if patient:
-            print(request.form)
             if request.form.get('call_number') == '':
                 current_app.display_toast(success = False, message="Un numéro d'appel est obligatoire")
                 return ""
@@ -173,7 +176,6 @@ def confirm_delete_patient(patient_id):
 @admin_queue_bp.route('/admin/queue/delete_patient/<int:patient_id>', methods=['DELETE'])
 @require_permission('queue')
 def delete_patient(patient_id):
-    print("id", patient_id)
     try:
         patient = Patient.query.get(patient_id)
         if not patient:
@@ -182,7 +184,8 @@ def delete_patient(patient_id):
 
         db.session.delete(patient)
         db.session.commit()
-        
+
+        record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_SUCCESS)
         communikation("update_patient")
         announce_refresh()
         clear_counter_table()
@@ -190,7 +193,9 @@ def delete_patient(patient_id):
         return "", 200
 
     except Exception as e:
-        current_app.logger(e)
+        db.session.rollback()
+        current_app.logger.error(e)
+        record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_FAILURE)
         current_app.display_toast(success=False, message=str(e))
         return "", 500
 

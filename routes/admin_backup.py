@@ -15,6 +15,8 @@ from backup_service import (
     BackupValidationError, MAX_BACKUP_FILE_BYTES, MAX_ARCHIVE_FILE_BYTES,
     selection_has_binary, write_backup_archive, estimate_export_size,
 )
+from audit_service import record_audit
+from audit_log import ACTION_RESTORE, OUTCOME_SUCCESS, OUTCOME_FAILURE
 
 admin_backup_bp = Blueprint('admin_backup', __name__)
 
@@ -401,6 +403,8 @@ def backup_import():
 
     # Erreur fatale (app/format invalide) : pas de rapport section par section.
     if "restored" not in report:
+        record_audit(ACTION_RESTORE, "backup", outcome=OUTCOME_FAILURE,
+                     details="erreur fatale de restauration")
         try:
             current_app.display_toast(success=False, message=_GENERIC_RESTORE_ERROR)
         except Exception:
@@ -409,6 +413,12 @@ def backup_import():
 
     n_ok = len(report.get("restored", []))
     n_total = len(requested)
+
+    record_audit(
+        ACTION_RESTORE, "backup",
+        outcome=OUTCOME_SUCCESS if n_ok and n_ok == n_total else OUTCOME_FAILURE,
+        details=f"{n_ok}/{n_total} section(s): {','.join(report.get('restored', []))}",
+    )
 
     # Toast global : « succès » seulement si TOUTES les sections demandées ont
     # été restaurées ; sinon le caractère partiel (ou l'échec) est explicite.
@@ -464,6 +474,9 @@ def backup_import_multi():
         msg = f"Restauration réussie : {', '.join(restored_labels)}"
         if report.get("errors"):
             msg += " (certaines sections n'ont pas pu être restaurées)"
+        record_audit(ACTION_RESTORE, "backup",
+                     outcome=OUTCOME_SUCCESS if not report.get("errors") else OUTCOME_FAILURE,
+                     details=f"sections: {','.join(report.get('restored', []))}")
         try:
             current_app.display_toast(success=True, message=msg)
         except Exception:
@@ -472,6 +485,8 @@ def backup_import_multi():
         resp.headers['HX-Refresh'] = 'true'
         return resp
 
+    record_audit(ACTION_RESTORE, "backup", outcome=OUTCOME_FAILURE,
+                 details=f"sections demandées: {','.join(keys_to_restore)}")
     return _alert("danger", _GENERIC_RESTORE_ERROR)
 
 
@@ -507,6 +522,7 @@ def backup_import_single():
         current_app.logger.error(f"Backup import_single errors: {report.get('errors')}")
 
     if report.get("restored"):
+        record_audit(ACTION_RESTORE, "backup", target_id=section_key, outcome=OUTCOME_SUCCESS)
         try:
             current_app.display_toast(success=True, message=f"Restauration de '{label}' réussie")
         except Exception:
@@ -515,4 +531,5 @@ def backup_import_single():
         resp.headers['HX-Refresh'] = 'true'
         return resp
 
+    record_audit(ACTION_RESTORE, "backup", target_id=section_key, outcome=OUTCOME_FAILURE)
     return _alert("danger", _GENERIC_RESTORE_ERROR)

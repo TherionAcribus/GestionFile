@@ -723,6 +723,53 @@ def bump_queue_revision():
         return None
 
 
+class AuditLog(db.Model):
+    """Journal d'audit des actions sensibles (point 7 — Phase 8).
+
+    Une ligne par action sensible réalisée depuis l'administration : qui
+    (``username``), quoi (``action`` + ``resource``), sur quelle cible
+    (``target``), quand (``timestamp``) et avec quel résultat (``outcome``).
+
+    Les champs libres sont normalisés et bornés par le noyau pur
+    :pymod:`audit_log` avant d'arriver ici ; **aucun secret** n'y transite (pas
+    de mot de passe, de jeton ni de cookie). La table est en écriture seule côté
+    application : on n'expose pas de route de modification/suppression d'entrées
+    (l'intégrité du journal prime).
+    """
+
+    __tablename__ = 'audit_log'
+    id = db.Column(db.Integer, primary_key=True)
+    # Horodatage = la « date » du cahier des charges. Indexé pour trier/filtrer.
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(time_tz), index=True)
+    username = db.Column(db.String(64))                 # utilisateur (None = système)
+    action = db.Column(db.String(40), nullable=False)   # verbe stable (create, delete…)
+    resource = db.Column(db.String(40), nullable=False, index=True)  # domaine visé
+    target = db.Column(db.String(64))                   # identifiant ciblé
+    outcome = db.Column(db.String(16), nullable=False)  # résultat (success/failure/denied)
+    ip = db.Column(db.String(64))
+    details = db.Column(db.String(255))
+
+    __table_args__ = (
+        db.Index('ix_audit_log_resource_timestamp', 'resource', 'timestamp'),
+    )
+
+    def __repr__(self):
+        return f'<AuditLog {self.action} {self.resource} {self.target} -> {self.outcome}>'
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "timestamp": self.timestamp.strftime('%Y-%m-%d %H:%M:%S') if self.timestamp else None,
+            "username": self.username,
+            "action": self.action,
+            "resource": self.resource,
+            "target": self.target,
+            "outcome": self.outcome,
+            "ip": self.ip,
+            "details": self.details,
+        }
+
+
 class JobExecutionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.String(50))
