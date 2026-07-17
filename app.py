@@ -1903,11 +1903,51 @@ def display_toast(success=True, message=None):
     Pour validation réussie, on peut simplement appeler la fonction sans argument """
     if message is None:
         message = "Enregistrement effectué"
-        
+
     data = {"toast": True, 'success': success, 'message': message}
     communikation("admin", data)
+
+    # Point 7.5 : en plus de la diffusion WebSocket (qui informe TOUS les
+    # administrateurs), on mémorise le résultat pour l'auteur de la requête.
+    # `_attach_admin_feedback` (after_request) le renvoie dans l'en-tête
+    # HX-Trigger, ce qui permet au client de confirmer la sauvegarde à partir
+    # de la réponse HTTP — sans dépendre uniquement du WebSocket.
+    if has_request_context():
+        g._admin_feedback = {'success': bool(success), 'message': message}
+
     return "", 204
     #return f'<script>display_toast({data})</script>'
+
+
+@app.after_request
+def _attach_admin_feedback(response):
+    """Point 7.5 — Acquittement HTTP des actions admin.
+
+    Si un ``display_toast`` a été émis pendant la requête, on ajoute son
+    résultat (succès + message) dans l'en-tête ``HX-Trigger`` de la réponse.
+    Le client (AdminFeedback) écoute l'évènement ``adminFeedback`` et l'annonce
+    dans une zone ``aria-live``. La sauvegarde est ainsi confirmée par la
+    réponse HTTP, indépendamment de la diffusion WebSocket.
+    """
+    feedback = g.pop('_admin_feedback', None) if has_request_context() else None
+    if feedback is None:
+        return response
+
+    import json
+    trigger = {'adminFeedback': feedback}
+    existing = response.headers.get('HX-Trigger')
+    if existing:
+        # Fusionne sans écraser un HX-Trigger déjà présent.
+        try:
+            merged = json.loads(existing)
+            if not isinstance(merged, dict):
+                raise ValueError
+        except (ValueError, TypeError):
+            merged = {existing: {}}
+        merged.update(trigger)
+        trigger = merged
+    response.headers['HX-Trigger'] = json.dumps(trigger)
+    return response
 
 
 def config_change_response(success=True, message=None):

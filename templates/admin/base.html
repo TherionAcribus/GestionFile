@@ -50,7 +50,20 @@
 <body>
     {% import '/admin/macros.html' as macros %}
     {{ macros.common_js() }}
-    
+
+    {# ------------------------------------------------------------------ #}
+    {#  Point 7.5 — Zone de retour utilisateur commune (accessible)        #}
+    {#                                                                    #}
+    {#  Deux régions `aria-live` masquées visuellement portent les        #}
+    {#  annonces au lecteur d'écran : « polite » pour chargement/succès,  #}
+    {#  « assertive » pour erreur/perte de connexion. Les messages        #}
+    {#  visibles (toasts) sont rendus dans le conteneur ci-dessous par    #}
+    {#  AdminFeedback (voir admin.js).                                    #}
+    {# ------------------------------------------------------------------ #}
+    <div id="admin-live-polite" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="admin-live-assertive" class="visually-hidden" role="alert" aria-live="assertive" aria-atomic="true"></div>
+    <div id="admin-toast-container" class="toast-container position-fixed top-0 end-0 p-3"></div>
+
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar structure -->

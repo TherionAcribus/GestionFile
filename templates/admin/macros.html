@@ -193,6 +193,7 @@ function handleAfterRequestConfig(event, variable) {
         id="{{ key }}_button"
         class="btn btn-primary"
         disabled
+        data-feedback-skip
         hx-post="/admin/update_input"
         hx-swap="none"
         hx-vals='js:{

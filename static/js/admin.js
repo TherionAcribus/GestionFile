@@ -207,38 +207,267 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
-function display_toast(data) {
-    console.log('toast', data);
+// ============================================================================
+//  Point 7.5 — Mécanisme commun de retour utilisateur (accessible)
+//
+//  États couverts : chargement, succès, erreur, perte de connexion, nouvelle
+//  tentative. Chaque message est annoncé dans une zone `aria-live` (lecteur
+//  d'écran) ; les messages visibles importants sont rendus en toast Bootstrap,
+//  avec au besoin un bouton « Réessayer ».
+//
+//  Les régions `aria-live` et le conteneur de toasts sont fournis par
+//  base.html (#admin-live-polite, #admin-live-assertive, #admin-toast-container)
+//  et recréés à la volée si absents (robustesse).
+// ============================================================================
+const AdminFeedback = (function () {
+    function byId(id) { return document.getElementById(id); }
 
-    // Déterminez la classe à utiliser pour le toast (success ou error)
-    let toastClass = data.data.success === true ? 'bg-success text-white' : 'bg-danger text-white';
-
-    // Créez le contenu HTML pour le toast
-    let toastHTML = `
-        <div class="toast align-items-center ${toastClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    ${data.data.message}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        </div>
-    `;
-
-    // Ajoutez le toast au conteneur des toasts
-    let toastContainer = document.getElementById('toastContainer');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.id = 'toastContainer';
-        toastContainer.classList.add('toast-container', 'position-fixed', 'top-0', 'end-0', 'p-3');
-        document.body.appendChild(toastContainer);
+    // Annonce au lecteur d'écran. On vide puis réécrit au tick suivant pour
+    // forcer la ré-annonce même lorsque le texte est identique.
+    function announce(message, assertive) {
+        const region = byId(assertive ? 'admin-live-assertive' : 'admin-live-polite');
+        if (!region) return;
+        region.textContent = '';
+        window.setTimeout(function () { region.textContent = message; }, 30);
     }
-    toastContainer.innerHTML = toastHTML;
 
-    // Initialisez le toast
-    let toastElement = toastContainer.querySelector('.toast');
-    let toast = new bootstrap.Toast(toastElement);
-    toast.show();
+    function container() {
+        let c = byId('admin-toast-container');
+        if (!c) {
+            c = document.createElement('div');
+            c.id = 'admin-toast-container';
+            c.className = 'toast-container position-fixed top-0 end-0 p-3';
+            document.body.appendChild(c);
+        }
+        return c;
+    }
+
+    // Toast visible. opts : { css, live, autohide, delay, retry(fn), retryLabel }
+    function showToast(message, opts) {
+        opts = opts || {};
+        const toast = document.createElement('div');
+        toast.className = 'toast align-items-center border-0 ' + (opts.css || 'bg-secondary text-white');
+        toast.setAttribute('role', opts.live === 'assertive' ? 'alert' : 'status');
+        toast.setAttribute('aria-live', opts.live || 'polite');
+        toast.setAttribute('aria-atomic', 'true');
+
+        const flex = document.createElement('div');
+        flex.className = 'd-flex';
+
+        const body = document.createElement('div');
+        body.className = 'toast-body';
+        body.textContent = message;
+        flex.appendChild(body);
+
+        if (typeof opts.retry === 'function') {
+            const retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.className = 'btn btn-sm btn-light me-2 my-auto';
+            retryBtn.textContent = opts.retryLabel || 'Réessayer';
+            retryBtn.addEventListener('click', function () {
+                hide(toast);
+                opts.retry();
+            });
+            flex.appendChild(retryBtn);
+        }
+
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'btn-close btn-close-white me-2 m-auto';
+        close.setAttribute('data-bs-dismiss', 'toast');
+        close.setAttribute('aria-label', 'Fermer');
+        flex.appendChild(close);
+
+        toast.appendChild(flex);
+        container().appendChild(toast);
+
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: opts.autohide !== false,
+            delay: opts.delay || 4000
+        });
+        toast.addEventListener('hidden.bs.toast', function () { toast.remove(); });
+        bsToast.show();
+        return toast;
+    }
+
+    function hide(toast) {
+        try {
+            const inst = bootstrap.Toast.getInstance(toast);
+            if (inst) { inst.hide(); return; }
+        } catch (e) { /* ignore */ }
+        toast.remove();
+    }
+
+    // ---- États (API publique) ----
+
+    // Chargement / succès : annonce lecteur d'écran uniquement (le succès
+    // visible reste porté par le toast WebSocket, cf. display_toast).
+    function loading(message) { announce(message || 'Chargement…', false); }
+    function announceSuccess(message) { announce(message || 'Enregistré.', false); }
+    function announceError(message) { announce(message || "Une erreur est survenue.", true); }
+
+    // Erreur visible + éventuelle nouvelle tentative (cas non couverts par le
+    // WebSocket : échec réseau, statut HTTP d'erreur, expiration).
+    function error(message, opts) {
+        opts = opts || {};
+        const msg = message || "Une erreur est survenue.";
+        announce(msg, true);
+        return showToast(msg, {
+            css: 'bg-danger text-white', live: 'assertive',
+            autohide: !opts.retry, retry: opts.retry
+        });
+    }
+
+    // Toast générique visible (utilisé par les évènements WebSocket).
+    function toast(message, isSuccess) {
+        const msg = message || 'Enregistrement effectué';
+        announce(msg, !isSuccess);
+        return showToast(msg, {
+            css: isSuccess ? 'bg-success text-white' : 'bg-danger text-white',
+            live: isSuccess ? 'polite' : 'assertive',
+            autohide: true
+        });
+    }
+
+    function connectionLost(opts) {
+        opts = opts || {};
+        const msg = "Connexion temps réel perdue : les mises à jour automatiques sont suspendues.";
+        announce(msg, true);
+        return showToast(msg, {
+            css: 'bg-warning', live: 'assertive', autohide: false,
+            retry: opts.retry, retryLabel: 'Reconnecter'
+        });
+    }
+
+    function connectionRestored() {
+        const msg = 'Connexion rétablie.';
+        announce(msg, false);
+        return showToast(msg, { css: 'bg-success text-white', live: 'polite', autohide: true });
+    }
+
+    return {
+        loading: loading,
+        announceSuccess: announceSuccess,
+        announceError: announceError,
+        error: error,
+        toast: toast,
+        connectionLost: connectionLost,
+        connectionRestored: connectionRestored,
+        showToast: showToast
+    };
+})();
+
+
+// Retour des évènements WebSocket transversaux (namespace /socket_admin).
+// Diffusé à TOUS les administrateurs : reste le canal VISIBLE inter-clients.
+// L'acquittement HTTP (aria-live) est géré en parallèle par les handlers HTMX
+// ci-dessous, de sorte que l'auteur d'une action ne dépend pas du WebSocket.
+function display_toast(data) {
+    const payload = (data && data.data) || {};
+    AdminFeedback.toast(payload.message, payload.success === true);
+}
+
+
+// ---------------------------------------------------------------------------
+//  Câblage du retour utilisateur commun (point 7.5)
+// ---------------------------------------------------------------------------
+document.addEventListener('DOMContentLoaded', function () {
+    setupHttpFeedback();
+    setupRealtimeConnectionFeedback();
+});
+
+// Une requête est « mutante » si son verbe n'est pas GET.
+function isMutatingRequest(evt) {
+    const cfg = evt.detail && evt.detail.requestConfig;
+    const verb = cfg && cfg.verb ? String(cfg.verb).toLowerCase() : '';
+    return !!verb && verb !== 'get';
+}
+
+// Les éléments marqués `data-feedback-skip` gèrent leur propre retour (ex. le
+// bouton de configuration universel, qui affiche un message près du champ).
+function feedbackSkipped(evt) {
+    const elt = evt.detail && evt.detail.elt;
+    return !!(elt && elt.closest && elt.closest('[data-feedback-skip]'));
+}
+
+// Reconstruit la requête ayant échoué pour la relancer à l'identique.
+function retryFromEvent(evt) {
+    const cfg = evt.detail && evt.detail.requestConfig;
+    const elt = evt.detail && evt.detail.elt;
+    if (!cfg || !cfg.verb || !cfg.path || !elt) return null;
+    return function () {
+        const ctx = { source: elt };
+        if (cfg.target) ctx.target = cfg.target;
+        const swap = elt.getAttribute && elt.getAttribute('hx-swap');
+        if (swap) ctx.swap = swap;
+        htmx.ajax(cfg.verb, cfg.path, ctx);
+    };
+}
+
+function setupHttpFeedback() {
+    const body = document.body;
+
+    // Chargement (annoncé au lecteur d'écran) pour toute sauvegarde.
+    body.addEventListener('htmx:beforeRequest', function (evt) {
+        if (!isMutatingRequest(evt) || feedbackSkipped(evt)) return;
+        AdminFeedback.loading('Enregistrement…');
+    });
+
+    // Acquittement HTTP autoritatif porté par l'en-tête HX-Trigger. Correct
+    // même quand la route renvoie 204 sur un échec de validation : le drapeau
+    // `success` provient du serveur, pas du seul statut HTTP. Annonce aria-live
+    // uniquement (le toast visible est déjà fourni par le WebSocket).
+    body.addEventListener('adminFeedback', function (evt) {
+        const d = evt.detail || {};
+        if (d.success) AdminFeedback.announceSuccess(d.message || 'Enregistré.');
+        else AdminFeedback.announceError(d.message || "Échec de l'enregistrement.");
+    });
+
+    // Erreur applicative (4xx/5xx) : toast visible + nouvelle tentative.
+    body.addEventListener('htmx:responseError', function (evt) {
+        if (feedbackSkipped(evt)) return;
+        const xhr = evt.detail && evt.detail.xhr;
+        const serverMsg = (xhr && xhr.responseText ? xhr.responseText.trim() : '');
+        const msg = serverMsg || ("L'enregistrement a échoué (erreur " + (xhr ? xhr.status : '?') + ").");
+        AdminFeedback.error(msg, { retry: retryFromEvent(evt) });
+    });
+
+    // Échec réseau : la requête n'a pas abouti.
+    body.addEventListener('htmx:sendError', function (evt) {
+        if (feedbackSkipped(evt)) return;
+        AdminFeedback.error('Connexion au serveur impossible. Vérifiez votre réseau.', { retry: retryFromEvent(evt) });
+    });
+
+    // Expiration.
+    body.addEventListener('htmx:timeout', function (evt) {
+        if (feedbackSkipped(evt)) return;
+        AdminFeedback.error('Le serveur met trop de temps à répondre.', { retry: retryFromEvent(evt) });
+    });
+}
+
+// Perte / rétablissement de la connexion temps réel (WebSocket).
+function setupRealtimeConnectionFeedback() {
+    if (typeof AdminRealtime === 'undefined') return;
+    const socket = AdminRealtime.connect('/socket_admin');
+    if (!socket) return;
+    let lostToast = null;
+
+    socket.on('disconnect', function () {
+        if (lostToast) return;
+        lostToast = AdminFeedback.connectionLost({
+            retry: function () { try { socket.connect(); } catch (e) { /* ignore */ } }
+        });
+    });
+
+    function restored() {
+        if (!lostToast) return;
+        lostToast = null;
+        AdminFeedback.connectionRestored();
+    }
+    socket.on('connect', restored);
+    if (socket.io && socket.io.on) {
+        socket.io.on('reconnect', restored);
+    }
 }
 
 // -------------- QUEUE  --------------
