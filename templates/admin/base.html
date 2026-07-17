@@ -2,11 +2,10 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Jeton CSRF (Flask-WTF), injecté dans HTMX/fetch/jQuery par csrf.js -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    {% block title %}
-    <!-- Titre -->
-    {% endblock %}
+    <title>{% block title %}Administration{% endblock %} · PharmaFile</title>
 
     {# ------------------------------------------------------------------ #}
     {#  Point 6.1 — Ressources communes                                   #}
@@ -28,9 +27,9 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/bootstrap.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/bootstrap-icons/font/bootstrap-icons.min.css') }}">
     {% if session["admin_colors"] %}
-        <link rel="stylesheet" href="../static/css/themes/{{ session['admin_colors'] }}.css">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/themes/' ~ session['admin_colors'] ~ '.css') }}">
     {% endif %}
-    <link rel="stylesheet" href="../static/css/admin.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
     <!-- Select2 : le CSS reste commun (léger) ; le JS est chargé en fin de page -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/select2.min.css') }}">
 
@@ -203,25 +202,26 @@
           <div class="row">
             <div class="col-md-4">
               <h5>PharmaFile</h5>
-              <p>Attention, ce site peut exploser à tout moment !</p>
+              <p class="mb-0">Système de gestion de file d'attente pour officine.</p>
             </div>
             <div class="col-md-4">
-              <h5>Autres pages</h5>
+              <h5>Pages publiques</h5>
               <ul class="list-unstyled">
-                <li><a href="/patient" class="text-white">Patient</a></li>
-                <li><a href="/display" class="text-white">Affichage</a></li>
-                <li><a href="/counter/1" class="text-white">Comptoir</a></li>
+                <li><a href="/patient" class="text-white">Borne patient</a></li>
+                <li><a href="/display" class="text-white">Écran d'affichage</a></li>
+                <li><a href="/counter/1" class="text-white">Poste comptoir</a></li>
               </ul>
             </div>
             <div class="col-md-4">
-              <h5>Autres infos</h5>
+              <h5>Administration</h5>
               <ul class="list-unstyled">
-                <li><a href="#" class="text-white">Rien</a></li>
+                <li><a href="/admin/stats" class="text-white">Statistiques</a></li>
+                <li><a href="/admin/security" class="text-white">Sécurité</a></li>
               </ul>
             </div>
           </div>
           <div class="text-center mt-3">
-            <small>CC-By-SA</small>
+            <small>PharmaFile · Distribué sous licence CC BY-SA 4.0</small>
           </div>
         </div>
       </footer>
