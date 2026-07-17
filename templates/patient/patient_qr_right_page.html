@@ -21,19 +21,21 @@
             {% endif %}
         >
 
+            {# On n'utilise la variante « avec image » que si une image est réellement
+               définie : sinon l'affichage retomberait sur un <img> cassé. #}
             <div
                 id="print_and_validate"
-                class="{% if page_patient_button_print_ticket_display_picture %} 
-                            div_validation_one_button_with_img 
-                        {% else %} 
-                            div_validation_one_button 
+                class="{% if page_patient_button_print_ticket_display_picture and page_patient_button_print_ticket_picture %}
+                            div_validation_one_button_with_img
+                        {% else %}
+                            div_validation_one_button
                         {% endif %}"
                 hx-post="/patient/print_and_validate"
                 hx-vals='{"activity_id": "{{ activity.id }}"}'
                 hx-target="#div_buttons_parents"
                 hx-sync="this:drop"
             >
-                {% if page_patient_button_print_ticket_display_picture %}                
+                {% if page_patient_button_print_ticket_display_picture and page_patient_button_print_ticket_picture %}
                     <img src="/static/images/buttons/{{ page_patient_button_print_ticket_picture }}"
                     class="img_for_div_validation"
                     >
@@ -65,14 +67,14 @@
                 hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}"}'>
             </div>
     
-            <div class="{% if page_patient_button_cancel_display_picture %}
+            <div class="{% if page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}
                     div_validation_one_button_with_img
                 {% else %}
                     div_validation_one_button
                 {% endif %}"
                 hx-get="/patient/patient_cancel"
                 hx-target="#div_buttons_parents">
-                {% if page_patient_button_cancel_display_picture %}
+                {% if page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}
                     <img src="/static/images/buttons/{{ page_patient_button_cancel_picture }}"
                     class="img_for_div_validation"
                 >

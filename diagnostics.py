@@ -68,8 +68,11 @@ def has_any_usable_button(buttons):
 
 
 def _picture_enabled_but_missing(config, display_key, picture_key):
-    """Vrai si « afficher une image » est actif mais qu'aucune image n'est définie
-    (produirait un ``<img src="…/">`` cassé sur la page de validation)."""
+    """Vrai si « afficher une image » est actif mais qu'aucune image n'est définie.
+
+    Le gabarit masque désormais l'``<img>`` dans ce cas (plus d'image cassée),
+    mais l'option reste incohérente : on la signale pour que l'admin choisisse
+    une image ou désactive l'option."""
     if not config:
         return False
     display = config.get(display_key)
@@ -111,7 +114,7 @@ def collect_patient_page_alerts(buttons, config=None):
             ),
         })
 
-    # 3) Images des boutons de validation activées mais non définies (image cassée).
+    # 3) Images des boutons de validation activées mais non définies (option incohérente).
     if _picture_enabled_but_missing(
         config,
         "PAGE_PATIENT_BUTTON_PRINT_TICKET_DISPLAY_PICTURE",
@@ -122,8 +125,8 @@ def collect_patient_page_alerts(buttons, config=None):
             "code": "print_button_picture_missing",
             "message": (
                 "L'affichage d'une image sur le bouton « Imprimer » est activé "
-                "mais aucune image n'est choisie : une image cassée s'affiche "
-                "sur la page de validation."
+                "mais aucune image n'est choisie : le bouton s'affiche sans "
+                "image. Choisissez une image ou désactivez l'option."
             ),
         })
 
@@ -137,8 +140,8 @@ def collect_patient_page_alerts(buttons, config=None):
             "code": "cancel_button_picture_missing",
             "message": (
                 "L'affichage d'une image sur le bouton « Annuler » est activé "
-                "mais aucune image n'est choisie : une image cassée s'affiche "
-                "sur la page de validation."
+                "mais aucune image n'est choisie : le bouton s'affiche sans "
+                "image. Choisissez une image ou désactivez l'option."
             ),
         })
 
