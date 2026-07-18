@@ -497,8 +497,26 @@ html, body {
     color: var(--subtitle_no_activity_font_color);
     font-size: var(--subtitle_no_activity_font_size);
     -webkit-text-stroke-color: var(--subtitle_no_activity_border_color);
-    -webkit-text-stroke-width: var(--subtitle_no_activity_border_size);  
-    font-weight: bold;  
+    -webkit-text-stroke-width: var(--subtitle_no_activity_border_size);
+    font-weight: bold;
+}
+
+/* Écran « aucun bouton configuré » (fond clair -> texte foncé pour rester lisible). */
+.div_no_buttons_message {
+    width: 100%;
+    text-align: center;
+    padding: 0 40px;
+}
+.no_buttons_title {
+    font-size: 44px;
+    font-weight: bold;
+    color: #b00020;
+    margin-bottom: 12px;
+}
+.no_buttons_subtitle {
+    font-size: 30px;
+    font-weight: bold;
+    color: #333333;
 }
 
 .div_text_explanation_specific_message {

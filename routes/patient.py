@@ -52,7 +52,14 @@ def patient_cancel():
 @patient_bp.route('/patient/patient_buttons')
 def patient_right_page():
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
-    
+
+    # Aucun bouton présent (tous décochés) : message clair au lieu d'une page
+    # vide / d'un plantage. Le personnel est par ailleurs alerté côté admin
+    # (carte « Alertes » : diagnostics.collect_patient_page_alerts -> no_usable_button).
+    if not buttons:
+        communikation("patient", event="refresh_title")
+        return render_template('patient/no_buttons.html')
+
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         buttons = get_buttons_translation(buttons, language_code)

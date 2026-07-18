@@ -78,6 +78,16 @@ def test_not_usable_when_all_hidden():
     assert has_any_usable_button([FakeButton(1, "X", is_present=False)]) is False
 
 
+def test_not_usable_when_no_buttons_at_all():
+    assert has_any_usable_button([]) is False
+
+
+def test_empty_button_list_raises_no_usable_alert():
+    alerts = collect_patient_page_alerts([])
+    assert [a["code"] for a in alerts] == ["no_usable_button"]
+    assert alerts[0]["level"] == "danger"
+
+
 # --------------------------------------------------------------------------
 # collect_patient_page_alerts
 # --------------------------------------------------------------------------

@@ -1,0 +1,10 @@
+{# Écran affiché sur la borne quand AUCUN bouton n'est présent (tous décochés).
+   Évite une page vide / un plantage et guide le patient. Le texte est foncé car
+   la zone #div_buttons_parents a un fond clair (patient_secondary_color). #}
+<div class="div_no_buttons_message">
+    <p class="no_buttons_title">⚠️ Aucun bouton configuré</p>
+    <p class="no_buttons_subtitle">Merci de vous adresser à notre équipe.</p>
+</div>
+
+{# Vide le sous-titre « merci de vous enregistrer… » (contradictoire ici). #}
+<div id="div_buttons_children" class="buttons_children_active" hx-swap-oob="true"></div>
