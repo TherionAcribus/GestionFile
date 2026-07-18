@@ -3,7 +3,7 @@ import datetime
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, Response, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db
-from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, format_ticket_text, get_activity_message_translation
+from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, create_qr_code
 from communication import communikation, send_app_notification
 
@@ -39,7 +39,9 @@ def change_language(language_code):
 
 @patient_bp.route('/patient/patient_title')
 def patient_display_title():
-    return f'<p>{choose_text_translation("page_patient_title")}</p>'
+    # {P}/{D}/{H} sont remplacés au rendu (nom de la pharmacie, date, heure) :
+    # le titre est affiché hors contexte patient, d'où le helper « welcome ».
+    return f'<p>{replace_balise_welcome(choose_text_translation("page_patient_title"))}</p>'
 
 @patient_bp.route('/patient/patient_cancel')
 def patient_cancel():

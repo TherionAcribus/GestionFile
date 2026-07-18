@@ -155,6 +155,21 @@ def replace_balise_phone(template, patient):
                             H=datetime.now().strftime("%H:%M"))
 
 
+def replace_balise_welcome(template):
+    """ Remplace les balises des textes « d'accueil » (sans patient) : {P} nom de
+    la pharmacie, {D} date du jour, {H} heure. Utilisé pour le titre de la page
+    patient (et tout texte affiché hors contexte patient).
+
+    Remplacement ciblé (pas de ``str.format``) afin de ne PAS planter si le texte
+    contient d'autres accolades ou une balise non gérée. """
+    if not template:
+        return template
+    return (template
+            .replace("{P}", app.config.get("PHARMACY_NAME", "") or "")
+            .replace("{D}", date.today().strftime("%d/%m/%y"))
+            .replace("{H}", datetime.now().strftime("%H:%M")))
+
+
 def get_buttons_translation(buttons, language_code):
     for button in buttons:
             # Récupérer la traduction du label du bouton
