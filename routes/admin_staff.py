@@ -1,6 +1,8 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app as app
 from models import Pharmacist, Activity, Counter, DashboardCard, db
 from routes.admin_security import require_permission, require_permission_dashboard
+from form_validation import Champ, LISTE_ENTIERS, extraire, valider
+from transactions import atomic
 from ui_feedback import display_toast
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
@@ -104,40 +106,50 @@ def add_staff_form():
     return render_template('/admin/staff_add_form.html', activities=activities)
 
 
+#: Formulaire de création d'un membre d'équipe (point 5 : schéma déclaratif).
+SCHEMA_MEMBRE = (
+    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=50),
+    Champ("initials", obligatoire=True, libelle="Les initiales", longueur_max=10),
+    Champ("language", libelle="La langue", longueur_max=50),
+    Champ("activities", type=LISTE_ENTIERS, libelle="Les activités"),
+)
+
+
 # enregistre le membre dans la Bdd
 @admin_staff_bp.route('/admin/staff/add_new_staff', methods=['POST'])
 @require_permission('staff')
 def add_new_staff():
     try:
-        name = request.form.get('name')
-        initials = request.form.get('initials')
-        language = request.form.get('language')
-        activities_ids = request.form.getlist('activities')
+        valeurs, erreurs = valider(
+            extraire(SCHEMA_MEMBRE, request.form.get, request.form.getlist),
+            SCHEMA_MEMBRE,
+        )
+        if erreurs:
+            display_toast(success=False, message=erreurs[0])
+            return display_staff_table()
 
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
-            return display_staff_table()
-        if not initials:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Initiales obligatoires")
-            return display_staff_table()
+        initials = valeurs["initials"]
+        activities_ids = valeurs["activities"]
+
+        # Unicité : contrôle métier, il reste ici (il interroge la base).
         if initials in [initial[0] for initial in db.session.query(Pharmacist.initials).all()]:
             display_toast(success=False, message="Les initiales sont déjà utilisées")
             return "", 204
 
-        new_staff = Pharmacist(
-            name=name,
-            initials=initials,
-            language=language,
-        )
-        db.session.add(new_staff)
-        db.session.commit()
+        # Point 6 : création + rattachement des activités dans UNE transaction.
+        with atomic():
+            new_staff = Pharmacist(
+                name=valeurs["name"],
+                initials=initials,
+                language=valeurs["language"],
+            )
+            db.session.add(new_staff)
+            db.session.flush()
 
-        # Associer les activités sélectionnées avec le nouveau pharmacien
-        for activity_id in activities_ids:
-            activity = Activity.query.get(int(activity_id))
-            if activity:
-                new_staff.activities.append(activity)
-        db.session.commit()
+            for activity_id in activities_ids:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    new_staff.activities.append(activity)
 
         display_toast(success=True, message="Membre ajouté avec succès")
 

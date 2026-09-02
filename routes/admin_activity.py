@@ -3,6 +3,9 @@ from flask import Blueprint, render_template, request, current_app as app
 from models import Activity, ActivitySchedule, Pharmacist, Button, db
 from sqlalchemy.orm import joinedload, selectinload
 from routes.admin_security import require_permission
+from communication import communikation
+from form_validation import Champ, BOOLEEN, ENTIER, LISTE_ENTIERS, extraire, valider
+from transactions import atomic
 from ui_feedback import display_toast
 from extensions import scheduler
 
@@ -194,44 +197,57 @@ def add_activity_staff_form():
                             staff=Pharmacist.query.all())
 
 
+#: Formulaire de creation d'une activite (point 5).
+SCHEMA_ACTIVITE = (
+    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=100),
+    Champ("letter", obligatoire=True, libelle="La lettre", longueur_max=1),
+    Champ("inactivity_message", libelle="Le message d'inactivite", defaut=""),
+    Champ("specific_message", libelle="Le message specifique", defaut=""),
+    Champ("notification", type=BOOLEEN, libelle="La notification"),
+    Champ("staff_id", type=ENTIER, libelle="Le membre d'equipe"),
+    Champ("schedules", type=LISTE_ENTIERS, libelle="Les plages horaires"),
+)
+
+
 # enregistre l'activité' dans la Bdd
 @admin_activity_bp.route('/admin/activity/add_new_activity', methods=['POST'])
 @require_permission('activity')
 def add_new_activity():
+    staff_id = request.form.get("staff_id")
     try:
-        name = request.form.get('name')
-        letter = request.form.get('letter')
-        schedule_ids = request.form.getlist('schedules')
-        inactivity_message = request.form.get('inactivity_message')
-        specific_message = request.form.get('specific_message')
-        notification = True if request.form.get('notification') == "true" else False
-        staff_id = request.form.get("staff_id")
-
-        
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
+        valeurs, erreurs = valider(
+            extraire(SCHEMA_ACTIVITE, request.form.get, request.form.getlist),
+            SCHEMA_ACTIVITE,
+        )
+        if erreurs:
+            display_toast(success=False, message=erreurs[0])
             return return_good_display_activity(staff_id)
 
-        new_activity = Activity(
-            name=name,
-            letter=letter,
-            inactivity_message=inactivity_message,
-            specific_message=specific_message,
-            notification=notification
-        )
-        
-        if staff_id:
-            new_activity.is_staff = True
-            new_activity.staff = Pharmacist.query.get(int(staff_id))
-            
-        db.session.add(new_activity)
+        schedule_ids = valeurs["schedules"]
+        staff_id = valeurs["staff_id"]
 
-        db.session.commit()
+        # Point 6 : creation + rattachement des plages horaires dans UNE
+        # transaction. Auparavant deux commits : un echec sur les plages laissait
+        # une activite creee sans horaire, que le rollback ne pouvait plus annuler.
+        with atomic():
+            new_activity = Activity(
+                name=valeurs["name"],
+                letter=valeurs["letter"],
+                inactivity_message=valeurs["inactivity_message"],
+                specific_message=valeurs["specific_message"],
+                notification=valeurs["notification"]
+            )
+            if staff_id:
+                new_activity.is_staff = True
+                new_activity.staff = Pharmacist.query.get(staff_id)
 
-        for schedule_id in schedule_ids:
-            schedule = ActivitySchedule.query.get(int(schedule_id))
-            if schedule:
-                new_activity.schedules.append(schedule)
-        db.session.commit()
+            db.session.add(new_activity)
+            db.session.flush()
+
+            for schedule_id in schedule_ids:
+                schedule = ActivitySchedule.query.get(schedule_id)
+                if schedule:
+                    new_activity.schedules.append(schedule)
 
         for schedule_id in schedule_ids:
             schedule = ActivitySchedule.query.get(int(schedule_id))
@@ -244,12 +260,14 @@ def add_new_activity():
                             hour=schedule.end_time.hour, minute=schedule.end_time.minute,
                             id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
 
-        app.logger.debug('communication %s', staff_id)
-        if staff_id:
-            app.logger.debug('staff_id %s', staff_id)
-            app.communication("update_admin", data={"action":"delete_add_activity_form_staff"})
-        else:
-            app.communication("update_admin", data={"action":"delete_add_activity_form"})
+        # `app.communication` n'a JAMAIS existe : la fonction s'appelle
+        # `communikation` (avec un k) et n'etait meme pas importee dans ce module.
+        # Ces deux lignes levaient donc une AttributeError, rattrapee par le
+        # `except` ci-dessous : l'activite etait bien creee en base, mais
+        # l'administrateur recevait systematiquement un message d'erreur et le
+        # formulaire n'etait pas vide.
+        action = "delete_add_activity_form_staff" if staff_id else "delete_add_activity_form"
+        communikation("update_admin", data={"action": action})
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""

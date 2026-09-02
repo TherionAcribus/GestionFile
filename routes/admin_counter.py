@@ -3,6 +3,8 @@ from sqlalchemy.orm import joinedload
 from models import Counter, Activity, DashboardCard, db
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_dashboard
+from form_validation import Champ, LISTE_ENTIERS, extraire, valider
+from transactions import atomic
 from ui_feedback import display_toast
 
 admin_counter_bp = Blueprint('admin_counter', __name__)
@@ -100,36 +102,47 @@ def add_counter_form():
     return render_template('/admin/counter_add_form.html', activities=activities)
 
 
+#: Formulaire de création d'un comptoir (point 5 : schéma déclaratif).
+SCHEMA_COMPTOIR = (
+    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=20),
+    Champ("activities", type=LISTE_ENTIERS, libelle="Les activités"),
+)
+
+
 # enregistre le comptoir dans la Bdd
 @admin_counter_bp.route('/admin/counter/add_new_counter', methods=['POST'])
 @require_permission('counter')
 def add_new_counter():
     try:
-        name = request.form.get('name')
-        activities_ids = request.form.getlist('activities')
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Le nom est obligatoire")
+        valeurs, erreurs = valider(
+            extraire(SCHEMA_COMPTOIR, request.form.get, request.form.getlist),
+            SCHEMA_COMPTOIR,
+        )
+        if erreurs:
+            display_toast(success=False, message=erreurs[0])
             return display_counter_table()
-        
+
+        name = valeurs["name"]
+        activities_ids = valeurs["activities"]
+
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
         max_order_counter = Counter.query.order_by(Counter.sort_order.desc()).first()
         sort_order = max_order_counter.sort_order + 1 if max_order_counter else 0
 
-        new_counter = Counter(
-            name=name,
-            sort_order=sort_order
-        )
-        db.session.add(new_counter)
-        db.session.commit()
+        # Point 6 : création + rattachement des activités dans UNE transaction.
+        # `flush` attribue l'identifiant sans clore la transaction.
+        with atomic():
+            new_counter = Counter(
+                name=name,
+                sort_order=sort_order
+            )
+            db.session.add(new_counter)
+            db.session.flush()
 
-
-        # Associer les activités sélectionnées avec le nouveau pharmacien
-        for activity_id in activities_ids:
-            activity = Activity.query.get(int(activity_id))
-            if activity:
-                new_counter.activities.append(activity)
-        db.session.commit()
+            for activity_id in activities_ids:
+                activity = Activity.query.get(activity_id)
+                if activity:
+                    new_counter.activities.append(activity)
 
         display_toast(success=True, message="Comptoir ajouté")
         

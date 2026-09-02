@@ -7,6 +7,7 @@ from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get
 from python.engine import generate_audio_calling
 from communication import communikation, send_app_notification
 from services import calling_service
+from transactions import atomic
 from auth_utils import require_app_token_or_login
 
 counter_bp = Blueprint('counter', __name__)
@@ -85,36 +86,40 @@ def web_update_counter_staff():
 
 def update_counter_staff():
     app.logger.debug('ma_request %s', request.form)
-    counter = Counter.query.get(request.form.get('counter_id'))  
+    counter = Counter.query.get(request.form.get('counter_id'))
     initials = request.form.get('initials')
-    # la demande vient elle de l'App en mode réduit ?
+    # la demande vient elle de l'App en mode reduit ?
     from_app = request.form.get("app") == "True"
+    # `or ''` : le champ est absent des requetes qui ne le transmettent pas ;
+    # `None.lower()` levait alors une AttributeError (500).
+    veut_deconnecter = (request.form.get('deconnect') or '').strip().lower() == "true"
     staff = Pharmacist.query.filter(func.lower(Pharmacist.initials) == func.lower(initials)).first()
     if staff:
-        # si demande de déconnexion
-        if request.form.get('deconnect').lower() == "true" or request.form.get('deconnect') == 'True':
-            # deconnexion de tous les postes
-            app.logger.debug("on se barre")
-            deconnect_staff_from_all_counters(staff)
-        # Ajout du membre de l'équipe au comptoir        
-        counter.staff = staff
-        db.session.commit()
+        # Point 6 : deconnexion de tous les postes ET rattachement au nouveau
+        # comptoir dans UNE transaction. Auparavant deux commits successifs (un
+        # dans deconnect_staff_from_all_counters, un ici) : un echec du second
+        # laissait le membre deconnecte de partout sans etre connecte nulle part.
+        with atomic():
+            if veut_deconnecter:
+                app.logger.debug("Deconnexion des autres comptoirs")
+                deconnect_staff_from_all_counters(staff)
+            counter.staff = staff
 
-        # mise à jour des boutons
+        # mise a jour des boutons
         communikation("counter", event="update buttons")
-        # On rappelle la base de données pour être sûr que bonne personne au bon comptoir
+        # On rappelle la base de donnees pour etre sur que bonne personne au bon comptoir
         if from_app:
             return api_is_staff_on_counter(request.form.get('counter_id'))
         else:
             return is_staff_on_counter(request.form.get('counter_id'))
 
-    # Si les initiales ne correspondent à rien
-    # on déconnecte l'utilisateur précedemement connecté
-    counter.staff = None
-    db.session.commit()
-    # mise à jour des boutons
+    # Si les initiales ne correspondent a rien
+    # on deconnecte l'utilisateur precedemement connecte
+    with atomic():
+        counter.staff = None
+    # mise a jour des boutons
     communikation("counter", event="update buttons")
-    # on affiche une erreur à la place du nom
+    # on affiche une erreur a la place du nom
     if from_app:
         return "", 204
     else:
@@ -158,27 +163,30 @@ def remove_counter_staff(origine=None):
 
 
 def deconnect_staff_from_all_counters(staff):
-    """ Déconnecte le membre de l'équipe de tous les comptoirs """
-    app.logger.debug("Déconnexion en cours...")
-    
-    # Récupère tous les comptoirs associés à ce membre du personnel
+    """ Deconnecte le membre de l'equipe de tous les comptoirs.
+
+    NE COMMITTE PAS : la transaction appartient a l'appelant
+    (update_counter_staff), pour que la deconnexion et la reconnexion forment un
+    tout indivisible.
+    """
+    app.logger.debug("Deconnexion en cours...")
+
+    # Recupere tous les comptoirs associes a ce membre du personnel
     affected_counters = Counter.query.filter_by(staff=staff).all()
-    
+
     if not affected_counters:
-        app.logger.debug("Aucun comptoir à déconnecter pour ce membre du personnel.")
+        app.logger.debug("Aucun comptoir a deconnecter pour ce membre du personnel.")
         return
-    
+
     for counter in affected_counters:
         app.logger.debug('counter-> %s', counter)
         counter.staff = None
         communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": staff.name})
-    
-    db.session.commit()
-    
-    # TODO A MODIFIER.... 
+
+    # TODO A MODIFIER....
     communikation("counter", event="update buttons")
-    
-    app.logger.debug(f"Déconnexion réussie de {len(affected_counters)} comptoir(s).")
+
+    app.logger.debug(f"Deconnexion reussie de {len(affected_counters)} comptoir(s).")
 
 @counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
 @require_app_token_or_login

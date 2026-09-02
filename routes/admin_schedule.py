@@ -4,6 +4,8 @@ from utils import parse_time
 from routes.admin_activity import update_bouton_after_scheduler_changed
 from routes.admin_security import require_permission
 from communication import communikation
+from form_validation import Champ, LISTE_ENTIERS, extraire, valider
+from transactions import atomic
 from ui_feedback import display_toast
 
 admin_schedule_bp = Blueprint('admin_schedule', __name__)
@@ -69,36 +71,44 @@ def add_schedule_form():
     return render_template('/admin/schedule_add_form.html', weekdays=weekdays)
 
 
+#: Formulaire de creation d'une plage horaire (point 5).
+SCHEMA_HORAIRE = (
+    Champ("name_schedule", obligatoire=True, libelle="Le nom", longueur_max=50),
+    Champ("start_time", libelle="L'heure de debut"),
+    Champ("end_time", libelle="L'heure de fin"),
+    Champ("weekdays", type=LISTE_ENTIERS, libelle="Les jours"),
+)
+
+
 # enregistre l'activité' dans la Bdd
 @admin_schedule_bp.route('/admin/schedule/add_new_schedule', methods=['POST'])
 @require_permission('schedule')
 def add_new_schedule():
     try:
-        name = request.form.get('name_schedule')
-        start_time_str = request.form.get('start_time')
-        end_time_str = request.form.get('end_time')
-        start_time = parse_time(start_time_str)
-        end_time = parse_time(end_time_str)
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
+        valeurs, erreurs = valider(
+            extraire(SCHEMA_HORAIRE, request.form.get, request.form.getlist),
+            SCHEMA_HORAIRE,
+        )
+        if erreurs:
+            display_toast(success=False, message=erreurs[0])
             return display_schedule_table()
 
-        new_schedule = ActivitySchedule(
-            name=name,
-            start_time=start_time,
-            end_time=end_time)
+        start_time = parse_time(valeurs["start_time"])
+        end_time = parse_time(valeurs["end_time"])
 
-        db.session.add(new_schedule)
+        # Point 6 : creation + rattachement des jours dans UNE transaction.
+        with atomic():
+            new_schedule = ActivitySchedule(
+                name=valeurs["name_schedule"],
+                start_time=start_time,
+                end_time=end_time)
+            db.session.add(new_schedule)
+            db.session.flush()
 
-        db.session.commit()
-
-        weekdays_ids = request.form.getlist('weekdays')  # Cela devrait retourner une liste de IDs
-        for weekdays_id in weekdays_ids:
-            weekday = Weekday.query.get(int(weekdays_id))
-            if weekday:
-                new_schedule.weekdays.append(weekday)
-        db.session.commit()
+            for weekdays_id in valeurs["weekdays"]:
+                weekday = Weekday.query.get(weekdays_id)
+                if weekday:
+                    new_schedule.weekdays.append(weekday)
 
         # mise à jour de la table activité si nouvelle plage horaire
         communikation("admin", event="refresh_activity_table")
