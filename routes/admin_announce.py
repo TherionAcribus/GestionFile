@@ -30,7 +30,7 @@ def announce_page(tab=None):
         tab = 'visual'
 
     variables=app.css_variable_manager.get_all_variables('announce')
-    print('variables', variables)
+    app.logger.debug('variables %s', variables)
 
     return render_template('/admin/announce.html', 
                             announce_sound = app.config['ANNOUNCE_SOUND'],
@@ -134,7 +134,7 @@ def gallery_audio_list():
         sounds = [p.name for p in signals_dir.iterdir() if p.is_file() and p.suffix.lower() in {".wav", ".mp3"}]
     except OSError:
         sounds = []
-    print("sounds", sounds)
+    app.logger.debug('sounds %s', sounds)
     return render_template("admin/announce_audio_gallery_list.html",
                             announce_alert_filename = app.config['ANNOUNCE_ALERT_FILENAME'],
                             sounds=sounds)
@@ -182,12 +182,12 @@ def current_signal():
 @admin_announce_bp.route('/admin/announce/audio/save_selected_sound', methods=['POST'])
 @require_permission('announce')
 def select_signal():
-    print(request.values)
+    app.logger.debug("%s", request.values)
     filename = request.form.get('selected_sound')
     if filename:
         app.config['ANNOUNCE_ALERT_FILENAME'] = filename
         config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
-        print(config)
+        app.logger.debug("%s", config)
         config.value_str = filename
         db.session.commit()
 
@@ -409,7 +409,8 @@ def announce_save_google_voice():
         return "", 200
 
     except Exception as e:
-        print(e)
+        db.session.rollback()
+        app.logger.exception("Echec de l'enregistrement du parametre de voix")
         app.display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
 
@@ -419,7 +420,7 @@ def announce_save_google_voice():
 def announce_select_language_voice():
     # Récupérer la voix sélectionnée dans le formulaire
     language_code = request.form.get('language_code', 'fr')
-    print("language_code", language_code)
+    app.logger.debug('language_code %s', language_code)
     language = Language.query.filter_by(code=language_code).first()
     languages = Language.query.all()
     return render_template('/admin/announce_tabs_choice_voices.html',
@@ -436,7 +437,7 @@ def announce_save_voice_model():
     # Récupérer la voix sélectionnée dans le formulaire
     language_id = request.form.get('language_id')
     voice_model = request.form.get('voice_model')
-    print("voice_model", voice_model, language_id)
+    app.logger.debug('voice_model %s %s', voice_model, language_id)
 
     try:
         language = Language.query.get(language_id)
@@ -452,7 +453,8 @@ def announce_save_voice_model():
         return "", 200
 
     except Exception as e:
-        print(e)
+        db.session.rollback()
+        app.logger.exception("Echec de l'enregistrement du parametre de voix")
         app.display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
 
@@ -478,7 +480,8 @@ def announce_save_gtts_voice():
         return "", 200
 
     except Exception as e:
-        print(e)
+        db.session.rollback()
+        app.logger.exception("Echec de l'enregistrement du parametre de voix")
         app.display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
     
@@ -500,6 +503,7 @@ def announce_save_voice_is_active():
         return "", 200
 
     except Exception as e:
-        print(e)
+        db.session.rollback()
+        app.logger.exception("Echec de l'enregistrement du parametre de voix")
         app.display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400

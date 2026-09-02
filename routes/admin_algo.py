@@ -55,7 +55,8 @@ def change_overtaken_limit():
         db.session.commit()
         return app.display_toast()
     except Exception as e:
-        print(e)
+        db.session.rollback()
+        app.logger.exception("Echec de l'enregistrement de la limite de depassement")
         return app.display_toast(success=False, message=str(e))
 
 
@@ -109,8 +110,8 @@ def add_new_rule():
 
     except Exception as e:
         db.session.rollback()
+        app.logger.exception("Echec de l'ajout d'une regle d'algorithme")
         app.display_toast(success=False, message="erreur : " + str(e))
-        print(e)
         return display_algo_table()
 
 

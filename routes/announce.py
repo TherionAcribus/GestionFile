@@ -52,8 +52,8 @@ def patients_ongoing():
     ongoing_patients = []
     for patient in patients:
         ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
-        print("ONGOINT", ongoing_patients)
-        print(patient)
+        app.logger.debug('ONGOINT %s', ongoing_patients)
+        app.logger.debug("%s", patient)
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)
 
 @announce_bp.route('/announce/patients_next')
@@ -95,9 +95,9 @@ def announce_init_gallery():
 
     # Mélange des images si l'option est active
     if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
-        print(images)
+        app.logger.debug("%s", images)
         images.sort(key=lambda x: os.path.basename(x))
-        print(images)
+        app.logger.debug("%s", images)
     
     return render_template('announce/gallery.html', images=images,
                             time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
@@ -109,5 +109,5 @@ def announce_init_gallery():
 def announce_refresh():
     """ Permet de rafraichir la page des annonces pour appliquer les changements """
     communikation("update_screen", event="refresh")
-    print("Refresh DISPLAY!!")
+    app.logger.debug("Refresh DISPLAY!!")
     return '', 204

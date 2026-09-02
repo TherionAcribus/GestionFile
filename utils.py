@@ -14,10 +14,10 @@ def validate_and_transform_text(user_input, allowed_letters):
 
     # Vérifier si tous les placeholders sont parmi les lettres autorisées après correction
     allowed_pattern = "[" + "".join(allowed_letters) + "]"
-    if re.search(r"\{[^" + allowed_pattern + "]?\}", corrected_input) or re.search(r"\{" + allowed_pattern + "[^}]", corrected_input):
+    if re.search(r"\{[^" + allowed_pattern + r"]?\}", corrected_input) or re.search(r"\{" + allowed_pattern + "[^}]", corrected_input):
         return {"success": False, "value": f"Certaines balises sont incorrectes. Vous ne pouvez utiliser que {', '.join(['{' + letter + '}' for letter in allowed_letters])}."}
     
-    print("corrected_input", corrected_input)
+    app.logger.debug('corrected_input %s', corrected_input)
     return {"success": True, "value": corrected_input}
 
 
@@ -101,7 +101,11 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
     # Nous pouvons diviser le texte en parties, en conservant les commandes ESC/POS intactes
 
     # Expression régulière pour séparer le texte en gardant les commandes ESC/POS
-    split_pattern = re.compile('(\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x1b]*\x1b\\\\|\x1b.|[\x00-\x1F])')
+    # Chaine BRUTE : la version non-brute contenait `\[` et `\]`, des séquences
+    # d'échappement invalides que Python signale et qui deviendront des erreurs
+    # de syntaxe. Le moteur `re` interprète lui-même `\x1b`, `\x00` et `\\` :
+    # les deux écritures produisent donc exactement le même découpage (vérifié).
+    split_pattern = re.compile(r'(\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\x1b]*\x1b\\|\x1b.|[\x00-\x1F])')
 
     parts = split_pattern.split(escpos_text)
     wrapped_parts = []
@@ -121,7 +125,7 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
 
 def replace_balise_announces(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)"""
-    print("replace_balise_announces", template, patient)
+    app.logger.debug('replace_balise_announces %s %s', template, patient)
     try:
         if patient.counter.staff:
             return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name, P=app.config.get("PHARMACY_NAME", "") or "")
@@ -138,14 +142,14 @@ def replace_balise_announces(template, patient):
 def replace_balise_phone(template, patient):
     """ Remplace les balises dans les textes d'annonces (texte et son)
     Pour le nom de l'activité, on reprend le nom du bouton pour plus de o"""    
-    print("LANGUES8REPLACE", session.get('language_code'))
-    print('template')
+    app.logger.debug('LANGUES8REPLACE %s', session.get('language_code'))
+    app.logger.debug('template')
     button_label = ""
     if "{A}" in template:
         button = Button.query.filter_by(activity_id=patient.activity_id).first()
         if session.get('language_code') != "fr":        
             button_label = get_buttons_translation([button], session.get('language_code'))[0].label
-            print("button_label", button_label)
+            app.logger.debug('button_label %s', button_label)
         else:
             button_label = button.label
     return template.format(P=app.config["PHARMACY_NAME"],
@@ -179,12 +183,12 @@ def get_buttons_translation(buttons, language_code):
                 language_code=language_code
             ).first()
             
-            print("button", button)
-            print("translation", translation)
+            app.logger.debug('button %s', button)
+            app.logger.debug('translation %s', translation)
             # Si une traduction existe, mettre à jour le label du bouton
             if translation:
                 button.label = translation.translated_text
-    print("buttons", buttons)
+    app.logger.debug('buttons %s', buttons)
     return buttons
 
 
@@ -202,7 +206,7 @@ def get_activity_message_translation(activity, language_code):
 
 
 def get_text_translation(key_name, language_code):
-    print("key_name", key_name, "language_code", language_code)
+    app.logger.debug('key_name %s %s %s', key_name, "language_code", language_code)
     try:
         translation = db.session.query(Translation).filter_by(language_code=language_code, key_name=key_name).first().translated_text
         if translation == "":
@@ -222,8 +226,8 @@ def choose_text_translation(key):
 
 
 def format_ticket_text(new_patient, activity):
-    print("ticket_text", new_patient)
-    print(app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
+    app.logger.debug('ticket_text %s', new_patient)
+    app.logger.debug("%s", app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
     if session.get('language_code') != "fr":
         language_code = session.get('language_code')
         text_list = [

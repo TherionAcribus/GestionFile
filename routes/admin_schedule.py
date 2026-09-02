@@ -42,7 +42,7 @@ def update_schedule(schedule_id):
             activities_with_this_schedule = Activity.query.join(activity_schedule_link).filter(
                 activity_schedule_link.c.schedule_id == schedule_id
             ).all()
-            print("activities_with_this_schedule", activities_with_this_schedule)
+            app.logger.debug('activities_with_this_schedule %s', activities_with_this_schedule)
             for activity in activities_with_this_schedule:
                 update_bouton_after_scheduler_changed(activity)
 

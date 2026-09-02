@@ -154,7 +154,7 @@ def add_new_staff():
 @admin_staff_bp.route('/admin/staff/dashboard')
 @require_permission_dashboard('staff')
 def dashboard_staff():
-    print("dashboard staff")
+    app.logger.debug("dashboard staff")
     staffs = Pharmacist.query.all()
     dashboardcard = DashboardCard.query.filter_by(name="staff").first()
     return render_template('/admin/dashboard_staff.html', 

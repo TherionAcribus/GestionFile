@@ -126,30 +126,6 @@ def load_phone_css_variables_from_json(json_file, restore=False):
 def init_default_options_db_from_json():
     json_file='static/json/default_config.json'
     load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False)
-    
-def restore_config_table_from_json(db, ConfigVersion, ConfigOption, request):
-    current_app.logger.info("Restauration de la table CONFIG")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                json_file = os.path.join('static/tmp', file.filename)
-                file.save(json_file)
-                load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=True)
-                os.remove(json_file)
-                # rechargement du "cache"
-                current_app.load_configuration()
-                current_app.display_toast(success=True, message="Restauration reussie")
-            else:
-                current_app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            os.remove(json_file)
-            current_app.logger.info(f'An error occurred: {e}')
-            current_app.display_toast(success=False, message=e)
-        return redirect(url_for('admin_app'))
-    return redirect(url_for('admin_app'))  
-
 # Mise à jour ou initialisation des options par défaut
 def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, restore=False):
     with current_app.app_context():
@@ -204,44 +180,6 @@ def init_staff_data_from_json():
         if not current_version:
             create_version_number(ConfigVersion, data, db, key="staff_version")
             staff_restore_init(Pharmacist, Activity, db, restore=False, file_path="static/json/default_staff.json")
-
-
-def restore_staff(db, ConfigVersion, Pharmacist, Activity, request):    
-    current_app.logger.info("staff_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-                
-                # on s'assure que le fichier est bien un fichier gérant le staff
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    backup_data = json.load(file)
-                    if backup_data.get("name") != "gf_staff" or backup_data.get("type") not in ["backup", "default"]:
-                        current_app.logger.error('Invalid backup file.')
-                        return "", 200
-                
-                # on efface la table puis on l'initialise avec le nouveau fichier
-                db.session.query(Pharmacist).delete()
-                db.session.commit()
-                print("effacement de la table")
-                
-                staff_restore_init(Pharmacist, Activity, db, restore=True, file_path=file_path)
-                os.remove(file_path)  # Optionally remove the file after processing
-                
-                print("rechargement du cache")
-                current_app.display_toast(success=True, message="Restauration reussie")
-                
-            else:
-                current_app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
-        return redirect(url_for('staff'))
-    return render_template('restore.html')
-
-
 def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         backup_data = json.load(file)
@@ -289,42 +227,6 @@ def init_counters_data_from_json():
         create_version_number(ConfigVersion, data, db, key="counters_version")
         if not current_version:
             counter_restore_init(Counter, Activity, ConfigVersion, db, restore=False, file_path=json_file)
-
-
-def restore_counters(db, ConfigVersion, Counter, Activity, request):
-    current_app.logger.info("counter_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    backup_data = json.load(file)
-                    if backup_data.get("name") != "gf_counters" or backup_data.get("type") not in ["backup", "default"]:
-                        current_app.logger.error('Invalid backup file.')
-                        return "", 200
-                    
-                # on efface la table puis on l'initialise avec le nouveau fichier
-                db.session.query(Counter).delete()
-                db.session.commit()
-                print("effacement de la table")
-
-                counter_restore_init(Counter, Activity, ConfigVersion, db, restore=True, file_path=file_path)
-                os.remove(file_path)  
-
-                current_app.display_toast(success=True, message="Restauration reussie")
-            else:
-                current_app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            os.remove(file_path)  
-            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
-        return redirect(url_for('admin_counter'))
-    return render_template('restore.html')
-
-
 def counter_restore_init(Counter, Activity, ConfigVersion, db, restore, file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         backup_data = json.load(file)
@@ -359,79 +261,6 @@ def counter_restore_init(Counter, Activity, ConfigVersion, db, restore, file_pat
             db.session.rollback()
             current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
             raise
-
-
-# ACTIVITIES SCHEDULES
-
-def restore_schedules(db, ConfigVersion, ActivitySchedule, Activity, Weekday, request):
-    current_app.logger.info("staff_restore" + request.method)
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-                print("RESTORE ACTIVITY SCHEDULES", file_path)
-                schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, db, file_path, is_restore=True)
-                os.remove(file_path)  # Optionally remove the file after processing
-            else:
-                print('Invalid file format. Please upload a JSON file.', 'danger')
-        except Exception as e:
-            db.session.rollback()
-            print(f'An error occurred: {e}', 'danger')
-        return redirect(url_for('activity'))
-    return render_template('restore.html')
-
-
-def schedules_restore_init(ActivitySchedule, Activity, Weekday, ConfigVersion, db, file_path, is_restore=False):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        backup_data = json.load(file)
-        
-        # Vérification des métadonnées
-        if backup_data.get("name") != "gf_activity_schedules" or backup_data.get("type") not in ["backup", "default"]:
-            current_app.logger.error('Invalid backup file.')
-            if is_restore:
-                return redirect(url_for('index'))
-
-        # Mise à jour de la version si ce n'est pas une restauration
-        if not is_restore:
-            current_version = ConfigVersion.query.filter_by(config_key="activity_schedule_version").first()
-            if not current_version or current_version.version != backup_data['version']:
-                if not current_version:
-                    new_version = ConfigVersion(key="activity_schedule_version", version=backup_data['version'])
-                    db.session.add(new_version)
-                else:
-                    current_version.version = backup_data['version']
-
-        # Mise à jour des données ActivitySchedule
-        schedules_json = backup_data.get("activity_schedules", [])
-        for schedule_json in schedules_json:
-            print("schedule_json", schedule_json)
-            weekdays_ids = schedule_json.pop('weekdays', [])
-            activities_ids = schedule_json.pop('activities', [])
-            schedule = db.session.get(ActivitySchedule, schedule_json['id'])
-            if not schedule:
-                schedule = ActivitySchedule(**schedule_json)
-            else:
-                schedule.from_dict(schedule_json)
-
-            schedule.weekdays = []
-            for weekday_id in weekdays_ids:
-                weekday = db.session.get(Weekday, weekday_id)
-                if weekday:
-                    schedule.weekdays.append(weekday)
-
-            schedule.activities = []
-            for activity_id in activities_ids:
-                activity = db.session.get(Activity, activity_id)
-                if activity:
-                    schedule.activities.append(activity)
-
-            db.session.add(schedule)
-        db.session.commit()
-        current_app.logger.info('Restoration successful!')
-
-
 # ACTIVITIES 
 
 def init_default_activities_db_from_json():
@@ -449,42 +278,6 @@ def init_default_activities_db_from_json():
 
         if not current_version:
             activity_restore_init(Activity, ActivitySchedule, db, restore=False, file_path=json_file)
-
-
-def restore_activities(db, ConfigVersion, Activity, ActivitySchedule, request):
-    current_app.logger.info("activity_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    backup_data = json.load(file)
-                    if backup_data.get("name") != "gf_activities" or backup_data.get("type") not in ["backup", "default"]:
-                        current_app.logger.error('Invalid backup file.')
-                        return "", 200
-
-                # Effacer la table avant de la réinitialiser avec le nouveau fichier
-                db.session.query(Activity).delete()
-                db.session.commit()
-                print("Effacement de la table ACTIVITIES")
-
-                activity_restore_init(Activity, ActivitySchedule, db, restore=True, file_path=file_path)
-                os.remove(file_path)
-
-                current_app.display_toast(success=True, message="Restauration réussie")
-            else:
-                current_app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            os.remove(file_path)
-            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
-        return redirect(url_for('admin_activity'))
-    return render_template('restore.html')
-
-
 def activity_restore_init(Activity, ActivitySchedule, db, restore, file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         backup_data = json.load(file)
@@ -536,42 +329,6 @@ def init_default_algo_rules_db_from_json():
         if not current_version:
             create_version_number(ConfigVersion, data, db, key="algo_rules_version")
             algo_rule_restore_init(AlgoRule, db, restore=False, file_path=json_file)
-
-
-def restore_algorules(db, ConfigVersion, AlgoRule, request):
-    current_app.logger.info("algo_rule_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    backup_data = json.load(file)
-                    if backup_data.get("name") != "gf_algo_rules" or backup_data.get("type") not in ["backup", "default"]:
-                        current_app.logger.error('Invalid backup file.')
-                        return "", 200
-
-                # Effacer la table avant de la réinitialiser avec le nouveau fichier
-                db.session.query(AlgoRule).delete()
-                db.session.commit()
-                print("Effacement de la table ALGO_RULES")
-
-                algo_rule_restore_init(AlgoRule, db, restore=True, file_path=file_path)
-                os.remove(file_path)
-
-                current_app.display_toast(success=True, message="Restauration réussie")
-            else:
-                current_app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            os.remove(file_path)
-            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
-        return redirect(url_for('admin_algo'))
-    return render_template('restore.html')
-
-
 def algo_rule_restore_init(AlgoRule, db, restore, file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         backup_data = json.load(file)
@@ -632,46 +389,6 @@ def init_default_buttons_db_from_json():
         if not current_version:
             create_version_number(ConfigVersion, data, db, key="buttons_version")
             button_restore_init(Button, Activity, db, restore=False, file_path=json_file)
-
-
-def restore_buttons(db, ConfigVersion, Button, Activity, request):
-    current_app.logger.info("button_restore")
-    if request.method == 'POST':
-        try:
-            file = request.files['file']
-            if file and file.filename.endswith('.json'):
-                file_path = os.path.join('static/json', file.filename)
-                file.save(file_path)
-
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    backup_data = json.load(file)
-                    if backup_data.get("name") != "gf_buttons" or backup_data.get("type") not in ["backup", "default"]:
-                        current_app.logger.error('Invalid backup file.')
-                        return "", 200
-
-                # Effacer la table avant de la réinitialiser avec le nouveau fichier
-                # Supprimer d'abord les boutons enfants
-                db.session.query(Button).filter(Button.parent_button_id.isnot(None)).delete(synchronize_session=False)
-
-                # Ensuite, supprimer les boutons parents
-                db.session.query(Button).filter(Button.parent_button_id.is_(None)).delete(synchronize_session=False)
-                db.session.commit()
-                print("Effacement de la table BUTTONS")
-
-                button_restore_init(Button, Activity, db, restore=True, file_path=file_path)
-                os.remove(file_path)
-
-                current_app.display_toast(success=True, message="Restauration réussie")
-            else:
-                current_app.logger.error('Invalid file format. Please upload a JSON file.')
-        except Exception as e:
-            db.session.rollback()
-            os.remove(file_path)
-            current_app.logger.error(f'An error occurred during commit: {e}', exc_info=True)
-        return redirect(url_for('admin_patient'))
-    return render_template('restore.html')
-
-
 def button_restore_init(Button, Activity, db, restore, file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         backup_data = json.load(file)
@@ -709,12 +426,16 @@ def restore_button(button_json, Button, Activity, db):
 # DATABASE
 
 def restore_databases(request, database):
-    
     if database == "sqlite":
         restore_sqlite(request)
         return "", 200
     elif database == "mysql":
-        restore_mysql(request)
+        # Le code de statut de restore_mysql etait jete : on renvoyait 200 meme
+        # quand la restauration avait echoue. On ne propage que l'echec, pour ne
+        # pas changer le corps de la reponse du cas nominal (consomme par HTMX).
+        message, statut = restore_mysql(request)
+        if statut != 200:
+            return message, statut
         return "", 200
 
 
@@ -768,15 +489,21 @@ def restore_mysql(request):
         )
         cursor = connection.cursor()
 
+        echecs = 0
         with zipfile.ZipFile(zip_buffer, 'r') as zip_file:
             for sql_file in zip_file.namelist():
-                db_name = sql_file.replace('.sql', '')                    
+                db_name = sql_file.replace('.sql', '')
                 sql_content = zip_file.read(sql_file)
-                restore_mysql_database(db_name, sql_content, cursor, connection)
-        
+                echecs += restore_mysql_database(db_name, sql_content, cursor, connection)
+
         connection.commit()
         cursor.close()
         connection.close()
+
+        if echecs:
+            # Le retour de restore_mysql_database etait purement et simplement
+            # ignore : une restauration a moitie ratee repondait 200 "success".
+            return f"Restauration incomplete : {echecs} instruction(s) SQL en echec (voir les journaux)", 500
 
         return "All databases restored successfully", 200
     else:
@@ -784,7 +511,7 @@ def restore_mysql(request):
     
 
 def restore_mysql_database(db_name, sql_content, cursor, connection):
-    print(f"Starting restoration of database {db_name}")
+    current_app.logger.debug(f"Starting restoration of database {db_name}")
     
     # Sélectionner la base de données avant de restaurer
     cursor.execute(f"USE {db_name}")
@@ -797,29 +524,41 @@ def restore_mysql_database(db_name, sql_content, cursor, connection):
     cursor.execute("SHOW TABLES")
     tables = cursor.fetchall()
     for table in tables:
-        print(f"TABLE TO DROP {table}")
+        current_app.logger.debug("Suppression de la table %s", table[0])
         cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
         connection.commit()  # Commit after each table drop
-    
+
     # Diviser le contenu du fichier SQL en statements individuels
     statements = sql_content.decode('utf-8').split(';')
+    echecs = 0
     for statement in statements:
         statement = statement.strip()
         if statement:
-            print(f"STATEMENT {statement[:50]}...")  # Print first 50 chars to avoid long output
             try:
                 cursor.execute(statement)
                 connection.commit()  # Commit after each statement
             except Exception as e:
-                print(f"Error executing statement: {e}")
-    
+                # On poursuit volontairement le rejeu (les tables ont deja ete
+                # supprimees : s'arreter laisserait une base vide). Mais on
+                # COMPTE les echecs et on les remonte a l'appelant : auparavant
+                # ils partaient sur stdout et la restauration se declarait
+                # "successful" meme apres avoir tout perdu.
+                echecs += 1
+                current_app.logger.error(
+                    "Restauration %s : echec du statement %r -> %s",
+                    db_name, statement[:80], e,
+                )
+
     # Réactiver les vérifications des clés étrangères
     cursor.execute("SET FOREIGN_KEY_CHECKS=1;")
     connection.commit()
 
-    print(f"Database {db_name} restored successfully")
+    if echecs:
+        current_app.logger.error("Restauration de %s TERMINEE AVEC %d ECHEC(S)", db_name, echecs)
+    else:
+        current_app.logger.info("Base %s restauree avec succes", db_name)
 
-    return True
+    return echecs
 
 
 # A TRIER 
@@ -856,7 +595,7 @@ def init_update_default_translations_db_from_json():
                             db.session.add(new_text_trans)
         
         db.session.commit()
-        print("Database updated to version:", data['version'])
+        current_app.logger.debug('Database updated to version: %s', data['version'])
 
 
 def init_default_languages_db_from_json():
@@ -865,7 +604,7 @@ def init_default_languages_db_from_json():
     json_file = 'static/json/default_languages.json'
     # Vérifier si la table est vide
     if Language.query.first() is None:
-        print("Initialisation des langues...")
+        current_app.logger.debug("Initialisation des langues...")
         # Charger les activités depuis le fichier JSON
         if os.path.exists(json_file):
             with open(json_file, 'r', encoding='utf-8') as f:
@@ -887,10 +626,10 @@ def init_default_languages_db_from_json():
 
             # Valider les changements
             db.session.commit()
-            print("Langues ajoutées avec succès.")
+            current_app.logger.debug("Langues ajoutées avec succès.")
 
         else:
-            print(f"Fichier {json_file} introuvable.")
+            current_app.logger.debug(f"Fichier {json_file} introuvable.")
     else:
         # Corriger les flag_url manquants ou invalides pour les langues existantes
         _fix_missing_flag_urls(json_file)
@@ -913,7 +652,7 @@ def _fix_missing_flag_urls(json_file):
             if default_flag:
                 language.flag_url = default_flag
                 updated = True
-                print(f"Flag corrigé pour {language.code}: {default_flag}")
+                current_app.logger.debug(f"Flag corrigé pour {language.code}: {default_flag}")
 
     if updated:
         db.session.commit()
@@ -924,10 +663,10 @@ def init_or_update_default_texts_db_from_json():
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    print("DATA VERSION", data['version'])
+    current_app.logger.debug('DATA VERSION %s', data['version'])
 
     current_version = ConfigVersion.query.filter_by(config_key="texts_version").first()
-    print("Data version:", data['version'])
+    current_app.logger.debug('Data version: %s', data['version'])
     if not current_version or current_version.version != data['version']:
         # Mise à jour de la version
         if current_version:
@@ -950,7 +689,7 @@ def init_or_update_default_texts_db_from_json():
                 text.text_value = text_data['value']  # Utilisation de text_value au lieu de text
 
         db.session.commit()
-        print("Database updated to version:", data['version'])
+        current_app.logger.debug('Database updated to version: %s', data['version'])
 
 
 def init_default_dashboard_db_from_json():
@@ -958,10 +697,10 @@ def init_default_dashboard_db_from_json():
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    print("DATA VERSION", data['version'])
+    current_app.logger.debug('DATA VERSION %s', data['version'])
 
     current_version = ConfigVersion.query.filter_by(config_key="dashboard_version").first()
-    print("Data version:", data['version'])
+    current_app.logger.debug('Data version: %s', data['version'])
     if not current_version or current_version.version != data['version']:
         # Mise à jour de la version
         if current_version:
@@ -981,7 +720,7 @@ def init_default_dashboard_db_from_json():
                 db.session.add(new_dashboard_card)
 
         db.session.commit()
-        print("Database updated to version:", data['version'])
+        current_app.logger.debug('Database updated to version: %s', data['version'])
 
 
 def init_days_of_week_db_from_json():

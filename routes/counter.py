@@ -26,9 +26,8 @@ def app_counter_paper_add():
 
 @counter_bp.route('/counter/paper_add/<int:add_paper>', methods=['GET'])
 def action_add_paper(add_paper, from_printer=False):
-    print("action_add_paper", add_paper)
+    app.logger.debug("action_add_paper %s", add_paper)
     try:
-        print("action_add_paper", add_paper)
         config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
         config_option.value_bool = add_paper
         db.session.commit()
@@ -38,8 +37,14 @@ def action_add_paper(add_paper, from_printer=False):
             communikation("app_counter", data={"add_paper": add_paper}, event="paper")
             send_app_notification(origin="low_paper", data={"add_paper": add_paper})
         return counter_paper_add()
-    except Exception as e:
-        print(e)
+    except Exception:
+        # Avant : `print(e)` puis retour implicite de None -- Flask levait alors
+        # "View function did not return a valid response" et le client recevait
+        # un 500 sans le moindre diagnostic, la vraie erreur n'ayant ete ecrite
+        # que sur stdout.
+        db.session.rollback()
+        app.logger.exception("Echec de la mise a jour de l'etat papier (add_paper=%s)", add_paper)
+        return jsonify({"error": "paper_update_failed"}), 500
 
 
 @counter_bp.route('/app/counter/paper_add', methods=['POST'])
@@ -49,20 +54,23 @@ def app_paper_add():
         return jsonify({"status": app.config["ADD_PAPER"]}), 200 # 
     else:
         add_paper_action = True if request.form.get('action') == "activate" else False
-        print("app_paper_add", add_paper_action)
+        app.logger.debug("app_paper_add %s", add_paper_action)
         try:
             config_option = ConfigOption.query.filter_by(config_key="add_paper").first()
             config_option.value_bool = add_paper_action
             db.session.commit()
             app.config["ADD_PAPER"] = add_paper_action
 
-            #app.communikation("counter", event="paper")
             communikation("app_counter", {"add_paper": add_paper_action}, event="paper")
-        
+
             return {"status": app.config["ADD_PAPER"] }, 200
 
-        except Exception as e:
-            print(e)
+        except Exception:
+            # Meme correctif que action_add_paper : sans retour explicite, l'App
+            # recevait un 500 vide au lieu d'une erreur exploitable.
+            db.session.rollback()
+            app.logger.exception("Echec de la mise a jour de l'etat papier depuis l'App")
+            return jsonify({"error": "paper_update_failed"}), 500
 
 
 @counter_bp.route('/app/counter/update_staff', methods=['POST'])
@@ -77,7 +85,7 @@ def web_update_counter_staff():
 
 
 def update_counter_staff():
-    print('ma_request', request.form)
+    app.logger.debug('ma_request %s', request.form)
     counter = Counter.query.get(request.form.get('counter_id'))  
     initials = request.form.get('initials')
     # la demande vient elle de l'App en mode réduit ?
@@ -87,7 +95,7 @@ def update_counter_staff():
         # si demande de déconnexion
         if request.form.get('deconnect').lower() == "true" or request.form.get('deconnect') == 'True':
             # deconnexion de tous les postes
-            print("on se barre")
+            app.logger.debug("on se barre")
             deconnect_staff_from_all_counters(staff)
         # Ajout du membre de l'équipe au comptoir        
         counter.staff = staff
@@ -127,7 +135,7 @@ def is_staff_on_counter(counter_id):
 def api_is_staff_on_counter(counter_id):
     counter = Counter.query.get(counter_id)
     if counter.staff:
-        print("counter", counter.staff)
+        app.logger.debug('counter %s', counter.staff)
         return jsonify({"staff": counter.staff.to_dict()}), 200
     else:
         return "", 204 
@@ -152,17 +160,17 @@ def remove_counter_staff(origine=None):
 
 def deconnect_staff_from_all_counters(staff):
     """ Déconnecte le membre de l'équipe de tous les comptoirs """
-    print("Déconnexion en cours...")
+    app.logger.debug("Déconnexion en cours...")
     
     # Récupère tous les comptoirs associés à ce membre du personnel
     affected_counters = Counter.query.filter_by(staff=staff).all()
     
     if not affected_counters:
-        print("Aucun comptoir à déconnecter pour ce membre du personnel.")
+        app.logger.debug("Aucun comptoir à déconnecter pour ce membre du personnel.")
         return
     
     for counter in affected_counters:
-        print("counter->", counter)
+        app.logger.debug('counter-> %s', counter)
         counter.staff = None
         communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": staff.name})
     
@@ -171,7 +179,7 @@ def deconnect_staff_from_all_counters(staff):
     # TODO A MODIFIER.... 
     communikation("counter", event="update buttons")
     
-    print(f"Déconnexion réussie de {len(affected_counters)} comptoir(s).")
+    app.logger.debug(f"Déconnexion réussie de {len(affected_counters)} comptoir(s).")
 
 @counter_bp.route('/api/counter/is_patient_on_counter/<int:counter_id>', methods=['GET'])
 @require_app_token_or_login
@@ -311,7 +319,7 @@ def update_switch_auto_calling():
 def app_auto_calling():
     counter_id = request.form.get('counter_id')
     action = request.form.get('action')
-    print("autocalling", action)
+    app.logger.debug('autocalling %s', action)
 
     if action is None:
         counter = Counter.query.get(counter_id)
@@ -324,10 +332,10 @@ def app_auto_calling():
     # notification de changement
     communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_value})
 
-    print(success, result, status_code)
+    app.logger.debug('%s %s %s', success, result, status_code)
     if not success:
         return jsonify({"error": result}), status_code
-    print("OL ")
+    app.logger.debug("OL ")
     return jsonify(result), status_code
     
 
@@ -348,7 +356,7 @@ def app_init_app():
 @counter_bp.route('/app/counter/remove_staff', methods=['POST'])
 @require_app_token_or_login
 def app_remove_counter_staff():
-    print("deconnction")
+    app.logger.debug("deconnction")
     remove_counter_staff()
     return '', 200
 
@@ -385,7 +393,7 @@ def list_of_activities():
 @counter_bp.route('/counter/select_patient/<int:counter_id>/<int:patient_id>', methods=['GET'])
 def counter_select_patient(counter_id, patient_id):
     """ Appeler lors du choix d'un patient spécifique au comptoir """
-    print("counter_select_patient", counter_id, patient_id)
+    app.logger.debug('counter_select_patient %s %s', counter_id, patient_id)
     app.call_specific_patient(counter_id, patient_id)
     communikation("update_patient")
     next_patient = Patient.query.get(patient_id)
@@ -455,7 +463,7 @@ def delete_patient_from_app(patient_id):
 
 def handle_patient_from_app(patient_id, action, activity_id=None):    
     patient = Patient.query.get(patient_id)
-    print("STANDING", patient)
+    app.logger.debug('STANDING %s', patient)
 
     if action == "delete":
         status = "done"  # en cas de suppression de la part du comptoir, on marque le patient comme terminé
@@ -475,7 +483,7 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
             if new_activity:
                 patient.activity_id = activity_id
                 patient.activity = new_activity
-                print(f"Activity changed to: {new_activity.name}")
+                app.logger.debug(f"Activity changed to: {new_activity.name}")
         
         db.session.commit()
 
@@ -510,20 +518,20 @@ def get_counters_from_activity(activity_id):
     # Récupérer l'activité à partir de l'ID
     activity = Activity.query.get(activity_id)
     if not activity:
-        print(f"Activity with ID {activity_id} not found.")
+        app.logger.debug(f"Activity with ID {activity_id} not found.")
         return None
 
     # Récupérer le staff associé à cette activité
     staff = activity.staff
     if not staff:
-        print(f"No staff associated with Activity ID {activity_id}.")
+        app.logger.debug(f"No staff associated with Activity ID {activity_id}.")
         return None
 
     # Récupérer tous les comptoirs associés à ce staff
     counters = staff.counter if isinstance(staff.counter, list) else [staff.counter]
 
     if not counters:
-        print(f"No counters associated with staff ID {staff.id} for Activity ID {activity_id}.")
+        app.logger.debug(f"No counters associated with staff ID {staff.id} for Activity ID {activity_id}.")
         return None
 
     # Retourner les comptoirs

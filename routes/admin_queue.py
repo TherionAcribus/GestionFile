@@ -211,7 +211,7 @@ def create_new_patient_auto():
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
 
-    print("new_patient", activity)
+    current_app.logger.debug('new_patient %s', activity)
     communikation("update_patient")
 
     return "", 204

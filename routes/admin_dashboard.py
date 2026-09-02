@@ -243,9 +243,11 @@ def save_dashboard_configuration():
         template_name = f'admin/dashboard_{dashboardcard.name}.html'
         try:
             html += render_template(template_name, **context)
-        except Exception as e:
-            print(f"Erreur lors du rendu de {template_name}: {e}")
-            # Fallback sur le wrapper si le template n'existe pas
+        except Exception:
+            # Repli sur le gabarit d'attente si celui de la carte n'existe pas
+            # (ou leve). Trace complete : une erreur Jinja dans une carte etait
+            # jusqu'ici indiscernable d'un gabarit simplement absent.
+            app.logger.exception("Rendu impossible du gabarit de carte %s", template_name)
             html += render_template(f'admin/dashboard_load_{dashboardcard.name}.html', dashboardcard=dashboardcard)
     
     return html, 200

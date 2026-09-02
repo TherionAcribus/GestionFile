@@ -26,7 +26,7 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
         # un rechargement de l'état autoritatif via /api/counter/<id>/state.
         revision = bump_queue_revision()
         patients = create_patients_list_for_pyside()
-        print('PATIENT LIST', patients)
+        current_app.logger.debug('PATIENT LIST %s', patients)
         communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list", revision=revision)
         communication_websocket("socket_update_patient", patients, event=event, revision=revision)
     elif stream == "update_audio":
@@ -38,7 +38,7 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
                 audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
                 if current_app.config["ANNOUNCE_PLAYER"] == "web":
                     communication_websocket("socket_update_screen", audio_path, event="audio")
-                    print('AUDIO_PATH', audio_path)
+                    current_app.logger.debug('AUDIO_PATH %s', audio_path)
                 else:
                     communication_websocket("socket_app_screen", audio_path, "sound")
             if current_app.config["ANNOUNCE_PLAYER"] == "web":
@@ -82,7 +82,7 @@ def send_app_notification(origin, data):
     for_counter = None
     if origin == "activity":
         message = f"{data['activity'].name} : {data['patient'].call_number}"
-        print("message_notif:", message)
+        current_app.logger.debug('message_notif: %s', message)
     elif origin == "printer_error":
         message = f"Erreur d'impression: {data['message']}"
     elif origin == "low_paper":

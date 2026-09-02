@@ -176,7 +176,7 @@ def load_configuration(app):
     app.config["VOICE_GTTS_NAME"] = french.voice_gtts_name
     app.config["VOICE_GOOGLE_NAME"] = french.voice_google_name
     app.config["VOICE_GOOGLE_REGION"] = french.voice_google_region
-    print("VOICE_MODEL", app.config["VOICE_MODEL"])
+    app.logger.debug('VOICE_MODEL %s', app.config["VOICE_MODEL"])
 
     # printer — état RUNTIME (historique du statut imprimante, poussé par l'App
     # Patient et accumulé en mémoire). Point 11 : ``load_configuration`` peut être
@@ -638,11 +638,14 @@ def rabbitmq_status_local():
 
     try:
         connection = pika.BlockingConnection(params)
-        print("Successfully connected to RabbitMQ (local)")
         connection.close()
+        return jsonify({"status": "RabbitMQ is running"})
     except Exception as e:
-        print(f"Failed to connect to RabbitMQ (local): {e}")
-    return "", 204
+        # Auparavant cette sonde renvoyait 204 meme quand la connexion echouait :
+        # elle affichait donc "tout va bien" en toute circonstance, le diagnostic
+        # partant sur stdout. Meme contrat que /test ci-dessus.
+        app.logger.warning("Connexion RabbitMQ (local) impossible : %s", e)
+        return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -1048,7 +1051,7 @@ CSS_SOURCE_PERMISSION = {
 
 @app.route('/admin/update_css_variable_old', methods=['POST'])
 def update_css_variable_old():
-    print(request.form)
+    app.logger.debug("%s", request.form)
     try:
         # Récupération des données
         source = request.form.get('source')
@@ -1095,7 +1098,7 @@ def update_css_variable_old():
 
 @app.route('/admin/update_css_variable', methods=['POST'])
 def update_css_variable():
-    print("UPDATE!!!")
+    app.logger.debug("UPDATE!!!")
 
     source_name = request.form.get('source')
     variable_name = request.form.get('variable')
@@ -1356,13 +1359,13 @@ def call_function_with_switch(key, value):
 
 def check_balises_before_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
-    print("call_function_with_input", value)
+    app.logger.debug('call_function_with_input %s', value)
 
     #return validate_and_transform_text_for_before_validation(value)
 
 def check_balises_after_validation(value):
     """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
-    print("call_function_with_input", value)
+    app.logger.debug('call_function_with_input %s', value)
 
     #return validate_and_transform_text_for_after_validation(value)
 
@@ -1455,7 +1458,7 @@ def enable_buttons_for_activity_task(activity_id):
 
 @app.route('/patient_right_page_default')
 def patient_right_page_default():
-    print("default")
+    app.logger.debug("default")
     return render_template('htmx/patient_right_page_default.html')
 
 
@@ -1507,7 +1510,7 @@ def call_specific_patient(counter_id, patient_id):
 @require_app_token_or_login
 def validate_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
-    print("validation", patient_id)
+    app.logger.debug('validation %s', patient_id)
 
     if patient_id:
         current_patient = Patient.query.get(patient_id)
@@ -1537,7 +1540,7 @@ def update_patient_status():
 @app.route('/patients/<lang>')
 def patients_langue(lang):
     session['lang'] = lang
-    print(session['lang'])
+    app.logger.debug("%s", session['lang'])
     return render_template('patients.html', cache=False)
 
 
@@ -1546,7 +1549,7 @@ def patients_langue(lang):
 @with_app_context
 def auto_calling():
     # si il y a des comptoirs en appel automatique on lance l'appel automatique
-    print(app.config["AUTO_CALLING"])
+    app.logger.debug("%s", app.config["AUTO_CALLING"])
     if len(app.config["AUTO_CALLING"]) > 0:
         counters = db.session.query(Counter).filter(
             Counter.id.in_(current_app.config["AUTO_CALLING"]),
@@ -1554,7 +1557,7 @@ def auto_calling():
             Counter.staff_id != None
         ).all()
 
-        print("auto counters", counters)
+        app.logger.debug('auto counters %s', counters)
 
         if app.config["COUNTER_ORDER"] == "order":
             counters = sorted(counters, key=lambda x: x.sort_order)
@@ -1563,7 +1566,7 @@ def auto_calling():
 
         for counter in counters:
             if not counter.is_active:
-                print("auto calling counter libre", counter.id)
+                app.logger.debug('auto calling counter libre %s', counter.id)
                 is_patient, patient = call_next(int(counter.id))
                 # mise à jour écran ... bizarremment l'audio est dans le call next....
                 text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
@@ -1589,7 +1592,7 @@ def list_patients_standing():
 @app.route('/countert/<int:counter_id>')
 def counter_test(counter_id):
 
-    print("counter_number", counter_id)
+    app.logger.debug('counter_number %s', counter_id)
     counter = Counter.query.get(counter_id)
     activities = Activity.query.all()
     # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
@@ -1604,7 +1607,7 @@ def counter_test(counter_id):
 @app.route('/counter/<int:counter_id>')
 def counter(counter_id):
 
-    print("counter_number", counter_id)
+    app.logger.debug('counter_number %s', counter_id)
     counter = Counter.query.get(counter_id)
     activities = Activity.query.all()
     # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
@@ -1626,19 +1629,19 @@ def wrong_counter(counter_id):
 @app.route('/current_patient_for_counter/<int:counter_id>')
 def current_patient_for_counter(counter_id):
     """ Affiche le patient en cours de traitement pour un comptoir """
-    print('counter_number ??', counter_id)
+    app.logger.debug('counter_number ?? %s', counter_id)
     patient = Patient.query.filter(
         Patient.counter_id == counter_id,
         Patient.status != 'done'
     ).first()
-    print("CURRENT", patient)
+    app.logger.debug('CURRENT %s', patient)
     return render_template('counter/current_patient_for_counter.html', patient=patient)
 
 
 @app.route('/counter/buttons_for_counter/<int:counter_id>')
 def current_patient_for_counter_test(counter_id):
     """ Affiche le patient en cours de traitement pour un comptoir """
-    print('counter_number', counter_id)
+    app.logger.debug('counter_number %s', counter_id)
     patient = Patient.query.filter(
         Patient.counter_id == counter_id, 
         Patient.status != "done"
@@ -1671,12 +1674,12 @@ def switch_auto_calling(counter_id):
 # A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
 @app.route('/counter_buttons/<int:counter_id>/')
 def counter_refresh_buttons(counter_id):
-    print('BUTTONS', counter_id)
+    app.logger.debug('BUTTONS %s', counter_id)
     patient = Patient.query.filter(
         Patient.counter_id == counter_id, 
         Patient.status != "done"
     ).first()
-    print("Patient", patient)
+    app.logger.debug('Patient %s', patient)
     if not patient:
         patient_id = None
         patient_status = None
@@ -1691,7 +1694,7 @@ def counter_refresh_buttons(counter_id):
 @require_app_token_or_login
 @idempotent
 def validate_and_call_next(counter_id):
-    print('validate_and_call_next', counter_id)
+    app.logger.debug('validate_and_call_next %s', counter_id)
 
     current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
     if current_patient:
@@ -1731,7 +1734,7 @@ def validate_current_patient(counter_id):
     ).all()
 
     if not active_patients:
-        print("pas de patient")
+        app.logger.debug("pas de patient")
         return
 
     now = datetime.now(time_tz)
@@ -1747,8 +1750,8 @@ def validate_current_patient(counter_id):
 @require_app_token_or_login
 def pause_patient(counter_id, patient_id):
     # Valide le patient actuel au comptoir sans appeler le prochain
-    print("pause_patient")
-    print("p", patient_id, "c",counter_id)
+    app.logger.debug("pause_patient")
+    app.logger.debug('p %s %s %s', patient_id, "c", counter_id)
     current_patient = Patient.query.get(patient_id)
     if current_patient:
         current_patient.status = 'done'
@@ -1759,7 +1762,7 @@ def pause_patient(counter_id, patient_id):
     counter_become_inactive(counter_id)
     
     communikation("update_patient")
-    print("counterauto", Counter.query.get(counter_id).auto_calling)
+    app.logger.debug('counterauto %s', Counter.query.get(counter_id).auto_calling)
     # si l'autocalling est activé. On le vire quand on se met en pause
     if Counter.query.get(counter_id).auto_calling:
         call_update_switch_auto_calling(counter_id)  
@@ -1780,8 +1783,8 @@ def call_update_switch_auto_calling(counter_id):
         # mise à jour du web. Pas nécessaire pour l'App
         communikation("counter", event="refresh_auto_calling", data={"auto_calling": False})
                 
-        print("switch_auto_calling")
-        print(f"Résultat : {result}")
+        app.logger.debug("switch_auto_calling")
+        app.logger.debug(f"Résultat : {result}")
         
 
 
@@ -1816,7 +1819,7 @@ def remove_client(clients_list, client):
 def event_stream(clients):
     return None
     client = add_client(clients)
-    print("client", client)
+    app.logger.debug('client %s', client)
     try:
         while True:
             message = client.get(timeout=30)  # Use timeout to avoid blocking indefinitely
@@ -2018,7 +2021,7 @@ def log_request_info():
 def current_patients():
     # Supposons que vous vouliez afficher les patients dont le statut est "au comptoir"
     patients = Patient.query.filter_by(status='ongoing').all()
-    print(patients)
+    app.logger.debug("%s", patients)
     return render_template('htmx/update_patients.html', patients=patients)
 
 
@@ -2044,7 +2047,7 @@ def patients_queue():
 @require_permission('staff')
 def pharmacists():
     all_pharmacists = Pharmacist.query.all()
-    print("ALL", all_pharmacists)
+    app.logger.debug('ALL %s', all_pharmacists)
     return render_template('pharmacists.html', pharmacists=all_pharmacists)
 
 
@@ -2079,7 +2082,7 @@ def add_pharmacist():
 @app.route('/new_pharmacist_form')
 @require_permission('staff')
 def new_pharmacist_form():
-    print("new_pharmacist_form")
+    app.logger.debug("new_pharmacist_form")
     return render_template('htmx/menu_admin_new_pharmacist_form.html')
 
 
@@ -2174,7 +2177,7 @@ def initialize_data():
             
 initialize_data()
 
-print("Starting Flask...")
+app.logger.debug("Starting Flask...")
 app.logger.info(f"Starting Flask on port {server_port} with debug={app.debug}")
 
 #app.run(host='0.0.0.0', port=server_port, debug=app.debug, threaded=True)

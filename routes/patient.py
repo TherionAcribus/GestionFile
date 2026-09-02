@@ -98,9 +98,9 @@ def patient_right_page():
 
 @patient_bp.route('/patients_submit', methods=['POST'])
 def patients_submit():
-    print("patients_submit")
+    app.logger.debug("patients_submit")
     # Récupération des données du formulaire
-    print('SUBMIT', request.form)
+    app.logger.debug('SUBMIT %s', request.form)
     if request.form.get('is_active')  == 'False':
         return display_activity_inactive(request)
     if request.form.get('is_parent')  == 'True':
@@ -163,7 +163,7 @@ def display_children_buttons_for_right_page(request):
 # affiche la page de validation pour page gauche et droite
 def display_validation_after_choice(request):
     activity_id = request.form.get('activity_id')
-    print("reason", activity_id)
+    app.logger.debug('reason %s', activity_id)
 
     # Si le bouton contient bien une activité
     if activity_id != "":
@@ -178,11 +178,11 @@ def display_validation_after_choice(request):
 
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
-    print("CONFIG QRCODE:", app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
+    app.logger.debug('CONFIG QRCODE: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     call_number = get_next_call_number(activity)
     #new_patient = add_patient(call_number, activity)
     futur_patient = get_futur_patient(call_number, activity)
-    print("futur_patient", futur_patient.id)
+    app.logger.debug('futur_patient %s', futur_patient.id)
     image_name_qr = create_qr_code(futur_patient)
     text = f"{activity.name}"
     # NB : pas d'émission ici. À ce stade le patient n'est que « futur »
@@ -193,7 +193,7 @@ def left_page_validate_patient(activity):
 
     page_patient_validation_message = choose_text_translation("page_patient_validation_message")
     page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
-    print(page_patient_validation_message)
+    app.logger.debug("%s", page_patient_validation_message)
 
     if session.get('language_code', 'fr') == "fr":
         page_patient_subtitle=activity.specific_message
@@ -271,7 +271,7 @@ def patient_return_validation_page_and_print_data(print_ticket):
 
     print_data = format_ticket_text(new_patient, activity)
     # On ne journalise PAS le contenu du ticket, seulement sa taille encodée.
-    print(f"print_data généré ({len(print_data)} caractères base64)")
+    app.logger.debug(f"print_data généré ({len(print_data)} caractères base64)")
 
     # Notification "nouveau patient" : uniquement quand il rejoint réellement la
     # file. En mode impression, elle est différée jusqu'à l'activation (cf.
@@ -466,7 +466,7 @@ def patient_validate_scan(activity_id):
 def patient_scan_already_validate():
     """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
     patient_call_number = request.form.get('patient_call_number')
-    print("already scanned", patient_call_number)
+    app.logger.debug('already scanned %s', patient_call_number)
     return patient_conclusion_page(patient_call_number, print_ticket=False, print_data=False)
 
 
@@ -478,7 +478,7 @@ def cancel_patient():
 
 @patient_bp.route('/patient/conclusion_page/<call_number>')
 def patient_conclusion_page(call_number, print_ticket, print_data=None, print_job_id=None):
-    print("CONFIG QRCODE CONCLUSION:", app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
+    app.logger.debug('CONFIG QRCODE CONCLUSION: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     image_name_qr = f"qr_patient-{call_number}.png" 
 
     patient = Patient.query.filter_by(call_number=call_number).first()

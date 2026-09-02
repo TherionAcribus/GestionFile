@@ -53,8 +53,8 @@ def display_languages_table():
 def update_language(language_id):
     try:
         language = Language.query.get(language_id)
-        print("language", language)
-        print("request.form", request.form)
+        app.logger.debug('language %s', language)
+        app.logger.debug('request.form %s', request.form)
         if language:
             code =  request.form.get('code', language.code)
             name = request.form.get('name', language.name)
@@ -88,10 +88,10 @@ def update_language(language_id):
             language.voice_is_active = voice_is_active
 
             # Gestion du téléchargement de l'image
-            print("request.files", request.files)
+            app.logger.debug('request.files %s', request.files)
             # Mise à jour de l'URL de l'image si elle a été changée
             image_url = request.form.get('image_url')
-            print("image_url", image_url)
+            app.logger.debug('image_url %s', image_url)
             if image_url:
                 extracted = image_url.split('/')[-1]
                 if extracted and extracted != 'None':
@@ -280,7 +280,7 @@ def translations_collect():
 
     # Charger les clés de configuration à traduire depuis le fichier JSON
     config_keys_to_translate = load_config_keys_to_translate()
-    print(config_keys_to_translate)
+    app.logger.debug("%s", config_keys_to_translate)
 
     # Compteur pour le nombre de nouvelles traductions
     new_translations_count = 0
@@ -418,13 +418,13 @@ def change_language_target():
 @admin_translation_bp.route('/admin/translations/save_translations', methods=['POST'])
 @require_permission('translation')
 def save_translations():
-    print(request.form.get("language_code"))
-    print("items", request.form.items())
+    app.logger.debug("%s", request.form.get("language_code"))
+    app.logger.debug('items %s', request.form.items())
     language_code = request.form.get("language_code")
     updated_count = 0
 
     for key, value in request.form.items():
-        print("key", key)
+        app.logger.debug('key %s', key)
         if key.startswith("translation|"):
             _, table_name, column_name, row_id, key_name = key.split('|')
             row_id = int(row_id)

@@ -91,7 +91,7 @@ def update_bouton_after_scheduler_changed(activity):
     # Obtenir l'heure actuelle et le jour actuel
     current_time = datetime.now().time()
     current_weekday = datetime.now().strftime('%A')  # Renvoie le jour de la semaine en anglais
-    print(current_weekday, current_time)
+    app.logger.debug('%s %s', current_weekday, current_time)
 
     # Charger l'activité avec ses horaires et boutons associés
     activity = Activity.query.options(
@@ -100,7 +100,7 @@ def update_bouton_after_scheduler_changed(activity):
     ).filter_by(id=activity.id).first()
 
     if not activity:
-        print(f"Activity with id {activity.id} not found.")
+        app.logger.debug(f"Activity with id {activity.id} not found.")
         return
 
     # Initialiser le drapeau d'activité à False
@@ -108,9 +108,9 @@ def update_bouton_after_scheduler_changed(activity):
 
     # Parcourir les créneaux horaires de l'activité
     for schedule in activity.schedules:
-        print(schedule)
+        app.logger.debug("%s", schedule)
         for weekday in schedule.weekdays:
-            print(weekday.english_name)
+            app.logger.debug("%s", weekday.english_name)
             if weekday.english_name.lower() == current_weekday.lower():
                 if schedule.start_time <= current_time <= schedule.end_time:
                     is_activity_active = True
@@ -186,7 +186,7 @@ def add_activity_form():
 @require_permission('activity')
 def add_activity_staff_form():
 
-    print(Pharmacist.query.all())
+    app.logger.debug("%s", Pharmacist.query.all())
     return render_template('/admin/activity_add_form.html', 
                             schedules=ActivitySchedule.query.all(),
                             staff=Pharmacist.query.all())
@@ -242,9 +242,9 @@ def add_new_activity():
                             hour=schedule.end_time.hour, minute=schedule.end_time.minute,
                             id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
 
-        print("communication", staff_id)
+        app.logger.debug('communication %s', staff_id)
         if staff_id:
-            print("staff_id", staff_id)
+            app.logger.debug('staff_id %s', staff_id)
             app.communication("update_admin", data={"action":"delete_add_activity_form_staff"})
         else:
             app.communication("update_admin", data={"action":"delete_add_activity_form"})
@@ -263,7 +263,7 @@ def add_new_activity():
 def return_good_display_activity(staff):
     """ Sert uniquement à retourner le bon affichage entre activité et activité == équipier"""
     if staff:
-        print("staff", staff)
+        app.logger.debug('staff %s', staff)
         return display_activity_table_staff()
     else:
         return display_activity_table()
@@ -276,9 +276,11 @@ def update_button_presence(activity_id, is_present, app):
             for button in buttons:
                 button.is_present = is_present
             db.session.commit()
-            print(f"Buttons for activity {activity_id} set to {'present' if is_present else 'not present'}")
-        except Exception as e:
-            print(f"Failed to update button presence: {str(e)}")
+            app.logger.info("Boutons de l'activite %s passes a is_present=%s", activity_id, is_present)
+        except Exception:
+            # Execute par le scheduler, hors requete : sans trace, l'echec
+            # d'ouverture/fermeture d'une activite passait totalement inapercu.
+            app.logger.exception("Echec de la mise a jour de la presence des boutons (activite %s)", activity_id)
             db.session.rollback()
 
 def update_scheduler_for_activity(activity):

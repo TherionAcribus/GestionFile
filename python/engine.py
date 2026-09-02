@@ -160,7 +160,7 @@ def algo_choice_next_patient(counter_id):
         Patient.activity_id.in_(staff_activities)
     )
 
-    print("next_possible_patient", next_possible_patient)
+    app.logger.debug('next_possible_patient %s', next_possible_patient)
     if next_possible_patient.count() == 0:
         return None
 
@@ -169,7 +169,7 @@ def algo_choice_next_patient(counter_id):
     is_patient_waiting_too_long = Patient.query.filter(
         and_(Patient.status == 'standing',
                 Patient.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"])).first()
-    print("is_patient_waiting_too_long", is_patient_waiting_too_long)
+    app.logger.debug('is_patient_waiting_too_long %s', is_patient_waiting_too_long)
 
     applicable_rules = None
     if app.config['ALGO_IS_ACTIVATED'] and not is_patient_waiting_too_long:
@@ -177,10 +177,10 @@ def algo_choice_next_patient(counter_id):
     # Récupération des règles applicables
         current_day = datetime.now().weekday()
         current_time = datetime.now().time()
-        print('current_time', current_time)
-        print('current_day', current_day)
+        app.logger.debug('current_time %s', current_time)
+        app.logger.debug('current_day %s', current_day)
         number_of_patients = Patient.query.filter_by(status='standing').count()
-        print('number_of_patients', number_of_patients)
+        app.logger.debug('number_of_patients %s', number_of_patients)
 
         # cherche des regles applicables
         applicable_rules = AlgoRule.query.filter(
@@ -190,34 +190,34 @@ def algo_choice_next_patient(counter_id):
             AlgoRule.max_patients >= number_of_patients,
             #AlgoRule.days_of_week.contains(current_day)  # Le jour actuel doit être inclus dans les jours valides
         )
-        print("applicable_rules", applicable_rules)
+        app.logger.debug('applicable_rules %s', applicable_rules)
 
         # S'il y a des regles applicables, regarde niveau par niveau les activités correspondantes
         if applicable_rules:
             for level in range(1, 6):
                 rules_at_level = applicable_rules.filter(AlgoRule.priority_level == level)
                 if rules_at_level:
-                    print("level", level)
+                    app.logger.debug('level %s', level)
                     activity_ids_from_rules  = [rule.activity_id for rule in rules_at_level]
                     next_possible_patient_via_rules = next_possible_patient.filter(
                         Patient.activity_id.in_(activity_ids_from_rules)
                     )
 
-                    print("next_possible_patient", next_possible_patient_via_rules.all())
+                    app.logger.debug('next_possible_patient %s', next_possible_patient_via_rules.all())
                     # pour les patients qui rentrent dans les priorité on va regarder si on ne dépasse pas le nombre de patients à dépasser de la régle
                     if next_possible_patient_via_rules.all():
                         for patient in next_possible_patient_via_rules.all():
-                            print("patient", patient)
+                            app.logger.debug('patient %s', patient)
                             patients_ahead_count = next_possible_patient.filter(
                                                                                         Patient.timestamp < patient.timestamp
                                                                                     ).count()
                             max_overtaken = min(rule.max_overtaken for rule in patient.activity.priority_rules)
-                            print("max_overtaken", max_overtaken, patients_ahead_count)
+                            app.logger.debug('max_overtaken %s %s', max_overtaken, patients_ahead_count)
                             if patients_ahead_count < max_overtaken:
                                 next_possible_patient = next_possible_patient_via_rules
                                 break
 
-    print('next_possible_patient', next_possible_patient)
+    app.logger.debug('next_possible_patient %s', next_possible_patient)
     
     # tri par date (id en départage déterministe si timestamps égaux, pour que
     # l'ordre d'appel corresponde exactement à l'ordre affiché de la file)
@@ -226,7 +226,7 @@ def algo_choice_next_patient(counter_id):
     if applicable_rules:
         patient_overtaken(next_patient)
 
-    print('next_patient', next_patient)
+    app.logger.debug('next_patient %s', next_patient)
 
     return next_patient
 
@@ -340,7 +340,7 @@ def patient_overtaken(next_patient):
 
     for patient in patients_overtaken:
         patient.overtaken = patient.overtaken + 1
-        print("patient overtaken", patient)
+        app.logger.debug('patient overtaken %s', patient)
         db.session.commit()
 
 
@@ -395,7 +395,7 @@ def expire_stale_pending_patients(ttl_seconds=None):
         db.session.delete(patient)
     if stale:
         db.session.commit()
-        print(f"{len(stale)} inscription(s) pending expirée(s) purgée(s)")
+        app.logger.debug(f"{len(stale)} inscription(s) pending expirée(s) purgée(s)")
     return len(stale)
 
 
@@ -429,7 +429,7 @@ def get_next_call_number(activity):
         call_number = get_next_category_number(activity)
     else:
         call_number = get_next_call_number_simple()
-    print("call_number", call_number)
+    app.logger.debug('call_number %s', call_number)
     return call_number
 
 def get_next_call_number_simple():
@@ -487,7 +487,7 @@ def register_patient(activity):
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
     
-    print("before autocalling")
+    app.logger.debug("before autocalling")
     app.auto_calling()
 
     communikation("update_patient")
@@ -537,7 +537,7 @@ def choose_voice_model(next_patient, text, language_code):
         return create_google_tts_sound(next_patient, text, language_code)
 
 def create_tts_sound(next_patient, text, language_code):
-    print("create_tts_sound", text, app.config["VOICE_GTTS_NAME"])
+    app.logger.debug('create_tts_sound %s %s', text, app.config["VOICE_GTTS_NAME"])
 
     if language_code == "fr"or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         voice_gtts_name = app.config["VOICE_GTTS_NAME"]
@@ -565,7 +565,7 @@ def create_tts_sound(next_patient, text, language_code):
     # Envoi du chemin relatif via SSE
     audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
 
-    print("AUDIO", audio_url)
+    app.logger.debug('AUDIO %s', audio_url)
 
     return audio_url
 
@@ -643,8 +643,8 @@ def create_google_tts_sound(next_patient, text, language_code):
 
 
 def create_qr_code(patient):
-    print("create_qr_code")
-    print(patient, patient.id, patient.call_number, patient.activity)
+    app.logger.debug("create_qr_code")
+    app.logger.debug('%s %s %s %s', patient, patient.id, patient.call_number, patient.activity)
 
     language_code = session.get('language_code', "fr")
 
@@ -703,17 +703,17 @@ def get_google_credentials():
 
 
 def counter_become_inactive(counter_id):
-    print("counter_become_inactiv")
+    app.logger.debug("counter_become_inactiv")
     counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
     counter.is_active = False
     db.session.commit()
 
 
 def counter_become_active(counter_id):
-    print("counter_become_activ")
+    app.logger.debug("counter_become_activ")
     counter = db.session.query(Counter).filter(Counter.id == counter_id).first()
-    print(counter, counter.is_active)
+    app.logger.debug('%s %s', counter, counter.is_active)
     if not counter.is_active:
-        print('change')
+        app.logger.debug('change')
         counter.is_active = True
         db.session.commit()

@@ -63,7 +63,7 @@ def update_counter(counter_id):
 @require_permission('counter')
 def confirm_delete_counter(counter_id):
     counter = Counter.query.get(counter_id)
-    print("counter", counter)
+    app.logger.debug('counter %s', counter)
     return render_template('/admin/counter_modal_confirm_delete.html', counter=counter)
 
 
@@ -161,9 +161,9 @@ def update_counter_order():
     try:
         order_data = request.form.getlist('order[]')
         for index, counter_id in enumerate(order_data):
-            print(counter_id, index)
+            app.logger.debug('%s %s', counter_id, index)
             counter = Counter.query.order_by(Counter.sort_order).get(counter_id)
-            print(counter)
+            app.logger.debug("%s", counter)
             counter.sort_order = index
         db.session.commit()
         app.display_toast(success=True, message="Ordre mis à jour")

@@ -1,5 +1,11 @@
+import logging
 import os
+
 from variables import MultiCssVariableManager
+
+# Module instancie hors contexte de requete (init_app au demarrage) : on utilise
+# un logger de module plutot que current_app.logger.
+logger = logging.getLogger(__name__)
 
 
 class CSSManager:
@@ -70,8 +76,11 @@ class CSSManager:
             with open(custom_path, 'w') as f:
                 f.write(css_content)
             return f'/static/css/{self.css_configs[mode]["custom"]}'
-        except Exception as e:
-            print(f"Erreur lors de la génération du CSS : {e}")
+        except OSError:
+            # Repli volontaire sur la feuille source : la personnalisation est
+            # perdue pour cette generation. Trace en ERROR -- l'echec etait
+            # jusqu'ici totalement invisible cote serveur.
+            logger.exception("Ecriture du CSS personnalise impossible (%s), repli sur la feuille source", custom_path)
             return f'/static/css/{self.css_configs[mode]["source"]}'
 
     def _generate_css_content(self, variables, mode="patient"):

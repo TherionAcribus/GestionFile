@@ -271,9 +271,9 @@ def update_button_order():
     try:
         order_data = request.form.getlist('order[]')
         for index, button_id in enumerate(order_data):
-            print(button_id, index)
+            app.logger.debug('%s %s', button_id, index)
             button = Button.query.order_by(Button.sort_order).get(button_id)
-            print(button)
+            app.logger.debug("%s", button)
             button.sort_order = index
         db.session.commit()
         app.display_toast(success=True, message="Ordre mis à jour")
@@ -297,7 +297,7 @@ def add_button_form():
 def add_new_button():
     try:
         activity_id = request.form.get('activity')
-        print("Activité", activity_id)
+        app.logger.debug('Activité %s', activity_id)
         parent_btn_id = request.form.get('parent_btn')
         is_present = True if request.form.get('is_present') == "true" else False
         label = request.form.get('label')
@@ -443,7 +443,7 @@ def upload_image_for_interface(button_id):
         app.config[key.upper()] = filename
         config_option = ConfigOption.query.filter_by(config_key=key).first()
         if config_option:
-            print("CONFIG OPTION")
+            app.logger.debug("CONFIG OPTION")
             config_option.value_str = filename
         db.session.commit()
         # Retour à la page admin/patient
@@ -463,7 +463,7 @@ def gallery_button_images(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
     button = Button.query.order_by(Button.sort_order).get(button_id)
-    print(images)
+    app.logger.debug("%s", images)
     return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
 
 
@@ -472,7 +472,7 @@ def gallery_button_images(button_id):
 def gallery_button_images_for_interface(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
     images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
-    print(images)
+    app.logger.debug("%s", images)
     return render_template('/admin/patient_page_button_modal_gallery_for_interface.html', images=images, button_id=button_id)
 
 
@@ -482,7 +482,7 @@ def update_button_image_from_gallery():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
     button = Button.query.order_by(Button.sort_order).get(button_id)
-    print(request.form)
+    app.logger.debug("%s", request.form)
     button.image_url = image_url
     db.session.commit()
     return """<img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">"""
@@ -493,7 +493,7 @@ def update_button_image_from_gallery():
 def update_button_image_from_gallery_for_interface():
     button_id = request.form.get('button_id')
     image_url = request.form.get('image')
-    print("REQUEST_imae", request.form)
+    app.logger.debug('REQUEST_imae %s', request.form)
     if button_id == "print_button":
         key = "page_patient_button_print_ticket_picture"
     elif button_id == "cancel_button":
@@ -519,7 +519,7 @@ def delete_button_image(button_id):
 @require_permission('patient')
 def print_ticket_test_size():
     text = "123456789012345678901234567890123456789012345678901234567890"
-    print(text)
+    app.logger.debug("%s", text)
     communikation(stream="app_patient", data=text, flag="print")
     return "", 204
 
@@ -530,7 +530,7 @@ def print_ticket_test():
     activity_id = request.values.get('activity', 1)
     activity = Activity.query.get(activity_id)
     language_code = request.values.get("language", "fr")
-    print("language_code", language_code)
+    app.logger.debug('language_code %s', language_code)
     session["language_code"] = language_code
     patient = get_futur_patient(call_number, activity)    
     text = format_ticket_text(patient, activity)
@@ -679,7 +679,7 @@ def admin_printer_status():
         action_add_paper(add_paper=False, from_printer=True)
 
     # Afficher les informations pour vérifier la mise à jour
-    print(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
+    app.logger.debug(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
 
     return jsonify({'status': 'success'}), 200
 
@@ -689,8 +689,8 @@ def admin_printer_status():
 def dashboard_staff():
     dashboardcard = DashboardCard.query.filter_by(name="staff").first()
     if not app.config["PRINTER_INFOS"]:
-        print("Karamaba")
-    print("PRINTERINFOS", app.config["PRINTER_INFOS"])
+        app.logger.debug("Karamaba")
+    app.logger.debug('PRINTERINFOS %s', app.config["PRINTER_INFOS"])
     return render_template('/admin/dashboard_printer.html', 
                             dashboardcard=dashboardcard,
                             printer_error=app.config["PRINTER_ERROR"],

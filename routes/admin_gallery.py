@@ -31,8 +31,8 @@ def choose_gallery(gallery_name="", checked=""):
     Ajout ou suppression de la galerie via le panel d'admin (POST)
     Ou lors de la suppression du dossier via le panel admin (arguments de la fonction)    
     """
-    print("choose_gallery")
-    print(request.form)
+    app.logger.debug("choose_gallery")
+    app.logger.debug("%s", request.form)
     if request.method == 'POST':
         gallery_name = request.form.get('gallery_name')
         checked = request.form.get('checked')
@@ -51,7 +51,7 @@ def choose_gallery(gallery_name="", checked=""):
     # Charger les galeries existantes à partir de la chaîne JSON
     galleries = json.loads(config_option.value_str)
 
-    print("CHECK", checked)
+    app.logger.debug('CHECK %s', checked)
     message = ""    
     if checked == "true":
         message="Galerie selectionnée"
@@ -84,8 +84,10 @@ def get_images_with_dates(folder):
             date = tm.strftime('%Y-%m-%d %H:%M:%S', tm.localtime(filepath.stat().st_mtime))
             images.append({'filename': file, 'date': date})
         return images
-    except (FileNotFoundError, OSError):
-        print("File not found")
+    except OSError:
+        # FileNotFoundError est une sous-classe d'OSError : la lister en plus
+        # etait redondant. Dossier de galerie absent ou illisible -> liste vide.
+        app.logger.warning("Dossier de galerie illisible : %s", folder)
         return []
     
 
@@ -161,7 +163,7 @@ def upload_gallery(name):
         file.save(str(target_path))
 
     images = get_images_with_dates(gallery_dir)
-    print("images", images)
+    app.logger.debug('images %s', images)
     return render_template('admin/gallery_list_images.html', gallery=name, images=images)
 
 

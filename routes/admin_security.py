@@ -511,13 +511,13 @@ def confirm_delete_role(role_id):
 # d'envoi d'e-mail sans authentification.
 def send_test_email(mail_adress):
     app.logger.info("Envoi d'un email de test")
-    print("mail_adress", mail_adress)
+    app.logger.debug('mail_adress %s', mail_adress)
     msg = EmailMessage(
         subject="Test Email",
         body="This is a test email sent from Flask-Mailman.",
         to=[mail_adress],
     )
-    print("message", msg)
+    app.logger.debug('message %s', msg)
     msg.send()
     return True
 

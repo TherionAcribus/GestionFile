@@ -256,7 +256,7 @@ def remove_scheduler_clear_announce_calls():
 def clear_all_patients_job():
     """Efface tous les patients en utilisant le contexte de l'application globale"""
     app = AppHolder.get_app()
-    print("Clear all patients")
+    current_app.logger.debug("Clear all patients")
 
     with app.app_context():
         _refresh_config(app)
