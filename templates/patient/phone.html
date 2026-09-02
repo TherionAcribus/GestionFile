@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Information</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
     {# CSS par défaut pour être sûr d'avoir quelque chose #}
-    <link rel="stylesheet" href="../../../../static/css/phone.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}">
     {# Les surcharges personnalisées sont chargées après #}
     <link rel="stylesheet" href="{{ get_css_url(mode='phone') }}">
-    <script src="https://unpkg.com/htmx.org@2.0.1" integrity="sha384-QWGpdj554B4ETpJJC9z+ZHJcA/i59TyjxEPXiiUgN2WmTyV5OEZWCD6gQhgkdpB/" crossorigin="anonymous"></script>
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+" crossorigin="anonymous"></script>
+    <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
 </head>
 <body>
 
@@ -32,7 +32,7 @@
         </div>
     </div>
 
-    <script src="../../../../static/js/phone.js"></script>
+    <script src="{{ url_for('static', filename='js/phone.js') }}"></script>
 
 </body>
 </html>

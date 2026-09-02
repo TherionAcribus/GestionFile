@@ -5,22 +5,21 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Écran d'Affichage</title>
         <!-- Script SocketIO -->
-        <script src="https://unpkg.com/htmx.org"></script>
-        <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+        <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
         <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
-        <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        <script src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
         {# CSS par défaut pour être sûr d'avoir quelque chose #}
-        <link rel="stylesheet" href="../static/css/display.css">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">
         {# Les surcharges personnalisées sont chargées après #}
         <link rel="stylesheet" href="{{ get_css_url(mode='announce') }}">
         <!-- Swiper-->
         <link
         rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/>
-        <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+        href="https://cdn.jsdelivr.net/npm/swiper@11.2.10/swiper-bundle.min.css"/>
+        <script src="https://cdn.jsdelivr.net/npm/swiper@11.2.10/swiper-bundle.min.js"></script>
         <!-- Anime JS -->   
-        <script src="../static/js/anime-master/anime.min.js"></script>
+        <script src="{{ url_for('static', filename='js/anime-master/anime.min.js') }}"></script>
         <script src="https://sdk.scdn.co/spotify-player.js"></script>
 
 </head>
@@ -112,7 +111,7 @@
 
     </div>
 
-<script src="../static/js/announce.js"></script>
+<script src="{{ url_for('static', filename='js/announce.js') }}"></script>
 
 
 </body>

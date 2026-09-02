@@ -4,12 +4,18 @@
     <meta charset="UTF-8">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Comptoir {{ counter.name }}</title>
-    <script src="https://unpkg.com/htmx.org"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
+    {# Dependances servies LOCALEMENT et a versions figees : la page comptoir
+       doit rester utilisable si Internet tombe mais que le serveur local
+       repond (meme principe que la page patient et la borne).
+       ATTENTION : cette page utilise Materialize 2.1.0, alors que le reste de
+       l'application est en 1.0.0 (static/{css,js}/libs/materialize.min.*).
+       Les deux majeures cohabitent volontairement : aligner le comptoir sur la
+       1.0.0 demanderait de reprendre son interface. #}
+    <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@materializecss/materialize@2.1.0/dist/css/materialize.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize-2.1.0.min.css') }}">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="../static/css/counter.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/counter.css') }}">
 </head>
 <body>
 
@@ -105,10 +111,8 @@
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
 
-    <script src="https://unpkg.com/htmx.org"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/ws.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@materializecss/materialize@2.1.0/dist/js/materialize.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" integrity="sha384-2huaZvOR9iDzHqslqwpR87isEmrfxqyWOF7hr7BY6KG0+hVKLoEXMPUJw3ynWuhO" crossorigin="anonymous"></script>
-    <script src="../static/js/counter.js"></script>
+    <script src="{{ url_for('static', filename='js/libs/materialize-2.1.0.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/counter.js') }}"></script>
 </body>
 </html>
