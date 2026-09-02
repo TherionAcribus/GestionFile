@@ -4,12 +4,8 @@ Tests sans Flask ni base : on vérifie la normalisation et surtout les
 garde-fous de sécurité (plafond serveur de `per_page`, liste blanche de tri).
 """
 
-import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
-
-from pagination import (  # noqa: E402
+from pagination import (
     DEFAULT_PER_PAGE,
     MAX_PER_PAGE,
     MAX_SEARCH_LEN,

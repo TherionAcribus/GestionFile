@@ -14,11 +14,8 @@ mêmes routes paginent.
 
 import os
 import re
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
-
-import pytest  # noqa: E402
+import pytest
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 

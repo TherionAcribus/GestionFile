@@ -4,12 +4,8 @@ Aucune base : on utilise de faux boutons (objets légers) exposant les mêmes
 attributs que le modèle ``Button`` lus par le module.
 """
 
-import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
-
-from diagnostics import (  # noqa: E402
+from diagnostics import (
     find_empty_present_parents,
     has_any_usable_button,
     collect_patient_page_alerts,

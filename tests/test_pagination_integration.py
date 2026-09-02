@@ -11,15 +11,12 @@
 import datetime
 import os
 import re
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
+from flask import Flask
 
-import pytest  # noqa: E402
-from flask import Flask  # noqa: E402
-
-from pagination import PageParams  # noqa: E402
-from permissions_registry import permissions_by_category  # noqa: E402
+from pagination import PageParams
+from permissions_registry import permissions_by_category
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 _TEMPLATES = os.path.join(_SERVEUR, "templates")

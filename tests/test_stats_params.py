@@ -4,13 +4,9 @@ Tests sans Flask ni base : validation stricte (type/style/granularité/filtres/
 dates) et bornage des périodes selon la granularité.
 """
 
-import os
-import sys
 from datetime import datetime
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
-
-from stats_params import (  # noqa: E402
+from stats_params import (
     CHART_TYPES,
     MAX_HOURLY_DAYS,
     MAX_DAILY_DAYS,

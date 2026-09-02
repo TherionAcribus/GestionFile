@@ -135,10 +135,30 @@ docker compose up --build
 
 Note : selon ton environnement, tu devras ajuster `docker-compose.yaml` (ex: URL RabbitMQ, ajout d’un service MySQL/RabbitMQ, volumes, etc.).
 
-## Tests
+## Tests et qualité
 
-- `tests/test_basic.py` : test simple Flask
-- `tests/test_add_patient.py` : test E2E Playwright (nécessite un serveur lancé + MySQL configuré)
+```powershell
+pytest                 # suite de référence : ~640 tests, aucune infrastructure requise
+ruff check .           # lint (mêmes règles que la CI)
+```
+
+`pytest.ini` fixe `testpaths` et **exclut par défaut** deux catégories de tests
+qui exigent autre chose que Python. Pour les lancer explicitement :
+
+| Commande | Ce qu'elle lance | Prérequis |
+|---|---|---|
+| `pytest` | la suite de référence | aucun |
+| `pytest -m mysql` | `tests/test_basic.py` | serveur MySQL joignable |
+| `pytest -m e2e` | `tests/test_add_patient.py` | serveur démarré + `playwright install chromium` |
+| `pytest -m ""` | tout, sans exclusion | les deux ci-dessus |
+
+`conftest.py` (racine) place le dépôt sur `sys.path` — un simple `pytest` suffit,
+inutile de passer par `python -m pytest` — et pose `SKIP_STARTUP_HOOKS` /
+`SKIP_EVENTLET_PATCH` pour que l'import de `app.py` n'ouvre ni base ni boucle
+eventlet.
+
+La CI (`.github/workflows/ci.yml`) exécute lint + tests + vérification du verrou
+de dépendances à chaque push, plus bandit/pip-audit en mode informatif.
 
 ## Structure (grandes lignes)
 

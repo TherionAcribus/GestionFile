@@ -10,7 +10,7 @@ _skip_eventlet_patch = os.getenv("SKIP_EVENTLET_PATCH", "").strip().lower() in {
 if not _skip_eventlet_patch:
     import eventlet
     eventlet.monkey_patch()  # thread=True, time=True
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, request, has_request_context, flash, session
+from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, has_request_context, flash
 
 from sqlalchemy.orm import sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
 from sqlalchemy import func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
@@ -33,7 +33,6 @@ import subprocess
 import threading
 import socket
 import pika
-import threading
 import pytz
 
 from urllib.parse import urlparse, urljoin
@@ -792,10 +791,12 @@ def set_locale():
 
 
 # permet d'avoir le contexte de l'App pour le Scheduler. A utiliser comme décorateur
-def with_app_context(func):
+def with_app_context(fonction):
+    # Parametre nomme `fonction` et non `func` : `func` est deja le `sqlalchemy.func`
+    # importe en tete de module, que ce nom masquait dans toute la portee du decorateur.
     def wrapper(*args, **kwargs):
         with app.app_context():
-            return func(*args, **kwargs)
+            return fonction(*args, **kwargs)
     return wrapper
 
 

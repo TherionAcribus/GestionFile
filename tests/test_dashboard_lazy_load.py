@@ -17,13 +17,10 @@ teste l'assemblage pur de ``build_jobs_info`` avec des jobs factices.
 """
 
 import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
 
-import pytest  # noqa: E402
-
-import scheduler_dashboard  # noqa: E402
+import scheduler_dashboard
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 

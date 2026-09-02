@@ -11,16 +11,12 @@ Deux niveaux :
   pour que la régression ne puisse pas revenir par la requête.
 """
 
-import os
-import sys
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
+from flask import Flask
 
-import pytest  # noqa: E402
-from flask import Flask  # noqa: E402
-
-from call_numbering import next_simple_call_number  # noqa: E402
+from call_numbering import next_simple_call_number
 
 
 # --- cœur pur ---------------------------------------------------------------

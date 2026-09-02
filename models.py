@@ -99,7 +99,6 @@ class User(db.Model, UserMixin):
     roles = db.relationship('Role', secondary='roles_users', backref=db.backref('users', lazy='dynamic'))
 
     def verify_password(self, password):
-        from flask import current_app as app
         app.logger.debug(f"Vérification du mot de passe pour {self.username}")
 
         stored_hash = self.password or ""
@@ -126,7 +125,6 @@ class User(db.Model, UserMixin):
         return False
 
     def set_password(self, password):
-        from flask import current_app as app
         app.logger.debug(f"Définition du mot de passe pour {self.username}")
         # Utilise bcrypt par défaut pour rester cohérent avec Flask-Security
         self.password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

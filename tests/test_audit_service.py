@@ -10,19 +10,15 @@ Trois volets, exécutables sans MySQL :
 """
 
 import logging
-import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user
 
-import pytest  # noqa: E402
-from flask import Flask  # noqa: E402
-from flask_sqlalchemy import SQLAlchemy  # noqa: E402
-from flask_login import LoginManager, UserMixin, login_user  # noqa: E402
-
-import audit_service  # noqa: E402
-from audit_service import persist_audit_record, record_audit  # noqa: E402
-from audit_log import build_audit_record, ACTION_DELETE, OUTCOME_SUCCESS  # noqa: E402
+import audit_service
+from audit_service import persist_audit_record, record_audit
+from audit_log import build_audit_record, ACTION_DELETE, OUTCOME_SUCCESS
 
 
 # --- 1. Persistance sur une base SQLite jouet -------------------------------

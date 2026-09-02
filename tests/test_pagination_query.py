@@ -6,16 +6,12 @@ le **plafond serveur** de `per_page` est bien appliqué de bout en bout (le clie
 ne peut pas forcer une page géante).
 """
 
-import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
 
-import pytest  # noqa: E402
-from flask import Flask  # noqa: E402
-from flask_sqlalchemy import SQLAlchemy  # noqa: E402
-
-from pagination import parse_page_params, paginate_query  # noqa: E402
+from pagination import parse_page_params, paginate_query
 
 
 class Args(dict):

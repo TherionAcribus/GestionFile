@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # --- Lint : socle d'erreurs critiques (bloquant) -------------------------
+  # Périmètre volontairement restreint (E9/F63/F7/F81/F82, cf. ruff.toml) :
+  # uniquement de vraies erreurs, jamais du style. C'est ce qui rend le job
+  # vert sur le code existant tout en bloquant les régressions réelles.
+  lint:
+    name: lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff==0.6.9
+      - name: Ruff check
+        run: ruff check .
+
+  # --- Tests automatisés (bloquant) ----------------------------------------
+  # `pytest` sans argument suffit : pytest.ini fixe testpaths et exclut les
+  # marqueurs `mysql` (serveur MySQL requis) et `e2e` (navigateur Playwright).
+  # conftest.py place la racine sur sys.path et pose SKIP_STARTUP_HOOKS.
+  test:
+    name: tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run pytest
+        run: pytest -q
+
+  # --- Cohérence des dépendances (bloquant) --------------------------------
+  # requirements.txt est GÉNÉRÉ depuis requirements.in : ce job vérifie qu'il
+  # n'a pas été édité à la main ni oublié après un changement du .in.
+  deps:
+    name: deps (verrou à jour)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Recompiler et comparer
+        run: |
+          cp requirements.txt /tmp/req.txt
+          cp requirements-dev.txt /tmp/req-dev.txt
+          uv pip compile requirements.in --universal --python-version 3.10 -o requirements.txt -q
+          uv pip compile requirements-dev.in --universal --python-version 3.10 -o requirements-dev.txt -q
+          diff /tmp/req.txt requirements.txt \
+            || (echo "::error::requirements.txt n'est pas à jour : relancez uv pip compile requirements.in --universal --python-version 3.10 -o requirements.txt" && exit 1)
+          diff /tmp/req-dev.txt requirements-dev.txt \
+            || (echo "::error::requirements-dev.txt n'est pas à jour" && exit 1)
+
+  # --- Analyse de sécurité (advisory : n'échoue pas le build) --------------
+  # Passer `continue-on-error` à false une fois la première base de résultats
+  # triée pour en faire un gate bloquant.
+  security:
+    name: security (bandit + pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install security tools
+        run: pip install bandit==1.7.10 pip-audit==2.7.3
+      - name: Bandit (SAST)
+        continue-on-error: true
+        run: bandit -r . -ll -x ./tests,./migrations
+      - name: pip-audit (dépendances)
+        continue-on-error: true
+        run: pip-audit -r requirements.txt

@@ -10,15 +10,12 @@ repli, on synthétisait un texte français avec la voix de la langue étrangère
 import ast
 import io
 import os
-import sys
 from types import SimpleNamespace
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
+from flask import Flask
 
-import pytest  # noqa: E402
-from flask import Flask  # noqa: E402
-
-import python.engine as engine  # noqa: E402
+import python.engine as engine
 
 _ENGINE_SOURCE = os.path.join(os.path.dirname(__file__), os.pardir, "python", "engine.py")
 

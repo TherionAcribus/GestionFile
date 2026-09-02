@@ -24,8 +24,8 @@ from login_guard import (
 from login_audit import (
     build_login_audit,
     format_login_audit,
-    OUTCOME_SUCCESS,
-    OUTCOME_FAILURE,
+    # OUTCOME_SUCCESS / OUTCOME_FAILURE viennent d'audit_log (memes valeurs) :
+    # les importer aussi d'ici creait une redefinition silencieuse.
     OUTCOME_BLOCKED,
 )
 from password_policy import validate_password
@@ -651,30 +651,12 @@ def logout_all():
     return redirect(url_for('admin_security.login'))
 
 
-@admin_security_bp.route('/logout')
-def logout():
-    logout_user()
-    # Rediriger vers la page de login ou une autre page appropriée après la déconnexion
-    return redirect(url_for('admin_security.login'))
+# NOTE: pas de route /logout ici. Flask-Security en enregistre une
+# (`security.logout`) dans create_app AVANT ce blueprint, et c'est elle qui
+# repond. Une route /logout locale, doublon d'URL, appelait `logout_user()` sans
+# jamais l'importer : elle etait masquee, donc jamais executee, mais aurait
+# renvoye une NameError (500) au moindre changement d'ordre d'enregistrement.
 
-
-def reset_roles_table():
-    """Réinitialise la table des rôles"""
-    """ A Supprimer quand toutes les BDD sont à jour"""
-    try:
-        # Suppression de la table roles_users
-        db.session.execute(text('DROP TABLE IF EXISTS roles_users'))
-        # Suppression de la table role
-        db.session.execute(text('DROP TABLE IF EXISTS role'))
-        db.session.commit()
-        
-        # Recréation des tables
-        db.create_all()
-        app.logger.info("Roles table reset successfully")
-        return True
-    except Exception as e:
-        app.logger.error(f"Error resetting roles table: {str(e)}")
-        return False
 
 def create_default_role():
     """Crée le rôle admin par défaut avec toutes les permissions"""

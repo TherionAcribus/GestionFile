@@ -10,15 +10,12 @@ recopie l'option ``pharmacy_name`` dans cette clé).
 """
 
 import os
-import sys
 from types import SimpleNamespace
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir)))
+import pytest
+from flask import Flask
 
-import pytest  # noqa: E402
-from flask import Flask  # noqa: E402
-
-import utils  # noqa: E402
+import utils
 
 
 @pytest.fixture

@@ -1,3 +1,10 @@
+# Ce test importe app.py en entier : il ouvre une connexion MySQL et execute
+# les hooks de demarrage. Marque `mysql` -> exclu de la suite par defaut
+# (voir pytest.ini). Lancer avec : pytest -m mysql
+import pytest
+
+pytestmark = pytest.mark.mysql
+
 from app import app
 import unittest
 

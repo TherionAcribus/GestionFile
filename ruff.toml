@@ -1,0 +1,27 @@
+# Configuration ruff (lint) du serveur, alignee sur celle de la borne.
+#
+# Socle d'erreurs CRITIQUES (toujours de vrais bugs, jamais du style) :
+#   E9  : erreurs de syntaxe / d'indentation
+#   F63 : tests/comparaisons douteux (ex. `is` sur un litteral)
+#   F7  : constructions invalides (break/continue hors boucle, etc.)
+#   F82 : noms indefinis (variable/reference non definie)
+#   F81 : redefinition d'un nom deja importe/defini
+# Ce socle passe sur le code existant sans exiger un grand nettoyage de style,
+# tout en bloquant les erreurs reelles. A elargir progressivement (F401 imports
+# inutilises, F841 variables mortes, "I" tri des imports) une fois app.py
+# decoupe -- cf. phase 9.5.
+target-version = "py310"   # version de l'image Docker de production
+line-length = 100
+
+exclude = [
+    ".venv",
+    "migrations/versions",   # fichiers generes par Alembic
+    "static/css/libs",
+]
+
+[lint]
+select = ["E9", "F63", "F7", "F81", "F82"]
+
+[lint.per-file-ignores]
+# Les tests peuvent reimporter / monkeypatcher librement.
+"tests/*" = ["E402", "F811"]

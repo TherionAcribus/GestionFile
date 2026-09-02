@@ -1,3 +1,12 @@
+# Test de bout en bout Playwright : exige un serveur deja demarre, un
+# navigateur installe (`playwright install chromium`) et MySQL. Marque `e2e`
+# -> exclu de la suite par defaut (voir pytest.ini). Lancer : pytest -m e2e
+import pytest
+
+pytestmark = pytest.mark.e2e
+
+pytest.importorskip('playwright.sync_api', reason='playwright non installe')
+
 import pytest
 from playwright.sync_api import Page
 import mysql.connector
