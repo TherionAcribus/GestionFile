@@ -12,6 +12,7 @@ from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
 from communication import communikation, notify_patient_phone
 from config import time_tz
 from auth_utils import require_app_token_or_login
+from call_numbering import next_simple_call_number
 
 engine_bp = Blueprint('engine', __name__)
 
@@ -432,15 +433,15 @@ def get_next_call_number(activity):
     return call_number
 
 def get_next_call_number_simple():
-    # Obtenir le dernier patient enregistré aujourd'hui
+    # Obtenir le numéro du dernier patient enregistré aujourd'hui.
+    # `call_number` est une colonne texte (String(10)) : on ne l'incrémente
+    # jamais directement, l'arithmétique est faite par le cœur pur
+    # `next_simple_call_number`, qui renvoie une chaîne.
     # BUG Connu : Si on passe de simple à par activité puis retour à simple -> repart à 1
-    last_patient_today = Patient.query.filter(db.func.date(Patient.timestamp) == date.today()).order_by(Patient.id.desc()).first()
-    if last_patient_today:
-        if str(last_patient_today.call_number).isdigit():
-            print(last_patient_today.call_number, type(last_patient_today.call_number))
-            return last_patient_today.call_number + 1
-        return 1
-    return 1  # Réinitialiser le compteur si aucun patient n'a été enregistré aujourd'hui
+    last_call_number = db.session.query(Patient.call_number).filter(
+        db.func.date(Patient.timestamp) == date.today()
+    ).order_by(Patient.id.desc()).limit(1).scalar()
+    return next_simple_call_number(last_call_number)
 
 
 
