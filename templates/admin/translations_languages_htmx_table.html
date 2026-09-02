@@ -28,7 +28,9 @@
                     <img src="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}" alt="{{ language.name }}" width="30">
                 {% endif %}
                 <!-- Champ pour télécharger une nouvelle image -->
-                <input type="file" name="flag_url" id="flag_url-{{ language.id }}" accept="image/*" aria-label="Drapeau de la langue">
+                <input type="file" name="flag_url" id="flag_url-{{ language.id }}" accept="image/*"
+                       data-flag-upload data-flag-target="image_url-{{ language.id }}"
+                       aria-label="Drapeau de la langue">
                 <!-- Champ caché pour stocker l'URL de l'image -->
                 <input type="hidden" name="image_url" id="image_url-{{ language.id }}" value="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}">
             </td>
@@ -69,40 +71,3 @@
 {{ pg.pagination_nav(pager, 'languages', url, 'get', target) }}
 
 
-<script>
-    document.querySelectorAll('input[type="file"]').forEach(input => {
-        input.addEventListener('change', function() {
-            let formData = new FormData();
-            formData.append('file', this.files[0]);
-            
-            fetch('/admin/languages/upload_flag_image', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.url) {
-                    // Mettre à jour l'URL de l'image dans le formulaire
-                    const imageUrlInput = document.getElementById('image_url-' + this.id.split('-')[1]);
-                    imageUrlInput.value = data.url;
-                    
-                    // Mettre à jour l'image affichée
-                    const imgElement = this.closest('td').querySelector('img');
-                    if (imgElement) {
-                        imgElement.src = data.url;
-                    } else {
-                        const newImg = document.createElement('img');
-                        newImg.src = data.url;
-                        newImg.width = 30;
-                        this.closest('td').prepend(newImg);
-                    }
-                } else {
-                    alert("Erreur lors du téléchargement de l'image : " + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-            });
-        });
-    });
-    </script>

@@ -1487,6 +1487,137 @@ function formatColorOption(color) {
     </span>`);
 }
 
+// Selects multiples des tableaux (horaires d'une activite, jours d'une plage).
+// Ces <select> etaient initialises par un <script> emis DANS la boucle {% for %}
+// du gabarit : une page de 30 lignes renvoyait 30 blocs identiques. Ici, une
+// seule passe, rejouee apres chaque echange HTMX (voir htmx:afterSettle plus bas).
+// `data-placeholder` est lu nativement par select2.
+// --- Page « Connexions » de l'App -----------------------------------------
+//
+// Ce code vivait dans le fragment app_connexion.html, sous un
+// `$(document).ready(...)` rejoue a chaque injection HTMX. Delegue ici : pose
+// une seule fois, il vaut pour toute injection ulterieure du fragment.
+//
+// Delegation jQuery et non addEventListener : select2 emet `change` via le
+// systeme d'evenements de jQuery, qu'un ecouteur natif ne capte pas de maniere
+// fiable.
+function afficherListeConnexions() {
+    var namespaces = $('#namespaceSelect').val() || [];
+    htmx.ajax('POST', '/admin/app/get_connections', {
+        target: '#connectionList',
+        swap: 'innerHTML',
+        values: { 'namespaces[]': namespaces }
+    });
+}
+
+$(document).on('change', '#namespaceSelect', afficherListeConnexions);
+$(document).on('click', '#refreshButton', afficherListeConnexions);
+
+// A l'arrivee du fragment : initialisation de select2 puis premier chargement.
+document.addEventListener('htmx:afterSettle', function (evt) {
+    var cible = evt.detail && evt.detail.target;
+    if (!cible) { return; }
+    var select = cible.id === 'namespaceSelect'
+        ? cible
+        : cible.querySelector('#namespaceSelect');
+    if (!select) { return; }
+    if (!$(select).data('select2')) { $(select).select2(); }
+    afficherListeConnexions();
+});
+
+
+// --- Galerie d'images -----------------------------------------------------
+//
+// Ces deux comportements vivaient dans des <script> de fragments HTMX, donc
+// rejoues a chaque echange : les ecouteurs s'empilaient (notamment celui pose
+// sur document.body par gallery_manage). Delegues ici, ils sont enregistres une
+// seule fois et couvrent le contenu injecte plus tard.
+
+// Le bouton d'envoi ne s'active qu'une fois un fichier choisi.
+document.addEventListener('change', function (evt) {
+    if (!evt.target || evt.target.id !== 'file-input') { return; }
+    var bouton = document.getElementById('upload-button');
+    if (bouton) { bouton.disabled = evt.target.files.length === 0; }
+});
+
+// Apres l'envoi (la liste d'images est rafraichie), on remet le formulaire a zero.
+document.body.addEventListener('htmx:afterRequest', function (evt) {
+    if (!evt.detail || !evt.detail.target || evt.detail.target.id !== 'image-list') { return; }
+    var bouton = document.getElementById('upload-button');
+    var champ = document.getElementById('file-input');
+    if (bouton) { bouton.disabled = true; }
+    if (champ) { champ.value = ''; }
+});
+
+// Clic sur une vignette : ouvre l'image dans la modale.
+document.addEventListener('click', function (evt) {
+    var img = evt.target;
+    if (!img || !img.closest || !img.closest('.thumbnail') || img.tagName !== 'IMG') { return; }
+    var modale = document.getElementById('image-modal');
+    var cible = document.getElementById('modal-image');
+    if (!modale || !cible) { return; }
+    cible.src = img.src;
+    var instance = M.Modal.getInstance(modale);
+    if (instance) { instance.open(); }
+});
+
+
+// Televersement du drapeau d'une langue.
+//
+// Deux gabarits (le formulaire d'ajout et le tableau) portaient chacun un
+// <script> quasi identique qui faisait `querySelectorAll('input[type=file]')`
+// puis attachait un ecouteur `change` a CHACUN. Comme les fragments sont
+// reinjectes par HTMX, ces ecouteurs s'accumulaient a chaque echange.
+//
+// Ici : un seul ecouteur delegue sur `document`, pose une fois. Il ne reagit
+// qu'aux champs marques `data-flag-upload`, et met a jour le champ cache
+// designe par `data-flag-target` (seul point de variation entre les deux
+// gabarits, desormais porte par le HTML et non par le JavaScript).
+document.addEventListener('change', function (evt) {
+    var input = evt.target;
+    if (!input || !input.matches || !input.matches('input[type="file"][data-flag-upload]')) {
+        return;
+    }
+    if (!input.files || !input.files[0]) { return; }
+
+    var formData = new FormData();
+    formData.append('file', input.files[0]);
+
+    fetch('/admin/languages/upload_flag_image', { method: 'POST', body: formData })
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            if (!data.url) {
+                alert("Erreur lors du telechargement de l'image : " + data.error);
+                return;
+            }
+            var cible = document.getElementById(input.dataset.flagTarget);
+            if (cible) { cible.value = data.url; }
+
+            var cellule = input.closest('td');
+            if (!cellule) { return; }
+            var img = cellule.querySelector('img');
+            if (img) {
+                img.src = data.url;
+            } else {
+                var nouvelle = document.createElement('img');
+                nouvelle.src = data.url;
+                nouvelle.width = 30;
+                cellule.prepend(nouvelle);
+            }
+        })
+        .catch(function (error) { console.error('Erreur:', error); });
+});
+
+
+function initSelect2Multiples() {
+    $('select.js-select2-multiple').each(function () {
+        var $select = $(this);
+        if ($select.data('select2')) { return; }   // deja initialise
+        $select.select2({ allowClear: true });
+    });
+}
+
+
 function initColorPickers() {
     $('.color-select2').each(function() {
         const $select = $(this);
@@ -1585,6 +1716,8 @@ function handleColorAfterRequest(source, variable) {
 // Initialisation
 document.addEventListener('DOMContentLoaded', initColorPickers);
 document.addEventListener('htmx:afterSettle', initColorPickers);
+document.addEventListener('htmx:afterSettle', initSelect2Multiples);
+document.addEventListener('DOMContentLoaded', initSelect2Multiples);
 
 
 document.addEventListener('DOMContentLoaded', function() {

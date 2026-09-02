@@ -19,7 +19,8 @@
                 <!-- Afficher l'image du drapeau -->
                 <img src="{{ url_for('static', filename='images/flags/' ~ 'none.png') }}" width="30">
                 <!-- Champ pour télécharger une nouvelle image -->
-                <input type="file" name="flag_url" id="flag_url" accept="image/*">
+                <input type="file" name="flag_url" id="flag_url" accept="image/*"
+                       data-flag-upload data-flag-target="image_url">
                 <!-- Champ caché pour stocker l'URL de l'image -->
                 <input type="hidden" name="image_url" id="image_url" value="{{ url_for('static', filename='images/flags/' ~ flag_url) }}">
             </td>
@@ -41,40 +42,3 @@
     </tbody>
 </table>
 
-<script>
-    document.querySelectorAll('input[type="file"]').forEach(input => {
-        input.addEventListener('change', function() {
-            let formData = new FormData();
-            formData.append('file', this.files[0]);
-            
-            fetch('/admin/languages/upload_flag_image', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.url) {
-                    // Mettre à jour l'URL de l'image dans le formulaire
-                    const imageUrlInput = document.getElementById('image_url');
-                    imageUrlInput.value = data.url;
-                    
-                    // Mettre à jour l'image affichée
-                    const imgElement = this.closest('td').querySelector('img');
-                    if (imgElement) {
-                        imgElement.src = data.url;
-                    } else {
-                        const newImg = document.createElement('img');
-                        newImg.src = data.url;
-                        newImg.width = 30;
-                        this.closest('td').prepend(newImg);
-                    }
-                } else {
-                    alert("Erreur lors du téléchargement de l'image : " + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-            });
-        });
-    });
-    </script>

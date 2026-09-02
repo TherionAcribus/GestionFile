@@ -1,5 +1,7 @@
 <!-- Structure de Swiper -->
-<div class="swiper" style="width: {{announce_infos_width}}px; height: {{announce_infos_height}}px;">
+<div class="swiper" data-swiper-delay="{{ time }}"
+     data-swiper-effect="{{announce_infos_transition}}"
+     style="width: {{announce_infos_width}}px; height: {{announce_infos_height}}px;">
     <div class="swiper-wrapper">
         <!-- Images ajoutées dynamiquement -->
 
@@ -11,27 +13,3 @@
     </div>
 </div>
 
-<script>
-    document.addEventListener('htmx:afterSettle', function(evt) {
-        delay_timer = Number("{{ time }}") * 1000;
-        announce_infos_transition = "{{announce_infos_transition}}";
-        if (!window.swiperInstance) {  // Vérifie si l'instance de Swiper existe déjà
-        window.swiperInstance = new Swiper('.swiper', {
-            loop: true,
-            effect: announce_infos_transition,
-            slidesPerView: 1,
-            pagination: {
-                el: '.swiper-pagination',
-                clickable: true,
-            },
-            autoplay: {
-                delay: delay_timer,
-                disableOnInteraction: false,
-            }
-        });
-    } else {
-        window.swiperInstance.update();  // Met à jour l'instance existante de Swiper
-    }
-    });
-
-</script>

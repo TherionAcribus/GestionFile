@@ -56,8 +56,7 @@
 
 {% endif %}
 
-<script>
-    // affiche liste des activités, mais uniquement une fois que l'utilisateur est connecté
-    // car on a besoin de récupérer son ID
-    htmx.trigger('#list_of_activities', 'on_update_staff_on_counter', {target: "#list_of_activities"});
-</script>
+{# NOTE: un <script> declenchait ici l'evenement 'on_update_staff_on_counter'
+   sur #list_of_activities. Cet element est entierement commente dans
+   counter/counter.html ("Pour l'instant suspendu") : le script ciblait donc
+   un element inexistant a chaque connexion au comptoir. #}

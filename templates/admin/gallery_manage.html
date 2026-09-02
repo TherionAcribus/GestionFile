@@ -24,31 +24,3 @@
         Supprimer cette galerie
 </a>
 
-<script>
-    // activation du bouton de chargement après le choix des fichiers
-    if (typeof fileInput === 'undefined') {
-        var fileInput = document.getElementById('file-input');
-    }
-
-    if (typeof uploadButton === 'undefined') {
-        var uploadButton = document.getElementById('upload-button');
-    }
-
-    fileInput.addEventListener('change', function() {
-        if (fileInput.files.length > 0) {
-            uploadButton.disabled = false;
-        } else {
-            uploadButton.disabled = true;
-        }
-    });
-
-    // réinitialisation du bouton de chargement après chargement 
-    document.body.addEventListener('htmx:afterRequest', function(evt) {
-        // Vérifiez si l'événement concerne le formulaire de téléchargement
-        if (evt.detail.target.id === 'image-list') {
-            uploadButton.disabled = true;
-            fileInput.value = ''; // Réinitialiser le champ de fichier
-        }
-    });
-
-</script>

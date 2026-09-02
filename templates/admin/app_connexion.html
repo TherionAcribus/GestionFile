@@ -16,34 +16,3 @@
     <div id="connectionList" class="connection-list"></div>
 </div>
 
-<script>
-$(document).ready(function() {
-    // Initialisation de Select2
-    $('#namespaceSelect').select2();
-    
-    // Fonction pour envoyer la requête HTMX
-    function displayListConnections() {
-        var selectedNamespaces = $('#namespaceSelect').val() || [];
-        htmx.ajax('POST', '/admin/app/get_connections', {
-            target: '#connectionList',
-            swap: 'innerHTML',
-            values: {
-                'namespaces[]': selectedNamespaces
-            }
-        });
-    }
-
-    // Lorsque la sélection change
-    $('#namespaceSelect').on('change', function() {
-        displayListConnections();
-    });
-
-    // Lorsqu'on clique sur le bouton Rafraîchir
-    $('#refreshButton').on('click', function() {
-        displayListConnections();
-    });
-
-    // Envoyer la requête automatiquement lors du chargement de la page
-    displayListConnections();
-});
-</script>

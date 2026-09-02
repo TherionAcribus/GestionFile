@@ -9,8 +9,10 @@ Ces tests verrouillent l'acquis :
 
 1. les fichiers extraits existent et sont bien chargés par ``admin/base.html`` ;
 2. les gabarits nettoyés ne réintroduisent pas de ``<script>`` inline ;
-3. un **cliquet** global : le nombre de blocs inline restants ne doit pas
-   augmenter (il reste des cas dépendant de variables Jinja, à traiter plus tard).
+3. un **cliquet** global : plus AUCUN bloc de JavaScript inline dans les
+   gabarits. Les valeurs qui venaient de Jinja passent désormais par des
+   attributs ``data-*``, et les données structurées par un îlot
+   ``type="application/json"``.
 """
 
 import io
@@ -24,10 +26,11 @@ _GABARITS = os.path.join(_RACINE, "templates")
 
 _BALISE = re.compile(r"<script\b([^>]*)>(.*?)</script>", re.DOTALL | re.IGNORECASE)
 
-#: Nombre de blocs `<script>` inline encore présents dans les gabarits.
-#: Ce plafond ne doit que DIMINUER. Les blocs restants dépendent d'expressions
-#: Jinja et demandent un pont `data-*` pour être sortis à leur tour.
-_PLAFOND_INLINE = 17
+#: Nombre de blocs de JavaScript inline encore présents dans les gabarits.
+#: Le point 2 les a tous sortis : ce plafond est donc à ZÉRO et ne doit jamais
+#: remonter. Les îlots de données `type="application/json"` ne comptent pas —
+#: ils ne sont pas du code (voir `_blocs_inline`).
+_PLAFOND_INLINE = 0
 
 
 def _lire(rel):
@@ -35,8 +38,21 @@ def _lire(rel):
 
 
 def _blocs_inline(contenu):
-    return [corps for attrs, corps in _BALISE.findall(contenu)
-            if "src=" not in attrs.lower() and corps.strip()]
+    """Blocs de JavaScript **exécutable** écrits dans le gabarit.
+
+    Sont exclus : les `<script src=...>` (références externes) et les îlots de
+    données `type="application/json"` — ces derniers ne sont pas du code, et
+    c'est précisément le bon moyen de passer des données du serveur au client.
+    """
+    blocs = []
+    for attrs, corps in _BALISE.findall(contenu):
+        attrs_min = attrs.lower()
+        if "src=" in attrs_min or not corps.strip():
+            continue
+        if "type=" in attrs_min and "javascript" not in attrs_min:
+            continue          # application/json, text/template…
+        blocs.append(corps)
+    return blocs
 
 
 def _tous_les_gabarits():
@@ -55,13 +71,20 @@ def _tous_les_gabarits():
     "static/js/admin_stats.js",
     "static/js/admin_data.js",
     "static/js/admin_home.js",
+    "static/js/admin_macros_forms.js",
+    "static/js/admin_backups.js",
+    "static/js/admin_dashboard_select.js",
+    "static/js/patient_conclusion.js",
 ])
 def test_fichier_extrait_existe_et_non_vide(fichier):
     contenu = _lire(fichier)
     assert len(contenu.strip()) > 0
 
 
-@pytest.mark.parametrize("fichier", ["admin_macros.js", "admin_fragments.js"])
+@pytest.mark.parametrize("fichier", [
+    "admin_macros.js", "admin_fragments.js", "admin_macros_forms.js",
+    "admin_backups.js", "admin_dashboard_select.js",
+])
 def test_scripts_partages_charges_une_fois_par_base(fichier):
     """Chargés depuis base.html, donc une seule fois par page."""
     base = _lire("templates/admin/base.html")
@@ -93,7 +116,7 @@ def test_stats_charge_son_script_apres_ses_dependances():
 # --- 2. Les gabarits nettoyés le restent ------------------------------------
 
 @pytest.mark.parametrize("gabarit", [
-    "templates/admin/macros.html",          # ne garde que les blocs à Jinja
+    "templates/admin/macros.html",
     "templates/admin/stats.html",
     "templates/admin/data.html",
     "templates/admin/admin.html",
@@ -104,15 +127,26 @@ def test_stats_charge_son_script_apres_ses_dependances():
     "templates/admin/counter_order_counters.html",
     "templates/admin/patient_page_order_buttons.html",
     "templates/admin/translations_languages_order.html",
+    "templates/admin/app_backups.html",
+    "templates/admin/app_connexion.html",
+    "templates/admin/dashboard_select.html",
+    "templates/admin/gallery_manage.html",
+    "templates/admin/gallery_list_images.html",
+    "templates/admin/activity_htmx_table.html",
+    "templates/admin/schedule_htmx_table.html",
+    "templates/admin/translations_language_add_form.html",
+    "templates/admin/translations_languages_htmx_table.html",
+    "templates/patient/conclusion_page.html",
+    "templates/patient/activity_inactive.html",
+    "templates/patient/patient_qr_right_page.html",
+    "templates/announce/gallery.html",
+    "templates/counter/staff_on_counter.html",
 ])
-def test_gabarit_nettoye_na_plus_de_script_sans_jinja(gabarit):
-    """Un bloc restant est toléré s'il dépend d'une variable Jinja ; un bloc de
-    JavaScript pur doit, lui, vivre dans un fichier."""
-    jinja = re.compile(r"\{\{.*?\}\}|\{%.*?%\}", re.DOTALL)
-    fautifs = [c for c in _blocs_inline(_lire(gabarit)) if not jinja.search(c)]
-    assert fautifs == [], (
-        f"{gabarit} contient à nouveau du JavaScript inline sans variable Jinja : "
-        f"le déplacer dans un fichier de static/js/"
+def test_gabarit_nettoye_na_plus_de_javascript_inline(gabarit):
+    assert _blocs_inline(_lire(gabarit)) == [], (
+        f"{gabarit} contient à nouveau du JavaScript inline : le déplacer dans "
+        f"un fichier de static/js/. Si du code a besoin d'une valeur du serveur, "
+        f"la passer par un attribut data-* plutôt que par de l'interpolation Jinja."
     )
 
 
@@ -143,10 +177,23 @@ def test_nombre_de_scripts_inline_ne_remonte_pas():
         f"{total} blocs <script> inline dans les gabarits, contre {_PLAFOND_INLINE} "
         f"attendus au maximum. Placez le nouveau JavaScript dans static/js/."
     )
-    if total < _PLAFOND_INLINE:
-        pytest.fail(
-            f"Bonne nouvelle : il ne reste que {total} blocs inline (plafond "
-            f"{_PLAFOND_INLINE}). Abaissez _PLAFOND_INLINE à {total} pour "
-            f"verrouiller le progrès.",
-            pytrace=False,
-        )
+    # (le plafond est à 0 : il ne peut plus descendre)
+
+
+def test_ilot_de_donnees_json_conserve():
+    """Le bon motif pour passer des données au client : il doit rester."""
+    contenu = _lire("templates/patient/conclusion_page.html")
+    assert 'id="print_ui_labels" type="application/json"' in contenu
+
+
+def test_valeurs_serveur_passent_par_des_attributs_data():
+    """Les valeurs Jinja qui étaient interpolées DANS du JavaScript."""
+    for gabarit, attribut in (
+        ("templates/patient/activity_inactive.html", "data-activity-inactive-delay"),
+        ("templates/patient/conclusion_page.html", "data-duration"),
+        ("templates/announce/gallery.html", "data-swiper-delay"),
+        ("templates/admin/macros.html", "data-restore-table"),
+        ("templates/admin/macros.html", "data-copy-colors-page"),
+        ("templates/admin/translations_languages_htmx_table.html", "data-flag-target"),
+    ):
+        assert attribut in _lire(gabarit), f"{attribut} manquant dans {gabarit}"

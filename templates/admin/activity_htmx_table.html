@@ -39,7 +39,8 @@
             <td><input type="text" class="form-control" name="letter" value="{{ activity.letter }}" id="letter-{{ activity.id }}" aria-label="Lettre"></td>
             <td>
                 <div class="mb-3 col-10">
-                    <select multiple id="schedules-{{ activity.id }}" aria-label="Horaires">
+                    <select multiple id="schedules-{{ activity.id }}" class="js-select2-multiple"
+                            data-placeholder="Choisissez les horaires" aria-label="Horaires">
                         {% for schedule in schedules %}
                             <option value="{{schedule.id}}"
                                     {% if schedule in activity.schedules %}selected{% endif %}>
@@ -94,14 +95,6 @@
             </td>
         </tr>
 
-        <script>
-            $(document).ready(function() {
-            $('#schedules-{{ activity.id }}').select2({
-            placeholder: "Choisissez les horaires",
-            allowClear: true
-                });
-            });
-        </script>
 
         {% endfor %}
     </tbody>

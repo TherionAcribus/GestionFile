@@ -380,3 +380,56 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+
+// --- Extraits des fragments de la page patient (Phase 8, point 2) ----------
+
+// Fonction qui permet de désactiver les boutons de validation pour éviter double validation
+function disableButtons(button) {
+    // Désactive le bouton cliqué
+    button.style.pointerEvents = 'none';
+    button.style.opacity = '0.6';
+    
+    // Désactive tous les boutons de validation
+    const buttons = document.querySelectorAll('.div_validation_one_button');
+    buttons.forEach(function(btn) {
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.6';
+    });
+}
+
+
+// Etat « activite indisponible » : la bande de boutons est grisee, puis
+// retablie apres un delai, et le sous-titre revient a sa valeur par defaut.
+//
+// Les trois valeurs (delai, sous-titre) venaient de Jinja interpole DANS le
+// script du fragment ; elles arrivent desormais par des attributs data-* du
+// bloc, ce qui rend ce code generique. Un `console.log({{...}})` de mise au
+// point a ete supprime : si l'option de configuration etait vide, il produisait
+// un `console.log()` vide, voire une erreur de syntaxe.
+function initActiviteIndisponible() {
+    var bloc = document.querySelector('[data-activity-inactive]');
+    if (!bloc || bloc.dataset.activityInactiveInit === '1') { return; }
+    bloc.dataset.activityInactiveInit = '1';
+
+    var boutons = document.getElementById('div_buttons_children');
+    if (!boutons) { return; }
+    boutons.classList.add('buttons_children_inactive');
+    boutons.classList.remove('buttons_children_active');
+
+    var delai = Number(bloc.dataset.activityInactiveDelay || 0) * 1000;
+    var sousTitre = bloc.dataset.activityInactiveSubtitle || '';
+
+    setTimeout(function () {
+        boutons.classList.remove('buttons_children_inactive');
+        boutons.classList.add('buttons_children_active');
+        var texte = document.querySelector('.div_text_explanation_inactive');
+        if (texte) {
+            texte.classList.remove('div_text_explanation_inactive');
+            texte.textContent = sousTitre;
+        }
+    }, delai);
+}
+
+document.addEventListener('DOMContentLoaded', initActiviteIndisponible);
+document.addEventListener('htmx:afterSettle', initActiviteIndisponible);

@@ -520,3 +520,30 @@ function refresh_page() {
 
 remove_text_up();
 remove_text_down();
+
+
+// --- Carrousel d'informations (fragment announce/gallery.html) -------------
+//
+// Ce code vivait dans le fragment, sous un `htmx:afterSettle` REPOSE a chaque
+// injection : les ecouteurs s'empilaient. Il est ici enregistre une seule fois.
+// Le delai et l'effet de transition, autrefois interpoles par Jinja DANS le
+// script, arrivent par des attributs data-* du conteneur.
+document.addEventListener('htmx:afterSettle', function () {
+    var conteneur = document.querySelector('.swiper[data-swiper-delay]');
+    if (!conteneur) { return; }
+
+    var delai = Number(conteneur.dataset.swiperDelay || 0) * 1000;
+    var effet = conteneur.dataset.swiperEffect || 'slide';
+
+    if (window.swiperInstance) {
+        window.swiperInstance.update();   // instance existante : simple mise a jour
+        return;
+    }
+    window.swiperInstance = new Swiper('.swiper', {
+        loop: true,
+        effect: effet,
+        slidesPerView: 1,
+        pagination: { el: '.swiper-pagination', clickable: true },
+        autoplay: { delay: delai, disableOnInteraction: false }
+    });
+});

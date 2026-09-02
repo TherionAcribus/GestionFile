@@ -17,13 +17,3 @@
     {% endfor %}
 {% endif %}
 
-<script>
-    document.querySelectorAll('.thumbnail img').forEach(function(img) {
-            img.addEventListener('click', function() {
-                var modalImage = document.getElementById('modal-image');
-                modalImage.src = this.src;
-                var modal = M.Modal.getInstance(document.getElementById('image-modal'));
-                modal.open();
-            });
-        });
-</script>

@@ -16,7 +16,8 @@
             <td><input type="text" class="form-control" name="end_time" value="{{ schedule.end_time }}" id="end_time-{{ schedule.id }}" aria-label="Heure de fin"></td>
             <td>
                 <div class="input-field col">
-                    <select multiple id="weekdays-{{ schedule.id }}" aria-label="Jours">
+                    <select multiple id="weekdays-{{ schedule.id }}" class="js-select2-multiple"
+                            data-placeholder="Choisissez les horaires" aria-label="Jours">
                         {% for weekday in weekdays %}
                             <option value="{{weekday.id}}"
                                     {% if weekday in schedule.weekdays %}selected{% endif %}>{{weekday.name}}</option>
@@ -48,14 +49,6 @@
             </td>
         </tr>
 
-        <script>
-            $(document).ready(function() {
-            $('#weekdays-{{ schedule.id }}').select2({
-            placeholder: "Choisissez les horaires",
-            allowClear: true
-                });
-            });
-        </script>
         {% endfor %}
     </tbody>
 </table>

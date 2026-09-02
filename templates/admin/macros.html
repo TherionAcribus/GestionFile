@@ -360,7 +360,8 @@
 <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#restoreModal_{{ table }}">Restaurer les données</button>
 
 <!-- Modal Structure -->
-<div class="modal fade" id="restoreModal_{{ table }}" tabindex="-1" aria-labelledby="restoreModalLabel_{{ table }}" aria-hidden="true">
+<div class="modal fade" id="restoreModal_{{ table }}" data-restore-table="{{ table }}"
+     tabindex="-1" aria-labelledby="restoreModalLabel_{{ table }}" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
@@ -396,76 +397,6 @@
     </div>
 </div>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var elems = document.querySelectorAll('.modal');
-        //M.Modal.init(elems);
-
-        initRestoreForm('{{ table }}', '{{ table }}' === 'databases');
-    });
-
-    function initRestoreForm(table, isDatabase) {
-        var fileInput = document.getElementById('fileInput_' + table);
-        var restoreButton = document.getElementById('restoreButton_' + table);
-        var fileContentDiv = document.getElementById('fileContent_' + table);
-        var json_tag = document.getElementById('json_tag_' + table).textContent;
-
-        fileInput.addEventListener('change', function(event) {
-            var file = event.target.files[0];
-            if (file) {
-                if (isDatabase && file.name.endsWith('.zip')) {
-                    // Just indicate that a ZIP file was selected and enable the restore button
-                    fileContentDiv.innerHTML = `<div><strong>Fichier ZIP sélectionné :</strong> ${file.name}</div>`;
-                    restoreButton.disabled = false; // Enable the button
-                } else if (!isDatabase && file.name.endsWith('.json')) {
-                    var reader = new FileReader();
-                    reader.onload = function(e) {
-                        var content = e.target.result;
-                        try {
-                            var jsonContent = JSON.parse(content);
-                            var metadata = {
-                                "name": jsonContent.name,
-                                "type": jsonContent.type,
-                                "version": jsonContent.version,
-                                "timestamp": jsonContent.timestamp,
-                                "comments": jsonContent.comments
-                            };
-                            var metadataContent = `
-                                <div><strong>Name:</strong> ${metadata.name}<br>
-                                <strong>Type:</strong> ${metadata.type}<br>
-                                <strong>Version:</strong> ${metadata.version}<br>
-                                <strong>Timestamp:</strong> ${metadata.timestamp}<br>
-                                <strong>Comments:</strong> ${metadata.comments}</div>
-                            `;
-                            if (json_tag != jsonContent.name) {
-                                var metadataContentBadContent = `
-                                <div><strong>Erreur de fichier !</strong><br>
-                                Vous utilisez un fichier de type <strong>${jsonContent.name}</strong>
-                                mais vous devez utiliser un fichier de type <strong>${json_tag}</strong><br>
-                            `;
-                                fileContentDiv.innerHTML = metadataContentBadContent;
-                            } else {
-                                fileContentDiv.innerHTML = metadataContent;
-                                restoreButton.disabled = false; // Enable the button
-                            }
-
-                        } catch (error) {
-                            fileContentDiv.innerText = 'Invalid JSON file or missing metadata';
-                            restoreButton.disabled = true; // Disable the button in case of error
-                        }
-                    };
-                    reader.readAsText(file);
-                } else {
-                    fileContentDiv.innerText = 'Fichier invalide sélectionné. Veuillez choisir un fichier valide.';
-                    restoreButton.disabled = true; // Disable the button if invalid file selected
-                }
-            } else {
-                fileContentDiv.innerText = '';
-                restoreButton.disabled = true; // Disable the button if no file is selected
-            }
-        });
-    }
-</script>
 {% endmacro %}
 
 
@@ -1047,7 +978,7 @@ Enregistrer
 
 {# Macro pour copier les couleurs d'une autre page #}
 {% macro copy_colors_bloc(current_page_key) %}
-<div class="card mb-4 border-info">
+<div class="card mb-4 border-info" data-copy-colors-page="{{ current_page_key }}">
     <div class="card-body py-2">
         <div class="d-flex flex-wrap align-items-center gap-3">
             <span class="fw-bold text-info"><i class="fas fa-palette"></i> Copier les couleurs depuis :</span>
@@ -1078,26 +1009,4 @@ Enregistrer
     </div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const currentPage = '{{ current_page_key }}';
-    const select = document.getElementById('copy_colors_select_' + currentPage);
-    if (select && typeof pageColorRoles !== 'undefined') {
-        for (const key in pageColorRoles) {
-            if (key !== currentPage) {
-                const opt = document.createElement('option');
-                opt.value = key;
-                opt.textContent = pageColorRoles[key].label;
-                select.appendChild(opt);
-            }
-        }
-    }
-
-    // Déplacer la modale au niveau du body pour éviter les problèmes de positionnement
-    const modal = document.getElementById('modal_copy_colors');
-    if (modal) {
-        document.body.appendChild(modal);
-    }
-});
-</script>
 {% endmacro %}

@@ -263,11 +263,14 @@
         fonctions (aucune instruction exécutée), donc `defer` convient : elles
         sont définies avant toute interaction possible de l'utilisateur. #}
     <script defer src="{{ url_for('static', filename='js/admin_macros.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/admin_macros_forms.js') }}"></script>
     {#  admin_fragments.js : fonctions appelées par les onclick des fragments
         injectés par HTMX. Elles y étaient définies EN LIGNE, donc redéfinies à
         chaque échange. `selectImage` et `getSelectedOptions` étaient même
         dupliquées à l'identique dans deux gabarits chacune. #}
     <script defer src="{{ url_for('static', filename='js/admin_fragments.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/admin_backups.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/admin_dashboard_select.js') }}"></script>
 
     {# Scripts spécifiques à la page (Chart.js/stats, audio, galerie…).
        Placés après les scripts communs : s'ils sont en `defer`, ils
