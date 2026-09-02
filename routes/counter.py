@@ -4,10 +4,9 @@ from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get_queue_revision
-from python.engine import call_next, generate_audio_calling
-from utils import replace_balise_announces
-from python.engine import counter_become_active, counter_become_inactive
-from communication import communikation, send_app_notification, notify_patient_phone
+from python.engine import generate_audio_calling
+from communication import communikation, send_app_notification
+from services import calling_service
 from auth_utils import require_app_token_or_login
 
 counter_bp = Blueprint('counter', __name__)
@@ -254,47 +253,22 @@ def patients_queue_for_counter(counter_id):
 
 
 def update_counter_auto_calling(counter_id, auto_calling_value):
-    """ FOnction commune pour le changement de l'autocalling web et App"""
+    """ Fonction commune pour le changement de l'autocalling web et App.
+
+    Delegue au service : c'est lui qui detient la sequence « appeler + activer +
+    annoncer », qui etait ici recopiee a l'identique depuis app.py (au commentaire
+    pres). Il n'y a plus non plus de liste app.config["AUTO_CALLING"] a maintenir
+    en parallele de Counter.auto_calling.
+    """
     try:
-        counter = Counter.query.get(counter_id)
-        if not counter:
-            app.logger.error(f"Counter not found: {counter_id}")
-            return False, "Counter not found", 404
-
-        counter.auto_calling = auto_calling_value
-        db.session.commit()
-
-        # Mise à jour de app.config
-        if auto_calling_value:
-            app.config["AUTO_CALLING"].append(counter.id)
-        else:
-            # avant de supprimer, on vérifie que le comptoir est bien dans la liste
-            if counter.id in app.config["AUTO_CALLING"]:
-                app.config["AUTO_CALLING"].remove(counter.id)
-            else:
-                app.logger(f"Le comptoir {counter.id} n'étais pas dans la liste des autocalling")
-        app.logger.info(f"counter autocalling : {app.config['AUTO_CALLING']}" )
-
-        # si on relance autocalling, on appelle automatiquement le patient suivant
-        # uniquement si le comptoir est inactif
-        if auto_calling_value and not counter.is_active:
-            is_patient, patient = call_next(counter.id)
-            if is_patient:
-                counter_become_active(counter.id)
-                communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
-                # mise à jour écran ... bizarremment l'audio est dans le call next....
-                text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
-                communikation("update_screen", event="add_calling", data={"id": patient.id, "counter_id": counter.id, "text": text})
-
-
-        return True, {"status": counter.auto_calling}, 200
-
+        return calling_service.set_auto_calling(counter_id, auto_calling_value)
     except SQLAlchemyError as e:
         db.session.rollback()
-        app.logger.error(f'Database error: {str(e)}')
+        app.logger.exception("Erreur base de donnees sur l'appel automatique")
         return False, str(e), 500
     except Exception as e:
-        app.logger.error(f'Unexpected error: {str(e)}')
+        db.session.rollback()
+        app.logger.exception("Erreur inattendue sur l'appel automatique")
         return False, str(e), 500
 
 
@@ -394,10 +368,9 @@ def list_of_activities():
 def counter_select_patient(counter_id, patient_id):
     """ Appeler lors du choix d'un patient spécifique au comptoir """
     app.logger.debug('counter_select_patient %s %s', counter_id, patient_id)
-    app.call_specific_patient(counter_id, patient_id)
-    communikation("update_patient")
-    next_patient = Patient.query.get(patient_id)
-    notify_patient_phone(next_patient.call_number)
+    # Le service emet lui-meme update_patient et notify_patient_phone : les
+    # refaire ici doublait les messages temps reel.
+    calling_service.call_specific(counter_id, patient_id)
     return '', 204
 
 

@@ -10,10 +10,8 @@ _skip_eventlet_patch = os.getenv("SKIP_EVENTLET_PATCH", "").strip().lower() in {
 if not _skip_eventlet_patch:
     import eventlet
     eventlet.monkey_patch()  # thread=True, time=True
-from flask import Flask, render_template, request, redirect, url_for, session, current_app, jsonify, send_from_directory, Response, g, make_response, has_request_context, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, g, make_response, has_request_context
 
-from sqlalchemy.orm import sessionmaker, relationship, backref, session as orm_session, exc as sqlalchemy_exceptions, joinedload
-from sqlalchemy import func, CheckConstraint, and_, Boolean, DateTime, Column, Integer, String, ForeignKey
 from flask_migrate import Migrate
 from flask.signals import request_started
 from flask_mailman import Mail
@@ -33,19 +31,11 @@ import subprocess
 import threading
 import socket
 import pika
-import pytz
 
-from urllib.parse import urlparse, urljoin
-import random
 
 from functools import partial
 
-from flask_security import Security, current_user, auth_required, hash_password, \
-    SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
-from sqlalchemy.ext.declarative import declarative_base
-from flask_security.forms import LoginForm, BooleanField
-from wtforms import StringField, PasswordField, HiddenField
-from wtforms.validators import DataRequired
+from flask_security import Security, current_user, SQLAlchemyUserDatastore
 
 import jwt
 from dotenv import load_dotenv
@@ -54,23 +44,23 @@ from markupsafe import escape
 from auth_utils import require_app_token_or_login, check_app_secret, is_valid_app_secret_config, is_socket_connection_authorized, is_authenticated_request, wants_json_response
 from idempotency import idempotent
 
-from models import db, Patient, Counter, Pharmacist, Activity, Button, Language, Text, AlgoRule, ActivitySchedule, ConfigOption, ConfigVersion, User, Role, Weekday, TextTranslation, activity_schedule_link, Translation, JobExecutionLog, DashboardCard
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_staff_data_from_json, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
-from python.engine import call_next, counter_become_inactive, counter_become_active, trigger_async_audio_calling
-from utils import validate_and_transform_text, parse_time, convert_markdown_to_escpos, replace_balise_announces, replace_balise_phone, get_buttons_translation, choose_text_translation, get_text_translation
+from models import db, Patient, Counter, Pharmacist, Activity, Language, ConfigOption, User, Role, JobExecutionLog, DashboardCard
+from services import calling_service
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
+from utils import validate_and_transform_text, convert_markdown_to_escpos
 from backup import backup_databases
 from routes.admin_backup import admin_backup_bp
 from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
 from scheduler_dashboard import build_jobs_info
 from bdd import init_database
 from config import Config, time_tz
-from communication import send_app_notification, communikation
+from communication import communikation
 from variables import MultiCssVariableManager
 from css_manager import CSSManager
 
 from app_holder import AppHolder
 
-from routes.counter import counter_bp, update_switch_auto_calling
+from routes.counter import counter_bp
 from routes.admin_announce import admin_announce_bp
 from routes.admin_counter import admin_counter_bp
 from routes.admin_activity import admin_activity_bp
@@ -83,15 +73,15 @@ from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
-from routes.admin_security import admin_security_bp, ExtendedLoginForm, create_default_user, create_default_role
-from routes.admin_music import admin_music_bp, is_spotipy_connected
+from routes.admin_security import admin_security_bp, create_default_user, create_default_role
+from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
 from routes.admin_data import admin_data_bp
 from routes.announce import announce_bp
 from routes.admin_stats import admin_stats_bp
 from routes.patient import patient_bp
-from routes.pyside import pyside_bp, create_patients_list_for_pyside
+from routes.pyside import pyside_bp
 from routes.home import home_bp
 from python.engine import engine_bp
 from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission, permission_error_response
@@ -196,12 +186,12 @@ def load_configuration(app):
     # stockage de la durée de conservation des cookies pour les mots de passe
     app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=app.config["SECURITY_REMEMBER_DURATION"])
 
-    # auto_calling 
-    auto_calling = []
-    for counter in Counter.query.all():
-        if counter.auto_calling:
-            auto_calling.append(counter.id)
-    app.config["AUTO_CALLING"] = auto_calling
+    # NOTE: il n'y a plus de liste app.config["AUTO_CALLING"]. Ce statut vit
+    # desormais uniquement dans Counter.auto_calling (base). La liste etait mutee
+    # en place depuis deux modules, donc propre a un processus : elle divergeait
+    # entre les conteneurs `web` et `scheduler`, et ce rechargement de
+    # configuration la reconstruisait en ecrasant les mutations en vol.
+    # Voir services/calling_service.counters_en_appel_automatique().
 
     #start_serveo_tunnel_in_thread()
     #flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, debug=debug))
@@ -1462,47 +1452,10 @@ def patient_right_page_default():
     return render_template('htmx/patient_right_page_default.html')
 
 
-def call_specific_patient_action(counter_id, patient_id):
-    validate_current_patient(counter_id)
-
-    next_patient = Patient.query.get(patient_id)
-    if not next_patient:
-        return False, {"error": "not_found"}, 404
-
-    # Réclamation atomique (même logique que call_next) : on ne passe le patient
-    # à 'calling' que si il est TOUJOURS 'standing' en base. Sans ça, deux
-    # comptoirs cliquant le même patient pouvaient tous deux le « décrocher ».
-    claimed = (
-        db.session.query(Patient)
-        .filter(Patient.id == patient_id, Patient.status == "standing")
-        .update({"status": "calling", "counter_id": counter_id}, synchronize_session=False)
-    )
-    if claimed:
-        db.session.query(Counter).filter(Counter.id == counter_id).update(
-            {"is_active": True}, synchronize_session=False
-        )
-    db.session.commit()
-
-    if not claimed:
-        app.logger.info("Already called")
-        send_app_notification(origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient})
-        return False, {"error": "already_called"}, 423
-
-    communikation("update_patient")
-
-    text = replace_balise_announces(app.config["ANNOUNCE_CALL_TEXT"], next_patient)
-    communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
-
-    language_code = next_patient.language.code
-    trigger_async_audio_calling(counter_id, next_patient.id, language_code)
-
-    return True, next_patient.to_dict(), 200
-
-
 @app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def call_specific_patient(counter_id, patient_id):
-    ok, payload, status_code = call_specific_patient_action(counter_id, patient_id)
+    ok, payload, status_code = calling_service.call_specific(counter_id, patient_id)
     return jsonify(payload), status_code
 
 
@@ -1545,37 +1498,6 @@ def patients_langue(lang):
 
 
 # ---------------- PAGE PATIENT FRONT ----------------
-
-@with_app_context
-def auto_calling():
-    # si il y a des comptoirs en appel automatique on lance l'appel automatique
-    app.logger.debug("%s", app.config["AUTO_CALLING"])
-    if len(app.config["AUTO_CALLING"]) > 0:
-        counters = db.session.query(Counter).filter(
-            Counter.id.in_(current_app.config["AUTO_CALLING"]),
-            Counter.is_active.is_(False),
-            Counter.staff_id != None
-        ).all()
-
-        app.logger.debug('auto counters %s', counters)
-
-        if app.config["COUNTER_ORDER"] == "order":
-            counters = sorted(counters, key=lambda x: x.sort_order)
-        elif app.config["COUNTER_ORDER"] == "random":
-            random.shuffle(counters)
-
-        for counter in counters:
-            if not counter.is_active:
-                app.logger.debug('auto calling counter libre %s', counter.id)
-                is_patient, patient = call_next(int(counter.id))
-                # mise à jour écran ... bizarremment l'audio est dans le call next....
-                text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], patient)
-                communikation("update_screen", event="add_calling", data={"id": patient.id, "counter_id": counter.id, "text": text})
-                counter_become_active(counter.id)
-                # mise à jour de Pyside, car lui est mis à jour normalement via les retours du serveur et non via websocket contrairement au site (pour l'instant)
-                communikation("app_counter", event="update_auto_calling", data={"counter_id": counter.id, "patient": patient.to_dict()})
-                break
-
 
 # liste des patients en attente : Nécessaire pour être transmis à Pyside
 def list_patients_standing():
@@ -1694,100 +1616,17 @@ def counter_refresh_buttons(counter_id):
 @require_app_token_or_login
 @idempotent
 def validate_and_call_next(counter_id):
-    app.logger.debug('validate_and_call_next %s', counter_id)
-
-    current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
-    if current_patient:
-        communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
-
-    validate_current_patient(counter_id)
-
-    is_patient, next_patient = call_next(counter_id)
-
-    
-    if is_patient:
-        counter_become_active(counter_id)   
-        communikation("update_patient")
-        
-        text = replace_balise_announces(app.config['ANNOUNCE_CALL_TEXT'], next_patient)
-        communikation("update_screen", event="add_calling", data={"id": next_patient.id, "counter_id": counter_id, "text": text})
-        
-        return jsonify(next_patient.to_dict()), 200  
-
-    # si pas de patient suivant, le comptoir devient inactif
-    else:
-        counter_become_inactive(counter_id)
-        return '', 204
-
-
-def validate_current_patient(counter_id):
-    # On ne traite QUE les patients réellement en cours à ce comptoir
-    # (calling / ongoing). Filtrer sur le statut évite de recharger et de
-    # réécrire tous les patients déjà "done" de la journée : sinon le coût
-    # devient quadratique au fil des appels et les anciens timestamp_end sont
-    # écrasés par l'heure du dernier appel (statistiques de durée faussées).
-    # On garde volontairement counter_id sur les patients terminés : les stats
-    # du jour regroupent les patients "done" par comptoir (routes/admin_stats).
-    active_patients = Patient.query.filter(
-        Patient.counter_id == counter_id,
-        Patient.status.in_(("calling", "ongoing")),
-    ).all()
-
-    if not active_patients:
-        app.logger.debug("pas de patient")
-        return
-
-    now = datetime.now(time_tz)
-    for patient in active_patients:
-        if patient.status == "calling":
-            communikation("update_screen", event="remove_calling", data={"id": patient.id})
-        patient.status = 'done'
-        patient.timestamp_end = now
-    db.session.commit()
+    ok, resultat = calling_service.validate_and_call_next(counter_id)
+    if ok:
+        return jsonify(resultat.to_dict()), 200
+    # pas de patient suivant : le service a repasse le comptoir inactif
+    return '', 204
 
 
 @app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def pause_patient(counter_id, patient_id):
-    # Valide le patient actuel au comptoir sans appeler le prochain
-    app.logger.debug("pause_patient")
-    app.logger.debug('p %s %s %s', patient_id, "c", counter_id)
-    current_patient = Patient.query.get(patient_id)
-    if current_patient:
-        current_patient.status = 'done'
-        current_patient.timestamp_end = datetime.now(time_tz)
-        db.session.commit()
-
-    # le comptoir devient inactif
-    counter_become_inactive(counter_id)
-    
-    communikation("update_patient")
-    app.logger.debug('counterauto %s', Counter.query.get(counter_id).auto_calling)
-    # si l'autocalling est activé. On le vire quand on se met en pause
-    if Counter.query.get(counter_id).auto_calling:
-        call_update_switch_auto_calling(counter_id)  
-
-    return jsonify({"id": None, "counter_id": counter_id}), 200  
-
-def call_update_switch_auto_calling(counter_id):
-    with current_app.test_request_context():
-        
-        # Simuler les données de la requête
-        request.values = {
-            'counter_id': counter_id,
-            'value': "false"
-        }        
-        # Appel direct de la fonction
-        result = update_switch_auto_calling()
-
-        # mise à jour du web. Pas nécessaire pour l'App
-        communikation("counter", event="refresh_auto_calling", data={"auto_calling": False})
-                
-        app.logger.debug("switch_auto_calling")
-        app.logger.debug(f"Résultat : {result}")
-        
-
-
+    return jsonify(calling_service.pause(counter_id, patient_id)), 200
 
 
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
@@ -2126,10 +1965,8 @@ def _sync_configuration_across_processes():
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
 app.load_configuration = load_configuration
 app.display_toast = display_toast
-app.call_specific_patient = call_specific_patient_action
 app.allowed_image_file = allowed_image_file
 app.mail = mail
-app.auto_calling = auto_calling
 app.socketio = socketio
 app.database = database
 app.scheduler = scheduler

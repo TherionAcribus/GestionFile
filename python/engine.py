@@ -40,6 +40,46 @@ def call_next_http(counter_id):
     return jsonify({"error": result}), 409
 
 
+def claim_patient(patient_id, counter_id):
+    """ Réclamation ATOMIQUE d'un patient par un comptoir.
+
+    Renvoie True si CE comptoir a décroché le patient, False s'il était déjà pris.
+
+    Auparavant on lisait next_patient.status ('standing') puis on écrivait
+    'calling' dans une seconde étape : deux comptoirs pouvaient sélectionner le
+    même patient avant que l'un des deux ne committe, se retrouver tous les deux
+    avec le même patient, et le dernier commit écrasait le counter_id de l'autre.
+
+    On fait un UPDATE conditionnel « ... WHERE id=? AND status='standing' » dont
+    on vérifie le rowcount : sous InnoDB (MySQL 8) comme sous SQLite, un seul des
+    comptoirs concurrents verra claimed == 1 ; l'autre verra 0. La transition du
+    patient ET l'activation du comptoir sont validées dans la MÊME transaction
+    (un seul commit).
+
+    Fonction partagée : `call_next` (appel du suivant) et le service d'appel
+    ciblé s'en servent tous les deux. Elle existait auparavant en deux copies,
+    dont l'une sans réessai ni nettoyage des `calling` périmés.
+    """
+    try:
+        claimed = (
+            db.session.query(Patient)
+            .filter(Patient.id == patient_id, Patient.status == "standing")
+            .update(
+                {"status": "calling", "counter_id": counter_id},
+                synchronize_session=False,
+            )
+        )
+        if claimed:
+            db.session.query(Counter).filter(Counter.id == counter_id).update(
+                {"is_active": True}, synchronize_session=False
+            )
+        db.session.commit()
+        return bool(claimed)
+    except Exception:
+        db.session.rollback()
+        raise
+
+
 def call_next(counter_id, attempts=0):
     # pour éviter de prendre deux fois le même patient, en vérifie en l'appelant qu'il est toujours en attente sinon on rappelle un patient.
     # pour éviter des boucles infinies, on considère qu'après x (5) essais on abandonne. Peut probable que 5 comptoirs appellent en même temps des patients.
@@ -67,34 +107,9 @@ def call_next(counter_id, attempts=0):
         app.logger.info(f"No next patient found for counter {counter_id}")
         return False, "no_patient_for_counter"
 
-    # Réclamation ATOMIQUE du patient.
-    #
-    # Auparavant on lisait next_patient.status ('standing') puis on écrivait
-    # 'calling' dans une seconde étape : deux comptoirs pouvaient sélectionner le
-    # même patient avant que l'un des deux ne committe, se retrouver tous les deux
-    # avec le même patient, et le dernier commit écrasait le counter_id de l'autre.
-    #
-    # On fait désormais un UPDATE conditionnel « ... WHERE id=? AND status='standing' »
-    # dont on vérifie le rowcount : sous InnoDB (MySQL 8) comme sous SQLite, un seul
-    # des comptoirs concurrents verra claimed == 1 ; l'autre verra 0 et réessaiera
-    # avec le candidat suivant. La transition du patient ET l'activation du comptoir
-    # sont validées dans la MÊME transaction (un seul commit).
     try:
-        claimed = (
-            db.session.query(Patient)
-            .filter(Patient.id == next_patient.id, Patient.status == "standing")
-            .update(
-                {"status": "calling", "counter_id": counter_id},
-                synchronize_session=False,
-            )
-        )
-        if claimed:
-            db.session.query(Counter).filter(Counter.id == counter_id).update(
-                {"is_active": True}, synchronize_session=False
-            )
-        db.session.commit()
+        claimed = claim_patient(next_patient.id, counter_id)
     except Exception as e:
-        db.session.rollback()
         app.logger.error(f"Error claiming patient {next_patient.id}: {str(e)}")
         return call_next(counter_id, attempts=attempts+1)
 
@@ -418,7 +433,11 @@ def activate_patient(patient):
     fois l'impression confirmée réussie (ou conservée malgré l'échec)."""
     patient.status = 'standing'
     db.session.commit()
-    app.auto_calling()
+    # Import différé : le service d'appel importe ce module (engine), on ne peut
+    # donc pas l'importer en tête sans créer un cycle. Remplace l'ancien
+    # `app.auto_calling()`, qui passait par un attribut greffé sur l'objet app.
+    from services.calling_service import run_auto_calling
+    run_auto_calling()
     communikation("update_patient")
     return patient
 
@@ -487,8 +506,8 @@ def register_patient(activity):
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
     
-    app.logger.debug("before autocalling")
-    app.auto_calling()
+    from services.calling_service import run_auto_calling
+    run_auto_calling()
 
     communikation("update_patient")
     return new_patient
