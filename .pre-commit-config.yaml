@@ -4,6 +4,8 @@
 #   pre-commit install
 # Test manuel sur tout le dépôt :
 #   pre-commit run --all-files
+# gitleaks lit automatiquement .gitleaks.toml (règles) et .gitleaksignore
+# (empreintes des fuites historiques rotées) à la racine du dépôt.
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.21.2

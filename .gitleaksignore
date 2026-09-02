@@ -7,3 +7,63 @@
 #
 # Exemple :
 #   a1b2c3d:instance/queuedatabase.db:generic-api-key:1
+#
+# NB : une empreinte doit être SEULE sur sa ligne — gitleaks ne retire pas les
+# commentaires de fin de ligne, il compare la ligne entière.
+
+# -----------------------------------------------------------------------------
+# Jetons OAuth Spotify du cache spotipy (.cache), suivi par git du 2024-08-12 au
+# 2024-12-26 : 40 commits, avec un couple access_token/refresh_token DIFFÉRENT à
+# chaque commit. Le fichier est depuis untracked + .gitignore, et les jetons
+# sont stockés en base (SpotifyDBCacheHandler, routes/admin_music.py).
+# La règle qui les détecte (spotify-oauth-token) a été ajoutée dans
+# .gitleaks.toml : gitleaks n'a rien par défaut pour Spotify, d'où le silence
+# du scan jusqu'ici.
+#
+# Ces empreintes ne valent acquittement QUE parce que l'application Spotify a
+# été révoquée côté Spotify (une révocation invalide d'un coup les 40 refresh
+# tokens ; l'historique public, lui, reste inchangeable).
+#
+# Pour régénérer la liste :
+#   git log --all --reverse --format=%H -- .cache | sed 's|$|:.cache:spotify-oauth-token:1|'
+# -----------------------------------------------------------------------------
+ab1fecb1a4decc3d2bce284c6b59299f15d3bd6e:.cache:spotify-oauth-token:1
+10520728bfcc40234e9dddef7387878673cac9cf:.cache:spotify-oauth-token:1
+9f3f6fcaf1b544859c0ca65a18ab0505b1c4ca71:.cache:spotify-oauth-token:1
+70edd394699f2af1defbbffeb0f9e59347d06ec2:.cache:spotify-oauth-token:1
+3ba0959829d22772fb8b3cad0436f1db580106b1:.cache:spotify-oauth-token:1
+5bf7a129602dee10d13123a7e922b1ea0b391c90:.cache:spotify-oauth-token:1
+17a1b23e7c20e66556a171a063e23d75eca5dd14:.cache:spotify-oauth-token:1
+1dd753853d5f60d214d3546c679b2ca4563f2af4:.cache:spotify-oauth-token:1
+9250c705b10b4ebee646a7c42fbf50d8bcf13a71:.cache:spotify-oauth-token:1
+a861ef46af2cfde6ff7e46893b4ce929c15429a6:.cache:spotify-oauth-token:1
+aba2d045b05521d200c6ba4bccae9a3037fd0276:.cache:spotify-oauth-token:1
+1ad116ad6d3638105e772522de57cf441e8c454c:.cache:spotify-oauth-token:1
+85c606be759cffe1067d9d16f5ca85edd3b44f45:.cache:spotify-oauth-token:1
+ab0a50e87d5a6235c13b6b35cb6ce63012598a8f:.cache:spotify-oauth-token:1
+c9d85e54e30f9a705647b164611cd38485b750b6:.cache:spotify-oauth-token:1
+ebde6e60dada9b8f0100b9d9ba23684cac30d4ba:.cache:spotify-oauth-token:1
+b7523bfa0809aa310691c5f5fbddaa1fc556f885:.cache:spotify-oauth-token:1
+b7c8b19e9769c19ffd0e363a4e8a2a646a577bb0:.cache:spotify-oauth-token:1
+f2da372a3c70dad56aed9b0f35a5ba153215891a:.cache:spotify-oauth-token:1
+9d8a5811437dd9e186573096f21d7020f4940c29:.cache:spotify-oauth-token:1
+56f033c49b47f358578df56f95fe62757e2df2bb:.cache:spotify-oauth-token:1
+a4552e2dd3ecf1b26757dc9e59c82db9aae94c68:.cache:spotify-oauth-token:1
+f206687233cecb459aa1cef256ec8ec853c08b57:.cache:spotify-oauth-token:1
+8de4905f7b661d896f556a2e3c0cd00f37b99dd0:.cache:spotify-oauth-token:1
+570a6321868a9a61757eee70dff0ea75cb98b237:.cache:spotify-oauth-token:1
+1d1f1131e92f9145a19dd95db26ea2dc7f63c0c3:.cache:spotify-oauth-token:1
+0e057889fd3658cff26423d7f43a54a0f71bbb06:.cache:spotify-oauth-token:1
+18c7a1bbecf9ee56472822a2ad77c2f2846f9df9:.cache:spotify-oauth-token:1
+a654590c4395e4b32d3d5ff747139e50f04bd122:.cache:spotify-oauth-token:1
+ea8e06a3a3bcd6af20376960360f85c8ebbed65e:.cache:spotify-oauth-token:1
+cd17a8c72d43b8158b10efa07146df8695bdeda3:.cache:spotify-oauth-token:1
+64c986ac30a62afeba013d583165722200756efa:.cache:spotify-oauth-token:1
+17c7b7077958f8c3211c8facb5687b6b98aa9892:.cache:spotify-oauth-token:1
+240a2a6ad1933ddbbc983d2593b29ada2e96963d:.cache:spotify-oauth-token:1
+01732db29aa154c00cc19436479a0a8e5cc40e83:.cache:spotify-oauth-token:1
+b1c2ef27b7f95143f1545816cf1c19f57f800934:.cache:spotify-oauth-token:1
+97b70474a71c4d57424334802d17b97376c57a8b:.cache:spotify-oauth-token:1
+ff48a440c6660327b5dcde10c98f2c0bbf2088b7:.cache:spotify-oauth-token:1
+21fa60d1cff1802cd157459df2f4e5912b8e424d:.cache:spotify-oauth-token:1
+dfdf7d397263c8d04b9942d985e48af2b4edd15f:.cache:spotify-oauth-token:1

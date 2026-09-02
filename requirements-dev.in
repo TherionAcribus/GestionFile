@@ -1,0 +1,10 @@
+# Dependances de developpement / test. Jamais installees en production.
+#     uv pip compile requirements-dev.in --python-version 3.12 -o requirements-dev.txt
+-r requirements.in
+
+pytest==8.3.2
+
+# Tests de bout en bout par navigateur (tests/test_add_patient.py, marker `e2e`).
+# Necessite en plus `playwright install chromium`.
+pytest-playwright==0.5.2
+playwright==1.46.0

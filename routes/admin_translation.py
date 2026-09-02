@@ -113,7 +113,7 @@ def update_language(language_id):
 @require_permission('translation')
 def confirm_delete_language(language_id):
     language = Language.query.get(language_id)
-    return render_template('/admin/translations_languages_modal_confirm_delete copy.html', language=language)
+    return render_template('/admin/translations_languages_modal_confirm_delete.html', language=language)
 
 
 # supprime un membre de l'equipe

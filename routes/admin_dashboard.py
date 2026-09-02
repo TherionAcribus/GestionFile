@@ -223,10 +223,13 @@ def save_dashboard_configuration():
             # Mêmes infos que la route /admin/appschedule/dashboard, via le même
             # assembleur : une seule requête pour toutes les dernières exécutions
             # (au lieu d'une par tâche) — cf. scheduler_dashboard, point 5.3.
-            from scheduler import scheduler
+            # ``scheduler`` est l'instance APScheduler creee par app.py et exposee
+            # sur l'application (app.py: app.scheduler). L'ancien ``from scheduler
+            # import scheduler`` visait un module scheduler.py vide : la carte
+            # levait ImportError des qu'elle etait affichee.
             from scheduler_dashboard import build_jobs_info
 
-            context['main_jobs'], context['other_jobs'] = build_jobs_info(scheduler.get_jobs())
+            context['main_jobs'], context['other_jobs'] = build_jobs_info(app.scheduler.get_jobs())
         
         elif dashboardcard.name == 'security':
             context['is_default_admin'] = check_default_admin()

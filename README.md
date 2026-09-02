@@ -100,8 +100,22 @@ Recommandation : pour une distribution “propre”, définis toujours `SECRET_K
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements.txt        # production
+pip install -r requirements-dev.txt    # + outils de test (pytest, playwright)
 ```
+
+> **Dépendances.** `requirements.txt` et `requirements-dev.txt` sont **générés** :
+> ne les éditez pas à la main. Les dépendances directes sont déclarées dans
+> `requirements.in` / `requirements-dev.in`, puis compilées :
+>
+> ```powershell
+> uv pip compile requirements.in --universal --python-version 3.10 -o requirements.txt
+> uv pip compile requirements-dev.in --universal --python-version 3.10 -o requirements-dev.txt
+> ```
+>
+> (`pip-compile` de pip-tools fonctionne aussi.) Sans `--upgrade`, les versions
+> déjà présentes dans le fichier de sortie sont conservées. Le mode `--universal`
+> produit un verrou valable de Python 3.10 (image Docker) à 3.12 (venv de dev).
 
 2) Définir les variables (`.env`) puis démarrer :
 

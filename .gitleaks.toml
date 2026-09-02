@@ -1,0 +1,20 @@
+# Configuration gitleaks du dépôt (CI : .github/workflows/secret-scan.yml,
+# local : .pre-commit-config.yaml).
+#
+# On garde toutes les règles par défaut de gitleaks et on ajoute ce qu'elles ne
+# couvrent pas. Les empreintes des fuites HISTORIQUES déjà traitées (rotées) se
+# mettent dans .gitleaksignore, pas ici.
+title = "GestionFile - Serveur"
+
+[extend]
+useDefault = true
+
+# Jetons OAuth Spotify (access_token « BQ... » et refresh_token « AQ... »).
+# Gitleaks n'a aucune règle Spotify par défaut : le fichier .cache de spotipy,
+# suivi par git jusqu'en 2024-12, n'a jamais été signalé.
+# Pas de `keywords` volontairement : le préfiltre par mot-clé raterait un jeton
+# recopié seul, hors de son JSON d'origine.
+[[rules]]
+id = "spotify-oauth-token"
+description = "Jeton OAuth Spotify (access_token / refresh_token)"
+regex = '''\b(?:BQ|AQ)[A-Za-z0-9_-]{80,}'''

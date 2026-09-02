@@ -22,7 +22,6 @@ from flask_socketio import SocketIO, join_room, leave_room
 from datetime import datetime, time, timedelta
 import time as tm
 
-from flask_apscheduler import APScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -42,7 +41,6 @@ import random
 
 from functools import partial
 
-from flask_debugtoolbar import DebugToolbarExtension
 from flask_security import Security, current_user, auth_required, hash_password, \
     SQLAlchemySessionUserDatastore, permissions_accepted, UserMixin, RoleMixin, AsaList, SQLAlchemyUserDatastore, login_required, lookup_identity, uia_username_mapper, verify_and_update_password, login_user
 from sqlalchemy.ext.declarative import declarative_base
@@ -556,13 +554,6 @@ def send_message():
     except Exception as e:
         return f"Failed to send message: {e}", 500
 
-
-#socketio.run(app, host='0.0.0.0', port=5001)
-
-#socketio = SocketIO(app, cors_allowed_origins="*", ping_timeout=60000, ping_interval=30000)
-
-#app.config['DEBUG_TB_PROFILER_ENABLED'] = True  # Activer le profiler
-#toolbar = DebugToolbarExtension(app)
 
 @app.errorhandler(404)
 def page_not_found(e):

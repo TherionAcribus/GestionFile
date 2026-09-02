@@ -1,0 +1,62 @@
+# Dependances DIRECTES du serveur (celles que le code importe reellement).
+# Les versions transitives sont figees dans requirements.txt, genere par :
+#     uv pip compile requirements.in --python-version 3.12 -o requirements.txt
+# (ou `pip-compile requirements.in`). Ne jamais editer requirements.txt a la main.
+#
+# Les dependances de developpement / test sont dans requirements-dev.in.
+
+# --- Coeur Flask ---
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+Flask-WTF==1.2.1
+Flask-SocketIO==5.3.6
+Flask-Login==0.6.3
+Werkzeug==3.0.3
+WTForms==3.1.2
+MarkupSafe==2.1.5
+SQLAlchemy==2.0.35
+
+# Authentification / securite.
+# Flask-Security-Too fournit le module `flask_security` importe par le code.
+# NE PAS ajouter le paquet `Flask-Security` (abandonne) : il installe le meme
+# module top-level et le gagnant depend de l'ordre d'installation.
+Flask-Security-Too==5.4.3
+bcrypt==4.0.1
+cryptography==43.0.0
+PyJWT==2.9.0
+bleach==6.1.0
+
+# Base de donnees.
+# Les DEUX pilotes MySQL sont necessaires :
+#   - PyMySQL : pilote DBAPI de SQLAlchemy (URI "mysql+pymysql://", config.py)
+#   - mysql-connector-python : connexions brutes de sauvegarde/restauration
+#     (backup.py, init_restore.py)
+PyMySQL==1.1.1
+mysql-connector-python==9.0.0
+
+# Serveur temps reel et taches planifiees
+eventlet==0.36.1
+APScheduler==3.10.4
+pika==1.3.2
+
+# Courriel (flask_mailman ; le paquet Flask-Mail n'est importe nulle part)
+Flask-Mailman==1.1.1
+
+# Synthese vocale des annonces
+gTTS==2.5.1
+google-cloud-texttospeech==2.17.2
+
+# Dependance IMPLICITE, ne pas retirer : passlib 1.7.4 (tire par
+# Flask-Security-Too) fait `import pkg_resources` au chargement, module fourni
+# par setuptools. Depuis Python 3.12 les venv n'installent plus setuptools par
+# defaut : sans cette ligne, `import flask_security` echoue sur un venv neuf.
+setuptools==69.5.1
+
+# Divers utilitaires importes par le code
+python-dotenv==1.0.1
+pytz==2024.1
+qrcode==7.4.2
+markdown2==2.5.0
+spotipy==2.24.0
+boto3==1.35.7

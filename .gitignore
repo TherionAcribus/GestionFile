@@ -1,7 +1,13 @@
 env/
 venv/
+.venv/
 __pycache__/
 *.pyc
+
+# Artefacts d'outillage local (jamais versionnes)
+.pytest_cache/
+.ruff_cache/
+*.prof
 static/audio/annonces/*.*
 static/qr_patients/*.*
 static/css/custom.css
@@ -18,3 +24,8 @@ instance/security_password_salt.txt
 *.sqlite
 *.sqlite3
 instance/*.db
+
+# Cache de jetons OAuth spotipy (access_token + refresh_token en clair).
+# Historiquement suivi par git : voir .gitleaksignore. Les jetons Spotify
+# sont desormais stockes en base (SpotifyDBCacheHandler).
+.cache
