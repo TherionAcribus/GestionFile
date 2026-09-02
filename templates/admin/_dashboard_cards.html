@@ -11,7 +11,7 @@
    - En attendant la réponse : un squelette occupe la place (pas de saut de mise
      en page). En cas d'échec réseau/serveur : un état d'erreur avec bouton
      « Réessayer » (voir les gestionnaires htmx:responseError / htmx:sendError et
-     dashboardCardRetry dans admin.html). #}
+     dashboardCardRetry dans static/js/admin_home.js). #}
 
 {% macro card_slot(dashboardcard, url, extra_triggers='') %}
 <div id="card-wrapper-{{ dashboardcard.id }}"

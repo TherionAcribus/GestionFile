@@ -1,0 +1,109 @@
+// Script de la page admin/admin.html, extrait du gabarit (Phase 8, point 2).
+// Charge en fin de page via le bloc `scripts_end` de admin/base.html : le
+// navigateur peut le mettre en cache, et le gabarit redevient du HTML.
+
+var sortableInstance = null;
+
+function initializeSortable() {
+    var dashboardEl = document.getElementById('sortable-dashboard');
+    if (!dashboardEl) return;
+    
+    if (sortableInstance) {
+        sortableInstance.destroy();
+    }
+    
+    sortableInstance = new Sortable(dashboardEl, {
+        handle: '.card-header',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        chosenClass: 'sortable-chosen',
+        dragClass: 'sortable-drag',
+        onEnd: function (evt) {
+            var order = [];
+            document.querySelectorAll('#sortable-dashboard .dashboard-card').forEach(function (item, index) {
+                var cardId = parseInt(item.id.replace('card-', ''));
+                order.push({
+                    id: cardId,
+                    position: index + 1
+                });
+            });
+
+            fetch('/admin/dashboard/save_order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ order: order })
+            }).then(response => {
+                if (response.ok) {
+                    console.log('Ordre des cartes sauvegardé');
+                } else {
+                    console.error('Erreur lors de la sauvegarde de l\'ordre');
+                    alert('Erreur lors de la sauvegarde de l\'ordre des cartes');
+                }
+            }).catch(error => {
+                console.error('Erreur réseau:', error);
+                alert('Erreur de connexion lors de la sauvegarde');
+            });
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    initializeSortable();
+});
+
+// Réinitialiser Sortable après mise à jour HTMX
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'sortable-dashboard') {
+        initializeSortable();
+    }
+});
+
+// -------- Point 5.3 : squelette + état d'erreur par carte --------
+// Chaque carte est chargée en différé (voir _dashboard_cards.html). Si sa
+// requête échoue (erreur serveur ou réseau), on remplace le squelette par un
+// état d'erreur avec un bouton « Réessayer », sans casser les autres cartes.
+
+function dashboardSkeletonHTML(cardId) {
+    return '<div id="card-' + cardId + '" class="dashboard-card card-skeleton" aria-busy="true">'
+        + '<div class="card"><div class="card-header d-flex justify-content-between align-items-center">'
+        + '<span class="skeleton-bar skeleton-title"></span></div>'
+        + '<div class="card-body"><span class="skeleton-bar"></span>'
+        + '<span class="skeleton-bar"></span>'
+        + '<span class="skeleton-bar skeleton-bar-short"></span></div></div></div>';
+}
+
+function dashboardCardError(wrapper) {
+    var cardId = wrapper.getAttribute('data-card-id');
+    wrapper.innerHTML = '<div id="card-' + cardId + '" class="dashboard-card card-load-error">'
+        + '<div class="card"><div class="card-header d-flex justify-content-between align-items-center">'
+        + '<span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Erreur de chargement</span>'
+        + '</div><div class="card-body text-center">'
+        + '<p class="text-muted small mb-2">Impossible de charger cette carte.</p>'
+        + '<button type="button" class="btn btn-sm btn-outline-primary" onclick="dashboardCardRetry(this)">'
+        + '<i class="bi bi-arrow-clockwise"></i> Réessayer</button>'
+        + '</div></div></div>';
+}
+
+function dashboardCardRetry(btn) {
+    var wrapper = btn.closest('.dashboard-card-slot');
+    if (!wrapper) return;
+    var url = wrapper.getAttribute('data-card-url');
+    wrapper.innerHTML = dashboardSkeletonHTML(wrapper.getAttribute('data-card-id'));
+    htmx.ajax('GET', url, { target: wrapper, swap: 'innerHTML' });
+}
+
+function dashboardSlotFromEvent(evt) {
+    var t = evt.target;
+    return (t && t.closest) ? t.closest('.dashboard-card-slot') : null;
+}
+
+document.body.addEventListener('htmx:responseError', function(evt) {
+    var wrapper = dashboardSlotFromEvent(evt);
+    if (wrapper) dashboardCardError(wrapper);
+});
+document.body.addEventListener('htmx:sendError', function(evt) {
+    var wrapper = dashboardSlotFromEvent(evt);
+    if (wrapper) dashboardCardError(wrapper);
+});

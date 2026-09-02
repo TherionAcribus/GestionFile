@@ -42,23 +42,3 @@
         Sauver</button>
 </div>
 
-<script>
-    function selectSound(button) {
-        // D'abord, désélectionner tous les éléments
-
-        document.querySelectorAll(".sound-item").forEach(function(item) {
-            item.classList.remove("bg-secondary");
-            item.classList.remove("bg-secondary-subtle");
-        });
-
-        // Ensuite, sélectionner l'élément parent de ce bouton
-        const li = button.closest("li");
-        li.classList.add("bg-secondary");
-
-        // mise à jour du span pour le nom du fichier
-        document.getElementById("selected_sound").innerText = button.name;
-    }
-
-
-    
-</script>

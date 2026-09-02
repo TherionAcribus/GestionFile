@@ -49,7 +49,6 @@
 
 <body>
     {% import '/admin/macros.html' as macros %}
-    {{ macros.common_js() }}
 
     {# ------------------------------------------------------------------ #}
     {#  Point 7.5 — Zone de retour utilisateur commune (accessible)        #}
@@ -256,6 +255,19 @@
     <script defer src="{{ url_for('static', filename='js/libs/select2.min.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/admin.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/htmx_tables.js') }}"></script>
+    {#  admin_macros.js : fonctions appelées par les attributs onclick/onkeypress
+        des macros (macros.html). Elles y étaient définies EN LIGNE, dans le corps
+        des macros : `css_unit_bloc` étant appelé 71 fois sur une page de
+        configuration CSS, les mêmes fonctions étaient renvoyées 71 fois dans une
+        seule réponse HTML. Le fichier ne contient que des déclarations de
+        fonctions (aucune instruction exécutée), donc `defer` convient : elles
+        sont définies avant toute interaction possible de l'utilisateur. #}
+    <script defer src="{{ url_for('static', filename='js/admin_macros.js') }}"></script>
+    {#  admin_fragments.js : fonctions appelées par les onclick des fragments
+        injectés par HTMX. Elles y étaient définies EN LIGNE, donc redéfinies à
+        chaque échange. `selectImage` et `getSelectedOptions` étaient même
+        dupliquées à l'identique dans deux gabarits chacune. #}
+    <script defer src="{{ url_for('static', filename='js/admin_fragments.js') }}"></script>
 
     {# Scripts spécifiques à la page (Chart.js/stats, audio, galerie…).
        Placés après les scripts communs : s'ils sont en `defer`, ils

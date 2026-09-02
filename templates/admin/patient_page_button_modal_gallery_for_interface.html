@@ -53,19 +53,3 @@
         Confirmer</a>
 </div>
 
-<script>
-    // le js est dans l'html car ne doit être chargé que quand l'est l'html
-    function selectImage(imageName) {
-        // Mettre à jour l'URL de l'image dans le formulaire
-        document.getElementById('image_name_field').innerText = imageName;
-        // Cadre bleu autour de l'image
-        if (document.getElementsByClassName('selected-image')) {         
-        for (element of document.getElementsByClassName('selected-image')) {
-            element.classList.remove('selected-image');
-        }
-    }
-        document.getElementById('img_' + imageName).classList.add('selected-image');
-        // Fermer la modal
-    }
-
-</script>

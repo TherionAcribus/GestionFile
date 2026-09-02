@@ -67,7 +67,8 @@ def test_macro_defers_until_revealed_and_shows_skeleton():
 
 
 def test_admin_page_has_per_card_error_state():
-    src = _read("templates/admin/admin.html")
+    # Le script de la page a ete extrait vers static/js/admin_home.js (point 2).
+    src = _read("templates/admin/admin.html") + _read("static/js/admin_home.js")
     # Un échec de requête d'une carte bascule sur un état d'erreur ciblé…
     assert "htmx:responseError" in src
     assert "htmx:sendError" in src

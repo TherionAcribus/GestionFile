@@ -101,17 +101,21 @@ def test_button_macro_wires_before_and_after_handlers():
 
 
 def test_before_request_handler_disables_button():
-    js = _read("templates/admin/macros.html")
+    # Ces fonctions ont quitte le corps des macros pour un fichier partage
+    # (Phase 8, point 2) ; leur logique est inchangee.
+    js = _read("static/js/admin_macros.js")
     body = re.search(r"function handleBeforeRequestConfig\(variable\)\s*{(.*?)\n}",
                      js, re.DOTALL).group(1)
     assert "button.disabled = true" in body
 
 
 def test_after_request_handler_checks_success_and_status():
-    js = _read("templates/admin/macros.html")
-    # Corps de la fonction, borné à sa dernière accolade avant </script>.
+    # Ces fonctions ont quitté le corps des macros pour un fichier partagé
+    # (Phase 8, point 2) ; leur logique est inchangée.
+    js = _read("static/js/admin_macros.js")
+    # Corps de la fonction, borné à sa dernière accolade de premier niveau.
     body = re.search(
-        r"function handleAfterRequestConfig\(event, variable\)\s*{(.*?)\n}\n\n</script>",
+        r"function handleAfterRequestConfig\(event, variable\)\s*{(.*?)\n}\n",
         js, re.DOTALL).group(1)
     # Vérifie le succès htmx ET le statut HTTP 2xx.
     assert "detail.successful" in body

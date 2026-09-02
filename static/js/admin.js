@@ -608,6 +608,20 @@ function sortable(){
     addKeyboardReorderControls(el);
 }
 
+// Les trois fragments de reordonnancement (comptoirs, boutons de la page
+// patient, langues) amenent tous la liste #list_order_buttons et appelaient
+// `sortable()` via un <script> inline, reexecute a chaque echange HTMX.
+// Un seul point d'accroche suffit : `sortable()` est deja idempotent
+// (garde `if (!el) return` et controles clavier non dupliques).
+document.addEventListener('htmx:afterSettle', function (evt) {
+    var cible = evt.detail && evt.detail.target;
+    if (!cible) { return; }
+    if (cible.id === 'list_order_buttons' || cible.querySelector('#list_order_buttons')) {
+        sortable();
+    }
+});
+
+
 function addKeyboardReorderControls(listEl){
     listEl.querySelectorAll('.button-order-item').forEach(function(item){
         if (item.querySelector('.order-move-controls')) return; // pas de doublon

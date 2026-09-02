@@ -62,16 +62,3 @@
 </div>
 
 
-<script>
-    // Permet de récuperer les options multiples
-    function getSelectedOptions(selectElementId) {
-    var selectElement = document.getElementById(selectElementId);
-    var selectedValues = [];
-    for (var option of selectElement.options) {
-        if (option.selected) {
-            selectedValues.push(option.value);
-        }
-    }
-    return selectedValues;
-}
-</script>
