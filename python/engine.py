@@ -513,7 +513,9 @@ def generate_audio_calling(counter_number, next_patient, language_code="fr"):
         else :
             translated_template = get_text_translation("announce_call_sound", next_patient.language.code)
             if translated_template["error"]:
-                language_code == "fr"
+                # Traduction absente/vide : get_text_translation renvoie le texte
+                # FR, la voix doit donc repasser en FR elle aussi.
+                language_code = "fr"
             text_template = translated_template["translation"]
 
     text = replace_balise_announces(text_template, next_patient)
