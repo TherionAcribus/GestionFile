@@ -25,10 +25,12 @@ POST_ONLY_ROUTES = [
     ("routes/counter.py", "/api/counter/put_standing_list/<int:patient_id>"),
     ("routes/counter.py", "/api/counter/validate_patient/<int:patient_id>"),
     ("routes/counter.py", "/api/counter/delete_patient/<int:patient_id>"),
-    ("app.py", "/call_specific_patient/<int:counter_id>/<int:patient_id>"),
-    ("app.py", "/validate_patient/<int:counter_id>/<int:patient_id>"),
-    ("app.py", "/validate_and_call_next/<int:counter_id>"),
-    ("app.py", "/pause_patient/<int:counter_id>/<int:patient_id>"),
+    # Ces quatre routes ont quitte app.py pour routes/calling.py (point 9.5d) ;
+    # l'exigence POST, elle, est inchangee.
+    ("routes/calling.py", "/call_specific_patient/<int:counter_id>/<int:patient_id>"),
+    ("routes/calling.py", "/validate_patient/<int:counter_id>/<int:patient_id>"),
+    ("routes/calling.py", "/validate_and_call_next/<int:counter_id>"),
+    ("routes/calling.py", "/pause_patient/<int:counter_id>/<int:patient_id>"),
 ]
 
 

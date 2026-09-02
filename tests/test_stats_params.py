@@ -9,7 +9,6 @@ from datetime import datetime
 from stats_params import (
     CHART_TYPES,
     MAX_HOURLY_DAYS,
-    MAX_DAILY_DAYS,
     parse_chart_request,
     parse_int_list,
     resolve_date_range,

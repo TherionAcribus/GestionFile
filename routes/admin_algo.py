@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app as a
 from datetime import datetime
 from models import AlgoRule, Activity, ConfigOption, db
 from routes.admin_security import require_permission
+from ui_feedback import display_toast
 
 admin_algo_bp = Blueprint('admin_algo', __name__)
 
@@ -53,11 +54,11 @@ def change_overtaken_limit():
         algo_overtaken_limit = ConfigOption.query.filter_by(config_key="algo_overtaken_limit").first()
         algo_overtaken_limit.value_int = overtaken_limit
         db.session.commit()
-        return app.display_toast()
+        return display_toast()
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Echec de l'enregistrement de la limite de depassement")
-        return app.display_toast(success=False, message=str(e))
+        return display_toast(success=False, message=str(e))
 
 
 # affiche le formulaire pour ajouter une regle de l'algo
@@ -85,7 +86,7 @@ def add_new_rule():
         end_time = datetime.strptime(end_time_str, "%H:%M").time()
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Nom obligatoire")
+            display_toast(success=False, message="Nom obligatoire")
             return display_algo_table()
 
         new_rule = AlgoRule(
@@ -101,7 +102,7 @@ def add_new_rule():
         db.session.add(new_rule)
         db.session.commit()
 
-        app.display_toast(success=True, message="Règle ajoutée avec succès")
+        display_toast(success=True, message="Règle ajoutée avec succès")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_rule_form"></div>"""
@@ -111,7 +112,7 @@ def add_new_rule():
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Echec de l'ajout d'une regle d'algorithme")
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return display_algo_table()
 
 
@@ -130,17 +131,17 @@ def delete_algo(algo_id):
     try:
         rule = AlgoRule.query.get(algo_id)
         if not rule:
-            app.display_toast(success=False, message="Règle non trouvée")
+            display_toast(success=False, message="Règle non trouvée")
             return display_algo_table()
 
         db.session.delete(rule)
         db.session.commit()
 
-        app.display_toast(success=True, message="Règle supprimée")
+        display_toast(success=True, message="Règle supprimée")
         return display_algo_table()
 
     except Exception as e:
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return display_algo_table()
 
 
@@ -151,10 +152,10 @@ def update_algo_rule(rule_id):
         rule = AlgoRule.query.get(rule_id)
         if rule:
             if request.form.get('name') == '':
-                app.display_toast(success=False, message="Le nom est obligatoire")
+                display_toast(success=False, message="Le nom est obligatoire")
                 return ""
             elif request.form.get('min_patients') > request.form.get('max_patients'):
-                app.display_toast(success=False, message="Le nombre de patients maximum doit être superieur au nombre de patients minimum")
+                display_toast(success=False, message="Le nombre de patients maximum doit être superieur au nombre de patients minimum")
                 return ""
 
             rule.name = request.form.get('name', rule.name)
@@ -171,13 +172,13 @@ def update_algo_rule(rule_id):
 
             db.session.commit()
 
-            app.display_toast(success=True, message="Mise à jour réussie")
+            display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
-            app.display_toast(success=False, message="Règle introuvable")
+            display_toast(success=False, message="Règle introuvable")
             return ""
 
     except Exception as e:
-            app.display_toast(success=False, message="erreur : " + str(e))
+            display_toast(success=False, message="erreur : " + str(e))
             app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500

@@ -8,9 +8,9 @@ from communication import communikation
 from bdd import transfer_patients_to_history
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
-from flask_login import current_user
 from audit_service import record_audit
 from audit_log import ACTION_DELETE, ACTION_CLEAR, OUTCOME_SUCCESS, OUTCOME_FAILURE
+from ui_feedback import display_toast
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
@@ -99,7 +99,7 @@ def clear_all_patients_from_db_with_saving():
         clear_all_patients_from_db()
     else:
         current_app.logger.error("Failed to transfer patients to history")
-        current_app.display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
+        display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
 
 @admin_queue_bp.route('/admin/database/clear_all_patients', methods=['POST'])
 @require_permission('queue')
@@ -120,12 +120,12 @@ def clear_all_patients_from_db(app_context=None):
             # mise à jour des dispos des comptoirs
             clear_counter_table()
             communikation("app_counter", event="refresh_after_clear_patient_list")
-            return current_app.display_toast(message="La table Patient a été vidée")
+            return display_toast(message="La table Patient a été vidée")
         except Exception as e:
             db.session.rollback()
             app_context.logger.error(str(e))
             record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE)
-            app_context.display_toast(success = False, message=str(e))
+            display_toast(success = False, message=str(e))
             return "", 200
 
 
@@ -137,7 +137,7 @@ def update_patient(patient_id):
         patient = Patient.query.get(patient_id)
         if patient:
             if request.form.get('call_number') == '':
-                current_app.display_toast(success = False, message="Un numéro d'appel est obligatoire")
+                display_toast(success = False, message="Un numéro d'appel est obligatoire")
                 return ""
             patient.call_number = request.form.get('call_number', patient.call_number)
             patient.status = request.form.get('status', patient.status)
@@ -152,14 +152,14 @@ def update_patient(patient_id):
 
             announce_refresh()
 
-            current_app.display_toast(success=True, message="Mise à jour effectuée")
+            display_toast(success=True, message="Mise à jour effectuée")
             return ""
         else:
-            current_app.display_toast(success = False, message="Patient introuvable")
+            display_toast(success = False, message="Patient introuvable")
             return ""
 
     except Exception as e:
-            current_app.display_toast(success = False, message=str(e))
+            display_toast(success = False, message=str(e))
             current_app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
 
@@ -179,7 +179,7 @@ def delete_patient(patient_id):
     try:
         patient = Patient.query.get(patient_id)
         if not patient:
-            current_app.display_toast(success=False, message="Patient introuvable")
+            display_toast(success=False, message="Patient introuvable")
             return 200, ""
 
         db.session.delete(patient)
@@ -189,14 +189,14 @@ def delete_patient(patient_id):
         communikation("update_patient")
         announce_refresh()
         clear_counter_table()
-        current_app.display_toast()
+        display_toast()
         return "", 200
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(e)
         record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_FAILURE)
-        current_app.display_toast(success=False, message=str(e))
+        display_toast(success=False, message=str(e))
         return "", 500
 
 
@@ -204,7 +204,7 @@ def delete_patient(patient_id):
 @require_permission('queue')
 def create_new_patient_auto():
     if request.form.get('activity_id') == "":
-        current_app.display_toast(success=False, message="Veuillez choisir un motif")
+        display_toast(success=False, message="Veuillez choisir un motif")
         return "", 204
     
     activity = Activity.query.get(request.form.get('activity_id'))

@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 from communication import communikation
 from routes.admin_security import require_permission
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
+from ui_feedback import display_toast
 
 admin_gallery_bp = Blueprint('admin_gallery', __name__)
 
@@ -66,7 +67,7 @@ def choose_gallery(gallery_name="", checked=""):
     config_option.value_str = json.dumps(galleries)
     db.session.commit()
 
-    app.display_toast(success=True, message=message)
+    display_toast(success=True, message=message)
 
     return "", 200
 
@@ -218,17 +219,17 @@ def delete_gallery(name):
 def create_gallery():
     name = request.form.get('name')
     if name == "":
-        app.display_toast(success=False, message="Le nom de la galerie doit être renseigné")
+        display_toast(success=False, message="Le nom de la galerie doit être renseigné")
         return "", 400
     try:
         validate_path_segment(name, what="gallery name")
         new_dir = safe_path_under(_galleries_dir(), name)
         new_dir.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
-        app.display_toast(success=False, message="La galerie doit avoir un nom unique")
+        display_toast(success=False, message="La galerie doit avoir un nom unique")
         return "", 400
     except UnsafePathError:
-        app.display_toast(success=False, message="Nom de galerie invalide")
+        display_toast(success=False, message="Nom de galerie invalide")
         return "", 400
 
     base_dir = _galleries_dir()

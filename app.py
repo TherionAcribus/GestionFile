@@ -10,22 +10,15 @@ _skip_eventlet_patch = os.getenv("SKIP_EVENTLET_PATCH", "").strip().lower() in {
 if not _skip_eventlet_patch:
     import eventlet
     eventlet.monkey_patch()  # thread=True, time=True
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, g, make_response, has_request_context
+from flask import Flask, request, redirect, url_for, session, jsonify, g, make_response, has_request_context
 
-from flask_migrate import Migrate
 from flask.signals import request_started
-from flask_mailman import Mail
-from flask_wtf.csrf import CSRFProtect, CSRFError
-from flask_socketio import SocketIO, join_room, leave_room
-from datetime import datetime, time, timedelta
+from flask_wtf.csrf import CSRFError
+from datetime import datetime, timedelta
 import time as tm
-
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.schedulers.background import BackgroundScheduler
 
 import json
 
-from queue import Queue, Empty
 import logging
 import subprocess
 import threading
@@ -37,24 +30,23 @@ from functools import partial
 
 from flask_security import Security, current_user, SQLAlchemyUserDatastore
 
-import jwt
 from dotenv import load_dotenv
 from markupsafe import escape
 
-from auth_utils import require_app_token_or_login, check_app_secret, is_valid_app_secret_config, is_socket_connection_authorized, is_authenticated_request, wants_json_response
-from idempotency import idempotent
+from auth_utils import is_valid_app_secret_config, wants_json_response, verify_app_token
 
-from models import db, Patient, Counter, Pharmacist, Activity, Language, ConfigOption, User, Role, JobExecutionLog, DashboardCard
-from services import calling_service
+from models import db, Patient, Language, ConfigOption, User, Role
+from extensions import csrf, mail, migrate, scheduler, socketio, configure_scheduler, init_socketio, start_scheduler
+import sockets
 from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
-from utils import validate_and_transform_text, convert_markdown_to_escpos
 from backup import backup_databases
 from routes.admin_backup import admin_backup_bp
-from scheduler_functions import enable_buttons_for_activity, disable_buttons_for_activity, add_scheduler_clear_all_patients, clear_old_patients_table, remove_scheduler_clear_all_patients, remove_scheduler_clear_announce_calls, scheduler_clear_announce_calls
-from scheduler_dashboard import build_jobs_info
+from routes.api_system import api_system_bp
+from routes.calling import calling_bp
+from routes.admin_config import admin_config_bp
+from scheduler_functions import clear_old_patients_table
 from bdd import init_database
 from config import Config, time_tz
-from communication import communikation
 from variables import MultiCssVariableManager
 from css_manager import CSSManager
 
@@ -84,8 +76,7 @@ from routes.patient import patient_bp
 from routes.pyside import pyside_bp
 from routes.home import home_bp
 from python.engine import engine_bp
-from routes.admin_security import require_permission, require_permission_dashboard, user_has_permission, permission_error_response
-from params_registry import CONFIG_MAPPINGS, BALISE_LETTERS, get_spec
+from params_registry import CONFIG_MAPPINGS
 from config_loader import load_config_options
 import config_sync
 
@@ -104,16 +95,6 @@ server_port = int(os.environ.get("PORT", 5000))
 _rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
 parameters = pika.URLParameters(_rabbitmq_url)
 
-mail = Mail()
-migrate = Migrate()
-# Protection CSRF (Flask-WTF). Initialisée dans create_app. On désactive la
-# vérification automatique globale (WTF_CSRF_CHECK_DEFAULT=False) et on décide
-# nous-mêmes, requête par requête, ce qui doit être protégé : les requêtes
-# navigateur (session + cookie) le sont, les requêtes machine (App_Comptoir,
-# borne, imprimante — authentifiées par jeton applicatif) et le transport
-# Socket.IO en sont exemptés. Voir csrf_protect_browser_requests() et
-# _csrf_is_exempt().
-csrf = CSRFProtect()
 
 
 # Charge des valeurs qui ne sont pas amener à changer avant redémarrage APP
@@ -298,8 +279,13 @@ def create_app(config_class=Config):
     security = Security(app, user_datastore, register_blueprint=True)
     #security.init_app(app, user_datastore, register_blueprint=True, name='flask_security')
 
-    # Initialiser le mail avec l'application
-    app.mail = Mail(app)
+    # Initialiser le mail avec l'application (instance partagee d'extensions.py).
+    # Auparavant : `app.mail = Mail(app)` creait une SECONDE instance, puis la
+    # ligne `app.mail = mail` en fin de module l'ecrasait par l'instance module
+    # non initialisee. Sans consequence (personne ne lit app.mail : l'envoi passe
+    # par flask_mailman.EmailMessage, qui utilise l'extension enregistree sur
+    # l'app), mais incoherent.
+    mail.init_app(app)
 
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
@@ -338,210 +324,26 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_data_bp, url_prefix='')
     app.register_blueprint(engine_bp, url_prefix='')
     app.register_blueprint(admin_backup_bp, url_prefix='')
+    app.register_blueprint(api_system_bp, url_prefix='')
+    app.register_blueprint(calling_bp, url_prefix='')
+    app.register_blueprint(admin_config_bp, url_prefix='')
+
+    # Temps reel et ordonnanceur : crees a vide dans extensions.py, lies ici.
+    # Auparavant ils etaient instancies au niveau module APRES create_app(), ce
+    # qui obligeait tout le reste du code a passer par des attributs greffes sur
+    # l'objet app (app.socketio, app.scheduler).
+    init_socketio(app)
+    configure_scheduler(app)
 
     return app
 
 load_dotenv()
 app = create_app(config_class=Config)
 
-_socketio_kwargs = {"async_mode": "eventlet"}
-if app.config.get("SOCKETIO_CORS_ALLOWED_ORIGINS") is not None:
-    _socketio_kwargs["cors_allowed_origins"] = app.config["SOCKETIO_CORS_ALLOWED_ORIGINS"]
-
-# Message queue optionnel (RabbitMQ). Sans lui, chaque processus ne diffuse
-# qu'à ses propres clients connectés -- ce qui est le comportement historique
-# et reste parfaitement valide pour un déploiement mono-processus (aucune
-# infra supplémentaire requise). Avec lui, SocketIO relaie automatiquement les
-# messages entre tous les processus qui partagent le même message_queue,
-# y compris depuis un processus qui ne sert aucune connexion lui-même
-# (ex: le conteneur APP_ROLE=scheduler, cf. scheduler_functions.py).
-# Activé via le switch admin "Démarrer le serveur avec RabbitMQ" (nécessite
-# un redémarrage du process pour prendre effet).
-if app.config.get("START_RABBITMQ") and app.config.get("RABBITMQ_URL"):
-    _socketio_kwargs["message_queue"] = app.config["RABBITMQ_URL"]
-
-socketio = SocketIO(app, **_socketio_kwargs)
-
-# Définir le jobstore avec votre base de données
-jobstores = {
-    'default': SQLAlchemyJobStore(url=app.config['SQLALCHEMY_DATABASE_URI_SCHEDULER'])
-}
-scheduler = BackgroundScheduler(jobstores=jobstores)
-#scheduler.init_app(app)
-
-
-def start_scheduler(active: bool):
-    if scheduler.running:
-        return
-    scheduler.start(paused=not active)
-
-# Dictionnaire pour suivre les connexions actives
-active_connections = {
-    '/socket_update_patient': set(),
-    '/socket_update_screen': set(),
-    '/socket_admin': set(),
-    '/socket_patient': set(),
-    '/socket_app_counter': set(),
-    '/socket_app_screen': set(),
-    '/socket_counter': set(),
-    '/socket_phone': set(),
-}
-
-app.active_connections = active_connections
-
-app.connected_clients_info = {}
-
-def get_and_register_socketio_username(request):
-    """ Les usernames sont transmis via le header dans Pyside et via la querystring dans JS. 
-    Ceci pour des raisons de simplicité côté client.
-    """
-
-    # Essayer d'abord de récupérer le username des headers (cas PySide)
-    username = request.headers.get('username')
-
-    # Si le username n'est pas dans les headers, chercher dans la query string (cas JavaScript)
-    if not username:
-        username = request.args.get('username', 'Unknown')
-
-    # Enregistrer le client avec son SID dans le dictionnaire
-    app.connected_clients_info[request.sid] = {
-        'username': username
-    }
-
-    return username
-
-
-def _socket_require(flag_name: str, namespace: str) -> bool:
-    allowed = is_socket_connection_authorized(app.config.get(flag_name, False))
-    if not allowed:
-        app.logger.warning("Unauthorized Socket.IO connect to %s (missing login/token).", namespace)
-    return allowed
-
-
-@socketio.on('connect', namespace='/socket_update_patient')
-def connect_general():
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to update patient namespace")
-
-@socketio.on('disconnect', namespace='/socket_update_patient')
-def disconnect_general():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from general namespace")
-
-@socketio.on('connect', namespace='/socket_update_screen')
-def connect_screen():
-    if not _socket_require("SECURITY_LOGIN_SCREEN", "/socket_update_screen"):
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to screen namespace")
-
-@socketio.on('disconnect', namespace='/socket_update_screen')
-def disconnect_screen():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from screen namespace")
-
-@socketio.on('connect', namespace='/socket_admin', )
-def connect_admin():
-    # Admin : authentification TOUJOURS requise (point 1.2). SECURITY_LOGIN_ADMIN
-    # est déprécié et n'est plus consulté pour le namespace d'administration :
-    # il ne peut plus rendre l'admin anonyme.
-    if not is_authenticated_request():
-        app.logger.warning("Unauthorized Socket.IO connect to /socket_admin (missing login).")
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info(f"Client connected to admin namespace with SID {request.sid} and username {username}")
-    logging.info("Client connected to screen namespace")
-
-@socketio.on('disconnect', namespace='/socket_admin')
-def disconnect_admin():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from screen namespace")
-
-@socketio.on('connect', namespace='/socket_patient')
-def connect_patient():
-    if not _socket_require("SECURITY_LOGIN_PATIENT", "/socket_patient"):
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to update patient namespace")
-
-@socketio.on('disconnect', namespace='/socket_patient')
-def disconnect_patient():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from patient namespace")
-
-@socketio.on('connect', namespace='/socket_app_counter')
-def connect_app_counter():
-    if not _socket_require("SECURITY_LOGIN_COUNTER", "/socket_app_counter"):
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to app counter namespace")
-
-@socketio.on('disconnect', namespace='/socket_app_counter')
-def disconnect_app_counter():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from app counter namespace")
-
-@socketio.on('connect', namespace='/socket_app_screen')
-def connect_app_screen():
-    if not _socket_require("SECURITY_LOGIN_SCREEN", "/socket_app_screen"):
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to test namespace")
-
-@socketio.on('disconnect', namespace='/socket_app_screen')
-def disconnect_app_screen():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from test namespace")
-
-@socketio.on('connect', namespace='/socket_counter')
-def connect_counter():
-    if not _socket_require("SECURITY_LOGIN_COUNTER", "/socket_counter"):
-        return False
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to counter namespace")
-
-@socketio.on('disconnect', namespace='/socket_counter')
-def disconnect_counter():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from counter namespace")
-
-@socketio.on('connect', namespace='/socket_phone')
-def connect_phone():
-    username = get_and_register_socketio_username(request)
-    logging.info("Client connected to phone namespace")
-    # Récupérer le patient_id depuis le cookie
-    patient_id = request.cookies.get('patient_id')
-    call_number = request.cookies.get('patient_call_number')
-    
-    if patient_id and call_number:
-        # Créer une salle unique pour ce patient
-        call_room = f"call_{call_number}"
-        
-        # Rejoindre les deux salles
-        join_room(call_room)
-        
-        app.logger.debug(f"Patient {patient_id} (call number {call_number}) connected and joined rooms")
-
-
-@socketio.on('disconnect', namespace='/socket_phone')
-def disconnect_phone():
-    app.connected_clients_info.pop(request.sid, None)
-    logging.info("Client disconnected from phone namespace")
-    patient_id = request.cookies.get('patient_id')
-    call_number = request.cookies.get('patient_call_number')
-    
-    if patient_id and call_number:
-        leave_room(f"call_{call_number}")
-
-@app.route('/send_message', methods=['POST'])
-@require_app_token_or_login
-def send_message():
-    message = request.json.get('message', 'Hello from server')
-    try:
-        socketio.emit('new_message', {'data': message})
-        return "Message sent!"
-    except Exception as e:
-        return f"Failed to send message: {e}", 500
+# Etat des connexions temps reel : vit desormais dans sockets.py. Reexpose sur
+# l'objet app car les pages d'administration le consultent via current_app.
+app.active_connections = sockets.active_connections
+app.connected_clients_info = sockets.connected_clients_info
 
 
 @app.errorhandler(404)
@@ -572,71 +374,12 @@ def page_not_found(e):
     return response
 
 
-@app.route('/send')
-@require_app_token_or_login
-def send_message_old():
-    url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
-    params = pika.URLParameters(url)
-    
-    app.logger.info(f"Connecting to RabbitMQ at {url}")
-    
-    # Ajoutez une boucle pour réessayer la connexion à RabbitMQ
-    for attempt in range(5):  # Réessayez 5 fois 
-        try:
-            app.logger.info(f"Attempt {attempt + 1} to connect to RabbitMQ")
-            connection = pika.BlockingConnection(params)
-            channel = connection.channel()
-            channel.queue_declare(queue='hello')
-            channel.basic_publish(exchange='', routing_key='hello', body='Hello World!')
-            connection.close()
-            app.logger.info("Message sent to RabbitMQ")
-            return jsonify({"message": "Message sent to RabbitMQ!"})
-        except pika.exceptions.AMQPConnectionError as e:
-            app.logger.error(f"Connection failed, retrying in 5 seconds... {e}")
-            time.sleep(5)  # Attendez 5 secondes avant de réessayer
-
-    app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
-    return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
-
-
-@app.route('/test')
-@require_app_token_or_login
-def rabbitmq_status():
-    url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
-    params = pika.URLParameters(url)
-    
-    try:
-        connection = pika.BlockingConnection(params)
-        connection.close()
-        return jsonify({"status": "RabbitMQ is running"})
-    except Exception as e:
-        return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
-
-
 # Configuration de la base de données avec session scoped
 """engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'])
 db_session = scoped_session(sessionmaker(autocommit=False,
                                         autoflush=False,
                                         bind=engine))
 """
-
-@app.route('/test_local')
-@require_app_token_or_login
-def rabbitmq_status_local():
-    rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
-    params = pika.URLParameters(rabbitmq_url)
-
-    try:
-        connection = pika.BlockingConnection(params)
-        connection.close()
-        return jsonify({"status": "RabbitMQ is running"})
-    except Exception as e:
-        # Auparavant cette sonde renvoyait 204 meme quand la connexion echouait :
-        # elle affichait donc "tout va bien" en toute circonstance, le diagnostic
-        # partant sur stdout. Meme contrat que /test ci-dessus.
-        app.logger.warning("Connexion RabbitMQ (local) impossible : %s", e)
-        return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
-
 
 # ---------------------------------------------------------------------------
 # Endpoints de santé (Health checks)
@@ -669,90 +412,6 @@ def rabbitmq_status_local():
 #     start_period: 30s
 # ---------------------------------------------------------------------------
 
-@app.route('/healthz')
-def healthz():
-    """Liveness probe – indique que le processus Flask est en vie.
-
-    Renvoie toujours HTTP 200 avec ``{"status": "alive"}``.
-    Utilisé par les orchestrateurs (Kubernetes, Coolify, Docker…) pour
-    détecter un processus bloqué et le redémarrer automatiquement.
-
-    Aucune dépendance externe (DB, RabbitMQ) n'est testée ici afin
-    d'éviter les redémarrages en cascade lors d'une panne transitoire
-    d'un service amont.
-
-    Returns:
-        tuple: (JSON body, HTTP 200)
-    """
-    return jsonify({"status": "alive"}), 200
-
-
-@app.route('/readyz')
-def readyz():
-    """Readiness probe – indique que l'application est prête à recevoir du trafic.
-
-    Vérifie les dépendances critiques avant de répondre 200 :
-      1. **Base de données** : exécute un ``SELECT 1`` pour confirmer que la
-         connexion SQL est opérationnelle.
-      2. **RabbitMQ** *(optionnel)* : si ``START_RABBITMQ`` est activé, ouvre
-         puis ferme une connexion AMQP pour valider la joignabilité du broker.
-
-    Si l'une des vérifications échoue, l'endpoint renvoie HTTP 503 avec le
-    détail des checks en erreur.  L'orchestrateur cessera alors de router
-    du trafic vers cette instance jusqu'à ce qu'elle redevienne saine.
-
-    Returns:
-        tuple: (JSON body, HTTP 200 | 503)
-
-    Exemple de réponse OK (200)::
-
-        {
-            "status": "ready",
-            "checks": {
-                "database": "ok",
-                "rabbitmq": "ok"
-            }
-        }
-
-    Exemple de réponse KO (503)::
-
-        {
-            "status": "not_ready",
-            "checks": {
-                "database": "ok",
-                "rabbitmq": "Connection refused"
-            }
-        }
-    """
-    checks = {}
-    ready = True
-
-    # --- Check base de données ---
-    try:
-        db.session.execute(db.text("SELECT 1"))
-        checks["database"] = "ok"
-    except Exception as e:
-        checks["database"] = str(e)
-        ready = False
-
-    # --- Check RabbitMQ (seulement si activé) ---
-    if app.config.get("START_RABBITMQ"):
-        try:
-            rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
-            connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
-            connection.close()
-            checks["rabbitmq"] = "ok"
-        except Exception as e:
-            checks["rabbitmq"] = str(e)
-            ready = False
-
-    status_code = 200 if ready else 503
-    return jsonify({
-        "status": "ready" if ready else "not_ready",
-        "checks": checks
-    }), status_code
-
-
 # ROUTES 
 
 # Sauvegardes / Restaurations (base de données brute uniquement, le reste est dans admin_backup_bp)
@@ -784,43 +443,9 @@ def set_locale():
 
 
 # permet d'avoir le contexte de l'App pour le Scheduler. A utiliser comme décorateur
-def with_app_context(fonction):
-    # Parametre nomme `fonction` et non `func` : `func` est deja le `sqlalchemy.func`
-    # importe en tete de module, que ce nom masquait dans toute la portee du decorateur.
-    def wrapper(*args, **kwargs):
-        with app.app_context():
-            return fonction(*args, **kwargs)
-    return wrapper
-
-
 
 
 # -------------- SECURITé ---------------------
-
-def generate_app_token():
-    expiration = datetime.utcnow() + timedelta(days=1)  # Le token expire après 1 jour
-    return jwt.encode({"exp": expiration}, app.config["SECRET_KEY"], algorithm="HS256")
-
-def verify_app_token(token):
-    try:
-        jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
-        return True
-    except jwt.ExpiredSignatureError:
-        return False
-    except jwt.InvalidTokenError:
-        return False
-
-@app.route('/api/get_app_token', methods=['POST'])
-def get_app_token():
-    # check_app_secret compare en temps constant le secret fourni au secret
-    # configuré (app.config["APP_SECRET"]) et refuse TOUJOURS si le secret serveur
-    # n'est pas réellement configuré (absent/vide/placeholder). Cela ferme la
-    # faille où un APP_SECRET absent (chaîne vide) acceptait un secret vide.
-    if check_app_secret(request.form.get('app_secret'), app.config.get("APP_SECRET")):
-        token = generate_app_token()
-        return jsonify({"token": token})
-    else:
-        return jsonify({"error": "Unauthorized"}), 401
 
 def _deny_unauthenticated_access():
     """Refus d'accès faute de session authentifiée, sous la forme adaptée au
@@ -939,563 +564,12 @@ def handle_csrf_error(error):
 
 
 
-def authorize_config_change(key, expected_value_type=None):
-    """Contrôle d'accès commun aux routes de modification des paramètres.
-
-    Retourne ``(spec, None)`` si la modification est autorisée, sinon
-    ``(None, (réponse, statut))`` à renvoyer tel quel :
-
-    - **401** si l'utilisateur n'est pas authentifié ;
-    - **400** si la clé est absente du registre (``PARAM_REGISTRY``) ou d'un
-      type incompatible avec la route appelée ;
-    - **403** si l'utilisateur n'a pas la permission associée à la clé.
-
-    Aucune confiance n'est accordée aux données du navigateur : la permission
-    et le type proviennent exclusivement du registre serveur.
-    """
-    if not current_user.is_authenticated:
-        app.logger.warning("Modification de paramètre refusée (non authentifié) : %r", key)
-        return None, (jsonify({"error": "Unauthorized"}), 401)
-
-    spec = get_spec(key)
-    if spec is None:
-        app.logger.warning("Modification de paramètre refusée (clé inconnue) : %r", key)
-        return None, (jsonify({"error": "Unknown parameter"}), 400)
-
-    if expected_value_type is not None and spec.value_type != expected_value_type:
-        app.logger.warning(
-            "Modification de paramètre refusée (type %s attendu pour %s, registre=%s)",
-            expected_value_type, key, spec.value_type)
-        return None, (jsonify({"error": "Invalid parameter type"}), 400)
-
-    if not user_has_permission(current_user, spec.permission):
-        app.logger.warning(
-            "Modification de '%s' refusée à %s (permission '%s' requise)",
-            key, getattr(current_user, "username", "?"), spec.permission)
-        return None, (jsonify({"error": "Forbidden"}), 403)
-
-    return spec, None
-
-
-@app.route('/admin/update_switch', methods=['POST'])
-def update_switch():
-    """ Mise à jour des switches d'options de l'application """
-    key = request.values.get('key')
-    value = request.values.get('value')
-
-    spec, error = authorize_config_change(key, expected_value_type="value_bool")
-    if error:
-        return error
-
-    bool_value = value == "true"
-    try:
-        # Mutation en base dans une seule transaction. On ne touche PAS à
-        # app.config ici : la mémoire ne doit refléter le changement qu'APRÈS un
-        # commit réussi (point 10), pour ne pas diverger de la base si le commit
-        # échoue.
-        config_option = ConfigOption.query.filter_by(config_key=key).first()
-        if config_option:
-            config_option.value_bool = bool_value
-        else:
-            config_option = ConfigOption(config_key=key, value_bool=bool_value)
-            db.session.add(config_option)
-
-        # Point 11 : incrémenter la génération de configuration DANS la même
-        # transaction, pour que les autres processus (répliques web, scheduler)
-        # rechargent app.config. On ne le fait PAS pour les paramètres nécessitant
-        # un redémarrage : ils ne s'appliquent qu'à l'initialisation du processus.
-        if not spec.restart_required:
-            config_sync.bump_generation()
-
-        db.session.commit()
-    except Exception as e:
-        # Toute exception annule la transaction (rollback) : la base reste dans
-        # son état précédent et app.config n'a pas été modifié.
-        db.session.rollback()
-        app.logger.error("Échec de mise à jour du switch %r : %s", key, e)
-        return display_toast(success=False, message=str(e))
-
-    # Paramètre nécessitant un redémarrage : la valeur est persistée mais n'est
-    # PAS appliquée à chaud (ni ici ni sur les autres processus). On ne mute donc
-    # pas app.config et on l'annonce clairement plutôt que de prétendre l'inverse.
-    if spec.restart_required:
-        return display_toast(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
-
-    # Commit réussi : refléter en mémoire, puis déclencher les effets de bord.
-    app.config[spec.config_name] = bool_value
-    call_function_with_switch(key, value)
-    return display_toast(success=True, message="Option mise à jour.")
-    
-
-# Chaque « source » de variables CSS correspond à une page d'administration : la
-# permission requise pour modifier son apparence est donc celle de cette page.
-# Source unique de vérité pour les routes CSS génériques ci-dessous, dont la
-# permission dépend de données de la requête (et ne peut donc pas être fixée par
-# un décorateur statique).
-CSS_SOURCE_PERMISSION = {
-    'patient': 'patient',
-    'announce': 'announce',
-    'phone': 'phone',
-}
-
-
-@app.route('/admin/update_css_variable_old', methods=['POST'])
-def update_css_variable_old():
-    app.logger.debug("%s", request.form)
-    try:
-        # Récupération des données
-        source = request.form.get('source')
-        variable = request.form.get('variable')
-        value = request.form.get('value')
-
-        # Validation des données
-        if not all([source, variable, value]):
-            return jsonify({
-                'status': 'error',
-                'message': 'Données manquantes'
-            }), 400
-
-        if source not in ['patient', 'announce']:
-            return jsonify({
-                'status': 'error',
-                'message': 'Source invalide'
-            }), 400
-
-        # Permission liée à la page ciblée par la variable CSS.
-        refusal = permission_error_response(CSS_SOURCE_PERMISSION[source], api=True)
-        if refusal is not None:
-            return refusal
-
-        # Mise à jour via le gestionnaire
-        app.css_variable_manager.update_variable(source, variable, value)
-
-        return jsonify({
-            'status': 'success',
-            'message': f'Variable {variable} mise à jour pour {source}',
-            'data': {
-                'source': source,
-                'variable': variable,
-                'value': value
-            }
-        })
-
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        }), 500
-
-
-@app.route('/admin/update_css_variable', methods=['POST'])
-def update_css_variable():
-    app.logger.debug("UPDATE!!!")
-
-    source_name = request.form.get('source')
-    variable_name = request.form.get('variable')
-    value = request.form.get('value')
-    dependencies = json.loads(request.form.get('dependencies', '[]'))
-
-    # Permission liée à la page ciblée par la variable CSS.
-    resource = CSS_SOURCE_PERMISSION.get(source_name)
-    if resource is None:
-        return jsonify({'status': 'error', 'message': 'Source invalide'}), 400
-    refusal = permission_error_response(resource, api=True)
-    if refusal is not None:
-        return refusal
-
-    # Met à jour la variable dans la base de données
-    app.css_variable_manager.update_variable(source_name, variable_name, value)
-    
-    # Met à jour toutes les variables dépendantes
-    for dep_variable in dependencies:
-        app.css_variable_manager.update_variable(
-            source_name, 
-            dep_variable,  # Maintenant dep_variable est directement le nom de la variable
-            value  # On utilise la même valeur que la variable parente
-        )
-
-    # Récupère toutes les variables pour générer le CSS
-    variables = app.css_variable_manager.get_all_variables(source_name)
-    
-    # Génère le nouveau CSS
-    new_css_url = app.css_manager.generate_css(variables, mode=source_name)
-    
-    return jsonify({
-        'status': 'success',
-        'css_url': new_css_url
-    })
-
-
-@app.route('/admin/copy_colors', methods=['POST'])
-def copy_colors():
-    """Copie les couleurs parentes d'une page source vers une page cible"""
-    try:
-        data = request.get_json()
-        source_page = data.get('source_page')
-        target_page = data.get('target_page')
-        mappings = data.get('mappings', [])
-
-        if not all([source_page, target_page, mappings]):
-            return jsonify({'status': 'error', 'message': 'Données manquantes'}), 400
-
-        # Permission : l'écriture porte sur chaque page cible ; l'utilisateur doit
-        # avoir la permission de modifier toutes les pages ciblées.
-        for target_source in {m.get('target_source') for m in mappings}:
-            resource = CSS_SOURCE_PERMISSION.get(target_source)
-            if resource is None:
-                return jsonify({'status': 'error', 'message': 'Source cible invalide'}), 400
-            refusal = permission_error_response(resource, api=True)
-            if refusal is not None:
-                return refusal
-
-        # Pour chaque mapping, lire la valeur source et l'écrire dans la cible
-        for mapping in mappings:
-            source_var = mapping.get('source_var')
-            target_var = mapping.get('target_var')
-            source_source = mapping.get('source_source')  # ex: 'patient', 'announce', 'phone'
-            target_source = mapping.get('target_source')
-
-            value = app.css_variable_manager.get_variable(source_source, source_var)
-            if value:
-                # Met à jour la variable parente cible
-                app.css_variable_manager.update_variable(target_source, target_var, value)
-
-                # Met à jour aussi les variables dépendantes via colorMappings (côté client)
-                dep_variables = mapping.get('dependencies', [])
-                for dep_var in dep_variables:
-                    app.css_variable_manager.update_variable(target_source, dep_var, value)
-
-        # Régénère le CSS pour la/les source(s) cible(s)
-        target_sources = set(m.get('target_source') for m in mappings)
-        for ts in target_sources:
-            variables = app.css_variable_manager.get_all_variables(ts)
-            app.css_manager.generate_css(variables, mode=ts)
-
-        return jsonify({'status': 'success', 'message': 'Couleurs copiées avec succès'})
-
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@app.route('/admin/update_input', methods=['POST'])
-def update_input():
-    """ Mise à jour des input d'options de l'application """
-    key = request.values.get('key')
-    value = request.values.get('value')
-
-    spec, error = authorize_config_change(key)
-    if error:
-        return error
-
-    # Le type de validation vient du registre serveur, jamais du paramètre
-    # ``check`` envoyé par le navigateur.
-    validator = spec.validator
-    if value is None:
-        value = ""
-
-    # Secrets (mot de passe SMTP, clé Spotify...) : le formulaire n'affiche
-    # jamais la valeur courante et envoie un champ vide par défaut. Un envoi vide
-    # signifie donc « conserver la valeur actuelle » — on n'efface pas un secret
-    # au seul motif que le champ était vide. On ne journalise jamais la valeur.
-    if spec.secret and value.strip() == "":
-        return config_change_response(success=True, message="Secret inchangé (valeur actuelle conservée).")
-
-    # --- Validation de TOUTES les valeurs AVANT toute mutation (point 10) ---
-    if validator == "int":
-        if value.isdigit():
-            value = int(value)
-        else:
-            return config_change_response(success=False, message="L'entrée doit être un nombre.")
-    elif validator in BALISE_LETTERS:
-        text_check = validate_and_transform_text(value, BALISE_LETTERS[validator])
-        if text_check["success"]:
-            value = text_check["value"]
-        else:
-            return config_change_response(success=False, message=text_check["value"])
-
-    # Cas particulier des tickets : la version ESC/POS est enregistrée dans la
-    # MÊME transaction que l'option principale (plus de commit intermédiaire pour
-    # une seule opération logique) et n'est reflétée dans app.config qu'après le
-    # commit final.
-    is_ticket = key.startswith("ticket_")
-    escpos_text = convert_markdown_to_escpos(value) if is_ticket else None
-    key_printer = (key + "_printer") if is_ticket else None
-
-    is_int = spec.value_type == "value_int"
-    try:
-        # MAJ BDD — option principale. La colonne cible vient du registre serveur.
-        config_option = ConfigOption.query.filter_by(config_key=key).first()
-        if config_option:
-            if is_int:
-                config_option.value_int = value
-            else:
-                config_option.value_str = value
-        else:
-            if is_int:
-                config_option = ConfigOption(config_key=key, value_int=value)
-            else:
-                config_option = ConfigOption(config_key=key, value_str=value)
-            db.session.add(config_option)
-
-        # MAJ BDD — version imprimante du ticket (même transaction, un seul commit).
-        if is_ticket:
-            printer_option = ConfigOption.query.filter_by(config_key=key_printer).first()
-            if printer_option:
-                printer_option.value_str = escpos_text
-            else:
-                printer_option = ConfigOption(config_key=key_printer, value_str=escpos_text)
-                db.session.add(printer_option)
-
-        # Point 11 : génération incrémentée dans la même transaction pour la
-        # convergence inter-processus (sauf paramètre nécessitant un redémarrage).
-        if not spec.restart_required:
-            config_sync.bump_generation()
-
-        db.session.commit()
-    except Exception as e:
-        # Toute exception annule l'ensemble de la transaction : ni l'option ni la
-        # version imprimante ne sont modifiées, et app.config reste intact.
-        db.session.rollback()
-        # Pour une clé secrète, ne jamais renvoyer/journaliser le détail technique
-        # (il pourrait, selon le backend, contenir la valeur).
-        if spec.secret:
-            app.logger.error("Échec de mise à jour du paramètre secret %r", key)
-            return config_change_response(success=False, message="La mise à jour du secret a échoué.")
-        app.logger.error("Échec de mise à jour de l'option %r : %s", key, e)
-        return config_change_response(success=False, message="La mise à jour a échoué.")
-
-    # Paramètre nécessitant un redémarrage : persisté mais non appliqué à chaud.
-    if spec.restart_required:
-        return config_change_response(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
-
-    # Commit réussi : refléter en mémoire (app.config) puis effets de bord.
-    app.config[spec.config_name] = value
-    if is_ticket:
-        app.config[key_printer.upper()] = escpos_text
-    special_functions_with_input(key)
-    # Réponse directe à l'auteur de la requête (pas de diffusion WebSocket à
-    # tous les administrateurs pour une sauvegarde de champ individuelle).
-    return config_change_response(success=True, message="Option mise à jour.")
-
-
-def special_functions_with_input(key):
-    if key == "cron_delete_patient_table_hour":
-        remove_scheduler_clear_all_patients()
-        add_scheduler_clear_all_patients()
-        communikation("admin", event="refresh_schedule_tasks_list")
-    if key == "cron_delete_announce_calls_hour":
-        remove_scheduler_clear_announce_calls()
-        scheduler_clear_announce_calls()
-        communikation("admin", event="refresh_schedule_tasks_list")
-
-
-@app.route('/admin/update_select', methods=['POST'])
-def update_select():
-    """ Mise à jour des selects d'options de l'application """
-    key = request.values.get('key')
-    value = request.values.get('value')
-
-    spec, error = authorize_config_change(key, expected_value_type="value_str")
-    if error:
-        return error
-
-    # Validation de l'existence de l'option AVANT toute mutation.
-    config_option = ConfigOption.query.filter_by(config_key=key).first()
-    if not config_option:
-        return display_toast(success=False, message="Option non trouvée.")
-
-    try:
-        # Mutation en base dans une transaction ; app.config n'est mis à jour
-        # qu'APRÈS un commit réussi (point 10).
-        config_option.value_str = value
-        # Point 11 : génération incrémentée dans la même transaction (convergence
-        # inter-processus), sauf paramètre nécessitant un redémarrage.
-        if not spec.restart_required:
-            config_sync.bump_generation()
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error("Échec de mise à jour du select %r : %s", key, e)
-        return display_toast(success=False, message=str(e))
-
-    # Paramètre nécessitant un redémarrage : persisté mais non appliqué à chaud.
-    if spec.restart_required:
-        return display_toast(success=True, message=config_sync.RESTART_REQUIRED_MESSAGE)
-
-    app.config[spec.config_name] = value
-    call_function_with_select(key, value)
-    return display_toast(success=True)
-
-
-def call_function_with_select(key, value):
-    """ Permet d'effectuer une action lors de l'activation d'un select en plus de la sauvegarde"""
-    # pour les couleurs, on met la page à jour. Pas possible en js direct, car rechargement trop rapide et on garde donc l'ancienne couleur sur la page
-    if key == "admin_colors":
-        communikation("admin", event="refresh_colors")
-
-def call_function_with_switch(key, value):
-    """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde"""
-    if key == "cron_delete_patient_table_activated":
-        if value == "true":
-            add_scheduler_clear_all_patients()
-        else:
-            remove_scheduler_clear_all_patients()
-    elif key == "cron_delete_announce_calls_activated":
-        if value == "true":
-            scheduler_clear_announce_calls()
-        else:
-            remove_scheduler_clear_announce_calls()
-
-
-def check_balises_before_validation(value):
-    """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
-    app.logger.debug('call_function_with_input %s', value)
-
     #return validate_and_transform_text_for_before_validation(value)
-
-def check_balises_after_validation(value):
-    """ Permet d'effectuer une action lors de l'activation d'un input en plus de la sauvegarde"""
-    app.logger.debug('call_function_with_input %s', value)
 
     #return validate_and_transform_text_for_after_validation(value)
 
 
 # --------  ADMIN -> DataBase  ---------
-
-@app.route('/admin/database')
-@require_permission('schedule')
-def admin_database():
-    return render_template('/admin/database.html',
-                        cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
-                        cron_transfer_patient_to_history = app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"],
-                        cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],
-                        cron_delete_announce_calls_activated=app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"],
-                        cron_delete_announce_calls_hour=app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"])
-
-
-
-@app.route("/admin/database/schedule_tasks_list")
-def display_schedule_tasks_list():
-    jobs = scheduler.get_jobs()
-    main_jobs = []
-    other_jobs = []
-    
-    MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
-    
-    for job in jobs:
-        # Préparer les informations du job
-        job_info = {
-            'id': job.id,
-            'next_run_time': str(job.next_run_time),
-            'function_name': job.func.__name__,
-            'trigger': str(job.trigger),
-            'misfire_grace_time': job.misfire_grace_time,
-            'coalesce': job.coalesce,
-            'max_instances': job.max_instances,
-            'cron_details': {
-                'hour': job.trigger.fields[5] if hasattr(job.trigger, 'fields') else None,
-                'minute': job.trigger.fields[4] if hasattr(job.trigger, 'fields') else None,
-            }
-        }
-        
-        # Récupérer les 5 dernières exécutions
-        last_executions = JobExecutionLog.query.filter_by(
-            job_id=job.id
-        ).order_by(
-            JobExecutionLog.execution_time.desc()
-        ).limit(5).all()
-        
-        job_info['last_executions'] = [{
-            'time': log.execution_time,
-            'status': log.status,
-            'error': log.error_message
-        } for log in last_executions]
-        
-        # Séparer les jobs en deux groupes
-        if job.id in MAIN_JOBS:
-            main_jobs.append(job_info)
-        else:
-            other_jobs.append(job_info)
-    
-    return render_template('/admin/database_schedule_tasks_list.html',
-                        main_jobs=main_jobs,
-                        other_jobs=other_jobs)
-
-
-@app.route('/admin/appschedule/dashboard')
-@require_permission_dashboard('schedule')
-def dashboard_counter():
-    # Une seule requête pour la dernière exécution de toutes les tâches (au lieu
-    # d'une par tâche — cf. scheduler_dashboard, point 5.3).
-    main_jobs_info, other_jobs_info = build_jobs_info(scheduler.get_jobs())
-
-    dashboardcard = DashboardCard.query.filter_by(name="appschedule").first()
-    
-    return render_template('/admin/dashboard_appschedule.html',
-                            dashboardcard=dashboardcard,
-                            main_jobs=main_jobs_info,
-                            other_jobs=other_jobs_info)
-
-
-def disable_buttons_for_activity_task(activity_id):
-    with app.app_context():
-        disable_buttons_for_activity(activity_id)
-
-def enable_buttons_for_activity_task(activity_id):
-    with app.app_context():
-        enable_buttons_for_activity(app, activity_id)
-
-
-@app.route('/patient_right_page_default')
-def patient_right_page_default():
-    app.logger.debug("default")
-    return render_template('htmx/patient_right_page_default.html')
-
-
-@app.route('/call_specific_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
-@require_app_token_or_login
-def call_specific_patient(counter_id, patient_id):
-    ok, payload, status_code = calling_service.call_specific(counter_id, patient_id)
-    return jsonify(payload), status_code
-
-
-@app.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
-@require_app_token_or_login
-def validate_patient(counter_id, patient_id):
-    # Valide le patient actuel au comptoir sans appeler le prochain
-    app.logger.debug('validation %s', patient_id)
-
-    if patient_id:
-        current_patient = Patient.query.get(patient_id)
-        if current_patient:
-            current_patient.status = 'ongoing'
-            current_patient.timestamp_counter = datetime.now(time_tz)
-            db.session.commit()
-    else:
-        current_patient = None
-
-    communikation("update_patient")
-    communikation("update_screen", event="remove_calling", data={"id": patient_id})
-
-    current_patient_pyside = current_patient.to_dict() if isinstance(current_patient, Patient) else {"id": None, "counter_id": counter_id}
-
-    #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
-    return jsonify(current_patient_pyside), 200  
-
-
-@app.route('/update_patient_status')
-def update_patient_status():
-    # Mettez à jour la base de données comme nécessaire
-    return 'Status Updated'
-
-
-# Route pour la page patients qui accepte une langue via l'URL
-@app.route('/patients/<lang>')
-def patients_langue(lang):
-    session['lang'] = lang
-    app.logger.debug("%s", session['lang'])
-    return render_template('patients.html', cache=False)
-
 
 # ---------------- PAGE PATIENT FRONT ----------------
 
@@ -1511,246 +585,19 @@ def list_patients_standing():
 
 # ---------------- PAGE COUNTER FRONT ----------------
 
-@app.route('/countert/<int:counter_id>')
-def counter_test(counter_id):
-
-    app.logger.debug('counter_number %s', counter_id)
-    counter = Counter.query.get(counter_id)
-    activities = Activity.query.all()
-    # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
-
-    if not counter:
-        return wrong_counter(counter_id)
-    return render_template('counter/countert.html', 
-                            counter=counter,
-                            activities=activities)
-
-#  On utilise l'ID dans l'URL pour éviter les erreurs (espace dans le nom...)
-@app.route('/counter/<int:counter_id>')
-def counter(counter_id):
-
-    app.logger.debug('counter_number %s', counter_id)
-    counter = Counter.query.get(counter_id)
-    activities = Activity.query.all()
-    # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
-
-    if not counter:
-        return wrong_counter(counter_id)
-    return render_template('counter/counter.html', 
-                            counter=counter,
-                            activities=activities)
-
-
 # si le comptoir n'existe pas -> page avec liste des comptoirs
-def wrong_counter(counter_id):
-    return render_template('counter/wrong_counter.html', 
-                    counters=Counter.query.all(), 
-                    counter_id=counter_id)
-
-
-@app.route('/current_patient_for_counter/<int:counter_id>')
-def current_patient_for_counter(counter_id):
-    """ Affiche le patient en cours de traitement pour un comptoir """
-    app.logger.debug('counter_number ?? %s', counter_id)
-    patient = Patient.query.filter(
-        Patient.counter_id == counter_id,
-        Patient.status != 'done'
-    ).first()
-    app.logger.debug('CURRENT %s', patient)
-    return render_template('counter/current_patient_for_counter.html', patient=patient)
-
-
-@app.route('/counter/buttons_for_counter/<int:counter_id>')
-def current_patient_for_counter_test(counter_id):
-    """ Affiche le patient en cours de traitement pour un comptoir """
-    app.logger.debug('counter_number %s', counter_id)
-    patient = Patient.query.filter(
-        Patient.counter_id == counter_id, 
-        Patient.status != "done"
-    ).first()
-    if not patient:
-        patient_id = None
-        patient_status = None
-    else :
-        patient_id = patient.id
-        patient_status = patient.status
-    return render_template('counter/buttons_for_counter.html', 
-                            patient=patient, 
-                            patient_id=patient_id, 
-                            counter_id=counter_id, 
-                            status = patient_status,
-                            current_staff=Counter.query.get(counter_id).staff  # TODO Utiliser une classe pour stocker ces infos
-                            )
-
-
-@app.route('/counter/switch_auto_calling/<int:counter_id>')
-def switch_auto_calling(counter_id):
-    counter = Counter.query.get(counter_id)
-    return render_template('counter/switch_auto_calling.html',
-                            counter=counter,
-                            auto_calling=counter.auto_calling)
-
-
-
-
-# A SUPPRIMER, NE FONCTIONNE PLUS AVEC HTTPS
-@app.route('/counter_buttons/<int:counter_id>/')
-def counter_refresh_buttons(counter_id):
-    app.logger.debug('BUTTONS %s', counter_id)
-    patient = Patient.query.filter(
-        Patient.counter_id == counter_id, 
-        Patient.status != "done"
-    ).first()
-    app.logger.debug('Patient %s', patient)
-    if not patient:
-        patient_id = None
-        patient_status = None
-    else :
-        patient_id = patient.id
-        patient_status = patient.status
-
-    return render_template('/counter/display_buttons.html', counter_id=counter_id, patient_id=patient_id, status=patient_status)
-
-
-@app.route('/validate_and_call_next/<int:counter_id>', methods=['POST'])
-@require_app_token_or_login
-@idempotent
-def validate_and_call_next(counter_id):
-    ok, resultat = calling_service.validate_and_call_next(counter_id)
-    if ok:
-        return jsonify(resultat.to_dict()), 200
-    # pas de patient suivant : le service a repasse le comptoir inactif
-    return '', 204
-
-
-@app.route('/pause_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
-@require_app_token_or_login
-def pause_patient(counter_id, patient_id):
-    return jsonify(calling_service.pause(counter_id, patient_id)), 200
-
-
 # ---------------- FIN  PAGE COUNTER FRONT ----------------
 
 
 # ---------------- FONCTIONS Généralistes / COmmunication ---------------- 
 
-# liste des flux SSE
-update_patients = []
-update_page_patient = []
-update_admin = []
-play_sound_streams = []
-counter_streams = {}
-update_announce = []
-update_patient_pyside = []
-update_patient_app = []
-update_screen_app = []
-
-def add_client(clients_list):
-    client = Queue()
-    clients_list.append(client)
-    app.logger.debug(f"Added new client. Total clients: {len(clients_list)}")
-    return client
-
-def remove_client(clients_list, client):
-    clients_list.remove(client)
-    app.logger.debug(f"Removed client. Total clients: {len(clients_list)}")
-
-def event_stream(clients):
-    return None
-    client = add_client(clients)
-    app.logger.debug('client %s', client)
-    try:
-        while True:
-            message = client.get(timeout=30)  # Use timeout to avoid blocking indefinitely
-            app.logger.debug(f"Sending message: {message}")
-            yield f'data: {message}\n\n'
-    except Empty:
-        yield 'data: no-message\n\n'
-    except GeneratorExit:
-        app.logger.debug("Client disconnected, removing client.")
-        remove_client(clients, client)
-
-def event_stream_dict(client_id):
-    app.logger.debug("start event event_stream_dict")
-    client_queue = counter_streams[client_id]
-    try:
-        while True:
-            try:
-                message = client_queue.get(timeout=30)
-                app.logger.debug(f"message test: {message}")
-                yield f'data: {message}\n\n'
-            except Empty:
-                yield 'data: no-message\n\n'
-                app.logger.debug("No message for client.")
-    except GeneratorExit:
-        app.logger.debug("Generator exit, client disconnected")
-    finally:
-        counter_streams.pop(client_id, None)
-        app.logger.debug(f"Stream closed for client {client_id}")
-
-"""@app.route('/events/update_patients')
-def events_update_patients():
-    return Response(event_stream(update_patients), content_type='text/event-stream')
-
-@app.route('/events/update_patient_app')
-def events_update_patients_app():
-    return Response(event_stream(update_patient_app), content_type='text/event-stream')
-
-@app.route('/events/update_screen_app')
-def events_update_screen_app():
-    return Response(event_stream(update_screen_app), content_type='text/event-stream')
-
-@app.route('/events/sound_calling')
-def events_update_sound_calling():
-    return Response(event_stream(play_sound_streams), content_type='text/event-stream')
-
-@app.route('/events/update_counter/<int:client_id>')
-def events_update_counter(client_id):
-    if client_id not in counter_streams:
-        counter_streams[client_id] = Queue()  # Crée une nouvelle Queue si elle n'existe pas
-    return Response(event_stream_dict(client_id), content_type='text/event-stream')
-
-@app.route('/events/update_admin')
-def events_update_admin():
-    return Response(event_stream(update_admin), content_type='text/event-stream')
-
-@app.route('/events/update_announce')
-def events_update_announce():
-    return Response(event_stream(update_announce), content_type='text/event-stream')
-
-@app.route('/events/update_page_patient')
-def events_update_page_patients():
-    return Response(event_stream(update_page_patient), content_type='text/event-stream')
-
-@app.route('/events/update_patient_pyside')
-def events_update_patient_pyside():
-    return Response(event_stream(update_patient_pyside), content_type='text/event-stream')
-"""
-
-
-
-
-
-
-def display_toast(success=True, message=None):
-    """ Affiche le toast dans la page Admin.
-    Pour validation réussie, on peut simplement appeler la fonction sans argument """
-    if message is None:
-        message = "Enregistrement effectué"
-
-    data = {"toast": True, 'success': success, 'message': message}
-    communikation("admin", data)
-
-    # Point 7.5 : en plus de la diffusion WebSocket (qui informe TOUS les
-    # administrateurs), on mémorise le résultat pour l'auteur de la requête.
-    # `_attach_admin_feedback` (after_request) le renvoie dans l'en-tête
-    # HX-Trigger, ce qui permet au client de confirmer la sauvegarde à partir
-    # de la réponse HTTP — sans dépendre uniquement du WebSocket.
-    if has_request_context():
-        g._admin_feedback = {'success': bool(success), 'message': message}
-
-    return "", 204
-    #return f'<script>display_toast({data})</script>'
+# NOTE: ~100 lignes de plomberie SSE ont ete retirees ici (point 9.5d) : neuf
+# listes de clients au niveau module, add_client/remove_client, event_stream,
+# event_stream_dict, et neuf routes /events/* enfermees dans une chaine de
+# caracteres (donc JAMAIS enregistrees). Le temps reel passe entierement par
+# Socket.IO. Les trois EventSource clients qui pointaient encore vers ces routes
+# inexistantes -- et bouclaient donc sur des 404 -- ont ete retires de
+# static/js/counter.js et static/js/announce.js.
 
 
 @app.after_request
@@ -1767,7 +614,6 @@ def _attach_admin_feedback(response):
     if feedback is None:
         return response
 
-    import json
     trigger = {'adminFeedback': feedback}
     existing = response.headers.get('HX-Trigger')
     if existing:
@@ -1784,36 +630,7 @@ def _attach_admin_feedback(response):
     return response
 
 
-def config_change_response(success=True, message=None):
-    """Réponse renvoyée DIRECTEMENT à l'auteur d'une modification de paramètre.
-
-    Contrairement à :func:`display_toast`, qui diffuse le résultat par WebSocket
-    à TOUS les administrateurs connectés (chaque admin voit alors un toast pour
-    une action qu'il n'a pas faite), cette fonction ne répond qu'au client qui a
-    soumis la requête :
-
-    - le **statut HTTP** distingue succès (200) et échec (400), ce qui permet au
-      JavaScript (``handleAfterRequestConfig``) de tester ``event.detail.successful``
-      et de ne mettre à jour la valeur initiale du champ qu'en cas de succès ;
-    - le **corps** contient le message à afficher près du champ concerné.
-
-    Aucune diffusion WebSocket n'est effectuée ici.
-    """
-    if message is None:
-        message = "Enregistré." if success else "Échec de l'enregistrement."
-    status = 200 if success else 400
-    return message, status, {"Content-Type": "text/plain; charset=utf-8"}
-
-
 # ---------------- FONCTIONS Généralistes > Communication avec Pyside ---------------- 
-
-@app.route('/api/counters', methods=['GET'])
-@require_app_token_or_login
-def get_counters():
-    counters = Counter.query.all()
-    counters_list = [{'id': counter.id, 'name': counter.name} for counter in counters]
-    return jsonify(counters_list)
-
 
 # ---------------- FONCTIONS Généralistes > Affichage page sur téléphone ---------------- 
 
@@ -1855,85 +672,10 @@ def log_request_info():
 """
 # ---------------- FIN FONCTIONS Généralistes ---------------- 
 
-# A PRIORI NE SERT PLUS A RIEN
-@app.route('/current_patients')
-def current_patients():
-    # Supposons que vous vouliez afficher les patients dont le statut est "au comptoir"
-    patients = Patient.query.filter_by(status='ongoing').all()
-    app.logger.debug("%s", patients)
-    return render_template('htmx/update_patients.html', patients=patients)
-
-
-@app.route('/add_counter', methods=['POST'])
-@require_permission('counter')
-def add_counter():
-    if request.method == 'POST':
-        name = request.form['name']
-        new_counter = Counter(name=name)
-        db.session.add(new_counter)
-        db.session.commit()
-        return redirect('/admin')
-    return "Erreur dans la soumission du formulaire"
-
-
-@app.route('/patients_queue')
-def patients_queue():
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp, Patient.id).all()
-    return render_template('htmx/patients_queue.html', patients=patients)
-
-
-@app.route('/pharmacists')
-@require_permission('staff')
-def pharmacists():
-    all_pharmacists = Pharmacist.query.all()
-    app.logger.debug('ALL %s', all_pharmacists)
-    return render_template('pharmacists.html', pharmacists=all_pharmacists)
-
-
-@app.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
-@require_permission('staff')
-def update_pharmacist(pharmacist_id):
-    pharmacist = Pharmacist.query.get(pharmacist_id)
-    if pharmacist:
-        pharmacist.name = request.form.get('name', pharmacist.name)
-        pharmacist.initials = request.form.get('initials', pharmacist.initials)
-        pharmacist.language = request.form.get('language', pharmacist.language)
-        pharmacist.is_active = 'is_active' in request.form
-        pharmacist.activity = request.form.get('activity', pharmacist.activity)
-        db.session.commit()
-    return redirect(url_for('pharmacists'))
-
-
-@app.route('/add_pharmacist', methods=['POST'])
-@require_permission('staff')
-def add_pharmacist():
-    name = request.form.get('name')
-    initials = request.form.get('initials')
-    language = request.form.get('language')
-    is_active = request.form.get('is_active') == 'on'
-    activity = request.form.get('activity')
-    new_pharmacist = Pharmacist(name=name, initials=initials, language=language, is_active=is_active, activity=activity)
-    db.session.add(new_pharmacist)
-    db.session.commit()
-    return render_template('htmx/menu_admin_pharmacist_row.html', pharmacist=new_pharmacist)
-
-
-@app.route('/new_pharmacist_form')
-@require_permission('staff')
-def new_pharmacist_form():
-    app.logger.debug("new_pharmacist_form")
-    return render_template('htmx/menu_admin_new_pharmacist_form.html')
-
-
 # Définir un filtre pour Jinja2
 @app.template_filter('format_time')
 def format_time(value):
     return value.strftime('%H:%M') if value else ''
-
-
-def allowed_image_file(filename):
-    """Vérifie si le fichier a une extension autorisée."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_IMAGE_EXTENSIONS"]
 
 
 # Chargement des couleurs pour pouvoir les passer dans la session pour être envoyé à base.html
@@ -1963,13 +705,13 @@ def _sync_configuration_across_processes():
 
 
 # Fonctions attachées à app afin de pouvoir les appeler depuis un autre fichier via current_app
+# NOTE: seule `load_configuration` reste greffee sur l'objet application. Elle
+# est appelee depuis init_restore.py et routes/admin_backup.py -- deux modules
+# qu'app.py importe lui-meme : un import direct creerait un cycle. Les autres
+# greffes ont disparu (socketio et scheduler viennent d'extensions.py,
+# active_connections/connected_clients_info de sockets.py, display_toast et
+# allowed_image_file de ui_feedback.py, l'appel patient de services/).
 app.load_configuration = load_configuration
-app.display_toast = display_toast
-app.allowed_image_file = allowed_image_file
-app.mail = mail
-app.socketio = socketio
-app.database = database
-app.scheduler = scheduler
 
 if __name__ == "__main__":
 
@@ -2007,12 +749,6 @@ if __name__ == "__main__":
 @app.context_processor
 def inject_user():
     return dict(current_user=current_user)
-
-# creation BDD si besoin et initialise certaines tables (Activités)
-def initialize_data():
-    pass
-            
-initialize_data()
 
 app.logger.debug("Starting Flask...")
 app.logger.info(f"Starting Flask on port {server_port} with debug={app.debug}")

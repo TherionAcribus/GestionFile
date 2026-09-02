@@ -1,8 +1,8 @@
 import random
-from flask import Blueprint, render_template, request, jsonify, current_app as app
-from sqlalchemy import func, text, or_
+from flask import Blueprint, render_template, request, jsonify
+from sqlalchemy import func, text
 from datetime import datetime, timedelta
-from models import DashboardCard, Activity, Language, Counter, Patient, PatientHistory, AggregatedStats, db
+from models import Activity, Language, Counter, Patient, PatientHistory, AggregatedStats, db
 from routes.admin_security import require_permission, require_permission_api
 from pagination import parse_page_params, paginate_query
 from stats_params import parse_chart_request

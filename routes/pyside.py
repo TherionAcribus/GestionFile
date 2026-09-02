@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app as app
+from flask import Blueprint
 from models import db, Patient, Activity, Language
 from auth_utils import require_app_token_or_login
 

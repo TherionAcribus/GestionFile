@@ -1,11 +1,11 @@
-import os
 from flask import Blueprint, render_template, request, jsonify, current_app
 from models import db, Patient, PatientHistory, AggregatedStats, ConfigOption, JobExecutionLog
 from routes.admin_security import require_permission
-from scheduler_functions import archive_data, auto_archive_job, add_scheduler_clear_all_patients
+from scheduler_functions import archive_data, auto_archive_job
 from sqlalchemy import text
 from datetime import datetime, timedelta
 from config import time_tz
+from extensions import scheduler
 
 admin_data_bp = Blueprint('admin_data', __name__)
 
@@ -90,8 +90,8 @@ def update_config():
         # Manage Scheduler
         job_id = 'Auto Archive Data'
         if current_app.config['DATA_AUTO_ARCHIVE_ENABLED']:
-            if not current_app.scheduler.get_job(job_id):
-                current_app.scheduler.add_job(
+            if not scheduler.get_job(job_id):
+                scheduler.add_job(
                     id=job_id,
                     func=auto_archive_job,
                     trigger='cron',
@@ -99,8 +99,8 @@ def update_config():
                     minute=30
                 )
         else:
-            if current_app.scheduler.get_job(job_id):
-                current_app.scheduler.remove_job(job_id)
+            if scheduler.get_job(job_id):
+                scheduler.remove_job(job_id)
         
         return jsonify({'success': True, 'message': 'Configuration updated'})
     except Exception as e:

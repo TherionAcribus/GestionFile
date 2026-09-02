@@ -14,7 +14,6 @@ Exécutable **sans MySQL ni serveur**. Couvre :
 import os
 import types
 
-import pytest
 
 import params_registry as reg
 import backup_service as bs
@@ -225,7 +224,7 @@ def test_music_route_does_not_pass_key_value():
 
 def test_update_input_keeps_secret_on_empty():
     """La route ``update_input`` conserve un secret quand le champ est vide."""
-    src = _read("app.py")
+    src = _read("routes/admin_config.py")
     assert "spec.secret and value.strip()" in src
 
 

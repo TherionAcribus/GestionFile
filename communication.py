@@ -4,6 +4,7 @@ import logging
 from flask import url_for, request, has_request_context, current_app
 from routes.pyside import create_patients_list_for_pyside
 from models import bump_queue_revision
+from extensions import socketio
 
 
 def communikation(stream, data=None, flag=None, event="update", client_id=None):
@@ -68,7 +69,7 @@ def communication_websocket(stream, data=None, flag=None, client_id=None, event=
 
     try:
         namespace = f'/{stream}'
-        current_app.socketio.emit(event, {"flag": flag, 'data': message, 'revision': revision}, namespace=namespace)
+        socketio.emit(event, {"flag": flag, 'data': message, 'revision': revision}, namespace=namespace)
         logging.info(f"Message SocketIO envoyé: {namespace}")
         return "Message sent!"
     except Exception as e:
@@ -115,7 +116,7 @@ def notify_patient_phone(call_number):
     if not current_app.config["PHONE_DISPLAY_YOUR_TURN"]:
         return False
     try:
-        current_app.socketio.emit('your_turn',
+        socketio.emit('your_turn',
                                 {'call_number': call_number},
                                 namespace='/socket_phone',
                                 room=f"call_{call_number}")

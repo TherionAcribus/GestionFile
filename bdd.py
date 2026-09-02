@@ -1,7 +1,7 @@
 from flask import current_app as app
-from flask_migrate import upgrade as _alembic_upgrade
 from models import Patient, PatientHistory, db
 from sqlalchemy import inspect
+from ui_feedback import display_toast
 
 def init_database(database, db):
     if database == "sqlite":
@@ -23,7 +23,7 @@ def transfer_patients_to_history():
         patients = Patient.query.all()
         if not patients:
             app.logger.info("No patients to transfer")
-            app.display_toast(success=False, message="Aucun patient à copier dans l'historique")
+            display_toast(success=False, message="Aucun patient à copier dans l'historique")
             return True
 
         for patient in patients:
@@ -52,12 +52,12 @@ def transfer_patients_to_history():
         db.session.commit()
 
         app.logger.info(f"{len(patients)} Patients transférés dans l'historique avec succès")
-        app.display_toast(success=True, message=f"{len(patients)} patients transférés dans l'historique avec succès")
+        display_toast(success=True, message=f"{len(patients)} patients transférés dans l'historique avec succès")
 
         return True
     except Exception as e:
         # En cas d'erreur, annuler toutes les transactions
         db.session.rollback()
         app.logger.info(f"Erreur lors de la copie dans patients dans l'historique : {e}")
-        app.display_toast(success=False, message=f"Erreur lors de la copie dans patients dans l'historique : {e}")
+        display_toast(success=False, message=f"Erreur lors de la copie dans patients dans l'historique : {e}")
         return False

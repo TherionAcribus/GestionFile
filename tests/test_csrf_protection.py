@@ -223,9 +223,15 @@ def test_get_is_never_checked(client):
 # --- 2. Régression statique ---
 
 def test_app_wires_csrf_protect():
+    # Depuis le point 9.5a, l'extension est instanciee dans extensions.py
+    # (fabrique d'application) et liee a l'app dans create_app.
+    extensions = _read("extensions.py")
+    assert "from flask_wtf.csrf import CSRFProtect" in extensions
+    assert "csrf = CSRFProtect()" in extensions
+
     source = _read("app.py")
-    assert "from flask_wtf.csrf import CSRFProtect, CSRFError" in source
-    assert "csrf = CSRFProtect()" in source
+    assert "from flask_wtf.csrf import CSRFError" in source
+    assert "from extensions import" in source and "csrf" in source
     assert "csrf.init_app(app)" in source
     assert 'app.config.setdefault("WTF_CSRF_CHECK_DEFAULT", False)' in source
 
@@ -268,9 +274,9 @@ def test_app_token_exemption_is_hardened():
 
 
 def test_browser_templates_include_csrf_token_and_script():
+    # countert.html a ete supprime avec la route de test /countert (point 9.5d).
     for tpl in ("templates/admin/base.html",
-                "templates/counter/counter.html",
-                "templates/counter/countert.html"):
+                "templates/counter/counter.html"):
         content = _read(tpl)
         assert 'name="csrf-token"' in content, f"meta csrf manquant dans {tpl}"
         assert "csrf_token()" in content, f"csrf_token() manquant dans {tpl}"

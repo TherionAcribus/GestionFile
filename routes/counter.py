@@ -213,7 +213,16 @@ def api_counter_state(counter_id):
         Patient.status.in_(['ongoing', 'calling'])
     ).first()
 
-    standing = Patient.query.filter_by(status="standing").order_by(Patient.timestamp, Patient.id).all()
+    # La boucle ci-dessous lit p.activity.name, p.activity.staff_id et
+    # p.language.code : sans chargement anticipe, chaque patient declenchait deux
+    # requetes supplementaires (N+1). Meme motif que patients_queue_for_counter.
+    standing = (
+        Patient.query
+        .filter_by(status="standing")
+        .options(joinedload(Patient.activity), joinedload(Patient.language))
+        .order_by(Patient.timestamp, Patient.id)
+        .all()
+    )
     standing_list = [{
         "id": p.id,
         "call_number": p.call_number,

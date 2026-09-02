@@ -15,6 +15,7 @@ from spotify_support import (
     resolve_redirect_uri,
     run_duck_cycle,
 )
+from ui_feedback import display_toast
 
 admin_music_bp = Blueprint('admin_music', __name__)
 
@@ -301,7 +302,7 @@ def spotify_exception_handler(func):
             return func(*args, **kwargs)
         except spotipy.exceptions.SpotifyException as e:
             app.logger.error(f"Failed during Spotify operation in function {func.__name__}: {e}")
-            app.display_toast(success=False, message="Error :" + str(e))
+            display_toast(success=False, message="Error :" + str(e))
             # Retourner une réponse d'erreur standardisée
             return '', 500  # Code 500 pour une erreur serveur
     return wrapper

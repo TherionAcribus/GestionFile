@@ -16,7 +16,6 @@ Exécutable **sans MySQL ni serveur**. Couvre :
 import os
 import re
 
-import pytest
 
 import spotify_support as ss
 

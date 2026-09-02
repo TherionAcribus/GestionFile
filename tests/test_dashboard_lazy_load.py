@@ -90,8 +90,8 @@ def test_skeleton_and_error_styles_exist():
 def _appschedule_route_body():
     """Corps de la route ``/admin/appschedule/dashboard`` (repérée par sa route,
     le nom de fonction étant ambigu dans app.py)."""
-    src = _read("app.py")
-    start = src.index("@app.route('/admin/appschedule/dashboard')")
+    src = _read("routes/admin_config.py")
+    start = src.index("@admin_config_bp.route('/admin/appschedule/dashboard')")
     return src[start:start + 1500]
 
 

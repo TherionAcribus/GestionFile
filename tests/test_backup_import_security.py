@@ -25,7 +25,6 @@ from backup_service import (
     BackupValidationError,
     load_and_validate_backup,
     _safe_b64decode,
-    MAX_BACKUP_FILE_BYTES,
 )
 
 
@@ -122,7 +121,6 @@ def test_load_rejects_bad_data_type():
 
 def test_validation_error_messages_are_safe():
     """Les messages ne divulguent aucun détail technique interne."""
-    import json
     with pytest.raises(BackupValidationError) as ei:
         load_and_validate_backup("{bad")
     msg = str(ei.value)

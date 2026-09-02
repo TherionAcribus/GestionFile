@@ -34,7 +34,9 @@ def _route_body(source, route):
 
 
 def _func_body(source, func):
-    m = re.search(r"def " + func + r"\(.*?\n(.*?)(?=\ndef )", source, re.DOTALL)
+    # `\Z` : la fonction cherchée peut être la DERNIÈRE du fichier (aucun `def`
+    # ne la suit) — c'est le cas de config_change_response dans admin_config.py.
+    m = re.search(r"def " + func + r"\(.*?\n(.*?)(?=\ndef |\Z)", source, re.DOTALL)
     assert m, f"fonction {func} introuvable"
     return m.group(1)
 
@@ -44,7 +46,7 @@ def _func_body(source, func):
 # ---------------------------------------------------------------------------
 
 def test_config_change_response_exists_with_distinct_status():
-    body = _func_body(_read("app.py"), "config_change_response")
+    body = _func_body(_read("routes/admin_config.py"), "config_change_response")
     # Statut 400 en cas d'échec, 200 en cas de succès.
     assert "200 if success else 400" in body
     # Cette fonction ne diffuse PAS par WebSocket (contrairement à display_toast).
@@ -52,7 +54,7 @@ def test_config_change_response_exists_with_distinct_status():
 
 
 def test_update_input_uses_config_change_response_not_toast():
-    body = _route_body(_read("app.py"), "update_input")
+    body = _route_body(_read("routes/admin_config.py"), "update_input")
     # La route répond directement au client demandeur…
     assert "config_change_response(" in body
     # …et ne diffuse plus le résultat par WebSocket à tous les admins.
@@ -61,7 +63,7 @@ def test_update_input_uses_config_change_response_not_toast():
 
 
 def test_update_input_failures_return_failure_status():
-    body = _route_body(_read("app.py"), "update_input")
+    body = _route_body(_read("routes/admin_config.py"), "update_input")
     # Les cas d'échec de validation renvoient bien success=False (→ HTTP 400).
     assert "config_change_response(success=False" in body
     # Et le cas nominal renvoie un succès.
@@ -70,7 +72,7 @@ def test_update_input_failures_return_failure_status():
 
 def test_update_input_still_guards_restart_required():
     # Régression : ne pas casser la garde « redémarrage requis » (point 11).
-    body = _route_body(_read("app.py"), "update_input")
+    body = _route_body(_read("routes/admin_config.py"), "update_input")
     assert "spec.restart_required" in body
     assert "RESTART_REQUIRED_MESSAGE" in body
 

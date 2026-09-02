@@ -1,5 +1,4 @@
 import re
-import pytz
 import base64
 from datetime import datetime, date
 from flask import session, current_app as app
@@ -175,20 +174,29 @@ def replace_balise_welcome(template):
 
 
 def get_buttons_translation(buttons, language_code):
-    for button in buttons:
-            # Récupérer la traduction du label du bouton
-            translation = Translation.query.filter_by(
-                table_name='Button',
-                row_id=button.id,
-                language_code=language_code
-            ).first()
-            
-            app.logger.debug('button %s', button)
-            app.logger.debug('translation %s', translation)
-            # Si une traduction existe, mettre à jour le label du bouton
-            if translation:
-                button.label = translation.translated_text
-    app.logger.debug('buttons %s', buttons)
+    """Applique aux boutons leur libellé traduit, en UNE seule requête.
+
+    Auparavant : une requête ``Translation`` **par bouton** (N+1). Sur la page
+    patient, qui affiche l'ensemble des boutons d'activité, le coût était donc
+    proportionnel au nombre de boutons à chaque affichage.
+    """
+    if not buttons:
+        return buttons
+
+    ids = [bouton.id for bouton in buttons]
+    traductions = {
+        traduction.row_id: traduction.translated_text
+        for traduction in Translation.query.filter(
+            Translation.table_name == 'Button',
+            Translation.language_code == language_code,
+            Translation.row_id.in_(ids),
+        ).all()
+    }
+
+    for bouton in buttons:
+        traduit = traductions.get(bouton.id)
+        if traduit:
+            bouton.label = traduit
     return buttons
 
 

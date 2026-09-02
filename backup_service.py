@@ -1,19 +1,16 @@
 import json
 import os
 import base64
-import shutil
 import zipfile
 from abc import ABC, abstractmethod
 from datetime import datetime
-from io import BytesIO
 from flask import current_app
 from path_security import UnsafePathError, safe_relative_path
-from params_registry import SECRET_CONFIG_KEYS, is_secret_key
+from params_registry import is_secret_key
 import config_sync
 from models import (
     db, Pharmacist, Counter, Activity, ActivitySchedule, Weekday,
-    AlgoRule, Button, ConfigOption, ConfigVersion,
-    PatientCssVariable, AnnounceCssVariable, PhoneCssVariable,
+    AlgoRule, Button, ConfigOption, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable,
     Language, Text, TextTranslation, TextInterface, Translation,
     DashboardCard,
     counters_activities, pharmacists_activities,

@@ -10,6 +10,7 @@ from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
 from routes.admin_security import require_permission, require_permission_dashboard
 from auth_utils import require_app_token_or_login
+from ui_feedback import display_toast
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -220,7 +221,7 @@ def update_button(button_id):
         activity_id = request.form.get('activity')
 
         if activity_id == "":
-            app.display_toast(success=False, message="L'activité est obligatoire")
+            display_toast(success=False, message="L'activité est obligatoire")
             app.logger.info("L'activité est obligatoire")
             return ""
 
@@ -237,7 +238,7 @@ def update_button(button_id):
                         button.activity = activity
                         button.is_parent = False
                     else:
-                        app.display_toast(success=False, message="L'activité est introuvable")
+                        display_toast(success=False, message="L'activité est introuvable")
                         app.logger.info("L'activité est introuvable")
                         return "Activité non trouvée", 404
                 else:
@@ -254,14 +255,14 @@ def update_button(button_id):
             button.shape = shape      
 
             db.session.commit()
-            app.display_toast(success=True, message="Mise à jour effectuée")
+            display_toast(success=True, message="Mise à jour effectuée")
             return ""
         else:
-            app.display_toast(success=False, message="Membre de l'équipe introuvable")
+            display_toast(success=False, message="Membre de l'équipe introuvable")
             return ""
 
     except Exception as e:
-            app.display_toast(success=False, message="erreur : " + str(e))
+            display_toast(success=False, message="erreur : " + str(e))
             app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
 
@@ -276,10 +277,10 @@ def update_button_order():
             app.logger.debug("%s", button)
             button.sort_order = index
         db.session.commit()
-        app.display_toast(success=True, message="Ordre mis à jour")
+        display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
     except Exception as e:
-        app.display_toast(success=False, message=f"Erreur: {e}")
+        display_toast(success=False, message=f"Erreur: {e}")
 
 
 # affiche le formulaire pour ajouter un membre
@@ -304,7 +305,7 @@ def add_new_button():
         shape = request.form.get('shape')
 
         if activity_id == "":
-            app.display_toast(success=False, message="L'activité est obligatoire")
+            display_toast(success=False, message="L'activité est obligatoire")
             return ""
         
         # GEstion du cas ou le bouton est un bouton parent
@@ -318,7 +319,7 @@ def add_new_button():
                 if activity:
                     activity = activity
                 else:
-                    app.display_toast(success=False, message="Activité non trouvée")
+                    display_toast(success=False, message="Activité non trouvée")
                     app.logger.error("Activité non trouvée")
                     return "Activité non trouvée", 404
             else:
@@ -347,13 +348,13 @@ def add_new_button():
         )
         
         if not label:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Le nom est obligatoire")
+            display_toast(success=False, message="Le nom est obligatoire")
             return display_button_table()        
 
         db.session.add(new_button)
         db.session.commit()
 
-        app.display_toast(success=True, message="Bouton ajouté")
+        display_toast(success=True, message="Bouton ajouté")
         communikation("admin", event="refresh_button_order")
 
         # Effacer le formulaire via swap-oob
@@ -364,7 +365,7 @@ def add_new_button():
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_button_table()
 
@@ -384,12 +385,12 @@ def delete_button(button_id):
     try:
         button = Button.query.order_by(Button.sort_order).get(button_id)
         if not button:
-            app.display_toast(success=False, message="Bouton non trouvé")
+            display_toast(success=False, message="Bouton non trouvé")
             return display_button_table()
 
         db.session.delete(button)
         db.session.commit()
-        app.display_toast(success=True, message="Bouton supprimé")
+        display_toast(success=True, message="Bouton supprimé")
 
         communikation("admin", event="refresh_button_order")
 
@@ -397,7 +398,7 @@ def delete_button(button_id):
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_button_table()
 

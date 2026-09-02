@@ -1,8 +1,10 @@
 from datetime import datetime, time
-from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app
-from models import Activity, ActivitySchedule, Pharmacist, Button, DashboardCard, db
+from flask import Blueprint, render_template, request, current_app as app
+from models import Activity, ActivitySchedule, Pharmacist, Button, db
 from sqlalchemy.orm import joinedload, selectinload
 from routes.admin_security import require_permission
+from ui_feedback import display_toast
+from extensions import scheduler
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
 
@@ -52,10 +54,10 @@ def update_activity(activity_id):
 
     if activity:
         if request.form.get('name') == '':
-            app.display_toast(success=False, message="Le nom est obligatoire")
+            display_toast(success=False, message="Le nom est obligatoire")
             return ""
         if request.form.get('letter') == '':
-            app.display_toast(success=False, message="La lettre est obligatoire")
+            display_toast(success=False, message="La lettre est obligatoire")
             return ""
         activity.name = request.form.get('name', activity.name)
         activity.letter = request.form.get('letter', activity.letter)
@@ -79,10 +81,10 @@ def update_activity(activity_id):
             activity.is_staff = False
 
         db.session.commit()
-        app.display_toast(success=True, message="Activité ajoutée avec succès")
+        display_toast(success=True, message="Activité ajoutée avec succès")
         return ""
     else:
-        return app.display_toast(success=False, message="Activité introuvable")
+        return display_toast(success=False, message="Activité introuvable")
 
 
 def update_bouton_after_scheduler_changed(activity):
@@ -123,7 +125,7 @@ def update_bouton_after_scheduler_changed(activity):
         if button.is_active != is_activity_active:
             button.is_active = is_activity_active
             db.session.add(button)  # Ajouter le bouton à la session pour la mise à jour
-            app.display_toast(success=True, message=f"Le bouton '{button.label} 'vient de changer d'activité.")
+            display_toast(success=True, message=f"Le bouton '{button.label} 'vient de changer d'activité.")
 
     db.session.commit()  # Sauvegarder les modifications dans la base de données
 
@@ -153,18 +155,18 @@ def delete_activity(activity_id, staff=None):
     try:
         activity = Activity.query.get(activity_id)
         if not activity:
-            app.display_toast(success=False, message="Activité non trouvée")
+            display_toast(success=False, message="Activité non trouvée")
             return return_good_display_activity(staff)
 
         db.session.delete(activity)
         db.session.commit()
-        app.display_toast(success=True, message="Activité supprimée avec succès")
+        display_toast(success=True, message="Activité supprimée avec succès")
         return return_good_display_activity(staff)
 
     except Exception as e:
         db.session.rollback()
         app.logger.error(str(e))
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return return_good_display_activity(staff)
 
 
@@ -233,11 +235,11 @@ def add_new_activity():
 
         for schedule_id in schedule_ids:
             schedule = ActivitySchedule.query.get(int(schedule_id))
-            app.scheduler.add_job(func=update_button_presence, args=[new_activity.id, True, app],
+            scheduler.add_job(func=update_button_presence, args=[new_activity.id, True, app],
                             trigger="cron", day_of_week='mon-sun', 
                             hour=schedule.start_time.hour, minute=schedule.start_time.minute,
                             id=f'activate_activity{new_activity.id}_schedule{schedule.id}')
-            app.scheduler.add_job(func=update_button_presence, args=[new_activity.id, False, app],
+            scheduler.add_job(func=update_button_presence, args=[new_activity.id, False, app],
                             trigger="cron", day_of_week='mon-sun', 
                             hour=schedule.end_time.hour, minute=schedule.end_time.minute,
                             id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
@@ -256,7 +258,7 @@ def add_new_activity():
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return return_good_display_activity(staff_id)
 
 
@@ -292,9 +294,9 @@ def update_scheduler_for_activity(activity):
 
     # Nettoyage des jobs existants
     try:
-        for job in app.scheduler.get_jobs():
+        for job in scheduler.get_jobs():
             if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
-                app.scheduler.remove_job(job.id)
+                scheduler.remove_job(job.id)
                 app.logger.info(f"Removed existing job: {job.id}")
     except Exception as e:
         app.logger.error(f"Error removing existing jobs for {activity.name}: {str(e)}")
@@ -309,7 +311,7 @@ def update_scheduler_for_activity(activity):
 
     def add_job(job_id, func, args, trigger_args):
         try:
-            app.scheduler.add_job(
+            scheduler.add_job(
                 id=job_id,
                 func=func,
                 args=args,

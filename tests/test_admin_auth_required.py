@@ -181,9 +181,11 @@ def test_debug_print_removed():
 
 
 def test_admin_socket_requires_authentication():
-    source = _read("app.py")
+    # Les gestionnaires Socket.IO ont ete extraits d'app.py vers sockets.py
+    # (point 9.5c) ; la garde d'authentification, elle, est inchangee.
+    source = _read("sockets.py")
     m = re.search(r"def connect_admin\(\):(.*?)def disconnect_admin", source, re.DOTALL)
-    assert m, "connect_admin introuvable"
+    assert m, "connect_admin introuvable dans sockets.py"
     body = m.group(1)
     assert "is_authenticated_request()" in body, (
         "Le namespace /socket_admin doit exiger l'authentification")

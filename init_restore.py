@@ -3,7 +3,7 @@ import os
 import zipfile
 import mysql.connector
 from datetime import datetime, time
-from flask import redirect, url_for, render_template, current_app
+from flask import current_app
 from io import BytesIO
 
 from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
@@ -467,7 +467,11 @@ def restore_sqlite(request):
                     else:
                         return f"Database file {db_name} not found in the ZIP", 400
                     
-            current_app.load_configuration()
+            # load_configuration(app) attend l'application en argument. Greffee
+            # sur l'objet app, elle n'est PAS liee comme une methode : l'appeler
+            # sans argument levait une TypeError -- juste apres avoir ecrase les
+            # fichiers de base, donc au pire moment.
+            current_app.load_configuration(current_app)
 
         return "All databases restored successfully"
     else:

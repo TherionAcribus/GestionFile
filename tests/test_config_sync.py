@@ -15,7 +15,6 @@ Trois niveaux, tous exécutables **sans MySQL ni serveur** :
 
 import os
 import re
-import types
 
 import pytest
 from flask import Flask
@@ -290,7 +289,7 @@ def _route_body(source, route):
 def test_update_routes_bump_generation_before_commit():
     """Chaque route update_* doit incrémenter la génération DANS la transaction
     (avant le commit) pour la convergence inter-processus."""
-    source = _read("app.py")
+    source = _read("routes/admin_config.py")
     for route in ("update_switch", "update_input", "update_select"):
         body = _route_body(source, route)
         bump_idx = body.find("config_sync.bump_generation()")
@@ -304,7 +303,7 @@ def test_update_routes_bump_generation_before_commit():
 def test_update_routes_guard_restart_required():
     """Les routes update_* ne doivent pas prétendre appliquer un paramètre
     nécessitant un redémarrage : message dédié + pas de bump pour ces clés."""
-    source = _read("app.py")
+    source = _read("routes/admin_config.py")
     for route in ("update_switch", "update_input", "update_select"):
         body = _route_body(source, route)
         assert "spec.restart_required" in body, (
@@ -314,12 +313,14 @@ def test_update_routes_guard_restart_required():
 
 
 def test_before_request_hook_registered():
+    # Ce hook est enregistre sur l'application elle-meme, il reste dans app.py.
     source = _read("app.py")
     assert "@app.before_request" in source
     assert "maybe_reload_configuration(app)" in source
 
 
 def test_start_fonctions_marks_generation():
+    # start_fonctions fait partie du demarrage de l'application : app.py.
     source = _read("app.py")
     assert "mark_current_generation(app)" in source
     assert "ensure_generation_row()" in source

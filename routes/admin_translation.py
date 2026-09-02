@@ -6,6 +6,7 @@ from werkzeug.utils import secure_filename
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_api
 from pagination import parse_page_params, paginate_query
+from ui_feedback import allowed_image_file, display_toast
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -62,13 +63,13 @@ def update_language(language_id):
             is_active = True if request.form.get('is_active', language.is_active) == "true" else False
             voice_is_active = True if request.form.get('voice_is_active', language.voice_is_active) == "true" else False
             if code == '':
-                app.display_toast(success=False, message="Le code est obligatoire")
+                display_toast(success=False, message="Le code est obligatoire")
                 return "", 204
             if name == '':
-                app.display_toast(success=False, message="Le nom est obligatoire")
+                display_toast(success=False, message="Le nom est obligatoire")
                 return "", 204
             if translation == '':
-                app.display_toast(success=False, message="La traduction est obligatoire")
+                display_toast(success=False, message="La traduction est obligatoire")
                 return "", 204
 
             # Vérifie que le code ne sont pas déjà enregistrées par une autre langue
@@ -78,7 +79,7 @@ def update_language(language_id):
             ).first()
 
             if existing_language:
-                app.display_toast(success=False, message="Le code est déjà utilisé par une autre langue")
+                display_toast(success=False, message="Le code est déjà utilisé par une autre langue")
                 return "", 204
 
             language.code = code
@@ -98,14 +99,14 @@ def update_language(language_id):
                     language.flag_url = extracted
 
             db.session.commit()
-            app.display_toast(success=True, message="Mise à jour réussie")
+            display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
-            app.display_toast(success=False, message="Langue introuvable")
+            display_toast(success=False, message="Langue introuvable")
             return ""
 
     except Exception as e:
-        app.display_toast(success=False, message="Erreur : " + str(e))
+        display_toast(success=False, message="Erreur : " + str(e))
         return jsonify(status="error", message=str(e)), 500
 
 
@@ -123,19 +124,19 @@ def delete_language(language_id):
     try:
         language = Language.query.get(language_id)
         if not language:
-            app.display_toast(success=False, message="Langue non trouvée")
+            display_toast(success=False, message="Langue non trouvée")
             return display_languages_table()
 
         db.session.delete(language)
         db.session.commit()
-        app.display_toast(success=True, message="Suppression réussie")
+        display_toast(success=True, message="Suppression réussie")
 
         communikation("admin", event="refresh_languages_order")
 
         return display_languages_table()
 
     except Exception as e:
-        app.display_toast(success=False, message="Erreur : " + str(e))
+        display_toast(success=False, message="Erreur : " + str(e))
         return display_languages_table()
     
 
@@ -167,16 +168,16 @@ def add_new_language():
         sort_order = max_order.sort_order + 1 if max_order else 0
 
         if not code:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Code obligatoire")
+            display_toast(success=False, message="Code obligatoire")
             return display_languages_table()
         if code in [code[0] for code in db.session.query(Language.code).all()]:
-            app.display_toast(success=False, message="Le code est déjà utilisées")
+            display_toast(success=False, message="Le code est déjà utilisées")
             return "", 204
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Nom obligatoires")
+            display_toast(success=False, message="Nom obligatoires")
             return display_languages_table()
         if not translation:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Traduction obligatoire")
+            display_toast(success=False, message="Traduction obligatoire")
             return display_languages_table()
         
 
@@ -194,7 +195,7 @@ def add_new_language():
 
         communikation("admin", event="refresh_languages_order")
 
-        app.display_toast(success=True, message="Langue ajoutée avec succès")
+        display_toast(success=True, message="Langue ajoutée avec succès")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_language_form"></div>"""
@@ -203,7 +204,7 @@ def add_new_language():
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message= "Erreur : " + str(e))
+        display_toast(success=False, message= "Erreur : " + str(e))
         return display_languages_table()
     
 @admin_translation_bp.route('/admin/languages/upload_flag_image', methods=['POST'])
@@ -216,7 +217,7 @@ def upload_flag_image():
     if file.filename == '':
         return {"error": "No selected file"}, 400
     
-    if file and app.allowed_image_file(file.filename):
+    if file and allowed_image_file(file.filename):
         filename = secure_filename(file.filename)
         flag_folder = os.path.join(app.static_folder, 'images', 'flags')
         os.makedirs(flag_folder, exist_ok=True)
@@ -242,10 +243,10 @@ def update_languages_order():
             languages = Language.query.order_by(Language.sort_order).get(counter_id)
             languages.sort_order = index
         db.session.commit()
-        app.display_toast(success=True, message="Ordre mis à jour")
+        display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
     except Exception as e:
-        app.display_toast(success=False, message=f"Erreur: {e}")
+        display_toast(success=False, message=f"Erreur: {e}")
 
 
 def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, language_code, text):
@@ -353,7 +354,7 @@ def translations_collect():
     db.session.commit()
 
     # Afficher le nombre de nouveaux textes mis à jour dans display_toast
-    app.display_toast(success=True, message=f"{new_translations_count} nouveaux textes mis à jour")
+    display_toast(success=True, message=f"{new_translations_count} nouveaux textes mis à jour")
 
     return "", 200
 
@@ -457,6 +458,6 @@ def save_translations():
 
     db.session.commit()
 
-    app.display_toast(success=True, message=f"{updated_count} traduction(s) sauvegardée(s)")
+    display_toast(success=True, message=f"{updated_count} traduction(s) sauvegardée(s)")
     # Retourner une réponse simple indiquant le nombre de traductions mises à jour
     return "", 200

@@ -3,6 +3,7 @@ from sqlalchemy.orm import joinedload
 from models import Counter, Activity, DashboardCard, db
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_dashboard
+from ui_feedback import display_toast
 
 admin_counter_bp = Blueprint('admin_counter', __name__)
 
@@ -31,7 +32,7 @@ def update_counter(counter_id):
         counter = Counter.query.get(counter_id)
         if counter:
             if request.form.get('name') == '':
-                app.display_toast(success=False, message="Le nom est obligatoire")
+                display_toast(success=False, message="Le nom est obligatoire")
                 return ""
             counter.name = request.form.get('name', counter.name)
             activities_ids = request.form.getlist('activities')
@@ -44,16 +45,16 @@ def update_counter(counter_id):
             counter.activities = new_activities
 
             db.session.commit()
-            app.display_toast(success=True, message="Mise à jour réussie")
+            display_toast(success=True, message="Mise à jour réussie")
             # mise à jour liste des comptoirs
             communikation("admin", event="refresh_counter_order")
             return ""
         else:
-            app.display_toast(success=False, message="Comptoir introuvable")
+            display_toast(success=False, message="Comptoir introuvable")
             return ""
 
     except Exception as e:
-            app.display_toast(success=False, message="erreur : " + str(e))
+            display_toast(success=False, message="erreur : " + str(e))
             app.logger.error(e)
             return ""
 
@@ -74,19 +75,19 @@ def delete_counter(counter_id):
     try:
         counter = Counter.query.get(counter_id)
         if not counter:
-            app.display_toast(success=False, message="Comptoir introuvable")
+            display_toast(success=False, message="Comptoir introuvable")
             return display_counter_table()
 
         db.session.delete(counter)
         db.session.commit()
 
-        app.display_toast(success=True, message="Comptoir supprimé")
+        display_toast(success=True, message="Comptoir supprimé")
         communikation("admin", event="refresh_counter_order")
 
         return display_counter_table()
 
     except Exception as e:
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_counter_table()
 
@@ -108,7 +109,7 @@ def add_new_counter():
         activities_ids = request.form.getlist('activities')
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Le nom est obligatoire")
+            display_toast(success=False, message="Le nom est obligatoire")
             return display_counter_table()
         
         # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
@@ -130,7 +131,7 @@ def add_new_counter():
                 new_counter.activities.append(activity)
         db.session.commit()
 
-        app.display_toast(success=True, message="Comptoir ajouté")
+        display_toast(success=True, message="Comptoir ajouté")
         
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_counter_form"></div>"""
@@ -143,7 +144,7 @@ def add_new_counter():
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_counter_table()
 
@@ -166,10 +167,10 @@ def update_counter_order():
             app.logger.debug("%s", counter)
             counter.sort_order = index
         db.session.commit()
-        app.display_toast(success=True, message="Ordre mis à jour")
+        display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
     except Exception as e:
-        app.display_toast(success=False, message=f"Erreur: {e}")
+        display_toast(success=False, message=f"Erreur: {e}")
 
 @admin_counter_bp.route('/admin/counter/dashboard')
 @require_permission_dashboard('counter')

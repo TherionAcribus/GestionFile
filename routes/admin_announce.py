@@ -11,6 +11,7 @@ from communication import communikation
 from routes.admin_security import require_permission
 import time
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
+from ui_feedback import display_toast
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
@@ -149,12 +150,12 @@ def delete_sound(sound_filename):
     try:
         validate_path_segment(sound_filename, what="sound filename")
         if not allowed_audio_file(sound_filename):
-            app.display_toast(success=False, message="Format de fichier non autorisé")
+            display_toast(success=False, message="Format de fichier non autorisé")
             return "Invalid file type", 400
         sound_path = safe_path_under(_signals_dir(), sound_filename)
         # on empeche de supprimer le son en cours d'utilisation
         if sound_filename == app.config["ANNOUNCE_ALERT_FILENAME"]:
-            app.display_toast(success=False, message="Impossible de supprimer le son courant. Selectionner un autre son et valider avant de supprimer celui-ci.")
+            display_toast(success=False, message="Impossible de supprimer le son courant. Selectionner un autre son et valider avant de supprimer celui-ci.")
             return "", 204
         # Vérifier si le fichier existe avant de le supprimer
         if sound_path.exists() and sound_path.is_file():
@@ -163,10 +164,10 @@ def delete_sound(sound_filename):
             return redirect (url_for('gallery_audio_list'))
         else:
             app.logger.error(f"Fichier non trouvé : {sound_filename}")
-            app.display_toast(success=False, message="Fichier non trouvé")
+            display_toast(success=False, message="Fichier non trouvé")
             return "Fichier non trouvé", 404
     except UnsafePathError:
-        app.display_toast(success=False, message="Nom de fichier invalide")
+        display_toast(success=False, message="Nom de fichier invalide")
         return "Invalid filename", 400
     except Exception as e:
         app.logger.error(f"Erreur lors de la suppression du fichier : {str(e)}")
@@ -214,20 +215,20 @@ def upload_signal_file():
 
         filename = secure_filename(file.filename)
         if not filename:
-            app.display_toast(success=False, message="Nom de fichier invalide")
+            display_toast(success=False, message="Nom de fichier invalide")
             return redirect(url_for('gallery_audio_list'))
         if not allowed_audio_file(filename):
-            app.display_toast(success=False, message="Format de fichier non autorisé")
+            display_toast(success=False, message="Format de fichier non autorisé")
             return redirect(url_for('gallery_audio_list'))
 
         try:
             target_path = safe_path_under(signals_dir, filename)
         except UnsafePathError:
-            app.display_toast(success=False, message="Nom de fichier invalide")
+            display_toast(success=False, message="Nom de fichier invalide")
             return redirect(url_for('gallery_audio_list'))
 
         if target_path.exists():
-            app.display_toast(success=False, message="Un fichier avec ce nom existe déjà")
+            display_toast(success=False, message="Un fichier avec ce nom existe déjà")
             return redirect(url_for('gallery_audio_list'))
 
         file.save(str(target_path))
@@ -404,14 +405,14 @@ def announce_save_google_voice():
             app.config["VOICE_GOOGLE_NAME"] = voice_google_name
             app.config["VOICE_GOOGLE_REGION"] = voice_google_region  
 
-        app.display_toast(success=True, message="Voix sauvegardée")
+        display_toast(success=True, message="Voix sauvegardée")
 
         return "", 200
 
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        app.display_toast(success=False, message=f"Erreur : {e}")
+        display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
 
 
@@ -448,14 +449,14 @@ def announce_save_voice_model():
         if language.code == "fr":
             app.config["VOICE_MODEL"] = voice_model
 
-        app.display_toast(success=True, message="Modele de voix sauvegardé")
+        display_toast(success=True, message="Modele de voix sauvegardé")
 
         return "", 200
 
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        app.display_toast(success=False, message=f"Erreur : {e}")
+        display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
 
 
@@ -475,14 +476,14 @@ def announce_save_gtts_voice():
         if language.code == "fr":
             app.config["VOICE_GTTS_NAME"] = voice_gtts_name
 
-        app.display_toast(success=True, message="Voix sauvegardée")
+        display_toast(success=True, message="Voix sauvegardée")
 
         return "", 200
 
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        app.display_toast(success=False, message=f"Erreur : {e}")
+        display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
     
 @admin_announce_bp.route('/admin/announce/save_voice_is_active', methods=['POST'])
@@ -498,12 +499,12 @@ def announce_save_voice_is_active():
         language.voice_is_active = True if voice_is_active == 'true' else False 
         db.session.commit()
 
-        app.display_toast(success=True, message="Option sauvée")
+        display_toast(success=True, message="Option sauvée")
 
         return "", 200
 
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        app.display_toast(success=False, message=f"Erreur : {e}")
+        display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400

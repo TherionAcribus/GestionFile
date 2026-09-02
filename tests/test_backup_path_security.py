@@ -16,7 +16,6 @@ import os
 
 import pytest
 
-import path_security as ps
 from path_security import UnsafePathError, safe_relative_path, split_relative_path
 
 

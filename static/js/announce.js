@@ -507,23 +507,16 @@ function remove_text_down(){
 }
 
 
-// stream permettant de rafraichir la page pour appliquer les modifications
-const eventSourceAnnounce = new EventSource("/events/update_announce");
-eventSourceAnnounce.onmessage = function(event) {
-    console.log("Update announce");
-    refresh_page();            
-};
+// NOTE: un EventSource vers /events/update_announce vivait ici. Cette route SSE
+// n'existe pas cote serveur : 404 puis reconnexion en boucle. Le rafraichissement
+// arrive de toute facon par Socket.IO -- screenSocket.on('refresh') appelle
+// refresh_page() plus haut dans ce fichier.
 
 // refresh page pour appliquer les modifications
 function refresh_page() {
     console.log("Refresh page...");
-    eventSourceAnnounce.close(); // Ferme la connexion SSE
     window.location.reload();
 }
-
-window.addEventListener('beforeunload', function() {
-    eventSourceAnnounce.close();
-});
 
 remove_text_up();
 remove_text_down();

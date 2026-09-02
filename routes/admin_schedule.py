@@ -4,6 +4,7 @@ from utils import parse_time
 from routes.admin_activity import update_bouton_after_scheduler_changed
 from routes.admin_security import require_permission
 from communication import communikation
+from ui_feedback import display_toast
 
 admin_schedule_bp = Blueprint('admin_schedule', __name__)
 
@@ -36,7 +37,7 @@ def update_schedule(schedule_id):
             schedule.weekdays = [Weekday.query.get(int(id)) for id in weekdays_ids]
 
             db.session.commit()
-            app.display_toast(success=True, message="Plage horaire mise à jour")
+            display_toast(success=True, message="Plage horaire mise à jour")
 
             # Mise à jour des boutons des activités qui dépendent du schedule
             activities_with_this_schedule = Activity.query.join(activity_schedule_link).filter(
@@ -51,12 +52,12 @@ def update_schedule(schedule_id):
 
             return ""
         else:
-            app.display_toast(success=False, message="Plage horaire introuvable")
+            display_toast(success=False, message="Plage horaire introuvable")
             return ""
 
     except Exception as e:
         app.logger.error(str(e))
-        app.display_toast(success = False, message=str(e))
+        display_toast(success = False, message=str(e))
         return ""
 
 
@@ -80,7 +81,7 @@ def add_new_schedule():
         end_time = parse_time(end_time_str)
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Nom obligatoire")
+            display_toast(success=False, message="Nom obligatoire")
             return display_schedule_table()
 
         new_schedule = ActivitySchedule(
@@ -109,7 +110,7 @@ def add_new_schedule():
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()
     
 
@@ -127,12 +128,12 @@ def delete_schedule(schedule_id):
     try:
         schedule = ActivitySchedule.query.get(schedule_id)
         if not schedule:
-            app.display_toast(success=False, message="Plage horaire introuvable")
+            display_toast(success=False, message="Plage horaire introuvable")
             return display_schedule_table()
 
         db.session.delete(schedule)
         db.session.commit()
-        app.display_toast(success=True, message="Suppression réussie'")
+        display_toast(success=True, message="Suppression réussie'")
 
         # mise à jour de la table activité si nouvelle plage horaire
         communikation("admin", event="refresh_activity_table")
@@ -141,5 +142,5 @@ def delete_schedule(schedule_id):
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()

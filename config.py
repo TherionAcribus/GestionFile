@@ -6,7 +6,7 @@ import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from sqlalchemy.engine import make_url, URL
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 # mieux que datetime.timezone pour gérer les fuseaux horaires et les changements d'heure.

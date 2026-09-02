@@ -3,13 +3,15 @@ from functools import wraps
 from datetime import datetime, timedelta
 from flask import current_app
 from sqlalchemy import func, text
-from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats, Language, Counter
+from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats
 from routes.admin_queue import clear_all_patients_from_db
 from bdd import transfer_patients_to_history
 from app_holder import AppHolder
 from config import time_tz
 from communication import communikation
 import config_sync
+from ui_feedback import display_toast
+from extensions import scheduler
 
 
 def _refresh_config(app):
@@ -25,11 +27,27 @@ def _refresh_config(app):
 
 
 def with_app_context(f):
+    """Pousse le contexte de l'application passee en PREMIER argument.
+
+    Version unique du decorateur (point 9.5b). Il en existait deux, differentes
+    et toutes deux fautives :
+
+    * celle d'app.py fermait sur l'objet app global et oubliait ``@wraps`` (le
+      nom de la fonction decoree etait perdu) -- elle est devenue morte au
+      point 9.4 et a ete supprimee ;
+    * celle-ci utilisait ``current_app``, qui exige qu'un contexte soit **deja**
+      pousse : dans une tache de fond, elle levait donc
+      ``RuntimeError: Working outside of application context`` au lieu d'en
+      fournir un. Elle ne « marchait » que parce que ses deux appelants
+      poussaient deja le contexte eux-memes.
+
+    Les deux fonctions decorees recoivent l'application en premier argument :
+    on s'en sert, ce qui rend le decorateur utilisable hors contexte.
+    """
     @wraps(f)
-    def decorated_function(*args, **kwargs):
-        from flask import current_app
-        with current_app.app_context():
-            return f(*args, **kwargs)
+    def decorated_function(app, *args, **kwargs):
+        with app.app_context():
+            return f(app, *args, **kwargs)
     return decorated_function
 
 def disable_buttons_for_activity_job(activity_id):
@@ -136,9 +154,9 @@ def add_scheduler_clear_all_patients():
     job_id = 'Clear Patient Table'
 
     # Vérifier si le job existe avant de tenter de le supprimer
-    if current_app.scheduler.get_job(job_id):
+    if scheduler.get_job(job_id):
         try:
-            current_app.scheduler.remove_job(job_id)
+            scheduler.remove_job(job_id)
             current_app.logger.info(f"Existing job '{job_id}' removed.")
         except Exception as e:
             current_app.logger.error(f"Failed to remove job '{job_id}': {e}")
@@ -148,7 +166,7 @@ def add_scheduler_clear_all_patients():
         minute = int(current_app.config["CRON_DELETE_PATIENT_TABLE_HOUR"].split(":")[1])
 
         # Ajouter la tâche avec une référence de fonction sans arguments
-        current_app.scheduler.add_job(
+        scheduler.add_job(
             id=job_id,
             func=clear_all_patients_job,  # Utiliser la référence de fonction directe
             trigger='cron',
@@ -160,14 +178,14 @@ def add_scheduler_clear_all_patients():
         )
 
         # Vérification que le job a bien été créé
-        if not current_app.scheduler.get_job(job_id):
+        if not scheduler.get_job(job_id):
             current_app.logger.error(f"Job '{job_id}' was not properly scheduled")
-            current_app.display_toast(success=False, message=f"La tâche '{job_id}' n'a pas été planifiée correctement")
+            display_toast(success=False, message=f"La tâche '{job_id}' n'a pas été planifiée correctement")
             
             return False
             
         current_app.logger.info(f"Job '{job_id}' scheduled for {hour:02d}:{minute:02d}")
-        current_app.display_toast(success=True, message=f"La tâche '{job_id}' à {hour:02d}:{minute:02d} a bien été planifiée")
+        display_toast(success=True, message=f"La tâche '{job_id}' à {hour:02d}:{minute:02d} a bien été planifiée")
         return True
     
 
@@ -199,7 +217,7 @@ def clear_old_patients_table(app):
 def remove_scheduler_clear_all_patients():
     try:
         # Supprime le job à l'aide de son id
-        current_app.scheduler.remove_job('Clear Patient Table')
+        scheduler.remove_job('Clear Patient Table')
         current_app.logger.info("Job 'Clear Patient Table' successfully removed.")
         return True
     except Exception as e:
@@ -211,7 +229,7 @@ def scheduler_clear_announce_calls():
     job_id = 'Clear Announce Calls'
 
     # Vérifier si le job existe déjà
-    if current_app.scheduler.get_job(job_id):
+    if scheduler.get_job(job_id):
         current_app.logger.info(f"Job '{job_id}' already exists. No new job added.")
         return False
 
@@ -219,7 +237,7 @@ def scheduler_clear_announce_calls():
         hour = int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
         minute = int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[1])
         
-        current_app.scheduler.add_job(
+        scheduler.add_job(
             id=job_id, 
             func=clear_announce_calls_job, 
             trigger='cron', 
@@ -231,7 +249,7 @@ def scheduler_clear_announce_calls():
         )
         
         # Vérification que le job a bien été créé
-        if not current_app.scheduler.get_job(job_id):
+        if not scheduler.get_job(job_id):
             current_app.logger.error(f"Job '{job_id}' was not properly scheduled")
             return False
             
@@ -245,7 +263,7 @@ def scheduler_clear_announce_calls():
 def remove_scheduler_clear_announce_calls():
     try:
         # Supprime le job à l'aide de son id
-        current_app.scheduler.remove_job('Clear Announce Calls')
+        scheduler.remove_job('Clear Announce Calls')
         current_app.logger.info("Job 'Clear Announce Calls' successfully removed.")
         return True
     except Exception as e:
@@ -345,13 +363,13 @@ def clear_announces_call():
                 files_count += 1
                 
         message = f"{files_count} fichiers audio ont été supprimés"
-        current_app.display_toast(success=True, message=message)
+        display_toast(success=True, message=message)
         current_app.logger.info(message)
         return "", 200
         
     except Exception as e:
         error_message = f"Erreur lors du nettoyage des annonces: {str(e)}"
-        current_app.display_toast(success=False, message=error_message)
+        display_toast(success=False, message=error_message)
         current_app.logger.error(error_message)
         raise  # Relance l'exception pour le logging dans clear_announce_calls_job
 

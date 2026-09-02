@@ -1,7 +1,11 @@
 const counter_id = document.getElementById('counter_id').textContent;
 
-var eventSource = new EventSource('/events/update_patients');
-var eventSourceforCounter = new EventSource(`/events/update_counter/${counter_id}`);
+// NOTE: deux EventSource pointaient ici vers /events/update_patients et
+// /events/update_counter/<id>. Ces routes SSE n'existent PAS cote serveur
+// (leur definition dort dans une chaine de commentaire depuis longtemps) :
+// le navigateur recevait un 404 et EventSource reconnectait en boucle.
+// Tout ce qu'elles declenchaient passe deja par Socket.IO ci-dessous
+// (socket.on('update') rafraichit boutons, patient courant et file).
 
 
 document.addEventListener('DOMContentLoaded', (event) => {
@@ -103,12 +107,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
 });
 
 
-eventSourceforCounter.onmessage = function(event) {
-    console.log("Refresh :", event.data);
-    refresh_buttons();    
-    htmx.trigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});
-};
-
 // Verifier l'existence des elements avant d'utiliser htmx.trigger
 function safeTrigger(selector, eventName, details) {
     const element = document.querySelector(selector);
@@ -135,6 +133,4 @@ function refresh_auto_calling(){
     safeTrigger('#div_switch_auto_calling', 'refresh_switch_auto_calling', {target: "#div_switch_auto_calling"});
 }
 
-eventSource.onmessage = function(event) {
-    //htmx.trigger('#patient_on_queue', 'refresh_queue', {target: "#patient_on_queue"});
-};
+

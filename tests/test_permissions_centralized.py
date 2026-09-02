@@ -31,7 +31,6 @@ from flask_login import LoginManager, UserMixin, login_user
 from routes.admin_security import (
     require_permission,
     require_permission_api,
-    permission_error_response,
     _permission_status,
 )
 
@@ -100,15 +99,33 @@ def _admin_route_modules():
             yield os.path.join("routes", name)
 
 
+#: Gardes posees DANS le corps de la vue, quand la permission depend d'une
+#: donnee de la requete (la source CSS ciblee, la cle de configuration) et ne
+#: peut donc pas etre fixee par un decorateur statique.
+_GUARD_CALLS = {"authorize_config_change", "permission_error_response"}
+
+
+def _appelle_une_garde_inline(noeud):
+    return any(
+        isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _GUARD_CALLS
+        for n in ast.walk(noeud)
+    )
+
+
 def test_every_admin_route_has_explicit_permission_guard():
     offenders = []
     for rel in _admin_route_modules():
         tree = ast.parse(_read(rel), rel)
+        corps = {n.name: n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
         for func_name, decos in _iter_route_functions(tree):
             if func_name in _ALLOWED_WITHOUT_GUARD:
                 continue
-            if not (_GUARD_DECORATORS & set(decos)):
-                offenders.append(f"{rel}::{func_name}")
+            if _GUARD_DECORATORS & set(decos):
+                continue
+            noeud = corps.get(func_name)
+            if noeud is not None and _appelle_une_garde_inline(noeud):
+                continue
+            offenders.append(f"{rel}::{func_name}")
 
     assert not offenders, (
         "Routes d'administration sans garde de permission explicite "
@@ -130,7 +147,7 @@ def test_broken_dangerous_routes_are_no_longer_exposed():
 
 
 def test_css_routes_in_app_are_permissioned():
-    source = _read("app.py")
+    source = _read("routes/admin_config.py")
     # Les 3 routes CSS génériques posent une garde dont la ressource dépend de la
     # page ciblée (permission_error_response + table CSS_SOURCE_PERMISSION).
     assert "CSS_SOURCE_PERMISSION" in source

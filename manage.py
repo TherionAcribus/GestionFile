@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 
 
 TRUE_VALUES = {"1", "true", "yes", "on"}

@@ -9,7 +9,7 @@ from flask import (
 from datetime import datetime
 from routes.admin_security import require_permission
 from backup_service import (
-    BACKUP_SECTIONS, SECTION_GROUPS, export_sections,
+    BACKUP_SECTIONS, export_sections,
     restore_sections, preview_backup,
     load_and_validate_backup, load_and_validate_archive,
     BackupValidationError, MAX_BACKUP_FILE_BYTES, MAX_ARCHIVE_FILE_BYTES,
@@ -17,6 +17,7 @@ from backup_service import (
 )
 from audit_service import record_audit
 from audit_log import ACTION_RESTORE, OUTCOME_SUCCESS, OUTCOME_FAILURE
+from ui_feedback import display_toast
 
 admin_backup_bp = Blueprint('admin_backup', __name__)
 
@@ -406,7 +407,7 @@ def backup_import():
         record_audit(ACTION_RESTORE, "backup", outcome=OUTCOME_FAILURE,
                      details="erreur fatale de restauration")
         try:
-            current_app.display_toast(success=False, message=_GENERIC_RESTORE_ERROR)
+            display_toast(success=False, message=_GENERIC_RESTORE_ERROR)
         except Exception:
             pass
         return _alert("danger", report.get("error") or _GENERIC_RESTORE_ERROR)
@@ -430,7 +431,7 @@ def backup_import():
         toast_ok = False
         toast_msg = f"Restauration partielle : {n_ok}/{n_total} section(s) restaurée(s)."
     try:
-        current_app.display_toast(success=toast_ok, message=toast_msg)
+        display_toast(success=toast_ok, message=toast_msg)
     except Exception:
         pass
 
@@ -478,7 +479,7 @@ def backup_import_multi():
                      outcome=OUTCOME_SUCCESS if not report.get("errors") else OUTCOME_FAILURE,
                      details=f"sections: {','.join(report.get('restored', []))}")
         try:
-            current_app.display_toast(success=True, message=msg)
+            display_toast(success=True, message=msg)
         except Exception:
             pass
         resp = make_response(_alert("success", msg))
@@ -524,7 +525,7 @@ def backup_import_single():
     if report.get("restored"):
         record_audit(ACTION_RESTORE, "backup", target_id=section_key, outcome=OUTCOME_SUCCESS)
         try:
-            current_app.display_toast(success=True, message=f"Restauration de '{label}' réussie")
+            display_toast(success=True, message=f"Restauration de '{label}' réussie")
         except Exception:
             pass
         resp = make_response(_alert("success", f"Restauration de « {label} » réussie."))

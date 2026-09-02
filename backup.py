@@ -2,7 +2,7 @@ import zipfile
 import mysql.connector
 import os
 from datetime import datetime
-from flask import redirect, url_for, current_app, send_file
+from flask import current_app, send_file
 from io import BytesIO
 
 

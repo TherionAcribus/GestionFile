@@ -105,3 +105,35 @@ def test_button_grouping_uses_in_memory_index(rel):
     assert "Button.query.get(parent_id)" not in src, (
         f"{rel} relance encore une requête par groupe (N+1)"
     )
+
+
+# --------------------------------------------------------------------------
+# Point 9.6 — deux derniers N+1
+# --------------------------------------------------------------------------
+
+def test_buttons_translation_uses_single_query():
+    """``get_buttons_translation`` faisait une requête Translation PAR bouton."""
+    body = _body("utils.py", "def get_buttons_translation")
+    assert "Translation.row_id.in_(" in body, (
+        "les traductions doivent être chargées en une seule requête (IN), "
+        "pas une par bouton"
+    )
+    assert "filter_by(" not in body or "row_id=button.id" not in body, (
+        "la requête par bouton subsiste"
+    )
+    # La boucle d'application ne doit plus contenir d'accès à la base.
+    # `rindex` : la liste en compréhension qui collecte les identifiants contient
+    # la même sous-chaîne plus haut dans la fonction.
+    marqueur = "for bouton in buttons:"
+    assert marqueur in body, "la boucle d'application des libellés a disparu"
+    boucle = body[body.rindex(marqueur):]
+    assert "Translation.query" not in boucle, (
+        "aucune requête ne doit rester dans la boucle sur les boutons"
+    )
+
+
+def test_counter_state_eager_loads_activity_and_language():
+    """``/api/counter/<id>/state`` lit p.activity.* et p.language.code par ligne."""
+    body = _body("routes/counter.py", "def api_counter_state")
+    assert "joinedload(Patient.activity)" in body
+    assert "joinedload(Patient.language)" in body

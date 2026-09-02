@@ -1,12 +1,12 @@
 import os
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app as app
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app as app
 from flask_login import current_user
 from functools import wraps
 from sqlalchemy.orm import selectinload
 from models import db, Role, User, DashboardCard
 from permissions_registry import PERMISSIONS, permissions_by_category
 from flask_mailman import EmailMessage
-from flask_security import login_required, login_user
+from flask_security import login_user
 from wtforms import StringField, PasswordField, HiddenField, BooleanField
 from flask_wtf import FlaskForm
 from wtforms.validators import DataRequired
@@ -39,6 +39,7 @@ from audit_log import (
     OUTCOME_SUCCESS,
     OUTCOME_FAILURE,
 )
+from ui_feedback import display_toast
 
 admin_security_bp = Blueprint('admin_security', __name__)
 
@@ -323,27 +324,27 @@ def add_new_user():
         # Vérification des mots de passe
         if password1 != password2:
             app.logger.error("Les mots de passe ne correspondent pas")
-            app.display_toast(success=False, message="Les mots de passe ne correspondent pas")
+            display_toast(success=False, message="Les mots de passe ne correspondent pas")
             return display_security_table()
 
         # Politique minimale de mot de passe (point 3.4)
         policy_problems = validate_password(password1, username=username)
         if policy_problems:
             app.logger.warning("Mot de passe refusé par la politique à la création d'utilisateur")
-            app.display_toast(success=False, message=" ".join(policy_problems))
+            display_toast(success=False, message=" ".join(policy_problems))
             return display_security_table()
 
         # Vérification de l'unicité du nom d'utilisateur
         if User.query.filter_by(username=username).first():
             app.logger.error(f"Le nom d'utilisateur {username} existe déjà")
-            app.display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
+            display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
             return display_security_table()
 
         # Récupération du rôle
         role = Role.query.get(role_id)
         if not role:
             app.logger.error(f"Le rôle {role_id} n'existe pas")
-            app.display_toast(success=False, message="Le rôle sélectionné n'existe pas")
+            display_toast(success=False, message="Le rôle sélectionné n'existe pas")
             return display_security_table()
 
         # Création de l'utilisateur
@@ -361,7 +362,7 @@ def add_new_user():
         app.logger.info(f"Nouvel utilisateur créé avec succès: {username}")
         record_audit(ACTION_CREATE, "user", target_id=user.id, outcome=OUTCOME_SUCCESS,
                      details=f"username={username}")
-        app.display_toast(success=True, message="Utilisateur créé avec succès")
+        display_toast(success=True, message="Utilisateur créé avec succès")
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_user_form"></div>"""
         return f"{display_security_table()}{clear_form_html}"
@@ -370,7 +371,7 @@ def add_new_user():
         db.session.rollback()
         app.logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
         record_audit(ACTION_CREATE, "user", target_id=username, outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message=f"Erreur lors de la création : {str(e)}")
+        display_toast(success=False, message=f"Erreur lors de la création : {str(e)}")
         return display_security_table()
 
 
@@ -380,7 +381,7 @@ def security_update_user(user_id):
     try:
         user = User.query.get(user_id)
         if not user:
-            app.display_toast(success=False, message="Utilisateur non trouvé")
+            display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()
 
         # Récupérer les données du formulaire
@@ -392,14 +393,14 @@ def security_update_user(user_id):
         # Vérifier si le nom d'utilisateur existe déjà
         existing_user = User.query.filter_by(username=username).first()
         if existing_user and existing_user.id != user_id:
-            app.display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
+            display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
             return display_security_table()
 
         # Vérifier si l'email existe déjà
         if email:
             existing_user = User.query.filter_by(email=email).first()
             if existing_user and existing_user.id != user_id:
-                app.display_toast(success=False, message="Cet email est déjà utilisé")
+                display_toast(success=False, message="Cet email est déjà utilisé")
                 return display_security_table()
 
         # Vérifier le changement de rôle pour un admin
@@ -408,7 +409,7 @@ def security_update_user(user_id):
             if not new_role or new_role.name != "admin":
                 # Si c'est le dernier admin, on refuse le changement
                 if count_admin_users() <= 1:
-                    app.display_toast(success=False, message="Impossible de retirer le rôle admin du dernier administrateur")
+                    display_toast(success=False, message="Impossible de retirer le rôle admin du dernier administrateur")
                     return display_security_table()
 
         # Mettre à jour les informations de base
@@ -418,7 +419,7 @@ def security_update_user(user_id):
         # Mettre à jour le rôle
         role = Role.query.get(role_id)
         if not role:
-            app.display_toast(success=False, message="Rôle invalide")
+            display_toast(success=False, message="Rôle invalide")
             return display_security_table()
 
         # Remplacer tous les rôles par le nouveau
@@ -427,13 +428,13 @@ def security_update_user(user_id):
         db.session.commit()
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
                      details=f"username={username} role={role.name}")
-        app.display_toast(success=True, message="Utilisateur mis à jour avec succès")
+        display_toast(success=True, message="Utilisateur mis à jour avec succès")
         return display_security_table()
 
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message=f"Erreur lors de la mise à jour : {str(e)}")
+        display_toast(success=False, message=f"Erreur lors de la mise à jour : {str(e)}")
         app.logger.error(f"Error in security_update_user: {str(e)}")
         return display_security_table()
 
@@ -454,7 +455,7 @@ def delete_user2(user_id):
     try:
         user = User.query.get(user_id)
         if not user:
-            app.display_toast(success=False, message="Utilisateur non trouvé")
+            display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()
 
         # Vérifier si c'est un admin
@@ -463,7 +464,7 @@ def delete_user2(user_id):
             if count_admin_users() <= 1:
                 record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
                              details="refus: dernier administrateur")
-                app.display_toast(success=False, message="Impossible de supprimer le dernier administrateur")
+                display_toast(success=False, message="Impossible de supprimer le dernier administrateur")
                 return display_security_table()
 
         deleted_username = user.username
@@ -472,13 +473,13 @@ def delete_user2(user_id):
 
         record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
                      details=f"username={deleted_username}")
-        app.display_toast(success=True, message="Utilisateur supprimé avec succès")
+        display_toast(success=True, message="Utilisateur supprimé avec succès")
         return display_security_table()
 
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message=f"Erreur lors de la suppression : {str(e)}")
+        display_toast(success=False, message=f"Erreur lors de la suppression : {str(e)}")
         app.logger.error(f"Error in delete_user: {str(e)}")
         return display_security_table()
 
@@ -544,7 +545,7 @@ def login():
         retry_after = worst_retry_after(throttle, ip, username)
         if retry_after > 0:
             _audit_login(OUTCOME_BLOCKED, username=username, retry_after=retry_after)
-            app.display_toast(success=False, message=GENERIC_LOGIN_ERROR)
+            display_toast(success=False, message=GENERIC_LOGIN_ERROR)
             return render_template('security/login.html', form=form)
 
         user = User.query.filter_by(username=username).first()
@@ -567,7 +568,7 @@ def login():
             throttle.register_failure(ip_key(ip))
             delay = throttle.register_failure(identity_key(username))
             _audit_login(OUTCOME_FAILURE, username=username, retry_after=delay)
-            app.display_toast(success=False, message=GENERIC_LOGIN_ERROR)
+            display_toast(success=False, message=GENERIC_LOGIN_ERROR)
             return render_template('security/login.html', form=form)
 
         # 4) Succès : on réinitialise les compteurs des deux clés et on journalise.
@@ -587,14 +588,14 @@ def login():
             except Exception:
                 next_url = app.config.get("SECURITY_POST_LOGIN_VIEW", "/admin")
 
-        app.display_toast(success=True, message=f"Bienvenue {user.username} !")
+        display_toast(success=True, message=f"Bienvenue {user.username} !")
         return redirect(next_url)
 
     if form.errors:
         # Erreurs de validation de formulaire (champ vide, CSRF…) : même message
         # générique, sans détailler le champ fautif au-delà de la validation WTForms.
         app.logger.info(f"Erreurs de validation du formulaire de connexion: {list(form.errors)}")
-        app.display_toast(success=False, message=GENERIC_LOGIN_ERROR)
+        display_toast(success=False, message=GENERIC_LOGIN_ERROR)
 
     return render_template('security/login.html', form=form)
 
@@ -723,21 +724,21 @@ def reset_admin():
     try:
         # Réinitialiser l'utilisateur admin
         if not reset_admin_user():
-            app.display_toast(success=False, message="Erreur lors de la suppression des utilisateurs")
+            display_toast(success=False, message="Erreur lors de la suppression des utilisateurs")
             return display_security_table()
             
         # Créer le nouvel utilisateur admin
         if not create_default_user():
-            app.display_toast(success=False, message="Erreur lors de la création de l'utilisateur admin")
+            display_toast(success=False, message="Erreur lors de la création de l'utilisateur admin")
             return display_security_table()
             
         record_audit(ACTION_RESET, "user", target_id="admin", outcome=OUTCOME_SUCCESS)
-        app.display_toast(success=True, message="Utilisateur admin réinitialisé avec succès")
+        display_toast(success=True, message="Utilisateur admin réinitialisé avec succès")
         return display_security_table()
     except Exception as e:
         app.logger.error(f"Error in reset_admin: {str(e)}")
         record_audit(ACTION_RESET, "user", target_id="admin", outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message=f"Erreur lors de la réinitialisation : {str(e)}")
+        display_toast(success=False, message=f"Erreur lors de la réinitialisation : {str(e)}")
         return display_security_table()
 
 @admin_security_bp.route('/admin/security/role_update/<int:role_id>', methods=['POST'])
@@ -799,21 +800,21 @@ def security_update_role(role_id):
             app.logger.info(f"Permissions finales du rôle: {role.to_dict()['permissions']}")
             record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_SUCCESS,
                          details=f"name={name}")
-            app.display_toast(success=True, message="Rôle mis à jour avec succès")
+            display_toast(success=True, message="Rôle mis à jour avec succès")
             return jsonify({'success': True})
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Erreur lors du commit: {str(e)}")
             app.logger.error(f"Type d'erreur: {type(e)}")
             record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
-            app.display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
+            display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
             return jsonify({'error': str(e)}), 500
 
     except Exception as e:
         app.logger.error(f"Erreur générale: {str(e)}")
         app.logger.error(f"Type d'erreur: {type(e)}")
         record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
+        display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
         return jsonify({'error': str(e)}), 500
 
 @admin_security_bp.route('/admin/security/save_role', methods=['POST'])
@@ -826,7 +827,7 @@ def save_role():
         
         if not name:
             app.logger.error("Le nom est requis")
-            app.display_toast(success=False, message="Le nom est requis")
+            display_toast(success=False, message="Le nom est requis")
             return ""
 
         permissions_str = data.get('permissions', '{}')
@@ -834,7 +835,7 @@ def save_role():
             permissions = json.loads(permissions_str)
         except json.JSONDecodeError:
             app.logger.error("Format de permissions invalide")
-            app.display_toast(success=False, message="Format de permissions invalide")
+            display_toast(success=False, message="Format de permissions invalide")
             return ""
 
         app.logger.info(f"Création d'un nouveau rôle - name: {name}, description: {description}")
@@ -864,18 +865,18 @@ def save_role():
             app.logger.info(f"Permissions finales du rôle: {role.to_dict()['permissions']}")
             record_audit(ACTION_CREATE, "role", target_id=role.id, outcome=OUTCOME_SUCCESS,
                          details=f"name={name}")
-            app.display_toast(success=True, message="Rôle créé avec succès")
+            display_toast(success=True, message="Rôle créé avec succès")
             return ""
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Erreur lors de la création du rôle: {str(e)}")
             record_audit(ACTION_CREATE, "role", target_id=name, outcome=OUTCOME_FAILURE)
-            app.display_toast(success=False, message="Erreur lors de la création du rôle")
+            display_toast(success=False, message="Erreur lors de la création du rôle")
             return ""
 
     except Exception as e:
         app.logger.error(f"Erreur lors de la création du rôle: {str(e)}")
-        app.display_toast(success=False, message="Erreur lors de la création du rôle")
+        display_toast(success=False, message="Erreur lors de la création du rôle")
         return ""
 
 @admin_security_bp.route('/admin/security/add_role_form')
@@ -897,7 +898,7 @@ def delete_role(role_id):
     try:
         role = Role.query.get(role_id)
         if not role:
-            app.display_toast(success=False, message="Role non trouvé")
+            display_toast(success=False, message="Role non trouvé")
             return display_security_role_table()
 
         deleted_role_name = role.name
@@ -906,13 +907,13 @@ def delete_role(role_id):
 
         record_audit(ACTION_DELETE, "role", target_id=role_id, outcome=OUTCOME_SUCCESS,
                      details=f"name={deleted_role_name}")
-        app.display_toast(success=True, message="Role supprimé")
+        display_toast(success=True, message="Role supprimé")
         return display_security_role_table()
 
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_DELETE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="erreur : " + str(e))
         return display_security_role_table()
 
 @admin_security_bp.route('/admin/security/change_password/<int:user_id>', methods=['GET'])
@@ -921,13 +922,13 @@ def change_password_form(user_id):
     try:
         user = User.query.get(user_id)
         if not user:
-            app.display_toast(success=False, message="Utilisateur non trouvé")
+            display_toast(success=False, message="Utilisateur non trouvé")
             return ""
 
         return render_template('admin/security_change_password.html', user_id=user_id)
 
     except Exception as e:
-        app.display_toast(success=False, message=f"Erreur : {str(e)}")
+        display_toast(success=False, message=f"Erreur : {str(e)}")
         return ""
 
 @admin_security_bp.route('/admin/security/update_password/<int:user_id>', methods=['POST'])
@@ -936,25 +937,25 @@ def update_password(user_id):
     try:
         user = User.query.get(user_id)
         if not user:
-            app.display_toast(success=False, message="Utilisateur non trouvé")
+            display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()
 
         password1 = request.form.get('password1')
         password2 = request.form.get('password2')
 
         if not password1 or not password2:
-            app.display_toast(success=False, message="Les deux champs de mot de passe sont obligatoires")
+            display_toast(success=False, message="Les deux champs de mot de passe sont obligatoires")
             return display_security_table()
 
         if password1 != password2:
-            app.display_toast(success=False, message="Les mots de passe ne correspondent pas")
+            display_toast(success=False, message="Les mots de passe ne correspondent pas")
             return display_security_table()
 
         # Politique minimale de mot de passe (point 3.4)
         policy_problems = validate_password(password1, username=user.username)
         if policy_problems:
             app.logger.warning("Mot de passe refusé par la politique au changement de mot de passe")
-            app.display_toast(success=False, message=" ".join(policy_problems))
+            display_toast(success=False, message=" ".join(policy_problems))
             return display_security_table()
 
         user.set_password(password1)
@@ -964,13 +965,13 @@ def update_password(user_id):
         # qu'il a été changé et sur quel compte.
         record_audit(ACTION_UPDATE, "password", target_id=user_id, outcome=OUTCOME_SUCCESS,
                      details=f"username={user.username}")
-        app.display_toast(success=True, message="Mot de passe mis à jour avec succès")
+        display_toast(success=True, message="Mot de passe mis à jour avec succès")
         return display_security_table()
 
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_UPDATE, "password", target_id=user_id, outcome=OUTCOME_FAILURE)
-        app.display_toast(success=False, message=f"Erreur lors de la mise à jour : {str(e)}")
+        display_toast(success=False, message=f"Erreur lors de la mise à jour : {str(e)}")
         app.logger.error(f"Error in update_password: {str(e)}")
         return display_security_table()
 

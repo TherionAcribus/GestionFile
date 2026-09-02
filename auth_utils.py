@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import jwt
@@ -42,6 +43,16 @@ def check_app_secret(provided, configured) -> bool:
     if not provided:
         return False
     return hmac.compare_digest(str(provided), str(configured))
+
+
+def generate_app_token(duree_jours: int = 1) -> str:
+    """Emet un jeton applicatif signe, valable ``duree_jours`` jours.
+
+    Vit ici, aux cotes de son pendant ``verify_app_token``, plutot que dans
+    app.py (point 9.5d).
+    """
+    expiration = datetime.now(timezone.utc) + timedelta(days=duree_jours)
+    return jwt.encode({"exp": expiration}, current_app.config["SECRET_KEY"], algorithm="HS256")
 
 
 def verify_app_token(token: str) -> bool:

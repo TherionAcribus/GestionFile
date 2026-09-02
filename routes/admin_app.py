@@ -1,6 +1,10 @@
-from flask import Blueprint, render_template, request, current_app as app, jsonify
+from flask import Blueprint, render_template, request, current_app as app
 from routes.admin_security import send_test_email, require_permission, require_permission_dashboard, require_permission_api
 from models import DashboardCard
+from ui_feedback import display_toast
+from extensions import socketio
+from sockets import active_connections
+from sockets import connected_clients_info
 
 admin_app_bp = Blueprint('admin_app', __name__)
 
@@ -29,7 +33,7 @@ def admin_app(tab=None):
                             mail_default_sender=app.config["MAIL_DEFAULT_SENDER"],
                             mail_use_tls=app.config["MAIL_USE_TLS"],
                             mail_use_ssl=app.config["MAIL_USE_SSL"],
-                            namespaces = list(app.active_connections.keys())
+                            namespaces = list(active_connections.keys())
     )
 
 @admin_app_bp.route('/admin/app/mail/test', methods=['POST'])
@@ -39,12 +43,12 @@ def admin_app_mail_test():
     mail_adress = request.values.get('mail_adress')
 
     if not mail_adress:
-        return app.display_toast(success=False, message="Veuillez entrer une adresse email")
+        return display_toast(success=False, message="Veuillez entrer une adresse email")
 
     if send_test_email(mail_adress):
-        app.display_toast(success=True, message="Email envoyé")
+        display_toast(success=True, message="Email envoyé")
     else:
-        app.display_toast(success=False, message="Email non envoyé")    
+        display_toast(success=False, message="Email non envoyé")    
 
     return "", 200
 
@@ -55,7 +59,7 @@ def dashboard_communication():
     dashboardcard = DashboardCard.query.filter_by(name="connection").first()
     return render_template('/admin/dashboard_connection.html',
                             dashboardcard=dashboardcard,
-                            namespaces = list(app.active_connections.keys()))
+                            namespaces = list(active_connections.keys()))
 
 
 @admin_app_bp.route('/admin/app/get_connections', methods=['POST'])
@@ -64,7 +68,7 @@ def get_connections():
     # on récupere les namespaces selectionnes, si aucun : on les affiche tous
     selected_namespaces = request.form.getlist('namespaces[]')
     if len(selected_namespaces) == 0:
-        selected_namespaces = list(app.active_connections.keys())
+        selected_namespaces = list(active_connections.keys())
 
     connections = {}
     for namespace in selected_namespaces:
@@ -77,9 +81,9 @@ def get_connections():
 
 
 def get_connected_clients(namespace):
-    sids = app.socketio.server.manager.rooms.get(namespace, {}).get(None, set())
+    sids = socketio.server.manager.rooms.get(namespace, {}).get(None, set())
     connected = []
     for sid in sids:
-        username = app.connected_clients_info.get(sid, {}).get('username', 'Unknown')
+        username = connected_clients_info.get(sid, {}).get('username', 'Unknown')
         connected.append({'sid': sid, 'username': username})
     return connected

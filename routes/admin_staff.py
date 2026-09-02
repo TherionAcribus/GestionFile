@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, jsonify, current_app as app
-from models import Pharmacist, Activity, DashboardCard, db
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app as app
+from models import Pharmacist, Activity, Counter, DashboardCard, db
 from routes.admin_security import require_permission, require_permission_dashboard
+from ui_feedback import display_toast
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
 
@@ -27,10 +28,10 @@ def update_member(member_id):
         member = Pharmacist.query.get(member_id)
         if member:
             if request.form.get('name') == '':
-                app.display_toast(success=False, message="Le nom est obligatoire")
+                display_toast(success=False, message="Le nom est obligatoire")
                 return "", 204
             if request.form.get('initials') == '':
-                app.display_toast(success=False, message="Les initiales sont obligatoires")
+                display_toast(success=False, message="Les initiales sont obligatoires")
                 return "", 204
 
             # Vérifie que les initiales ne sont pas déjà enregistrées par une autre personne
@@ -41,7 +42,7 @@ def update_member(member_id):
             ).first()
 
             if existing_member:
-                app.display_toast(success=False, message="Les initiales sont déjà utilisées par un autre membre")
+                display_toast(success=False, message="Les initiales sont déjà utilisées par un autre membre")
                 return "", 204
 
             member.name = request.form.get('name', member.name)
@@ -56,14 +57,14 @@ def update_member(member_id):
             member.activities = new_activities
 
             db.session.commit()
-            app.display_toast(success=True, message="Mise à jour réussie")
+            display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
-            app.display_toast(success=False, message="Membre de l'équipe introuvable")
+            display_toast(success=False, message="Membre de l'équipe introuvable")
             return ""
 
     except Exception as e:
-        app.display_toast(success=False, message="Erreur : " + str(e))
+        display_toast(success=False, message="Erreur : " + str(e))
         return jsonify(status="error", message=str(e)), 500
 
 
@@ -82,16 +83,16 @@ def delete_staff(member_id):
     try:
         member = Pharmacist.query.get(member_id)
         if not member:
-            app.display_toast(success=False, message="Membre de l'équipe non trouvé")
+            display_toast(success=False, message="Membre de l'équipe non trouvé")
             return display_staff_table()
 
         db.session.delete(member)
         db.session.commit()
-        app.display_toast(success=True, message="Suppression réussie")
+        display_toast(success=True, message="Suppression réussie")
         return display_staff_table()
 
     except Exception as e:
-        app.display_toast(success=False, message="Erreur : " + str(e))
+        display_toast(success=False, message="Erreur : " + str(e))
         return display_staff_table()
     
 
@@ -114,13 +115,13 @@ def add_new_staff():
         activities_ids = request.form.getlist('activities')
 
         if not name:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Nom obligatoire")
+            display_toast(success=False, message="Nom obligatoire")
             return display_staff_table()
         if not initials:  # Vérifiez que les champs obligatoires sont remplis
-            app.display_toast(success=False, message="Initiales obligatoires")
+            display_toast(success=False, message="Initiales obligatoires")
             return display_staff_table()
         if initials in [initial[0] for initial in db.session.query(Pharmacist.initials).all()]:
-            app.display_toast(success=False, message="Les initiales sont déjà utilisées")
+            display_toast(success=False, message="Les initiales sont déjà utilisées")
             return "", 204
 
         new_staff = Pharmacist(
@@ -138,7 +139,7 @@ def add_new_staff():
                 new_staff.activities.append(activity)
         db.session.commit()
 
-        app.display_toast(success=True, message="Membre ajouté avec succès")
+        display_toast(success=True, message="Membre ajouté avec succès")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
@@ -147,7 +148,7 @@ def add_new_staff():
 
     except Exception as e:
         db.session.rollback()
-        app.display_toast(success=False, message= "Erreur : " + str(e))
+        display_toast(success=False, message= "Erreur : " + str(e))
         return display_staff_table()
     
 
@@ -160,4 +161,70 @@ def dashboard_staff():
     return render_template('/admin/dashboard_staff.html', 
                             staffs=staffs,
                             dashboardcard=dashboardcard)
+
+
+
+# ---------------------------------------------------------------------------
+# Routes historiques, sans prefixe /admin, deplacees depuis app.py (point 9.5d).
+# Elles precedent la refonte de l'administration ; conservees telles quelles.
+# ---------------------------------------------------------------------------
+
+@admin_staff_bp.route('/add_counter', methods=['POST'])
+@require_permission('counter')
+def add_counter():
+    if request.method == 'POST':
+        name = request.form['name']
+        new_counter = Counter(name=name)
+        db.session.add(new_counter)
+        db.session.commit()
+        return redirect('/admin')
+    return "Erreur dans la soumission du formulaire"
+
+
+
+@admin_staff_bp.route('/pharmacists')
+@require_permission('staff')
+def pharmacists():
+    all_pharmacists = Pharmacist.query.all()
+    app.logger.debug('ALL %s', all_pharmacists)
+    return render_template('pharmacists.html', pharmacists=all_pharmacists)
+
+
+
+@admin_staff_bp.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
+@require_permission('staff')
+def update_pharmacist(pharmacist_id):
+    pharmacist = Pharmacist.query.get(pharmacist_id)
+    if pharmacist:
+        pharmacist.name = request.form.get('name', pharmacist.name)
+        pharmacist.initials = request.form.get('initials', pharmacist.initials)
+        pharmacist.language = request.form.get('language', pharmacist.language)
+        pharmacist.is_active = 'is_active' in request.form
+        pharmacist.activity = request.form.get('activity', pharmacist.activity)
+        db.session.commit()
+    return redirect(url_for('admin_staff.pharmacists'))
+
+
+
+@admin_staff_bp.route('/add_pharmacist', methods=['POST'])
+@require_permission('staff')
+def add_pharmacist():
+    name = request.form.get('name')
+    initials = request.form.get('initials')
+    language = request.form.get('language')
+    is_active = request.form.get('is_active') == 'on'
+    activity = request.form.get('activity')
+    new_pharmacist = Pharmacist(name=name, initials=initials, language=language, is_active=is_active, activity=activity)
+    db.session.add(new_pharmacist)
+    db.session.commit()
+    return render_template('htmx/menu_admin_pharmacist_row.html', pharmacist=new_pharmacist)
+
+
+
+@admin_staff_bp.route('/new_pharmacist_form')
+@require_permission('staff')
+def new_pharmacist_form():
+    app.logger.debug("new_pharmacist_form")
+    return render_template('htmx/menu_admin_new_pharmacist_form.html')
+
 
