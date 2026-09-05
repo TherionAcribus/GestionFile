@@ -613,25 +613,29 @@
 </div>
 {% endmacro %}
 
-{# Macro pour le bouton aligné #}
+{# Macro pour le bouton aligné — variables CSS. Utilise handleBeforeRequest /
+   handleAfterRequest qui vérifient le succès/échec de la requête (comme les
+   boutons de config). data-feedback-skip évite le double retour global. #}
 {% macro css_unit_button(source, variable, unit="px") %}
 <div class="d-flex align-items-end mb-2">
     <button
         id="{{ source }}_{{ variable }}_button"
         class="btn btn-primary ms-2"
         disabled
+        data-feedback-skip
         hx-post="/admin/update_css_variable"
-        hx-target="#invisible"
+        hx-swap="none"
         hx-vals='js:{
             "source": "{{ source }}",
-            "variable": "{{ variable }}", 
+            "variable": "{{ variable }}",
             "value": document.getElementById("{{ source }}_{{ variable }}").value + "{{ unit }}"
         }'
-        hx-on::after-request="handleAfterRequest('{{ source }}', '{{ variable }}')"
+        hx-on::before-request="handleBeforeRequest('{{ source }}', '{{ variable }}')"
+        hx-on::after-request="handleAfterRequest(event, '{{ source }}', '{{ variable }}')"
     >
         Enregistrer
     </button>
-    <div id="{{ source }}_{{ variable }}_result"></div>
+    <div id="{{ source }}_{{ variable }}_result" class="small mt-1" role="status" aria-live="polite"></div>
 </div>
 {% endmacro %}
 
@@ -891,20 +895,23 @@ Enregistrer
 
 
 
-{# Macro pour l'input #}
+{# Macro pour l'input — utilise le même schéma que `input_field` (id = clé
+   de config, handlers handleInputChangeConfig / handleKeyPressConfig) pour
+   que le bouton `simple_button` puisse envoyer `key` à la route
+   /admin/update_input et recevoir un vrai retour de succès/échec. #}
 {% macro simple_input(variable, value, label) %}
 <div class="row align-items-center">
     <div class="col-sm-1">
-        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+        <label for="{{ variable }}" class="form-label mb-0">{{ label }}</label>
     </div>
     <div class="col-sm-11">
-        <input 
-            type="text" 
-            id="{{ source }}_{{ variable }}" 
-            class="form-control" 
+        <input
+            type="text"
+            id="{{ variable }}"
+            class="form-control"
             value="{{ value }}"
-            oninput="handleSimpleInputChange('{{ source }}', '{{ variable }}')"
-            onkeydown="handleSimpleKeyPress(event, '{{ source }}', '{{ variable }}')"
+            oninput="handleInputChangeConfig('{{ variable }}')"
+            onkeydown="handleKeyPressConfig(event, '{{ variable }}')"
             data-initial-value="{{ value }}"
         >
     </div>
@@ -937,26 +944,31 @@ Enregistrer
 </div>
 {% endmacro %}
 
-{# Macro pour le bouton universel #}
+{# Macro pour le bouton universel — utilise le même schéma que `button` :
+   envoie `key` (et non `source`/`variable`) à /admin/update_input, utilise
+   handleBeforeRequestConfig / handleAfterRequestConfig pour un vrai retour
+   de succès/échec, et data-feedback-skip pour ne pas déclencher le retour
+   global (le message s'affiche près du champ). #}
 {% macro simple_button(variable, check="text") %}
 <div class="ms-3">
     <button
-        id="{{ source }}_{{ variable }}_button"
+        id="{{ variable }}_button"
         class="btn btn-primary"
         disabled
+        data-feedback-skip
         hx-post="/admin/update_input"
-        hx-target="#invisible"
+        hx-swap="none"
         hx-vals='js:{
-            "source": "{{ source }}",
-            "variable": "{{ variable }}", 
-            "value": document.getElementById("{{ source }}_{{ variable }}").value,
+            "key": "{{ variable }}",
+            "value": document.getElementById("{{ variable }}").value,
             "check": "{{ check }}"
         }'
-        hx-on::after-request="handleSimpleAfterRequest('{{ source }}', '{{ variable }}')"
+        hx-on::before-request="handleBeforeRequestConfig('{{ variable }}')"
+        hx-on::after-request="handleAfterRequestConfig(event, '{{ variable }}')"
     >
         Enregistrer
     </button>
-    <div id="{{ source }}_{{ variable }}_result"></div>
+    <div id="{{ variable }}_result" class="small mt-1" role="status" aria-live="polite"></div>
 </div>
 {% endmacro %}
 

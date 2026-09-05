@@ -106,11 +106,17 @@ function handleAfterRequestConfig(event, variable) {
 }
 
 // --- extrait de macros.html, ligne 822 ---
+// Variables CSS : les champs utilisent un id composite `source_variable` et
+// envoient `source` + `variable` à /admin/update_css_variable (route différente
+// de /admin/update_input). Le retour de succès/échec suit la même logique que
+// handleAfterRequestConfig : on ne considère la sauvegarde réussie que si htmx
+// signale un succès ET que le statut HTTP est un 2xx.
+
 function handleInputChange(source, variable) {
     const input = document.getElementById(`${source}_${variable}`);
     const button = document.getElementById(`${source}_${variable}_button`);
     const initialValue = input.dataset.initialValue;
-    
+
     // Active/désactive le bouton selon si la valeur a changé
     button.disabled = input.value === initialValue;
 }
@@ -126,13 +132,66 @@ function handleKeyPress(event, source, variable, unit) {
     }
 }
 
-function handleAfterRequest(source, variable) {
+// Désactive le bouton CSS pendant la requête et remet la zone de résultat à zéro.
+function handleBeforeRequest(source, variable) {
+    const button = document.getElementById(`${source}_${variable}_button`);
+    const result = document.getElementById(`${source}_${variable}_result`);
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Enregistrement…";
+    }
+    if (result) {
+        result.textContent = "";
+        result.className = "small mt-1";
+    }
+}
+
+function handleAfterRequest(event, source, variable) {
     const input = document.getElementById(`${source}_${variable}`);
     const button = document.getElementById(`${source}_${variable}_button`);
-    
-    // Met à jour la valeur initiale et désactive le bouton
-    input.dataset.initialValue = input.value;
-    button.disabled = true;
+    const result = document.getElementById(`${source}_${variable}_result`);
+
+    // On ne considère la sauvegarde réussie que si htmx signale un succès ET
+    // que le statut HTTP est un 2xx (comme handleAfterRequestConfig).
+    const detail = event && event.detail;
+    const xhr = detail && detail.xhr;
+    const status = xhr ? xhr.status : 0;
+    const ok = !!(detail && detail.successful) && status >= 200 && status < 300;
+    const serverMessage = (xhr && xhr.responseText ? xhr.responseText : "").trim();
+
+    if (button) {
+        button.textContent = "Enregistrer";
+    }
+
+    if (ok) {
+        // Succès : la valeur enregistrée devient la nouvelle valeur de référence,
+        // le bouton se désactive et on confirme.
+        if (input) {
+            input.dataset.initialValue = input.value;
+        }
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Enregistré ✓";
+            setTimeout(() => {
+                button.textContent = "Enregistrer";
+            }, 1500);
+        }
+        if (result) {
+            result.className = "small mt-1 text-success";
+            result.textContent = serverMessage || "Enregistré.";
+        }
+    } else {
+        // Échec : NE PAS toucher à la valeur initiale, garder le bouton actif
+        // pour réessayer, et afficher le message d'erreur près du champ.
+        if (button) {
+            button.disabled = false;
+        }
+        if (result) {
+            result.className = "small mt-1 text-danger";
+            result.textContent = serverMessage
+                || "Échec de l'enregistrement. Veuillez réessayer.";
+        }
+    }
 }
 
 // --- extrait de macros.html, ligne 1177 ---
