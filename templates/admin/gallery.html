@@ -19,8 +19,8 @@
 
 <form id="create-gallery-form" 
         hx-post="{{ url_for('admin_gallery.create_gallery') }}" 
-        hx-target="#gallery-list" 
-        hx-swap="outerHTML">
+        hx-target="#galleries_list" 
+        hx-swap="innerHTML">
     <div class="mb-3">
         <label for="name" class="form-label">Nom de la Galerie</label>
         <input type="text" class="form-control" id="name" name="name" placeholder="Nom de la Galerie">

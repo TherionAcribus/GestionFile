@@ -496,7 +496,8 @@ def update_button_image_from_gallery():
     app.logger.debug("%s", request.form)
     button.image_url = image_url
     db.session.commit()
-    return """<img src="{{ url_for('static', filename='images/buttons/' ~ button.image_url) }}" alt="Button Image" style="width: 100px;">"""
+    display_toast(success=True, message="Image mise à jour")
+    return f'<img src="/static/images/buttons/{image_url}" alt="Button Image" style="width: 100px;">'
 
 
 @admin_patient_bp.route('/admin/patient/update_button_image_from_gallery_for_interface', methods=['POST'])

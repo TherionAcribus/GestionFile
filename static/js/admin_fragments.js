@@ -56,18 +56,26 @@ function selectSound(button) {
 }
 
 // --- extrait de templates/admin/patient_page_button_modal_gallery.html ---
-// le js est dans l'html car ne doit être chargé que quand l'est l'html
+// Sélection d'une image dans la modale galerie de boutons.
+// Anciennement appelée par onclick inline (incompatible CSP script-src 'self').
+// Désormais déclenchée par délégation d'événement sur les boutons
+// [data-select-image] (voir admin.js). Conservée comme globale pour compat
+// ascendante, mais corrigée : `let` au lieu d'une variable globale implicite,
+// et sélection via querySelector au lieu d'un id fragile construit depuis le
+// nom de fichier (qui peut contenir des espaces, points, etc.).
 function selectImage(imageName) {
     // Mettre à jour l'URL de l'image dans le formulaire
-    document.getElementById('image_name_field').innerText = imageName;
-    // Cadre bleu autour de l'image
-    if (document.getElementsByClassName('selected-image')) {         
-    for (element of document.getElementsByClassName('selected-image')) {
-        element.classList.remove('selected-image');
-    }
-}
-    document.getElementById('img_' + imageName).classList.add('selected-image');
-    // Fermer la modal
+    var field = document.getElementById('image_name_field');
+    if (field) { field.innerText = imageName; }
+    // Cadre bleu autour de l'image : retirer la sélection précédente
+    document.querySelectorAll('.selected-image').forEach(function (el) {
+        el.classList.remove('selected-image');
+    });
+    // Sélectionner la vignette via data-image (robuste : pas d'id construit
+    // depuis le nom de fichier, qui peut contenir des caractères invalides
+    // pour un id HTML).
+    var target = document.querySelector('[data-image="' + imageName + '"]');
+    if (target) { target.classList.add('selected-image'); }
 }
 
 // --- extrait de templates/admin/activity_htmx_table.html ---

@@ -8,10 +8,10 @@
     <div class="image-grid">
         {% for image in images %}
         <button type="button" class="image-select-btn p-0 border-0 bg-transparent"
-            onclick="selectImage('{{ image }}');"
+            data-select-image="{{ image }}"
             aria-label="Choisir l'image {{ image }}">
             <img src="{{ url_for('static', filename='images/buttons/' + image) }}"
-                id="img_{{ image }}"
+                data-image="{{ image }}"
                 alt=""
                 style="width: 100px;">
         </button>
@@ -30,8 +30,8 @@
          porté par ce champ caché, lu côté serveur par Flask-WTF (form.csrf_token). -->
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="file-upload">
-        <button type="button" class="btn btn-primary" onclick="this.nextElementSibling.click()">Ouvrir une image depuis votre ordinateur</button>
-        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif" aria-label="Choisir un fichier image" onchange="this.form.submit()">
+        <button type="button" class="btn btn-primary" data-action="open-file-dialog">Ouvrir une image depuis votre ordinateur</button>
+        <input type="file" name="file" accept=".png, .jpg, .jpeg, .gif, .webp" aria-label="Choisir un fichier image" data-action="submit-on-change">
     </div>
 </form>
 

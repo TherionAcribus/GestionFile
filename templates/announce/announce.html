@@ -37,7 +37,7 @@
         </div>
 
         <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-            <p id="text_title" onclick="initializeAudio()" id="text_title">
+            <p id="text_title" data-action="initialize-audio">
                 {{announce_title}}</p>
             <p id="text_subtitle">
                 {{announce_subtitle}}</p>

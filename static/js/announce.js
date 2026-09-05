@@ -136,10 +136,19 @@ document.addEventListener('DOMContentLoaded', (event) => {
 //            refresh_calling_list();            
 //        };
 
-// Assurez-vous de fermer le flux SSE lorsque la page est fermée/unloaded
-window.onunload = function() {
-    eventSource.close();
-};
+// Le flux SSE ci-dessus est commenté : pas de EventSource à fermer au
+// déchargement. On retire le handler qui référençait une variable inexistante
+// (ReferenceError systématique au unload).
+
+// Initialisation audio : déclenchée par un clic sur le titre (anciennement
+// onclick inline, incompatible avec la CSP script-src 'self').
+document.addEventListener('click', function (evt) {
+    if (evt.target && evt.target.dataset && evt.target.dataset.action === 'initialize-audio') {
+        if (typeof initializeAudio === 'function') {
+            initializeAudio();
+        }
+    }
+});
 
 
 function refresh_calling_list() {

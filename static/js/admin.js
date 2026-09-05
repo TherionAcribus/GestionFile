@@ -1601,7 +1601,7 @@ document.body.addEventListener('htmx:afterRequest', function (evt) {
     if (champ) { champ.value = ''; }
 });
 
-// Clic sur une vignette : ouvre l'image dans la modale.
+// Clic sur une vignette : ouvre l'image dans la modale Bootstrap.
 document.addEventListener('click', function (evt) {
     var img = evt.target;
     if (!img || !img.closest || !img.closest('.thumbnail') || img.tagName !== 'IMG') { return; }
@@ -1609,8 +1609,45 @@ document.addEventListener('click', function (evt) {
     var cible = document.getElementById('modal-image');
     if (!modale || !cible) { return; }
     cible.src = img.src;
-    var instance = M.Modal.getInstance(modale);
-    if (instance) { instance.open(); }
+    // La modale est une modale Bootstrap (class="modal fade"), pas Materialize.
+    // L'ancien code appelait M.Modal (Materialize) qui n'est pas chargé sur
+    // les pages admin -> ReferenceError.
+    var instance = bootstrap.Modal.getInstance(modale);
+    if (instance) { instance.show(); }
+});
+
+
+// --- Modale galerie de boutons : sélection et upload d'image ---------------
+//
+// Les handlers onclick/onchange inline des modales galerie (templates
+// patient_page_button_modal_gallery*.html) sont incompatibles avec la CSP
+// script-src 'self'. Remplacés par de la délégation d'événements sur data-*.
+//
+// 1. Clic sur une vignette : appelle selectImage (définie dans
+//    admin_fragments.js, globale pour compat ascendante).
+document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest('[data-select-image]');
+    if (!btn) { return; }
+    if (typeof selectImage === 'function') {
+        selectImage(btn.dataset.selectImage);
+    }
+});
+
+// 2. Bouton « Ouvrir une image » : déclenche le clic sur l'input file suivant.
+document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest('[data-action="open-file-dialog"]');
+    if (!btn) { return; }
+    var input = btn.parentElement && btn.parentElement.querySelector('input[type="file"]');
+    if (input) { input.click(); }
+});
+
+// 3. input file « Choisir un fichier » : soumet le formulaire parent
+//    (soumission native, non interceptée par HTMX — le jeton CSRF est porté
+//    par le champ caché csrf_token).
+document.addEventListener('change', function (evt) {
+    var input = evt.target.closest('[data-action="submit-on-change"]');
+    if (!input) { return; }
+    if (input.form) { input.form.submit(); }
 });
 
 
