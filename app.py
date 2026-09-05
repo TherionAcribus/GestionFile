@@ -65,7 +65,7 @@ from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
-from routes.admin_security import admin_security_bp, create_default_user, create_default_role
+from routes.admin_security import admin_security_bp, create_default_user, create_default_role, require_permission
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -415,13 +415,20 @@ db_session = scoped_session(sessionmaker(autocommit=False,
 # ROUTES 
 
 # Sauvegardes / Restaurations (base de données brute uniquement, le reste est dans admin_backup_bp)
+#
+# Point 1 (audit Admin) : ces deux routes ne portaient AUCUNE garde de permission
+# au-delà de l'authentification globale (/admin). Un utilisateur simplement
+# connecté — sans le rôle ni la permission 'app' — pouvait télécharger l'intégralité
+# de la base (backup) ou l'écraser (restore). Elles sont désormais protégées par
+# require_permission('app'), la même permission que le nouveau système de
+# sauvegardes (admin_backup_bp), pour une politique cohérente.
 
-app.add_url_rule('/admin/database/backup', 'backup_databases', 
-                partial(backup_databases, database), 
+app.add_url_rule('/admin/database/backup', 'backup_databases',
+                require_permission('app')(partial(backup_databases, database)),
                 methods=['GET'])
 
-app.add_url_rule('/admin/database/restore', 'restore_databases', 
-                partial(restore_databases, request, database), 
+app.add_url_rule('/admin/database/restore', 'restore_databases',
+                require_permission('app')(partial(restore_databases, request, database)),
                 methods=['GET', 'POST'])
 
 
