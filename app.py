@@ -755,7 +755,8 @@ if __name__ == "__main__":
 # Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
 @app.context_processor
 def inject_user():
-    return dict(current_user=current_user)
+    from routes.admin_security import user_has_permission
+    return dict(current_user=current_user, user_has_permission=user_has_permission)
 
 app.logger.debug("Starting Flask...")
 app.logger.info(f"Starting Flask on port {server_port} with debug={app.debug}")

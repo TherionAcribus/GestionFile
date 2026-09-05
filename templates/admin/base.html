@@ -65,13 +65,37 @@
 
     <div class="container-fluid">
         <div class="row">
+            {# ---------------------------------------------------------------- #}
+            {#  Point 5 (audit Admin) — Sidebar                                  #}
+            {#                                                                    #}
+            {#  Trois améliorations :                                            #}
+            {#  1. Surbrillance dynamique : la section courante est marquée      #}
+            {#     `active` + `aria-current="page"` selon request.path, au lieu  #}
+            {#     d'un "Accueil" toujours actif.                                #}
+            {#  2. Permissions : chaque entrée n'est affichée que si l'utilisateur#}
+            {#     a la permission correspondante (user_has_permission, exposé  #}
+            {#     via context processor).                                       #}
+            {#  3. Mobile : bouton hamburger + sidebar repliable en-dessous de   #}
+            {#     768px (Bootstrap offcanvas léger, sans dépendance JS).        #}
+            {# ---------------------------------------------------------------- #}
+
+            {# Bouton hamburger (mobile uniquement, < md) #}
+            <button class="btn btn-outline-secondary d-md-none m-2"
+                    type="button" data-bs-toggle="collapse"
+                    data-bs-target="#sidebarMenu" aria-expanded="false"
+                    aria-controls="sidebarMenu" aria-label="Afficher le menu">
+                <i class="bi bi-list"></i> Menu
+            </button>
+
             <!-- Sidebar structure -->
-            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-secondary-subtle sidebar">
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-secondary-subtle sidebar collapse">
                 <div class="position-sticky pt-3">
                     <ul class="nav flex-column">
                         <li class="nav-item">
-                            <a class="nav-link active" aria-current="page" href="/admin">
-                                Accueil
+                            <a class="nav-link {{ 'active' if request.path == '/admin' else '' }}"
+                               {{ 'aria-current="page"' if request.path == '/admin' else '' }}
+                               href="/admin">
+                                <i class="bi bi-house-door"></i> Accueil
                             </a>
                         </li>
                         <li class="nav-item">
@@ -86,115 +110,211 @@
                         <li class="nav-item">
                             <hr class="dropdown-divider">
                         </li>
+
+                        {# --- Exploitation --- #}
                         <li class="nav-item">
                             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                                <span>Suivi</span>
+                                <span>Exploitation</span>
+                            </h6>
+                        </li>
+                        {% if user_has_permission(current_user, 'queue') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/queue') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/queue') else '' }}
+                               href="/admin/queue">
+                                <i class="bi bi-people"></i> File d'attente
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'counter') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/counter') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/counter') else '' }}
+                               href="/admin/counter">
+                                <i class="bi bi-window-stack"></i> Comptoirs
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'staff') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/staff') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/staff') else '' }}
+                               href="/admin/staff">
+                                <i class="bi bi-person-badge"></i> Équipe
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'activity') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/activity') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/activity') else '' }}
+                               href="/admin/activity">
+                                <i class="bi bi-card-list"></i> Activités
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# --- Configuration de la file --- #}
+                        {% if user_has_permission(current_user, 'algo') or user_has_permission(current_user, 'schedule') or user_has_permission(current_user, 'translation') %}
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Configuration</span>
+                            </h6>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'algo') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/algo') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/algo') else '' }}
+                               href="/admin/algo">
+                                <i class="bi bi-sort-numeric-down"></i> Priorités
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'schedule') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/database') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/database') else '' }}
+                               href="/admin/database">
+                                <i class="bi bi-calendar-week"></i> Planification
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'translation') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/translations') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/translations') else '' }}
+                               href="/admin/translations">
+                                <i class="bi bi-translate"></i> Traductions
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# --- Affichages publics --- #}
+                        {% if user_has_permission(current_user, 'patient') or user_has_permission(current_user, 'announce') or user_has_permission(current_user, 'phone') or user_has_permission(current_user, 'gallery') or user_has_permission(current_user, 'music_play') or user_has_permission(current_user, 'music_options') %}
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Affichage et contenus</span>
+                            </h6>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'patient') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/patient') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/patient') else '' }}
+                               href="/admin/patient">
+                                <i class="bi bi-tablet"></i> Borne patient
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'announce') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/announce') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/announce') else '' }}
+                               href="/admin/announce">
+                                <i class="bi bi-display"></i> Écran d'annonce
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'phone') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/phone') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/phone') else '' }}
+                               href="/admin/phone">
+                                <i class="bi bi-telephone"></i> Affichage téléphone
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'gallery') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/info') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/info') else '' }}
+                               href="/admin/info">
+                                <i class="bi bi-images"></i> Galerie média
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'music_play') or user_has_permission(current_user, 'music_options') %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/music') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/music') else '' }}
+                               href="/admin/music">
+                                <i class="bi bi-music-note-beamed"></i> Musique
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {# --- Analyse --- #}
+                        {% if user_has_permission(current_user, 'stats') %}
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Analyse</span>
                             </h6>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/queue">
-                                Patients
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/stats') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/stats') else '' }}
+                               href="/admin/stats">
+                                <i class="bi bi-bar-chart"></i> Statistiques
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/info">
-                                Galerie
+                            <a class="nav-link {{ 'active' if request.path == '/admin/stats/history' else '' }}"
+                               {{ 'aria-current="page"' if request.path == '/admin/stats/history' else '' }}
+                               href="/admin/stats/history">
+                                <i class="bi bi-clock-history"></i> Historique détaillé
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/music">
-                                Musique
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/algo">
-                                Priorités
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/stats">
-                                Statistiques
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/stats/history">
-                                Historique détaillé
-                            </a>
-                        </li>
+                        {% endif %}
+
+                        {# --- Administration --- #}
+                        {% if user_has_permission(current_user, 'app') or user_has_permission(current_user, 'options') or user_has_permission(current_user, 'security') %}
                         <li class="nav-item">
                             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                                <span>Gestion de l'application</span>
+                                <span>Administration</span>
                             </h6>
                         </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'app') %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/app">
-                                Application
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/app') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/app') else '' }}
+                               href="/admin/app">
+                                <i class="bi bi-gear"></i> Application
                             </a>
                         </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'options') %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/data">
-                                Données
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/data') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/data') else '' }}
+                               href="/admin/data">
+                                <i class="bi bi-database"></i> Données
                             </a>
                         </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'options') %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/database">
-                                Planification
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/admin_options') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/admin_options') else '' }}
+                               href="/admin/admin_options">
+                                <i class="bi bi-sliders"></i> Préférences d'administration
                             </a>
                         </li>
+                        {% endif %}
+                        {% if user_has_permission(current_user, 'security') %}
                         <li class="nav-item">
-                            <a class="nav-link" href="/admin/patient">
-                                Page Patient
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/security') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/security') else '' }}
+                               href="/admin/security">
+                                <i class="bi bi-shield-lock"></i> Sécurité
                             </a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/announce">
-                                Page Annonce
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/phone">
-                                Page Téléphone
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/security">
-                                Sécurité
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/translations">
-                                Traduction
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/admin_options">
-                                Admin
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                                <span>Gestion de la pharmacie</span>
-                            </h6>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/staff">
-                                Équipe
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/counter">
-                                Comptoirs
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/admin/activity">
-                                Activités
-                            </a>
-                        </li>
+                        {% endif %}
                     </ul>
                 </div>
             </nav>
-        
+
             <!-- Main content area -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 {% block content %}
