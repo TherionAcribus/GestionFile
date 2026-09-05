@@ -248,11 +248,29 @@ def delete_gallery(name):
     if not gallery_dir.exists() or not gallery_dir.is_dir():
         return "Gallery not found", 404
 
-    for child in gallery_dir.iterdir():
-        if child.is_dir():
-            return "Gallery contains subdirectories", 400
+    # 1. Vérifier tout le contenu AVANT de supprimer quoi que ce soit.
+    #    L'ancien code supprimait les fichiers au fil de l'itération et
+    #    retournait 400 à la rencontre d'un sous-dossier — la galerie se
+    #    retrouvait alors à moitié vidée (état incohérent).
+    #    Le sous-dossier thumbnails/ est légitime (créé par upload_gallery) :
+    #    on le nettoie et le supprime, pas un motif de refus.
+    children = list(gallery_dir.iterdir())
+    unexpected_dirs = [
+        c for c in children
+        if c.is_dir() and c.name != THUMBNAIL_DIR
+    ]
+    if unexpected_dirs:
+        return "Gallery contains unexpected subdirectories", 400
+
+    # 2. Tout est conforme : supprimer fichiers + dossier thumbnails.
+    for child in children:
         if child.is_file():
             child.unlink()
+        elif child.is_dir() and child.name == THUMBNAIL_DIR:
+            for thumb in child.iterdir():
+                if thumb.is_file():
+                    thumb.unlink()
+            child.rmdir()
 
     gallery_dir.rmdir()
 

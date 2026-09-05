@@ -19,6 +19,7 @@
 <a href="{{ url_for('admin_gallery.delete_gallery', name=gallery) }}" 
     class="btn btn-danger"
     hx-delete="{{ url_for('admin_gallery.delete_gallery', name=gallery) }}" 
+    hx-confirm="Supprimer la galerie « {{ gallery }} » et toutes ses images ? Cette action est irréversible."
     hx-target="#content" 
     hx-swap="innerHTML">
         Supprimer cette galerie
