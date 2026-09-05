@@ -1,57 +1,8 @@
-{% extends '/admin/base.html' %}
 
-{% block title %}Galeries{% endblock %}
 
-{# CSS spécifique à la galerie : chargé uniquement sur cette page #}
-{% block styles %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/gallery.css') }}">
-{% endblock %}
-
-{% block content %}
-<h3>Galeries</h3>
-
-<div id="galleries_list"
-    hx-get="/admin/gallery/list"
-    hx-trigger="load, refresh_gallery_list"
-    hx-target="#galleries_list"
-    hx-swap="innerHTML">
-</div>
-
-<form id="create-gallery-form" 
-        hx-post="{{ url_for('admin_gallery.create_gallery') }}" 
-        hx-target="#galleries_list" 
-        hx-swap="innerHTML">
-    <div class="mb-3">
-        <label for="name" class="form-label">Nom de la Galerie</label>
-        <input type="text" class="form-control" id="name" name="name" placeholder="Nom de la Galerie">
-    </div>
-    <button class="btn btn-primary" type="submit">Créer une nouvelle galerie</button>
-</form>
-<div id="content"></div>
-
-<!-- Modale pour afficher l'image en grand -->
-<div class="modal fade" id="image-modal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-body">
-                <img id="modal-image" class="img-fluid" src="" alt="Image en grand">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-            </div>
-        </div>
-    </div>
-</div>
-        
-<br>
-<div>
-    <button class="btn btn-danger"
-            hx-get="/announce/refresh"
-            hx-target="#invisible"                    
-            >Relancer la page "Annonce"</button>
-</div>
-
-<!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés -->
-<div id="invisible" style="display:none;"></div>
-
+{# Galerie d'images : comportement propre a cette page, extrait de admin.js
+   (Phase 8, point 1). `defer` respecte l'ordre du document : ce script
+   s'execute apres admin.js et admin_macros.js, declares par admin/base.html. #}
+{% block scripts_end %}
+<script defer src="{{ url_for('static', filename='js/admin_gallery.js') }}"></script>
 {% endblock %}

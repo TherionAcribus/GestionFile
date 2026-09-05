@@ -19,18 +19,15 @@ function toggleCardManager(evt) {
     var content = document.getElementById('card-manager-content');
     var icon = document.getElementById('card-manager-toggle-icon');
     
-    console.log('toggleCardManager - état actuel:', isCardManagerOpen);
     
     if (isCardManagerOpen) {
         content.style.display = 'none';
         icon.style.transform = 'rotate(0deg)';
         isCardManagerOpen = false;
-        console.log('Panneau fermé');
     } else {
         content.style.display = 'block';
         icon.style.transform = 'rotate(180deg)';
         isCardManagerOpen = true;
-        console.log('Panneau ouvert');
         
         // Initialiser Sortable quand on ouvre
         setTimeout(function() {
@@ -47,13 +44,10 @@ function initializeCardListSortable() {
     }
     
     if (cardListSortable) {
-        console.log('Destruction de l\'ancien Sortable');
         cardListSortable.destroy();
         cardListSortable = null;
     }
     
-    console.log('Initialisation de Sortable sur card-list-sortable');
-    console.log('Nombre de cartes:', cardListEl.children.length);
     
     try {
         cardListSortable = new Sortable(cardListEl, {
@@ -63,15 +57,8 @@ function initializeCardListSortable() {
             chosenClass: 'card-item-chosen',
             dragClass: 'card-item-drag',
             forceFallback: false,
-            fallbackTolerance: 3,
-            onStart: function(evt) {
-                console.log('Début du drag depuis index:', evt.oldIndex);
-            },
-            onEnd: function(evt) {
-                console.log('Carte déplacée de', evt.oldIndex, 'vers', evt.newIndex);
-            }
+            fallbackTolerance: 3
         });
-        console.log('Sortable initialisé avec succès');
     } catch(e) {
         console.error('Erreur lors de l\'initialisation de Sortable:', e);
     }
@@ -113,7 +100,6 @@ function saveCardConfiguration(evt) {
         }
     });
     
-    console.log('Sauvegarde:', { visible_cards: visibleCards, card_order: cardOrder });
     
     var btn = evt ? evt.target.closest('button') : document.querySelector('.card-manager-footer button');
     
@@ -159,7 +145,6 @@ function saveCardConfiguration(evt) {
 
 document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target.id === 'card-list-sortable') {
-        console.log('HTMX afterSwap sur card-list-sortable');
         if (isCardManagerOpen) {
             initializeCardListSortable();
         }

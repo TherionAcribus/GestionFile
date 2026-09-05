@@ -77,19 +77,37 @@ def test_admin_js_debug_console_log_preserved():
     assert "console.log" in source
 
 
-def test_admin_colors_js_no_console_log():
-    """Idem pour admin_colors.js, extrait de admin.js (Phase 8, point 1).
+def _fichiers_admin_extraits():
+    """Fichiers JS d'administration autres que admin.js.
 
-    Le découpage aurait sinon créé un trou : la moitié du code d'origine
-    (sélecteurs de couleur, mise à jour CSS) sortait du champ de la
-    vérification ci-dessus. Ce fichier n'a pas de bloc DEBUG : aucun
-    console.log n'y est admis.
+    Découverts par balayage, et non listés à la main : chaque extraction de
+    admin.js (Phase 8, point 1) créait sinon un trou de couverture — le code
+    déplacé sortait du champ de la vérification ci-dessus sans que rien ne le
+    signale.
     """
-    source = _read("static/js/admin_colors.js")
-    fautifs = [f"ligne {i}: {ligne.strip()}"
-               for i, ligne in enumerate(source.splitlines(), 1)
-               if "console.log" in ligne]
-    assert not fautifs, "console.log dans admin_colors.js :\n" + "\n".join(fautifs)
+    dossier = os.path.join(_SERVEUR, "static", "js")
+    return sorted(nom for nom in os.listdir(dossier)
+                  if nom.startswith("admin_") and nom.endswith(".js"))
+
+
+@pytest.mark.parametrize("fichier", _fichiers_admin_extraits())
+def test_admin_js_extraits_sans_console_log(fichier):
+    """Aucun console.log dans les fichiers JS d'administration.
+
+    Seul admin.js a le droit d'en contenir, et uniquement dans son bloc
+    ``if (DEBUG)`` (test précédent).
+    """
+    source = _read(f"static/js/{fichier}")
+    fautifs = []
+    for i, ligne in enumerate(source.splitlines(), 1):
+        nu = ligne.strip()
+        # Les commentaires ont le droit de mentionner console.log : plusieurs
+        # expliquent précisément pourquoi une trace a été retirée.
+        if nu.startswith("//") or nu.startswith("*"):
+            continue
+        if "console.log" in ligne:
+            fautifs.append(f"ligne {i}: {nu}")
+    assert not fautifs, f"console.log dans {fichier} :\n" + "\n".join(fautifs)
 
 
 def test_patient_conclusion_no_console_log():

@@ -66,4 +66,6 @@
    admin/base.html. #}
 {% block scripts_end %}
 <script defer src="{{ url_for('static', filename='js/admin_colors.js') }}"></script>
+{# Modale de choix d'image d'un bouton : delegation extraite de admin.js. #}
+<script defer src="{{ url_for('static', filename='js/admin_button_gallery.js') }}"></script>
 {% endblock %}

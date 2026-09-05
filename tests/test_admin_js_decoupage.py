@@ -31,6 +31,17 @@ _FICHIERS_ADMIN = [
     "admin.js", "admin_colors.js", "admin_macros.js", "admin_macros_forms.js",
     "admin_fragments.js", "admin_backups.js", "admin_dashboard_select.js",
     "admin_data.js", "admin_home.js", "admin_stats.js", "admin_unsaved_changes.js",
+    "admin_gallery.js", "admin_button_gallery.js", "admin_flag_upload.js",
+]
+
+# Blocs extraits de admin.js -> (fichier, pages qui doivent le charger).
+# Chaque bloc est une delegation posee sur `document` : elle couvre donc aussi
+# les fragments injectes par HTMX apres le chargement de la page.
+BLOCS_EXTRAITS = [
+    ("admin_colors.js", ["announce.html", "patient_page.html", "phone.html"]),
+    ("admin_gallery.js", ["gallery.html"]),
+    ("admin_button_gallery.js", ["patient_page.html"]),
+    ("admin_flag_upload.js", ["translations.html"]),
 ]
 
 # Pages incluant les fragments qui appellent les macros de couleur / d'entier.
@@ -62,11 +73,26 @@ def test_page_couleur_charge_admin_colors(page):
     assert "{% block scripts_end %}" in contenu
 
 
-def test_admin_colors_pas_charge_globalement():
-    """base.html ne doit PAS le charger : c'est tout l'objet du découpage."""
+@pytest.mark.parametrize("fichier,pages", BLOCS_EXTRAITS)
+def test_bloc_extrait_charge_par_ses_pages(fichier, pages):
+    """Chaque bloc extrait est declare par les pages qui en ont besoin."""
+    for page in pages:
+        contenu = _lire(f"templates/admin/{page}")
+        assert f"js/{fichier}" in contenu, f"{page} ne charge pas {fichier}"
+        assert "{% block scripts_end %}" in contenu
+
+
+@pytest.mark.parametrize("fichier,_pages", BLOCS_EXTRAITS)
+def test_bloc_extrait_pas_charge_globalement(fichier, _pages):
+    """base.html ne doit charger aucun bloc extrait : c'est l'objet du découpage."""
     base = _lire("templates/admin/base.html")
-    assert "admin_colors.js" not in base, (
-        "admin_colors.js rechargé globalement : le découpage perd son intérêt")
+    assert fichier not in base, (
+        f"{fichier} rechargé globalement : le découpage perd son intérêt")
+
+
+def test_admin_colors_pas_charge_globalement():
+    """base.html garde en revanche les deux fichiers réellement globaux."""
+    base = _lire("templates/admin/base.html")
     # admin.js et admin_macros.js, eux, restent globaux.
     assert "js/admin.js" in base
     assert "js/admin_macros.js" in base
@@ -87,8 +113,8 @@ def test_admin_js_a_bien_diminue():
     évolutions normales tout en signalant un retour en arrière.
     """
     lignes = len(_lire("static/js/admin.js").splitlines())
-    assert lignes < 1200, (
-        f"admin.js est remonté à {lignes} lignes (971 après le découpage) : "
+    assert lignes < 1050, (
+        f"admin.js est remonté à {lignes} lignes (849 après le découpage) : "
         "le nouveau code global mérite peut-être son propre fichier de page")
 
 

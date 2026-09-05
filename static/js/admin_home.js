@@ -35,9 +35,7 @@ function initializeSortable() {
                 },
                 body: JSON.stringify({ order: order })
             }).then(response => {
-                if (response.ok) {
-                    console.log('Ordre des cartes sauvegardé');
-                } else {
+                if (!response.ok) {
                     console.error('Erreur lors de la sauvegarde de l\'ordre');
                     alert('Erreur lors de la sauvegarde de l\'ordre des cartes');
                 }
