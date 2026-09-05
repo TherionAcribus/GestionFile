@@ -92,8 +92,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const NS_QUEUE = '/socket_update_patient';
     const NS_ADMIN = '/socket_admin';
 
-    // --- File des patients : uniquement sur la page de la file ---
-    if (document.querySelector('#div_queue_table')) {
+    // --- File des patients : sur la page de la file ET sur le dashboard ---
+    // Sur la page /admin/queue : #div_queue_table est présent.
+    // Sur le dashboard : la carte "Patients" est enveloppée par un slot portant
+    //   data-card-url="/admin/queue/dashboard" (présent dès le HTML initial,
+    //   avant le chargement différé du contenu de la carte).
+    // L'un OU l'autre suffit à justifier l'abonnement au namespace.
+    var queueOnPage = document.querySelector('#div_queue_table');
+    var queueOnDashboard = document.querySelector('[data-card-url="/admin/queue/dashboard"]');
+    if (queueOnPage || queueOnDashboard) {
         AdminRealtime.on(NS_QUEUE, 'update', function () { refresh_queue(); });
         // Rattrape les mises à jour manquées pendant une coupure.
         AdminRealtime.onReconnect(NS_QUEUE, function () { refresh_queue(); });
@@ -480,17 +487,20 @@ function setupRealtimeConnectionFeedback() {
 
 function refresh_queue(){
     var queueTable = document.querySelector('#div_queue_table');
-    var card_queue = document.querySelector('#card-queue');
-    console.log("card_queue", card_queue)
+    // La carte "Patients" du dashboard est enveloppée par un slot portant
+    // data-card-url="/admin/queue/dashboard" (stable, présent dès le HTML
+    // initial). L'ancien sélecteur '#card-queue' ne matchait jamais car
+    // l'id de la carte est numérique (card-{{ dashboardcard.id }}).
+    var queueCardSlot = document.querySelector('[data-card-url="/admin/queue/dashboard"]');
 
-    // Vérifie si div_queue_table existe
+    // Vérifie si div_queue_table existe (page /admin/queue)
     if (queueTable) {
         htmx.trigger(queueTable, 'refresh_queue_patient', {target: "#div_queue_table"});
     }
 
-    // Vérifie si queue_dashboard existe
-    if (card_queue) {
-        htmx.trigger(card_queue, 'refresh_queue_patient', {target: "#card_queue"});
+    // Vérifie si la carte dashboard existe
+    if (queueCardSlot) {
+        htmx.trigger(queueCardSlot, 'refresh_queue_patient');
     }
 }
 
@@ -544,13 +554,20 @@ function refresh_activity_staff_table(){
 
 
 // ---------------- DASHBOARD ----------------
+//
+// Les cartes du dashboard ont un id numérique (card-{{ dashboardcard.id }}) :
+// les anciens sélecteurs '#card-printer' / '#card-counter' / '#card-queue' ne
+// matchaient jamais. On utilise data-card-url (stable, présent dès le HTML
+// initial sur le slot de la carte) pour retrouver chaque carte.
 
 function refresh_printer_dashboard(){
-    htmx.trigger('#card-printer', 'refresh_printer_dashboard', {target: "#card-printer"});
+    var slot = document.querySelector('[data-card-url="/admin/printer/dashboard"]');
+    if (slot) { htmx.trigger(slot, 'refresh_printer_dashboard'); }
 }
 
 function refresh_counter_dashboard(){
-    htmx.trigger('#card-counter', 'refresh_counter_dashboard', {target: "#card-counter"});
+    var slot = document.querySelector('[data-card-url="/admin/counter/dashboard"]');
+    if (slot) { htmx.trigger(slot, 'refresh_counter_dashboard'); }
 }
 
 
