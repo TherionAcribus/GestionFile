@@ -5,6 +5,7 @@ from models import Patient, ConfigOption
 from utils import replace_balise_announces
 from communication import communikation
 from python.engine import get_global_patient_queue
+from image_storage import ALLOWED_IMAGE_EXTENSIONS
 
 announce_bp = Blueprint('announce', __name__)
 
@@ -88,7 +89,12 @@ def announce_init_gallery():
     for gallery in announce_infos_galleries:
         try:
             image_dir = os.path.join(app.static_folder, "galleries", gallery)
-            images.extend([url_for('static', filename=f"galleries/{gallery}/{image}") for image in os.listdir(image_dir) if image.endswith((".png", ".jpg", ".jpeg"))])
+            images.extend([
+                url_for('static', filename=f"galleries/{gallery}/{image}")
+                for image in os.listdir(image_dir)
+                if "." in image
+                and image.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+            ])
         except FileNotFoundError:
             app.logger.error(f"Gallery {gallery} not found")
 

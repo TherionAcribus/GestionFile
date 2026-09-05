@@ -2,11 +2,12 @@ import json
 import os
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from models import ConfigOption, Button, Activity, Language, Translation, db
-from werkzeug.utils import secure_filename
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_api
 from pagination import parse_page_params, paginate_query
-from ui_feedback import allowed_image_file, display_toast
+from ui_feedback import display_toast
+from image_storage import accept_image_upload
+from path_security import safe_path_under
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -212,19 +213,20 @@ def add_new_language():
 def upload_flag_image():
     if 'file' not in request.files:
         return {"error": "No file part"}, 400
-    
+
     file = request.files['file']
     if file.filename == '':
         return {"error": "No selected file"}, 400
-    
-    if file and allowed_image_file(file.filename):
-        filename = secure_filename(file.filename)
-        flag_folder = os.path.join(app.static_folder, 'images', 'flags')
-        os.makedirs(flag_folder, exist_ok=True)
-        file.save(os.path.join(flag_folder, filename))
-        return {"url": url_for('static', filename='images/flags/' + filename)}
-    
-    return {"error": "Invalid file type"}, 400  
+
+    ok, err, result = accept_image_upload(file)
+    if not ok:
+        return {"error": err or "Fichier invalide"}, 400
+
+    flag_folder = os.path.join(app.static_folder, 'images', 'flags')
+    os.makedirs(flag_folder, exist_ok=True)
+    target_path = safe_path_under(flag_folder, result["filename"])
+    target_path.write_bytes(result["data"])
+    return {"url": url_for('static', filename='images/flags/' + result["filename"])}
 
 
 @admin_translation_bp.route('/admin/languages/order_languages')

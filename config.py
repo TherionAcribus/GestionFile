@@ -189,3 +189,7 @@ class Config:
     RABBITMQ_QUEUE = "socketio_messages"
 
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    # Extensions d'images acceptées à l'upload (validation centralisée dans
+    # ``image_storage.accept_image_upload``). Alignées sur ce que les navigateurs
+    # savent afficher + webp. SVG exclu (risque XSS). Voir ``image_storage``.
+    ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}

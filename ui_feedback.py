@@ -39,6 +39,12 @@ def display_toast(success=True, message=None):
 
 
 def allowed_image_file(filename):
-    """Vérifie si le fichier a une extension autorisée."""
+    """Vérifie si le fichier a une extension autorisée.
+
+    Conservée pour compatibilité ; les nouveaux uploads devraient utiliser
+    ``image_storage.accept_image_upload`` (validation complète : extension +
+    contenu + taille + nom unique).
+    """
+    from image_storage import ALLOWED_IMAGE_EXTENSIONS
     return ('.' in filename
-            and filename.rsplit('.', 1)[1].lower() in current_app.config["ALLOWED_IMAGE_EXTENSIONS"])
+            and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS)

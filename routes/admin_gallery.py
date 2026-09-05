@@ -4,13 +4,11 @@ import time as tm
 from pathlib import Path
 from flask import Blueprint, render_template, request, current_app as app
 from models import ConfigOption, db
-from wtforms import MultipleFileField, SubmitField
-from flask_wtf import FlaskForm
-from werkzeug.utils import secure_filename
 from communication import communikation
 from routes.admin_security import require_permission
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
 from ui_feedback import display_toast
+from image_storage import accept_image_upload, MAX_IMAGES_PER_UPLOAD, ALLOWED_IMAGE_EXTENSIONS
 
 admin_gallery_bp = Blueprint('admin_gallery', __name__)
 
@@ -71,14 +69,18 @@ def choose_gallery(gallery_name="", checked=""):
 
     return "", 200
 
-class UploadForm(FlaskForm):
-    photos = MultipleFileField('Upload Images')
-    submit = SubmitField('Upload')
+def _has_image_extension(name: str) -> bool:
+    """Filtre les fichiers affichés au seul sous-ensemble des images validées
+    à l'upload. Évite de rendre en vignette un fichier non-image hérité d'un
+    upload antérieur (avant validation centralisée)."""
+    return "." in name and name.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
 
 def get_images_with_dates(folder):
     try:
         folder_path = Path(folder)
-        files = [p.name for p in folder_path.iterdir() if p.is_file()]
+        files = [p.name for p in folder_path.iterdir()
+                 if p.is_file() and _has_image_extension(p.name)]
         images = []
         for file in files:
             filepath = folder_path / file
@@ -153,15 +155,38 @@ def upload_gallery(name):
 
     gallery_dir.mkdir(parents=True, exist_ok=True)
 
-    for file in request.files.getlist('photos'):
-        filename = secure_filename(file.filename or "")
-        if not filename:
+    files = request.files.getlist('photos')
+    if len(files) > MAX_IMAGES_PER_UPLOAD:
+        display_toast(
+            success=False,
+            message=f"Trop de fichiers en une fois (maximum {MAX_IMAGES_PER_UPLOAD}).",
+        )
+        images = get_images_with_dates(gallery_dir)
+        return render_template('admin/gallery_list_images.html', gallery=name, images=images)
+
+    saved = 0
+    skipped: list[str] = []
+    for file in files:
+        if not file.filename:
             continue
-        try:
-            target_path = safe_path_under(gallery_dir, filename)
-        except UnsafePathError:
+        ok, err, result = accept_image_upload(file)
+        if not ok:
+            skipped.append(f"{file.filename} : {err}")
             continue
-        file.save(str(target_path))
+        target_path = gallery_dir / result["filename"]
+        target_path.write_bytes(result["data"])
+        saved += 1
+
+    if skipped:
+        detail = "; ".join(skipped[:3])
+        if len(skipped) > 3:
+            detail += f" … (+{len(skipped) - 3} autre(s))"
+        display_toast(
+            success=saved > 0,
+            message=f"{saved} image(s) ajoutée(s), {len(skipped)} refusée(s) — {detail}",
+        )
+    elif saved:
+        display_toast(success=True, message=f"{saved} image(s) ajoutée(s).")
 
     images = get_images_with_dates(gallery_dir)
     app.logger.debug('images %s', images)

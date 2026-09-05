@@ -1,7 +1,6 @@
 import os
 import datetime
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
-from werkzeug.utils import secure_filename
 from models import Button, Activity, DashboardCard, Language, ConfigOption, db
 from diagnostics import collect_patient_page_alerts
 from python.engine import get_futur_patient, create_qr_code
@@ -11,6 +10,8 @@ from routes.counter import action_add_paper
 from routes.admin_security import require_permission, require_permission_dashboard
 from auth_utils import require_app_token_or_login
 from ui_feedback import display_toast
+from image_storage import accept_image_upload, ALLOWED_IMAGE_EXTENSIONS
+from path_security import safe_path_under
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -413,15 +414,19 @@ def upload_image(button_id):
     file = request.files['file']
     if file.filename == '':
         return "No selected file", 400
-    if file and allowed_image_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.static_folder, 'images/buttons',  filename)
-        file.save(file_path)
-        button.image_url = filename
-        db.session.commit()
-        # Retour à la page admin/patient
+    ok, err, result = accept_image_upload(file)
+    if not ok:
+        display_toast(success=False, message=err)
         return redirect("/admin/patient", code=302)
-    return "Invalid file", 400
+    buttons_dir = os.path.join(app.static_folder, 'images', 'buttons')
+    os.makedirs(buttons_dir, exist_ok=True)
+    target_path = safe_path_under(buttons_dir, result["filename"])
+    target_path.write_bytes(result["data"])
+    button.image_url = result["filename"]
+    db.session.commit()
+    display_toast(success=True, message="Image mise à jour")
+    # Retour à la page admin/patient
+    return redirect("/admin/patient", code=302)
 
 
 @admin_patient_bp.route('/upload_image_for_interface/<button_id>', methods=['POST'])
@@ -433,36 +438,39 @@ def upload_image_for_interface(button_id):
     file = request.files['file']
     if file.filename == '':
         return "No selected file", 400
-    if file and allowed_image_file(file.filename):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.static_folder, 'images/buttons',  filename)
-        file.save(file_path)
-        if button_id == "print_button":
-            key = "page_patient_button_print_ticket_picture"
-        elif button_id == "cancel_button":
-            key = "page_patient_button_cancel_picture"
-        app.config[key.upper()] = filename
-        config_option = ConfigOption.query.filter_by(config_key=key).first()
-        if config_option:
-            app.logger.debug("CONFIG OPTION")
-            config_option.value_str = filename
-        db.session.commit()
-        # Retour à la page admin/patient
+    ok, err, result = accept_image_upload(file)
+    if not ok:
+        display_toast(success=False, message=err)
         return redirect("/admin/patient", code=302)
-    return "Invalid file", 400
-
-
-# Permet de définir le type de fichiers autorisés pour l'ajout d'images
-def allowed_image_file(filename):
-    return '.' in filename and \
-        filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_EXTENSIONS"]
+    buttons_dir = os.path.join(app.static_folder, 'images', 'buttons')
+    os.makedirs(buttons_dir, exist_ok=True)
+    target_path = safe_path_under(buttons_dir, result["filename"])
+    target_path.write_bytes(result["data"])
+    if button_id == "print_button":
+        key = "page_patient_button_print_ticket_picture"
+    elif button_id == "cancel_button":
+        key = "page_patient_button_cancel_picture"
+    else:
+        display_toast(success=False, message="Bouton d'interface inconnu")
+        return redirect("/admin/patient", code=302)
+    app.config[key.upper()] = result["filename"]
+    config_option = ConfigOption.query.filter_by(config_key=key).first()
+    if config_option:
+        app.logger.debug("CONFIG OPTION")
+        config_option.value_str = result["filename"]
+    db.session.commit()
+    display_toast(success=True, message="Image mise à jour")
+    # Retour à la page admin/patient
+    return redirect("/admin/patient", code=302)
 
 
 @admin_patient_bp.route('/admin/patient/gallery_button_images/<int:button_id>', methods=['GET'])
 @require_permission('patient')
 def gallery_button_images(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
-    images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    images = [f for f in os.listdir(directory)
+              if os.path.isfile(os.path.join(directory, f))
+              and "." in f and f.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS]
     button = Button.query.order_by(Button.sort_order).get(button_id)
     app.logger.debug("%s", images)
     return render_template('/admin/patient_page_button_modal_gallery.html', images=images, button=button)
@@ -472,7 +480,9 @@ def gallery_button_images(button_id):
 @require_permission('patient')
 def gallery_button_images_for_interface(button_id):
     directory = os.path.join(app.static_folder, 'images/buttons')
-    images = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+    images = [f for f in os.listdir(directory)
+              if os.path.isfile(os.path.join(directory, f))
+              and "." in f and f.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS]
     app.logger.debug("%s", images)
     return render_template('/admin/patient_page_button_modal_gallery_for_interface.html', images=images, button_id=button_id)
 
