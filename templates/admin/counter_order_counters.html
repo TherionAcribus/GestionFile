@@ -1,8 +1,8 @@
 <h3>Choix des comptoirs</h3>
-<p>Glissez-déposez les comptoirs dans l'ordre souhaite</p>
-<ul id="list_order_buttons" class="list-group">
+<p>Glissez-déposez les comptoirs dans l'ordre souhaite, ou utilisez les flèches haut/bas et les boutons « Monter »/« Descendre ».</p>
+<ul id="list_order_buttons" class="list-group" role="list">
     {% for counter in counters %}
-    <li class="button-order-item list-group-item" data-id="{{ counter.id }}">
+    <li class="button-order-item list-group-item" data-id="{{ counter.id }}" role="listitem" tabindex="0">
         {{ counter.name }}
     </li>
     {% endfor %}

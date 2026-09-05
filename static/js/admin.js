@@ -605,7 +605,8 @@ function sortable(){
         preventOnFilter: false,
         onEnd: function (/**Event*/evt) {
             var itemEl = evt.item;  // dragged HTMLElement
-            // index of the new position available via evt.newIndex
+            // Mettre à jour les positions ARIA après un glisser-déposer.
+            updateAriaPositions(el);
         }
     });
     // Alternative clavier au glisser-déposer : chaque élément reçoit des
@@ -629,8 +630,16 @@ document.addEventListener('htmx:afterSettle', function (evt) {
 
 
 function addKeyboardReorderControls(listEl){
-    listEl.querySelectorAll('.button-order-item').forEach(function(item){
+    var items = listEl.querySelectorAll('.button-order-item');
+    var total = items.length;
+
+    items.forEach(function(item, index){
         if (item.querySelector('.order-move-controls')) return; // pas de doublon
+
+        // Point 14 : accessibilité du drag-and-drop.
+        // aria-posinset/aria-setsize pour annoncer la position à SR.
+        item.setAttribute('aria-setsize', total);
+        item.setAttribute('aria-posinset', index + 1);
 
         var controls = document.createElement('span');
         controls.className = 'order-move-controls ms-2';
@@ -644,6 +653,7 @@ function addKeyboardReorderControls(listEl){
         up.addEventListener('click', function(){
             var prev = item.previousElementSibling;
             if (prev) listEl.insertBefore(item, prev);
+            updateAriaPositions(listEl);
             up.focus();
         });
 
@@ -656,12 +666,53 @@ function addKeyboardReorderControls(listEl){
         down.addEventListener('click', function(){
             var next = item.nextElementSibling;
             if (next) listEl.insertBefore(next, item);
+            updateAriaPositions(listEl);
             down.focus();
         });
 
         controls.appendChild(up);
         controls.appendChild(down);
         item.appendChild(controls);
+
+        // Point 14 : navigation clavier sur l'item lui-même.
+        // Flèche haut/bas = déplacer l'item (comme les boutons).
+        // Home/End = focus le premier/dernier item.
+        item.addEventListener('keydown', function(e){
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                var prev = item.previousElementSibling;
+                if (prev) {
+                    listEl.insertBefore(item, prev);
+                    updateAriaPositions(listEl);
+                }
+                item.focus();
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                var next = item.nextElementSibling;
+                if (next) {
+                    listEl.insertBefore(next, item);
+                    updateAriaPositions(listEl);
+                }
+                item.focus();
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                var first = listEl.querySelector('.button-order-item');
+                if (first) first.focus();
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                var all = listEl.querySelectorAll('.button-order-item');
+                if (all.length) all[all.length - 1].focus();
+            }
+        });
+    });
+}
+
+// Met à jour aria-posinset/aria-setsize après un réordonnancement.
+function updateAriaPositions(listEl){
+    var items = listEl.querySelectorAll('.button-order-item');
+    items.forEach(function(item, i){
+        item.setAttribute('aria-setsize', items.length);
+        item.setAttribute('aria-posinset', i + 1);
     });
 }
 
