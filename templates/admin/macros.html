@@ -572,15 +572,6 @@
 </div>
 {% endmacro %}
 
-{# Macro complète #}
-{% macro css_textbloc(source, variable, value, label) %}
-<div class="row mb-4">
-    <div class="col-12">
-        {{ css_textarea(source, variable, value, label) }}
-        {{ css_button(source, variable) }}
-    </div>
-</div>
-{% endmacro %}
 
 
 
@@ -919,30 +910,6 @@ Enregistrer
 {% endmacro %}
 
 
-{# Macro pour l'input avec unité #}
-{% macro number_input(variable, value, label, unit="px") %}
-<div class="row align-items-center">
-    <div class="col-sm-1">
-        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
-    </div>
-    <div class="col-sm-11">
-        <div class="input-group">
-            <input
-                type="number"
-                id="{{ source }}_{{ variable }}"
-                class="form-control"
-                value="{{ value }}"
-                data-number-source="{{ source }}"
-                data-number-variable="{{ variable }}"
-                data-initial-value="{{ value }}"
-                min="0"
-                step="1"
-            >
-            <span class="input-group-text">{{ unit }}</span>
-        </div>
-    </div>
-</div>
-{% endmacro %}
 
 {# Macro pour le bouton universel — utilise le même schéma que `button` :
    envoie `key` (et non `source`/`variable`) à /admin/update_input, utilise

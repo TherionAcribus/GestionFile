@@ -41,7 +41,11 @@ def hide_dashboard_card():
         return 'Card non trouvée', 404
     
 
-@admin_dashboard_bp.route('/admin/dashboard/valide_select', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_dashboard_bp.route('/admin/dashboard/valide_select', methods=['POST'])
 @require_permission('options')
 def dashboard_valid_select():
     data = request.form.getlist('dashboard_options')
@@ -87,7 +91,11 @@ def save_dashboard_order():
         return '', 204  # Réponse vide avec succès
     return 'Invalid data', 400
 
-@admin_dashboard_bp.route('/admin/dashboard/resize', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_dashboard_bp.route('/admin/dashboard/resize', methods=['POST'])
 @require_permission_api('options')
 def resize_dashboard_card():
     data = request.get_json()
@@ -108,7 +116,11 @@ def resize_dashboard_card():
     else:
         return 'Card non trouvée', 404
 
-@admin_dashboard_bp.route('/admin/dashboard/add', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_dashboard_bp.route('/admin/dashboard/add', methods=['POST'])
 @require_permission_api('options')
 def add_dashboard_card():
     data = request.get_json()

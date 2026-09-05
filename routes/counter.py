@@ -330,7 +330,11 @@ def app_auto_calling():
     return jsonify(result), status_code
     
 
-@counter_bp.route('/app/counter/init_app', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @counter_bp.route('/app/counter/init_app', methods=['POST'])
 def app_init_app():
     """ Fonction d'initialisation de l'application pour récupérer les infos utiles en une seule requete """
     counter_id = request.form.get('counter_id')

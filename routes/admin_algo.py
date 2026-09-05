@@ -44,7 +44,11 @@ def toggle_activation():
                             algo_activated=app.config['ALGO_IS_ACTIVATED'])
 
 
-@admin_algo_bp.route('/admin/algo/change_overtaken_limit', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_algo_bp.route('/admin/algo/change_overtaken_limit', methods=['POST'])
 @require_permission('algo')
 def change_overtaken_limit():
     overtaken_limit = request.form.get('overtaken_limit')

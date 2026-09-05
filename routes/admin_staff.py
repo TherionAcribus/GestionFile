@@ -194,16 +194,11 @@ def add_counter():
 
 
 
-@admin_staff_bp.route('/pharmacists')
-@require_permission('staff')
-def pharmacists():
-    all_pharmacists = Pharmacist.query.all()
-    app.logger.debug('ALL %s', all_pharmacists)
-    return render_template('pharmacists.html', pharmacists=all_pharmacists)
-
-
-
-@admin_staff_bp.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_staff_bp.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
 @require_permission('staff')
 def update_pharmacist(pharmacist_id):
     pharmacist = Pharmacist.query.get(pharmacist_id)
@@ -214,11 +209,19 @@ def update_pharmacist(pharmacist_id):
         pharmacist.is_active = 'is_active' in request.form
         pharmacist.activity = request.form.get('activity', pharmacist.activity)
         db.session.commit()
+    # ATTENTION si cette route est reactivee : 'admin_staff.pharmacists' n'existe
+    # plus (elle rendait pharmacists.html, fichier inexistant -> 500, et a ete
+    # retiree). Ce url_for leverait donc un BuildError. Viser /admin/staff, qui
+    # est l'interface vivante du personnel.
     return redirect(url_for('admin_staff.pharmacists'))
 
 
 
-@admin_staff_bp.route('/add_pharmacist', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_staff_bp.route('/add_pharmacist', methods=['POST'])
 @require_permission('staff')
 def add_pharmacist():
     name = request.form.get('name')
@@ -233,10 +236,12 @@ def add_pharmacist():
 
 
 
-@admin_staff_bp.route('/new_pharmacist_form')
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_staff_bp.route('/new_pharmacist_form')
 @require_permission('staff')
 def new_pharmacist_form():
     app.logger.debug("new_pharmacist_form")
     return render_template('htmx/menu_admin_new_pharmacist_form.html')
-
-

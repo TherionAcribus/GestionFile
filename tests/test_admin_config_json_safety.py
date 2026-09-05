@@ -11,7 +11,7 @@ Trois problèmes corrigés dans ``routes/admin_config.py`` :
    (Content-Type non JSON), puis ``data.get(...)}`` levait ``AttributeError``
    → 500. Désormais ``get_json(silent=True)`` + vérification ``isinstance``.
 
-3. **Fuite d'information** : ``update_css_variable_old`` et ``copy_colors``
+3. **Fuite d'information** : ``copy_colors`` et ``update_css_variable``
    renvoyaient ``str(e)`` au client (détails techniques possibles :
    chemin de fichier, nom de table, etc.). Remplacé par un message générique,
    le détail étant journalisé côté serveur.
@@ -119,18 +119,6 @@ def _strip_comments(code):
     return '\n'.join(lines)
 
 
-def test_no_str_e_in_update_css_variable_old():
-    """update_css_variable_old ne doit pas renvoyer str(e) au client."""
-    source = _read("routes/admin_config.py")
-    body = _extract_func(source, "update_css_variable_old")
-    code_only = _strip_comments(body)
-    # Vérifier que str(e) n'apparaît pas dans un return ou jsonify.
-    returns = re.findall(r'return.*', code_only)
-    for ret in returns:
-        assert "str(e)" not in ret, (
-            "update_css_variable_old renvoie str(e) au client "
-            "(fuite d'information technique)"
-        )
 
 
 def test_no_str_e_in_copy_colors():
@@ -160,7 +148,7 @@ def test_error_messages_are_generic():
     """Les messages d'erreur renvoyés au client doivent être génériques
     (pas de détail technique)."""
     source = _read("routes/admin_config.py")
-    for func_name in ["update_css_variable_old", "copy_colors", "update_css_variable"]:
+    for func_name in ["copy_colors", "update_css_variable"]:
         body = _extract_func(source, func_name)
         code_only = _strip_comments(body)
         returns = re.findall(r'return.*', code_only)
@@ -172,11 +160,6 @@ def test_error_messages_are_generic():
 # 4. Les détails techniques sont journalisés
 # ---------------------------------------------------------------------------
 
-def test_update_css_variable_old_logs_error():
-    """L'exception doit être journalisée côté serveur (app.logger.error)."""
-    source = _read("routes/admin_config.py")
-    body = _extract_func(source, "update_css_variable_old")
-    assert "logger.error" in body or "logger.warning" in body
 
 
 def test_copy_colors_logs_error():

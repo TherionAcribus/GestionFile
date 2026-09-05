@@ -25,7 +25,11 @@ def wrong_counter(counter_id):
                     counters=Counter.query.all(),
                     counter_id=counter_id)
 
-@calling_bp.route('/patient_right_page_default')
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @calling_bp.route('/patient_right_page_default')
 def patient_right_page_default():
     app.logger.debug("default")
     return render_template('htmx/patient_right_page_default.html')
@@ -62,15 +66,6 @@ def validate_patient(counter_id, patient_id):
 
     #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
     return jsonify(current_patient_pyside), 200  
-
-
-
-# Route pour la page patients qui accepte une langue via l'URL
-@calling_bp.route('/patients/<lang>')
-def patients_langue(lang):
-    session['lang'] = lang
-    app.logger.debug("%s", session['lang'])
-    return render_template('patients.html', cache=False)
 
 
 
@@ -165,12 +160,3 @@ def current_patients():
     patients = Patient.query.filter_by(status='ongoing').all()
     app.logger.debug("%s", patients)
     return render_template('htmx/update_patients.html', patients=patients)
-
-
-
-@calling_bp.route('/patients_queue')
-def patients_queue():
-    patients = Patient.query.filter_by(status='standing').order_by(Patient.timestamp, Patient.id).all()
-    return render_template('htmx/patients_queue.html', patients=patients)
-
-

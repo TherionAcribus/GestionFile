@@ -477,7 +477,15 @@ def cancel_patient():
     
 
 @patient_bp.route('/patient/conclusion_page/<call_number>')
-def patient_conclusion_page(call_number, print_ticket, print_data=None, print_job_id=None):
+def patient_conclusion_page(call_number, print_ticket=False, print_data=None, print_job_id=None):
+    # ``print_ticket`` doit avoir une valeur par defaut : la fonction sert a la
+    # fois d'aide interne (appelee avec tous ses arguments depuis
+    # patients_submit et patient_scan_already_validate) ET de vue pour cette
+    # route, que Flask appelle avec le seul <call_number>. Sans defaut, l'acces
+    # par URL levait un TypeError (500) -- ce qui cassait la redirection non-HTMX
+    # de patients_submit, seul chemin emprunte quand le navigateur n'envoie pas
+    # d'en-tete HX-Request. False correspond au mode « pas d'impression en
+    # cours », comme pour l'arrivee par scan.
     app.logger.debug('CONFIG QRCODE CONCLUSION: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     image_name_qr = f"qr_patient-{call_number}.png" 
 

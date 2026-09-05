@@ -735,7 +735,11 @@ def reset_admin_user():
         app.logger.error(f"Error in reset_admin_user: {str(e)}")
         return False
 
-@admin_security_bp.route('/admin/reset_admin', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_security_bp.route('/admin/reset_admin', methods=['POST'])
 @require_permission('security')
 def reset_admin():
     """Reset the admin user and create a new one"""

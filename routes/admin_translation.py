@@ -275,7 +275,11 @@ def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, 
 
     return False  # Aucune nouvelle traduction insérée
 
-@admin_translation_bp.route('/admin/translations/collect', methods=['GET'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_translation_bp.route('/admin/translations/collect', methods=['GET'])
 @require_permission('translation')
 def translations_collect():
     # Définir la langue par défaut (vous pouvez adapter selon vos besoins)

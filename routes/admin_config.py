@@ -139,56 +139,6 @@ def update_switch():
 # Source unique de vérité pour les routes CSS génériques ci-dessous, dont la
 # permission dépend de données de la requête (et ne peut donc pas être fixée par
 # un décorateur statique).
-@admin_config_bp.route('/admin/update_css_variable_old', methods=['POST'])
-def update_css_variable_old():
-    app.logger.debug("%s", request.form)
-    try:
-        # Récupération des données
-        source = request.form.get('source')
-        variable = request.form.get('variable')
-        value = request.form.get('value')
-
-        # Validation des données
-        if not all([source, variable, value]):
-            return jsonify({
-                'status': 'error',
-                'message': 'Données manquantes'
-            }), 400
-
-        if source not in ['patient', 'announce']:
-            return jsonify({
-                'status': 'error',
-                'message': 'Source invalide'
-            }), 400
-
-        # Permission liée à la page ciblée par la variable CSS.
-        refusal = permission_error_response(CSS_SOURCE_PERMISSION[source], api=True)
-        if refusal is not None:
-            return refusal
-
-        # Mise à jour via le gestionnaire
-        app.css_variable_manager.update_variable(source, variable, value)
-
-        return jsonify({
-            'status': 'success',
-            'message': f'Variable {variable} mise à jour pour {source}',
-            'data': {
-                'source': source,
-                'variable': variable,
-                'value': value
-            }
-        })
-
-    except Exception as e:
-        # Point 3 (audit Admin) : ne pas renvoyer str(e) au client.
-        app.logger.error("Échec update_css_variable_old : %s", e)
-        return jsonify({
-            'status': 'error',
-            'message': 'La mise à jour de la variable a échoué.'
-        }), 500
-
-
-
 @admin_config_bp.route('/admin/update_css_variable', methods=['POST'])
 def update_css_variable():
     app.logger.debug("UPDATE!!!")

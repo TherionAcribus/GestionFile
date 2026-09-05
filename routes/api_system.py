@@ -17,7 +17,11 @@ from models import db, Counter
 
 api_system_bp = Blueprint('api_system', __name__)
 
-@api_system_bp.route('/send_message', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @api_system_bp.route('/send_message', methods=['POST'])
 @require_app_token_or_login
 def send_message():
     message = request.json.get('message', 'Hello from server')
@@ -76,7 +80,11 @@ def rabbitmq_status():
 
 
 
-@api_system_bp.route('/test_local')
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @api_system_bp.route('/test_local')
 @require_app_token_or_login
 def rabbitmq_status_local():
     rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')

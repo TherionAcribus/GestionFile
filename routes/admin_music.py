@@ -176,7 +176,11 @@ def admin_music(tab=None):
                                 can_access_options=can_access_options)
 
 
-@admin_music_bp.route('/admin/music/player/<action>', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_music_bp.route('/admin/music/player/<action>', methods=['POST'])
 @require_permission('music_play')
 def player_action(action):
     if action == 'shuffle':
@@ -198,7 +202,11 @@ def player_action(action):
     elif action == 'play_playlist':
         return play_playlist()
 
-@admin_music_bp.route('/admin/music/save_options', methods=['POST'])
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_music_bp.route('/admin/music/save_options', methods=['POST'])
 @require_permission('music_options')
 def save_music_options():
     """Sauvegarde les options de musique"""
@@ -257,7 +265,11 @@ def spotify_callback():
 
     return redirect(url_for('admin_music.admin_music'))  # Rediriger vers votre page d'administration ou autre
 
-@admin_music_bp.route('/show_saved_tracks')
+# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
+# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
+# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
+# tests/test_code_mort.py.
+# @admin_music_bp.route('/show_saved_tracks')
 @require_permission('music_play')
 def show_saved_tracks():
     token_info, authorized = get_spotify_token()

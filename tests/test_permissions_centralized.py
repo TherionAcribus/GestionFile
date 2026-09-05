@@ -148,10 +148,12 @@ def test_broken_dangerous_routes_are_no_longer_exposed():
 
 def test_css_routes_in_app_are_permissioned():
     source = _read("routes/admin_config.py")
-    # Les 3 routes CSS génériques posent une garde dont la ressource dépend de la
+    # Les routes CSS génériques posent une garde dont la ressource dépend de la
     # page ciblée (permission_error_response + table CSS_SOURCE_PERMISSION).
+    # ``update_css_variable_old`` a été retirée (Phase 8 pt 3) : doublon obsolète
+    # de ``update_css_variable``, plus référencée nulle part.
     assert "CSS_SOURCE_PERMISSION" in source
-    for route in ("update_css_variable", "update_css_variable_old", "copy_colors"):
+    for route in ("update_css_variable", "copy_colors"):
         m = re.search(
             r"def " + route + r"\(.*?\n(.*?)(?=\ndef |\n@app\.route)", source, re.DOTALL)
         assert m, f"fonction {route} introuvable"
