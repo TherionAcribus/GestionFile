@@ -81,6 +81,33 @@ def is_authenticated_request() -> bool:
     return bool(getattr(current_user, "is_authenticated", False))
 
 
+def is_admin_session() -> bool:
+    """Vérifie qu'une **session admin authentifiée** est active.
+
+    Contrairement à ``is_authenticated_request``, cette fonction **n'accepte
+    pas** un jeton applicatif (``X-App-Token``) : un jeton machine générique
+    ne prouve pas que le client est une interface d'administration.
+
+    Utilisée pour le namespace Socket.IO ``/socket_admin`` (point 2 — audit
+    Admin) : seuls les utilisateurs connectés via l'interface web admin
+    peuvent rejoindre ce namespace et recevoir ses évènements (toasts,
+    rafraîchissements de tableaux, etc.).
+
+    La vérification de **permission** (l'utilisateur a-t-il au moins une
+    permission admin ?) est laissée à l'appelant, car elle dépend du modèle
+    ``Role`` et du registre de permissions — des dépendances que ce module
+    garde volontairement légères.
+    """
+    if not has_request_context():
+        return False
+
+    # Pas de jeton applicatif : seule une session authentifiée compte.
+    if current_user is None:
+        return False
+
+    return bool(getattr(current_user, "is_authenticated", False))
+
+
 def wants_json_response(req) -> bool:
     """True si la requête est un appel programmatique (AJAX/HTMX/JSON) et non une
     navigation navigateur classique.

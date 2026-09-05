@@ -16,7 +16,7 @@ import logging
 from flask import current_app, request
 from flask_socketio import join_room, leave_room
 
-from auth_utils import is_authenticated_request, is_socket_connection_authorized
+from auth_utils import is_authenticated_request, is_admin_session, is_socket_connection_authorized
 from extensions import socketio
 
 logger = logging.getLogger(__name__)
@@ -112,11 +112,38 @@ def connect_admin():
     # Admin : authentification TOUJOURS requise (point 1.2). SECURITY_LOGIN_ADMIN
     # est déprécié et n'est plus consulté pour le namespace d'administration :
     # il ne peut plus rendre l'admin anonyme.
-    if not is_authenticated_request():
+    #
+    # Point 2 (audit Admin) : on exige une **session admin authentifiée**, pas
+    # un simple jeton applicatif (X-App-Token). Un jeton machine générique ne
+    # prouve pas que le client est une interface d'administration : il pourrait
+    # être utilisé par une application comptoir/écran pour se connecter au
+    # namespace admin et recevoir des évènements (toasts, rafraîchissements)
+    # qui ne la concernent pas.
+    if not is_admin_session():
         current_app.logger.warning(
-            "Connexion Socket.IO refusee sur /socket_admin (login manquant)."
+            "Connexion Socket.IO refusee sur /socket_admin "
+            "(session admin manquante — jeton applicatif non accepté)."
         )
         return False
+
+    # Vérification de permission : l'utilisateur doit avoir au moins une
+    # permission admin. Un utilisateur authentifié sans aucun rôle admin
+    # (ex. compte de service) ne doit pas rejoindre ce namespace.
+    from routes.admin_security import user_has_permission
+    from permissions_registry import PERMISSION_RESOURCES
+    from flask_login import current_user as _current_user
+
+    has_any_admin_perm = any(
+        user_has_permission(_current_user, resource)
+        for resource in PERMISSION_RESOURCES
+    )
+    if not has_any_admin_perm:
+        current_app.logger.warning(
+            "Connexion Socket.IO refusee sur /socket_admin "
+            "(utilisateur sans permission admin)."
+        )
+        return False
+
     username = register_client(request)
     logger.info("Client connecte au namespace admin (SID %s, username %s)", request.sid, username)
 
