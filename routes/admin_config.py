@@ -180,9 +180,11 @@ def update_css_variable_old():
         })
 
     except Exception as e:
+        # Point 3 (audit Admin) : ne pas renvoyer str(e) au client.
+        app.logger.error("Échec update_css_variable_old : %s", e)
         return jsonify({
             'status': 'error',
-            'message': str(e)
+            'message': 'La mise à jour de la variable a échoué.'
         }), 500
 
 
@@ -194,7 +196,21 @@ def update_css_variable():
     source_name = request.form.get('source')
     variable_name = request.form.get('variable')
     value = request.form.get('value')
-    dependencies = json.loads(request.form.get('dependencies', '[]'))
+
+    # Point 3 (audit Admin) : json.loads peut lever JSONDecodeError si le
+    # client envoie un JSON mal formé. On valide AVANT toute mutation.
+    raw_dependencies = request.form.get('dependencies', '[]')
+    try:
+        dependencies = json.loads(raw_dependencies)
+    except (json.JSONDecodeError, TypeError):
+        app.logger.warning(
+            "update_css_variable : dependencies invalide reçu de %s",
+            getattr(current_user, "username", "?"),
+        )
+        return jsonify({'status': 'error', 'message': 'Données de dépendances invalides.'}), 400
+
+    if not isinstance(dependencies, list):
+        return jsonify({'status': 'error', 'message': 'Les dépendances doivent être une liste.'}), 400
 
     # Permission liée à la page ciblée par la variable CSS.
     resource = CSS_SOURCE_PERMISSION.get(source_name)
@@ -204,23 +220,27 @@ def update_css_variable():
     if refusal is not None:
         return refusal
 
-    # Met à jour la variable dans la base de données
-    app.css_variable_manager.update_variable(source_name, variable_name, value)
-    
-    # Met à jour toutes les variables dépendantes
-    for dep_variable in dependencies:
-        app.css_variable_manager.update_variable(
-            source_name, 
-            dep_variable,  # Maintenant dep_variable est directement le nom de la variable
-            value  # On utilise la même valeur que la variable parente
-        )
+    try:
+        # Met à jour la variable dans la base de données
+        app.css_variable_manager.update_variable(source_name, variable_name, value)
 
-    # Récupère toutes les variables pour générer le CSS
-    variables = app.css_variable_manager.get_all_variables(source_name)
-    
-    # Génère le nouveau CSS
-    new_css_url = app.css_manager.generate_css(variables, mode=source_name)
-    
+        # Met à jour toutes les variables dépendantes
+        for dep_variable in dependencies:
+            app.css_variable_manager.update_variable(
+                source_name,
+                dep_variable,
+                value
+            )
+
+        # Récupère toutes les variables pour générer le CSS
+        variables = app.css_variable_manager.get_all_variables(source_name)
+
+        # Génère le nouveau CSS
+        new_css_url = app.css_manager.generate_css(variables, mode=source_name)
+    except Exception as e:
+        app.logger.error("Échec update_css_variable (%s/%s) : %s", source_name, variable_name, e)
+        return jsonify({'status': 'error', 'message': 'La mise à jour de la variable a échoué.'}), 500
+
     return jsonify({
         'status': 'success',
         'css_url': new_css_url
@@ -232,13 +252,21 @@ def update_css_variable():
 def copy_colors():
     """Copie les couleurs parentes d'une page source vers une page cible"""
     try:
-        data = request.get_json()
+        # Point 3 (audit Admin) : request.get_json() peut retourner None si
+        # le Content-Type n'est pas JSON. On valide avant d'accéder aux clés.
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({'status': 'error', 'message': 'Corps JSON manquant ou invalide.'}), 400
+
         source_page = data.get('source_page')
         target_page = data.get('target_page')
         mappings = data.get('mappings', [])
 
         if not all([source_page, target_page, mappings]):
             return jsonify({'status': 'error', 'message': 'Données manquantes'}), 400
+
+        if not isinstance(mappings, list):
+            return jsonify({'status': 'error', 'message': 'Les mappings doivent être une liste.'}), 400
 
         # Permission : l'écriture porte sur chaque page cible ; l'utilisateur doit
         # avoir la permission de modifier toutes les pages ciblées.
@@ -276,7 +304,10 @@ def copy_colors():
         return jsonify({'status': 'success', 'message': 'Couleurs copiées avec succès'})
 
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        # Point 3 : ne pas renvoyer str(e) au client (fuite d'information
+        # technique). Journaliser le détail côté serveur.
+        app.logger.error("Échec copy_colors : %s", e)
+        return jsonify({'status': 'error', 'message': 'La copie des couleurs a échoué.'}), 500
 
 
 
