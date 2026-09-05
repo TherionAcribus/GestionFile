@@ -64,6 +64,10 @@ services:
     volumes:
       - instance_data:/app/instance
       - galleries_data:/app/static/galleries
+      - buttons_data:/app/static/images/buttons
+      - flags_data:/app/static/images/flags
+      - annonces_data:/app/static/images/annonces
+      - signals_data:/app/static/audio/signals
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/healthz"]
@@ -98,6 +102,10 @@ services:
     volumes:
       - instance_data:/app/instance
       - galleries_data:/app/static/galleries
+      - buttons_data:/app/static/images/buttons
+      - flags_data:/app/static/images/flags
+      - annonces_data:/app/static/images/annonces
+      - signals_data:/app/static/audio/signals
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
 
 volumes:
@@ -105,3 +113,7 @@ volumes:
   rabbitmq_data:
   instance_data:
   galleries_data:
+  buttons_data:
+  flags_data:
+  annonces_data:
+  signals_data:
