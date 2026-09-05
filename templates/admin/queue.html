@@ -61,22 +61,52 @@
 
     <br>
 
-    <button
-        class="btn btn-warning"
-        hx-get="/admin/database/confirm_delete_patient_table_with_saving"
-        hx-target="#modal-htmx"
-        data-bs-toggle="modal"
-        data-bs-target="#modal_delete">
-        Supprimer tous les patients (avec sauvegarde)
-    </button>
-    <button
-        class="btn btn-danger"
-        hx-get="/admin/database/confirm_delete_patient_table_without_saving"
-        hx-target="#modal-htmx"
-        data-bs-toggle="modal"
-        data-bs-target="#modal_delete">
-        Supprimer tous les patients (sans sauvegarde)
-    </button>
+    {# ------------------------------------------------------------------ #}
+    {#  Point 6 (audit Admin) — Actions avancées                          #}
+    {#                                                                    #}
+    {#  Les boutons de suppression massive de patients sont des opérations #}
+    {#  destructives et irréversibles. Ils ne doivent pas apparaître dans   #}
+    {#  le parcours quotidien de gestion de la file, où un clic involontai-#}
+    {#  re est possible. Ils sont regroupés dans une zone repliable, sépa- #}
+    {#  rée visuellement, avec un avertissement explicite.                 #}
+    {# ------------------------------------------------------------------ #}
+    <div class="card border-danger mt-4">
+        <div class="card-header bg-danger-subtle">
+            <button class="btn btn-link text-danger text-decoration-none p-0 fw-bold"
+                    type="button" data-bs-toggle="collapse"
+                    data-bs-target="#advancedActions" aria-expanded="false"
+                    aria-controls="advancedActions">
+                <i class="bi bi-exclamation-triangle"></i> Actions avancées
+            </button>
+        </div>
+        <div id="advancedActions" class="collapse">
+            <div class="card-body">
+                <div class="alert alert-warning mb-3">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <strong>Attention :</strong> ces actions suppriment des données
+                    de manière <strong>irréversible</strong>. Assurez-vous qu'aucune
+                    activité n'est en cours et utilisez l'option « avec sauvegarde »
+                    si possible.
+                </div>
+                <button
+                    class="btn btn-warning"
+                    hx-get="/admin/database/confirm_delete_patient_table_with_saving"
+                    hx-target="#modal-htmx"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal_delete">
+                    <i class="bi bi-archive"></i> Supprimer tous les patients (avec sauvegarde)
+                </button>
+                <button
+                    class="btn btn-danger ms-2"
+                    hx-get="/admin/database/confirm_delete_patient_table_without_saving"
+                    hx-target="#modal-htmx"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modal_delete">
+                    <i class="bi bi-trash"></i> Supprimer tous les patients (sans sauvegarde)
+                </button>
+            </div>
+        </div>
+    </div>
 
     <br><br>
 
