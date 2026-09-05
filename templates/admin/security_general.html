@@ -27,7 +27,37 @@ security_login_counter,
                 "Mot de passe sur les pages 'Ecran Announce'")
 }}
 
-{{ macros.switch("security_login_patient", 
-                security_login_patient, 
+{{ macros.switch("security_login_patient",
+                security_login_patient,
                 "Mot de passe sur les pages 'Ecran Patient'")
 }}
+
+{# ------------------------------------------------------------------ #}
+{#  Point 1 (audit Admin) — Déconnexion globale de tous les utilisateurs #}
+{#                                                                    #}
+{#  Action destructive : supprime toutes les sessions Flask. Doit être  #}
+{#  déclenchée par un formulaire POST (CSRF) avec confirmation, pas par  #}
+{#  un simple lien GET (risque de CSRF par image/iframe).               #}
+{# ------------------------------------------------------------------ #}
+<div class="card border-danger mt-4">
+    <div class="card-header bg-danger-subtle">
+        <i class="bi bi-exclamation-triangle"></i> <strong>Actions avancées</strong>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning mb-3">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <strong>Attention :</strong> cette action déconnecte
+            <strong>tous les utilisateurs</strong> (admin, comptoirs, écrans)
+            en supprimant toutes les sessions. À utiliser avant une
+            restauration de la base « Users » ou en cas d'urgence.
+        </div>
+        <form method="post" action="/admin/logout_all"
+              hx-post="/admin/logout_all"
+              hx-confirm="Confirmer la déconnexion de TOUS les utilisateurs ? Toutes les sessions seront supprimées.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-box-arrow-right"></i> Déconnecter tous les utilisateurs
+            </button>
+        </form>
+    </div>
+</div>

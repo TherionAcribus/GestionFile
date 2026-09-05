@@ -632,11 +632,18 @@ class ExtendedLoginForm(FlaskForm):
         app.logger.info(f"Validation OK pour username: {self.username.data}")
         return True
     
-@admin_security_bp.route('/logout_all')
+@admin_security_bp.route('/logout_all', methods=['POST'])
 @require_permission('security')
 def logout_all():
-    """ Déconnexion de tous les utilisateurs 
-    Cela permet de restaurer la base de données User """
+    """ Déconnexion de tous les utilisateurs
+    Cela permet de restaurer la base de données User
+
+    Point 1 (audit Admin) : cette route était auparavant accessible en GET,
+    ce qui permettait à un lien ou une image intégrée de déclencher la
+    déconnexion de tous les utilisateurs (CSRF par GET). Elle est désormais
+    POST-only : Flask renvoie 405 sur un GET, et le décorateur global CSRF
+    (before_request dans app.py) valide le jeton sur les POST navigateur.
+    """
     app.logger.info("Logout all users")
     # Supprimer toutes les sessions
     if os.path.exists('flask_session'):
