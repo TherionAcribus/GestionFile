@@ -442,93 +442,69 @@ def archive_data(older_than_days, compress=True):
     return f"Archived {total_archived} records from {len(dates_to_process)} days."
 
 def create_daily_stats(date, base_query):
-    """Crée les statistiques agrégées pour une journée donnée"""
-    
-    # Helper pour calculer les moyennes
-    def get_avgs(query):
-        return query.with_entities(
-            func.count(PatientHistory.id).label('count'),
-            func.avg(func.timestampdiff(text('SECOND'), PatientHistory.timestamp, PatientHistory.timestamp_counter)).label('avg_waiting'),
-            func.avg(func.timestampdiff(text('SECOND'), PatientHistory.timestamp_counter, PatientHistory.timestamp_end)).label('avg_counter'),
-            func.avg(func.timestampdiff(text('SECOND'), PatientHistory.timestamp, PatientHistory.timestamp_end)).label('avg_total')
-        ).first()
+    """Cree les statistiques agregees pour une journee donnee.
 
-    # 1. Global
-    stats = get_avgs(base_query)
-    if stats.count > 0:
+    Une seule requete d'agregat par dimension (globale, activite, langue,
+    comptoir) grace a un GROUP BY, au lieu d'une requete DISTINCT suivie d'une
+    requete par entite : sur un premier archivage rattrapant plusieurs annees,
+    l'ancienne boucle emettait des dizaines de milliers de requetes.
+    """
+    # Idempotence : rejouer l'archivage d'une date deja traitee ne doit pas
+    # doubler les comptages (la fusion detaille/compresse les additionne).
+    # Couvre aussi les lignes 'global', que la contrainte d'unicite ne protege
+    # pas sous MySQL (category_id NULL y est considere comme distinct).
+    AggregatedStats.query.filter(AggregatedStats.date == date).delete(
+        synchronize_session=False)
+
+    waiting = func.timestampdiff(text('SECOND'),
+                                 PatientHistory.timestamp, PatientHistory.timestamp_counter)
+    counter = func.timestampdiff(text('SECOND'),
+                                 PatientHistory.timestamp_counter, PatientHistory.timestamp_end)
+    total = func.timestampdiff(text('SECOND'),
+                               PatientHistory.timestamp, PatientHistory.timestamp_end)
+
+    # COUNT(expr) ne compte que les resultats non NULL : c'est exactement
+    # l'effectif ayant participe a la moyenne correspondante, seul poids correct
+    # pour recombiner ces moyennes cote statistiques.
+    metrics = (
+        func.count(PatientHistory.id).label('count'),
+        func.avg(waiting).label('avg_waiting'),
+        func.avg(counter).label('avg_counter'),
+        func.avg(total).label('avg_total'),
+        func.count(waiting).label('count_waiting'),
+        func.count(counter).label('count_counter'),
+        func.count(total).label('count_total'),
+    )
+
+    def add_row(category_type, category_id, row):
+        if not row or not row.count:
+            return
         db.session.add(AggregatedStats(
             date=date,
-            category_type='global',
-            count=stats.count,
-            avg_waiting_time=stats.avg_waiting,
-            avg_counter_time=stats.avg_counter,
-            avg_total_time=stats.avg_total
+            category_type=category_type,
+            category_id=category_id,
+            count=row.count,
+            avg_waiting_time=row.avg_waiting,
+            avg_counter_time=row.avg_counter,
+            avg_total_time=row.avg_total,
+            count_waiting_time=row.count_waiting,
+            count_counter_time=row.count_counter,
+            count_total_time=row.count_total,
         ))
 
-    # 2. Par Activité
-    activities = db.session.query(PatientHistory.activity_id).filter(
-        PatientHistory.timestamp.between(
-            datetime.combine(date, datetime.min.time()),
-            datetime.combine(date, datetime.max.time())
-        )
-    ).distinct().all()
-    
-    for act_id in activities:
-        act_query = base_query.filter(PatientHistory.activity_id == act_id[0])
-        stats = get_avgs(act_query)
-        if stats.count > 0:
-            db.session.add(AggregatedStats(
-                date=date,
-                category_type='activity',
-                category_id=act_id[0],
-                count=stats.count,
-                avg_waiting_time=stats.avg_waiting,
-                avg_counter_time=stats.avg_counter,
-                avg_total_time=stats.avg_total
-            ))
+    # 1. Global
+    add_row('global', None, base_query.with_entities(*metrics).first())
 
-    # 3. Par Langue
-    languages = db.session.query(PatientHistory.language_id).filter(
-        PatientHistory.timestamp.between(
-            datetime.combine(date, datetime.min.time()),
-            datetime.combine(date, datetime.max.time())
-        )
-    ).distinct().all()
-    
-    for lang_id in languages:
-        if lang_id[0] is None: continue
-        lang_query = base_query.filter(PatientHistory.language_id == lang_id[0])
-        stats = get_avgs(lang_query)
-        if stats.count > 0:
-            db.session.add(AggregatedStats(
-                date=date,
-                category_type='language',
-                category_id=lang_id[0],
-                count=stats.count,
-                avg_waiting_time=stats.avg_waiting,
-                avg_counter_time=stats.avg_counter,
-                avg_total_time=stats.avg_total
-            ))
-
-    # 4. Par Comptoir
-    counters = db.session.query(PatientHistory.counter_id).filter(
-        PatientHistory.timestamp.between(
-            datetime.combine(date, datetime.min.time()),
-            datetime.combine(date, datetime.max.time())
-        )
-    ).distinct().all()
-    
-    for count_id in counters:
-        if count_id[0] is None: continue
-        count_query = base_query.filter(PatientHistory.counter_id == count_id[0])
-        stats = get_avgs(count_query)
-        if stats.count > 0:
-            db.session.add(AggregatedStats(
-                date=date,
-                category_type='counter',
-                category_id=count_id[0],
-                count=stats.count,
-                avg_waiting_time=stats.avg_waiting,
-                avg_counter_time=stats.avg_counter,
-                avg_total_time=stats.avg_total
-            ))
+    # 2. Par activite / langue / comptoir : un GROUP BY chacun.
+    for category_type, column in (
+        ('activity', PatientHistory.activity_id),
+        ('language', PatientHistory.language_id),
+        ('counter', PatientHistory.counter_id),
+    ):
+        rows = (base_query
+                .with_entities(column.label('category_id'), *metrics)
+                .filter(column.isnot(None))
+                .group_by(column)
+                .all())
+        for row in rows:
+            add_row(category_type, row.category_id, row)

@@ -4,11 +4,14 @@
 
 {% block content %}
 <div class="container mx-auto px-4">
+    {# Les donnees du graphique sont chargees en JSON par admin_stats.js, pas par
+       htmx : htmx echangeait la reponse en innerHTML dans une <div>, ce qui
+       cassait JSON.parse des qu'un nom d'activite contenait « < » (et injectait
+       du HTML dans la page), n'echangeait rien sur un statut 4xx -- le message
+       de validation n'atteignait donc jamais l'utilisateur -- et ne protegeait
+       pas contre les reponses arrivant dans le desordre. #}
     <div id="controls" class="mb-6 space-y-4"
-         hx-get="/admin/stats/chart" 
-         hx-trigger="change from:select, input from:.date-input, click from:#apply-filters" 
-         hx-target="#chart-data" 
-         hx-include="#controls">
+         data-chart-url="{{ url_for('admin_stats.get_chart_data') }}">
         
         <!-- Période -->
         <div class="row mb-3">
@@ -16,7 +19,7 @@
             <div class="col-md-3">
                 <div class="form-group">
                     <label for="date-type">Période</label>
-                    <select id="date-type" name="date_type" class="form-select" onchange="toggleDateOptions()">
+                    <select id="date-type" name="date_type" class="form-select">
                         <option value="current">Aujourd'hui</option>
                         <option value="history">Historique</option>
                     </select>
@@ -27,7 +30,7 @@
             <div id="history-options" class="col-md-3 d-none">
                 <div class="form-group">
                     <label for="period-type">Type de période</label>
-                    <select id="period-type" name="period_type" class="form-select" onchange="toggleCustomDates()">
+                    <select id="period-type" name="period_type" class="form-select">
                         <option value="7">7 derniers jours</option>
                         <option value="28">28 derniers jours</option>
                         <option value="365">365 derniers jours</option>
@@ -156,11 +159,11 @@
     </div>
 
     <div class="bg-white rounded-lg shadow p-6">
-        <div id="chart-error" class="alert alert-warning d-none" role="alert"></div>
+        <div id="chart-error" class="alert alert-danger d-none" role="alert"></div>
+        <div id="chart-warning" class="alert alert-warning d-none" role="alert"></div>
         <div id="chart-container" class="w-full" style="height: 400px;">
             <canvas id="statsChart"></canvas>
         </div>
-        <div id="chart-data" hx-swap-oob="true"></div>
     </div>
 </div>
 {% endblock %}
@@ -171,10 +174,17 @@
    que dans des gestionnaires d'événements / DOMContentLoaded, jamais lors de
    l'analyse : elles sont donc chargées en `defer` (ordre préservé). #}
 {% block scripts_end %}
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/locale/fr.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+{# Librairies servies localement (versions figees), comme le reste du front
+   depuis la phase 8 : cette page etait la derniere a dependre de cdnjs/jsdelivr
+   et donc la seule a casser hors ligne ou sous CSP stricte. #}
+<script defer src="{{ url_for('static', filename='js/libs/chart-3.7.0.min.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/libs/moment-2.29.1.min.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/libs/moment-locale-fr-2.29.1.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/libs/chartjs-adapter-moment-1.0.0.min.js') }}"></script>
+{# Le plugin etait charge par un import() dynamique depuis un CDN : il pouvait
+   arriver apres le premier rendu (etiquettes manquantes) ou pas du tout.
+   En `defer` il est enregistre avant le premier graphique. #}
+<script defer src="{{ url_for('static', filename='js/libs/chartjs-plugin-datalabels-2.2.0.min.js') }}"></script>
 
 <!-- Apres Chart.js et moment : `defer` preserve l'ordre du document,
      et ce script les utilise des son execution. -->

@@ -184,6 +184,16 @@ counters_activities = db.Table('counters_activities',
 )
 
 class PatientHistory(db.Model):
+    __table_args__ = (
+        # Table d'archive : elle croît indéfiniment et toutes les lectures la
+        # balayent sur une plage de dates (graphiques de statistiques, job
+        # d'archivage) ou la trient par date (historique détaillé paginé).
+        # Sans cet index, chacune de ces requêtes est un balayage complet.
+        db.Index('ix_patient_history_timestamp', 'timestamp'),
+        # Graphiques filtrés par activité / comptoir sur une plage de dates.
+        db.Index('ix_patient_history_activity_timestamp', 'activity_id', 'timestamp'),
+        db.Index('ix_patient_history_counter_timestamp', 'counter_id', 'timestamp'),
+    )
     id = db.Column(db.Integer, Sequence('patient_history_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
@@ -221,9 +231,24 @@ class AggregatedStats(db.Model):
     avg_waiting_time = db.Column(db.Float, nullable=True)  # En secondes
     avg_counter_time = db.Column(db.Float, nullable=True)  # En secondes
     avg_total_time = db.Column(db.Float, nullable=True)    # En secondes
+    # Effectif ayant réellement participé à chaque moyenne : un patient sans
+    # timestamp_counter ne compte pas dans avg_waiting_time. C'est le seul poids
+    # correct pour recombiner ces moyennes (fusion avec les données détaillées
+    # dans routes/admin_stats.py). NULL sur les lignes agrégées avant l'ajout de
+    # ces colonnes : `count` sert alors de repli approché.
+    count_waiting_time = db.Column(db.Integer, nullable=True)
+    count_counter_time = db.Column(db.Integer, nullable=True)
+    count_total_time = db.Column(db.Integer, nullable=True)
 
     __table_args__ = (
         db.Index('idx_aggregated_stats_date_type', 'date', 'category_type'),
+        # Une seule ligne par (jour, dimension, entité) : le job d'archivage
+        # rejoué sur une date déjà traitée doublerait sinon les comptages, que
+        # la fusion additionne. NB : MySQL considère les NULL comme distincts,
+        # donc les lignes 'global' (category_id NULL) ne sont pas couvertes —
+        # create_daily_stats purge la date avant d'insérer pour les protéger.
+        db.UniqueConstraint('date', 'category_type', 'category_id',
+                            name='uq_aggregated_stats_date_type_category'),
     )
 
     def to_dict(self):
@@ -235,7 +260,10 @@ class AggregatedStats(db.Model):
             "count": self.count,
             "avg_waiting_time": self.avg_waiting_time,
             "avg_counter_time": self.avg_counter_time,
-            "avg_total_time": self.avg_total_time
+            "avg_total_time": self.avg_total_time,
+            "count_waiting_time": self.count_waiting_time,
+            "count_counter_time": self.count_counter_time,
+            "count_total_time": self.count_total_time
         }
 
 class Counter(db.Model):

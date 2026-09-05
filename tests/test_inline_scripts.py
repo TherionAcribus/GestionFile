@@ -107,10 +107,39 @@ def test_page_charge_son_script_dans_scripts_end(gabarit, fichier):
 def test_stats_charge_son_script_apres_ses_dependances():
     """`defer` respecte l'ordre du document : admin_stats.js utilise Chart.js."""
     contenu = _lire("templates/admin/stats.html")
-    assert contenu.index("chart.min.js") < contenu.index("admin_stats.js"), (
+    # On compare les balises <script> elles-memes : le nom du fichier apparait
+    # aussi dans les commentaires du gabarit.
+    assert contenu.index("js/libs/chart-3.7.0.min.js") < contenu.index("js/admin_stats.js"), (
         "admin_stats.js doit être déclaré APRÈS Chart.js, sinon Chart est "
         "indéfini au moment de son exécution"
     )
+
+
+def test_stats_ne_depend_plus_d_un_cdn():
+    """Les librairies de graphique sont servies localement (phase 8).
+
+    stats.html était la dernière page à charger Chart.js, moment et le plugin
+    datalabels depuis cdnjs/jsdelivr : hors ligne ou sous CSP stricte, elle
+    était la seule à casser.
+    """
+    contenu = _lire("templates/admin/stats.html")
+    for hote in ("cdnjs.cloudflare.com", "cdn.jsdelivr.net"):
+        assert hote not in contenu, f"stats.html dépend encore de {hote}"
+    for lib in ("chart-3.7.0.min.js", "moment-2.29.1.min.js",
+                "chartjs-adapter-moment-1.0.0.min.js",
+                "chartjs-plugin-datalabels-2.2.0.min.js"):
+        assert f"js/libs/{lib}" in contenu, f"{lib} n'est pas servi localement"
+
+
+def test_admin_stats_js_ne_charge_rien_dynamiquement():
+    """Plus d'``import()`` distant : le plugin datalabels est chargé en `defer`.
+
+    L'import dynamique pouvait arriver après le premier rendu (étiquettes
+    manquantes) ou pas du tout (réseau coupé).
+    """
+    contenu = _lire("static/js/admin_stats.js")
+    assert "import(" not in contenu
+    assert "https://" not in contenu
 
 
 # --- 2. Les gabarits nettoyés le restent ------------------------------------

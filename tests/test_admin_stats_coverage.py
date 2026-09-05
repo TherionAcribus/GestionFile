@@ -9,7 +9,7 @@ accès à la base ni à Flask) qui n'étaient pas testées :
   Chart.js (pie/bar ou line).
 - ``get_chart_title`` : retourne le titre du graphique selon le type.
 - ``generate_colors`` : génère une palette de couleurs.
-- ``get_random_color`` : génère une couleur RGBA aléatoire.
+- ``color_for_label`` : couleur stable dérivée du libellé d'une série.
 
 Ces fonctions sont extraites du source par ``exec`` (comme
 ``_split_sql_statements`` dans ``test_mysql_restore_safety.py``) car
@@ -53,11 +53,14 @@ def _build_namespace():
     source = _read("routes/admin_stats.py")
     ns = {}
     # Importer les dépendances nécessaires (random, datetime, timedelta).
-    exec("import random", ns)
+    exec("import zlib", ns)
     exec("from datetime import datetime, timedelta", ns)
+    # format_chart_data delegue desormais la detection des metriques de duree au
+    # coeur pur stats_params (importable sans Flask ni base).
+    exec("from stats_params import is_time_chart", ns)
     # Extraire chaque fonction (avec sa signature def) et l'ajouter au namespace.
     for fname in ["merge_datasets", "format_chart_data",
-                  "get_chart_title", "generate_colors", "get_random_color"]:
+                  "get_chart_title", "generate_colors", "color_for_label"]:
         # Capturer la fonction entière (signature + corps) jusqu'à la prochaine
         # fonction top-level ou un décorateur.
         pattern = rf"^(def {fname}\([^)]*\):.*?)(?=^def |^@|\Z)"
@@ -300,53 +303,68 @@ def test_get_chart_title_unknown_type(ns):
 
 
 # ---------------------------------------------------------------------------
-# 4. generate_colors
+# 4. generate_colors / color_for_label
 # ---------------------------------------------------------------------------
 
-def test_generate_colors_small_count(ns):
-    """Pour un petit nombre, utilise la palette prédéfinie."""
-    colors = ns["generate_colors"](3)
+def test_generate_colors_one_per_label(ns):
+    """Une couleur par libelle."""
+    colors = ns["generate_colors"](["A", "B", "C"])
     assert len(colors) == 3
-    assert all(c.startswith('#') for c in colors)
+    assert all(c.startswith("hsl(") for c in colors)
 
 
-def test_generate_colors_exact_palette_size(ns):
-    """Pour exactement la taille de la palette, utilise la palette."""
-    colors = ns["generate_colors"](6)
-    assert len(colors) == 6
-    assert all(c.startswith('#') for c in colors)
+def test_generate_colors_empty(ns):
+    """Aucun libelle -> palette vide."""
+    assert ns["generate_colors"]([]) == []
 
 
-def test_generate_colors_large_count(ns):
-    """Pour un grand nombre, génère des couleurs HSL."""
-    colors = ns["generate_colors"](10)
-    assert len(colors) == 10
-    # Les couleurs au-delà de la palette sont en format hsl().
-    assert any(c.startswith('hsl(') for c in colors)
+def test_generate_colors_same_label_same_color(ns):
+    """Le meme libelle donne toujours la meme couleur, quelle que soit sa place.
 
-
-def test_generate_colors_zero(ns):
-    """Count=0 → liste vide."""
-    assert ns["generate_colors"](0) == []
+    Regression : la palette etait indexee par position, donc l'apparition ou la
+    disparition d'une categorie decalait les couleurs de toutes les autres.
+    """
+    first = ns["generate_colors"](["Comptoir A", "Comptoir B"])
+    second = ns["generate_colors"](["Comptoir Z", "Comptoir A"])
+    assert first[0] == second[1]
 
 
 # ---------------------------------------------------------------------------
-# 5. get_random_color
+# 5. color_for_label
 # ---------------------------------------------------------------------------
 
-def test_get_random_color_format(ns):
-    """La couleur doit être au format rgba(r, g, b, 1)."""
-    color = ns["get_random_color"]()
-    assert color.startswith('rgba(')
-    assert color.endswith(', 1)')
-    # Extraire les composantes et vérifier qu'elles sont entre 0 et 255.
-    import re
-    m = re.match(r'rgba\((\d+), (\d+), (\d+), 1\)', color)
+def test_color_for_label_is_stable(ns):
+    """Deux appels successifs rendent la meme couleur.
+
+    Regression : ``get_random_color()`` tirait une couleur au hasard a chaque
+    requete -- une meme serie changeait de couleur a chaque rafraichissement.
+    """
+    assert ns["color_for_label"]("Accueil") == ns["color_for_label"]("Accueil")
+
+
+def test_color_for_label_format(ns):
+    """Format hsl() avec saturation et luminosite fixes (lisibilite garantie)."""
+    import re as _re
+    m = _re.match(r"hsl\((\d+), 65%, 45%\)$", ns["color_for_label"]("Accueil"))
     assert m
-    r, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    assert 0 <= r <= 255
-    assert 0 <= g <= 255
-    assert 0 <= b <= 255
+    assert 0 <= int(m.group(1)) < 360
+
+
+def test_color_for_label_differs_between_labels(ns):
+    """Des libelles differents donnent (en general) des teintes differentes."""
+    couleurs = {ns["color_for_label"](f"Comptoir {i}") for i in range(10)}
+    assert len(couleurs) >= 8
+
+
+def test_color_for_label_independent_of_hash_seed(ns):
+    """La couleur ne doit pas dependre de PYTHONHASHSEED.
+
+    ``hash()`` est randomise par processus : deux workers auraient rendu des
+    couleurs differentes pour une meme serie. On verifie que crc32 est utilise.
+    """
+    import zlib as _zlib
+    attendu = f"hsl({_zlib.crc32('Accueil'.encode('utf-8')) % 360}, 65%, 45%)"
+    assert ns["color_for_label"]("Accueil") == attendu
 
 
 # ---------------------------------------------------------------------------

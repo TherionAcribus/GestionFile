@@ -97,7 +97,12 @@ class ChartRequest:
     @property
     def is_time(self) -> bool:
         """Vrai pour les métriques de durée (moyenne de temps, pas un comptage)."""
-        return '_times' in self.chart_type
+        return is_time_chart(self.chart_type)
+
+    @property
+    def category(self) -> Optional[str]:
+        """Dimension de regroupement (``None`` = série unique)."""
+        return chart_category(self.chart_type)
 
 
 def _validated(raw, allowed, default, label):
@@ -181,6 +186,14 @@ def resolve_date_range(date_type, period_type, start_str, end_str, granularity, 
         end = now
         start = end - timedelta(days=days)
 
+    # Les colonnes ``timestamp`` sont des DateTime **naïfs** en heure locale.
+    # ``now`` étant tz-aware, les presets renvoyaient des bornes aware et les
+    # branches ``current`` / ``custom`` des bornes naïves : les deux étaient
+    # comparées aux mêmes colonnes, avec un décalage selon la branche. On
+    # normalise en naïf local (l'heure murale est déjà la bonne).
+    start = start.replace(tzinfo=None)
+    end = end.replace(tzinfo=None)
+
     max_days = MAX_HOURLY_DAYS if granularity == 'hour' else MAX_DAILY_DAYS
     span_days = (end - start).days
     if span_days > max_days:
@@ -238,4 +251,147 @@ def parse_chart_request(args, *, now):
         language_ids=language_ids,
         day_of_week=day_of_week,
         error=error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Sélection de branche (dimension de regroupement / métrique)
+# ---------------------------------------------------------------------------
+# Ces fonctions étaient auparavant des chaînes de ``if`` dispersées dans
+# ``routes/admin_stats.py``, mêlées à la construction SQL — donc intestables et
+# porteuses de deux bugs silencieux :
+#   * ``chart_type in ['activities', '_by_activity']`` ne pouvait jamais être
+#     vrai pour ``waiting_times_by_activity`` & co. (comparaison d'égalité avec
+#     un fragment de nom) : les trois graphiques « par activité » ne
+#     groupaient pas et renvoyaient une valeur globale unique ;
+#   * ``'activity' in chart_type`` est faux pour ``'activities'``
+#     (``activit|y`` vs ``activit|ies``) : les données archivées du graphique
+#     « Patients par activité » étaient purement et simplement absentes.
+# Les remonter ici les rend testables sans base ni Flask.
+
+# Dimension de regroupement d'un graphique, dans le vocabulaire de
+# ``AggregatedStats.category_type``.
+CATEGORY_LANGUAGE = 'language'
+CATEGORY_ACTIVITY = 'activity'
+CATEGORY_COUNTER = 'counter'
+CATEGORY_GLOBAL = 'global'
+
+# Suffixe des types « ventilés par activité » (waiting/counter/total).
+_BY_ACTIVITY_SUFFIX = '_by_activity'
+
+# Libellés utilisateur des dimensions de filtre (messages d'avertissement).
+DIMENSION_LABELS = {
+    CATEGORY_COUNTER: 'comptoir',
+    CATEGORY_ACTIVITY: 'activité',
+    CATEGORY_LANGUAGE: 'langue',
+}
+
+
+def is_time_chart(chart_type):
+    """Vrai si la métrique est une durée moyenne (et non un comptage)."""
+    return '_times' in (chart_type or '')
+
+
+def chart_category(chart_type):
+    """Dimension de regroupement du graphique, ou ``None`` s'il est global.
+
+    ``None`` signifie « une seule série » : les graphiques de temps non
+    ventilés (``waiting_times``, ``counter_times``, ``total_times``).
+    """
+    if chart_type == 'languages':
+        return CATEGORY_LANGUAGE
+    if chart_type == 'activities' or (chart_type or '').endswith(_BY_ACTIVITY_SUFFIX):
+        return CATEGORY_ACTIVITY
+    if chart_type == 'counters':
+        return CATEGORY_COUNTER
+    return None
+
+
+def aggregated_category_type(chart_type):
+    """``AggregatedStats.category_type`` à interroger, ou ``None`` si aucun.
+
+    Les graphiques de temps non ventilés lisent les lignes ``global``
+    (``category_id`` NULL) ; les autres lisent la dimension correspondante.
+    """
+    category = chart_category(chart_type)
+    if category is not None:
+        return category
+    if is_time_chart(chart_type):
+        return CATEGORY_GLOBAL
+    return None
+
+
+def time_metric(chart_type):
+    """Nom de la métrique de durée : ``waiting`` / ``counter`` / ``total``.
+
+    ``None`` pour un graphique de comptage. Sert à la fois à choisir la
+    différence de timestamps (données détaillées) et la colonne pré-calculée
+    de ``AggregatedStats`` (données compressées) : une seule source de vérité.
+    """
+    if not is_time_chart(chart_type):
+        return None
+    if chart_type.startswith('waiting'):
+        return 'waiting'
+    if chart_type.startswith('counter'):
+        return 'counter'
+    return 'total'
+
+
+def mysql_weekdays(days):
+    """Convertit les jours du gabarit (1=lundi … 7=dimanche) vers DAYOFWEEK.
+
+    MySQL ``DAYOFWEEK`` numérote 1=dimanche … 7=samedi. lundi(1)→2,
+    samedi(6)→7, dimanche(7)→1.
+    """
+    return tuple(d + 1 if d < 7 else 1 for d in days)
+
+
+def compressed_filter_plan(req):
+    """Décide ce que les données agrégées peuvent honorer des filtres actifs.
+
+    ``AggregatedStats`` ne stocke **qu'une seule dimension par ligne**
+    (``category_type`` + ``category_id``). Un filtre portant sur la dimension
+    du graphique est donc applicable (``category_id IN (...)``) ; un filtre
+    portant sur une autre dimension ne l'est pas — l'information a été perdue à
+    l'agrégation.
+
+    Renvoie ``(category_ids, unsupported)`` :
+
+    - ``category_ids`` : identifiants auxquels restreindre ``category_id``
+      (``None`` = aucune restriction) ;
+    - ``unsupported`` : libellés des dimensions filtrées que les agrégats ne
+      peuvent pas honorer. Non vide ⇒ l'appelant doit **écarter** les données
+      compressées et le signaler, plutôt que d'additionner un sous-ensemble
+      filtré et un total non filtré (ce que faisait le code précédent, qui
+      n'appliquait aucun filtre aux agrégats).
+    """
+    category = chart_category(req.chart_type)
+    active = (
+        (CATEGORY_COUNTER, req.counter_ids),
+        (CATEGORY_ACTIVITY, req.activity_ids),
+        (CATEGORY_LANGUAGE, req.language_ids),
+    )
+
+    category_ids = None
+    unsupported = []
+    for dimension, ids in active:
+        if not ids:
+            continue
+        if dimension == category:
+            category_ids = ids
+        else:
+            unsupported.append(DIMENSION_LABELS[dimension])
+
+    return category_ids, tuple(unsupported)
+
+
+def compressed_skipped_warning(unsupported):
+    """Message utilisateur quand les agrégats sont écartés par les filtres."""
+    if not unsupported:
+        return None
+    dimensions = ', '.join(unsupported)
+    return (
+        "Les données archivées ne conservent pas le détail par "
+        f"{dimensions} : seules les données récentes sont prises en compte "
+        "pour ce filtre."
     )

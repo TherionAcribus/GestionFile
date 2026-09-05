@@ -1,12 +1,25 @@
-import random
-from flask import Blueprint, render_template, request, jsonify
-from sqlalchemy import func, text
+import zlib
 from datetime import datetime, timedelta
-from models import Activity, Language, Counter, Patient, PatientHistory, AggregatedStats, db
-from routes.admin_security import require_permission, require_permission_api
-from pagination import parse_page_params, paginate_query
-from stats_params import parse_chart_request
+
 import pytz
+from flask import Blueprint, jsonify, render_template, request
+from sqlalchemy import func, text
+
+from models import Activity, AggregatedStats, Counter, Language, Patient, PatientHistory, db
+from pagination import paginate_query, parse_page_params
+from routes.admin_security import require_permission, require_permission_api
+from stats_params import (
+    CATEGORY_ACTIVITY,
+    CATEGORY_COUNTER,
+    CATEGORY_LANGUAGE,
+    aggregated_category_type,
+    compressed_filter_plan,
+    compressed_skipped_warning,
+    is_time_chart,
+    mysql_weekdays,
+    parse_chart_request,
+    time_metric,
+)
 
 admin_stats_bp = Blueprint('admin_stats', __name__)
 
@@ -20,6 +33,23 @@ HISTORY_SORT_COLUMNS = {
     'day_of_week': PatientHistory.day_of_week,
 }
 
+# Dimension de regroupement -> (entité à joindre, colonne de clé étrangère).
+# La colonne de libellé est toujours ``entity.name``.
+CATEGORY_ENTITIES = {
+    CATEGORY_LANGUAGE: (Language, 'language_id'),
+    CATEGORY_ACTIVITY: (Activity, 'activity_id'),
+    CATEGORY_COUNTER: (Counter, 'counter_id'),
+}
+
+# Métrique de durée -> (colonne de moyenne, colonne d'effectif) dans
+# ``AggregatedStats``. Les colonnes d'effectif sont NULL pour les lignes
+# agrégées avant leur introduction : ``count`` sert alors de repli.
+AGGREGATED_TIME_COLUMNS = {
+    'waiting': (AggregatedStats.avg_waiting_time, AggregatedStats.count_waiting_time),
+    'counter': (AggregatedStats.avg_counter_time, AggregatedStats.count_counter_time),
+    'total': (AggregatedStats.avg_total_time, AggregatedStats.count_total_time),
+}
+
 
 @admin_stats_bp.route('/admin/stats')
 @require_permission('stats')
@@ -28,8 +58,8 @@ def admin_stats():
     activities = Activity.query.all()
     languages = Language.query.all()
     today = datetime.now(time_tz).date()
-    return render_template('admin/stats.html', 
-                            current_date=today,                          
+    return render_template('admin/stats.html',
+                            current_date=today,
                             counters=counters,
                             activities=activities,
                             languages=languages)
@@ -82,225 +112,211 @@ def display_history_table():
 @admin_stats_bp.route('/admin/stats/chart')
 @require_permission_api('stats')
 def get_chart_data():
+    """Données du graphique, au format attendu par Chart.js.
+
+    Répond toujours 200 : une entrée invalide devient ``{'error': ...}`` dans le
+    corps, que le front affiche dans son encart dédié. htmx n'échange pas le
+    fragment sur un statut 4xx (``responseHandling`` par défaut), et le message
+    de validation — notamment le bornage de période — n'atteignait donc jamais
+    l'utilisateur.
+    """
     # Validation stricte + bornage de période (point 5.4) dans le cœur pur.
     req = parse_chart_request(request.args, now=datetime.now(time_tz))
     if not req.ok:
-        return jsonify({'error': req.error}), 400
+        return jsonify({'error': req.error})
 
-    chart_type = req.chart_type
-    chart_style = req.chart_style
-    time_granularity = req.time_granularity
-    start_date, end_date = req.start_date, req.end_date
+    warning = None
 
-    # 1. Fetch Detailed Data (Patient or PatientHistory)
+    # 1. Données détaillées (Patient pour la journée en cours, PatientHistory
+    #    pour l'historique).
     if req.is_history:
-        model = PatientHistory
-        detailed_data = fetch_detailed_data(model, start_date, end_date, chart_type, req, chart_style, time_granularity)
+        detailed_data = fetch_detailed_data(PatientHistory, req)
     else:
-        model = Patient
-        detailed_data = fetch_detailed_data(model, start_date, end_date, chart_type, req, chart_style, time_granularity, join_models=True)
+        detailed_data = fetch_detailed_data(Patient, req, join_models=True)
 
-    # 2. Fetch Compressed Data (AggregatedStats) - Only for history
+    # 2. Données compressées (AggregatedStats) : uniquement sur l'historique, et
+    #    uniquement si les filtres actifs sont représentables au niveau
+    #    d'agrégation (une seule dimension par ligne).
     compressed_data = []
     if req.is_history:
-        compressed_data = fetch_compressed_data(start_date, end_date, chart_type, chart_style, time_granularity)
+        category_ids, unsupported = compressed_filter_plan(req)
+        if unsupported:
+            warning = compressed_skipped_warning(unsupported)
+        else:
+            compressed_data = fetch_compressed_data(req, category_ids)
 
-    # 3. Merge Data
+    # 3. Fusion (moyenne pondérée pour les durées, somme pour les comptages).
     merged_data = merge_datasets(detailed_data, compressed_data, req.is_time)
 
-    # 4. Format for Chart.js
-    response_data = format_chart_data(merged_data, chart_type, chart_style, start_date, end_date, time_granularity)
+    # 4. Mise en forme Chart.js.
+    response_data = format_chart_data(merged_data, req.chart_type, req.chart_style,
+                                      req.start_date, req.end_date, req.time_granularity)
+    if warning:
+        response_data['warning'] = warning
 
     return jsonify(response_data)
 
 
-def fetch_detailed_data(model, start_date, end_date, chart_type, req, chart_style, time_granularity, join_models=False):
-    """Fetches data from Patient or PatientHistory tables."""
+def fetch_detailed_data(model, req, join_models=False):
+    """Agrège les lignes détaillées de ``Patient`` ou ``PatientHistory``.
 
-    base_query = db.session.query(model).filter(model.timestamp.between(start_date, end_date))
-    base_query = apply_filters(base_query, model, req)
+    ``join_models`` : ``Patient`` porte de vraies clés étrangères, SQLAlchemy
+    déduit donc la condition de jointure ; ``PatientHistory`` stocke des entiers
+    nus et exige une condition explicite.
+    """
+    query = db.session.query(model).filter(model.timestamp.between(req.start_date, req.end_date))
+    query = apply_filters(query, model, req)
 
-    # Prepare metrics and grouping
-    date_func = get_date_func(model.timestamp, time_granularity, chart_style)
-    
-    query = None
-    is_time = '_times' in chart_type
-    
-    if chart_type == 'languages':
-        entity = Language
-        join_condition = (model.language_id == Language.id) if not join_models else None
-        group_col = Language.name
-    elif chart_type in ['activities', '_by_activity']:
-        entity = Activity
-        join_condition = (model.activity_id == Activity.id) if not join_models else None
-        group_col = Activity.name
-    elif chart_type == 'counters':
-        entity = Counter
-        join_condition = (model.counter_id == Counter.id) if not join_models else None
-        group_col = Counter.name
-    else:
-        entity = None
-        group_col = None
-
-    # Build Query
     entities = []
-    if chart_style == 'line':
-        entities.append(date_func.label('date'))
-    
-    if group_col is not None:
-        entities.append(group_col.label('category'))
-    
-    # Metrics
-    if is_time:
-        time_col = get_time_column(model, chart_type)
-        # Filter nulls
-        if 'waiting' in chart_type: base_query = base_query.filter(model.timestamp_counter.isnot(None))
-        if 'counter' in chart_type or 'total' in chart_type: base_query = base_query.filter(model.timestamp_end.isnot(None))
-        
-        entities.append(func.avg(time_col).label('value'))
-        entities.append(func.count(model.id).label('count')) # Need count for weighted average merging
+    groups = []
+
+    # Axe temporel (graphique en courbe uniquement).
+    if req.chart_style == 'line':
+        entities.append(get_date_func(model.timestamp, req.time_granularity).label('date'))
+        groups.append(text('date'))
+
+    # Dimension de regroupement.
+    entity = None
+    if req.category is not None:
+        entity, fk_name = CATEGORY_ENTITIES[req.category]
+        entities.append(entity.name.label('category'))
+        groups.append(entity.name)
+
+    # Métrique.
+    metric = time_metric(req.chart_type)
+    if metric:
+        query = filter_complete_timestamps(query, model, metric)
+        entities.append(func.avg(get_time_column(model, metric)).label('value'))
+        # ``count`` sert de poids à la fusion détaillé/compressé : il doit
+        # compter les lignes réellement moyennées, donc après filtrage des
+        # timestamps manquants.
+        entities.append(func.count(model.id).label('count'))
     else:
-        entities.append(func.count(model.id).label('value')) # Value is count
-        entities.append(func.count(model.id).label('count')) # Duplicate for uniform handling
+        entities.append(func.count(model.id).label('value'))
+        entities.append(func.count(model.id).label('count'))
 
-    query = base_query.with_entities(*entities)
+    query = query.with_entities(*entities)
 
-    if entity:
+    if entity is not None:
         if join_models:
             query = query.join(entity)
         else:
-            query = query.join(entity, join_condition)
-            
-    # Grouping
-    groups = []
-    if chart_style == 'line':
-        groups.append(text('date'))
-    if group_col is not None:
-        groups.append(group_col)
-        
+            query = query.join(entity, getattr(model, fk_name) == entity.id)
+
     if groups:
         query = query.group_by(*groups)
-    
+
     return query.all()
 
 
-def fetch_compressed_data(start_date, end_date, chart_type, chart_style, time_granularity):
-    """Fetches data from AggregatedStats."""
-    
-    # Determine category_type based on chart_type
-    category_type = None
-    if chart_type == 'languages': category_type = 'language'
-    elif 'activity' in chart_type: category_type = 'activity' # activities or *_by_activity
-    elif chart_type == 'counters': category_type = 'counter'
-    elif '_times' in chart_type: category_type = 'global' # waiting_times, etc.
-    
-    if not category_type: return []
+def fetch_compressed_data(req, category_ids=None):
+    """Agrège les lignes pré-calculées de ``AggregatedStats``.
 
-    base_query = db.session.query(AggregatedStats).filter(
-        AggregatedStats.date.between(start_date.date(), end_date.date()),
-        AggregatedStats.category_type == category_type
+    ``category_ids`` restreint ``category_id`` quand le filtre actif porte sur
+    la dimension même du graphique (cf. ``compressed_filter_plan``). Les filtres
+    portant sur une autre dimension ne sont pas représentables ici : l'appelant
+    écarte alors les agrégats au lieu de les additionner sans filtre.
+    """
+    category_type = aggregated_category_type(req.chart_type)
+    if category_type is None:
+        return []
+
+    query = db.session.query(AggregatedStats).filter(
+        AggregatedStats.date.between(req.start_date.date(), req.end_date.date()),
+        AggregatedStats.category_type == category_type,
     )
+    if category_ids:
+        query = query.filter(AggregatedStats.category_id.in_(category_ids))
+    if req.day_of_week:
+        query = query.filter(
+            func.dayofweek(AggregatedStats.date).in_(mysql_weekdays(req.day_of_week))
+        )
 
-    # We need to join with related tables to get names (Language.name, etc.)
-    date_func = get_date_func(AggregatedStats.date, time_granularity, chart_style)
-    
-    query = None
     entities = []
     groups = []
-    
-    if chart_style == 'line':
-        entities.append(date_func.label('date'))
+
+    if req.chart_style == 'line':
+        entities.append(get_date_func(AggregatedStats.date, req.time_granularity).label('date'))
         groups.append(text('date'))
 
-    # Join and Select Category Name
-    if category_type == 'language':
-        query = base_query.join(Language, AggregatedStats.category_id == Language.id)
-        entities.append(Language.name.label('category'))
-        groups.append(Language.name)
-    elif category_type == 'activity':
-        query = base_query.join(Activity, AggregatedStats.category_id == Activity.id)
-        entities.append(Activity.name.label('category'))
-        groups.append(Activity.name)
-    elif category_type == 'counter':
-        query = base_query.join(Counter, AggregatedStats.category_id == Counter.id)
-        entities.append(Counter.name.label('category'))
-        groups.append(Counter.name)
-    else:
-        query = base_query
-    
-    # Metrics selection
-    if 'waiting_time' in chart_type: metric = AggregatedStats.avg_waiting_time
-    elif 'counter_time' in chart_type: metric = AggregatedStats.avg_counter_time
-    elif 'total_time' in chart_type: metric = AggregatedStats.avg_total_time
-    else: metric = AggregatedStats.count # Default count
+    if req.category is not None:
+        entity, _fk_name = CATEGORY_ENTITIES[req.category]
+        query = query.join(entity, AggregatedStats.category_id == entity.id)
+        entities.append(entity.name.label('category'))
+        groups.append(entity.name)
 
-    # For aggregated queries (like pie chart of history), we sum counts or weighted average times
-    # Aggregation is needed if multiple rows match grouping (e.g. multiple days for pie chart)
-    
-    is_time_metric = '_times' in chart_type
-    
-    if is_time_metric:
-        # Weighted average: Sum(avg * count) / Sum(count)
-        # SQL: SUM(avg * count) / NULLIF(SUM(count), 0)
-        val = func.sum(metric * AggregatedStats.count) / func.nullif(func.sum(AggregatedStats.count), 0)
-        entities.append(val.label('value'))
+    metric = time_metric(req.chart_type)
+    if metric:
+        avg_col, count_col = AGGREGATED_TIME_COLUMNS[metric]
+        # L'effectif de la métrique (patients dont les deux timestamps sont
+        # renseignés) est le seul poids correct ; ``count`` (tous les patients du
+        # jour) ne sert que de repli pour les lignes agrégées avant son
+        # introduction.
+        weight = func.coalesce(count_col, AggregatedStats.count)
+        entities.append(
+            (func.sum(avg_col * weight) / func.nullif(func.sum(weight), 0)).label('value')
+        )
+        entities.append(func.sum(weight).label('count'))
+    else:
+        entities.append(func.sum(AggregatedStats.count).label('value'))
         entities.append(func.sum(AggregatedStats.count).label('count'))
-    else:
-        entities.append(func.sum(metric).label('value'))
-        entities.append(func.sum(metric).label('count'))
 
-    query = query.with_entities(*entities).group_by(*groups)
-    
+    query = query.with_entities(*entities)
+    if groups:
+        query = query.group_by(*groups)
+
     return query.all()
 
 
 def merge_datasets(detailed, compressed, is_time):
-    """Merges detailed and compressed data."""
+    """Fusionne les lignes détaillées et compressées d'une même période.
+
+    Les durées se recombinent en moyenne pondérée par l'effectif, les comptages
+    par simple somme.
+    """
     data_map = {}
-    
+
     all_rows = list(detailed) + list(compressed)
-    
+
     for row in all_rows:
         date = getattr(row, 'date', 'Total')
         category = getattr(row, 'category', 'Total')
         val = float(row.value) if row.value else 0
         cnt = int(row.count) if row.count else 0
-        
+
         key = (date, category)
         if key not in data_map:
             data_map[key] = {'weighted_sum': 0, 'total_count': 0}
-            
+
         if is_time:
-            # val is average.
+            # val est une moyenne : on repasse en somme pondérée.
             data_map[key]['weighted_sum'] += val * cnt
             data_map[key]['total_count'] += cnt
         else:
-            # val is count.
+            # val est déjà un comptage : il s'additionne tel quel.
             data_map[key]['weighted_sum'] += val
-            data_map[key]['total_count'] += 0 # Irrelevant for sum
-            
-    # Reconstruct list
+
     result = []
-    for key, v in data_map.items():
-        date, category = key
+    for (date, category), v in data_map.items():
         if is_time:
             final_val = v['weighted_sum'] / v['total_count'] if v['total_count'] > 0 else 0
         else:
             final_val = v['weighted_sum']
-            
-        # Create a dummy object or dict
-        obj = type('obj', (object,), {'date': date, 'category': category, 'value': final_val, 'count': v['total_count']})
+
+        obj = type('obj', (object,), {'date': date, 'category': category,
+                                      'value': final_val, 'count': v['total_count']})
         result.append(obj)
-        
+
     return result
 
 
 def format_chart_data(data, chart_type, chart_style, start_date, end_date, time_granularity):
-    is_time = '_times' in chart_type
-    
+    is_time = is_time_chart(chart_type)
+
     if chart_style == 'line':
-        # Organize by category
-        categories = set(d.category for d in data)
+        # Une série par catégorie, dans un ordre stable (les couleurs et la
+        # légende ne doivent pas se réorganiser d'un rafraîchissement à l'autre).
+        categories = sorted({d.category for d in data}, key=str)
         datasets = []
 
         # Index (date, catégorie) -> valeur, construit en une passe. Remplace la
@@ -309,7 +325,7 @@ def format_chart_data(data, chart_type, chart_style, start_date, end_date, time_
         # O(dates × catégories × lignes) à un accès dictionnaire O(1).
         value_by_key = {(str(d.date), d.category): d.value for d in data}
 
-        # Generate all dates
+        # Toutes les dates de la plage, y compris celles sans donnée (y=0).
         all_dates = []
         current = start_date
         fmt = '%Y-%m-%d %H:00:00' if time_granularity == 'hour' else '%Y-%m-%d'
@@ -323,10 +339,11 @@ def format_chart_data(data, chart_type, chart_style, start_date, end_date, time_
             cat_data = []
             for date in all_dates:
                 val = value_by_key.get((date, cat), 0)
-                if is_time: val = val / 60 # Minutes
+                if is_time:
+                    val = val / 60  # Minutes
                 cat_data.append({'x': date, 'y': val})
-                
-            color = get_random_color()
+
+            color = color_for_label(cat)
             datasets.append({
                 'label': cat,
                 'data': cat_data,
@@ -335,23 +352,24 @@ def format_chart_data(data, chart_type, chart_style, start_date, end_date, time_
                 'backgroundColor': color,
                 'tension': 0.1
             })
-            
+
         return {
             'datasets': datasets,
             'title': get_chart_title(chart_type),
             'isTime': is_time
         }
     else:
-        # Pie/Bar
+        # Camembert / histogramme.
         labels = [d.category for d in data]
         values = [d.value for d in data]
-        if is_time: values = [v/60 for v in values]
-        
+        if is_time:
+            values = [v / 60 for v in values]
+
         return {
             'labels': labels,
             'datasets': [{
                 'data': values,
-                'backgroundColor': generate_colors(len(labels))
+                'backgroundColor': generate_colors(labels)
             }],
             'title': get_chart_title(chart_type),
             'isTime': is_time
@@ -375,51 +393,71 @@ def apply_filters(query, model, req):
 
     # Le jour de la semaine n'a de sens que sur l'historique (colonne dérivée
     # d'un balayage temporel long) ; on le réserve au modèle PatientHistory.
+    # ``dayofweek`` n'est pas indexable, mais il ne s'applique ici qu'aux lignes
+    # déjà restreintes par l'index (timestamp) de la plage demandée.
     if req.is_history and req.day_of_week:
-        # Gabarit : 1=lundi … 7=dimanche ; MySQL DAYOFWEEK : 1=dimanche … 7=samedi.
-        days = [d + 1 if d < 7 else 1 for d in req.day_of_week]
-        query = query.filter(func.dayofweek(model.timestamp).in_(days))
+        query = query.filter(func.dayofweek(model.timestamp).in_(mysql_weekdays(req.day_of_week)))
 
     return query
 
-def get_date_func(col, granularity, style):
-    if style != 'line':
-        # For non-line charts, we don't group by date usually, but fetch function does.
-        # We can return a dummy constant if we want to aggregate everything?
-        # No, fetch functions expect a valid SQL expression.
-        # If pie chart, we aggregate over the whole period.
-        # So we can just use a constant string?
-        return func.max(col) # Dummy aggregation
-        
+
+def filter_complete_timestamps(query, model, metric):
+    """Écarte les lignes dont un timestamp de la durée mesurée manque.
+
+    ``AVG`` ignore déjà les NULL, mais pas ``COUNT(id)`` : sans ce filtre le
+    poids de la moyenne pondérée compterait des patients qui ne participent pas
+    à la moyenne.
+    """
+    if metric == 'waiting':
+        return query.filter(model.timestamp_counter.isnot(None))
+    if metric == 'counter':
+        return query.filter(model.timestamp_counter.isnot(None),
+                            model.timestamp_end.isnot(None))
+    return query.filter(model.timestamp_end.isnot(None))
+
+
+def get_date_func(col, granularity):
+    """Expression de troncature de date, pour l'axe des graphiques en courbe."""
     fmt = '%Y-%m-%d %H:00:00' if granularity == 'hour' else '%Y-%m-%d'
     return func.date_format(col, fmt)
 
-def get_time_column(model, chart_type):
-    if 'waiting' in chart_type:
+
+def get_time_column(model, metric):
+    """Durée mesurée, en secondes, pour la métrique demandée."""
+    if metric == 'waiting':
         return func.timestampdiff(text('SECOND'), model.timestamp, model.timestamp_counter)
-    elif 'counter' in chart_type:
+    if metric == 'counter':
         return func.timestampdiff(text('SECOND'), model.timestamp_counter, model.timestamp_end)
-    else:
-        return func.timestampdiff(text('SECOND'), model.timestamp, model.timestamp_end)
+    return func.timestampdiff(text('SECOND'), model.timestamp, model.timestamp_end)
 
-def generate_colors(count):
-    colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40']
-    return colors[:count] if count <= len(colors) else [
-        f'hsl({int(360 * i / count)}, 70%, 50%)' for i in range(count)
-    ]
 
-def get_random_color():
-    return f'rgba({random.randint(0,255)}, {random.randint(0,255)}, {random.randint(0,255)}, 1)'
+def color_for_label(label):
+    """Couleur stable, dérivée du libellé de la série.
+
+    Le tirage aléatoire précédent changeait de couleur à chaque rafraîchissement
+    et pouvait produire des teintes illisibles (quasi-blanc). ``crc32`` est
+    utilisé plutôt que ``hash()`` : ce dernier est randomisé par processus, donc
+    deux workers auraient rendu des couleurs différentes pour une même série.
+    Saturation et luminosité sont fixées pour garantir la lisibilité.
+    """
+    hue = zlib.crc32(str(label).encode('utf-8')) % 360
+    return f'hsl({hue}, 65%, 45%)'
+
+
+def generate_colors(labels):
+    """Palette d'un graphique en secteurs / barres : une couleur par libellé."""
+    return [color_for_label(label) for label in labels]
+
 
 def get_chart_title(chart_type):
     titles = {
         'languages': 'Distribution des langues',
         'activities': 'Distribution des activités',
         'counters': 'Distribution des comptoirs',
-        'waiting_times': 'Évolution des temps d\'attente',
+        'waiting_times': "Évolution des temps d'attente",
         'counter_times': 'Évolution des temps au comptoir',
         'total_times': 'Évolution des temps totaux',
-        'waiting_times_by_activity': 'Temps d\'attente moyen par activité',
+        'waiting_times_by_activity': "Temps d'attente moyen par activité",
         'counter_times_by_activity': 'Temps au comptoir moyen par activité',
         'total_times_by_activity': 'Temps total moyen par activité'
     }
