@@ -511,16 +511,27 @@ def confirm_delete_role(role_id):
 # comme vue (argument positionnel sans convertisseur d'URL) et déclenchement
 # d'envoi d'e-mail sans authentification.
 def send_test_email(mail_adress):
+    """Envoie un e-mail de test à l'adresse indiquée.
+
+    Retourne ``(True, None)`` en cas de succès, ``(False, message)`` en cas
+    d'échec. Le message est sûr pour l'affichage (aucun détail technique).
+    """
     app.logger.info("Envoi d'un email de test")
     app.logger.debug('mail_adress %s', mail_adress)
-    msg = EmailMessage(
-        subject="Test Email",
-        body="This is a test email sent from Flask-Mailman.",
-        to=[mail_adress],
-    )
-    app.logger.debug('message %s', msg)
-    msg.send()
-    return True
+    try:
+        msg = EmailMessage(
+            subject="Test Email",
+            body="This is a test email sent from Flask-Mailman.",
+            to=[mail_adress],
+        )
+        app.logger.debug('message %s', msg)
+        msg.send()
+        return True, None
+    except Exception as e:
+        # Point 4 (audit Admin) : capturer l'erreur SMTP au lieu de laisser
+        # propager une 500. Journaliser le détail, renvoyer un message générique.
+        app.logger.error("Échec d'envoi d'email de test : %s", e)
+        return False, "L'envoi de l'email a échoué. Vérifiez la configuration SMTP."
 
 
 def is_safe_url(target):
