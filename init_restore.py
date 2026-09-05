@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import zipfile
 import mysql.connector
 from datetime import datetime, time
@@ -7,6 +8,29 @@ from flask import current_app
 from io import BytesIO
 
 from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
+
+# Point 12 (audit Admin) — Restauration MySQL : validation des identifiants.
+#
+# db_name provient du nom du fichier .sql dans le ZIP uploadé. Sans validation,
+# un ZIP malveillant contenant un fichier comme "DROP DATABASE mysql; --.sql"
+# permettait une injection SQL via le f"USE {db_name}".
+#
+# On n'accepte que les identifiants MySQL valides : alphanumériques,
+# tiret bas, et au maximum 64 caractères (limite MySQL).
+_VALID_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+
+
+def _validate_identifier(name, kind="base"):
+    """Valide un identifiant MySQL (nom de base ou de table).
+
+    Retourne l'identifiant s'il est valide, sinon lève ValueError.
+    """
+    if not name or not _VALID_IDENTIFIER.match(str(name)):
+        current_app.logger.error(
+            "Identifiant %s invalide rejeté : %r", kind, name
+        )
+        raise ValueError(f"Nom de {kind} invalide")
+    return str(name)
 
 def init_default_patient_css_variables_db_from_json():
     json_file='static/json/default_patient_css_variables.json'
@@ -516,10 +540,20 @@ def restore_mysql(request):
 
 def restore_mysql_database(db_name, sql_content, cursor, connection):
     current_app.logger.debug(f"Starting restoration of database {db_name}")
-    
-    # Sélectionner la base de données avant de restaurer
-    cursor.execute(f"USE {db_name}")
-    
+
+    # Point 12 (audit Admin) — Valider le nom de la base avant de l'utiliser
+    # dans une instruction SQL. db_name provient du nom du fichier .sql dans
+    # le ZIP uploadé : sans validation, un ZIP malveillant pouvait injecter
+    # du SQL via f"USE {db_name}".
+    try:
+        db_name = _validate_identifier(db_name, "base de données")
+    except ValueError:
+        return 1  # compté comme un échec
+
+    # Sélectionner la base de données avant de restaurer (identifiant échappé
+    # avec backticks pour empêcher l'injection même si la validation est contournée).
+    cursor.execute(f"USE `{db_name}`")
+
     # Désactiver les vérifications des clés étrangères
     cursor.execute("SET FOREIGN_KEY_CHECKS=0;")
     connection.commit()
@@ -527,14 +561,26 @@ def restore_mysql_database(db_name, sql_content, cursor, connection):
     # Supprimer les tables existantes
     cursor.execute("SHOW TABLES")
     tables = cursor.fetchall()
+    echecs = 0
     for table in tables:
-        current_app.logger.debug("Suppression de la table %s", table[0])
-        cursor.execute(f"DROP TABLE IF EXISTS {table[0]}")
+        table_name = table[0]
+        # Valider le nom de table avant le DROP (échappé avec backticks).
+        try:
+            table_name = _validate_identifier(table_name, "table")
+        except ValueError:
+            current_app.logger.error("Nom de table invalide ignoré : %r", table[0])
+            echecs += 1
+            continue
+        current_app.logger.debug("Suppression de la table %s", table_name)
+        cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`")
         connection.commit()  # Commit after each table drop
 
-    # Diviser le contenu du fichier SQL en statements individuels
-    statements = sql_content.decode('utf-8').split(';')
-    echecs = 0
+    # Diviser le contenu du fichier SQL en statements individuels.
+    # NOTE : split(';') est naïf — il casse sur les ; contenus dans les chaînes
+    # littérales ou les procédures stockées. Une solution robuste nécessiterait
+    # un vrai parser SQL. On améliore ici la sécurité des identifiants, pas
+    # le parsing des statements (qui reste un known limitation documentée).
+    statements = _split_sql_statements(sql_content.decode('utf-8'))
     for statement in statements:
         statement = statement.strip()
         if statement:
@@ -563,6 +609,52 @@ def restore_mysql_database(db_name, sql_content, cursor, connection):
         current_app.logger.info("Base %s restauree avec succes", db_name)
 
     return echecs
+
+
+def _split_sql_statements(sql_text):
+    """Découpe un script SQL en statements individuels.
+
+    Amélioration par rapport au ``split(';')`` naïf : on respecte les
+    délimiteurs de chaînes ('...' et "...") pour ne pas couper un statement
+    au milieu d'une chaîne contenant un point-virgule (ex. :
+    ``INSERT INTO config VALUES ('a;b')``).
+
+    Limitation connue : ne gère pas les procédures stockées avec
+    ``DELIMITER //``. Ce cas est rare dans les dumps standards de
+    mysqldump (qui utilisent ``DELIMITER`` en dehors du flux SQL) et
+    nécessiterait un parser SQL complet.
+    """
+    statements = []
+    current = []
+    in_single_quote = False
+    in_double_quote = False
+    i = 0
+    while i < len(sql_text):
+        ch = sql_text[i]
+        # Gérer les échappements (\') et (\") dans les chaînes
+        if ch == '\\' and i + 1 < len(sql_text):
+            current.append(ch)
+            current.append(sql_text[i + 1])
+            i += 2
+            continue
+        if ch == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+        elif ch == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+        elif ch == ';' and not in_single_quote and not in_double_quote:
+            stmt = ''.join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+    # Dernier statement (sans ; final)
+    last = ''.join(current).strip()
+    if last:
+        statements.append(last)
+    return statements
 
 
 # A TRIER 
