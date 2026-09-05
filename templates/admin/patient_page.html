@@ -57,3 +57,13 @@
 
     
 {% endblock %}
+
+{# Personnalisation CSS (selecteurs de couleur, copie de palette entre pages,
+   saisie d'entiers multiples) : plus de la moitie de l'ancien admin.js, mais
+   utile aux seules pages d'apparence. Charge ici plutot que globalement
+   (Phase 8, point 1). `defer` respecte l'ordre du document : ce script
+   s'execute apres admin.js et admin_macros.js, declares plus haut par
+   admin/base.html. #}
+{% block scripts_end %}
+<script defer src="{{ url_for('static', filename='js/admin_colors.js') }}"></script>
+{% endblock %}

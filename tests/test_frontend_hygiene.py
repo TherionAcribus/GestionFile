@@ -77,6 +77,21 @@ def test_admin_js_debug_console_log_preserved():
     assert "console.log" in source
 
 
+def test_admin_colors_js_no_console_log():
+    """Idem pour admin_colors.js, extrait de admin.js (Phase 8, point 1).
+
+    Le découpage aurait sinon créé un trou : la moitié du code d'origine
+    (sélecteurs de couleur, mise à jour CSS) sortait du champ de la
+    vérification ci-dessus. Ce fichier n'a pas de bloc DEBUG : aucun
+    console.log n'y est admis.
+    """
+    source = _read("static/js/admin_colors.js")
+    fautifs = [f"ligne {i}: {ligne.strip()}"
+               for i, ligne in enumerate(source.splitlines(), 1)
+               if "console.log" in ligne]
+    assert not fautifs, "console.log dans admin_colors.js :\n" + "\n".join(fautifs)
+
+
 def test_patient_conclusion_no_console_log():
     """patient_conclusion.js ne doit plus contenir de console.log."""
     source = _read("static/js/patient_conclusion.js")
