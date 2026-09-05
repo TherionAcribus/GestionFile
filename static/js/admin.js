@@ -1608,7 +1608,9 @@ document.addEventListener('click', function (evt) {
     var modale = document.getElementById('image-modal');
     var cible = document.getElementById('modal-image');
     if (!modale || !cible) { return; }
-    cible.src = img.src;
+    // data-full-src pointe vers l'image originale (la vignette peut être une
+    // miniature légère) ; sans cet attribut, on repli sur le src de la vignette.
+    cible.src = img.dataset.fullSrc || img.src;
     // La modale est une modale Bootstrap (class="modal fade"), pas Materialize.
     // L'ancien code appelait M.Modal (Materialize) qui n'est pas chargé sur
     // les pages admin -> ReferenceError.

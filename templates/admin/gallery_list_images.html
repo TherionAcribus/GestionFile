@@ -3,7 +3,15 @@
 {% else %}
     {% for image in images %}
         <div class="thumbnail">
-            <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}" alt="{{ image['filename'] }}">
+            {% if image.thumbnail %}
+                <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/thumbnails/' ~ image.thumbnail) }}"
+                     alt="{{ image['filename'] }}" loading="lazy"
+                     data-full-src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}">
+            {% else %}
+                <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}"
+                     alt="{{ image['filename'] }}" loading="lazy"
+                     data-full-src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}">
+            {% endif %}
             <div class="details">
                 <p>{{ image['filename'] }}</p>
                 <p>{{ image['date'] }}</p>

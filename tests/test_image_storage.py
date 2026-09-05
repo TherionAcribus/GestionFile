@@ -24,8 +24,12 @@ import pytest
 from image_storage import (
     ALLOWED_IMAGE_EXTENSIONS,
     MAX_IMAGES_PER_UPLOAD,
+    THUMBNAIL_MAX_SIZE,
+    THUMBNAIL_PREFIX,
     ImageValidationError,
     accept_image_upload,
+    generate_thumbnail,
+    thumbnail_filename,
     unique_image_filename,
 )
 
@@ -163,3 +167,71 @@ def test_file_rembobine_apres_validation():
     assert ok
     # Le curseur du stream est remis à 0 (seek(0) dans accept_image_upload).
     assert fs.stream.tell() == 0
+
+
+# --- Miniatures ---
+
+def test_thumbnail_filename_avec_prefixe():
+    assert thumbnail_filename("abc123.jpg") == THUMBNAIL_PREFIX + "abc123.jpg"
+    assert thumbnail_filename("photo.png") == THUMBNAIL_PREFIX + "photo.png"
+
+
+def test_generate_thumbnail_produit_jpeg_redimensionne():
+    """Une image PNG de 800x800 doit produire une miniature JPEG <= 300x300."""
+    try:
+        from PIL import Image
+    except ImportError:
+        pytest.skip("Pillow non installé")
+    # Créer une image avec du contenu varié.
+    img = Image.new("RGB", (800, 800))
+    pixels = img.load()
+    for x in range(800):
+        for y in range(800):
+            pixels[x, y] = ((x * 7) % 256, (y * 13) % 256, ((x + y) * 5) % 256)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    original = buf.getvalue()
+    thumb = generate_thumbnail(original)
+    assert thumb is not None
+    # La miniature est en JPEG (commence par \xff\xd8\xff).
+    assert thumb[:3] == b"\xff\xd8\xff"
+    # Les dimensions sont réduites à <= 300x300.
+    thumb_img = Image.open(io.BytesIO(thumb))
+    assert thumb_img.width <= 300
+    assert thumb_img.height <= 300
+
+
+def test_generate_thumbnail_respecte_max_size():
+    """Une image 500x500 doit être redimensionnée à <= 300x300."""
+    try:
+        from PIL import Image
+    except ImportError:
+        pytest.skip("Pillow non installé")
+    buf = io.BytesIO()
+    Image.new("RGB", (500, 500), (0, 128, 255)).save(buf, format="PNG")
+    thumb = generate_thumbnail(buf.getvalue(), max_size=(300, 300))
+    assert thumb is not None
+    # Vérifier les dimensions de la miniature.
+    thumb_img = Image.open(io.BytesIO(thumb))
+    assert thumb_img.width <= 300
+    assert thumb_img.height <= 300
+
+
+def test_generate_thumbnail_replie_sur_none_si_image_invalide():
+    """Des octets non-image doivent retourner None (repli sur l'originale)."""
+    thumb = generate_thumbnail(b"ce n'est pas une image")
+    assert thumb is None
+
+
+def test_generate_thumbnail_convertit_rgba_vers_jpeg():
+    """Une image avec transparence (RGBA) doit être convertie en RGB."""
+    try:
+        from PIL import Image
+    except ImportError:
+        pytest.skip("Pillow non installé")
+    buf = io.BytesIO()
+    Image.new("RGBA", (50, 50), (255, 0, 0, 128)).save(buf, format="PNG")
+    thumb = generate_thumbnail(buf.getvalue())
+    assert thumb is not None
+    # JPEG valide.
+    assert thumb[:3] == b"\xff\xd8\xff"

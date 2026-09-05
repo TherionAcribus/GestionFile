@@ -31,9 +31,15 @@ qu'une image restaurée puis re-téléversée soit acceptée de façon cohérent
 from __future__ import annotations
 
 import hashlib
+import io
 from typing import Optional, Tuple
 
 from werkzeug.datastructures import FileStorage
+
+# Pillow est importé paresseusement : les tests de validation (qui n'ont pas
+# besoin de décoder d'images) restent légers et ne requièrent pas Pillow.
+# ``generate_thumbnail`` l'importe explicitement et lève une erreur claire
+# s'il manque.
 
 # Extensions acceptées à l'upload. Alignées sur ce que les navigateurs savent
 # afficher dans le diaporama et les boutons, plus webp (sûr et largement
@@ -51,6 +57,17 @@ MAX_IMAGE_BYTES = 16 * 1024 * 1024
 # Nombre maximal de fichiers traités en une seule requête d'upload multiple
 # (galeries). Garde-fou anti-abus ; au-delà, on refuse le lot entier.
 MAX_IMAGES_PER_UPLOAD = 50
+
+# Dimensions maximales des miniatures générées à l'upload. Les vignettes de
+# l'admin n'ont pas besoin de la résolution originale : 300px de large
+# suffit pour une prévisualisation nette tout en divisant le poids par ~10.
+THUMBNAIL_MAX_SIZE = (300, 300)
+
+# Préfixe des noms de miniatures : ``thumb_<nom_original>``.
+THUMBNAIL_PREFIX = "thumb_"
+
+# Sous-dossier des miniatures dans chaque galerie.
+THUMBNAIL_DIR = "thumbnails"
 
 
 class ImageValidationError(ValueError):
@@ -159,3 +176,49 @@ def accept_image_upload(
 
     stored_name = unique_image_filename(data, canon_ext)
     return True, None, {"data": data, "filename": stored_name, "ext": canon_ext}
+
+
+def generate_thumbnail(
+    data: bytes,
+    *,
+    max_size: Tuple[int, int] = THUMBNAIL_MAX_SIZE,
+) -> Optional[bytes]:
+    """Génère une miniature JPEG depuis des octets d'image.
+
+    Utilise Pillow pour redimensionner en conservant les proportions
+    (``thumbnail``), convertir en RGB (le JPEG ne supporte pas l'alpha) et
+    exporter en JPEG qualité 85 — un format universellement affichable, plus
+    compact que le PNG pour les photos.
+
+    Retourne les octets de la miniature, ou ``None`` si Pillow n'est pas
+    disponible ou si le décodage échoue (l'image originale est alors
+    utilisée comme repli par l'appelant).
+    """
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+
+    try:
+        img = Image.open(io.BytesIO(data))
+        # Convertir en RGB : JPEG ne supporte pas la transparence (RGBA/P).
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        img.thumbnail(max_size)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+    except Exception:
+        # Image corrompue ou format non géré par Pillow : repli sur l'originale.
+        return None
+
+
+def thumbnail_filename(original: str) -> str:
+    """Construit le nom de la miniature associée à un nom d'image.
+
+    ``photo.jpg`` -> ``thumb_photo.jpg``. La miniature est toujours en JPEG
+    (voir ``generate_thumbnail``), mais on conserve l'extension originale
+    dans le nom pour simplifier le routage statique : le contenu est JPEG
+    quel que soit le nom.
+    """
+    return f"{THUMBNAIL_PREFIX}{original}"

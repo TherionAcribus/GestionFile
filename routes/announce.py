@@ -1,5 +1,6 @@
 import os
 import json
+import random
 from flask import Blueprint, render_template, url_for, current_app as app
 from models import Patient, ConfigOption
 from utils import replace_balise_announces
@@ -99,11 +100,11 @@ def announce_init_gallery():
             app.logger.error(f"Gallery {gallery} not found")
 
 
-    # Mélange des images si l'option est active
+    # Mélange des images si l'option est active. L'ancien code faisait un
+    # ``sort`` (tri alphabétique) au lieu d'un vrai mélange — le nom de
+    # l'option et son commentaire parlaient bien de « mélange ».
     if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
-        app.logger.debug("%s", images)
-        images.sort(key=lambda x: os.path.basename(x))
-        app.logger.debug("%s", images)
+        random.shuffle(images)
     
     return render_template('announce/gallery.html', images=images,
                             time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],

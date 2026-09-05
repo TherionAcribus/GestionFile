@@ -8,7 +8,14 @@ from communication import communikation
 from routes.admin_security import require_permission
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
 from ui_feedback import display_toast
-from image_storage import accept_image_upload, MAX_IMAGES_PER_UPLOAD, ALLOWED_IMAGE_EXTENSIONS
+from image_storage import (
+    accept_image_upload,
+    MAX_IMAGES_PER_UPLOAD,
+    ALLOWED_IMAGE_EXTENSIONS,
+    generate_thumbnail,
+    thumbnail_filename,
+    THUMBNAIL_DIR,
+)
 
 admin_gallery_bp = Blueprint('admin_gallery', __name__)
 
@@ -79,13 +86,19 @@ def _has_image_extension(name: str) -> bool:
 def get_images_with_dates(folder):
     try:
         folder_path = Path(folder)
+        thumb_dir = folder_path / THUMBNAIL_DIR
         files = [p.name for p in folder_path.iterdir()
                  if p.is_file() and _has_image_extension(p.name)]
         images = []
         for file in files:
             filepath = folder_path / file
             date = tm.strftime('%Y-%m-%d %H:%M:%S', tm.localtime(filepath.stat().st_mtime))
-            images.append({'filename': file, 'date': date})
+            thumb = thumb_dir / thumbnail_filename(file)
+            images.append({
+                'filename': file,
+                'date': date,
+                'thumbnail': thumb.name if thumb.exists() else None,
+            })
         return images
     except OSError:
         # FileNotFoundError est une sous-classe d'OSError : la lister en plus
@@ -166,6 +179,7 @@ def upload_gallery(name):
 
     saved = 0
     skipped: list[str] = []
+    thumb_dir = gallery_dir / THUMBNAIL_DIR
     for file in files:
         if not file.filename:
             continue
@@ -175,6 +189,13 @@ def upload_gallery(name):
             continue
         target_path = gallery_dir / result["filename"]
         target_path.write_bytes(result["data"])
+        # Générer une miniature pour l'affichage admin (évite de charger
+        # l'originale qui peut peser plusieurs Mo). Repli sur l'originale
+        # si Pillow échoue : la template gère l'absence de miniature.
+        thumb_data = generate_thumbnail(result["data"])
+        if thumb_data is not None:
+            thumb_dir.mkdir(parents=True, exist_ok=True)
+            (thumb_dir / thumbnail_filename(result["filename"])).write_bytes(thumb_data)
         saved += 1
 
     if skipped:
@@ -206,6 +227,10 @@ def delete_image(gallery, image):
 
     if target_path.exists() and target_path.is_file():
         target_path.unlink()
+        # Supprimer la miniature associée si elle existe.
+        thumb = target_path.parent / THUMBNAIL_DIR / thumbnail_filename(image)
+        if thumb.exists() and thumb.is_file():
+            thumb.unlink()
 
     images = get_images_with_dates(gallery_dir)
     return render_template('admin/gallery_list_images.html', gallery=gallery, images=images)
