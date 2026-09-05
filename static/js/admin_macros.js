@@ -232,3 +232,157 @@ function handleSimpleAfterRequest(source, variable) {
     }, 1000);
 }
 
+// ============================================================================
+//  Point 13 (audit Admin) — Remplacement des handlers inline par addEventListener.
+//
+//  Les macros de macros.html utilisaient des attributs onclick/oninput/onkeydown
+//  inline, ce qui :
+//  - exige une CSP sans directive 'unsafe-inline' (impossible à verrouiller) ;
+//  - mélange HTML et JavaScript ;
+//  - empêche la mise en cache du comportement.
+//
+//  Désormais les boutons portent des data-attributes et les listeners sont
+//  attachés ici par délégation (un seul listener sur document, pas un par
+//  bouton). Les fonctions globales (handleInputChangeConfig, etc.) restent
+//  disponibles pour la rétrocompatibilité avec d'éventuels templates non
+//  migrés.
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Boutons .variables_calling : insertPlaceholder ---
+    // data-placeholder-key = ID du textarea cible
+    // data-placeholder-text = texte à insérer
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.variables_calling');
+        if (!btn) return;
+        var key = btn.getAttribute('data-placeholder-key');
+        var text = btn.getAttribute('data-placeholder-text');
+        if (key && text !== null) {
+            insertPlaceholder(key, text);
+        }
+    });
+
+    // --- Champs data-config-key : input + keydown ---
+    // Remplace oninput="handleInputChangeConfig(key)" et
+    // onkeydown="handleKeyPressConfig(event, key)"
+    document.addEventListener('input', function (e) {
+        var el = e.target.closest('[data-config-key]');
+        if (!el) return;
+        handleInputChangeConfig(el.getAttribute('data-config-key'));
+    });
+    document.addEventListener('keydown', function (e) {
+        var el = e.target.closest('[data-config-key]');
+        if (!el) return;
+        handleKeyPressConfig(e, el.getAttribute('data-config-key'));
+    });
+
+    // --- Champs CSS data-css-handler : input + keydown ---
+    // data-css-source, data-css-variable, data-css-unit, data-css-handler
+    // handler "change" → handleInputChange + handleKeyPress
+    // handler "parent-change" → handleInputChange + handleParentKeyPress
+    document.addEventListener('input', function (e) {
+        var el = e.target.closest('[data-css-handler]');
+        if (!el) return;
+        var source = el.getAttribute('data-css-source');
+        var variable = el.getAttribute('data-css-variable');
+        handleInputChange(source, variable);
+    });
+    document.addEventListener('keydown', function (e) {
+        var el = e.target.closest('[data-css-handler]');
+        if (!el) return;
+        var source = el.getAttribute('data-css-source');
+        var variable = el.getAttribute('data-css-variable');
+        var unit = el.getAttribute('data-css-unit');
+        var handler = el.getAttribute('data-css-handler');
+        if (handler === 'parent-change') {
+            handleParentKeyPress(e, source, variable, unit);
+        } else {
+            handleKeyPress(e, source, variable, unit);
+        }
+    });
+
+    // --- Color picker : data-color-source + data-color-variable ---
+    // Remplace oninput="handleColorChange(source, variable)"
+    document.addEventListener('input', function (e) {
+        var el = e.target.closest('[data-color-source]');
+        if (!el) return;
+        handleColorChange(el.getAttribute('data-color-source'),
+                          el.getAttribute('data-color-variable'));
+    });
+
+    // --- Bouton data-color-after-request ---
+    // Remplace onclick="handleColorAfterRequest(source, variable)"
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-color-after-request]');
+        if (!btn) return;
+        var parts = btn.getAttribute('data-color-after-request').split(':');
+        if (parts.length === 2) {
+            handleColorAfterRequest(parts[0], parts[1]);
+        }
+    });
+
+    // --- Boutons de sélection de variables CSS ---
+    // data-select-all, data-deselect-all, data-invert-selection
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-select-all]');
+        if (btn) { selectAllVariables(btn.getAttribute('data-select-all')); return; }
+        btn = e.target.closest('[data-deselect-all]');
+        if (btn) { deselectAllVariables(btn.getAttribute('data-deselect-all')); return; }
+        btn = e.target.closest('[data-invert-selection]');
+        if (btn) { invertSelection(btn.getAttribute('data-invert-selection')); return; }
+    });
+
+    // --- Boutons de sélection de variables numériques ---
+    // data-select-all-number, data-deselect-all-number, data-invert-number-selection
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-select-all-number]');
+        if (btn) { selectAllNumberVariables(btn.getAttribute('data-select-all-number')); return; }
+        btn = e.target.closest('[data-deselect-all-number]');
+        if (btn) { deselectAllNumberVariables(btn.getAttribute('data-deselect-all-number')); return; }
+        btn = e.target.closest('[data-invert-number-selection]');
+        if (btn) { invertNumberSelection(btn.getAttribute('data-invert-number-selection')); return; }
+    });
+
+    // --- Bouton data-apply-number ---
+    // Remplace onclick="applyNumberToAll(source, variable, unit)"
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-apply-number]');
+        if (!btn) return;
+        var parts = btn.getAttribute('data-apply-number').split(':');
+        if (parts.length === 3) {
+            applyNumberToAll(parts[0], parts[1], parts[2]);
+        }
+    });
+
+    // --- Champs data-number-source : input + keydown ---
+    // Remplace oninput="handleNumberInputChange(source, variable)" et
+    // onkeydown="handleNumberKeyPress(event, source, variable)"
+    document.addEventListener('input', function (e) {
+        var el = e.target.closest('[data-number-source]');
+        if (!el) return;
+        handleNumberInputChange(el.getAttribute('data-number-source'),
+                                el.getAttribute('data-number-variable'));
+    });
+    document.addEventListener('keydown', function (e) {
+        var el = e.target.closest('[data-number-source]');
+        if (!el) return;
+        handleNumberKeyPress(e, el.getAttribute('data-number-source'),
+                             el.getAttribute('data-number-variable'));
+    });
+
+    // --- Bouton data-copy-colors ---
+    // Remplace onclick="copyColorsFromPage(current_page_key)"
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-copy-colors]');
+        if (!btn) return;
+        copyColorsFromPage(btn.getAttribute('data-copy-colors'));
+    });
+
+    // Re-attacher après un swap HTMX (nouveaux champs injectés).
+    document.addEventListener('htmx:afterSwap', function () {
+        // Les listeners délégués sur document couvrent déjà les nouveaux
+        // éléments — rien à faire ici. Ce hook existe pour les futurs
+        // cas où un listener non délégué serait ajouté.
+    });
+});
+

@@ -118,7 +118,6 @@ function handlePrintButtonClick() {
     printBtn.style.pointerEvents = 'none';
     printBtn.style.opacity = '0.6';
 
-    console.log("Données de réimpression prêtes à être envoyées :", printData);
     sendPrintTicket(printData).finally(function() {
         printBtn.dataset.printing = 'false';
         printBtn.style.pointerEvents = '';

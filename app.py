@@ -637,6 +637,50 @@ def _attach_admin_feedback(response):
     return response
 
 
+@app.after_request
+def _set_security_headers(response):
+    """Point 13 (audit Admin) — En-têtes de sécurité HTTP.
+
+    Ajoute des en-têtes de défense en profondeur sur TOUTES les réponses :
+
+    - ``X-Content-Type-Options: nosniff`` : empêche le navigateur de deviner
+      le type MIME (attaque MIME-sniffing).
+    - ``X-Frame-Options: SAMEORIGIN`` : empêche l'intégration de l'app dans
+      une iframe externe (clickjacking). Les iframes du même domaine (ex.
+      modales Bootstrap) restent autorisées.
+    - ``Content-Security-Policy`` : restreint les sources autorisées pour
+      scripts, styles, images, connexions temps réel et formulaires. Les
+      handlers inline ont été retirés des macros admin (point 13), ce qui
+      permet d'interdire ``'unsafe-inline'`` pour les scripts. Les styles
+      inline restent nécessaires (Bootstrap en utilise quelques-uns), donc
+      on garde ``style-src 'unsafe-inline'`` pour le moment.
+
+    Ces en-têtes ne remplacent pas l'authentification ou les permissions,
+    mais ajoutent une couche de protection contre le XSS et le clickjacking.
+    """
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    # CSP : on est conservateur pour ne pas casser l'existant.
+    # - script-src : 'self' uniquement (les handlers inline ont été retirés)
+    # - style-src : 'self' + 'unsafe-inline' (Bootstrap utilise des styles inline)
+    # - img-src : 'self' + data: (images base64 dans la galerie)
+    # - connect-src : 'self' + ws: + wss: (Socket.IO)
+    # - font-src : 'self' + data: (Bootstrap Icons via font-data)
+    response.headers.setdefault(
+        'Content-Security-Policy',
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self' ws: wss:; "
+        "font-src 'self' data:; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'self'"
+    )
+    return response
+
+
 # ---------------- FONCTIONS Généralistes > Communication avec Pyside ---------------- 
 
 # ---------------- FONCTIONS Généralistes > Affichage page sur téléphone ---------------- 

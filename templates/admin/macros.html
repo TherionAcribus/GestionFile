@@ -1,60 +1,60 @@
 {% macro balises_before_call(key) %}
 <div>
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{P}">{P}</button>
     pour le nom de la pharmacie,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{N}">{N}</button>
     pour le numéro du patient,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{A}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{A}">{A}</button>
     pour l'activité,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{D}">{D}</button>
     pour la date,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{H}">{H}</button>
     pour l'heure.
 </div>
 {% endmacro %}
 
 {% macro balises_web(key) %}
 <div>
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '#')">#</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="#">#</button>
     pour un titre 1,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '##')">##</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="##">##</button>
     pour un titre 2,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '###')">###</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="###">###</button>
     pour un titre 3,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '*italique*')">*italique*</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="*italique*">*italique*</button>
     pour un texte en italique,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**gras**')">**gras**</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="**gras**">**gras**</button>
     pour un texte en gras,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '***')">***</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="***">***</button>
     pour une séparation,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;')">&lt;p align="center"&gt;&lt;/p&gt;</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;">&lt;p align="center"&gt;&lt;/p&gt;</button>
     pour centrer un texte. Les autres balises markdown sont également utilisables.
 </div>
 {% endmacro %}
 
 {% macro balises_for_printer(key) %}
 <div>
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[center][/center]')">Centrer</button>,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[double][/double]')">Double taille</button>,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '**Texte en gras**')">Gras</button>,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '__Texte souligné__')">Souligné</button>,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '[separator]')">Séparateur</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="[center][/center]">Centrer</button>,
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="[double][/double]">Double taille</button>,
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="**Texte en gras**">Gras</button>,
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="__Texte souligné__">Souligné</button>,
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="[separator]">Séparateur</button>
 </div>
 {% endmacro %}
 
 {% macro balises_after_call(key) %}
 <div>
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{P}">{P}</button>
     pour le nom de la pharmacie,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{N}')">{N}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{N}">{N}</button>
     pour le numéro du patient,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{A}')">{M}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{A}">{M}</button>
     pour le membre de l'équipe,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{C}')">{C}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{C}">{C}</button>
     pour le comptoir,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{D}">{D}</button>
     pour la date,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{H}">{H}</button>
     pour l'heure.
 </div>
 {% endmacro %}
@@ -62,11 +62,11 @@
 
 {% macro balises_welcome(key) %}
 <div>
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{P}')">{P}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{P}">{P}</button>
     pour le nom de la pharmacie,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{D}')">{D}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{D}">{D}</button>
     pour la date,
-    <button type="button" class="variables_calling" onclick="insertPlaceholder('{{ key }}', '{H}')">{H}</button>
+    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{H}">{H}</button>
     pour l'heure.
 </div>
 {% endmacro %}
@@ -112,12 +112,11 @@
 {% macro textarea(key, value, label) %}
 <div class="flex-grow-1">
     <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
-    <textarea 
-        id="{{ key }}" 
-        class="form-control" 
+    <textarea
+        id="{{ key }}"
+        class="form-control"
         rows="3"
-        oninput="handleInputChangeConfig('{{ key }}')"
-        onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+        data-config-key="{{ key }}"
         data-initial-value="{{ value }}"
     >{{ value }}</textarea>
 </div>
@@ -138,8 +137,7 @@
         value=""
         autocomplete="new-password"
         placeholder="{% if is_set %}•••••••• (défini — laisser vide pour conserver){% else %}Non défini{% endif %}"
-        oninput="handleInputChangeConfig('{{ key }}')"
-        onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+        data-config-key="{{ key }}"
         data-initial-value=""
     >
     <small class="form-text text-muted">
@@ -171,13 +169,12 @@
 {% macro input_field(key, value, label) %}
 <div class="flex-grow-1">
     <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
-    <input 
-        type="text" 
-        id="{{ key }}" 
-        class="form-control" 
+    <input
+        type="text"
+        id="{{ key }}"
+        class="form-control"
         value="{{ value }}"
-        oninput="handleInputChangeConfig('{{ key }}')"
-        onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+        data-config-key="{{ key }}"
         data-initial-value="{{ value }}"
     >
 </div>
@@ -268,13 +265,12 @@
         <div class="d-flex align-items-center">
             <div class="flex-grow-1">
                 <label for="{{ key }}" class="form-label mb-0">{{ label }}</label>
-                <input 
-                    type="time" 
-                    id="{{ key }}" 
-                    class="form-control" 
+                <input
+                    type="time"
+                    id="{{ key }}"
+                    class="form-control"
                     value="{{ value }}"
-                    oninput="handleInputChangeConfig('{{ key }}')"
-                    onkeydown="handleKeyPressConfig(event, '{{ key }}')"
+                    data-config-key="{{ key }}"
                     data-initial-value="{{ value }}"
                 >
             </div>
@@ -596,15 +592,17 @@
     </div>
     <div class="col-sm-8">
         <div class="input-group">
-            <input 
-                type="number" 
-                id="{{ source }}_{{ variable }}" 
-                class="form-control" 
+            <input
+                type="number"
+                id="{{ source }}_{{ variable }}"
+                class="form-control"
                 value="{{ value|replace(unit, '') }}"
                 min="0"
                 step="1"
-                oninput="handleInputChange('{{ source }}', '{{ variable }}')"
-                onkeydown="handleKeyPress(event, '{{ source }}', '{{ variable }}', '{{ unit }}')"
+                data-css-source="{{ source }}"
+                data-css-variable="{{ variable }}"
+                data-css-unit="{{ unit }}"
+                data-css-handler="change"
                 data-initial-value="{{ value|replace(unit, '') }}"
             >
             <span class="input-group-text">{{ unit }}</span>
@@ -663,13 +661,14 @@
     </div>
     <div class="ms-2 me-2">
         <div class="input-group">
-            <input 
-                type="color" 
+            <input
+                type="color"
                 id="{{ source }}_{{ variable }}_picker"
-                class="form-control form-control-color me-2" 
+                class="form-control form-control-color me-2"
                 value="{{ value }}"
                 title="Choisir une couleur"
-                oninput="handleColorChange('{{ source }}', '{{ variable }}')"
+                data-color-source="{{ source }}"
+                data-color-variable="{{ variable }}"
                 data-initial-value="{{ value }}"
                 style="width: 60px;"
             >
@@ -721,7 +720,7 @@ Enregistrer
     id="{{ source }}_{{ variable }}_button"
     class="btn btn-primary"
     disabled
-    onclick="handleColorAfterRequest('{{ source }}', '{{ variable }}')"
+    data-color-after-request="{{ source }}:{{ variable }}"
 >
     Enregistrer
 </button>
@@ -778,16 +777,16 @@ Enregistrer
             <div class="card card-body">
                 {# Boutons de sélection #}
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="selectAllVariables('{{ variable }}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-select-all="{{ variable }}">
                         Tout sélectionner
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="deselectAllVariables('{{ variable }}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-deselect-all="{{ variable }}">
                         Tout désélectionner
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="invertSelection('{{ variable }}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-invert-selection="{{ variable }}">
                         Inverser la sélection
                     </button>
                 </div>
@@ -818,15 +817,17 @@ Enregistrer
                     </div>
                     <div class="col-sm-8">
                         <div class="input-group">
-                            <input 
-                                type="number" 
-                                id="{{ source }}_{{ variable }}" 
-                                class="form-control" 
+                            <input
+                                type="number"
+                                id="{{ source }}_{{ variable }}"
+                                class="form-control"
                                 value="{{ value|replace(unit, '') }}"
                                 min="0"
                                 step="1"
-                                oninput="handleInputChange('{{ source }}', '{{ variable }}')"
-                                onkeydown="handleParentKeyPress(event, '{{ source }}', '{{ variable }}', '{{ unit }}')"
+                                data-css-source="{{ source }}"
+                                data-css-variable="{{ variable }}"
+                                data-css-unit="{{ unit }}"
+                                data-css-handler="parent-change"
                                 data-initial-value="{{ value|replace(unit, '') }}"
                             >
                             <span class="input-group-text">{{ unit }}</span>
@@ -847,17 +848,17 @@ Enregistrer
                 </button>
 
                 {# Bouton de validation #}
-                <button type="button" 
+                <button type="button"
                         id="{{ source }}_{{ variable }}_button"
                         class="btn btn-primary"
                         hx-swap="none"
                         hx-vals='js:{
                             "source": "{{ source }}",
-                            "variable": "{{ variable }}", 
+                            "variable": "{{ variable }}",
                             "value": document.getElementById("{{ source }}_{{ variable }}").value + "{{ unit }}"
                         }'
                         hx-post="/admin/update_css_variable"
-                        onclick="applyNumberToAll('{{ source }}', '{{ variable }}', '{{ unit }}')"
+                        data-apply-number="{{ source }}:{{ variable }}:{{ unit }}"
                         >
                     <i class="fas fa-check"></i> Enregistrer
                 </button>
@@ -869,16 +870,16 @@ Enregistrer
             <div class="card card-body">
                 {# Boutons de sélection #}
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="selectAllNumberVariables('{{ variable }}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-select-all-number="{{ variable }}">
                         Tout sélectionner
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="deselectAllNumberVariables('{{ variable }}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-deselect-all-number="{{ variable }}">
                         Tout désélectionner
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                            onclick="invertNumberSelection('{{ variable }}')">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-invert-number-selection="{{ variable }}">
                         Inverser la sélection
                     </button>
                 </div>
@@ -910,8 +911,7 @@ Enregistrer
             id="{{ variable }}"
             class="form-control"
             value="{{ value }}"
-            oninput="handleInputChangeConfig('{{ variable }}')"
-            onkeydown="handleKeyPressConfig(event, '{{ variable }}')"
+            data-config-key="{{ variable }}"
             data-initial-value="{{ value }}"
         >
     </div>
@@ -927,13 +927,13 @@ Enregistrer
     </div>
     <div class="col-sm-11">
         <div class="input-group">
-            <input 
-                type="number" 
-                id="{{ source }}_{{ variable }}" 
-                class="form-control" 
+            <input
+                type="number"
+                id="{{ source }}_{{ variable }}"
+                class="form-control"
                 value="{{ value }}"
-                oninput="handleNumberInputChange('{{ source }}', '{{ variable }}')"
-                onkeydown="handleNumberKeyPress(event, '{{ source }}', '{{ variable }}')"
+                data-number-source="{{ source }}"
+                data-number-variable="{{ variable }}"
                 data-initial-value="{{ value }}"
                 min="0"
                 step="1"
@@ -997,7 +997,7 @@ Enregistrer
             <select id="copy_colors_select_{{ current_page_key }}" class="form-select form-select-sm" style="max-width: 300px;">
                 <option value="">-- Choisir une page --</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-info" onclick="copyColorsFromPage('{{ current_page_key }}')">
+            <button type="button" class="btn btn-sm btn-outline-info" data-copy-colors="{{ current_page_key }}">
                 <i class="fas fa-copy"></i> Copier
             </button>
         </div>

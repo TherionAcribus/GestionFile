@@ -520,11 +520,9 @@ $(document).ready(function() {
 // -------------- GALERIES --------------
 
 function display_new_gallery(data) {
-    console.log(data);
-    
+
     // Construire l'URL de la galerie
     let url = "/admin/gallery/__NAME__".replace('__NAME__', data.data);
-    console.log("URL", url);
 
     // Utiliser HTMX pour envoyer une requête GET
     htmx.ajax('GET', url, { target: '#content' });
@@ -532,7 +530,6 @@ function display_new_gallery(data) {
 
 
 function refresh_gallery_list(data) {
-    console.log(data);
     htmx.trigger('#galleries_list', 'refresh_gallery_list', {target: "#galleries_list"});
 }
 
@@ -580,11 +577,6 @@ function submitFile(buttonId) {
         var formData = new FormData();
         formData.append('file', file);
 
-        // Pour le débogage, loggez le contenu de FormData
-        for (var pair of formData.entries()) {
-            console.log(pair[0]+ ', ' + pair[1]); 
-        }
-
         htmx.ajax('POST', '/upload_image/' + buttonId, {
             body: formData,
             headers: {
@@ -593,8 +585,6 @@ function submitFile(buttonId) {
             },
             target: '#button-image-' + buttonId
         });
-    } else {
-        console.log('No file selected.');
     }
 }
 
@@ -615,8 +605,7 @@ function sortable(){
         preventOnFilter: false,
         onEnd: function (/**Event*/evt) {
             var itemEl = evt.item;  // dragged HTMLElement
-            console.log('New index: ' + evt.newIndex); // index of the new position
-            // Vous pouvez ici ajouter une requête pour sauvegarder l'ordre
+            // index of the new position available via evt.newIndex
         }
     });
     // Alternative clavier au glisser-déposer : chaque élément reçoit des
@@ -703,7 +692,6 @@ function refresh_sound(){
 // ---------------- ANNOUNCES ----------------
 
 function insertPlaceholder(textareaId, text) {
-    console.log("Insert placeholder", textareaId, "_", text);
     var textarea = document.getElementById(textareaId);
     var cursorPos = textarea.selectionStart;
     var v = textarea.value;
@@ -721,13 +709,11 @@ htmx.on('htmx:afterSwap', function(evt) {
     // Vérifiez que l'échange concerne bien le contenu de la modale
     if (evt.detail.target.id === 'modal_display_gallery') {
         var closeModalButton = document.getElementById('closeModalButton');
-        console.log("Close modal button", closeModalButton);
 
         if (closeModalButton) {
             closeModalButton.addEventListener('click', function() {
                 // Déclencher l'événement personnalisé pour HTMX
                 var event = new Event('closeModalEvent');
-                console.log("Close modal event dispatched");
                 document.getElementById('announce_current_signal').dispatchEvent(event);
             });
         }
@@ -741,7 +727,6 @@ let audioPlayer = new Audio();
 
 // Fonction pour jouer l'audio
 function playAudio(audioUrl) {
-    console.log("Playing audio:", audioUrl);
     audioPlayer.src = audioUrl.data;
     audioPlayer.play().catch(error => {
         console.error("Erreur lors de la lecture audio:", error);
@@ -753,7 +738,6 @@ function playAudio(audioUrl) {
 // ---------------- TASKS ----------------
 
 function refresh_schedule_tasks_list(data) {
-    console.log(data);
     htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
 }
 
@@ -1647,13 +1631,6 @@ function initColorPickers() {
             const variable = selectId.substring(firstUnderscore + 1);
             const colorPickerId = `${source}_${variable}_picker`;
 
-            console.log('Initializing picker:', {
-                selectId,
-                source,
-                variable,
-                colorPickerId
-            });
-
             $select.select2({
                 data: getColorData(),
                 templateResult: formatColorOption,
@@ -1781,16 +1758,13 @@ function updateDependentColors(source, parentVariable, newValue, selectedVariabl
 }
 
 function sendUpdateToServer(formData) {
-    console.log(formData);
     fetch('/admin/update_css_variable', {
         method: 'POST',
         body: formData
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success) {
-            console.log('Variables mises à jour avec succès');
-        } else {
+        if (!data.success) {
             console.error('Erreur lors de la mise à jour des variables');
         }
     })

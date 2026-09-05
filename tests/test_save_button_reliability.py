@@ -97,10 +97,13 @@ def test_simple_input_uses_variable_as_id():
 
 def test_simple_input_uses_robust_handlers():
     body = _macro_body(_read("templates/admin/macros.html"), "simple_input")
-    # handleInputChangeConfig : active/désactive le bouton selon la valeur initiale.
-    assert "handleInputChangeConfig('{{ variable }}')" in body
-    # handleKeyPressConfig : Entrée = sauvegarder (avec Shift+Enter pour saut de ligne).
-    assert "handleKeyPressConfig(event, '{{ variable }}')" in body
+    # Point 13 : les handlers inline ont été remplacés par des data-attributes.
+    # data-config-key permet à admin_macros.js d'attacher les listeners par
+    # délégation (handleInputChangeConfig + handleKeyPressConfig).
+    assert 'data-config-key="{{ variable }}"' in body
+    # Plus de handlers inline.
+    assert "handleInputChangeConfig('{{ variable }}')" not in body
+    assert "handleKeyPressConfig(event, '{{ variable }}')" not in body
     # Plus de handleSimpleInputChange / handleSimpleKeyPress.
     assert "handleSimpleInputChange" not in body
     assert "handleSimpleKeyPress" not in body
