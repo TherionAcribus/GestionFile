@@ -16,10 +16,10 @@
     --text_up_font_border_size: 0px;
     --text_up_font_border_color: black;
     --text_up_background_color: #008B8B;
-    --calling_font_size: "75px";
-    --calling_font_color: "#FFFFFF";
-    --calling_font_border_size: "0px";
-    --calling_font_border_color: "black";
+    --calling_font_size: 75px;
+    --calling_font_color: #FFFFFF;
+    --calling_font_border_size: 0px;
+    --calling_font_border_color: black;
     --calling_background_color: #008B8B;
     --text_down_font_color: #FFFFFF;
     --text_down_font_size: 75px;
@@ -174,14 +174,6 @@ html, body {
     width: 100%;
 }
 
-#div_announcements {
-    height: 60vh;  /* Définir une hauteur spécifique peut aider à gérer l'espace pour l'image */
-    width: 100%;   /* Utilise toute la largeur disponible */
-    display: flex;  /* Permet d'utiliser 'margin: auto' dans l'image pour la centrer */
-    align-items: center;  /* Centre verticalement le contenu */
-    justify-content: center;  /* Centre horizontalement le contenu */
-}
-
 #image_announcement {
     max-height: 100%;  /* Ajuste l'image pour ne pas dépasser la hauteur de son conteneur */
     max-width: 100%;   /* Ajuste l'image pour ne pas dépasser la largeur de son conteneur */
@@ -189,14 +181,7 @@ html, body {
     width: auto;       /* Garantit que le ratio de l'image est maintenu */
     display: block;    /* Élimine l'espace supplémentaire en dessous de l'image */
     margin: auto;      /* Centre l'image horizontalement si elle est plus petite que le conteneur */
-}
-
-#image_announcement {
-    width: 100%;   /* Utilise toute la largeur de son conteneur */
-    height: 100%;  /* Utilise toute la hauteur de son conteneur */
     object-fit: contain;  /* Assure que l'image s'adapte à son conteneur tout en conservant son ratio */
-    display: block;    /* Élimine l'espace supplémentaire en dessous de l'image */
-    margin: auto;      /* Centre l'image horizontalement et verticalement */
 }
 
 .swiper-slide img {

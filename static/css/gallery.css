@@ -4,14 +4,36 @@
     border: 1px solid #ddd;
     padding: 5px;
     width: 150px;
+    vertical-align: top;
+    word-break: break-word;
 }
 
 .thumbnail img {
     width: 100%;
     height: auto;
+    cursor: pointer;
 }
 
 .thumbnail .details {
     margin-top: 5px;
     text-align: center;
+}
+
+.thumbnail .details p {
+    word-break: break-all;
+    font-size: 0.8em;
+    line-height: 1.2;
+}
+
+@media (max-width: 768px) {
+    .thumbnail {
+        width: 120px;
+    }
+}
+
+@media (max-width: 480px) {
+    .thumbnail {
+        width: 100px;
+        margin: 5px;
+    }
 }

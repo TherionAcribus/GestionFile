@@ -7,8 +7,8 @@
     --circle_button_image_size: 140px;
     --circle_button_text_size: 24px;
     --circle_button_text_color: darkcyan;
-    --circle_button_text_border_size: "0px";
-    --circle_button_text_border_color: "black";
+    --circle_button_text_border_size: 0px;
+    --circle_button_text_border_color: black;
     --circle_button_text_background_color: transparent;
     --square_button_width: 340px;
     --square_button_height: 110px;
@@ -18,8 +18,8 @@
     --square_button_image_size: 85px;
     --square_button_text_size: 24px;
     --square_button_text_color: white;
-    --square_button_text_border_size: "0px";
-    --square_button_text_border_color: "black";
+    --square_button_text_border_size: 0px;
+    --square_button_text_border_color: black;
     --square_button_text_background_color: transparent;
     --square_cancel_button_width: 340px;
     --square_cancel_button_height: 110px;
@@ -29,13 +29,13 @@
     --square_cancel_button_image_size: 85px;
     --square_cancel_button_text_size: 24px;
     --square_cancel_button_text_color: #FFFFFF;
-    --square_cancel_button_text_border_size: "0px";
-    --square_cancel_button_text_border_color: "black";
+    --square_cancel_button_text_border_size: 0px;
+    --square_cancel_button_text_border_color: black;
     --square_cancel_button_text_background_color: transparent;
     --scan_explanation_font_size: 26px;
     --scan_explanation_font_color: #FFFFFF;
     --scan_explanation_border_size: 2px;
-    --scan_explanation_border_color: #black;
+    --scan_explanation_border_color: #000000;
     --scan_explanation_background_color: #008B8B;
     --patient_title_font_size: 52px;
     --patient_title_font_color: #FFFFFF;
@@ -283,6 +283,9 @@ html, body {
 
 .img_btn {
     height: var(--circle_button_image_size);
+    width: var(--circle_button_image_size);
+    object-fit: contain;
+    border-radius: 50%;
 }
 
 .img_square_button {
@@ -294,6 +297,10 @@ html, body {
 
 .img_btn_inactive {
     filter: grayscale(100%);
+}
+
+.img_btn_active {
+    filter: none;
 }
 
 .div_text_button{

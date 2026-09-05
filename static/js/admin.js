@@ -570,24 +570,6 @@ function refresh_counter_dashboard(){
 
 // ---------------- BOUTONS ----------------
 
-function submitFile(buttonId) {
-    var input = document.getElementById('file-input-' + buttonId);
-    var file = input.files[0];
-    if (file) {
-        var formData = new FormData();
-        formData.append('file', file);
-
-        htmx.ajax('POST', '/upload_image/' + buttonId, {
-            body: formData,
-            headers: {
-                'HX-Request': 'true',
-                'Content-Type': 'multipart/form-data' // Assurez-vous de ne pas définir explicitement Content-Type
-            },
-            target: '#button-image-' + buttonId
-        });
-    }
-}
-
 function refresh_button_order(){
     htmx.trigger('#order_buttons', 'refresh_buttons_order', {target: "#order_buttons"});
 }

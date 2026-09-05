@@ -545,8 +545,12 @@ document.addEventListener('htmx:afterSettle', function () {
     var effet = conteneur.dataset.swiperEffect || 'slide';
 
     if (window.swiperInstance) {
-        window.swiperInstance.update();   // instance existante : simple mise a jour
-        return;
+        // L'instance existe déjà (le conteneur a été rechargé par HTMX avec
+        // de nouvelles slides). update() seul ne recharge pas les slides du
+        // DOM — il faut détruire et recréer l'instance pour prendre en
+        // compte le nouveau contenu.
+        window.swiperInstance.destroy(true, true);
+        window.swiperInstance = null;
     }
     window.swiperInstance = new Swiper('.swiper', {
         loop: true,
