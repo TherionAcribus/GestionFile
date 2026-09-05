@@ -182,13 +182,21 @@ def test_debug_print_removed():
 
 def test_admin_socket_requires_authentication():
     # Les gestionnaires Socket.IO ont ete extraits d'app.py vers sockets.py
-    # (point 9.5c) ; la garde d'authentification, elle, est inchangee.
+    # (point 9.5c). La garde a ensuite ete DURCIE (point 2 — audit Admin) :
+    # `is_admin_session()` remplace `is_authenticated_request()`, qui acceptait
+    # un simple jeton applicatif (X-App-Token). Un jeton machine generique ne
+    # prouve pas que le client est une interface d'administration : une
+    # application comptoir ou ecran pouvait rejoindre le namespace admin et
+    # recevoir ses evenements. Ce test verrouille la version stricte.
     source = _read("sockets.py")
     m = re.search(r"def connect_admin\(\):(.*?)def disconnect_admin", source, re.DOTALL)
     assert m, "connect_admin introuvable dans sockets.py"
     body = m.group(1)
-    assert "is_authenticated_request()" in body, (
-        "Le namespace /socket_admin doit exiger l'authentification")
+    assert "is_admin_session()" in body, (
+        "Le namespace /socket_admin doit exiger une session admin authentifiée")
+    assert "is_authenticated_request()" not in body, (
+        "Le namespace /socket_admin ne doit pas se contenter d'un jeton "
+        "applicatif : is_authenticated_request() est trop permissif ici")
     assert '_socket_require("SECURITY_LOGIN_ADMIN"' not in body, (
         "Le namespace admin ne doit plus dépendre de SECURITY_LOGIN_ADMIN")
 
