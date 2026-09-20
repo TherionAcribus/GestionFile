@@ -1,7 +1,7 @@
 import json
 import time
 import logging
-from flask import url_for, request, has_request_context, current_app
+from flask import url_for, current_app
 from routes.pyside import create_patients_list_for_pyside
 from models import bump_queue_revision
 from extensions import socketio
@@ -59,13 +59,14 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
 
 
 def communication_websocket(stream, data=None, flag=None, client_id=None, event="update", revision=None):
+    # Auparavant, en contexte de requete HTTP, ``request.args`` pouvait
+    # ecraser ``stream`` et ``data`` (``?stream=...&message=...``) : n'importe
+    # quel appelant (authentifie ou non selon la route declenchante) pouvait
+    # alors detourner le message vers un autre namespace ou en remplacer le
+    # contenu. Aucun appelant ne s'en servait : le stream et les donnees sont
+    # desormais exclusivement ceux passes par le code serveur.
     logging.info(f'communication_websocket: stream={stream}, event={event}')
-
-    if has_request_context():
-        stream = request.args.get('stream', stream)
-        message = request.args.get('message', data)
-    else:
-        message = data
+    message = data
 
     try:
         namespace = f'/{stream}'
