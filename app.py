@@ -33,7 +33,7 @@ from flask_security import Security, current_user, SQLAlchemyUserDatastore
 from dotenv import load_dotenv
 from markupsafe import escape
 
-from auth_utils import is_valid_app_secret_config, wants_json_response, verify_app_token
+from auth_utils import is_valid_app_secret_config, wants_json_response, verify_app_token, is_kiosk_patient_session
 
 from models import db, Patient, Language, ConfigOption, User, Role
 from extensions import csrf, mail, migrate, scheduler, socketio, configure_scheduler, init_socketio, start_scheduler
@@ -494,9 +494,15 @@ def require_login_for_admin():
     # couvrir aussi les routes /announce/* consommées par la page — auparavant
     # seules les navigations vers /display étaient filtrées ici, laissant
     # /announce/state, /announce/patients_* et /announce/refresh publics.
-    # on mets en code sur les pages patients, mais pas patient/phone
-    elif request.path.startswith('/patient') and not request.path.startswith('/patient/phone'):
-        if app.config["SECURITY_LOGIN_PATIENT"] and not current_user.is_authenticated:
+    # on mets en code sur les pages patients, mais pas patient/phone (borne
+    # téléphone, authentifiée par son propre jeton signé) ni
+    # /patient/kiosk_login — c'est la route qui CRÉE la session borne.
+    elif request.path.startswith('/patient') and not request.path.startswith(('/patient/phone', '/patient/kiosk_login')):
+        # Session borne (patient_kiosk) : la borne ouvre sa zone patient avec
+        # son identité machine (jeton applicatif -> ticket signé), sans compte
+        # utilisateur ni mot de passe injecté dans le DOM.
+        if app.config["SECURITY_LOGIN_PATIENT"] and not (
+                current_user.is_authenticated or is_kiosk_patient_session()):
             return redirect(url_for('admin_security.login', next=request.url))
     elif request.path.startswith('/app'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not (current_user.is_authenticated or is_valid_app_request):

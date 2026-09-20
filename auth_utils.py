@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import jwt
-from flask import current_app, has_request_context, jsonify, request
+from flask import current_app, has_request_context, jsonify, request, session
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 try:
@@ -104,6 +104,58 @@ def check_patient_phone_token(token, patient_id, call_number) -> bool:
     return hmac.compare_digest(
         f"{data.get('pid')}:{data.get('call')}",
         f"{patient_id}:{call_number}")
+
+
+# ---------------------------------------------------------------------------
+# Session « borne » (kiosque patient)
+#
+# La borne cumulait deux connexions : le jeton applicatif (APP_SECRET -> JWT)
+# pour ses appels machine, ET un couple utilisateur/mot de passe technique
+# injecté en JavaScript dans le formulaire /login pour ouvrir la session de la
+# page patient. Le mot de passe transitait donc dans le DOM et une erreur de
+# saisie provoquait des soumissions automatiques répétées.
+#
+# Désormais la borne n'utilise QUE son identité machine : elle échange son
+# jeton applicatif contre un TICKET de connexion signé et éphémère
+# (/api/kiosk/session_ticket), puis fait naviguer sa WebView sur l'URL
+# /patient/kiosk_login/<ticket> — qui pose le drapeau KIOSK_SESSION_KEY dans la
+# session (cookie HttpOnly) et redirige vers /patient. Le drapeau n'ouvre QUE
+# la zone patient : ni /admin, ni /counter, ni les autres namespaces.
+# ---------------------------------------------------------------------------
+
+KIOSK_SESSION_KEY = "patient_kiosk"
+
+# Le ticket ne sert qu'à la navigation immédiate de la borne : durée de vie
+# courte pour limiter le rejeu si l'URL était interceptée.
+KIOSK_TICKET_MAX_AGE = 60
+
+
+def make_kiosk_login_ticket() -> str:
+    """Ticket signé à usage unique logique (TTL court) pour la connexion borne."""
+    s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    return s.dumps({"kiosk": True}, salt="kiosk-login")
+
+
+def check_kiosk_login_ticket(ticket) -> bool:
+    """Vérifie signature et fraîcheur du ticket de connexion borne."""
+    if not ticket:
+        return False
+    try:
+        data = URLSafeTimedSerializer(current_app.config["SECRET_KEY"]).loads(
+            ticket, salt="kiosk-login", max_age=KIOSK_TICKET_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return False
+    return data.get("kiosk") is True
+
+
+def is_kiosk_patient_session() -> bool:
+    """Vrai si la session courante est une session borne (zone patient).
+
+    Utilisée par la garde /patient (app.py) et le namespace /socket_patient :
+    une session émise via /patient/kiosk_login ne donne accès qu'à la zone
+    patient — elle n'est PAS une session utilisateur (current_user reste
+    anonyme)."""
+    return has_request_context() and bool(session.get(KIOSK_SESSION_KEY))
 
 
 def is_authenticated_request() -> bool:

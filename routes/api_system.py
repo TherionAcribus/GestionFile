@@ -8,9 +8,9 @@ serveur est vivant, prêt, et pour obtenir un jeton d'accès.
 import os
 
 import pika
-from flask import Blueprint, current_app as app, jsonify, request
+from flask import Blueprint, current_app as app, jsonify, request, url_for
 
-from auth_utils import check_app_secret, generate_app_token, require_app_token_or_login
+from auth_utils import check_app_secret, generate_app_token, make_kiosk_login_ticket, require_app_token_or_login
 from extensions import socketio
 from models import db, Counter
 
@@ -162,6 +162,24 @@ def get_app_token():
         return jsonify({"token": token})
     else:
         return jsonify({"error": "Unauthorized"}), 401
+
+
+@api_system_bp.route('/api/kiosk/session_ticket', methods=['POST'])
+@require_app_token_or_login
+def kiosk_session_ticket():
+    """Émet un ticket de connexion pour la borne (kiosque patient).
+
+    Étape 1 du mécanisme de session borne (point authentification borne) : le
+    client machine présente son jeton applicatif (X-App-Token) et reçoit une
+    URL de connexion signée à durée de vie courte. La borne fait alors naviguer
+    sa WebView sur cette URL (étape 2, /patient/kiosk_login/<ticket>) où le
+    serveur pose le cookie de session HttpOnly limité à la zone patient.
+
+    Le secret applicatif et le jeton ne traversent jamais le DOM d'une page :
+    seule une URL à durée de vie courte transite par la navigation.
+    """
+    ticket = make_kiosk_login_ticket()
+    return jsonify({"login_url": url_for('patient.kiosk_login', ticket=ticket)})
 
 
 @api_system_bp.route('/api/counters', methods=['GET'])

@@ -89,6 +89,26 @@ pas seulement la page `/display` :
   action d'administration : **POST** uniquement (plus de déclenchement par un
   simple lien) et permission `announce` exigée quel que soit le drapeau.
 
+## Session « borne » (kiosque patient)
+
+La borne patient ne possède plus de compte utilisateur : plus de couple
+identifiant/mot de passe injecté en JavaScript dans `/login`. Elle s'authentifie
+uniquement par son **identité machine** :
+
+1. `POST /api/kiosk/session_ticket` — exige le jeton applicatif
+   (`X-App-Token`, lui-même obtenu via `/api/get_app_token` + `APP_SECRET`) —
+   délivre une **URL de connexion signée à courte durée de vie** (60 s).
+2. `GET /patient/kiosk_login/<ticket>` — vérifie signature et fraîcheur du
+   ticket, pose le drapeau `patient_kiosk` dans la session (cookie HttpOnly)
+   et redirige vers `/patient`.
+
+Le drapeau `patient_kiosk` n'ouvre **que** la zone patient : la garde
+`/patient` (`app.py`) et le namespace `/socket_patient` (`sockets.py`)
+l'acceptent quand `SECURITY_LOGIN_PATIENT` est actif ; `/admin`, `/counter` et
+les autres namespaces exigent toujours une session utilisateur. Un ticket
+invalide ou expiré ne crée aucune session : la borne détecte la page `/login`
+et redemande un ticket frais (avec limitation de débit côté client).
+
 ## Intégration Spotify (musique d'ambiance)
 
 L'intégration Spotify pilote un **unique** compte Spotify (le lecteur physique

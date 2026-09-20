@@ -5,7 +5,7 @@ from models import Language, Button, Activity, Patient, db, record_printer_statu
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, create_qr_code
 from communication import communikation, send_app_notification
-from auth_utils import make_patient_phone_token, check_patient_phone_token
+from auth_utils import make_patient_phone_token, check_patient_phone_token, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -13,6 +13,32 @@ def utility_processor():
     def get_css_url():
         return app.css_manager.get_current_css_url()
     return dict(get_css_url=get_css_url)
+
+@patient_bp.route('/patient/kiosk_login/<ticket>')
+def kiosk_login(ticket):
+    """Connexion de la borne (étape 2, sans compte utilisateur).
+
+    La borne a obtenu ce ticket signé via POST /api/kiosk/session_ticket sur
+    présentation de son jeton applicatif. On vérifie signature + fraîcheur,
+    puis on pose le drapeau de session borne — cookie de session HttpOnly
+    classique, limité à la zone patient (la garde /patient de app.py est la
+    seule à l'accepter ; il n'ouvre ni /admin ni /counter).
+
+    Cette route est exemptée de la garde /patient dans app.py : c'est elle qui
+    CRÉE la session. Un ticket invalide ou expiré renvoie simplement vers
+    /patient (qui redirigera lui-même vers /login si la sécurité est active) ;
+    la borne détecte la page de connexion et redemande un ticket frais.
+    """
+    if not check_kiosk_login_ticket(ticket):
+        app.logger.warning("Ticket de connexion borne refusé (invalide ou expiré).")
+        return redirect(url_for('patient.patients_front_page'))
+    session[KIOSK_SESSION_KEY] = True
+    # Session permanente : la borne tourne en continu, sa session ne doit pas
+    # dépendre de la fermeture du navigateur embarqué.
+    session.permanent = True
+    app.logger.info("Session borne ouverte (zone patient).")
+    return redirect(url_for('patient.patients_front_page'))
+
 
 @patient_bp.route('/patient')
 def patients_front_page():

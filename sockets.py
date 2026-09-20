@@ -16,7 +16,7 @@ import logging
 from flask import current_app, request
 from flask_socketio import join_room, leave_room
 
-from auth_utils import is_authenticated_request, is_admin_session, is_socket_connection_authorized, check_patient_phone_token
+from auth_utils import is_authenticated_request, is_admin_session, is_kiosk_patient_session, is_socket_connection_authorized, check_patient_phone_token
 from extensions import socketio
 
 logger = logging.getLogger(__name__)
@@ -101,10 +101,41 @@ def _handlers_simples(namespace, flag_name=None, libelle=None):
 # documenté ici pour que ce soit un choix visible et non un oubli.
 _handlers_simples("/socket_update_patient", None, "file patients")
 _handlers_simples("/socket_update_screen", "SECURITY_LOGIN_SCREEN", "ecran d'affichage")
-_handlers_simples("/socket_patient", "SECURITY_LOGIN_PATIENT", "page patient")
 _handlers_simples("/socket_app_counter", "SECURITY_LOGIN_COUNTER", "App comptoir")
 _handlers_simples("/socket_app_screen", "SECURITY_LOGIN_SCREEN", "App ecran")
 _handlers_simples("/socket_counter", "SECURITY_LOGIN_COUNTER", "comptoir")
+
+
+def _socket_patient_authorized(flag_active):
+    """Autorisation du namespace /socket_patient (page borne).
+
+    Même périmètre que la zone HTTP /patient : quand SECURITY_LOGIN_PATIENT est
+    actif, la connexion exige une session utilisateur, un jeton applicatif —
+    OU une session borne (``patient_kiosk``), émise via /patient/kiosk_login
+    sans compte technique. Sans ce troisième cas, la borne connecterait sa page
+    mais son Socket.IO serait refusé."""
+    if not flag_active:
+        return True
+    return is_authenticated_request() or is_kiosk_patient_session()
+
+
+@socketio.on("connect", namespace="/socket_patient")
+def connect_patient():
+    if not _socket_patient_authorized(
+            current_app.config.get("SECURITY_LOGIN_PATIENT", False)):
+        current_app.logger.warning(
+            "Connexion Socket.IO refusee sur /socket_patient "
+            "(session/jeton/session-borne manquant)."
+        )
+        return False
+    register_client(request)
+    logger.info("Client connecte au namespace page patient")
+
+
+@socketio.on("disconnect", namespace="/socket_patient")
+def disconnect_patient():
+    forget_client(request)
+    logger.info("Client deconnecte du namespace page patient")
 
 
 @socketio.on("connect", namespace="/socket_admin")
