@@ -16,7 +16,7 @@ import logging
 from flask import current_app, request
 from flask_socketio import join_room, leave_room
 
-from auth_utils import is_authenticated_request, is_admin_session, is_socket_connection_authorized
+from auth_utils import is_authenticated_request, is_admin_session, is_socket_connection_authorized, check_patient_phone_token
 from extensions import socketio
 
 logger = logging.getLogger(__name__)
@@ -156,19 +156,26 @@ def disconnect_admin():
 
 @socketio.on("connect", namespace="/socket_phone")
 def connect_phone():
-    # Pas de garde d'authentification : le téléphone du patient n'a pas de
-    # session. Il rejoint une salle dérivée de son numéro d'appel, lu dans ses
-    # propres cookies — comportement historique, conservé tel quel.
+    # Pas de session : le téléphone du patient rejoint la salle de son numéro
+    # d'appel. Les cookies patient_id / patient_call_number sont lisibles et
+    # falsifiables côté client — ils ne suffisent donc pas : il faut le cookie
+    # patient_token, signé par le serveur dans /patient/phone/ping. Sans lui,
+    # poser patient_call_number=X permettait d'écouter la salle call_X d'un
+    # autre patient.
     register_client(request)
     logger.info("Client connecte au namespace telephone")
 
     patient_id = request.cookies.get("patient_id")
     call_number = request.cookies.get("patient_call_number")
-    if patient_id and call_number:
+    token = request.cookies.get("patient_token")
+    if check_patient_phone_token(token, patient_id, call_number):
         join_room(f"call_{call_number}")
         current_app.logger.debug(
             "Patient %s (numero d'appel %s) a rejoint sa salle", patient_id, call_number
         )
+    elif patient_id or call_number:
+        logger.warning(
+            "Telephone sans jeton patient valide (cookies non signes) : salle non rejointe")
 
 
 @socketio.on("disconnect", namespace="/socket_phone")
@@ -177,5 +184,8 @@ def disconnect_phone():
     logger.info("Client deconnecte du namespace telephone")
 
     call_number = request.cookies.get("patient_call_number")
-    if request.cookies.get("patient_id") and call_number:
+    if check_patient_phone_token(
+            request.cookies.get("patient_token"),
+            request.cookies.get("patient_id"),
+            call_number):
         leave_room(f"call_{call_number}")

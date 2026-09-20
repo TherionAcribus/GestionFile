@@ -6,6 +6,7 @@ from functools import wraps
 
 import jwt
 from flask import current_app, has_request_context, jsonify, request
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 try:
     from flask_security import current_user
@@ -65,6 +66,44 @@ def verify_app_token(token: str) -> bool:
         return False
     except jwt.InvalidTokenError:
         return False
+
+
+# Validité du jeton téléphone-patient : alignée sur le max_age (30 min) des
+# cookies patient_id / patient_call_number posés par /patient/phone/ping.
+_PATIENT_PHONE_TOKEN_MAX_AGE = 30 * 60
+
+
+def make_patient_phone_token(patient_id, call_number) -> str:
+    """Jeton signé liant le couple (patient_id, call_number) d'un téléphone.
+
+    Posé en cookie ``patient_token`` au moment où le serveur pose les cookies
+    patient. Les cookies patient restent lisibles côté client (le JS s'en sert
+    pour filtrer 'your_turn' et pour le rattrapage au reconnect) : le jeton
+    prouve seulement que CES valeurs ont bien été émises par le serveur.
+    """
+    s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    return s.dumps({"pid": str(patient_id), "call": str(call_number)},
+                   salt="patient-phone")
+
+
+def check_patient_phone_token(token, patient_id, call_number) -> bool:
+    """Vérifie le jeton téléphone face aux valeurs des cookies patient.
+
+    Sans lui, poser ``patient_call_number=X`` suffisait à rejoindre la salle
+    ``call_X`` de ``/socket_phone`` et à lire le statut d'un autre patient via
+    ``/patient/phone/status``. Comparaison en temps constant pour ne pas
+    donner d'oracle sur la valeur du jeton.
+    """
+    if not token or not patient_id or not call_number:
+        return False
+    try:
+        data = URLSafeTimedSerializer(current_app.config["SECRET_KEY"]).loads(
+            token, salt="patient-phone", max_age=_PATIENT_PHONE_TOKEN_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return False
+    return hmac.compare_digest(
+        f"{data.get('pid')}:{data.get('call')}",
+        f"{patient_id}:{call_number}")
 
 
 def is_authenticated_request() -> bool:

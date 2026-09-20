@@ -5,6 +5,7 @@ from models import Language, Button, Activity, Patient, db, record_printer_statu
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, create_qr_code
 from communication import communikation, send_app_notification
+from auth_utils import make_patient_phone_token, check_patient_phone_token
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -555,6 +556,7 @@ def phone_patient(language_code, patient_id, activity_id):
                                                     language_code=language_code))
             response.set_cookie('patient_id', "", expires=0)
             response.set_cookie('patient_call_number', "", expires=0)
+            response.set_cookie('patient_token', "", expires=0)
             return response
     return render_template('/patient/phone.html',
                             phone_title=phone_title,
@@ -572,11 +574,14 @@ def phone_patient_status():
     évènements manqués -- fréquent sur mobile : verrouillage d'écran,
     bascule wifi/4G, mise en arrière-plan du navigateur).
     """
-    patient_id = request.cookies.get('patient_id')
-    if not patient_id:
+    # Le cookie patient_id est falsifiable : seul un patient_token signé
+    # (posé par /patient/phone/ping) autorise à lire le statut d'un patient.
+    if not check_patient_phone_token(request.cookies.get('patient_token'),
+                                     request.cookies.get('patient_id'),
+                                     request.cookies.get('patient_call_number')):
         return jsonify({"status": None}), 200
 
-    patient = Patient.query.get(patient_id)
+    patient = Patient.query.get(request.cookies.get('patient_id'))
     if not patient:
         return jsonify({"status": None}), 200
 
@@ -595,8 +600,12 @@ def phone_patient_ping():
     """
     activity_id = request.form.get('activity_id')
     language_code = request.form.get('language_code')
-    # si déja inscrit
-    if request.cookies.get('patient_id'):
+    # si déja inscrit — le cookie patient_id seul est falsifiable : exiger le
+    # jeton signé. Sans lui (ou s'il est périmé), on retombe sur une nouvelle
+    # inscription, comme pour un client sans cookie.
+    if check_patient_phone_token(request.cookies.get('patient_token'),
+                                 request.cookies.get('patient_id'),
+                                 request.cookies.get('patient_call_number')):
         patient = Patient.query.get(request.cookies.get('patient_id'))
     # si pas encore inscrit
     else:
@@ -633,6 +642,9 @@ def phone_patient_ping():
                                             phone_center=app.config['PHONE_CENTER']))
     response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
     response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
+    # Jeton signé liant ce couple de cookies : preuve opposable pour la salle
+    # /socket_phone, /patient/phone/status et la réaffichage ci-dessus.
+    response.set_cookie('patient_token', make_patient_phone_token(patient.id, patient.call_number), max_age=60*30)
     return response
 
 
@@ -643,7 +655,14 @@ def phone_patient_your_turn():
     """
     activity_id = request.form.get('activity_id')
     language_code = request.form.get('language_code')
-    patient = Patient.query.get(request.cookies.get('patient_id'))
+    # Même garde que /patient/phone/status : un cookie patient_id forgé ne doit
+    # pas dévoiler la page "votre tour" d'un autre patient.
+    if check_patient_phone_token(request.cookies.get('patient_token'),
+                                 request.cookies.get('patient_id'),
+                                 request.cookies.get('patient_call_number')):
+        patient = Patient.query.get(request.cookies.get('patient_id'))
+    else:
+        patient = None
 
     phone_lines = []
 
