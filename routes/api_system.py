@@ -6,7 +6,6 @@ serveur est vivant, prêt, et pour obtenir un jeton d'accès.
 """
 
 import os
-import time
 
 import pika
 from flask import Blueprint, current_app as app, jsonify, request
@@ -33,51 +32,14 @@ def send_message():
 
 
 
-@api_system_bp.route('/send')
-@require_app_token_or_login
-def send_message_old():
-    url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
-    params = pika.URLParameters(url)
-    
-    app.logger.info(f"Connecting to RabbitMQ at {url}")
-    
-    # Ajoutez une boucle pour réessayer la connexion à RabbitMQ
-    for attempt in range(5):  # Réessayez 5 fois 
-        try:
-            app.logger.info(f"Attempt {attempt + 1} to connect to RabbitMQ")
-            connection = pika.BlockingConnection(params)
-            channel = connection.channel()
-            channel.queue_declare(queue='hello')
-            channel.basic_publish(exchange='', routing_key='hello', body='Hello World!')
-            connection.close()
-            app.logger.info("Message sent to RabbitMQ")
-            return jsonify({"message": "Message sent to RabbitMQ!"})
-        except pika.exceptions.AMQPConnectionError as e:
-            app.logger.error(f"Connection failed, retrying in 5 seconds... {e}")
-            # `time` designe bien le module standard ici. Dans app.py il pointait
-            # sur `datetime.time` (importe par `from datetime import datetime,
-            # time, timedelta`) : `time.sleep` n'existe pas dessus, et la boucle
-            # de reessai levait donc une AttributeError des le premier echec.
-            time.sleep(5)  # Attendez 5 secondes avant de réessayer
-
-    app.logger.error("Failed to connect to RabbitMQ after 5 attempts")
-    return jsonify({"message": "Failed to connect to RabbitMQ"}), 500
-
-
-
-@api_system_bp.route('/test')
-@require_app_token_or_login
-def rabbitmq_status():
-    url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
-    params = pika.URLParameters(url)
-    
-    try:
-        connection = pika.BlockingConnection(params)
-        connection.close()
-        return jsonify({"status": "RabbitMQ is running"})
-    except Exception as e:
-        return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
-
+# /send et /test retires (point C13) : ce ne sont pas des routes d'usage mais
+# des restes de mise au point RabbitMQ — /send publiait « Hello World! » dans
+# une file 'hello' que rien ne consomme, avec 5 x 5 s de reessai bloquant dans
+# la vue ; /test pingait le broker. Le seul usage reel de RabbitMQ est le
+# message_queue de Socket.IO (extensions.py) et le diagnostic equivalent est
+# deja fait proprement par /readyz (check AMQP conditionne a START_RABBITMQ).
+# Les sondes manuelles dormantes ci-dessous restent cataloguees dans
+# tests/test_code_mort.py (ROUTES_DESACTIVEES).
 
 
 # [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot

@@ -105,6 +105,13 @@ ROUTES_RETIREES = [
     # à une recherche d'URL : « /patients » matche backref('patients') dans
     # models.py ; c'est l'invariant render_template ci-dessous qui l'a trouvée.
     ("routes/calling.py", "/patients/<lang>"),
+    # Restes de mise au point RabbitMQ (point C13) : /send publiait
+    # « Hello World! » dans une file 'hello' que rien ne consomme, avec
+    # 5 x 5 s de reessai bloquant dans la vue ; /test pingait le broker —
+    # diagnostic deja couvert par /readyz. Le seul usage reel du broker est
+    # le message_queue de Socket.IO.
+    ("routes/api_system.py", "/send"),
+    ("routes/api_system.py", "/test"),
 ]
 
 
