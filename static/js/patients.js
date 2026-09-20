@@ -36,6 +36,15 @@ document.addEventListener('DOMContentLoaded', (event) => {
         htmx.trigger('#div_for_scan', 'qrcode_is_scanned');
     });
 
+    // Impression de test déclenchée depuis l'admin (onglet Ticket). Le payload
+    // est le même que le flux normal : base64 ESC/POS passé au pont pywebview.
+    // Une page ouverte dans un navigateur classique n'imprime rien
+    // (sendPrintTicket renvoie 'no_api' sans window.pywebview).
+    patientSocket.on('print_ticket', function(msg) {
+        console.log("Print ticket demandé par l'admin");
+        sendPrintTicket(msg.data);
+    });
+
     patientSocket.on('connect_error', function(err) {
         console.error('Patient WebSocket connection error:', err);
     });

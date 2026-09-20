@@ -464,16 +464,9 @@ def play_playlist():
 
     app.config["IS_PLAYING_SPOTIFY"] = True
 
-    # Envoie la commande à la page "announce" via WebSocket ou un autre mécanisme
-    """communikation("update_audio", 
-                    event="spotify", 
-                    data={
-                        'playlist_uri': playlist_uri, 
-                        'access_token': token_info['access_token'],
-                        'shuffle': shuffle  # Ajoute l'option shuffle dans les données
-                    })"""
-
-    #socketio.emit('play_playlist', {'playlist_uri': playlist_uri}, namespace='/announce')
+    # La lecture est entièrement pilotée ici, côté serveur (spotipy) : plus
+    # aucun évènement temps réel n'est envoyé à l'écran, et surtout plus de
+    # token OAuth Spotify dans un message Socket.IO.
 
     return redirect(url_for('admin_music.admin_music'))
 

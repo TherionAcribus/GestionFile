@@ -31,29 +31,29 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
         communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list", revision=revision)
         communication_websocket("socket_update_patient", patients, event=event, revision=revision)
     elif stream == "update_audio":
-        if event == "spotify":
-            communication_websocket("socket_update_screen", data, flag, event="spotify")
-        else:
-            if current_app.config["ANNOUNCE_ALERT"]:
-                signal_file = current_app.config["ANNOUNCE_ALERT_FILENAME"]
-                audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-                if current_app.config["ANNOUNCE_PLAYER"] == "web":
-                    communication_websocket("socket_update_screen", audio_path, event="audio")
-                    current_app.logger.debug('AUDIO_PATH %s', audio_path)
-                else:
-                    communication_websocket("socket_app_screen", audio_path, "sound")
+        # L'ancienne branche event == "spotify" (token OAuth + Web Playback SDK
+        # côté écran) a été retirée : plus personne n'émet cet évènement, la
+        # lecture Spotify est pilotée côté serveur.
+        if current_app.config["ANNOUNCE_ALERT"]:
+            signal_file = current_app.config["ANNOUNCE_ALERT_FILENAME"]
+            audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
             if current_app.config["ANNOUNCE_PLAYER"] == "web":
-                communication_websocket("socket_update_screen", data, event="audio")
+                communication_websocket("socket_update_screen", audio_path, event="audio")
+                current_app.logger.debug('AUDIO_PATH %s', audio_path)
             else:
-                communication_websocket("socket_app_screen", data, "sound")
-            # Ducking côté serveur : baisse/coupe la musique Spotify pendant
-            # l'annonce puis la relance automatiquement. Import différé pour
-            # éviter une dépendance circulaire (admin_music importe communikation).
-            try:
-                from routes.admin_music import duck_for_announcement
-                duck_for_announcement()
-            except Exception:
-                logging.exception("Échec du déclenchement du ducking Spotify")
+                communication_websocket("socket_app_screen", audio_path, "sound")
+        if current_app.config["ANNOUNCE_PLAYER"] == "web":
+            communication_websocket("socket_update_screen", data, event="audio")
+        else:
+            communication_websocket("socket_app_screen", data, "sound")
+        # Ducking côté serveur : baisse/coupe la musique Spotify pendant
+        # l'annonce puis la relance automatiquement. Import différé pour
+        # éviter une dépendance circulaire (admin_music importe communikation).
+        try:
+            from routes.admin_music import duck_for_announcement
+            duck_for_announcement()
+        except Exception:
+            logging.exception("Échec du déclenchement du ducking Spotify")
     else:
         communication_websocket(f"socket_{stream}", data, flag, event=event)
 

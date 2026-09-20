@@ -1,4 +1,5 @@
 import os
+import base64
 import datetime
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
 from models import (
@@ -533,9 +534,14 @@ def delete_button_image(button_id):
 @admin_patient_bp.route("/admin/patient/print_test_ticket_size", methods=['POST'])
 @require_permission('patient')
 def print_ticket_test_size():
+    # L'évènement « print_ticket » sur /socket_patient est le vrai canal
+    # d'impression : la page borne (patients.js) le relaie au pont pywebview.
+    # Auparavant on émettait sur « app_patient » -> /socket_app_patient,
+    # namespace qui n'existe pas : le bouton n'imprimait rien.
     text = "123456789012345678901234567890123456789012345678901234567890"
     app.logger.debug("%s", text)
-    communikation(stream="app_patient", data=text, flag="print")
+    payload = base64.b64encode(text.encode("utf-8")).decode("utf-8")
+    communikation(stream="patient", data=payload, event="print_ticket")
     return "", 204
 
 @admin_patient_bp.route("/admin/patient/print_ticket_test", methods=['POST'])
@@ -547,9 +553,10 @@ def print_ticket_test():
     language_code = request.values.get("language", "fr")
     app.logger.debug('language_code %s', language_code)
     session["language_code"] = language_code
-    patient = get_futur_patient(call_number, activity)    
+    patient = get_futur_patient(call_number, activity)
+    # format_ticket_text renvoie déjà du base64 ESC/POS, prêt pour print_ticket.
     text = format_ticket_text(patient, activity)
-    communikation(stream="app_patient", data=text, flag="print")
+    communikation(stream="patient", data=text, event="print_ticket")
     return "", 204
 
 
