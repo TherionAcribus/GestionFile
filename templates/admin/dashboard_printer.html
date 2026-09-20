@@ -23,7 +23,7 @@
                         {% endif %}
                         <div>
                             {% for info in printer_infos %}
-                                <p>{{info["timestamp"]}} : {{ info["message"]}}</p>
+                                <p>{{info["timestamp"]}}{% if info["borne_id"] %} [{{ info["borne_id"] }}]{% endif %} : {{ info["message"]}}</p>
                             {% endfor %}
                         </div>
                     </div>

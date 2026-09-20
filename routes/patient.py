@@ -1,8 +1,7 @@
 import uuid
-import datetime
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
-from models import Language, Button, Activity, Patient, db
+from models import Language, Button, Activity, Patient, db, record_printer_status
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, create_qr_code
 from communication import communikation, send_app_notification
@@ -305,15 +304,13 @@ def _alert_staff_print_failure(patient, code, message):
     except Exception as e:
         app.logger.error(f"Alerte personnel (impression) impossible: {e}")
 
-    # Trace horodatée dans le tableau de bord imprimante du staff.
+    # Trace horodatée dans le tableau de bord imprimante du staff. En base et
+    # non plus dans app.config["PRINTER_INFOS"] : visible par tous les process
+    # et sans commit implicite de la session (écriture sur connexion dédiée —
+    # on est au milieu du flux d'écriture de confirm_print).
     try:
-        timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
-        infos = app.config.get("PRINTER_INFOS")
-        if infos is not None:
-            if len(infos) >= 10:
-                infos.pop(0)
-            infos.append({'error': True, 'message': detail, 'timestamp': timestamp})
-            communikation("admin", event="refresh_printer_dashboard")
+        record_printer_status("printer_error", detail, is_error=True)
+        communikation("admin", event="refresh_printer_dashboard")
     except Exception as e:
         app.logger.error(f"Journalisation dashboard imprimante impossible: {e}")
 

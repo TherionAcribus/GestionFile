@@ -14,7 +14,7 @@ from flask import Flask, request, redirect, url_for, session, jsonify, g, make_r
 
 from flask.signals import request_started
 from flask_wtf.csrf import CSRFError
-from datetime import datetime, timedelta
+from datetime import timedelta
 import time as tm
 
 import json
@@ -46,7 +46,7 @@ from routes.calling import calling_bp
 from routes.admin_config import admin_config_bp
 from scheduler_functions import clear_old_patients_table
 from bdd import init_database
-from config import Config, time_tz
+from config import Config
 from variables import MultiCssVariableManager
 from css_manager import CSSManager
 
@@ -149,17 +149,11 @@ def load_configuration(app):
     app.config["VOICE_GOOGLE_REGION"] = french.voice_google_region
     app.logger.debug('VOICE_MODEL %s', app.config["VOICE_MODEL"])
 
-    # printer — état RUNTIME (historique du statut imprimante, poussé par l'App
-    # Patient et accumulé en mémoire). Point 11 : ``load_configuration`` peut être
-    # rappelée à chaud (rechargement après changement de config par un autre
-    # processus) ; on utilise ``setdefault`` pour NE PAS écraser cet état runtime
-    # à chaque rechargement (seul le tout premier chargement l'initialise).
-    app.config.setdefault("PRINTER_INFOS", [])
-    app.config.setdefault("PRINTER_ERROR", {
-        'error': True,
-        'message': "pas de connexion à l'App Patient",
-        'timestamp': datetime.now(time_tz)
-    })
+    # printer — l'historique des statuts imprimante vit désormais en base
+    # (table printer_status, cf. models.record_printer_status /
+    # get_printer_infos / get_printer_error). Il était auparavant tenu dans
+    # app.config (PRINTER_INFOS / PRINTER_ERROR) : un état par process,
+    # partiel en multi-worker et perdu au redémarrage.
 
     # TMP FIX adresse galleries
     app.config["ANNOUNCE_GALLERY_FOLDERS"]= "static/galleries"

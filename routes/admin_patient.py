@@ -1,7 +1,10 @@
 import os
 import datetime
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
-from models import Button, Activity, DashboardCard, Language, ConfigOption, db
+from models import (
+    Button, Activity, DashboardCard, Language, ConfigOption, db,
+    record_printer_status, get_printer_infos, get_printer_error,
+)
 from diagnostics import collect_patient_page_alerts
 from python.engine import get_futur_patient, create_qr_code
 from utils import format_ticket_text
@@ -656,33 +659,46 @@ def activate_button(button_id):
 @admin_patient_bp.route('/api/printer/status', methods=['POST'])
 @require_app_token_or_login
 def admin_printer_status():
-    # Récupérer les données envoyées par la requête POST
-    printer_error_code = request.json.get('error')
-    error_message = request.json.get('message', 'No error message provided')
-    
-    printer_error = True if 'error' in printer_error_code else False
+    # Corps JSON validé : avant, request.json.get('error') pouvait renvoyer
+    # None et `'error' in printer_error_code` levait un TypeError -> 500 sans
+    # diagnostic pour la borne.
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "invalid_json"}), 400
+    printer_error_code = data.get('error')
+    if not isinstance(printer_error_code, str) or not printer_error_code:
+        return jsonify({"error": "missing_error_code"}), 400
 
-    # Mettre à jour l'état de l'imprimante dans la configuration de Flask
-    app.config["PRINTER_ERROR"] = printer_error
-    
-    # Créer un horodatage dans le format "DD/MM-HH:MM"
-    timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
+    error_message = data.get('message', 'No error message provided')
+    borne_id = data.get('borne_id')
 
-    # Limiter la taille de la liste à 10 éléments
-    if len(app.config["PRINTER_INFOS"]) >= 10:
-        app.config["PRINTER_INFOS"].pop(0)  # Supprimer l'élément le plus ancien
+    # La borne envoie l'horodatage de GÉNÉRATION du statut (ISO 8601) : il
+    # reste exact même si l'envoi n'aboutit qu'après des réessais. Illisible
+    # ou absent -> on retombe sur l'heure de réception (record_printer_status).
+    generated_at = None
+    raw_timestamp = data.get('timestamp')
+    if isinstance(raw_timestamp, str):
+        try:
+            generated_at = datetime.datetime.fromisoformat(raw_timestamp)
+        except ValueError:
+            app.logger.warning("Horodatage de statut imprimante illisible : %r", raw_timestamp)
 
-    # Ajouter la nouvelle erreur à la liste PRINTER_INFOS
-    app.config["PRINTER_INFOS"].append({
-        'error': printer_error,
-        'message': error_message,
-        'timestamp': timestamp
-    })
+    # Persistance en base (record_printer_status) : l'état était auparavant
+    # tenu dans app.config — par process — donc partiel avec plusieurs workers
+    # et perdu au redémarrage.
+    record_printer_status(
+        printer_error_code,
+        error_message,
+        borne_id=borne_id,
+        generated_at=generated_at,
+    )
+    printer_error = "error" in printer_error_code
 
     communikation("admin", event="refresh_printer_dashboard")
 
     # notification à Pyside
-    send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp})
+    timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
+    send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp, "borne_id": borne_id})
 
     # on met à jour l'icone des Apps Comptoir en fonction du status du papier
     if printer_error_code in ["no_paper", "low_paper"]:
@@ -691,7 +707,7 @@ def admin_printer_status():
         action_add_paper(add_paper=False, from_printer=True)
 
     # Afficher les informations pour vérifier la mise à jour
-    app.logger.debug(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Timestamp : {timestamp}")
+    app.logger.debug(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Borne : {borne_id}, Timestamp : {timestamp}")
 
     return jsonify({'status': 'success'}), 200
 
@@ -700,11 +716,10 @@ def admin_printer_status():
 @require_permission_dashboard('patient')
 def dashboard_staff():
     dashboardcard = DashboardCard.query.filter_by(name="staff").first()
-    if not app.config["PRINTER_INFOS"]:
-        app.logger.debug("Karamaba")
-    app.logger.debug('PRINTERINFOS %s', app.config["PRINTER_INFOS"])
-    return render_template('/admin/dashboard_printer.html', 
+    printer_infos = get_printer_infos()
+    app.logger.debug('PRINTERINFOS %s', printer_infos)
+    return render_template('/admin/dashboard_printer.html',
                             dashboardcard=dashboardcard,
-                            printer_error=app.config["PRINTER_ERROR"],
-                            printer_infos=app.config["PRINTER_INFOS"]) 
+                            printer_error=get_printer_error(),
+                            printer_infos=printer_infos)
 

@@ -772,6 +772,120 @@ def bump_queue_revision():
         return None
 
 
+class PrinterStatus(db.Model):
+    """Journal des statuts remontés par les bornes d'impression (et par le
+    flux d'impression serveur).
+
+    Vivait auparavant dans ``app.config["PRINTER_INFOS"]`` / ``["PRINTER_ERROR"]`` :
+    un état PAR PROCESS — avec plusieurs workers web ou le conteneur scheduler,
+    le tableau de bord ne voyait qu'une partie des statuts et un redémarrage
+    effaçait tout. Une ligne par statut ; la purge paresseuse à l'insertion ne
+    conserve que les ``PRINTER_INFOS_LIMIT`` plus récents.
+    """
+    __tablename__ = 'printer_status'
+    id = db.Column(db.Integer, primary_key=True)
+    # Identifiant de la borne émettrice (settings.borne_id, sinon hostname) ;
+    # None pour les statuts générés côté serveur (ex. échec d'impression).
+    borne_id = db.Column(db.String(80))
+    # Code machine envoyé par la borne : 'init_ok', 'error_init', 'no_paper',
+    # 'low_paper', 'paper_ok', 'print_ok', 'error_print', 'invalid_data'…
+    error_code = db.Column(db.String(40), nullable=False)
+    is_error = db.Column(db.Boolean, nullable=False)
+    message = db.Column(db.Text)
+    # Horodatage de GÉNÉRATION du statut par la borne (reste exact même si
+    # l'envoi n'aboutit qu'après des réessais) ; None si absent/illisible.
+    generated_at = db.Column(db.DateTime)
+    # Horodatage de RÉCEPTION par le serveur.
+    received_at = db.Column(db.DateTime, nullable=False)
+
+    def __repr__(self):
+        return f'<PrinterStatus {self.borne_id}:{self.error_code}>'
+
+
+# Nombre de statuts imprimante conservés/affichés (même borne que l'ancien
+# app.config["PRINTER_INFOS"]).
+PRINTER_INFOS_LIMIT = 10
+
+
+def _printer_status_is_error(error_code):
+    """ Dérivation historique du drapeau d'erreur : un code contenant
+    « error » est une erreur (no_paper/low_paper restent des états « papier »,
+    traités à part par le bouton d'ajout de papier). """
+    return "error" in (error_code or "")
+
+
+def record_printer_status(error_code, message, borne_id=None, generated_at=None,
+                          is_error=None):
+    """ Journalise un statut imprimante en base et renvoie la ligne créée.
+
+    Connexion dédiée (comme ``bump_queue_revision``) : la fonction peut être
+    appelée au milieu d'un flux d'écriture métier (ex. ``confirm_print``) sans
+    committer par surprise les changements en attente de ``db.session``.
+
+    ``generated_at`` : datetime de génération (borne) ; ignoré si non fourni.
+    ``is_error`` : dérivé du code si non fourni (voir _printer_status_is_error).
+    """
+    table = PrinterStatus.__table__
+    is_error = _printer_status_is_error(error_code) if is_error is None else bool(is_error)
+    # Le message vient du réseau : on le borne pour ne pas laisser une borne
+    # (ou un client forgé) gonfler la table indéfiniment.
+    message = (str(message) if message is not None else "")[:1000]
+    borne_id = (str(borne_id) if borne_id is not None else None)
+    if borne_id:
+        borne_id = borne_id[:80]
+    values = {
+        "borne_id": borne_id,
+        "error_code": str(error_code)[:40],
+        "is_error": is_error,
+        "message": message,
+        "generated_at": generated_at,
+        "received_at": datetime.now(time_tz),
+    }
+    with db.engine.begin() as conn:
+        conn.execute(table.insert().values(**values))
+        # Purge paresseuse : on ne conserve que les N plus récents.
+        stale_ids = conn.execute(
+            db.select(table.c.id)
+            .order_by(table.c.id.desc())
+            .offset(PRINTER_INFOS_LIMIT)
+        ).scalars().all()
+        if stale_ids:
+            conn.execute(table.delete().where(table.c.id.in_(stale_ids)))
+
+
+def get_printer_infos(limit=PRINTER_INFOS_LIMIT):
+    """ Les ``limit`` derniers statuts, du plus ancien au plus récent, au
+    format attendu par le gabarit du tableau de bord (clés historiques
+    ``error``/``message``/``timestamp``, plus ``borne_id``/``error_code``).
+    L'horodatage affiché est celui de GÉNÉRATION par la borne quand il est
+    connu (exact malgré les réessais d'envoi), sinon celui de réception. """
+    rows = (
+        db.session.query(PrinterStatus)
+        .order_by(PrinterStatus.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()
+    return [{
+        "error": row.is_error,
+        "message": row.message,
+        "timestamp": (row.generated_at or row.received_at).strftime("%d/%m-%H:%M"),
+        "borne_id": row.borne_id,
+        "error_code": row.error_code,
+    } for row in rows]
+
+
+def get_printer_error():
+    """ Drapeau d'erreur du statut le plus récent, ou None s'il n'y a encore
+    aucun statut en base (le gabarit affiche alors « Pas d'infos »). """
+    row = (
+        db.session.query(PrinterStatus.is_error)
+        .order_by(PrinterStatus.id.desc())
+        .first()
+    )
+    return row.is_error if row else None
+
+
 class AuditLog(db.Model):
     """Journal d'audit des actions sensibles (point 7 — Phase 8).
 
