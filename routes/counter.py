@@ -1,10 +1,9 @@
-import os
-from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
+from flask import Blueprint, render_template, request, jsonify, current_app as app
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get_queue_revision
-from python.engine import generate_audio_calling
+from python.engine import trigger_async_audio_calling
 from communication import communikation, send_app_notification
 from services import calling_service
 from transactions import atomic
@@ -394,23 +393,10 @@ def do_relaunch_patient_call(counter_id):
     if not patient:
         return
 
-    audiofile = f'patient_{patient.call_number}.mp3'
-    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)
-
-    if os.path.exists(audio_path):
-        audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-    else:
-        # Le mp3 est peut-être encore en cours de génération en tâche de fond
-        # (cf. trigger_async_audio_calling, appelé juste avant par call_next),
-        # ou l'annonce sonore est désactivée. "Relancer l'appel" est une action
-        # manuelle rare déclenchée à la main par le pharmacien : contrairement à
-        # l'appel du patient suivant, un léger délai ici est acceptable, donc on
-        # (re)génère de façon synchrone plutôt que de diffuser un lien mort.
-        audio_url = generate_audio_calling(counter_id, patient, language_code=patient.language.code)
-        if not audio_url:
-            return
-
-    communikation("update_audio", event="audio", data=audio_url)
+    # La relance rejoint la MEME file FIFO que l'appel initial. Ainsi, si le
+    # premier MP3 est encore en cours de generation, le rappel ne peut ni lire
+    # un ancien fichier portant le meme numero ni passer avant l'annonce initiale.
+    trigger_async_audio_calling(counter_id, patient.id, patient.language.code)
 
 
 # Route fusionnee web + App (point C12), POST uniquement — la relance

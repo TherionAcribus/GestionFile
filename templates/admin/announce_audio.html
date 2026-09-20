@@ -15,8 +15,7 @@
         hx-target="#invisible"
         hx-vals='js:{"key": "announce_player", "value": document.getElementById("announce_player").value}'>
         <option value="" disabled selected>Lecteur audio</option>
-        <option value="app" {% if announce_player == "app" %}selected{% endif %}>Application (recommandé)</option>
-        <option value="web" {% if announce_player == "web" %}selected{% endif %}>Page web (en cas d'échec)</option>
+        <option value="web" selected>Page web</option>
     </select>
     <label>Choix du lecteur audio</label>
 </div>

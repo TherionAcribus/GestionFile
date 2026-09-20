@@ -68,6 +68,7 @@ services:
       - flags_data:/app/static/images/flags
       - annonces_data:/app/static/images/annonces
       - signals_data:/app/static/audio/signals
+      - tts_data:/app/static/audio/annonces
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/healthz"]
@@ -106,6 +107,7 @@ services:
       - flags_data:/app/static/images/flags
       - annonces_data:/app/static/images/annonces
       - signals_data:/app/static/audio/signals
+      - tts_data:/app/static/audio/annonces
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
 
 volumes:
@@ -117,3 +119,4 @@ volumes:
   flags_data:
   annonces_data:
   signals_data:
+  tts_data:

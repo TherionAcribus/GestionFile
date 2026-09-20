@@ -251,6 +251,7 @@ setInterval(syncCallList, 60000);
 
 const audioQueue = [];
 let isPlaying = false;
+const AUDIO_LOAD_TIMEOUT_MS = 10000;
 
 function receive_audio(msg) {
     console.log("Received audio data :", msg);
@@ -260,6 +261,10 @@ function receive_audio(msg) {
 }
 
 function queueAudio(audioUrl) {
+    if (typeof audioUrl !== 'string' || !audioUrl) {
+        console.error('Annonce audio invalide ignorée :', audioUrl);
+        return;
+    }
     audioQueue.push(audioUrl);
     if (!isPlaying) {
         playNextAudio();
@@ -280,13 +285,52 @@ function playNextAudio() {
 function playAudio(audioUrl) {
     const player = document.getElementById('player');
     console.log("Playing audio...", audioUrl);
-    player.src = audioUrl;
-    player.play();
-    console.log("Playing audio... DONE");
+    let finished = false;
+    let started = false;
+    let loadTimeout;
+
+    function finish(reason) {
+        if (finished) {
+            return;
+        }
+        finished = true;
+        window.clearTimeout(loadTimeout);
+        player.onended = null;
+        player.onerror = null;
+        player.onplaying = null;
+        if (reason !== 'ended') {
+            console.error('Annonce audio abandonnée :', reason, audioUrl);
+        }
+        playNextAudio();
+    }
 
     player.onended = function() {
         console.log("Audio ended");
-        playNextAudio();
+        finish('ended');
+    };
+    player.onerror = function() {
+        finish('media-error');
+    };
+    player.onplaying = function() {
+        started = true;
+        window.clearTimeout(loadTimeout);
+    };
+
+    player.src = audioUrl;
+    player.load();
+    loadTimeout = window.setTimeout(function() {
+        if (!started) {
+            finish('load-timeout');
+        }
+    }, AUDIO_LOAD_TIMEOUT_MS);
+
+    const playAttempt = player.play();
+    // play() est une promesse sur les navigateurs modernes : un refus
+    // d'autoplay ne doit jamais bloquer les annonces suivantes.
+    if (playAttempt && typeof playAttempt.catch === 'function') {
+        playAttempt.catch(function(error) {
+            finish(error && error.name ? error.name : 'play-rejected');
+        });
     }
 }
 
@@ -295,7 +339,12 @@ function initializeAudio() {
     const player = document.getElementById('player');
     // Cette fonction est appelée par un clic utilisateur, ce qui 'déverrouille' la capacité de jouer des sons.
     player.src = '/static/audio/beep.wav';
-    player.play();  // Essayez de jouer quelque chose immédiatement pour confirmer l'activation.
+    const playAttempt = player.play();
+    if (playAttempt && typeof playAttempt.catch === 'function') {
+        playAttempt.catch(function(error) {
+            console.error('Activation audio refusée :', error);
+        });
+    }
 }
 
 

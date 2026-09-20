@@ -39,15 +39,26 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
         # L'ancienne branche event == "spotify" (token OAuth + Web Playback SDK
         # côté écran) a été retirée : plus personne n'émet cet évènement, la
         # lecture Spotify est pilotée côté serveur.
+        # Aucun client ``socket_app_screen`` n'est livre avec l'application.
+        # Une ancienne configuration "app" ne doit donc jamais rendre les
+        # annonces silencieuses : le lecteur web est le repli fiable.
+        player_mode = current_app.config.get("ANNOUNCE_PLAYER", "web")
+        if player_mode != "web":
+            current_app.logger.error(
+                "ANNOUNCE_PLAYER=%s indisponible ; utilisation du lecteur web.",
+                player_mode,
+            )
+            player_mode = "web"
+
         if current_app.config["ANNOUNCE_ALERT"]:
             signal_file = current_app.config["ANNOUNCE_ALERT_FILENAME"]
             audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
-            if current_app.config["ANNOUNCE_PLAYER"] == "web":
+            if player_mode == "web":
                 communication_websocket("socket_update_screen", audio_path, event="audio")
                 current_app.logger.debug('AUDIO_PATH %s', audio_path)
             else:
                 communication_websocket("socket_app_screen", audio_path, "sound")
-        if current_app.config["ANNOUNCE_PLAYER"] == "web":
+        if player_mode == "web":
             communication_websocket("socket_update_screen", data, event="audio")
         else:
             communication_websocket("socket_app_screen", data, "sound")

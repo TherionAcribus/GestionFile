@@ -1,4 +1,6 @@
 import os
+import re
+import time
 from functools import wraps
 from datetime import datetime, timedelta
 from flask import current_app
@@ -346,19 +348,34 @@ def clear_announce_calls_job():
             db.session.commit()
             app.logger.error(f"Clear announce calls job failed with error: {str(e)}")
 
+ANNOUNCEMENT_CACHE_RETENTION_DAYS = 31
+_CACHED_ANNOUNCEMENT_NAME = re.compile(r"^[0-9a-f]{64}\.mp3$")
+
+
 def clear_announces_call():
-    """Nettoyage des fichiers audio d'annonces"""
-    announce_folder = os.path.join(os.getcwd(), 'static/audio/annonces/')
+    """Purge les annonces obsoletes sans invalider le cache utile.
+
+    Les anciens fichiers ``patient_<numero>.mp3`` sont supprimes au prochain
+    passage. Les MP3 modernes, identifies par contenu, sont conserves 31 jours
+    apres leur derniere utilisation afin que la numerotation quotidienne puisse
+    etre rejouee sans appel TTS distant.
+    """
+    announce_folder = os.path.join(current_app.static_folder, 'audio', 'annonces')
     files_count = 0  # Compteur de fichiers supprimés
     
     try:
         if not os.path.exists(announce_folder):
             raise FileNotFoundError("Le répertoire d'annonces n'existe pas")
             
-        # Parcours tous les fichiers dans le répertoire
+        cutoff = time.time() - (ANNOUNCEMENT_CACHE_RETENTION_DAYS * 24 * 60 * 60)
         for fichier in os.listdir(announce_folder):
             fichier_complet = os.path.join(announce_folder, fichier)
-            if os.path.isfile(fichier_complet):
+            is_legacy = fichier.startswith("patient_") and fichier.endswith(".mp3")
+            is_expired_cache = (
+                _CACHED_ANNOUNCEMENT_NAME.fullmatch(fichier)
+                and os.path.getmtime(fichier_complet) < cutoff
+            )
+            if os.path.isfile(fichier_complet) and (is_legacy or is_expired_cache):
                 os.remove(fichier_complet)
                 files_count += 1
                 

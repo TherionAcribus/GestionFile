@@ -52,7 +52,7 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `add_calling` | `{id, counter_id, text}` | Ajoute une bannière d'appel (animée) |
 | `remove_calling` | `{id}` | Retire une bannière d'appel |
 | `refresh` | `null` | Rechargement complet de la page (changement de config) |
-| `audio` | `string` — URL du fichier son | Joue l'annonce vocale (`ANNOUNCE_PLAYER=web`) |
+| `audio` | `string` — URL du fichier son | Joue l'annonce vocale (lecteur web) |
 | `spotify_status` | `bool` | État de lecture Spotify (affichage/ducking) |
 
 ### `/socket_app_counter`
@@ -109,10 +109,9 @@ enveloppe `communikation`) :
 
 ### `/socket_app_screen`
 
-Réservé à une future App écran (utilisé quand `ANNOUNCE_PLAYER != web`) :
-`update` avec `flag="sound"`, `data` = URL du fichier audio. **Aucun client
-dans ce dépôt** — l'option `ANNOUNCE_PLAYER=app` produit des annonces
-silencieuses tant qu'elle n'existe pas.
+Réservé à une future App écran. Le produit emploie actuellement toujours le
+lecteur web : une ancienne configuration `ANNOUNCE_PLAYER=app` est ramenée au
+lecteur web afin de ne jamais produire d'annonce silencieuse.
 
 ## Invariants
 

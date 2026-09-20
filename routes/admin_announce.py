@@ -1,9 +1,10 @@
-import os
+import json
 from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, jsonify
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
 from google.cloud import texttospeech
+from google.oauth2 import service_account
 import gtts
 from models import ConfigOption, Activity, Counter, Language, db
 from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
@@ -337,18 +338,19 @@ def list_google_voices(credentials_json,language=None, gender=None, voice_type=N
     # Récupérer les credentials déchiffrés
     
     if not credentials_json:
-        return "Erreur : Clé Google Cloud non configurée.", 500
+        raise RuntimeError("Clé Google Cloud non configurée.")
 
-    # Écrire les credentials dans un fichier temporaire
-    temp_credentials_path = 'temp_google_credentials.json'
-    with open(temp_credentials_path, 'wb') as temp_file:
-        temp_file.write(credentials_json)
+    try:
+        credentials_info = json.loads(credentials_json.decode("utf-8"))
+        credentials = service_account.Credentials.from_service_account_info(
+            credentials_info
+        )
+    except (UnicodeDecodeError, ValueError, TypeError) as exc:
+        raise RuntimeError("Clé Google Cloud invalide.") from exc
 
-    # Configurer la variable d'environnement pour Google Cloud
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_credentials_path
-
-    # Appel à l'API Google Text-to-Speech
-    client = texttospeech.TextToSpeechClient()
+    # Les identifiants restent en memoire : aucun fichier global temporaire,
+    # donc aucune collision entre apercu des voix et annonce patient.
+    client = texttospeech.TextToSpeechClient(credentials=credentials)
 
     # Effectuer la requête pour lister les voix disponibles
     voices = client.list_voices()

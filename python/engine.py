@@ -1,11 +1,12 @@
 import os
-import threading
+import json
 import qrcode
-from flask import Blueprint, url_for, request, session, current_app as app, jsonify, has_request_context
+from flask import Blueprint, url_for, request, session, current_app as app, jsonify
 from datetime import datetime, date, timedelta
 from sqlalchemy import and_
 from cryptography.fernet import Fernet
 from google.cloud import texttospeech
+from google.oauth2 import service_account
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
 from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
@@ -13,6 +14,8 @@ from communication import communikation, notify_patient_phone
 from config import time_tz
 from auth_utils import require_app_token_or_login
 from call_numbering import next_simple_call_number
+from announcement_audio import cached_announcement_url
+from announcement_dispatcher import announcement_dispatcher
 
 engine_bp = Blueprint('engine', __name__)
 
@@ -130,34 +133,22 @@ def call_next(counter_id, attempts=0):
 
 
 def trigger_async_audio_calling(counter_id, patient_id, language_code):
-    """ Lance la génération + diffusion du son d'appel en tâche de fond.
+    """Planifie une annonce vocale FIFO sans retarder l'appel du patient.
 
-    Ne doit jamais retarder l'appel du patient suivant : la génération TTS
-    (gTTS ou Google Cloud TTS) dépend d'un aller-retour réseau vers un service
-    externe, potentiellement lent ou indisponible. Dégradation attendue en cas
-    d'échec/lenteur : pas de son diffusé, mais le ticket a déjà avancé.
+    Le dispatcher conserve l'ordre de soumission, borne le nombre de travaux
+    pendants et isole les appels externes TTS du traitement HTTP.
     """
     flask_app = app._get_current_object()
-    # Capturé pendant qu'on est encore dans la requête HTTP d'origine : le
-    # thread de fond n'aura pas de contexte de requête, mais url_for(_external=True)
-    # (utilisé pour construire l'URL du mp3) en a besoin pour connaître l'hôte.
-    base_url = request.host_url if has_request_context() else None
 
-    def _worker():
-        with flask_app.app_context(), flask_app.test_request_context(base_url=base_url):
-            try:
-                patient = Patient.query.get(patient_id)
-                if not patient:
-                    return
-                audio_url = generate_audio_calling(counter_id, patient, language_code=language_code)
-                if audio_url:
-                    communikation("update_audio", event="audio", data=audio_url)
-            except Exception as e:
-                flask_app.logger.error(
-                    f"Génération/diffusion du son d'appel échouée pour le patient {patient_id}: {e}"
-                )
+    def _job():
+        patient = db.session.get(Patient, patient_id)
+        if not patient:
+            return
+        audio_url = generate_audio_calling(counter_id, patient, language_code=language_code)
+        if audio_url:
+            communikation("update_audio", event="audio", data=audio_url)
 
-    threading.Thread(target=_worker, daemon=True).start()
+    announcement_dispatcher.submit(flask_app, _job)
 
 
 def algo_choice_next_patient(counter_id):
@@ -566,27 +557,16 @@ def create_tts_sound(next_patient, text, language_code):
         else:
             voice_gtts_name = next_patient.language.voice_gtts_name
 
-    lang = voice_gtts_name
+    def _write_audio(path):
+        gTTS(text, lang=voice_gtts_name, timeout=TTS_TIMEOUT_SECONDS).save(path)
 
-    tts = gTTS(text, lang=lang, timeout=TTS_TIMEOUT_SECONDS)
-
-    # Chemin de sauvegarde du fichier audio
-    audiofile = f'patient_{next_patient.call_number}.mp3'
-    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)  # Enregistrement dans le dossier 'static/audio'
-
-    # Assurer que le répertoire existe
-    if not os.path.exists(os.path.dirname(audio_path)):
-        os.makedirs(os.path.dirname(audio_path))
-
-    # Sauvegarde du fichier audio
-    tts.save(audio_path)
-
-    # Envoi du chemin relatif via SSE
-    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-
-    app.logger.debug('AUDIO %s', audio_url)
-
-    return audio_url
+    return cached_announcement_url(
+        text=text,
+        provider="gtts",
+        voice=voice_gtts_name,
+        language=language_code,
+        writer=_write_audio,
+    )
 
 
 def create_google_tts_sound(next_patient, text, language_code):
@@ -603,62 +583,42 @@ def create_google_tts_sound(next_patient, text, language_code):
             voice_google_name = next_patient.language.voice_google_name
             voice_google_region = next_patient.language.voice_google_region
 
-    # Récupérer les credentials déchiffrés
-    try:
+    def _write_audio(path):
         credentials_json = get_google_credentials()
-    except Exception as e:
-        credentials_json = None
-    if not credentials_json:
-        return "Erreur : Clé Google Cloud non configurée.", 500
+        if not credentials_json:
+            raise RuntimeError("Clé Google Cloud non configurée.")
 
-    # Écrire les credentials dans un fichier temporaire
-    temp_credentials_path = 'temp_google_credentials.json'
-    with open(temp_credentials_path, 'wb') as temp_file:
-        temp_file.write(credentials_json)
+        try:
+            credentials_info = json.loads(credentials_json.decode("utf-8"))
+            credentials = service_account.Credentials.from_service_account_info(
+                credentials_info
+            )
+        except (UnicodeDecodeError, ValueError, TypeError) as exc:
+            raise RuntimeError("Clé Google Cloud invalide.") from exc
 
-    # Configurer la variable d'environnement pour Google Cloud
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_credentials_path
+        client = texttospeech.TextToSpeechClient(credentials=credentials)
+        response = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=text),
+            voice=texttospeech.VoiceSelectionParams(
+                name=voice_google_name,
+                language_code=voice_google_region,
+            ),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3
+            ),
+            timeout=TTS_TIMEOUT_SECONDS,
+        )
+        with open(path, "wb") as out:
+            out.write(response.audio_content)
 
-    # Appel à l'API Google Text-to-Speech
-    client = texttospeech.TextToSpeechClient()
-
-    synthesis_input = texttospeech.SynthesisInput(text=text)
-
-    # Utiliser la voix sélectionnée
-    voice = texttospeech.VoiceSelectionParams(
-        name=voice_google_name,  # Voix sauvegardée dans la base de données
-        language_code=voice_google_region  # Adapter selon la voix sélectionnée (ex: "fr-FR")
+    return cached_announcement_url(
+        text=text,
+        provider="google",
+        voice=voice_google_name,
+        language=language_code,
+        voice_region=voice_google_region,
+        writer=_write_audio,
     )
-
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
-    )
-
-    # Effectuer la requête à l'API
-    response = client.synthesize_speech(
-        input=synthesis_input, voice=voice, audio_config=audio_config,
-        timeout=TTS_TIMEOUT_SECONDS
-    )
-
-    # Chemin de sauvegarde du fichier audio
-    audiofile = f'patient_{next_patient.call_number}.mp3'
-    audio_path = os.path.join(app.static_folder, 'audio/annonces', audiofile)  # Enregistrement dans le dossier 'static/audio'
-
-    # Assurer que le répertoire existe
-    if not os.path.exists(os.path.dirname(audio_path)):
-        os.makedirs(os.path.dirname(audio_path))
-
-    # Sauvegarder l'audio généré dans un fichier MP3
-    with open(audio_path, 'wb') as out:
-        out.write(response.audio_content)
-
-    # Supprimer le fichier temporaire après utilisation
-    os.remove(temp_credentials_path)
-
-    # Envoi du chemin relatif via SSE
-    audio_url = url_for('static', filename=f'audio/annonces/{audiofile}', _external=True)
-
-    return audio_url
 
 
 def create_qr_code(patient):
