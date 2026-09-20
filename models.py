@@ -728,6 +728,14 @@ def bump_queue_revision():
     InnoDB comme sous SQLite l'écriture est sérialisée. On committe pour rendre
     la nouvelle révision visible aux autres process avant l'emit Socket.IO.
 
+    La relecture se fait DANS la transaction, avant le commit : l'UPDATE détient
+    le verrou de ligne jusqu'au commit (InnoDB), aucun autre process ne peut
+    donc incrémenter entre notre écriture et notre lecture. Auparavant le SELECT
+    se faisait APRES le commit : un process concurrent pouvait incrémenter
+    entretemps, deux diffusions portaient alors la même révision et l'App
+    comptoir jetait la seconde — plus récente — comme un doublon, laissant la
+    file périmée sans détection.
+
     Tolérant aux pannes : si le magasin de révision est indisponible, on renvoie
     None. Une diffusion sans révision fait simplement retomber le client sur son
     comportement d'avant (appliquer le message reçu tel quel) : la file continue
@@ -741,8 +749,13 @@ def bump_queue_revision():
             # Ligne absente (base pas encore initialisée par la migration) : on la
             # crée à 1 pour ne jamais bloquer une diffusion sur un défaut d'amorçage.
             db.session.add(QueueRevision(id=1, revision=1))
+        # first() émet un SELECT dans la transaction courante : il voit notre
+        # propre écriture (et l'INSERT en attente via l'autoflush) alors que les
+        # incréments concurrents sont bloqués par notre verrou de ligne.
+        row = db.session.query(QueueRevision).filter_by(id=1).first()
+        revision = row.revision if row else None
         db.session.commit()
-        return get_queue_revision()
+        return revision
     except Exception as e:
         db.session.rollback()
         logging.error(f"Révision de file indisponible, diffusion sans révision: {e}")
