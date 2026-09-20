@@ -740,24 +740,34 @@ def bump_queue_revision():
     None. Une diffusion sans révision fait simplement retomber le client sur son
     comportement d'avant (appliquer le message reçu tel quel) : la file continue
     de fonctionner, on perd seulement la détection des messages manqués. """
+    revision_table = QueueRevision.__table__
     try:
-        updated = db.session.query(QueueRevision).filter_by(id=1).update(
-            {QueueRevision.revision: QueueRevision.revision + 1},
-            synchronize_session=False,
-        )
-        if not updated:
-            # Ligne absente (base pas encore initialisée par la migration) : on la
-            # crée à 1 pour ne jamais bloquer une diffusion sur un défaut d'amorçage.
-            db.session.add(QueueRevision(id=1, revision=1))
-        # first() émet un SELECT dans la transaction courante : il voit notre
-        # propre écriture (et l'INSERT en attente via l'autoflush) alors que les
-        # incréments concurrents sont bloqués par notre verrou de ligne.
-        row = db.session.query(QueueRevision).filter_by(id=1).first()
-        revision = row.revision if row else None
-        db.session.commit()
-        return revision
+        # Connexion dédiée, transaction indépendante de ``db.session`` : avant,
+        # le bump commitait la session de l'appelant — validant par surprise les
+        # écritures métier encore en cours (ex. patient posé mais pas encore
+        # committé par la vue).
+        with db.engine.begin() as conn:
+            result = conn.execute(
+                revision_table.update()
+                .where(revision_table.c.id == 1)
+                .values(revision=revision_table.c.revision + 1)
+            )
+            if result.rowcount:
+                # Relecture DANS la transaction : l'UPDATE détient le verrou de
+                # ligne jusqu'au commit (InnoDB), aucun process concurrent ne
+                # peut incrémenter entre notre écriture et cette lecture — la
+                # valeur renvoyée est bien la nôtre.
+                return conn.execute(
+                    db.select(revision_table.c.revision)
+                    .where(revision_table.c.id == 1)
+                ).scalar_one()
+            # Ligne absente (base pas encore initialisée par la migration) : on
+            # la crée à 1 pour ne jamais bloquer une diffusion sur un défaut
+            # d'amorçage. Un INSERT concurrent échoue sur la clé primaire ->
+            # except -> diffusion sans révision, dégradation déjà prévue.
+            conn.execute(revision_table.insert().values(id=1, revision=1))
+            return 1
     except Exception as e:
-        db.session.rollback()
         logging.error(f"Révision de file indisponible, diffusion sans révision: {e}")
         return None
 

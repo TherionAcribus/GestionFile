@@ -159,12 +159,18 @@ def validate_current(counter_id):
         return []
 
     now = datetime.now(time_tz)
+    calling_ids = []
     for patient in active_patients:
         if patient.status == "calling":
-            communikation("update_screen", event="remove_calling", data={"id": patient.id})
+            calling_ids.append(patient.id)
         patient.status = "done"
         patient.timestamp_end = now
     db.session.commit()
+    # Emission APRES le commit : avant, remove_calling partait avant
+    # l'ecriture — si le commit echouait, l'ecran retirait un appel encore
+    # « calling » en base.
+    for patient_id in calling_ids:
+        communikation("update_screen", event="remove_calling", data={"id": patient_id})
     return active_patients
 
 
@@ -174,10 +180,10 @@ def validate_and_call_next(counter_id):
     Renvoie ``(True, patient)`` si un patient a été appelé, ``(False, raison)``
     sinon — dans ce cas le comptoir est repassé inactif.
     """
-    current_patient = Patient.query.filter_by(counter_id=counter_id, status="calling").first()
-    if current_patient:
-        communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
-
+    # Pas d'emission remove_calling ici : validate_current la fait pour tous
+    # les « calling » du comptoir, apres son commit (elle couvre aussi le
+    # patient « calling » courant — l'emission prealable etait un doublon
+    # envoye avant le commit).
     validate_current(counter_id)
 
     ok, resultat = call_next_for_counter(counter_id)
@@ -195,9 +201,15 @@ def pause(counter_id, patient_id):
     """
     current_patient = Patient.query.get(patient_id)
     if current_patient:
+        was_calling = current_patient.status == "calling"
         current_patient.status = "done"
         current_patient.timestamp_end = datetime.now(time_tz)
         db.session.commit()
+        # Le patient mis en pause pouvait etre encore « calling » : sans ce
+        # remove_calling, sa banniere restait affichee a l'ecran. Emission
+        # apres le commit, comme validate_current.
+        if was_calling:
+            communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
 
     counter_become_inactive(counter_id)
     communikation("update_patient")
