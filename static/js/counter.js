@@ -27,18 +27,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
     socket.on('update', function(msg) {
-        console.log("Received message:", msg.data.flag, msg.data);
+        console.log("Received message:", msg);
         safeTrigger('#button_section', 'refresh_buttons', {target: "#button_section"});
         safeTrigger('#div_current_patient', 'refresh_current_patient', {target: "#div_current_patient"});
         safeTrigger("#patient_on_queue", 'refresh_queue', {target: "#patient_on_queue"});
-        var messages = document.getElementById('messages');
-        if (messages) {
-            var message = document.createElement('div');
-            message.textContent = msg.data;
-            messages.appendChild(message);
-        } else {
-            console.error('Element with ID "messages" not found');
-        }
     });
 
     socket.on('connect_error', function(err) {

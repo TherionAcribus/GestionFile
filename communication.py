@@ -29,7 +29,13 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
         patients = create_patients_list_for_pyside()
         current_app.logger.debug('PATIENT LIST %s', patients)
         communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list", revision=revision)
-        communication_websocket("socket_update_patient", patients, event=event, revision=revision)
+        # Le namespace public /socket_update_patient n'a pas de garde et ses
+        # consommateurs (écran, comptoir web, admin) n'utilisent l'évènement que
+        # comme déclencheur de refresh HTMX : plus besoin d'y diffuser la liste
+        # complète des patients (numéros, activités, langues). L'enveloppe garde
+        # la révision — l'écran s'en sert pour détecter un trou d'évènements et
+        # resynchroniser ses bannières via /announce/state.
+        communication_websocket("socket_update_patient", event=event, revision=revision)
     elif stream == "update_audio":
         # L'ancienne branche event == "spotify" (token OAuth + Web Playback SDK
         # côté écran) a été retirée : plus personne n'émet cet évènement, la
