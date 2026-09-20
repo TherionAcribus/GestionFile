@@ -33,7 +33,13 @@ jobs:
     name: tests (pytest)
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 indispensable : test_secret_hygiene_gitleaks.py inspecte
+      # l'historique de `.cache` (git log --all) pour vérifier que chaque
+      # commit fuitant est acquitté dans .gitleaksignore. Avec la profondeur
+      # par défaut (1), l'historique est vide et le test échoue.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
