@@ -8,7 +8,7 @@ from python.engine import generate_audio_calling
 from communication import communikation, send_app_notification
 from services import calling_service
 from transactions import atomic
-from auth_utils import require_app_token_or_login
+from auth_utils import require_app_token_or_login, require_counter_access
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -73,17 +73,13 @@ def app_paper_add():
             return jsonify({"error": "paper_update_failed"}), 500
 
 
+# Route fusionnee web + App (point C12) : le decorateur reproduit les deux
+# regimes historiques — jeton/session obligatoire sous /app/, session selon
+# SECURITY_LOGIN_COUNTER sous /counter/. Le format de reponse reste choisi
+# par le champ de formulaire "app" (JSON pour l'App, gabarit pour le web).
 @counter_bp.route('/app/counter/update_staff', methods=['POST'])
-@require_app_token_or_login
-def app_update_counter_staff():
-    return update_counter_staff()
-
-
 @counter_bp.route('/counter/update_staff', methods=['POST'])
-def web_update_counter_staff():
-    return update_counter_staff()
-
-
+@require_counter_access
 def update_counter_staff():
     app.logger.debug('ma_request %s', request.form)
     counter = Counter.query.get(request.form.get('counter_id'))
@@ -147,18 +143,22 @@ def api_is_staff_on_counter(counter_id):
 
 def remove_counter_staff(origine=None):
     counter_id = request.form.get('counter_id')
-    counter = Counter.query.get(counter_id) 
-    counter.staff = None
-    db.session.commit()
-
-    # quand on se déconnecte on enleve l'autocalling
-    update_counter_auto_calling(counter_id=counter_id, auto_calling_value=False)
+    counter = Counter.query.get(counter_id)
+    # Deconnexion + coupure de l'appel automatique dans LA MEME transaction :
+    # auparavant deux commits successifs (ici puis dans set_auto_calling)
+    # laissaient une fenetre ou un comptoir sans agent continuait a appeler.
+    with atomic():
+        counter.staff = None
+        counter.auto_calling = False
 
     if origine == "dashboard":
         communikation("app_counter", event="disconnect_user", data={'counter_id': counter.id, "staff": "Admin"})
 
-    # mise à jour des boutons
+    # mise à jour des boutons + de l'interrupteur d'appel automatique : aucun
+    # evenement ne signalait la coupure d'autocalling, l'affichage web restait
+    # dans son ancien etat.
     communikation("counter", event="update buttons")
+    communikation("counter", event="refresh_auto_calling", data={"auto_calling": False})
     return is_staff_on_counter(request.form.get('counter_id'))
 
 
@@ -289,46 +289,43 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
         return False, str(e), 500
 
 
-@counter_bp.route('/counter/update_switch_auto_calling', methods=['POST'])
-def update_switch_auto_calling():
-    counter_id = request.values.get('counter_id')
-    value = request.values.get('value')
-    auto_calling_value = value.lower() == "true"
-
-    success, result, status_code = update_counter_auto_calling(counter_id, auto_calling_value)
-
-    # Notification de changement
-    communikation("app_counter", event="change_auto_calling", 
-                                    data={"counter_id": counter_id, "autocalling": auto_calling_value})
-    if not success:
-        return result, status_code
-    return "", 204
-
-
+# Route fusionnee web + App (point C12). Deux conventions de parametres
+# historiques, conservees pour ne pas toucher les clients :
+#   - App  : form "action" = activate/deactivate ; POST sans action = lecture
+#            d'etat ; reponse JSON.
+#   - web  : "value" = true/false ; reponse 204.
 @counter_bp.route('/app/counter/auto_calling', methods=['POST'])
-@require_app_token_or_login
-def app_auto_calling():
-    counter_id = request.form.get('counter_id')
+@counter_bp.route('/counter/update_switch_auto_calling', methods=['POST'])
+@require_counter_access
+def counter_auto_calling():
+    counter_id = request.values.get('counter_id')
     action = request.form.get('action')
-    app.logger.debug('autocalling %s', action)
+    value = request.values.get('value')
+    app.logger.debug('autocalling action=%s value=%s', action, value)
 
-    if action is None:
+    # Lecture d'etat (App uniquement : POST sans 'action' ni 'value').
+    if action is None and value is None:
         counter = Counter.query.get(counter_id)
         return jsonify({"status": counter.auto_calling}), 200
 
-    auto_calling_value = action == "activate"
+    auto_calling_value = (action == "activate") if action is not None else (value.lower() == "true")
 
     success, result, status_code = update_counter_auto_calling(counter_id, auto_calling_value)
 
-    # notification de changement
-    communikation("counter", event="refresh_auto_calling", data={"auto_calling": auto_calling_value})
+    # Les DEUX interfaces sont notifiees quel que soit l'initiateur : avant,
+    # le web n'informait que l'App (change_auto_calling) et l'App n'informait
+    # que le web (refresh_auto_calling).
+    communikation("app_counter", event="change_auto_calling",
+                  data={"counter_id": counter_id, "autocalling": auto_calling_value})
+    communikation("counter", event="refresh_auto_calling",
+                  data={"auto_calling": auto_calling_value})
 
-    app.logger.debug('%s %s %s', success, result, status_code)
     if not success:
         return jsonify({"error": result}), status_code
-    app.logger.debug("OL ")
-    return jsonify(result), status_code
-    
+    if action is not None:
+        return jsonify(result), status_code
+    return "", 204
+
 
 # [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
 # (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
@@ -348,12 +345,14 @@ def app_init_app():
                     }), 200
 
 
+# Route fusionnee web + App (point C12) : la reponse est le gabarit
+# staff_on_counter ; l'App n'en lit que le statut (elle attendait un 200).
 @counter_bp.route('/app/counter/remove_staff', methods=['POST'])
-@require_app_token_or_login
-def app_remove_counter_staff():
+@counter_bp.route('/counter/remove_staff', methods=['POST'])
+@require_counter_access
+def counter_remove_staff():
     app.logger.debug("deconnction")
-    remove_counter_staff()
-    return '', 200
+    return remove_counter_staff()
 
 @counter_bp.route('/dash/counter/remove_staff', methods=['POST'])
 def dashboard_remove_counter_staff():
@@ -361,11 +360,6 @@ def dashboard_remove_counter_staff():
     communikation("admin", event="refresh_counter_dashboard")
     
     return '', 200
-
-
-@counter_bp.route('/counter/remove_staff', methods=['POST'])
-def web_remove_counter_staff():
-    return remove_counter_staff()
 
 
 @counter_bp.route('/counter/list_of_activities', methods=['POST'])
@@ -419,15 +413,12 @@ def do_relaunch_patient_call(counter_id):
     communikation("update_audio", event="audio", data=audio_url)
 
 
-@counter_bp.route('/counter/relaunch_patient_call/<int:counter_id>', methods=['GET'])
-def relaunch_patient_call(counter_id):
-    do_relaunch_patient_call(counter_id)
-    return '', 204
-
-
+# Route fusionnee web + App (point C12), POST uniquement — la relance
+# modifie l'etat (annonce rejouee). Le gabarit web utilise hx-post.
 @counter_bp.route('/app/counter/relaunch_patient_call/<int:counter_id>', methods=['POST'])
-@require_app_token_or_login
-def app_relaunch_patient_call(counter_id):
+@counter_bp.route('/counter/relaunch_patient_call/<int:counter_id>', methods=['POST'])
+@require_counter_access
+def relaunch_patient_call(counter_id):
     do_relaunch_patient_call(counter_id)
     return '', 204
 

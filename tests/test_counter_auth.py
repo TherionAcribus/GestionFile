@@ -42,19 +42,21 @@ import pytest
 from flask import Flask, jsonify
 
 # auth_utils est importable seul (contrairement à app.py qui exige MySQL).
-from auth_utils import require_app_token_or_login
+from auth_utils import require_app_token_or_login, require_counter_access
 
 
 SECRET_KEY = "test-secret-key-for-counter-auth"
 
-# (chemin, methode, nom de la vue réelle dans routes/counter.py)
-# Les <int:counter_id> sont concrétisés pour le client de test.
+# (chemin, methode, nom de la vue réelle dans routes/counter.py, decorateur)
+# Les routes fusionnees web+App (point C12) portent require_counter_access :
+# jeton/session inconditionnel sous /app/, session selon SECURITY_LOGIN_COUNTER
+# sous /counter/. app_paper_add garde son propre chemin /app/ dedie.
 PROTECTED_ROUTES = [
-    ("/app/counter/paper_add", "POST", "app_paper_add"),
-    ("/app/counter/update_staff", "POST", "app_update_counter_staff"),
-    ("/app/counter/auto_calling", "POST", "app_auto_calling"),
-    ("/app/counter/remove_staff", "POST", "app_remove_counter_staff"),
-    ("/app/counter/relaunch_patient_call/1", "POST", "app_relaunch_patient_call"),
+    ("/app/counter/paper_add", "POST", "app_paper_add", "require_app_token_or_login"),
+    ("/app/counter/update_staff", "POST", "update_counter_staff", "require_counter_access"),
+    ("/app/counter/auto_calling", "POST", "counter_auto_calling", "require_counter_access"),
+    ("/app/counter/remove_staff", "POST", "counter_remove_staff", "require_counter_access"),
+    ("/app/counter/relaunch_patient_call/1", "POST", "relaunch_patient_call", "require_counter_access"),
 ]
 
 
@@ -95,38 +97,38 @@ def client():
     return app.test_client()
 
 
-@pytest.mark.parametrize("path,method,_view_name", PROTECTED_ROUTES)
-def test_missing_token_is_rejected(client, path, method, _view_name):
+@pytest.mark.parametrize("path,method,_view_name,_decorator", PROTECTED_ROUTES)
+def test_missing_token_is_rejected(client, path, method, _view_name, _decorator):
     """Sans jeton ni session : 401."""
     resp = client.open(path, method=method)
     assert resp.status_code == 401
 
 
-@pytest.mark.parametrize("path,method,_view_name", PROTECTED_ROUTES)
-def test_invalid_token_is_rejected(client, path, method, _view_name):
+@pytest.mark.parametrize("path,method,_view_name,_decorator", PROTECTED_ROUTES)
+def test_invalid_token_is_rejected(client, path, method, _view_name, _decorator):
     """Jeton signé avec une autre clé : 401."""
     bad = _make_token(secret="wrong-secret")
     resp = client.open(path, method=method, headers={"X-App-Token": bad})
     assert resp.status_code == 401
 
 
-@pytest.mark.parametrize("path,method,_view_name", PROTECTED_ROUTES)
-def test_garbage_token_is_rejected(client, path, method, _view_name):
+@pytest.mark.parametrize("path,method,_view_name,_decorator", PROTECTED_ROUTES)
+def test_garbage_token_is_rejected(client, path, method, _view_name, _decorator):
     """Chaîne quelconque comme jeton : 401."""
     resp = client.open(path, method=method, headers={"X-App-Token": "not-a-jwt"})
     assert resp.status_code == 401
 
 
-@pytest.mark.parametrize("path,method,_view_name", PROTECTED_ROUTES)
-def test_expired_token_is_rejected(client, path, method, _view_name):
+@pytest.mark.parametrize("path,method,_view_name,_decorator", PROTECTED_ROUTES)
+def test_expired_token_is_rejected(client, path, method, _view_name, _decorator):
     """Jeton expiré : 401."""
     expired = _make_token(expired=True)
     resp = client.open(path, method=method, headers={"X-App-Token": expired})
     assert resp.status_code == 401
 
 
-@pytest.mark.parametrize("path,method,_view_name", PROTECTED_ROUTES)
-def test_valid_token_is_accepted(client, path, method, _view_name):
+@pytest.mark.parametrize("path,method,_view_name,_decorator", PROTECTED_ROUTES)
+def test_valid_token_is_accepted(client, path, method, _view_name, _decorator):
     """Jeton valide signé avec la bonne clé : la garde laisse passer (200)."""
     good = _make_token()
     resp = client.open(path, method=method, headers={"X-App-Token": good})
@@ -151,7 +153,9 @@ def test_valid_token_accepted_for_any_counter_documents_no_per_counter_scope(cli
 
 def test_real_routes_carry_the_decorator():
     """Régression : chaque route applicative sensible de routes/counter.py est
-    bien décorée par @require_app_token_or_login, juste au-dessus de son ``def``.
+    bien décorée par le garde attendu (require_app_token_or_login pour les
+    routes /app/ dédiées, require_counter_access pour les routes fusionnées
+    web+App), juste au-dessus de son ``def``.
 
     Vérification statique sur le source car app.py n'est pas importable sans
     MySQL dans l'environnement de test."""
@@ -159,14 +163,71 @@ def test_real_routes_carry_the_decorator():
     with open(counter_py, encoding="utf-8") as fh:
         source = fh.read()
 
-    for _path, _method, view_name in PROTECTED_ROUTES:
+    for _path, _method, view_name, decorator in PROTECTED_ROUTES:
         # Cherche le décorateur immédiatement suivi (éventuellement d'autres
         # décorateurs puis) de la def de la vue.
         pattern = re.compile(
-            r"@require_app_token_or_login\s*\n(?:\s*@[^\n]*\n)*\s*def\s+"
+            r"@" + decorator + r"\s*\n(?:\s*@[^\n]*\n)*\s*def\s+"
             + re.escape(view_name) + r"\s*\(",
         )
         assert pattern.search(source), (
             f"La vue {view_name} doit être décorée par "
-            f"@require_app_token_or_login dans routes/counter.py"
+            f"@{decorator} dans routes/counter.py"
         )
+
+
+# --- require_counter_access : deux régimes selon le chemin -------------------
+#
+# Routes fusionnées web+App (point C12). La garde reproduit les protections
+# des anciennes routes séparées :
+#   - /app/...  : jeton ou session TOUJOURS, même SECURITY_LOGIN_COUNTER off ;
+#   - /counter/... : session seulement quand SECURITY_LOGIN_COUNTER est actif.
+
+
+@pytest.fixture
+def dual_client():
+    """Une route factice répondant sous les deux chemins, comme les vues
+    fusionnées de routes/counter.py."""
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = SECRET_KEY
+    app.config["TESTING"] = True
+    app.config["SECURITY_LOGIN_COUNTER"] = False
+
+    @app.route("/app/counter/double", methods=["POST"])
+    @app.route("/counter/double", methods=["POST"])
+    @require_counter_access
+    def _view():
+        return jsonify({"ok": True}), 200
+
+    return app, app.test_client()
+
+
+def test_app_path_requires_auth_even_when_security_off(dual_client):
+    _app, client = dual_client
+    assert client.post("/app/counter/double").status_code == 401
+
+
+def test_app_path_accepts_valid_token(dual_client):
+    _app, client = dual_client
+    resp = client.post("/app/counter/double",
+                       headers={"X-App-Token": _make_token()})
+    assert resp.status_code == 200
+
+
+def test_counter_path_open_when_security_off(dual_client):
+    _app, client = dual_client
+    assert client.post("/counter/double").status_code == 200
+
+
+def test_counter_path_requires_session_when_security_on(dual_client):
+    app, client = dual_client
+    app.config["SECURITY_LOGIN_COUNTER"] = True
+    assert client.post("/counter/double").status_code == 401
+
+
+def test_counter_path_accepts_token_when_security_on(dual_client):
+    app, client = dual_client
+    app.config["SECURITY_LOGIN_COUNTER"] = True
+    resp = client.post("/counter/double",
+                       headers={"X-App-Token": _make_token()})
+    assert resp.status_code == 200

@@ -191,3 +191,34 @@ def require_app_token_or_login(func):
         return jsonify({"error": "Unauthorized"}), 401
 
     return wrapper
+
+
+def require_counter_access(func):
+    """Garde unique des routes comptoir a double usage (navigateur + machine).
+
+    Posée sur une fonction qui repond a la fois sous ``/counter/...`` et sous
+    ``/app/counter/...``, elle reproduit exactement les protections des
+    anciennes routes separees :
+
+    - chemin ``/app/...`` (App_Comptoir) : jeton applicatif ou session,
+      *inconditionnellement* — meme quand ``SECURITY_LOGIN_COUNTER`` est
+      desactive. Un deploiement « reseau de confiance » laisse l'IHM
+      navigateur ouverte par choix, mais ne doit pas exposer les mutations
+      machine non authentifiees.
+    - chemin ``/counter/...`` (navigateur) : session requise seulement quand
+      ``SECURITY_LOGIN_COUNTER`` est actif — le ``before_request`` global
+      redirige deja vers le login ; ce garde renvoie un 401 en defence en
+      profondeur si le chemin est atteint autrement.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if request.path.startswith("/app/"):
+            allowed = is_authenticated_request()
+        else:
+            allowed = (not current_app.config.get("SECURITY_LOGIN_COUNTER", False)
+                       or is_authenticated_request())
+        if not allowed:
+            return jsonify({"error": "Unauthorized"}), 401
+        return func(*args, **kwargs)
+
+    return wrapper
