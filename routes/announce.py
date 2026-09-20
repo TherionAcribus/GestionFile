@@ -1,14 +1,50 @@
 import os
 import json
 import random
-from flask import Blueprint, render_template, url_for, current_app as app, jsonify
+from flask import Blueprint, render_template, url_for, current_app as app, jsonify, request, redirect
 from models import Patient, ConfigOption, get_queue_revision
 from utils import replace_balise_announces
 from communication import communikation
 from python.engine import get_global_patient_queue
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
+from auth_utils import is_authenticated_request, wants_json_response
+from routes.admin_security import require_permission_api
 
 announce_bp = Blueprint('announce', __name__)
+
+# Endpoints de ce blueprint qui restent publics meme quand SECURITY_LOGIN_SCREEN
+# est actif. Volontairement vide : tout ce que la page /display consomme (etat
+# des appels, fragments HTMX, galerie) releve de la meme session que la page
+# elle-meme. N'ajouter un endpoint qu'apres avoir verifie qu'il n'expose ni
+# donnee patient ni action sensible.
+_ANNOUNCE_PUBLIC_ENDPOINTS = frozenset()
+
+
+@announce_bp.before_request
+def _require_screen_access():
+    """Garde commune du perimetre « ecran ».
+
+    Avant, SECURITY_LOGIN_SCREEN ne protegeait que /display (branche du
+    before_request global d'app.py) : les routes /announce/* qu'il consomme
+    restaient publiques et exposaient appels, comptoirs et prochains patients
+    meme securite activee. Quand le drapeau est actif, TOUTES les routes de ce
+    blueprint — /display compris — exigent desormais une preuve d'identite :
+    session authentifiee ou jeton applicatif valide (X-App-Token), comme le
+    namespace /socket_update_screen. Les exceptions eventuelles sont declarees
+    explicitement dans _ANNOUNCE_PUBLIC_ENDPOINTS.
+
+    Forme du refus : 401 JSON pour un appel programmatique (HTMX/fetch),
+    redirection vers la connexion pour une navigation navigateur.
+    """
+    if request.endpoint in _ANNOUNCE_PUBLIC_ENDPOINTS:
+        return
+    if not app.config.get("SECURITY_LOGIN_SCREEN", False):
+        return
+    if is_authenticated_request():
+        return
+    if wants_json_response(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    return redirect(url_for('admin_security.login', next=request.url))
 
 
 @announce_bp.route('/display')
@@ -133,9 +169,25 @@ def announce_init_gallery():
                             announce_infos_height=app.config['ANNOUNCE_INFOS_HEIGHT'],
                             announce_infos_width=app.config['ANNOUNCE_INFOS_WIDTH'],)
 
-@announce_bp.route('/announce/refresh')
-def announce_refresh():
-    """ Permet de rafraichir la page des annonces pour appliquer les changements """
+def refresh_announce_screens():
+    """Envoie l'ordre de rechargement aux ecrans d'annonce.
+
+    Separe de la route : admin_queue l'appelle directement apres ses mutations,
+    sans repasser par HTTP ni par la garde de permission posee sur l'endpoint.
+    """
     communikation("update_screen", event="refresh")
     app.logger.debug("Refresh DISPLAY!!")
+
+
+@announce_bp.route('/announce/refresh', methods=['POST'])
+@require_permission_api('announce')
+def announce_refresh():
+    """Relance les ecrans d'annonce — action d'administration.
+
+    Avant : GET publique, n'importe qui pouvait forcer le rechargement de tous
+    les ecrans (et un simple lien la declenchait — CSRF/prechargement). Elle est
+    desormais en POST et reservee aux utilisateurs porteurs de la permission
+    'announce', quelle que soit la valeur de SECURITY_LOGIN_SCREEN.
+    """
+    refresh_announce_screens()
     return '', 204

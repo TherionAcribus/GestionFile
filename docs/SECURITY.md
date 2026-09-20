@@ -71,6 +71,24 @@ en POST, avec jeton) fait l'objet d'un point ultérieur ; elle n'est pas incluse
 dans l'activation du CSRF pour ne pas modifier le comportement des liens et
 modales de confirmation existants.
 
+## Périmètre « écran d'annonce »
+
+Quand `SECURITY_LOGIN_SCREEN` est actif, le paramètre protège **tout** le
+blueprint `announce` (`_require_screen_access` dans `routes/announce.py`), et
+pas seulement la page `/display` :
+
+- `/announce/state`, `/announce/patients_ongoing`, `/announce/patients_next`
+  et `/announce/init_gallery` exigent une session authentifiée ou un jeton
+  applicatif valide (`X-App-Token`) — la même règle que le namespace Socket.IO
+  `/socket_update_screen`. Le refus est un **401 JSON** pour les appels
+  programmatiques (HTMX/fetch) et une **redirection** vers la connexion pour
+  une navigation navigateur.
+- Les éventuelles exceptions sont déclarées explicitement dans l'allowlist
+  `_ANNOUNCE_PUBLIC_ENDPOINTS` (vide aujourd'hui).
+- `/announce/refresh` — qui force le rechargement de tous les écrans — est une
+  action d'administration : **POST** uniquement (plus de déclenchement par un
+  simple lien) et permission `announce` exigée quel que soit le drapeau.
+
 ## Intégration Spotify (musique d'ambiance)
 
 L'intégration Spotify pilote un **unique** compte Spotify (le lecteur physique

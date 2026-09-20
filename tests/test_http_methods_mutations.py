@@ -72,6 +72,7 @@ _MUTATIONS = [
     ("routes/admin_music.py", "/spotify/next_track", "POST"),
     ("routes/admin_music.py", "/spotify/previous_track", "POST"),
     ("routes/admin_announce.py", "/admin/announce/audio/test/<string:scope>", "POST"),
+    ("routes/announce.py", "/announce/refresh", "POST"),
 ]
 
 

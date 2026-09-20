@@ -42,9 +42,11 @@
     </div>
 
     <div>
+        <!-- POST : action mutatrice reservee a l'administration (permission
+             'announce' cote serveur). csrf.js injecte le jeton automatiquement. -->
         <button class="btn btn-danger"
-                hx-get="/announce/refresh"
-                hx-target="#invisible">Relancer la page "Annonce"
+                hx-post="/announce/refresh"
+                hx-swap="none">Relancer la page "Annonce"
         </button>
     </div>
 

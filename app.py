@@ -489,9 +489,11 @@ def require_login_for_admin():
     elif request.path.startswith('/counter'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not current_user.is_authenticated:
             return redirect(url_for('admin_security.login', next=request.url))
-    elif request.path.startswith('/display'):
-        if app.config["SECURITY_LOGIN_SCREEN"] and not current_user.is_authenticated:
-            return redirect(url_for('admin_security.login', next=request.url))
+    # Zone « écran » (/display + /announce/*) : gardée par le before_request de
+    # announce_bp (SECURITY_LOGIN_SCREEN). La garde vit dans le blueprint pour
+    # couvrir aussi les routes /announce/* consommées par la page — auparavant
+    # seules les navigations vers /display étaient filtrées ici, laissant
+    # /announce/state, /announce/patients_* et /announce/refresh publics.
     # on mets en code sur les pages patients, mais pas patient/phone
     elif request.path.startswith('/patient') and not request.path.startswith('/patient/phone'):
         if app.config["SECURITY_LOGIN_PATIENT"] and not current_user.is_authenticated:

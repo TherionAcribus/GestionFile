@@ -3,7 +3,7 @@ from sqlalchemy.orm import contains_eager, joinedload
 from models import Patient, Activity, Counter, DashboardCard, db
 from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
-from routes.announce import announce_refresh
+from routes.announce import refresh_announce_screens
 from communication import communikation
 from bdd import transfer_patients_to_history
 from routes.admin_security import require_permission, require_permission_dashboard
@@ -116,7 +116,7 @@ def clear_all_patients_from_db(app_context=None):
                          details=f"{deleted} patient(s) supprimé(s)")
             communikation("update_patient")
             # rafraichissement de la page Announce
-            announce_refresh()
+            refresh_announce_screens()
             # mise à jour des dispos des comptoirs
             clear_counter_table()
             communikation("app_counter", event="refresh_after_clear_patient_list")
@@ -150,7 +150,7 @@ def update_patient(patient_id):
 
             clear_counter_table()
 
-            announce_refresh()
+            refresh_announce_screens()
 
             display_toast(success=True, message="Mise à jour effectuée")
             return ""
@@ -187,7 +187,7 @@ def delete_patient(patient_id):
 
         record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_SUCCESS)
         communikation("update_patient")
-        announce_refresh()
+        refresh_announce_screens()
         clear_counter_table()
         display_toast()
         return "", 200
