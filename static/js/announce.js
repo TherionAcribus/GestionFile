@@ -20,6 +20,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     generalSocket.on('update', function(msg) {
         console.log("Received general message:", msg);
+        // La révision de file accompagne chaque mutation : un trou (évènement
+        // manqué hors coupure franche) déclenche une resynchronisation des
+        // bannières, comme sur l'App comptoir.
+        noteQueueRevision(msg && msg.revision);
         refresh_calling_list();
     });
 
@@ -34,7 +38,10 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log('General WebSocket reconnected after', attempt, 'attempts');
         // Rattrape les mises à jour manquées pendant la coupure (cet écran
         // tourne sans surveillance, une coupure passée inaperçue le laisserait
-        // figé indéfiniment sinon).
+        // figé indéfiniment sinon). syncCallList réconcilie les bannières avec
+        // l'état autoritatif ; refresh_calling_list recharge « prochains
+        // patients ».
+        syncCallList();
         refresh_calling_list();
     });
 
@@ -112,11 +119,16 @@ document.addEventListener('DOMContentLoaded', (event) => {
     // Évènements de reconnexion sur le Manager (screenSocket.io), cf. plus haut.
     screenSocket.io.on('reconnect', function(attempt) {
         console.log('Screen WebSocket reconnected after', attempt, 'attempts');
-        // Cet écran affiche un état ponctuel (bannières d'appel en cours) sans
-        // endpoint de resynchronisation dédié : un rechargement complet est le
-        // moyen le plus sûr de rattraper ce qui a pu être manqué pendant la
-        // coupure. Même mécanisme que l'évènement "refresh" existant.
-        refresh_page();
+        // Resynchronisation ciblée des bannières via /announce/state au lieu du
+        // rechargement complet d'avant : même convergence, sans perdre la file
+        // audio en cours ni l'état de la page (le 'refresh' explicite conserve
+        // le rechargement pour les changements de configuration).
+        syncCallList();
+        refresh_calling_list();
+        var ongoingDiv = document.getElementById('div_ongoing');
+        if (ongoingDiv) {
+            htmx.trigger(ongoingDiv, 'refresh_ongoing');
+        }
     });
 
     screenSocket.io.on('reconnect_attempt', function(attempt) {
@@ -160,6 +172,84 @@ function refresh_calling_list() {
         htmx.trigger(nextPatientsDiv, 'refresh_next_patients');
     }
 }
+
+
+// --- Suivi de révision + resynchronisation des bannières d'appel ------------
+//
+// Les évènements add_calling/remove_calling sont incrémentaux : Socket.IO ne
+// rejoue rien, un message perdu hors coupure franche laissait une bannière
+// fantôme ou manquante jusqu'au prochain évènement. Chaque mutation de la file
+// porte une révision croissante (enveloppe des évènements 'update') : un trou
+// détecté -> on recharge l'état autoritatif via /announce/state et on
+// réconcilie le DOM. Une resync périodique couvre le cas « dernier évènement
+// perdu » sur cet écran qui tourne sans surveillance.
+
+var lastQueueRevision = -1;
+
+function noteQueueRevision(rev) {
+    // rev peut être absent (diffusion sans révision si le magasin de révision
+    // est en panne) : on ignore plutôt que de casser le suivi.
+    if (typeof rev !== 'number') {
+        return;
+    }
+    if (lastQueueRevision >= 0 && rev > lastQueueRevision + 1) {
+        console.warn('Évènement(s) de file manqué(s) (rév. ' + lastQueueRevision +
+            ' -> ' + rev + ') : resynchronisation des bannières');
+        syncCallList();
+    }
+    if (rev > lastQueueRevision) {
+        lastQueueRevision = rev;
+    }
+}
+
+function syncCallList() {
+    fetch('/announce/state')
+        .then(function(response) { return response.json(); })
+        .then(function(state) {
+            // Une réponse plus vieille que ce qu'on a déjà vu (mutation entre
+            // la lecture serveur et l'application) est écartée : l'évènement
+            // suivant déclenchera une nouvelle resync.
+            if (typeof state.revision === 'number' && lastQueueRevision > state.revision) {
+                return;
+            }
+            var wanted = {};
+            (state.calling || []).forEach(function(c) { wanted[c.id] = c; });
+
+            // Retire les bannières absentes de l'état autoritatif.
+            Array.from(patientList.children).forEach(function(item) {
+                var id = Number(String(item.id).replace('patient-', ''));
+                if (!wanted[id]) {
+                    item.remove();
+                }
+            });
+
+            // Ajoute ou met à jour les bannières de l'état (sans animation :
+            // c'est un rattrapage, pas un nouvel appel).
+            (state.calling || []).forEach(function(c) {
+                var item = document.getElementById('patient-' + c.id);
+                if (!item) {
+                    item = document.createElement('li');
+                    item.id = 'patient-' + c.id;
+                    item.className = 'text_patient_calling';
+                    item.setAttribute('data-counter', c.counter_id);
+                    patientList.appendChild(item);
+                }
+                item.textContent = c.text;
+            });
+
+            if (typeof state.revision === 'number' && state.revision > lastQueueRevision) {
+                lastQueueRevision = state.revision;
+            }
+            updateEmptyStateTexts();
+        })
+        .catch(function(err) {
+            console.error('Resynchronisation des bannières impossible :', err);
+        });
+}
+
+// Rattrapage périodique (60 s) : si l'évènement perdu était le DERNIER (rien
+// ne redéclenche une resync), la prochaine passe le corrige quand même.
+setInterval(syncCallList, 60000);
 
 // Le ducking Spotify (baisser/couper la musique pendant les annonces) est
 // désormais géré côté serveur : l'écran d'annonce public n'appelle plus aucune
@@ -318,9 +408,13 @@ async function remove_calling(msg) {
         listItem.remove();
     }
 
-    // reste t'il des enfants ?
-    var childElements = Array.from(patientList.childNodes).filter(node => node.nodeType === Node.ELEMENT_NODE);
+    updateEmptyStateTexts();
+}
 
+
+// Réévalue les textes "file vide / comptoir libre" après tout changement de
+// la liste des appels (utilisé par remove_calling et par la resync /announce/state).
+function updateEmptyStateTexts() {
     if (announce_text_up_patients_display == "empty"){
         add_text_up();
     } else if (announce_text_up_patients_display == "full"){

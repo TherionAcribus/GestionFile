@@ -1,8 +1,8 @@
 import os
 import json
 import random
-from flask import Blueprint, render_template, url_for, current_app as app
-from models import Patient, ConfigOption
+from flask import Blueprint, render_template, url_for, current_app as app, jsonify
+from models import Patient, ConfigOption, get_queue_revision
 from utils import replace_balise_announces
 from communication import communikation
 from python.engine import get_global_patient_queue
@@ -33,18 +33,39 @@ def display():
                             announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),)
 
 
-def patient_list_for_init_display():
-    """ Création de la liste de patients pour initialiser l'écran d'annonce"""
+def _calling_patients_list():
+    """ Liste des appels en cours telle que l'écran les affiche (bannières). """
     patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
     announce_call_text = ConfigOption.query.filter_by(config_key="announce_call_text").first().value_str
-    call_patients = []
-    for patient in patients:
-        call_patient = {
+    return [
+        {
             'id': patient.id,
-            'text': replace_balise_announces(announce_call_text, patient)
+            'counter_id': patient.counter_id,
+            'text': replace_balise_announces(announce_call_text, patient),
         }
-        call_patients.append(call_patient)
-    return call_patients
+        for patient in patients
+    ]
+
+
+def patient_list_for_init_display():
+    """ Création de la liste de patients pour initialiser l'écran d'annonce"""
+    return _calling_patients_list()
+
+
+@announce_bp.route('/announce/state')
+def announce_state():
+    """ État autoritatif des bannières d'appel + révision de la file.
+
+    Les évènements add_calling/remove_calling sont incrémentaux : un message
+    perdu sans coupure franche laissait une bannière fantôme ou manquante
+    jusqu'à l'évènement suivant (l'écran ne rechargait la page qu'à la
+    reconnexion). Ce snapshot — même rôle que /api/counter/<id>/state pour
+    l'App comptoir — permet au client de réconcilier son affichage à la
+    demande, sans rechargement complet. """
+    return jsonify({
+        "revision": get_queue_revision(),
+        "calling": _calling_patients_list(),
+    })
 
 
 @announce_bp.route('/announce/patients_ongoing')
