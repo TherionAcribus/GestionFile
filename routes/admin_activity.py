@@ -3,7 +3,6 @@ from flask import Blueprint, render_template, request, current_app as app
 from models import Activity, ActivitySchedule, Pharmacist, Button, db
 from sqlalchemy.orm import joinedload, selectinload
 from routes.admin_security import require_permission
-from communication import communikation
 from form_validation import Champ, BOOLEEN, ENTIER, LISTE_ENTIERS, extraire, valider
 from transactions import atomic
 from ui_feedback import display_toast
@@ -260,14 +259,11 @@ def add_new_activity():
                             hour=schedule.end_time.hour, minute=schedule.end_time.minute,
                             id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
 
-        # `app.communication` n'a JAMAIS existe : la fonction s'appelle
-        # `communikation` (avec un k) et n'etait meme pas importee dans ce module.
-        # Ces deux lignes levaient donc une AttributeError, rattrapee par le
-        # `except` ci-dessous : l'activite etait bien creee en base, mais
-        # l'administrateur recevait systematiquement un message d'erreur et le
-        # formulaire n'etait pas vide.
-        action = "delete_add_activity_form_staff" if staff_id else "delete_add_activity_form"
-        communikation("update_admin", data={"action": action})
+        # Historique : `app.communication` n'a JAMAIS existe (la fonction
+        # s'appelle `communikation` et n'etait meme pas importee ici), puis
+        # l'emission corrigee visait /socket_update_admin, un namespace
+        # inexistant. Dans les deux cas le formulaire n'etait jamais vide ;
+        # le nettoyage est desormais assure par le swap-oob ci-dessous.
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""

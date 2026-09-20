@@ -103,14 +103,8 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
 
 
-    screenSocket.on('add_on_counter', function(msg) {
-        console.log("Received screen message:", msg);
-    });
-
-    screenSocket.on('remove_on_counter', function(msg) {
-        console.log("Received screen message REMOVED:", msg);
-    });
-
+    // Pas de handlers 'add_on_counter' / 'remove_on_counter' : aucun
+    // émetteur serveur, les anciens ne faisaient que console.log.
 
     screenSocket.on('connect_error', function(err) {
         console.error('Screen WebSocket connection error:', err);

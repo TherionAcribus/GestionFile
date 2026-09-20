@@ -1,4 +1,3 @@
-import json
 import time
 import logging
 from flask import url_for, current_app
@@ -115,7 +114,10 @@ def send_app_notification(origin, data):
         "timestamp": int(time.time()),
         "for_counter": for_counter
     }
-    communikation("app_counter", event="notification", flag=for_counter,  data = json.dumps(notification_data))
+    # `data` est toujours un objet (pas une chaîne JSON) : l'enveloppe
+    # {flag, data, revision} se veut homogène, le client n'a pas à deviner
+    # s'il doit json.loads (cf. docs/PROTOCOLE.md).
+    communikation("app_counter", event="notification", flag=for_counter, data=notification_data)
 
 
 def notify_patient_phone(call_number):
