@@ -68,13 +68,16 @@ document.addEventListener('DOMContentLoaded', (event) => {
         console.log("Update Patient:", msg);
         var scanDiv = document.getElementById('div_for_scan');
         if (!scanDiv) { return; }
-        // Le payload porte le numéro RÉELLEMENT attribué à l'inscription : il
-        // peut différer du numéro « futur » affiché quand deux parcours se
-        // concluent en même temps. On l'injecte dans hx-vals avant le POST.
+        // Le payload porte l'id du patient inscrit : c'est lui qui identifie
+        // la conclusion (le call_number est réutilisé d'un jour à l'autre et
+        // peut différer du « futur » affiché). On l'injecte dans hx-vals
+        // avant le POST, avec le numéro en repli pour compat.
         var callNumber = msg && msg.data && msg.data.call_number;
-        if (callNumber) {
+        var patientId = msg && msg.data && msg.data.patient_id;
+        if (patientId || callNumber) {
             scanDiv.setAttribute('hx-vals', JSON.stringify({
-                patient_call_number: callNumber,
+                patient_id: patientId || '',
+                patient_call_number: callNumber || '',
                 journey: scanDiv.getAttribute('data-journey-id') || ''
             }));
         }

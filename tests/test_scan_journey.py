@@ -62,6 +62,22 @@ def application(tmp_path):
         PHONE_LINE6="",
         PHONE_DISPLAY_SPECIFIC_MESSAGE=False,
         PHONE_CENTER=True,
+        # Clés lues par patient_conclusion_page (page de conclusion).
+        PAGE_PATIENT_CONFIRMATION_MESSAGE="Ticket {N} - {A}",
+        PAGE_PATIENT_END_TIMER=10,
+        PAGE_PATIENT_QRCODE_DISPLAY=True,
+        PAGE_PATIENT_PRINT_AFTER_PRINT=False,
+        PAGE_PATIENT_PRINT_AFTER_SCAN=False,
+        PAGE_PATIENT_INTERFACE_PRINTING="impression",
+        PAGE_PATIENT_INTERFACE_PRINT_FAILED="echec",
+        PAGE_PATIENT_INTERFACE_RETRY="retry",
+        PAGE_PATIENT_INTERFACE_CALL_STAFF="staff",
+        PAGE_PATIENT_INTERFACE_STAFF_CALLED="appele",
+        PAGE_PATIENT_INTERFACE_NO_TICKET="pas de ticket",
+        PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF="voir personnel",
+        PAGE_PATIENT_INTERFACE_DONE_BACK="retour",
+        PAGE_PATIENT_INTERFACE_DONE_PRINT="imprimer",
+        PAGE_PATIENT_INTERFACE_DONE_EXTEND="prolonger",
     )
     db.init_app(app)
     from routes.patient import patient_bp
@@ -255,7 +271,8 @@ def test_ping_emet_dans_la_salle_du_parcours(client, application, monkeypatch):
 
     with application.app_context():
         patient = Patient.query.filter_by(activity_id=activite_id).one()
-    assert scans[0]["data"] == {"call_number": patient.call_number}
+    assert scans[0]["data"] == {"call_number": patient.call_number,
+                                "patient_id": patient.id}
 
 
 def test_ping_sans_journey_ne_diffuse_pas(client, application, monkeypatch):
@@ -308,3 +325,62 @@ def test_qr_image_conclusion_repli_par_numero(application):
     with application.app_context():
         assert _qr_image_for_conclusion("A5", None) == "qr_patient-A5-jx.png"
         assert _qr_image_for_conclusion("B9", None) == "qr_patient-B9.png"
+
+
+# --- 5. Conclusion : identité par patient_id, pas par call_number -------------
+
+def _deux_patients_meme_numero(application):
+    """Un call_number est réutilisé d'un jour à l'autre : un ANCIEN patient
+    (statut done) et le NOUVEAU (standing) partagent 'A5'. Le nom d'activité
+    ({A}) distingue lequel est rendu par la page de conclusion."""
+    with application.app_context():
+        langue = Language(code="fr", name="Français", translation="Français")
+        ancienne = Activity(name="ANCIENNE", letter="Z")
+        nouvelle = Activity(name="NOUVELLE", letter="Z")
+        vieux = Patient(call_number="A5", status="done",
+                        activity=ancienne, language=langue)
+        nouveau = Patient(call_number="A5", status="standing",
+                          activity=nouvelle, language=langue)
+        db.session.add_all([langue, ancienne, nouvelle, vieux, nouveau])
+        db.session.commit()
+        return vieux.id, nouveau.id
+
+
+def test_conclusion_par_patient_id_rend_le_bon_patient(client, application):
+    """La conclusion identifie le patient par son id : même call_number qu'un
+    patient d'hier → c'est le NOUVEAU qui est affiché."""
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+
+    reponse = client.post("/patient/scan_already_validate",
+                          data={"patient_id": str(nouveau_id),
+                                "journey": "j-x"})
+
+    html = reponse.get_data(as_text=True)
+    assert reponse.status_code == 200
+    assert "NOUVELLE" in html
+    assert "ANCIENNE" not in html
+
+
+def test_conclusion_repli_call_number_prend_le_plus_recent(client, application):
+    """Repli compat (pas de patient_id dans le POST) : parmi les patients au
+    même numéro, on prend le PLUS RÉCENT — pas le premier trouvé."""
+    _deux_patients_meme_numero(application)
+
+    reponse = client.post("/patient/scan_already_validate",
+                          data={"patient_call_number": "A5"})
+
+    html = reponse.get_data(as_text=True)
+    assert "NOUVELLE" in html
+    assert "ANCIENNE" not in html
+
+
+def test_conclusion_page_route_par_patient_id(client, application):
+    """L'accès direct à /patient/conclusion_page/<id> rend le bon patient."""
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+
+    reponse = client.get(f"/patient/conclusion_page/{nouveau_id}")
+
+    html = reponse.get_data(as_text=True)
+    assert reponse.status_code == 200
+    assert "NOUVELLE" in html
+    assert "ANCIENNE" not in html

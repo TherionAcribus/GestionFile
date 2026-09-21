@@ -15,7 +15,7 @@ L'invariant 2 a réellement attrapé deux défauts :
 
 - ``/pharmacists`` rendait ``pharmacists.html``, **fichier inexistant** : la
   route répondait 500 à chaque appel.
-- ``/patient/conclusion_page/<call_number>`` était posée sur une fonction dont
+- ``/patient/conclusion_page/<patient_id>`` était posée sur une fonction dont
   l'argument ``print_ticket`` était **obligatoire** : Flask n'appelant la vue
   qu'avec les variables de l'URL, tout accès direct levait un ``TypeError``
   (500). C'était le chemin de repli non-HTMX de l'inscription patient.
@@ -199,7 +199,7 @@ def test_toute_vue_est_appelable_avec_les_variables_de_l_url():
     """Flask n'appelle une vue qu'avec les variables déclarées dans la règle.
 
     Tout autre argument obligatoire garantit un TypeError (500) à l'appel.
-    Régression : /patient/conclusion_page/<call_number> exigeait aussi
+    Régression : /patient/conclusion_page/<patient_id> exigeait aussi
     ``print_ticket`` — la redirection non-HTMX de l'inscription patient menait
     donc à une erreur 500.
     """

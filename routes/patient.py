@@ -319,7 +319,7 @@ def patient_return_validation_page_and_print_data(print_ticket):
     if 'HX-Request' in request.headers:
         # Requête provenant de HTMX
         # Rendre le template de la page de conclusion
-        html_content = patient_conclusion_page(new_patient.call_number,
+        html_content = patient_conclusion_page(new_patient.id,
                                                 print_ticket=print_ticket,
                                                 print_data=print_data,
                                                 print_job_id=print_job_id,
@@ -330,7 +330,7 @@ def patient_return_validation_page_and_print_data(print_ticket):
         return response
     else:
         # Redirection traditionnelle si pas de requête AJAX
-        return redirect(url_for('patient.patient_conclusion_page', call_number=new_patient.call_number))
+        return redirect(url_for('patient.patient_conclusion_page', patient_id=new_patient.id))
 
 
 def _alert_staff_print_failure(patient, code, message):
@@ -508,10 +508,19 @@ def patient_validate_scan(activity_id):
 @patient_bp.route('/patient/scan_already_validate', methods=['POST'])
 def patient_scan_already_validate():
     """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
-    patient_call_number = request.form.get('patient_call_number')
+    patient_id = request.form.get('patient_id')
     journey_id = request.form.get('journey')
-    app.logger.debug('already scanned %s', patient_call_number)
-    return patient_conclusion_page(patient_call_number, print_ticket=False, print_data=False, journey_id=journey_id)
+    app.logger.debug('already scanned %s', patient_id)
+    if patient_id:
+        return patient_conclusion_page(int(patient_id), print_ticket=False, print_data=False, journey_id=journey_id)
+    # Repli compat (client sans patient_id) : le numéro d'appel est réutilisé
+    # d'un jour à l'autre, on prend donc le patient le PLUS RÉCENT portant ce
+    # numéro — pas le premier trouvé, qui pouvait dater d'hier.
+    patient_call_number = request.form.get('patient_call_number')
+    patient = (Patient.query.filter_by(call_number=patient_call_number)
+               .order_by(Patient.id.desc()).first())
+    return patient_conclusion_page(patient.id if patient else 0,
+                                   print_ticket=False, print_data=False, journey_id=journey_id)
 
 
 @patient_bp.route('/patient/cancel_patient')
@@ -543,20 +552,24 @@ def _qr_image_for_conclusion(call_number, journey_id=None):
     return f"qr_patient-{call_number}.png"
 
 
-@patient_bp.route('/patient/conclusion_page/<call_number>')
-def patient_conclusion_page(call_number, print_ticket=False, print_data=None, print_job_id=None, journey_id=None):
+@patient_bp.route('/patient/conclusion_page/<int:patient_id>')
+def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, print_job_id=None, journey_id=None):
     # ``print_ticket`` doit avoir une valeur par defaut : la fonction sert a la
     # fois d'aide interne (appelee avec tous ses arguments depuis
     # patients_submit et patient_scan_already_validate) ET de vue pour cette
-    # route, que Flask appelle avec le seul <call_number>. Sans defaut, l'acces
+    # route, que Flask appelle avec le seul <patient_id>. Sans defaut, l'acces
     # par URL levait un TypeError (500) -- ce qui cassait la redirection non-HTMX
     # de patients_submit, seul chemin emprunte quand le navigateur n'envoie pas
     # d'en-tete HX-Request. False correspond au mode « pas d'impression en
     # cours », comme pour l'arrivee par scan.
+    #
+    # Le patient est identifié par son id — PAS par call_number : celui-ci est
+    # réutilisé d'un jour à l'autre et une recherche dessus pouvait ressortir
+    # un ancien patient (confirmation affichée pour un autre).
     app.logger.debug('CONFIG QRCODE CONCLUSION: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
-    image_name_qr = _qr_image_for_conclusion(call_number, journey_id)
-
-    patient = Patient.query.filter_by(call_number=call_number).first()
+    patient = Patient.query.get(patient_id)
+    call_number = patient.call_number if patient else ""
+    image_name_qr = _qr_image_for_conclusion(call_number, journey_id) if call_number else ""
     page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
     page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
 
@@ -690,13 +703,16 @@ def phone_patient_ping():
         # Émission ciblée dans la salle du parcours : seule la borne affichant
         # CE QR reçoit update_scan_phone, avec le numéro RÉELLEMENT attribué
         # (le numéro « futur » affiché peut différer si deux parcours se
-        # concluent en même temps). Sans journey (QR généré avant cette
-        # version) on ne diffuse plus à toutes les bornes : une confirmation
-        # ne doit jamais atterrir sur le mauvais écran.
+        # concluent en même temps) ET l'id du patient — la conclusion se fait
+        # par id, le call_number étant réutilisé d'un jour à l'autre. Sans
+        # journey (QR généré avant cette version) on ne diffuse plus à toutes
+        # les bornes : une confirmation ne doit jamais atterrir sur le mauvais
+        # écran.
         if journey_id:
             from sockets import scan_journey_room
             communikation("patient", event="update_scan_phone",
-                          data={"call_number": patient.call_number},
+                          data={"call_number": patient.call_number,
+                                "patient_id": patient.id},
                           room=scan_journey_room(journey_id))
 
     phone_lines = []
