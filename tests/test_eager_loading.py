@@ -137,3 +137,31 @@ def test_counter_state_eager_loads_activity_and_language():
     body = _body("routes/counter.py", "def api_counter_state")
     assert "joinedload(Patient.activity)" in body
     assert "joinedload(Patient.language)" in body
+
+
+# --------------------------------------------------------------------------
+# écran d'annonce : bannières « calling » et « ongoing »
+# --------------------------------------------------------------------------
+#
+# Chaque ligne est rendue par replace_balise_announces, qui lit
+# patient.counter.staff ({C}/{M}), patient.activity et patient.language ({A})
+# — trois relations paresseuses par ligne sinon.
+
+@pytest.mark.parametrize("marker", [
+    "def _calling_patients_list",
+    "def patients_ongoing",
+])
+def test_announce_lists_eager_load_balise_relations(marker):
+    body = _body("routes/announce.py", marker)
+    assert "joinedload(Patient.counter).joinedload(Counter.staff)" in body
+    assert "joinedload(Patient.activity)" in body
+    assert "joinedload(Patient.language)" in body
+
+
+def test_announce_listes_ne_relisent_pas_configoption():
+    """Le texte d'appel vient d'app.config (chargé en une requête groupée au
+    démarrage) — plus de relecture ConfigOption par requête, qui levait en
+    outre un AttributeError quand la ligne manquait en base."""
+    body = _body("routes/announce.py", "def _calling_patients_list")
+    assert "ConfigOption.query" not in body
+    assert "ANNOUNCE_CALL_TEXT" in body

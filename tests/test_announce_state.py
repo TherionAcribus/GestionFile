@@ -119,6 +119,29 @@ def test_state_revision_suit_le_compteur_de_file(client, application):
     assert client.get("/announce/state").get_json()["revision"] == rev_apres
 
 
+def test_state_sans_ligne_configoption_en_base(client, application):
+    """Régression : la lecture directe de ConfigOption levait un
+    AttributeError si la ligne announce_call_text manquait. Le gabarit vient
+    désormais d'app.config (chargement groupé + repli par défaut)."""
+    with application.app_context():
+        # Pas de ConfigOption announce_call_text — seulement le reste du jeu.
+        langue = Language(code="fr", name="Français", translation="Français")
+        activite = Activity(name="Ordonnance", letter="O")
+        membre = Pharmacist(name="Alice", initials="AL")
+        comptoir = Counter(name="1", sort_order=1, is_active=True)
+        comptoir.staff = membre
+        db.session.add_all([langue, activite, membre, comptoir])
+        db.session.commit()
+        db.session.add(Patient(call_number=100, status="calling",
+                               activity_id=activite.id, language_id=langue.id,
+                               counter_id=comptoir.id))
+        db.session.commit()
+    reponse = client.get("/announce/state")
+    assert reponse.status_code == 200
+    appel = reponse.get_json()["calling"][0]
+    assert "100" in appel["text"]
+
+
 def test_init_display_inclut_counter_id(application):
     """Régression : le gabarit lit call_patient.counter_id (data-counter)."""
     from routes.announce import patient_list_for_init_display

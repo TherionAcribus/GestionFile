@@ -2,7 +2,8 @@ import os
 import json
 import random
 from flask import Blueprint, render_template, url_for, current_app as app, jsonify, request, redirect
-from models import Patient, ConfigOption, get_queue_revision
+from sqlalchemy.orm import joinedload
+from models import Patient, Counter, ConfigOption, get_queue_revision
 from utils import replace_balise_announces, replace_balise_welcome
 from communication import communikation
 from python.engine import get_next_patients_call_numbers
@@ -73,8 +74,25 @@ def display():
 
 def _calling_patients_list():
     """ Liste des appels en cours telle que l'écran les affiche (bannières). """
-    patients = Patient.query.filter_by(status='calling').order_by(Patient.call_number).all()
-    announce_call_text = ConfigOption.query.filter_by(config_key="announce_call_text").first().value_str
+    # joinedload : le rendu de chaque bannière lit patient.counter.staff
+    # (balises {C}/{M}), patient.activity et patient.language ({A}) — sans
+    # chargement anticipé, une requête par relation et par ligne (N+1).
+    patients = (
+        Patient.query.filter_by(status='calling')
+        .options(
+            joinedload(Patient.counter).joinedload(Counter.staff),
+            joinedload(Patient.activity),
+            joinedload(Patient.language),
+        )
+        .order_by(Patient.call_number)
+        .all()
+    )
+    # Source de vérité : app.config, peuplée en une requête groupée au
+    # chargement (config_loader). Relecture directe de ConfigOption ici =
+    # une requête à chaque appel, et AttributeError si la ligne manquait en
+    # base. Repli : le texte par défaut de default_config.json.
+    announce_call_text = app.config.get(
+        'ANNOUNCE_CALL_TEXT', "Le patient {N} est invité au comptoir {C}")
     return [
         {
             'id': patient.id,
@@ -108,8 +126,19 @@ def announce_state():
 
 @announce_bp.route('/announce/patients_ongoing')
 def patients_ongoing():
-    announce_ongoing_text = app.config['ANNOUNCE_ONGOING_TEXT']
-    patients = Patient.query.filter_by(status='ongoing').order_by(Patient.counter_id).all()
+    # Mêmes chargement anticipé et repli que _calling_patients_list.
+    announce_ongoing_text = app.config.get(
+        'ANNOUNCE_ONGOING_TEXT', "Comptoir {C} : Patient {N}")
+    patients = (
+        Patient.query.filter_by(status='ongoing')
+        .options(
+            joinedload(Patient.counter).joinedload(Counter.staff),
+            joinedload(Patient.activity),
+            joinedload(Patient.language),
+        )
+        .order_by(Patient.counter_id)
+        .all()
+    )
     ongoing_patients = []
     for patient in patients:
         ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
