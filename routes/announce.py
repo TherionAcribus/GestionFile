@@ -3,7 +3,7 @@ import json
 import random
 from flask import Blueprint, render_template, url_for, current_app as app, jsonify, request, redirect
 from models import Patient, ConfigOption, get_queue_revision
-from utils import replace_balise_announces
+from utils import replace_balise_announces, replace_balise_welcome
 from communication import communikation
 from python.engine import get_global_patient_queue
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
@@ -51,15 +51,17 @@ def _require_screen_access():
 def display():
     app.logger.debug("start display")
     # TODO verifier qu'existe
-    return render_template('/announce/announce.html', 
+    return render_template('/announce/announce.html',
                             #current_patients=current_patients,
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
-                            announce_title=app.config['ANNOUNCE_TITLE'],
-                            announce_subtitle=app.config['ANNOUNCE_SUBTITLE'],
-                            announce_text_up_patients=app.config['ANNOUNCE_TEXT_UP_PATIENTS'],
+                            # Textes « welcome » : les balises {P} {D} {H} sont
+                            # résolues au rendu (le titre par défaut contient {P}).
+                            announce_title=replace_balise_welcome(app.config['ANNOUNCE_TITLE']),
+                            announce_subtitle=replace_balise_welcome(app.config['ANNOUNCE_SUBTITLE']),
+                            announce_text_up_patients=replace_balise_welcome(app.config['ANNOUNCE_TEXT_UP_PATIENTS']),
                             announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
                             announce_text_up_patients_size=app.config['ANNOUNCE_TEXT_UP_PATIENTS_SIZE'],
-                            announce_text_down_patients=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS'],
+                            announce_text_down_patients=replace_balise_welcome(app.config['ANNOUNCE_TEXT_DOWN_PATIENTS']),
                             announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
                             announce_text_down_patients_size=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_SIZE'],
                             call_patients = patient_list_for_init_display(),
@@ -117,7 +119,9 @@ def patients_ongoing():
 
 @announce_bp.route('/announce/patients_next')
 def patients_next():
-    announce_next_patients_text = app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :")
+    # Texte hors contexte patient : {P}/{D}/{H} résolus, balises patient vides.
+    announce_next_patients_text = replace_balise_welcome(
+        app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :"))
     announce_next_patients_alignment = app.config.get('ANNOUNCE_NEXT_PATIENTS_ALIGNMENT', 'center')
     
     # Use the global queue algorithm instead of simple timestamp sort

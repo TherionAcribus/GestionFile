@@ -1,7 +1,7 @@
 import re
 import base64
 from datetime import datetime, date
-from flask import session, current_app as app
+from flask import session, has_request_context, current_app as app
 from models import Button, Translation, db
 from communication import send_app_notification
 
@@ -122,55 +122,138 @@ def convert_markdown_to_escpos(markdown_text, line_width=42):
 
     return escpos_text
 
-def replace_balise_announces(template, patient):
-    """ Remplace les balises dans les textes d'annonces (texte et son)"""
-    app.logger.debug('replace_balise_announces %s %s', template, patient)
+# ---------------------------------------------------------------------------
+# Moteur centralisé de rendu des balises
+# ---------------------------------------------------------------------------
+# Toutes les balises annoncées par l'administration sont prises en charge —
+# union de params_registry.BALISE_LETTERS : « welcome » {P}{D}{H},
+# « before_call » {P}{D}{H}{A}{N} et « after_call » {P}{D}{H}{A}{N}{M}{C}.
+# Le rendu ne lève JAMAIS d'exception : il intervient pour certaines annonces
+# APRÈS que le patient a été marqué 'calling', où un KeyError (str.format sans
+# la clé) laissait l'appel sans bannière à l'écran ni annonce audio.
+
+_BALISE_PATTERN = re.compile(r"\{([A-Za-z])\}")
+
+# Sentinel : distingue « balise inconnue » (laissée telle quelle) de « balise
+# connue mais sans valeur » (rendue vide).
+_BALISE_MISSING = object()
+
+
+def render_balises(template, values):
+    """Remplace chaque balise ``{X}`` par ``values[X]``, sans jamais lever
+    d'exception.
+
+    Contrairement à ``str.format`` : une balise absente de ``values`` reste
+    inchangée, une valeur ``None`` est rendue vide, et les autres accolades
+    (``{0}``, ``{{``, ``{`` seule…) ne font pas échouer le rendu.
+    """
+    if not template:
+        return template
+
+    def _sub(match):
+        value = values.get(match.group(1).upper(), _BALISE_MISSING)
+        if value is _BALISE_MISSING:
+            return match.group(0)
+        return "" if value is None else str(value)
+
+    return _BALISE_PATTERN.sub(_sub, str(template))
+
+
+def _activity_label(patient, language_code=None):
+    """Libellé pour ``{A}`` : le bouton associé à l'activité du patient
+    (traduit si possible), à défaut le nom de l'activité.
+
+    Repli silencieux : un libellé introuvable ne doit jamais casser un appel.
+    """
+    if patient is None:
+        return ""
+    if language_code is None:
+        # En contexte de requête : la langue choisie sur la borne. Hors requête
+        # (thread audio, planificateur) : la langue du patient.
+        language_code = (
+            session.get('language_code') if has_request_context()
+            else getattr(getattr(patient, 'language', None), 'code', None)
+        )
+    label = ""
     try:
-        if patient.counter.staff:
-            return template.format(N=patient.call_number, C=patient.counter.name, M=patient.counter.staff.name, P=app.config.get("PHARMACY_NAME", "") or "")
-        else:
-            app.logger.error(f"Pas de Staff on counter : {patient} {patient.counter} {patient.counter.staff}")
-            template = "Comptoir {C}: {N}"
-            send_app_notification(origin="erreur", data="Erreur: Vous n'êtes pas connecté au comptoir. Le patient est bien appelé. Signaler le problème.")
-            return template.format(N=patient.call_number, C=patient.counter.name, P=app.config.get("PHARMACY_NAME", "") or "")
-    except AttributeError as e:
-        app.logger.error(f"Failed to replace balise announces: {e}")
-        return "Erreur"
+        button = Button.query.filter_by(activity_id=patient.activity_id).first()
+        if button is not None:
+            if language_code and language_code != "fr":
+                label = get_buttons_translation([button], language_code)[0].label
+            else:
+                label = button.label
+    except Exception as e:
+        app.logger.warning("Balise {A} : libellé d'activité introuvable (%s)", e)
+    if not label:
+        label = getattr(getattr(patient, 'activity', None), 'name', '') or ''
+    return label
+
+
+def balise_values(patient=None, language_code=None, with_activity=False):
+    """Valeurs de TOUTES les balises annoncées.
+
+    {P} nom de la pharmacie, {D} date du jour, {H} heure, {N} numéro d'appel,
+    {C} comptoir, {M} membre d'équipe, {A} activité. Chaque donnée
+    indisponible (pas de patient, pas de comptoir, pas de membre) est rendue
+    vide plutôt que de faire échouer le rendu.
+    """
+    counter = getattr(patient, 'counter', None)
+    staff = getattr(counter, 'staff', None)
+    return {
+        "P": app.config.get("PHARMACY_NAME", "") or "",
+        "D": date.today().strftime("%d/%m/%y"),
+        "H": datetime.now().strftime("%H:%M"),
+        "N": getattr(patient, 'call_number', '') or '',
+        "C": getattr(counter, 'name', '') or '',
+        "M": getattr(staff, 'name', '') or '',
+        # {A} coûte une requête (bouton + traduction) : résolu à la demande.
+        "A": _activity_label(patient, language_code) if with_activity else "",
+    }
+
+
+def replace_balises(template, patient=None, language_code=None):
+    """Point d'entrée unique : rend TOUTES les balises d'un texte, pour un
+    patient donné ou hors contexte patient (``patient=None``)."""
+    return render_balises(
+        template,
+        balise_values(patient, language_code,
+                      with_activity="{a}" in str(template or "").lower()),
+    )
+
+
+def replace_balise_announces(template, patient):
+    """ Remplace les balises dans les textes d'annonces (texte et son).
+
+    Sans membre d'équipe sur le comptoir, on dégrade le texte en
+    « Comptoir {C}: {N} » et on alerte le personnel — le patient reste appelé.
+    """
+    app.logger.debug('replace_balise_announces %s %s', template, patient)
+    counter = getattr(patient, 'counter', None)
+    staff = getattr(counter, 'staff', None)
+    if patient is None or staff is None:
+        app.logger.error(f"Pas de Staff on counter : {patient} {counter} {staff}")
+        send_app_notification(origin="erreur", data="Erreur: Vous n'êtes pas connecté au comptoir. Le patient est bien appelé. Signaler le problème.")
+        template = "Comptoir {C}: {N}"
+    return replace_balises(template, patient)
 
 
 def replace_balise_phone(template, patient):
-    """ Remplace les balises dans les textes d'annonces (texte et son)
-    Pour le nom de l'activité, on reprend le nom du bouton pour plus de o"""    
-    app.logger.debug('LANGUES8REPLACE %s', session.get('language_code'))
-    app.logger.debug('template')
-    button_label = ""
-    if "{A}" in template:
-        button = Button.query.filter_by(activity_id=patient.activity_id).first()
-        if session.get('language_code') != "fr":        
-            button_label = get_buttons_translation([button], session.get('language_code'))[0].label
-            app.logger.debug('button_label %s', button_label)
-        else:
-            button_label = button.label
-    return template.format(P=app.config["PHARMACY_NAME"],
-                            N=patient.call_number, 
-                            A=button_label, 
-                            D=date.today().strftime("%d/%m/%y"),
-                            H=datetime.now().strftime("%H:%M"))
+    """ Remplace les balises dans les textes « avant appel » (page patient,
+    ticket, téléphone). Même moteur que les annonces : aucune balise ne peut
+    lever d'exception. Pour le nom de l'activité ({A}), on reprend le libellé
+    du bouton pour plus de cohérence avec ce que le patient a choisi."""
+    return replace_balises(template, patient)
 
 
 def replace_balise_welcome(template):
     """ Remplace les balises des textes « d'accueil » (sans patient) : {P} nom de
-    la pharmacie, {D} date du jour, {H} heure. Utilisé pour le titre de la page
-    patient (et tout texte affiché hors contexte patient).
+    la pharmacie, {D} date du jour, {H} heure ; les balises patient ({N} {A}
+    {M} {C}) sont rendues vides. Utilisé pour le titre de la page patient et
+    les textes hors appel de l'écran d'annonce.
 
     Remplacement ciblé (pas de ``str.format``) afin de ne PAS planter si le texte
     contient d'autres accolades ou une balise non gérée. """
-    if not template:
-        return template
-    return (template
-            .replace("{P}", app.config.get("PHARMACY_NAME", "") or "")
-            .replace("{D}", date.today().strftime("%d/%m/%y"))
-            .replace("{H}", datetime.now().strftime("%H:%M")))
+    return replace_balises(template)
 
 
 def get_buttons_translation(buttons, language_code):
