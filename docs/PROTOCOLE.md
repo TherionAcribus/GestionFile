@@ -82,7 +82,7 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `refresh` | `null` | Recharge la page borne |
 | `refresh_title` | `null` | Recharge le titre |
 | `refresh_buttons` | `null` | Recharge les boutons d'activité |
-| `update_scan_phone` | `{call_number: string}` — salle `scan_<journey>` | Signale le scan du QR du parcours affiché par cette borne |
+| `update_scan_phone` | `{call_number, patient_id}` — salle `scan_<journey>` | Signale le scan du QR du parcours affiché par cette borne |
 | `print_ticket` | `string` — ESC/POS **base64** | Impression (ticket de test admin) |
 
 Chaque parcours QR est identifié par un UUID (`journey`) généré à l'affichage
@@ -92,6 +92,14 @@ borne émet `join_scan_journey {journey}` pour rejoindre la salle
 disparaît ; `/patient/phone/ping` n'émet `update_scan_phone` que dans cette
 salle — avec plusieurs bornes, une confirmation ne peut plus arriver sur le
 mauvais écran. Sans `journey` (QR antérieur), aucune diffusion n'est faite.
+
+Le QR lui-même n'est **pas** un fichier : `qr_code_data_uri` génère le PNG en
+mémoire et la page l'embarque en `data:image/png;base64,...`. Un
+`call_number` étant réutilisé d'un jour à l'autre, un fichier statique
+`qr_patient-<numéro>.png` pouvait être servi périmé depuis le cache — plus
+rien à cacher ni à nettoyer. La page de conclusion regénère le QR pour le
+patient réellement inscrit (`patient_id`), y compris en impression directe
+où aucun QR de validation n'existait.
 
 #### Acquittement d'impression (`POST /patient/confirm_print`)
 

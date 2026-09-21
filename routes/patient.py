@@ -1,11 +1,9 @@
-import glob
-import os
 import uuid
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation
-from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, create_qr_code
+from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
@@ -216,7 +214,12 @@ def left_page_validate_patient(activity):
     # Socket.IO dédiée — seule la borne affichant CE QR reçoit alors
     # update_scan_phone (plusieurs bornes/parcours simultanés).
     journey_id = str(uuid.uuid4())
-    image_name_qr = create_qr_code(futur_patient, journey_id=journey_id)
+    # QR généré en mémoire (data URI) : l'image affichée correspond toujours
+    # au parcours courant — un fichier statique réutilisé par un jour, une
+    # langue ou une activité différente pourrait servir un QR périmé depuis
+    # le cache navigateur.
+    qr_data_uri = (qr_code_data_uri(futur_patient, journey_id=journey_id)
+                   if app.config["PAGE_PATIENT_QRCODE_DISPLAY"] else None)
     text = f"{activity.name}"
     # NB : pas d'émission ici. À ce stade le patient n'est que « futur »
     # (get_futur_patient ne l'enregistre PAS en base) : la file n'a pas changé.
@@ -234,7 +237,7 @@ def left_page_validate_patient(activity):
         page_patient_subtitle=get_activity_message_translation(activity, session.get('language_code', 'fr'))
 
     main_content = render_template('patient/patient_qr_right_page.html', 
-                            image_name_qr=image_name_qr, 
+                            qr_data_uri=qr_data_uri,
                             text=text,
                             activity=activity,
                             futur_patient=futur_patient,
@@ -293,9 +296,6 @@ def patient_return_validation_page_and_print_data(print_ticket):
     # Récupération et traitement des données comme avant
     activity_id = request.form.get('activity_id')
     activity = Activity.query.get(activity_id)
-    # Parcours QR d'origine : sert à retrouver l'image du QR pour la page de
-    # conclusion (le numéro réellement attribué peut différer du « futur »).
-    journey_id = request.form.get('journey')
 
     if print_ticket:
         # Inscription en attente : elle sera activée à la confirmation d'impression.
@@ -322,8 +322,7 @@ def patient_return_validation_page_and_print_data(print_ticket):
         html_content = patient_conclusion_page(new_patient.id,
                                                 print_ticket=print_ticket,
                                                 print_data=print_data,
-                                                print_job_id=print_job_id,
-                                                journey_id=journey_id)
+                                                print_job_id=print_job_id)
 
         # Inclure les données d'impression dans un en-tête HX-Trigger si nécessaire (voir plus bas)
         response = make_response(html_content)
@@ -509,10 +508,9 @@ def patient_validate_scan(activity_id):
 def patient_scan_already_validate():
     """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
     patient_id = request.form.get('patient_id')
-    journey_id = request.form.get('journey')
     app.logger.debug('already scanned %s', patient_id)
     if patient_id:
-        return patient_conclusion_page(int(patient_id), print_ticket=False, print_data=False, journey_id=journey_id)
+        return patient_conclusion_page(int(patient_id), print_ticket=False, print_data=False)
     # Repli compat (client sans patient_id) : le numéro d'appel est réutilisé
     # d'un jour à l'autre, on prend donc le patient le PLUS RÉCENT portant ce
     # numéro — pas le premier trouvé, qui pouvait dater d'hier.
@@ -520,7 +518,7 @@ def patient_scan_already_validate():
     patient = (Patient.query.filter_by(call_number=patient_call_number)
                .order_by(Patient.id.desc()).first())
     return patient_conclusion_page(patient.id if patient else 0,
-                                   print_ticket=False, print_data=False, journey_id=journey_id)
+                                   print_ticket=False, print_data=False)
 
 
 @patient_bp.route('/patient/cancel_patient')
@@ -529,31 +527,8 @@ def cancel_patient():
     return patient_right_page()
     
 
-def _qr_image_for_conclusion(call_number, journey_id=None):
-    """ Retrouve le fichier QR généré pour ce parcours.
-
-    Le fichier embarque le numéro « futur » calculé à l'affichage du QR ET le
-    journey_id : quand le numéro réellement attribué à l'inscription diffère
-    (deux parcours simultanés), la recherche par suffixe journey reste fiable.
-    Sans journey (accès direct à l'URL / repli non-HTMX), on retombe sur le
-    fichier le plus récent de ce numéro — comportement historique."""
-    directory = os.path.join(app.static_folder, 'qr_patients')
-    candidates = []
-    if journey_id:
-        candidates += glob.glob(
-            os.path.join(directory, f"qr_patient-*-{journey_id}.png"))
-    candidates += glob.glob(
-        os.path.join(directory, f"qr_patient-{call_number}-*.png"))
-    legacy = os.path.join(directory, f"qr_patient-{call_number}.png")
-    if os.path.exists(legacy):
-        candidates.append(legacy)
-    if candidates:
-        return os.path.basename(max(candidates, key=os.path.getmtime))
-    return f"qr_patient-{call_number}.png"
-
-
 @patient_bp.route('/patient/conclusion_page/<int:patient_id>')
-def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, print_job_id=None, journey_id=None):
+def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, print_job_id=None):
     # ``print_ticket`` doit avoir une valeur par defaut : la fonction sert a la
     # fois d'aide interne (appelee avec tous ses arguments depuis
     # patients_submit et patient_scan_already_validate) ET de vue pour cette
@@ -569,7 +544,11 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
     app.logger.debug('CONFIG QRCODE CONCLUSION: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
     patient = Patient.query.get(patient_id)
     call_number = patient.call_number if patient else ""
-    image_name_qr = _qr_image_for_conclusion(call_number, journey_id) if call_number else ""
+    # QR régénéré à la volée pour le patient RÉEL (et non retrouvé sur disque
+    # : le numéro « futur » du QR de validation peut différer du numéro
+    # attribué, et le chemin d'impression directe ne générait aucun fichier).
+    qr_data_uri = (qr_code_data_uri(patient)
+                   if patient and app.config["PAGE_PATIENT_QRCODE_DISPLAY"] else None)
     page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
     page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
 
@@ -595,7 +574,7 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
     return render_template('patient/conclusion_page.html',
                         print_ui_labels=print_ui_labels,
                         call_number=call_number,
-                        image_name_qr=image_name_qr,
+                        qr_data_uri=qr_data_uri,
                         page_patient_confirmation_message=page_patient_confirmation_message,
                         page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
                         page_patient_display_qrcode=app.config["PAGE_PATIENT_QRCODE_DISPLAY"],
@@ -629,7 +608,7 @@ def phone_patient(language_code, patient_id, activity_id):
     else:
         phone_title = app.config['PHONE_TITLE']
 
-    # UUID du parcours QR (query string posée par create_qr_code). Propagé au
+    # UUID du parcours QR (query string posée par qr_code_data_uri). Propagé au
     # ping via le gabarit pour que update_scan_phone cible la salle de la
     # borne affichant CE QR.
     journey_id = request.args.get('journey', '')

@@ -13,14 +13,16 @@ que dans cette salle, avec le numéro RÉELLEMENT attribué à l'inscription.
 
 Verrouillé ici :
 
-1. ``create_qr_code`` encode le journey dans l'URL et dans le nom de fichier
-   (deux bornes au même numéro « futur » ne s'écrasent plus leur QR) ;
+1. ``qr_code_data_uri`` encode le journey dans l'URL et renvoie le PNG en
+   ``data:`` URI — aucun fichier n'est écrit : un call_number réutilisé
+   (autre jour, autre borne) ne peut plus servir un QR périmé depuis le
+   cache navigateur ;
 2. ``join_scan_journey`` fait rejoindre la salle, seule destinataire de
    l'évènement ; les salles précédentes sont quittées ;
 3. ``/patient/phone/ping`` émet dans la salle du parcours — et ne diffuse plus
    à toutes les bornes quand le journey est absent (QR antérieur) ;
-4. ``_qr_image_for_conclusion`` retrouve le fichier par journey même quand le
-   numéro réel diffère du numéro « futur ».
+4. la page de conclusion génère son QR à la volée pour le patient RÉEL —
+   y compris en impression directe, où aucun QR de validation n'existait.
 """
 
 import os
@@ -78,6 +80,12 @@ def application(tmp_path):
         PAGE_PATIENT_INTERFACE_DONE_BACK="retour",
         PAGE_PATIENT_INTERFACE_DONE_PRINT="imprimer",
         PAGE_PATIENT_INTERFACE_DONE_EXTEND="prolonger",
+        # Clés lues par format_ticket_text (chemin print_and_validate).
+        TICKET_DISPLAY_SPECIFIC_MESSAGE=False,
+        TICKET_HEADER_PRINTER="",
+        TICKET_MESSAGE_PRINTER="{N}",
+        TICKET_FOOTER_PRINTER="",
+        PRINTER_WIDTH=48,
     )
     db.init_app(app)
     from routes.patient import patient_bp
@@ -103,19 +111,20 @@ def _activite(application, letter="O"):
         return activite.id
 
 
-# --- 1. create_qr_code --------------------------------------------------------
+# --- 1. qr_code_data_uri ------------------------------------------------------
 
 def test_qr_code_encode_le_journey(application, monkeypatch):
-    """L'URL scannée porte ?journey=<uuid> et le fichier est unique par
-    parcours (deux bornes au même numéro « futur » n'écrivent plus le même
-    fichier)."""
+    """L'URL scannée porte ?journey=<uuid> ; l'image est une data URI —
+    aucun fichier n'est écrit, donc aucun risque de cache périmé ou de
+    collision de nom entre parcours au même numéro."""
     from python import engine
 
     captured = {}
 
     class _Img:
-        def save(self, path):
-            captured["path"] = path
+        def save(self, buf, format=None):
+            captured["format"] = format
+            buf.write(b'PNGDATA')
 
     def _make(data):
         captured["data"] = data
@@ -128,22 +137,23 @@ def test_qr_code_encode_le_journey(application, monkeypatch):
     with application.test_request_context("/patient"):
         from flask import session
         session["language_code"] = "fr"
-        filename = engine.create_qr_code(patient, journey_id="j-123")
+        uri = engine.qr_code_data_uri(patient, journey_id="j-123")
 
     assert captured["data"] == "http://borne.test//patient/phone/fr/A1/3?journey=j-123"
-    assert filename == "qr_patient-A1-j-123.png"
+    assert captured["format"] == "PNG"
+    assert uri == "data:image/png;base64,UE5HREFUQQ=="
 
 
 def test_qr_code_sans_journey_reste_compatible(application, monkeypatch):
-    """Sans journey (ex. QR de test admin), l'URL et le nom de fichier sont
-    inchangés — compat ascendante."""
+    """Sans journey (ex. QR de test admin, QR de conclusion), l'URL ne porte
+    pas de paramètre — compat ascendante du contenu encodé."""
     from python import engine
 
     captured = {}
 
     class _Img:
-        def save(self, path):
-            pass
+        def save(self, buf, format=None):
+            buf.write(b'PNGDATA')
 
     def _make(data):
         captured["data"] = data
@@ -156,10 +166,10 @@ def test_qr_code_sans_journey_reste_compatible(application, monkeypatch):
     with application.test_request_context("/patient"):
         from flask import session
         session["language_code"] = "fr"
-        filename = engine.create_qr_code(patient)
+        uri = engine.qr_code_data_uri(patient)
 
     assert captured["data"] == "http://borne.test//patient/phone/fr/A1/3"
-    assert filename == "qr_patient-A1.png"
+    assert uri.startswith("data:image/png;base64,")
 
 
 # --- 2. La salle scan_<journey> sur /socket_patient ---------------------------
@@ -298,33 +308,58 @@ def test_ping_sans_journey_ne_diffuse_pas(client, application, monkeypatch):
         assert Patient.query.filter_by(activity_id=activite_id).count() == 1
 
 
-# --- 4. _qr_image_for_conclusion ----------------------------------------------
+# --- 4. QR de conclusion : généré à la volée pour le patient réel -------------
 
-def test_qr_image_conclusion_retrouve_par_journey(application):
-    """Le numéro réel (A6) diffère du « futur » (A5) : la recherche par
-    suffixe journey retrouve quand même le bon fichier."""
-    from routes.patient import _qr_image_for_conclusion
+def test_conclusion_sert_une_data_uri_pas_un_fichier(client, application):
+    """Le QR de conclusion est embarqué en data URI : plus de fichier
+    ``qr_patient-<numéro>.png`` que le cache navigateur pourrait servir
+    périmé (autre jour, autre langue ou activité sous la même URL)."""
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
 
-    qr_dir = os.path.join(application.static_folder, "qr_patients")
-    os.makedirs(qr_dir)
-    open(os.path.join(qr_dir, "qr_patient-A5-j1.png"), "w").close()
+    reponse = client.get(f"/patient/conclusion_page/{nouveau_id}")
 
+    html = reponse.get_data(as_text=True)
+    assert reponse.status_code == 200
+    assert "data:image/png;base64," in html
+    assert "qr_patients/" not in html
+
+
+def test_conclusion_qr_encode_le_patient_reel(client, application, monkeypatch):
+    """Le QR de conclusion encode le numéro/activité du patient réellement
+    inscrit (et non un fichier lié au numéro « futur » du parcours)."""
+    from python import engine
+
+    captured = []
+
+    class _Img:
+        def save(self, buf, format=None):
+            buf.write(b'PNGDATA')
+
+    monkeypatch.setattr(engine.qrcode, "make", lambda data: captured.append(data) or _Img())
+
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
     with application.app_context():
-        assert _qr_image_for_conclusion("A6", "j1") == "qr_patient-A5-j1.png"
+        activite_id = Patient.query.get(nouveau_id).activity_id
+
+    client.get(f"/patient/conclusion_page/{nouveau_id}")
+
+    assert captured == [f"http://borne.test//patient/phone/fr/A5/{activite_id}"]
 
 
-def test_qr_image_conclusion_repli_par_numero(application):
-    """Sans journey (accès direct à l'URL) : dernier fichier du numéro, puis
-    nom historique si rien n'existe."""
-    from routes.patient import _qr_image_for_conclusion
+def test_conclusion_impression_directe_a_un_qr(client, application):
+    """Impression directe : la conclusion a bien un QR alors que ce chemin
+    ne passait pas par la page de validation (aucun QR n'était généré)."""
+    activite_id = _activite(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
 
-    qr_dir = os.path.join(application.static_folder, "qr_patients")
-    os.makedirs(qr_dir)
-    open(os.path.join(qr_dir, "qr_patient-A5-jx.png"), "w").close()
+    reponse = client.post("/patient/print_and_validate",
+                          data={"activity_id": str(activite_id)},
+                          headers={"HX-Request": "true"})
 
-    with application.app_context():
-        assert _qr_image_for_conclusion("A5", None) == "qr_patient-A5-jx.png"
-        assert _qr_image_for_conclusion("B9", None) == "qr_patient-B9.png"
+    html = reponse.get_data(as_text=True)
+    assert reponse.status_code == 200
+    assert "data:image/png;base64," in html
 
 
 # --- 5. Conclusion : identité par patient_id, pas par call_number -------------

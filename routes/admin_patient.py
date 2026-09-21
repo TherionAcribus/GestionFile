@@ -7,7 +7,7 @@ from models import (
     record_printer_status, get_printer_infos, get_printer_error,
 )
 from diagnostics import collect_patient_page_alerts
-from python.engine import get_futur_patient, create_qr_code
+from python.engine import get_futur_patient, qr_code_data_uri
 from utils import format_ticket_text
 from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
@@ -570,7 +570,7 @@ def admin_patient_qr_code_modal():
     
     activity = Activity.query.get(activity_id)
     patient = get_futur_patient(call_number, activity)
-    qr_code = create_qr_code(patient)
+    qr_code = qr_code_data_uri(patient)
  
     # retour en français
     session["language_code"] = "fr"

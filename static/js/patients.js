@@ -77,8 +77,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
         if (patientId || callNumber) {
             scanDiv.setAttribute('hx-vals', JSON.stringify({
                 patient_id: patientId || '',
-                patient_call_number: callNumber || '',
-                journey: scanDiv.getAttribute('data-journey-id') || ''
+                patient_call_number: callNumber || ''
             }));
         }
         htmx.trigger('#div_for_scan', 'qrcode_is_scanned');

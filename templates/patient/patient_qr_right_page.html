@@ -11,7 +11,7 @@
         
         {% if page_patient_display_qrcode %}
         <div id="div_qr_code" class="div_qr_code">
-            <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
+            <img src="{{ qr_data_uri }}" alt="QR Code">
         </div>
         {% endif %}
 
@@ -31,7 +31,7 @@
                             div_validation_one_button
                         {% endif %}"
                 hx-post="/patient/print_and_validate"
-                hx-vals='{"activity_id": "{{ activity.id }}", "journey": "{{ journey_id }}"}'
+                hx-vals='{"activity_id": "{{ activity.id }}"}'
                 hx-target="#div_buttons_parents"
                 hx-sync="this:drop"
             >
@@ -47,7 +47,7 @@
                 <div class="div_validation_one_button"
                     hx-post="patient/scan_and_validate"
                     hx-target="#div_buttons_parents"
-                    hx-vals='{"activity_id": "{{ activity.id }}", "journey": "{{ journey_id }}"}'
+                    hx-vals='{"activity_id": "{{ activity.id }}"}'
                     hx-sync="this:drop">
                     <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
                 </div>
@@ -69,7 +69,7 @@
                 hx-trigger="qrcode_is_scanned"
                 hx-post="patient/scan_already_validate"
                 hx-target="#div_buttons_parents"
-                hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}", "journey": "{{ journey_id }}"}'>
+                hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}"}'>
             </div>
     
             <div class="{% if page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}

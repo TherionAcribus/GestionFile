@@ -1,4 +1,5 @@
-import os
+import base64
+import io
 import json
 import qrcode
 from flask import Blueprint, url_for, request, session, current_app as app, jsonify
@@ -667,8 +668,16 @@ def create_google_tts_sound(next_patient, text, language_code):
     )
 
 
-def create_qr_code(patient, journey_id=None):
-    app.logger.debug("create_qr_code")
+def qr_code_data_uri(patient, journey_id=None):
+    """QR code de la borne rendu en ``data:image/png;base64,...``.
+
+    Le PNG est généré en mémoire et embarqué dans la page : aucun fichier
+    n'est écrit dans ``static/qr_patients``, donc pas de collision de nom
+    (un call_number est réutilisé d'un jour à l'autre), pas de QR périmé
+    servi depuis le cache navigateur et pas de dossier à nettoyer. La CSP
+    autorise déjà ``img-src data:``.
+    """
+    app.logger.debug("qr_code_data_uri")
     app.logger.debug('%s %s %s %s', patient, patient.id, patient.call_number, patient.activity)
 
     language_code = session.get('language_code', "fr")
@@ -694,30 +703,17 @@ def create_qr_code(patient, journey_id=None):
                 template = template + "\n" + patient.activity.specific_message
         data = replace_balise_phone(template, patient)
 
-    # Générer le QR Code
+    # Générer le QR Code en mémoire. qrcode utilise Pillow si présent
+    # (save(buffer, format=...)), sinon PyPNGImage (save(buffer) — le PNG
+    # est son seul format) : on tolère les deux signatures.
     img = qrcode.make(data)
-    
-    # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
-    directory = os.path.join(app.static_folder, 'qr_patients')
-    # Le journey_id entre dans le nom de fichier : deux bornes affichant le
-    # même numéro « futur » génèrent sinon le même fichier, et la dernière
-    # écriture écraserait le QR de l'autre (contenu différent depuis que
-    # l'URL embarque le parcours). patient_conclusion_page le retrouve par
-    # suffixe (*-<journey>.png).
-    if journey_id:
-        filename = f'qr_patient-{patient.call_number}-{journey_id}.png'
-    else:
-        filename = f'qr_patient-{patient.call_number}.png'
-    img_path = os.path.join(directory, filename)
-
-    # Assurer que le répertoire existe
-    if not os.path.exists(directory):
-        os.makedirs(directory)  # Créer le dossier s'il n'existe pas
-
-    # Enregistrement de l'image dans le dossier static
-    img.save(img_path)
-
-    return filename
+    buffer = io.BytesIO()
+    try:
+        img.save(buffer, format='PNG')
+    except TypeError:
+        img.save(buffer)
+    encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
+    return f"data:image/png;base64,{encoded}"
 
 
 def set_server_url(app, request):

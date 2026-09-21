@@ -16,9 +16,9 @@
     {% endif %}
     >
 
-        {% if page_patient_display_qrcode %}
+        {% if qr_data_uri %}
         <div id="div_qr_code" class="div_qr_code">
-            <img src="{{ url_for('static', filename='qr_patients/' ~ image_name_qr) }}" alt="QR Code">
+            <img src="{{ qr_data_uri }}" alt="QR Code">
         </div>
         {% endif %}
 
