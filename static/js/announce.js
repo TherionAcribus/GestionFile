@@ -450,19 +450,11 @@ function initializeAudio() {
 }
 
 
-if (Notification.permission !== 'granted'){
-    requestPermissions();
-}
-
-function requestPermissions() {
-            Notification.requestPermission().then(permission => {
-                if (permission === 'granted') {
-                    alert('Notifications activées!');
-                } else {
-                    alert('Notifications refusées. Le son ne fonctionnera pas sans cette autorisation.');
-                }
-            });
-        }
+// Pas de demande de permission Notification : aucune notification système
+// n'est créée par cet écran, la permission est sans rapport avec la lecture
+// audio (déverrouillée par le clic « initialiser l'audio »), le message
+// d'alerte était trompeur — et l'appel levait un ReferenceError sur les
+// navigateurs sans API Notification, interrompant le reste du script.
 
 
 const announce_text_up_patients = document.getElementById('announce_text_up_patients').textContent;

@@ -118,6 +118,20 @@ def test_patient_conclusion_no_console_log():
     )
 
 
+def test_announce_js_sans_permission_notification():
+    """announce.js ne doit plus demander la permission Web Notification.
+
+    Aucune notification système n'est créée par l'écran ; la permission est
+    sans rapport avec la lecture audio, le message d'alerte était trompeur,
+    et ``Notification.permission`` levait un ReferenceError sur les
+    navigateurs sans cette API — interrompant le reste du script.
+    """
+    source = _read("static/js/announce.js")
+    code = re.sub(r"//[^\n]*", "", source)  # les commentaires peuvent la citer
+    assert "Notification" not in code
+    assert "requestPermission" not in code
+
+
 # ---------------------------------------------------------------------------
 # 2. Handlers inline retirés de macros.html
 # ---------------------------------------------------------------------------
