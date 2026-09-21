@@ -546,6 +546,12 @@ remove_text_down();
 document.addEventListener('htmx:afterSettle', function () {
     var conteneur = document.querySelector('.swiper[data-swiper-delay]');
     if (!conteneur) { return; }
+    if (typeof Swiper === 'undefined') {
+        // Librairie non chargée : la galerie reste affichée statique plutôt que
+        // de lever une exception à chaque injection HTMX du fragment.
+        console.warn('Swiper indisponible : carrousel d\'images non initialisé.');
+        return;
+    }
 
     var delai = Number(conteneur.dataset.swiperDelay || 0) * 1000;
     var effet = conteneur.dataset.swiperEffect || 'slide';

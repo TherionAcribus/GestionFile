@@ -104,6 +104,10 @@ def test_extension_ws_htmx_non_chargee():
     ("templates/counter/wrong_counter.html", "js/libs/htmx.min.js"),
     ("templates/announce/announce.html", "js/libs/htmx.min.js"),
     ("templates/announce/announce.html", "js/libs/socket.io.min.js"),
+    # Carrousel de la galerie : chargé depuis jsdelivr, la CSP
+    # (script-src/style-src 'self') le bloquait et `new Swiper(...)` échouait.
+    ("templates/announce/announce.html", "js/libs/swiper-bundle.min.js"),
+    ("templates/announce/announce.html", "css/libs/swiper-bundle.min.css"),
     ("templates/patient/phone.html", "js/libs/htmx.min.js"),
     ("templates/patient/phone.html", "js/libs/socket.io.min.js"),
 ])
@@ -122,3 +126,22 @@ def test_htmx_local_est_bien_fige():
     assert re.search(r'version:"\d+\.\d+\.\d+"', contenu), (
         "impossible de lire la version de la copie locale d'htmx"
     )
+
+
+def test_swiper_ne_depend_plus_d_un_cdn():
+    """Régression CSP : announce.html chargeait Swiper depuis jsdelivr alors
+    que la politique n'autorise que 'self' — le navigateur bloquait la
+    bibliothèque et `new Swiper(...)` plantait à chaque injection HTMX."""
+    contenu = _lire("templates/announce/announce.html")
+    for hote in ("cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"):
+        assert hote not in contenu, f"announce.html dépend encore de {hote}"
+
+
+def test_swiper_local_est_bien_fige():
+    """Les copies locales portent la version 11.2.10 (celle qu'annonçait l'URL
+    CDN précédente — pas de changement de version au passage)."""
+    for fichier in ("static/js/libs/swiper-bundle.min.js",
+                    "static/css/libs/swiper-bundle.min.css"):
+        assert "Swiper 11.2.10" in _lire(fichier), (
+            f"version de Swiper introuvable dans {fichier}"
+        )

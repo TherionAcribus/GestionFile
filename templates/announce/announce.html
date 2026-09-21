@@ -13,11 +13,10 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">
         {# Les surcharges personnalisées sont chargées après #}
         <link rel="stylesheet" href="{{ get_css_url(mode='announce') }}">
-        <!-- Swiper-->
-        <link
-        rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/swiper@11.2.10/swiper-bundle.min.css"/>
-        <script src="https://cdn.jsdelivr.net/npm/swiper@11.2.10/swiper-bundle.min.js"></script>
+        <!-- Swiper — servi localement : la CSP (script-src/style-src 'self')
+             bloque le CDN, et l'écran doit fonctionner sans Internet. -->
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/swiper-bundle.min.css') }}">
+        <script src="{{ url_for('static', filename='js/libs/swiper-bundle.min.js') }}"></script>
         <!-- Anime JS -->   
         <script src="{{ url_for('static', filename='js/anime-master/anime.min.js') }}"></script>
 
