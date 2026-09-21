@@ -1,3 +1,5 @@
+import glob
+import os
 import uuid
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
@@ -209,7 +211,12 @@ def left_page_validate_patient(activity):
     #new_patient = add_patient(call_number, activity)
     futur_patient = get_futur_patient(call_number, activity)
     app.logger.debug('futur_patient %s', futur_patient.id)
-    image_name_qr = create_qr_code(futur_patient)
+    # Chaque parcours QR est identifié par un UUID : encodé dans l'URL du QR,
+    # rendu dans le fragment (data-journey-id) et utilisé comme salle
+    # Socket.IO dédiée — seule la borne affichant CE QR reçoit alors
+    # update_scan_phone (plusieurs bornes/parcours simultanés).
+    journey_id = str(uuid.uuid4())
+    image_name_qr = create_qr_code(futur_patient, journey_id=journey_id)
     text = f"{activity.name}"
     # NB : pas d'émission ici. À ce stade le patient n'est que « futur »
     # (get_futur_patient ne l'enregistre PAS en base) : la file n'a pas changé.
@@ -234,6 +241,7 @@ def left_page_validate_patient(activity):
                             page_patient_display_qrcode=app.config["PAGE_PATIENT_QRCODE_DISPLAY"],
                             page_patient_display_button_scan=app.config["PAGE_PATIENT_DISPLAY_BUTTON_SCAN"],
                             page_patient_display_scan_explanation=app.config["PAGE_PATIENT_DISPLAY_SCAN_EXPLANATION"],
+                            journey_id=journey_id,
                             page_patient_validation_message=page_patient_validation_message,
                             page_patient_button_print_ticket_display_picture=app.config["PAGE_PATIENT_BUTTON_PRINT_TICKET_DISPLAY_PICTURE"],
                             page_patient_button_print_ticket_picture=app.config["PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE"],
@@ -285,6 +293,9 @@ def patient_return_validation_page_and_print_data(print_ticket):
     # Récupération et traitement des données comme avant
     activity_id = request.form.get('activity_id')
     activity = Activity.query.get(activity_id)
+    # Parcours QR d'origine : sert à retrouver l'image du QR pour la page de
+    # conclusion (le numéro réellement attribué peut différer du « futur »).
+    journey_id = request.form.get('journey')
 
     if print_ticket:
         # Inscription en attente : elle sera activée à la confirmation d'impression.
@@ -311,7 +322,8 @@ def patient_return_validation_page_and_print_data(print_ticket):
         html_content = patient_conclusion_page(new_patient.call_number,
                                                 print_ticket=print_ticket,
                                                 print_data=print_data,
-                                                print_job_id=print_job_id)
+                                                print_job_id=print_job_id,
+                                                journey_id=journey_id)
 
         # Inclure les données d'impression dans un en-tête HX-Trigger si nécessaire (voir plus bas)
         response = make_response(html_content)
@@ -490,8 +502,9 @@ def patient_validate_scan(activity_id):
 def patient_scan_already_validate():
     """ Fct appelée une fois la scan fait pour retourner la page de confirmation sur l'interface patient"""
     patient_call_number = request.form.get('patient_call_number')
+    journey_id = request.form.get('journey')
     app.logger.debug('already scanned %s', patient_call_number)
-    return patient_conclusion_page(patient_call_number, print_ticket=False, print_data=False)
+    return patient_conclusion_page(patient_call_number, print_ticket=False, print_data=False, journey_id=journey_id)
 
 
 @patient_bp.route('/patient/cancel_patient')
@@ -500,8 +513,31 @@ def cancel_patient():
     return patient_right_page()
     
 
+def _qr_image_for_conclusion(call_number, journey_id=None):
+    """ Retrouve le fichier QR généré pour ce parcours.
+
+    Le fichier embarque le numéro « futur » calculé à l'affichage du QR ET le
+    journey_id : quand le numéro réellement attribué à l'inscription diffère
+    (deux parcours simultanés), la recherche par suffixe journey reste fiable.
+    Sans journey (accès direct à l'URL / repli non-HTMX), on retombe sur le
+    fichier le plus récent de ce numéro — comportement historique."""
+    directory = os.path.join(app.static_folder, 'qr_patients')
+    candidates = []
+    if journey_id:
+        candidates += glob.glob(
+            os.path.join(directory, f"qr_patient-*-{journey_id}.png"))
+    candidates += glob.glob(
+        os.path.join(directory, f"qr_patient-{call_number}-*.png"))
+    legacy = os.path.join(directory, f"qr_patient-{call_number}.png")
+    if os.path.exists(legacy):
+        candidates.append(legacy)
+    if candidates:
+        return os.path.basename(max(candidates, key=os.path.getmtime))
+    return f"qr_patient-{call_number}.png"
+
+
 @patient_bp.route('/patient/conclusion_page/<call_number>')
-def patient_conclusion_page(call_number, print_ticket=False, print_data=None, print_job_id=None):
+def patient_conclusion_page(call_number, print_ticket=False, print_data=None, print_job_id=None, journey_id=None):
     # ``print_ticket`` doit avoir une valeur par defaut : la fonction sert a la
     # fois d'aide interne (appelee avec tous ses arguments depuis
     # patients_submit et patient_scan_already_validate) ET de vue pour cette
@@ -511,7 +547,7 @@ def patient_conclusion_page(call_number, print_ticket=False, print_data=None, pr
     # d'en-tete HX-Request. False correspond au mode « pas d'impression en
     # cours », comme pour l'arrivee par scan.
     app.logger.debug('CONFIG QRCODE CONCLUSION: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
-    image_name_qr = f"qr_patient-{call_number}.png" 
+    image_name_qr = _qr_image_for_conclusion(call_number, journey_id)
 
     patient = Patient.query.filter_by(call_number=call_number).first()
     page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
@@ -573,12 +609,18 @@ def phone_patient(language_code, patient_id, activity_id):
     else:
         phone_title = app.config['PHONE_TITLE']
 
+    # UUID du parcours QR (query string posée par create_qr_code). Propagé au
+    # ping via le gabarit pour que update_scan_phone cible la salle de la
+    # borne affichant CE QR.
+    journey_id = request.args.get('journey', '')
+
     if request.cookies.get('patient_call_number') != patient_id:
         if request.cookies.get('patient_id') != patient_id:
-            response = make_response(render_template('/patient/phone.html', 
-                                                    patient_id=patient_id, 
+            response = make_response(render_template('/patient/phone.html',
+                                                    patient_id=patient_id,
                                                     activity_id=activity_id,
                                                     phone_title=phone_title,
+                                                    journey_id=journey_id,
                                                     language_code=language_code))
             response.set_cookie('patient_id', "", expires=0)
             response.set_cookie('patient_call_number', "", expires=0)
@@ -586,8 +628,9 @@ def phone_patient(language_code, patient_id, activity_id):
             return response
     return render_template('/patient/phone.html',
                             phone_title=phone_title,
-                            patient_id=patient_id, 
+                            patient_id=patient_id,
                             activity_id=activity_id,
+                            journey_id=journey_id,
                             language_code=language_code)
 
 
@@ -626,6 +669,7 @@ def phone_patient_ping():
     """
     activity_id = request.form.get('activity_id')
     language_code = request.form.get('language_code')
+    journey_id = request.form.get('journey')
     # si déja inscrit — le cookie patient_id seul est falsifiable : exiger le
     # jeton signé. Sans lui (ou s'il est périmé), on retombe sur une nouvelle
     # inscription, comme pour un client sans cookie.
@@ -636,7 +680,17 @@ def phone_patient_ping():
     # si pas encore inscrit
     else:
         patient = patient_validate_scan(activity_id)
-        communikation("patient", event="update_scan_phone")
+        # Émission ciblée dans la salle du parcours : seule la borne affichant
+        # CE QR reçoit update_scan_phone, avec le numéro RÉELLEMENT attribué
+        # (le numéro « futur » affiché peut différer si deux parcours se
+        # concluent en même temps). Sans journey (QR généré avant cette
+        # version) on ne diffuse plus à toutes les bornes : une confirmation
+        # ne doit jamais atterrir sur le mauvais écran.
+        if journey_id:
+            from sockets import scan_journey_room
+            communikation("patient", event="update_scan_phone",
+                          data={"call_number": patient.call_number},
+                          room=scan_journey_room(journey_id))
 
     phone_lines = []
 

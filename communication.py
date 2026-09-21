@@ -6,7 +6,7 @@ from models import bump_queue_revision
 from extensions import socketio
 
 
-def communikation(stream, data=None, flag=None, event="update", client_id=None):
+def communikation(stream, data=None, flag=None, event="update", client_id=None, room=None):
     """ Effectue la communication temps réel avec les clients.
 
     Passe toujours par SocketIO. Si l'app est configurée avec un message_queue
@@ -71,10 +71,10 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None):
         except Exception:
             logging.exception("Échec du déclenchement du ducking Spotify")
     else:
-        communication_websocket(f"socket_{stream}", data, flag, event=event)
+        communication_websocket(f"socket_{stream}", data, flag, event=event, room=room)
 
 
-def communication_websocket(stream, data=None, flag=None, client_id=None, event="update", revision=None):
+def communication_websocket(stream, data=None, flag=None, client_id=None, event="update", revision=None, room=None):
     # Auparavant, en contexte de requete HTTP, ``request.args`` pouvait
     # ecraser ``stream`` et ``data`` (``?stream=...&message=...``) : n'importe
     # quel appelant (authentifie ou non selon la route declenchante) pouvait
@@ -86,7 +86,7 @@ def communication_websocket(stream, data=None, flag=None, client_id=None, event=
 
     try:
         namespace = f'/{stream}'
-        socketio.emit(event, {"flag": flag, 'data': message, 'revision': revision}, namespace=namespace)
+        socketio.emit(event, {"flag": flag, 'data': message, 'revision': revision}, namespace=namespace, room=room)
         logging.info(f"Message SocketIO envoyé: {namespace}")
         return "Message sent!"
     except Exception as e:

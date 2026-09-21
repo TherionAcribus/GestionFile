@@ -82,8 +82,16 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `refresh` | `null` | Recharge la page borne |
 | `refresh_title` | `null` | Recharge le titre |
 | `refresh_buttons` | `null` | Recharge les boutons d'activité |
-| `update_scan_phone` | `null` | Signale un scan QR téléphone |
+| `update_scan_phone` | `{call_number: string}` — salle `scan_<journey>` | Signale le scan du QR du parcours affiché par cette borne |
 | `print_ticket` | `string` — ESC/POS **base64** | Impression (ticket de test admin) |
+
+Chaque parcours QR est identifié par un UUID (`journey`) généré à l'affichage
+de la page de validation, encodé dans l'URL du QR (`?journey=<uuid>`). La
+borne émet `join_scan_journey {journey}` pour rejoindre la salle
+`scan_<journey>` quand le fragment QR apparaît, `leave_scan_journey` quand il
+disparaît ; `/patient/phone/ping` n'émet `update_scan_phone` que dans cette
+salle — avec plusieurs bornes, une confirmation ne peut plus arriver sur le
+mauvais écran. Sans `journey` (QR antérieur), aucune diffusion n'est faite.
 
 ### `/socket_admin`
 

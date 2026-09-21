@@ -1,15 +1,45 @@
+// Parcours QR courant (data-journey-id du fragment affiché, null hors page
+// QR). Chaque parcours a une salle Socket.IO dédiée (scan_<uuid>) : la borne
+// la rejoint quand le QR apparaît, la quitte quand il disparaît, et
+// update_scan_phone n'arrive alors qu'à la borne affichant CE QR — plus de
+// confirmation affichée pour le scan d'une autre borne.
+var _scanJourney = null;
+
+function syncScanJourney() {
+    var el = document.getElementById('div_for_scan');
+    var journey = el ? el.getAttribute('data-journey-id') : null;
+    if (journey === _scanJourney) { return; }
+    var previous = _scanJourney;
+    _scanJourney = journey;
+    var s = window.__patientSocket;
+    if (!s || !s.connected) { return; }
+    if (previous) { s.emit('leave_scan_journey', { journey: previous }); }
+    if (journey) { s.emit('join_scan_journey', { journey: journey }); }
+}
+
+function rejoinScanJourney() {
+    var s = window.__patientSocket;
+    if (s && s.connected && _scanJourney) {
+        s.emit('join_scan_journey', { journey: _scanJourney });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
     // Socket.IO expects an http(s) URL. Use same-origin host/port for reverse proxies (Coolify).
     var socketProtocol = protocol === 'https:' ? 'https://' : 'http://';
     var domain = window.location.host;
     var baseUrl = socketProtocol + domain;
-    
+
     // Connexion au namespace général
     var patientSocket = io.connect(baseUrl + '/socket_patient');
+    window.__patientSocket = patientSocket;
 
     patientSocket.on('connect', function() {
         console.log('Patient WebSocket connected');
+        // Les salles Socket.IO ne survivent pas à une déconnexion : si un QR
+        // est affiché à la (re)connexion, on rejoint à nouveau sa salle.
+        rejoinScanJourney();
     });
 
     patientSocket.on('disconnect', function() {
@@ -33,6 +63,18 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     patientSocket.on('update_scan_phone', function(msg) {
         console.log("Update Patient:", msg);
+        var scanDiv = document.getElementById('div_for_scan');
+        if (!scanDiv) { return; }
+        // Le payload porte le numéro RÉELLEMENT attribué à l'inscription : il
+        // peut différer du numéro « futur » affiché quand deux parcours se
+        // concluent en même temps. On l'injecte dans hx-vals avant le POST.
+        var callNumber = msg && msg.data && msg.data.call_number;
+        if (callNumber) {
+            scanDiv.setAttribute('hx-vals', JSON.stringify({
+                patient_call_number: callNumber,
+                journey: scanDiv.getAttribute('data-journey-id') || ''
+            }));
+        }
         htmx.trigger('#div_for_scan', 'qrcode_is_scanned');
     });
 
@@ -360,6 +402,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Vérifier que la cible mise à jour est celle que nous attendons
         if (event.detail.target.id === 'div_buttons_parents') {
             console.log("div_buttons_parents a été mise à jour");
+
+            // Le fragment QR vient peut-être d'apparaître (ou de disparaître) :
+            // rejoint/quitte la salle Socket.IO du parcours affiché.
+            syncScanJourney();
 
             // Récupérer les données d'impression
             var printDataElement = document.getElementById('print_data');

@@ -31,7 +31,7 @@
                             div_validation_one_button
                         {% endif %}"
                 hx-post="/patient/print_and_validate"
-                hx-vals='{"activity_id": "{{ activity.id }}"}'
+                hx-vals='{"activity_id": "{{ activity.id }}", "journey": "{{ journey_id }}"}'
                 hx-target="#div_buttons_parents"
                 hx-sync="this:drop"
             >
@@ -47,7 +47,7 @@
                 <div class="div_validation_one_button"
                     hx-post="patient/scan_and_validate"
                     hx-target="#div_buttons_parents"
-                    hx-vals='{"activity_id": "{{ activity.id }}"}'
+                    hx-vals='{"activity_id": "{{ activity.id }}", "journey": "{{ journey_id }}"}'
                     hx-sync="this:drop">
                     <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
                 </div>
@@ -59,12 +59,17 @@
                 </div>
             {% endif %}
 
-            <div 
+            {# data-journey-id identifie ce parcours QR : la borne rejoint la
+               salle Socket.IO scan_<uuid> (patients.js) et le numéro réellement
+               attribué est injecté dans hx-vals à la réception de
+               update_scan_phone. #}
+            <div
                 id="div_for_scan"
+                data-journey-id="{{ journey_id }}"
                 hx-trigger="qrcode_is_scanned"
                 hx-post="patient/scan_already_validate"
                 hx-target="#div_buttons_parents"
-                hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}"}'>
+                hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}", "journey": "{{ journey_id }}"}'>
             </div>
     
             <div class="{% if page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}

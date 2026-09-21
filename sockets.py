@@ -12,9 +12,10 @@ téléphone patient). L'émission des messages, elle, reste dans
 """
 
 import logging
+import re
 
 from flask import current_app, request
-from flask_socketio import join_room, leave_room
+from flask_socketio import join_room, leave_room, rooms
 
 from auth_utils import is_authenticated_request, is_admin_session, is_kiosk_patient_session, is_socket_connection_authorized, check_patient_phone_token
 from extensions import socketio
@@ -136,6 +137,48 @@ def connect_patient():
 def disconnect_patient():
     forget_client(request)
     logger.info("Client deconnecte du namespace page patient")
+
+
+# --- Parcours QR de la borne -------------------------------------------------
+# Chaque QR affiché par une borne correspond à un « parcours » identifié par un
+# UUID (généré dans left_page_validate_patient et encodé dans l'URL du QR). La
+# borne rejoint la salle scan_<uuid> quand le fragment QR apparaît ; le ping du
+# téléphone n'émet update_scan_phone que dans cette salle. Avec plusieurs
+# bornes ou parcours simultanés, la confirmation ne peut plus arriver sur le
+# mauvais écran.
+
+SCAN_JOURNEY_PREFIX = "scan_"
+_SCAN_JOURNEY_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def scan_journey_room(journey_id):
+    """Nom de la salle /socket_patient dédiée à un parcours QR."""
+    return f"{SCAN_JOURNEY_PREFIX}{journey_id}"
+
+
+def _leave_scan_journeys():
+    """Quitte toutes les salles scan_* du client courant.
+
+    Une borne n'affiche qu'un parcours QR à la fois : on purge les salles
+    précédentes avant d'en rejoindre une nouvelle ou de quitter la page QR."""
+    for room in rooms():
+        if room.startswith(SCAN_JOURNEY_PREFIX):
+            leave_room(room)
+
+
+@socketio.on("join_scan_journey", namespace="/socket_patient")
+def join_scan_journey(data):
+    journey = (data or {}).get("journey")
+    if not journey or not _SCAN_JOURNEY_ID.match(str(journey)):
+        return
+    _leave_scan_journeys()
+    join_room(scan_journey_room(journey))
+    logger.debug("Borne dans la salle parcours %s", journey)
+
+
+@socketio.on("leave_scan_journey", namespace="/socket_patient")
+def leave_scan_journey(_data=None):
+    _leave_scan_journeys()
 
 
 @socketio.on("connect", namespace="/socket_admin")

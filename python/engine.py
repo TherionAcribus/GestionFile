@@ -667,7 +667,7 @@ def create_google_tts_sound(next_patient, text, language_code):
     )
 
 
-def create_qr_code(patient):
+def create_qr_code(patient, journey_id=None):
     app.logger.debug("create_qr_code")
     app.logger.debug('%s %s %s %s', patient, patient.id, patient.call_number, patient.activity)
 
@@ -677,6 +677,11 @@ def create_qr_code(patient):
         if "SERVER_URL" not in app.config:
             set_server_url(app, request)
         data = f"{app.config['SERVER_URL']}/patient/phone/{language_code}/{patient.call_number}/{patient.activity.id}"
+        # L'UUID du parcours voyage dans l'URL scannée : le téléphone le
+        # renvoie dans /patient/phone/ping, qui émet update_scan_phone dans la
+        # salle scan_<uuid> de la SEULE borne affichant ce QR.
+        if journey_id:
+            data += f"?journey={journey_id}"
     else :
         if session.get('language_code') != "fr":
             language_code = session.get('language_code')
@@ -694,7 +699,15 @@ def create_qr_code(patient):
     
     # Utiliser app.static_folder pour obtenir le chemin absolu vers le dossier static
     directory = os.path.join(app.static_folder, 'qr_patients')
-    filename = f'qr_patient-{patient.call_number}.png'
+    # Le journey_id entre dans le nom de fichier : deux bornes affichant le
+    # même numéro « futur » génèrent sinon le même fichier, et la dernière
+    # écriture écraserait le QR de l'autre (contenu différent depuis que
+    # l'URL embarque le parcours). patient_conclusion_page le retrouve par
+    # suffixe (*-<journey>.png).
+    if journey_id:
+        filename = f'qr_patient-{patient.call_number}-{journey_id}.png'
+    else:
+        filename = f'qr_patient-{patient.call_number}.png'
     img_path = os.path.join(directory, filename)
 
     # Assurer que le répertoire existe

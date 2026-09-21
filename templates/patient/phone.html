@@ -25,7 +25,7 @@
             hx-trigger="load"
             hx-post="/patient/phone/ping"
             hx-swap="outerHTML"
-            hx-vals='{"activity_id": "{{ activity_id }}", "language_code": "{{language_code}}"}'> 
+            hx-vals='{"activity_id": "{{ activity_id }}", "language_code": "{{language_code}}", "journey": "{{ journey_id }}"}'>
 
             <p>En attente de validation pour le numéro {{ patient_id }}</p>
             <p>Veuillez patienter....</p>
