@@ -33,7 +33,8 @@ from models import (
 
 @pytest.fixture
 def application():
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder=os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "templates"))
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
         # Pas de SQLALCHEMY_BINDS : l'extension db est partagée entre tous les
@@ -42,6 +43,8 @@ def application():
         # l'app ne définit pas ce bind.
         TESTING=True,
         PHARMACY_NAME="Pharmacie de test",
+        ALGO_IS_ACTIVATED=False,
+        ALGO_OVERTAKEN_LIMIT=3,
     )
     db.init_app(app)
     from routes.announce import announce_bp
@@ -140,6 +143,15 @@ def test_state_sans_ligne_configoption_en_base(client, application):
     assert reponse.status_code == 200
     appel = reponse.get_json()["calling"][0]
     assert "100" in appel["text"]
+
+
+def test_reponses_announce_sans_cache(client, application):
+    """L'écran reflète un état temps réel : ni le navigateur (bfcache) ni un
+    proxy ne doivent servir une file périmée — Cache-Control: no-store sur
+    toutes les routes du blueprint."""
+    for chemin in ("/announce/state", "/announce/patients_next"):
+        reponse = client.get(chemin)
+        assert reponse.headers.get("Cache-Control") == "no-store", chemin
 
 
 def test_init_display_inclut_counter_id(application):

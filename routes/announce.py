@@ -48,6 +48,16 @@ def _require_screen_access():
     return redirect(url_for('admin_security.login', next=request.url))
 
 
+@announce_bp.after_request
+def _no_store(response):
+    """Aucune mise en cache pour l'écran : /display et les fragments
+    /announce/* reflètent un état temps réel (appels, prochains patients) —
+    un cache navigateur (bfcache, bouton précédent) ou un proxy
+    intermédiaire pourrait sinon servir une file périmée."""
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @announce_bp.route('/display')
 def display():
     app.logger.debug("start display")
