@@ -93,6 +93,18 @@ disparaît ; `/patient/phone/ping` n'émet `update_scan_phone` que dans cette
 salle — avec plusieurs bornes, une confirmation ne peut plus arriver sur le
 mauvais écran. Sans `journey` (QR antérieur), aucune diffusion n'est faite.
 
+#### Acquittement d'impression (`POST /patient/confirm_print`)
+
+Après une impression physique, la borne DOIT obtenir une réponse du serveur
+— sinon le patient repart avec un ticket absent de la file. L'acquittement
+est donc persisté en `localStorage` **avant** le premier essai, puis retenté
+jusqu'à réponse définitive (2xx/4xx ; les 5xx et erreurs réseau restent en
+file). L'endpoint est idempotent : un appel répété renvoie l'état métier
+(`activated` / `activated_no_ticket` / `cancelled` / `ask` / `expired`), sans
+ré-exécuter — le statut interne brut (`standing`, `print_failed`) n'est pas
+exposé. La file est vidée au `connect` Socket.IO, périodiquement, et au
+chargement de la page.
+
 ### `/socket_admin`
 
 Tous ces évènements déclenchent un rafraîchissement HTMX ciblé ; `data` est

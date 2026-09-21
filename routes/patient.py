@@ -364,8 +364,11 @@ def confirm_print():
     'ask' -> laisser le patient décider ; 'keep' -> conserver ; 'cancel' ->
     annuler).
 
-    Idempotente : un second appel pour un patient déjà traité renvoie son état
-    courant sans rien ré-exécuter."""
+    Idempotente : un second appel pour un patient déjà traité renvoie l'état
+    MÉTIER correspondant ('activated' / 'cancelled'), pas le statut interne
+    brut. La borne retente l'acquittement tant qu'elle n'a pas de réponse :
+    si la première réponse a été perdue en vol, 'standing' signifierait « déjà
+    en file » mais serait lu comme un échec par le client."""
     data = request.get_json(silent=True) or request.form
     print_job_id = data.get('print_job_id')
     success = data.get('success')
@@ -385,9 +388,13 @@ def confirm_print():
         # Inconnu ou déjà purgé (inscription pending expirée).
         return jsonify({'status': 'expired'}), 410
 
-    # Déjà confirmé : idempotence (renvoi réseau, double appel...).
+    # Déjà confirmé : idempotence (renvoi réseau, réessai de la file locale
+    # de la borne...). Tout statut hors 'print_failed' signifie que le
+    # patient a rejoint (ou dépassé) la file.
     if patient.status != 'pending':
-        return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
+        if patient.status == 'print_failed':
+            return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
+        return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200
 
     if success:
         _activate_and_notify(patient)

@@ -40,6 +40,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // Les salles Socket.IO ne survivent pas à une déconnexion : si un QR
         // est affiché à la (re)connexion, on rejoint à nouveau sa salle.
         rejoinScanJourney();
+        // Le réseau est de retour : toute la file d'acquittements
+        // d'impression en attente peut être vidée.
+        drainPrintConfirmations();
     });
 
     patientSocket.on('disconnect', function() {
@@ -201,7 +204,133 @@ function postPrintConfirmation(printJobId, result) {
             code: result ? result.code : 'unknown',
             message: result ? result.message : ''
         })
-    }).then(function(r) { return r.json(); });
+    }).then(function(r) {
+        // 5xx = état serveur inconnu (crash possible avant/après écriture) :
+        // l'acquittement doit être retenté. 2xx/4xx = réponse définitive
+        // (confirm_print est idempotent), le job peut sortir de la file.
+        if (r.status >= 500) { throw new Error('confirm_print HTTP ' + r.status); }
+        return r.json();
+    });
+}
+
+// ---------------------------------------------------------------------------
+// File durable des acquittements d'impression.
+//
+// Après une impression physique réussie, /patient/confirm_print doit
+// IMPÉRATIVEMENT atteindre le serveur : sinon le patient repart avec un
+// ticket qui n'existe pas dans la file. L'acquittement est donc persisté en
+// localStorage AVANT le premier essai, puis retenté jusqu'à réponse
+// définitive — coupure réseau, rechargement de page ou redémarrage de la
+// borne : la vidange reprend dès que possible (connect Socket.IO, minuterie,
+// chargement de page). Repli mémoire si localStorage est indisponible.
+// ---------------------------------------------------------------------------
+
+var PRINT_QUEUE_KEY = 'gf_pending_print_confirmations';
+var PRINT_DRAIN_DELAY_MS = 5000;       // délai de réessai après un échec réseau
+var PRINT_DRAIN_PERIOD_MS = 15000;     // vidange périodique de sécurité
+var PRINT_CONFIRM_FALLBACK_MS = 45000; // échec affiché si toujours injoignable
+var _memPrintQueue = null;             // repli mémoire (localStorage HS)
+var _drainingPrintQueue = false;
+var _printDrainTimer = null;
+var _confirmFallbackTimer = null;
+
+function _readPrintQueue() {
+    if (_memPrintQueue !== null) { return _memPrintQueue; }
+    try {
+        return JSON.parse(localStorage.getItem(PRINT_QUEUE_KEY) || '[]');
+    } catch (e) {
+        _memPrintQueue = [];
+        return _memPrintQueue;
+    }
+}
+
+function _writePrintQueue(jobs) {
+    if (_memPrintQueue !== null) { _memPrintQueue = jobs; return; }
+    try {
+        localStorage.setItem(PRINT_QUEUE_KEY, JSON.stringify(jobs));
+    } catch (e) {
+        _memPrintQueue = jobs;
+    }
+}
+
+function enqueuePrintConfirmation(printJobId, result, printData) {
+    var jobs = _readPrintQueue().filter(function(j) { return j.printJobId !== printJobId; });
+    jobs.push({
+        printJobId: printJobId,
+        result: {
+            success: !!(result && result.success),
+            code: result ? result.code : 'unknown',
+            message: result ? result.message : ''
+        },
+        printData: printData || null,
+        queuedAt: Date.now()
+    });
+    _writePrintQueue(jobs);
+}
+
+function dequeuePrintConfirmation(printJobId) {
+    _writePrintQueue(_readPrintQueue().filter(function(j) { return j.printJobId !== printJobId; }));
+}
+
+// Job actuellement affiché à l'écran (la conclusion n'en présente qu'un).
+// Sert à ne mettre à jour l'UI que pour lui : les jobs plus anciens sont
+// acquittés silencieusement — c'est le but de la file.
+function displayedPrintJobId() {
+    var el = document.getElementById('print_data');
+    var id = el ? el.getAttribute('data-print-job-id') : null;
+    return id || null;
+}
+
+function clearConfirmFallbackTimer() {
+    if (_confirmFallbackTimer) {
+        clearTimeout(_confirmFallbackTimer);
+        _confirmFallbackTimer = null;
+    }
+}
+
+function schedulePrintDrain(delay) {
+    if (_printDrainTimer) { return; }
+    _printDrainTimer = setTimeout(function() {
+        _printDrainTimer = null;
+        drainPrintConfirmations();
+    }, delay || PRINT_DRAIN_DELAY_MS);
+}
+
+// Vidange séquentielle : un job ne sort de la file qu'après RÉPONSE du
+// serveur (succès ou échec applicatif — les deux sont définitifs). Un échec
+// réseau arrête la passe et reprogramme un essai : inutile de marteler un
+// serveur injoignable.
+function drainPrintConfirmations() {
+    if (_drainingPrintQueue) { return; }
+    var jobs = _readPrintQueue();
+    if (!jobs.length) { return; }
+    _drainingPrintQueue = true;
+
+    var step = function(index) {
+        if (index >= jobs.length) {
+            _drainingPrintQueue = false;
+            // Un job enfilé pendant la passe n'est pas dans l'instantané :
+            // on relance si la file n'est pas vide.
+            if (_readPrintQueue().length) { schedulePrintDrain(0); }
+            return;
+        }
+        var job = jobs[index];
+        postPrintConfirmation(job.printJobId, job.result)
+            .then(function(data) {
+                dequeuePrintConfirmation(job.printJobId);
+                if (job.printJobId === displayedPrintJobId()) {
+                    clearConfirmFallbackTimer();
+                    handlePrintConfirmation(job.printData, job.printJobId, data);
+                }
+                step(index + 1);
+            })
+            .catch(function(err) {
+                console.warn('confirm_print toujours injoignable, réessai programmé', err);
+                _drainingPrintQueue = false;
+                schedulePrintDrain();
+            });
+    };
+    step(0);
 }
 
 function postPrintCallStaff(printJobId) {
@@ -315,15 +444,38 @@ function bigNumberHtml(prefixText, callNumber) {
 // Lance (ou relance) tout le flux impression -> confirmation.
 function runPrintFlow(printData, printJobId) {
     showPrintBusy();
+    clearConfirmFallbackTimer();
     sendPrintTicket(printData)
-        .then(function(result) { return postPrintConfirmation(printJobId, result); })
-        .then(function(data) { handlePrintConfirmation(printData, printJobId, data); })
+        .then(function(result) {
+            // Enfilé AVANT le premier POST : une coupure (réseau,
+            // rechargement, crash) entre l'impression physique et
+            // l'acquittement ne perd plus l'inscription — la file reprendra
+            // au retour de la connectivité.
+            enqueuePrintConfirmation(printJobId, result, printData);
+            return postPrintConfirmation(printJobId, result);
+        })
+        .then(function(data) {
+            dequeuePrintConfirmation(printJobId);
+            clearConfirmFallbackTimer();
+            handlePrintConfirmation(printData, printJobId, data);
+        })
         .catch(function(err) {
-            console.error('Flux impression: erreur', err);
-            var L = printLabels();
-            renderPrintOverlay('<p class="text_summary">' + L.print_failed_staff + '</p>', [
-                { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
-            ]);
+            // Réseau/serveur injoignable : l'acquittement reste en file et
+            // sera retenté jusqu'à réponse. L'écran « impression en cours »
+            // reste affiché puis, passé un délai, bascule sur l'échec — la
+            // file continue de vider en arrière-plan dans les deux cas, et
+            // une confirmation tardive remettra l'écran d'aplomb si le job
+            // est encore affiché.
+            console.error('confirm_print injoignable — acquittement conservé en file locale', err);
+            schedulePrintDrain();
+            _confirmFallbackTimer = setTimeout(function() {
+                _confirmFallbackTimer = null;
+                var L = printLabels();
+                renderPrintOverlay('<p class="text_summary">' + L.print_failed_staff + '</p>', [
+                    { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
+                ]);
+                conclusionTimer().start();
+            }, PRINT_CONFIRM_FALLBACK_MS);
         });
 }
 
@@ -332,6 +484,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
     var L = printLabels();
     switch (data && data.status) {
         case 'activated':
+        case 'standing': // réponse perdue puis retentée : déjà en file côté serveur
             // Succès : confirmation normale + (re)démarrage du minuteur.
             setPrintOverlay(false);
             conclusionTimer().start();
@@ -395,6 +548,12 @@ function callStaffFlow(printJobId) {
 
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Reprise après rechargement/redémarrage : des acquittements
+    // d'impression peuvent être restés en file (le ticket est imprimé, le
+    // patient doit rejoindre la file même si personne n'est plus devant).
+    drainPrintConfirmations();
+    setInterval(drainPrintConfirmations, PRINT_DRAIN_PERIOD_MS);
+
     // Écoute de l'événement htmx:afterSwap sur le document
     document.body.addEventListener('htmx:afterSwap', function(event) {
         console.log("htmx:afterSwap déclenché", event);
