@@ -12,10 +12,16 @@ document.addEventListener('DOMContentLoaded', (event) => {
     generalSocket.on('connect', function() {
         console.log('General WebSocket connected');
         console.log(generalSocket.io.uri)
+        noteSocketConnected('general');
+        // Resynchronisation à CHAQUE connexion — initiale comprise : un appel
+        // émis entre le rendu HTML et l'ouverture du socket était sinon manqué
+        // jusqu'à la prochaine reconnexion ou la passe périodique de 60 s.
+        syncCallList();
     });
 
     generalSocket.on('disconnect', function() {
         console.log('General WebSocket disconnected');
+        noteSocketDisconnected('general');
     });
 
     generalSocket.on('update', function(msg) {
@@ -29,6 +35,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     generalSocket.on('connect_error', function(err) {
         console.error('General WebSocket connection error:', err);
+        noteSocketFailed('general');
     });
 
     // En Socket.IO client v4, les évènements de reconnexion sont émis par le
@@ -59,10 +66,15 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     screenSocket.on('connect', function() {
         console.log('Screen WebSocket connected');
+        noteSocketConnected('screen');
+        // Même rattrapage que sur le namespace général : c'est ce flux qui
+        // porte add_calling/remove_calling.
+        syncCallList();
     });
 
     screenSocket.on('disconnect', function() {
         console.log('Screen WebSocket disconnected');
+        noteSocketDisconnected('screen');
     });
 
     screenSocket.on('audio', function(msg) {
@@ -108,6 +120,7 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     screenSocket.on('connect_error', function(err) {
         console.error('Screen WebSocket connection error:', err);
+        noteSocketFailed('screen');
     });
 
     // Évènements de reconnexion sur le Manager (screenSocket.io), cf. plus haut.
@@ -178,6 +191,61 @@ function refresh_calling_list() {
 // réconcilie le DOM. Une resync périodique couvre le cas « dernier évènement
 // perdu » sur cet écran qui tourne sans surveillance.
 
+// --- Indicateur « données non actualisées » ----------------------------------
+//
+// Cet écran tourne sans surveillance : une coupure socket ou une resync en
+// échec ne doit plus être visible qu'en console — le personnel doit VOIR que
+// les informations affichées peuvent être périmées. Le badge #sync_status
+// (dans announce.html) n'apparaît que lorsqu'un problème est détecté, et
+// indique l'heure de la dernière synchronisation réussie.
+
+var socketState = { general: false, screen: false };
+var connexionVue = false;      // true dès qu'une connexion a réussi OU échoué
+var derniereSyncOk = null;     // Date du dernier état autoritatif appliqué
+var derniereErreurSync = null; // message, ou null si la dernière passe a réussi
+
+function updateSyncIndicator() {
+    var badge = document.getElementById('sync_status');
+    if (!badge) { return; }
+
+    var problemes = [];
+    if (!socketState.general) { problemes.push('flux de file coupé'); }
+    if (!socketState.screen) { problemes.push('flux écran coupé'); }
+    if (derniereErreurSync) {
+        problemes.push('synchronisation impossible (' + derniereErreurSync + ')');
+    }
+
+    // Au tout premier chargement les sockets mettent un instant à s'ouvrir :
+    // n'afficher le badge qu'après une première tentative de connexion, pas
+    // d'emblée.
+    if (problemes.length === 0 || !connexionVue) {
+        badge.hidden = true;
+        return;
+    }
+    var quand = derniereSyncOk ? derniereSyncOk.toLocaleTimeString('fr-FR') : 'jamais';
+    badge.textContent = 'Données non actualisées — ' + problemes.join(' — ') +
+        ' (dernière synchronisation : ' + quand + ')';
+    badge.hidden = false;
+}
+
+function noteSocketConnected(nom) {
+    connexionVue = true;
+    socketState[nom] = true;
+    updateSyncIndicator();
+}
+
+function noteSocketDisconnected(nom) {
+    socketState[nom] = false;
+    updateSyncIndicator();
+}
+
+function noteSocketFailed(nom) {
+    // Une erreur de connexion compte comme tentative : un écran qui n'arrive
+    // jamais à se connecter doit quand même signaler des données périmées.
+    connexionVue = true;
+    noteSocketDisconnected(nom);
+}
+
 var lastQueueRevision = -1;
 
 function noteQueueRevision(rev) {
@@ -196,48 +264,81 @@ function noteQueueRevision(rev) {
     }
 }
 
+var syncEnCours = false;
+
 function syncCallList() {
-    fetch('/announce/state')
-        .then(function(response) { return response.json(); })
+    // Garde anti-concurrence : connect (x2 sockets), reconnect, trou de
+    // révision et passe périodique peuvent se chevaucher — une seule requête
+    // d'état à la fois.
+    if (syncEnCours) {
+        return;
+    }
+    syncEnCours = true;
+    fetch('/announce/state', { headers: { 'Accept': 'application/json' } })
+        .then(function(response) {
+            if (response.status === 401) {
+                // SECURITY_LOGIN_SCREEN actif et session expirée : l'état ne
+                // peut plus être lu. Sans ce cas, la page de connexion (302)
+                // ou le JSON de refus était traité comme un état valide.
+                throw new Error('session expirée ou écran non authentifié (401)');
+            }
+            if (response.redirected) {
+                throw new Error('redirection inattendue vers ' + response.url);
+            }
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
         .then(function(state) {
+            // Réponse autoritative reçue : la date de fraîcheur est mise à jour
+            // même si l'état est écarté ensuite comme trop vieux.
+            derniereSyncOk = new Date();
+            derniereErreurSync = null;
+
             // Une réponse plus vieille que ce qu'on a déjà vu (mutation entre
             // la lecture serveur et l'application) est écartée : l'évènement
             // suivant déclenchera une nouvelle resync.
-            if (typeof state.revision === 'number' && lastQueueRevision > state.revision) {
-                return;
-            }
-            var wanted = {};
-            (state.calling || []).forEach(function(c) { wanted[c.id] = c; });
+            if (typeof state.revision !== 'number' || lastQueueRevision <= state.revision) {
+                var wanted = {};
+                (state.calling || []).forEach(function(c) { wanted[c.id] = c; });
 
-            // Retire les bannières absentes de l'état autoritatif.
-            Array.from(patientList.children).forEach(function(item) {
-                var id = Number(String(item.id).replace('patient-', ''));
-                if (!wanted[id]) {
-                    item.remove();
+                // Retire les bannières absentes de l'état autoritatif.
+                Array.from(patientList.children).forEach(function(item) {
+                    var id = Number(String(item.id).replace('patient-', ''));
+                    if (!wanted[id]) {
+                        item.remove();
+                    }
+                });
+
+                // Ajoute ou met à jour les bannières de l'état (sans animation :
+                // c'est un rattrapage, pas un nouvel appel).
+                (state.calling || []).forEach(function(c) {
+                    var item = document.getElementById('patient-' + c.id);
+                    if (!item) {
+                        item = document.createElement('li');
+                        item.id = 'patient-' + c.id;
+                        item.className = 'text_patient_calling';
+                        item.setAttribute('data-counter', c.counter_id);
+                        patientList.appendChild(item);
+                    }
+                    item.textContent = c.text;
+                });
+
+                if (typeof state.revision === 'number' && state.revision > lastQueueRevision) {
+                    lastQueueRevision = state.revision;
                 }
-            });
-
-            // Ajoute ou met à jour les bannières de l'état (sans animation :
-            // c'est un rattrapage, pas un nouvel appel).
-            (state.calling || []).forEach(function(c) {
-                var item = document.getElementById('patient-' + c.id);
-                if (!item) {
-                    item = document.createElement('li');
-                    item.id = 'patient-' + c.id;
-                    item.className = 'text_patient_calling';
-                    item.setAttribute('data-counter', c.counter_id);
-                    patientList.appendChild(item);
-                }
-                item.textContent = c.text;
-            });
-
-            if (typeof state.revision === 'number' && state.revision > lastQueueRevision) {
-                lastQueueRevision = state.revision;
+                updateEmptyStateTexts();
             }
-            updateEmptyStateTexts();
+            updateSyncIndicator();
         })
         .catch(function(err) {
             console.error('Resynchronisation des bannières impossible :', err);
+            derniereErreurSync = (err && err.message) ? err.message : 'erreur réseau';
+            updateSyncIndicator();
+        })
+        .finally(function() {
+            syncEnCours = false;
         });
 }
 

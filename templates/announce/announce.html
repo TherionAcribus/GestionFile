@@ -41,6 +41,11 @@
                 {{announce_subtitle}}</p>
         </div>
 
+        {# Indicateur de fraîcheur : announce.js le rend visible quand la
+           connexion est coupée ou la resynchronisation échoue — l'écran tourne
+           sans surveillance, un affichage périmé ne doit pas rester muet. #}
+        <div id="sync_status" hidden role="alert"></div>
+
         <div class="div_center"
             {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
             <div id="left_side">                

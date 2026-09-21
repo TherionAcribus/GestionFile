@@ -243,3 +243,20 @@ html, body {
     -webkit-text-stroke-color: var(--next_patients_font_border_color);
     -webkit-text-stroke-width: var(--next_patients_font_border_size);
 }
+
+/* Indicateur « données non actualisées » : caché par l'attribut [hidden],
+   affiché par announce.js quand un flux socket est coupé ou qu'une
+   resynchronisation échoue. */
+#sync_status {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    z-index: 1000;
+    max-width: 90%;
+    padding: 8px 14px;
+    border-radius: 6px;
+    background-color: #b00020;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 22px;
+}
