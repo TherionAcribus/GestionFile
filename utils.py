@@ -286,6 +286,7 @@ def get_buttons_translation(buttons, language_code):
 def get_activity_message_translation(activity, language_code):
     translation = Translation.query.filter_by(
         table_name='Activity',
+        column_name='specific_message',
         row_id=activity.id,
         language_code=language_code
     ).first()
@@ -294,6 +295,21 @@ def get_activity_message_translation(activity, language_code):
         return translation.translated_text
     else:
         return ""
+
+
+def get_activity_inactivity_message_translation(activity, language_code):
+    """Traduction du message d'inactivité de l'activité.
+
+    ``column_name`` est filtré explicitement : ``inactivity_message`` et
+    ``specific_message`` partagent les mêmes table_name/row_id — un
+    ``.first()`` non filtré pourrait renvoyer l'autre texte."""
+    translation = Translation.query.filter_by(
+        table_name='Activity',
+        column_name='inactivity_message',
+        row_id=activity.id,
+        language_code=language_code
+    ).first()
+    return translation.translated_text if translation else ""
 
 
 def get_text_translation(key_name, language_code):

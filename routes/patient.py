@@ -2,7 +2,7 @@ import uuid
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status
-from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation
+from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, check_kiosk_login_ticket, KIOSK_SESSION_KEY
@@ -141,12 +141,15 @@ def display_activity_inactive(request):
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         default_subtitle = get_text_translation("page_patient_subtitle", language_code)["translation"]
+        # ``message`` doit être résolu dans cette branche aussi : il n'était
+        # défini qu'en français -> NameError (500) pour tout patient en
+        # langue étrangère sur une activité inactive.
+        message = (get_activity_inactivity_message_translation(activity, language_code)
+                   or activity.inactivity_message
+                   or get_text_translation("page_patient_disable_default_message", language_code)["translation"])
     else:
         default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
-
-        message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
-        if activity.inactivity_message != "":
-            message = activity.inactivity_message
+        message = activity.inactivity_message or app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
 
     return render_template('patient/activity_inactive.html',
                             page_patient_disable_default_message=message,
