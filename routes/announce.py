@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, url_for, current_app as app, jsoni
 from models import Patient, ConfigOption, get_queue_revision
 from utils import replace_balise_announces, replace_balise_welcome
 from communication import communikation
-from python.engine import get_global_patient_queue
+from python.engine import get_next_patients_call_numbers
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
 from auth_utils import is_authenticated_request, wants_json_response
 from routes.admin_security import require_permission_api
@@ -124,11 +124,12 @@ def patients_next():
         app.config.get('ANNOUNCE_NEXT_PATIENTS_TEXT', "Prochains patients :"))
     announce_next_patients_alignment = app.config.get('ANNOUNCE_NEXT_PATIENTS_ALIGNMENT', 'center')
     
-    # Use the global queue algorithm instead of simple timestamp sort
-    patients = get_global_patient_queue()
-    
-    next_patients = [p.call_number for p in patients]
-    return render_template('announce/patients_next.html', 
+    # Liste bornée (5 numéros) et mémorisée par révision de file — la file
+    # globale complète n'est plus ordonnée à chaque requête. Ordre indicatif
+    # seulement : les compétences propres à chaque comptoir ne sont pas
+    # simulées (voir get_global_patient_queue).
+    next_patients = get_next_patients_call_numbers()
+    return render_template('announce/patients_next.html',
                            announce_next_patients_text=announce_next_patients_text,
                            announce_next_patients_alignment=announce_next_patients_alignment,
                            next_patients=next_patients)

@@ -244,6 +244,18 @@ html, body {
     -webkit-text-stroke-width: var(--next_patients_font_border_size);
 }
 
+/* « ordre indicatif » : l'ordre simulé ne tient pas compte des compétences
+   propres à chaque comptoir — le prochain patient réellement appelé peut
+   différer du premier numéro affiché. */
+.next_patients_hint {
+    flex-shrink: 0;
+    font-style: italic;
+    font-size: calc(var(--next_patients_font_size) * 0.55);
+    color: var(--next_patients_font_color);
+    opacity: 0.75;
+    margin-left: 8px;
+}
+
 /* Indicateur « données non actualisées » : caché par l'attribut [hidden],
    affiché par announce.js quand un flux socket est coupé ou qu'une
    resynchronisation échoue. */

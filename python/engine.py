@@ -9,7 +9,7 @@ from google.cloud import texttospeech
 from google.oauth2 import service_account
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
-from models import Patient, Counter, AlgoRule, ConfigOption, Language, db
+from models import Patient, Counter, AlgoRule, ConfigOption, Language, db, get_queue_revision
 from communication import communikation, notify_patient_phone
 from config import time_tz
 from auth_utils import require_app_token_or_login
@@ -236,16 +236,29 @@ def algo_choice_next_patient(counter_id):
 
     return next_patient
 
-def get_global_patient_queue():
+def get_global_patient_queue(limit=None):
     """
-    Simulates the patient selection algorithm to determine the order of all waiting patients.
+    Simulates the patient selection algorithm to determine the order of waiting patients.
     Returns an ordered list of patients.
+
+    Ordre INDICATIF : contrairement à ``algo_choice_next_patient``, la
+    simulation ne filtre pas par les activités du membre d'équipe de chaque
+    comptoir — le prochain patient réellement appelé peut différer du premier
+    numéro affiché.
+
+    ``limit`` borne le calcul : l'écran n'affiche que quelques numéros,
+    ordonner toute la file (jusqu'à ~O(n³) selon les règles et le nombre de
+    patients) pour n'en montrer que 5 est un gaspillage. ``None`` = file
+    complète.
+
+    Le tri de base est ``(timestamp, id)`` — déterministe même à timestamps
+    égaux — posé en SQL à la récupération (index ix_patient_status_timestamp)
+    puis préservé : la liste de travail ne subit que des retraits, aucun
+    re-tri n'est nécessaire dans la boucle.
     """
-    # 1. Fetch all standing patients
-    all_patients = Patient.query.filter_by(status='standing').all()
-    
-    # Working copy of the list to manipulate
-    waiting_patients = list(all_patients)
+    # 1. Fetch all standing patients, already in (timestamp, id) order
+    waiting_patients = Patient.query.filter_by(status='standing').order_by(
+        Patient.timestamp, Patient.id).all()
     ordered_queue = []
     
     # Get current context for rules
@@ -265,13 +278,13 @@ def get_global_patient_queue():
     else:
         applicable_rules = []
 
-    # Loop until all patients are ordered
-    while waiting_patients:
+    # Loop until all patients are ordered (or the display limit is reached)
+    while waiting_patients and (limit is None or len(ordered_queue) < limit):
         selected_patient = None
-        
+
         # If algorithm is active and we have rules, try to find a priority patient
         if app.config['ALGO_IS_ACTIVATED'] and applicable_rules:
-            
+
             # Check if any patient has waited too long (overtaken limit)
             # In the simulation, we use the current 'overtaken' value from DB.
             # Ideally, the simulation should track 'overtaken' dynamically as we build the queue,
@@ -279,24 +292,23 @@ def get_global_patient_queue():
             is_patient_waiting_too_long = any(
                 p.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"] for p in waiting_patients
             )
-            
+
             if not is_patient_waiting_too_long:
                 # Iterate through priority levels
                 for level in range(1, 6):
                     rules_at_level = [r for r in applicable_rules if r.priority_level == level]
                     if not rules_at_level:
                         continue
-                        
+
                     activity_ids_from_rules = [rule.activity_id for rule in rules_at_level]
-                    
-                    # Candidates matching this priority level
+
+                    # Candidates matching this priority level — waiting_patients
+                    # est déjà triée (timestamp, id), la compréhension conserve
+                    # cet ordre : pas de re-tri.
                     priority_candidates = [
-                        p for p in waiting_patients 
+                        p for p in waiting_patients
                         if p.activity_id in activity_ids_from_rules
                     ]
-                    
-                    # Sort by timestamp to find the "oldest" candidate for this priority
-                    priority_candidates.sort(key=lambda p: p.timestamp)
                     
                     for candidate in priority_candidates:
                         # Count how many people would be overtaken
@@ -323,17 +335,51 @@ def get_global_patient_queue():
                     if selected_patient:
                         break
         
-        # Fallback: if no patient selected by rules (or algo disabled), pick the one with oldest timestamp
+        # Fallback: if no patient selected by rules (or algo disabled), pick
+        # the oldest — waiting_patients reste triée (timestamp, id), retraits
+        # uniquement.
         if not selected_patient:
-            # Sort remaining by timestamp
-            waiting_patients.sort(key=lambda p: p.timestamp)
             selected_patient = waiting_patients[0]
-            
+
         # Add to ordered list and remove from working set
         ordered_queue.append(selected_patient)
         waiting_patients.remove(selected_patient)
-        
+
     return ordered_queue
+
+
+# Nombre de numéros « prochains patients » affichés à l'écran : l'ordre est
+# indicatif (compétences des comptoirs non simulées), 5 bornent le calcul et
+# suffisent à informer le public.
+NEXT_PATIENTS_DISPLAY_LIMIT = 5
+
+
+def get_next_patients_call_numbers(limit=NEXT_PATIENTS_DISPLAY_LIMIT):
+    """Numéros d'appel des prochains patients pour l'écran — ordre INDICATIF.
+
+    Le résultat est mémorisé par révision de file : chaque mutation de la
+    file incrémente le compteur ``QueueRevision`` (``communikation
+    ("update_patient")`` → ``bump_queue_revision``), donc les requêtes HTMX
+    répétées entre deux mutations ne relancent pas la simulation. La clé
+    inclut aussi la minute courante : les règles ALGO sont horaires
+    (``start_time``/``end_time``) et les compteurs ``overtaken`` évoluent
+    sans révision — une clé à la seule révision figerait l'ordre entre deux
+    mutations distantes.
+
+    Le cache vit dans ``app.extensions`` : portée application — pas de fuite
+    entre les apps des tests — et un seul calcul par révision et par
+    process. Les numéros (chaînes) sont stockés, pas les ORM : pas
+    d'instance détachée de session.
+    """
+    revision = get_queue_revision()
+    key = (revision, datetime.now().replace(second=0, microsecond=0))
+    cache = app.extensions.setdefault('gestionfile_announce', {})
+    if cache.get('next_patients_key') == key:
+        return cache['next_patients']
+    numbers = [p.call_number for p in get_global_patient_queue(limit=limit)]
+    cache['next_patients_key'] = key
+    cache['next_patients'] = numbers
+    return numbers
 
 def patient_overtaken(next_patient):
     """ Met a jour le nombre de fois que le patient a été doublé"""

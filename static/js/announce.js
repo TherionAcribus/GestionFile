@@ -96,10 +96,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
     screenSocket.on('add_calling', function(msg) {
         console.log("Received screen message:", msg);
         add_calling(msg);
-        var nextPatientsDiv = document.getElementById('div_next_patients');
-        if (nextPatientsDiv) {
-            htmx.trigger(nextPatientsDiv, 'refresh_next_patients');
-        }
+        // Pas de refresh_next_patients ici : announce_call émet toujours un
+        // évènement 'update' sur le namespace général (communikation
+        // "update_patient") avant add_calling, et ce handler déclenche déjà
+        // refresh_calling_list — le déclenchement doublé provoquait deux
+        // requêtes HTMX /announce/patients_next par appel.
     });
 
     screenSocket.on('spotify_status', function(msg) {
