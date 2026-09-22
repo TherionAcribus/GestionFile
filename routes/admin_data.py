@@ -55,20 +55,21 @@ def admin_data():
         'logs_count': JobExecutionLog.query.count()
     }
 
-    # DB Size estimation (simple row count based or specific query if MySQL)
+    # Taille allouée aux données et aux index du schéma MySQL courant.
+    # DATABASE() utilise le schéma réellement sélectionné par la connexion :
+    # cela fonctionne aussi avec DATABASE_URL et évite de dépendre d'un nom de
+    # variable de configuration particulier (DB_NAME / MYSQL_DATABASE).
     db_size = "N/A"
     if current_app.config.get('SQLALCHEMY_DATABASE_URI', '').startswith('mysql'):
         try:
             query = text("""
-                SELECT table_schema AS "Database",
-                SUM(data_length + index_length) / 1024 / 1024 AS "Size (MB)"
+                SELECT COALESCE(SUM(data_length + index_length), 0) / 1024 / 1024
                 FROM information_schema.TABLES
-                WHERE table_schema = :db_name
-                GROUP BY table_schema
+                WHERE table_schema = DATABASE()
             """)
-            result = db.session.execute(query, {'db_name': current_app.config.get('MYSQL_DATABASE')}).first()
-            if result:
-                db_size = f"{round(result[1], 2)} MB"
+            size_mb = db.session.execute(query).scalar()
+            if size_mb is not None:
+                db_size = f"{float(size_mb):.2f} MB"
         except Exception as e:
             current_app.logger.error(f"Error calculating DB size: {e}")
 

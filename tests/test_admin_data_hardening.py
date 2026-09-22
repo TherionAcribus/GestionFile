@@ -1,6 +1,6 @@
 """Point 4 (audit Admin) — Renforcer la gestion des données.
 
-Quatre problèmes corrigés dans ``routes/admin_data.py`` :
+Cinq problèmes corrigés dans ``routes/admin_data.py`` :
 
 1. **``days`` non validé** dans ``manual_archive`` et ``delete_aggregated`` :
    une valeur négative déplaçait la date de cutoff dans le futur (élargissant
@@ -16,6 +16,9 @@ Quatre problèmes corrigés dans ``routes/admin_data.py`` :
 
 4. **Pas d'audit** sur ces opérations sensibles (archivage, suppression de
    stats, modification de config).
+
+5. **Taille MySQL calculée avec une clé de configuration inexistante** : le
+   schéma actif est maintenant résolu par MySQL avec ``DATABASE()``.
 
 Vérifications statiques (``app.py`` exige MySQL et n'est pas importable ici) :
 on lit le source, comme les autres tests de régression statique de ce dépôt.
@@ -167,3 +170,18 @@ def test_error_messages_do_not_leak_exceptions():
         assert not re.search(r"message\s*=\s*str\(e\)", body), (
             f"{func} ne doit plus renvoyer str(e) au client (fuite d'info technique)"
         )
+
+
+# ---------------------------------------------------------------------------
+# 6. La taille MySQL porte sur le schéma réel de la connexion
+# ---------------------------------------------------------------------------
+
+def test_database_size_uses_active_mysql_schema():
+    """Le calcul ne doit pas dépendre d'une clé MYSQL_DATABASE absente quand
+    la connexion est fournie par DATABASE_URL ou exposée sous DB_NAME."""
+    source = _read("routes/admin_data.py")
+    body = _func_body(source, "admin_data")
+
+    assert "WHERE table_schema = DATABASE()" in body
+    assert "current_app.config.get('MYSQL_DATABASE')" not in body
+    assert "db.session.execute(query).scalar()" in body
