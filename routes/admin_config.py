@@ -34,6 +34,8 @@ from scheduler_functions import (
 )
 from ui_feedback import display_toast
 from utils import convert_markdown_to_escpos, validate_and_transform_text
+from audit_service import record_audit
+from audit_log import ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS
 
 admin_config_bp = Blueprint('admin_config', __name__)
 
@@ -114,10 +116,14 @@ def update_switch():
             config_sync.bump_generation()
 
         db.session.commit()
+        record_audit(ACTION_UPDATE, "config", target_id=key,
+                     outcome=OUTCOME_SUCCESS, details=f"value={bool_value}")
     except Exception as e:
         # Toute exception annule la transaction (rollback) : la base reste dans
         # son état précédent et app.config n'a pas été modifié.
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "config", target_id=key,
+                     outcome=OUTCOME_FAILURE)
         app.logger.error("Échec de mise à jour du switch %r : %s", key, e)
         return display_toast(success=False, message=str(e))
 
@@ -188,9 +194,18 @@ def update_css_variable():
         # Génère le nouveau CSS
         new_css_url = app.css_manager.generate_css(variables, mode=source_name)
     except Exception as e:
+        # Rollback avant l'audit : css_variable_manager partage db.session et
+        # peut laisser des mutations partielles en attente.
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "css_variable",
+                     target_id=f"{source_name}.{variable_name}",
+                     outcome=OUTCOME_FAILURE)
         app.logger.error("Échec update_css_variable (%s/%s) : %s", source_name, variable_name, e)
         return jsonify({'status': 'error', 'message': 'La mise à jour de la variable a échoué.'}), 500
 
+    record_audit(ACTION_UPDATE, "css_variable",
+                 target_id=f"{source_name}.{variable_name}",
+                 outcome=OUTCOME_SUCCESS, details=f"value={value}")
     return jsonify({
         'status': 'success',
         'css_url': new_css_url
@@ -251,9 +266,15 @@ def copy_colors():
             variables = app.css_variable_manager.get_all_variables(ts)
             app.css_manager.generate_css(variables, mode=ts)
 
+        record_audit(ACTION_UPDATE, "css_variable", target_id=target_page,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"copie depuis {source_page}")
         return jsonify({'status': 'success', 'message': 'Couleurs copiées avec succès'})
 
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "css_variable",
+                     outcome=OUTCOME_FAILURE, details="copie de couleurs")
         # Point 3 : ne pas renvoyer str(e) au client (fuite d'information
         # technique). Journaliser le détail côté serveur.
         app.logger.error("Échec copy_colors : %s", e)
@@ -336,10 +357,18 @@ def update_input():
             config_sync.bump_generation()
 
         db.session.commit()
+        record_audit(
+            ACTION_UPDATE, "config", target_id=key,
+            outcome=OUTCOME_SUCCESS,
+            # Jamais la valeur d'un secret dans le journal (point 10).
+            details="(secret modifié)" if spec.secret else f"value={value}",
+        )
     except Exception as e:
         # Toute exception annule l'ensemble de la transaction : ni l'option ni la
         # version imprimante ne sont modifiées, et app.config reste intact.
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "config", target_id=key,
+                     outcome=OUTCOME_FAILURE)
         # Pour une clé secrète, ne jamais renvoyer/journaliser le détail technique
         # (il pourrait, selon le backend, contenir la valeur).
         if spec.secret:
@@ -399,8 +428,12 @@ def update_select():
         if not spec.restart_required:
             config_sync.bump_generation()
         db.session.commit()
+        record_audit(ACTION_UPDATE, "config", target_id=key,
+                     outcome=OUTCOME_SUCCESS, details=f"value={value}")
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "config", target_id=key,
+                     outcome=OUTCOME_FAILURE)
         app.logger.error("Échec de mise à jour du select %r : %s", key, e)
         return display_toast(success=False, message=str(e))
 

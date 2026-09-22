@@ -7,6 +7,11 @@ from communication import communikation
 from form_validation import Champ, LISTE_ENTIERS, extraire, valider
 from transactions import atomic
 from ui_feedback import display_toast
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 admin_schedule_bp = Blueprint('admin_schedule', __name__)
 
@@ -39,6 +44,9 @@ def update_schedule(schedule_id):
             schedule.weekdays = [Weekday.query.get(int(id)) for id in weekdays_ids]
 
             db.session.commit()
+            record_audit(ACTION_UPDATE, "schedule", target_id=schedule_id,
+                         outcome=OUTCOME_SUCCESS,
+                         details=f"name={schedule.name}")
             display_toast(success=True, message="Plage horaire mise à jour")
 
             # Mise à jour des boutons des activités qui dépendent du schedule
@@ -58,6 +66,9 @@ def update_schedule(schedule_id):
             return ""
 
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "schedule", target_id=schedule_id,
+                     outcome=OUTCOME_FAILURE)
         app.logger.error(str(e))
         display_toast(success = False, message=str(e))
         return ""
@@ -110,6 +121,9 @@ def add_new_schedule():
                 if weekday:
                     new_schedule.weekdays.append(weekday)
 
+        record_audit(ACTION_CREATE, "schedule", target_id=new_schedule.id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"name={new_schedule.name}")
         # mise à jour de la table activité si nouvelle plage horaire
         communikation("admin", event="refresh_activity_table")
         
@@ -120,6 +134,9 @@ def add_new_schedule():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "schedule",
+                     target_id=request.form.get('name_schedule'),
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()
     
@@ -143,6 +160,8 @@ def delete_schedule(schedule_id):
 
         db.session.delete(schedule)
         db.session.commit()
+        record_audit(ACTION_DELETE, "schedule", target_id=schedule_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Suppression réussie'")
 
         # mise à jour de la table activité si nouvelle plage horaire
@@ -152,5 +171,7 @@ def delete_schedule(schedule_id):
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_DELETE, "schedule", target_id=schedule_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         return display_schedule_table()

@@ -6,6 +6,11 @@ from routes.admin_security import require_permission, require_permission_dashboa
 from form_validation import Champ, LISTE_ENTIERS, extraire, valider
 from transactions import atomic
 from ui_feedback import display_toast
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 admin_counter_bp = Blueprint('admin_counter', __name__)
 
@@ -47,6 +52,9 @@ def update_counter(counter_id):
             counter.activities = new_activities
 
             db.session.commit()
+            record_audit(ACTION_UPDATE, "counter", target_id=counter_id,
+                         outcome=OUTCOME_SUCCESS,
+                         details=f"name={counter.name}")
             display_toast(success=True, message="Mise à jour réussie")
             # mise à jour liste des comptoirs
             communikation("admin", event="refresh_counter_order")
@@ -56,6 +64,9 @@ def update_counter(counter_id):
             return ""
 
     except Exception as e:
+            db.session.rollback()
+            record_audit(ACTION_UPDATE, "counter", target_id=counter_id,
+                         outcome=OUTCOME_FAILURE)
             display_toast(success=False, message="erreur : " + str(e))
             app.logger.error(e)
             return ""
@@ -83,12 +94,17 @@ def delete_counter(counter_id):
         db.session.delete(counter)
         db.session.commit()
 
+        record_audit(ACTION_DELETE, "counter", target_id=counter_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Comptoir supprimé")
         communikation("admin", event="refresh_counter_order")
 
         return display_counter_table()
 
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_DELETE, "counter", target_id=counter_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_counter_table()
@@ -144,6 +160,8 @@ def add_new_counter():
                 if activity:
                     new_counter.activities.append(activity)
 
+        record_audit(ACTION_CREATE, "counter", target_id=new_counter.id,
+                     outcome=OUTCOME_SUCCESS, details=f"name={name}")
         display_toast(success=True, message="Comptoir ajouté")
         
         # Effacer le formulaire via swap-oob
@@ -157,6 +175,8 @@ def add_new_counter():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "counter", target_id=request.form.get('name'),
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_counter_table()
@@ -180,9 +200,14 @@ def update_counter_order():
             app.logger.debug("%s", counter)
             counter.sort_order = index
         db.session.commit()
+        record_audit(ACTION_UPDATE, "counter", outcome=OUTCOME_SUCCESS,
+                     details="réordonnancement")
         display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "counter", outcome=OUTCOME_FAILURE,
+                     details="réordonnancement")
         display_toast(success=False, message=f"Erreur: {e}")
 
 @admin_counter_bp.route('/admin/counter/dashboard')

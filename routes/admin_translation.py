@@ -8,6 +8,11 @@ from pagination import parse_page_params, paginate_query
 from ui_feedback import display_toast
 from image_storage import accept_image_upload
 from path_security import safe_path_under
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -100,6 +105,8 @@ def update_language(language_id):
                     language.flag_url = extracted
 
             db.session.commit()
+            record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                         outcome=OUTCOME_SUCCESS, details=f"code={code}")
             display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
@@ -107,6 +114,11 @@ def update_language(language_id):
             return ""
 
     except Exception as e:
+        # Rollback avant l'audit : le commit interne de record_audit ne doit
+        # pas persister de mutations métier restées en attente.
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="Erreur : " + str(e))
         return jsonify(status="error", message=str(e)), 500
 
@@ -130,6 +142,8 @@ def delete_language(language_id):
 
         db.session.delete(language)
         db.session.commit()
+        record_audit(ACTION_DELETE, "language", target_id=language_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Suppression réussie")
 
         communikation("admin", event="refresh_languages_order")
@@ -137,6 +151,9 @@ def delete_language(language_id):
         return display_languages_table()
 
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_DELETE, "language", target_id=language_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="Erreur : " + str(e))
         return display_languages_table()
     
@@ -194,6 +211,8 @@ def add_new_language():
         db.session.add(new_language)
         db.session.commit()
 
+        record_audit(ACTION_CREATE, "language", target_id=new_language.id,
+                     outcome=OUTCOME_SUCCESS, details=f"code={code}")
         communikation("admin", event="refresh_languages_order")
 
         display_toast(success=True, message="Langue ajoutée avec succès")
@@ -205,6 +224,8 @@ def add_new_language():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "language", target_id=request.form.get('code'),
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message= "Erreur : " + str(e))
         return display_languages_table()
     
@@ -226,6 +247,8 @@ def upload_flag_image():
     os.makedirs(flag_folder, exist_ok=True)
     target_path = safe_path_under(flag_folder, result["filename"])
     target_path.write_bytes(result["data"])
+    record_audit(ACTION_CREATE, "language_flag",
+                 target_id=result["filename"], outcome=OUTCOME_SUCCESS)
     return {"url": url_for('static', filename='images/flags/' + result["filename"])}
 
 
@@ -245,9 +268,14 @@ def update_languages_order():
             languages = Language.query.order_by(Language.sort_order).get(counter_id)
             languages.sort_order = index
         db.session.commit()
+        record_audit(ACTION_UPDATE, "language", outcome=OUTCOME_SUCCESS,
+                     details="réordonnancement")
         display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", outcome=OUTCOME_FAILURE,
+                     details="réordonnancement")
         display_toast(success=False, message=f"Erreur: {e}")
 
 
@@ -358,6 +386,8 @@ def translations_collect():
 
     # Confirmer les changements dans la base de données
     db.session.commit()
+    record_audit(ACTION_UPDATE, "translation", outcome=OUTCOME_SUCCESS,
+                 details=f"collecte : {new_translations_count} nouveau(x)")
 
     # Afficher le nombre de nouveaux textes mis à jour dans display_toast
     display_toast(success=True, message=f"{new_translations_count} nouveaux textes mis à jour")
@@ -463,6 +493,8 @@ def save_translations():
             updated_count += 1
 
     db.session.commit()
+    record_audit(ACTION_UPDATE, "translation", outcome=OUTCOME_SUCCESS,
+                 details=f"langue={language_code}, {updated_count} mise(s) à jour")
 
     display_toast(success=True, message=f"{updated_count} traduction(s) sauvegardée(s)")
     # Retourner une réponse simple indiquant le nombre de traductions mises à jour

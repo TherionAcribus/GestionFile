@@ -16,6 +16,10 @@ from image_storage import (
     thumbnail_filename,
     THUMBNAIL_DIR,
 )
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE, OUTCOME_SUCCESS,
+)
 
 admin_gallery_bp = Blueprint('admin_gallery', __name__)
 
@@ -71,6 +75,9 @@ def choose_gallery(gallery_name="", checked=""):
     # Enregistrer les galeries mises à jour
     config_option.value_str = json.dumps(galleries)
     db.session.commit()
+    record_audit(ACTION_UPDATE, "config",
+                 target_id="announce_infos_gallery", outcome=OUTCOME_SUCCESS,
+                 details=f"{gallery_name} {'sélectionnée' if checked == 'true' else 'désélectionnée'}")
 
     display_toast(success=True, message=message)
 
@@ -209,6 +216,11 @@ def upload_gallery(name):
     elif saved:
         display_toast(success=True, message=f"{saved} image(s) ajoutée(s).")
 
+    if saved:
+        record_audit(ACTION_CREATE, "gallery_image", target_id=name,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"{saved} image(s) ajoutée(s)")
+
     images = get_images_with_dates(gallery_dir)
     app.logger.debug('images %s', images)
     return render_template('admin/gallery_list_images.html', gallery=name, images=images)
@@ -227,6 +239,8 @@ def delete_image(gallery, image):
 
     if target_path.exists() and target_path.is_file():
         target_path.unlink()
+        record_audit(ACTION_DELETE, "gallery_image", target_id=image,
+                     outcome=OUTCOME_SUCCESS, details=f"gallery={gallery}")
         # Supprimer la miniature associée si elle existe.
         thumb = target_path.parent / THUMBNAIL_DIR / thumbnail_filename(image)
         if thumb.exists() and thumb.is_file():
@@ -273,6 +287,8 @@ def delete_gallery(name):
             child.rmdir()
 
     gallery_dir.rmdir()
+    record_audit(ACTION_DELETE, "gallery", target_id=name,
+                 outcome=OUTCOME_SUCCESS)
 
     # on supprime la selection pour cette galerie si elle est selectionnée
     choose_gallery(gallery_name=name, checked="false")
@@ -300,6 +316,8 @@ def create_gallery():
         display_toast(success=False, message="Nom de galerie invalide")
         return "", 400
 
+    record_audit(ACTION_CREATE, "gallery", target_id=name,
+                 outcome=OUTCOME_SUCCESS)
     base_dir = _galleries_dir()
     try:
         galleries = [p.name for p in base_dir.iterdir() if p.is_dir()]

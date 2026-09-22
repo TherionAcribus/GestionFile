@@ -16,6 +16,11 @@ from auth_utils import require_app_token_or_login
 from ui_feedback import display_toast
 from image_storage import accept_image_upload, ALLOWED_IMAGE_EXTENSIONS
 from path_security import safe_path_under
+from audit_service import record_audit
+from audit_log import (
+    ACTION_ACTIVATE, ACTION_CREATE, ACTION_DEACTIVATE, ACTION_DELETE,
+    ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
 
@@ -260,6 +265,9 @@ def update_button(button_id):
             button.shape = shape      
 
             db.session.commit()
+            record_audit(ACTION_UPDATE, "button", target_id=button_id,
+                         outcome=OUTCOME_SUCCESS,
+                         details=f"label={button.label}")
             display_toast(success=True, message="Mise à jour effectuée")
             return ""
         else:
@@ -267,6 +275,11 @@ def update_button(button_id):
             return ""
 
     except Exception as e:
+            # Rollback avant l'audit : le commit interne de record_audit ne
+            # doit pas persister de mutations métier restées en attente.
+            db.session.rollback()
+            record_audit(ACTION_UPDATE, "button", target_id=button_id,
+                         outcome=OUTCOME_FAILURE)
             display_toast(success=False, message="erreur : " + str(e))
             app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500
@@ -282,9 +295,14 @@ def update_button_order():
             app.logger.debug("%s", button)
             button.sort_order = index
         db.session.commit()
+        record_audit(ACTION_UPDATE, "button", outcome=OUTCOME_SUCCESS,
+                     details="réordonnancement")
         display_toast(success=True, message="Ordre mis à jour")
         return '', 200  # Réponse sans contenu
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "button", outcome=OUTCOME_FAILURE,
+                     details="réordonnancement")
         display_toast(success=False, message=f"Erreur: {e}")
 
 
@@ -359,6 +377,8 @@ def add_new_button():
         db.session.add(new_button)
         db.session.commit()
 
+        record_audit(ACTION_CREATE, "button", target_id=new_button.id,
+                     outcome=OUTCOME_SUCCESS, details=f"label={label}")
         display_toast(success=True, message="Bouton ajouté")
         communikation("admin", event="refresh_button_order")
 
@@ -370,6 +390,8 @@ def add_new_button():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "button", target_id=request.form.get('label'),
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_button_table()
@@ -395,6 +417,8 @@ def delete_button(button_id):
 
         db.session.delete(button)
         db.session.commit()
+        record_audit(ACTION_DELETE, "button", target_id=button_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Bouton supprimé")
 
         communikation("admin", event="refresh_button_order")
@@ -403,6 +427,8 @@ def delete_button(button_id):
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_DELETE, "button", target_id=button_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         app.logger.error(e)
         return display_button_table()
@@ -428,6 +454,9 @@ def upload_image(button_id):
     target_path.write_bytes(result["data"])
     button.image_url = result["filename"]
     db.session.commit()
+    record_audit(ACTION_UPDATE, "button", target_id=button_id,
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"image={result['filename']}")
     display_toast(success=True, message="Image mise à jour")
     # Retour à la page admin/patient
     return redirect("/admin/patient", code=302)
@@ -463,6 +492,9 @@ def upload_image_for_interface(button_id):
         app.logger.debug("CONFIG OPTION")
         config_option.value_str = result["filename"]
     db.session.commit()
+    record_audit(ACTION_UPDATE, "patient_page", target_id=key,
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"image={result['filename']}")
     display_toast(success=True, message="Image mise à jour")
     # Retour à la page admin/patient
     return redirect("/admin/patient", code=302)
@@ -500,6 +532,8 @@ def update_button_image_from_gallery():
     app.logger.debug("%s", request.form)
     button.image_url = image_url
     db.session.commit()
+    record_audit(ACTION_UPDATE, "button", target_id=button_id,
+                 outcome=OUTCOME_SUCCESS, details=f"image={image_url}")
     display_toast(success=True, message="Image mise à jour")
     return f'<img src="/static/images/buttons/{image_url}" alt="Button Image" style="width: 100px;">'
 
@@ -517,6 +551,8 @@ def update_button_image_from_gallery_for_interface():
     config_option = ConfigOption.query.filter_by(config_key=key).first()
     config_option.value_str = image_url
     db.session.commit()
+    record_audit(ACTION_UPDATE, "patient_page", target_id=key,
+                 outcome=OUTCOME_SUCCESS, details=f"image={image_url}")
     app.config[key.upper()] = image_url
     html = f"""<img src="/static/images/buttons/{image_url}" alt="Button Image" style="width: 100px;">"""
     return html
@@ -528,6 +564,8 @@ def delete_button_image(button_id):
     button = Button.query.order_by(Button.sort_order).get(button_id)
     button.image_url = None
     db.session.commit()
+    record_audit(ACTION_UPDATE, "button", target_id=button_id,
+                 outcome=OUTCOME_SUCCESS, details="image supprimée")
     return "<div>Pas d'image</div>"
 
 
@@ -651,6 +689,8 @@ def deactivate_button(button_id):
     button = Button.query.get(button_id)
     button.is_active = False
     db.session.commit()
+    record_audit(ACTION_DEACTIVATE, "button", target_id=button_id,
+                 outcome=OUTCOME_SUCCESS)
     return dashboard_button()
 
 
@@ -660,6 +700,8 @@ def activate_button(button_id):
     button = Button.query.get(button_id)
     button.is_active = True
     db.session.commit()
+    record_audit(ACTION_ACTIVATE, "button", target_id=button_id,
+                 outcome=OUTCOME_SUCCESS)
     return dashboard_button()
 
 

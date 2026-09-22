@@ -4,6 +4,11 @@ from routes.admin_security import require_permission, require_permission_dashboa
 from form_validation import Champ, LISTE_ENTIERS, extraire, valider
 from transactions import atomic
 from ui_feedback import display_toast
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
 
@@ -59,6 +64,9 @@ def update_member(member_id):
             member.activities = new_activities
 
             db.session.commit()
+            record_audit(ACTION_UPDATE, "staff", target_id=member_id,
+                         outcome=OUTCOME_SUCCESS,
+                         details=f"name={member.name}")
             display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
@@ -66,6 +74,11 @@ def update_member(member_id):
             return ""
 
     except Exception as e:
+        # Rollback avant l'audit : le commit interne de record_audit ne doit
+        # pas persister de mutations métier restées en attente.
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "staff", target_id=member_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="Erreur : " + str(e))
         return jsonify(status="error", message=str(e)), 500
 
@@ -90,10 +103,15 @@ def delete_staff(member_id):
 
         db.session.delete(member)
         db.session.commit()
+        record_audit(ACTION_DELETE, "staff", target_id=member_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Suppression réussie")
         return display_staff_table()
 
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_DELETE, "staff", target_id=member_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="Erreur : " + str(e))
         return display_staff_table()
     
@@ -152,6 +170,9 @@ def add_new_staff():
                     new_staff.activities.append(activity)
 
         display_toast(success=True, message="Membre ajouté avec succès")
+        record_audit(ACTION_CREATE, "staff", target_id=new_staff.id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"name={new_staff.name}")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
@@ -160,6 +181,8 @@ def add_new_staff():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "staff", target_id=request.form.get('name'),
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message= "Erreur : " + str(e))
         return display_staff_table()
     
@@ -189,6 +212,8 @@ def add_counter():
         new_counter = Counter(name=name)
         db.session.add(new_counter)
         db.session.commit()
+        record_audit(ACTION_CREATE, "counter", target_id=new_counter.id,
+                     outcome=OUTCOME_SUCCESS, details=f"name={name}")
         return redirect('/admin')
     return "Erreur dans la soumission du formulaire"
 
@@ -209,6 +234,9 @@ def update_pharmacist(pharmacist_id):
         pharmacist.is_active = 'is_active' in request.form
         pharmacist.activity = request.form.get('activity', pharmacist.activity)
         db.session.commit()
+        record_audit(ACTION_UPDATE, "staff", target_id=pharmacist_id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"name={pharmacist.name}")
     # ATTENTION si cette route est reactivee : 'admin_staff.pharmacists' n'existe
     # plus (elle rendait pharmacists.html, fichier inexistant -> 500, et a ete
     # retiree). Ce url_for leverait donc un BuildError. Viser /admin/staff, qui
@@ -232,6 +260,8 @@ def add_pharmacist():
     new_pharmacist = Pharmacist(name=name, initials=initials, language=language, is_active=is_active, activity=activity)
     db.session.add(new_pharmacist)
     db.session.commit()
+    record_audit(ACTION_CREATE, "staff", target_id=new_pharmacist.id,
+                 outcome=OUTCOME_SUCCESS, details=f"name={name}")
     return render_template('htmx/menu_admin_pharmacist_row.html', pharmacist=new_pharmacist)
 
 

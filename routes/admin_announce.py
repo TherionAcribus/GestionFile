@@ -20,6 +20,11 @@ from upload_security import (
     read_upload_bounded,
     validate_service_account_json,
 )
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
@@ -169,6 +174,8 @@ def delete_sound(sound_filename):
         if sound_path.exists() and sound_path.is_file():
             sound_path.unlink()
             app.logger.info(f"Son supprimé : {sound_filename}")
+            record_audit(ACTION_DELETE, "sound", target_id=sound_filename,
+                         outcome=OUTCOME_SUCCESS)
             return redirect (url_for('.gallery_audio_list'))
         else:
             app.logger.error(f"Fichier non trouvé : {sound_filename}")
@@ -199,6 +206,8 @@ def select_signal():
         app.logger.debug("%s", config)
         config.value_str = filename
         db.session.commit()
+        record_audit(ACTION_UPDATE, "config", target_id="announce_alert_filename",
+                     outcome=OUTCOME_SUCCESS, details=f"value={filename}")
 
         communikation("admin", event="refresh_sound")
 
@@ -246,6 +255,8 @@ def upload_signal_file():
         return redirect(url_for('.gallery_audio_list'))
 
     target_path.write_bytes(result["data"])
+    record_audit(ACTION_CREATE, "sound", target_id=filename,
+                 outcome=OUTCOME_SUCCESS)
 
     return redirect(url_for('.gallery_audio_list'))
 
@@ -327,6 +338,10 @@ def upload_google_key():
             config_option = ConfigOption(config_key='voice_google_key', value_json=encrypted_content_str)
             db.session.add(config_option)
         db.session.commit()
+        # Pas de détail : la valeur est un secret chiffré — on trace
+        # l'action, jamais le contenu.
+        record_audit(ACTION_UPDATE, "config", target_id="voice_google_key",
+                     outcome=OUTCOME_SUCCESS)
         return '<div class="alert alert-success">Clé Google Cloud enregistrée avec succès.</div>'
     else:
         return '<div class="alert alert-danger">Format de fichier non autorisé. Veuillez télécharger un fichier JSON.</div>'
@@ -425,6 +440,9 @@ def announce_save_google_voice():
         language.voice_google_name = voice_google_name
         language.voice_google_region = voice_google_region  
         db.session.commit()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"voice_google={voice_google_name}")
 
         if language.code == "fr":
             app.config["VOICE_GOOGLE_NAME"] = voice_google_name
@@ -436,6 +454,8 @@ def announce_save_google_voice():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_FAILURE, details="voice_google")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
         display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
@@ -470,6 +490,9 @@ def announce_save_voice_model():
 
         language.voice_model = voice_model
         db.session.commit()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"voice_model={voice_model}")
 
         if language.code == "fr":
             app.config["VOICE_MODEL"] = voice_model
@@ -480,6 +503,8 @@ def announce_save_voice_model():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_FAILURE, details="voice_model")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
         display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
@@ -497,6 +522,9 @@ def announce_save_gtts_voice():
 
         language.voice_gtts_name = voice_gtts_name
         db.session.commit()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"voice_gtts={voice_gtts_name}")
 
         if language.code == "fr":
             app.config["VOICE_GTTS_NAME"] = voice_gtts_name
@@ -507,6 +535,8 @@ def announce_save_gtts_voice():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_FAILURE, details="voice_gtts")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
         display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400
@@ -523,6 +553,9 @@ def announce_save_voice_is_active():
 
         language.voice_is_active = True if voice_is_active == 'true' else False 
         db.session.commit()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"voice_is_active={language.voice_is_active}")
 
         display_toast(success=True, message="Option sauvée")
 
@@ -530,6 +563,8 @@ def announce_save_voice_is_active():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id=language_id,
+                     outcome=OUTCOME_FAILURE, details="voice_is_active")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
         display_toast(success=False, message=f"Erreur : {e}")
         return f"Erreur : {e}", 400

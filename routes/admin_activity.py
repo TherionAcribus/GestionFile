@@ -6,6 +6,11 @@ from routes.admin_security import require_permission
 from form_validation import Champ, BOOLEEN, ENTIER, LISTE_ENTIERS, extraire, valider
 from transactions import atomic
 from ui_feedback import display_toast
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 from extensions import scheduler
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
@@ -83,6 +88,9 @@ def update_activity(activity_id):
             activity.is_staff = False
 
         db.session.commit()
+        record_audit(ACTION_UPDATE, "activity", target_id=activity_id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"name={activity.name}")
         display_toast(success=True, message="Activité ajoutée avec succès")
         return ""
     else:
@@ -162,11 +170,15 @@ def delete_activity(activity_id, staff=None):
 
         db.session.delete(activity)
         db.session.commit()
+        record_audit(ACTION_DELETE, "activity", target_id=activity_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Activité supprimée avec succès")
         return return_good_display_activity(staff)
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_DELETE, "activity", target_id=activity_id,
+                     outcome=OUTCOME_FAILURE)
         app.logger.error(str(e))
         display_toast(success=False, message="erreur : " + str(e))
         return return_good_display_activity(staff)
@@ -268,10 +280,16 @@ def add_new_activity():
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
 
+        record_audit(ACTION_CREATE, "activity", target_id=new_activity.id,
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"name={new_activity.name}")
         return f"{return_good_display_activity(staff_id)}{clear_form_html}"
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "activity",
+                     target_id=request.form.get('name'),
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         return return_good_display_activity(staff_id)
 

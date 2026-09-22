@@ -3,6 +3,11 @@ from datetime import datetime
 from models import AlgoRule, Activity, ConfigOption, db
 from routes.admin_security import require_permission
 from ui_feedback import display_toast
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
+    OUTCOME_FAILURE, OUTCOME_SUCCESS,
+)
 
 admin_algo_bp = Blueprint('admin_algo', __name__)
 
@@ -39,6 +44,8 @@ def toggle_activation():
     algo_activated = ConfigOption.query.filter_by(config_key="algo_activate").first()
     algo_activated.value_bool = is_activated
     db.session.commit()
+    record_audit(ACTION_UPDATE, "config", target_id="algo_activate",
+                 outcome=OUTCOME_SUCCESS, details=f"value={is_activated}")
 
     return render_template("admin/algo_des_activate_buttons.html",
                             algo_activated=app.config['ALGO_IS_ACTIVATED'])
@@ -58,9 +65,13 @@ def change_overtaken_limit():
         algo_overtaken_limit = ConfigOption.query.filter_by(config_key="algo_overtaken_limit").first()
         algo_overtaken_limit.value_int = overtaken_limit
         db.session.commit()
+        record_audit(ACTION_UPDATE, "config", target_id="algo_overtaken_limit",
+                     outcome=OUTCOME_SUCCESS, details=f"value={overtaken_limit}")
         return display_toast()
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_UPDATE, "config", target_id="algo_overtaken_limit",
+                     outcome=OUTCOME_FAILURE)
         app.logger.exception("Echec de l'enregistrement de la limite de depassement")
         return display_toast(success=False, message=str(e))
 
@@ -106,6 +117,8 @@ def add_new_rule():
         db.session.add(new_rule)
         db.session.commit()
 
+        record_audit(ACTION_CREATE, "algo_rule", target_id=new_rule.id,
+                     outcome=OUTCOME_SUCCESS, details=f"name={name}")
         display_toast(success=True, message="Règle ajoutée avec succès")
 
         # Effacer le formulaire via swap-oob
@@ -115,6 +128,8 @@ def add_new_rule():
 
     except Exception as e:
         db.session.rollback()
+        record_audit(ACTION_CREATE, "algo_rule",
+                     target_id=request.form.get('name'), outcome=OUTCOME_FAILURE)
         app.logger.exception("Echec de l'ajout d'une regle d'algorithme")
         display_toast(success=False, message="erreur : " + str(e))
         return display_algo_table()
@@ -141,10 +156,15 @@ def delete_algo(algo_id):
         db.session.delete(rule)
         db.session.commit()
 
+        record_audit(ACTION_DELETE, "algo_rule", target_id=algo_id,
+                     outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Règle supprimée")
         return display_algo_table()
 
     except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_DELETE, "algo_rule", target_id=algo_id,
+                     outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="erreur : " + str(e))
         return display_algo_table()
 
@@ -175,6 +195,8 @@ def update_algo_rule(rule_id):
             rule.end_time = datetime.strptime(end_time_str, "%H:%M").time()
 
             db.session.commit()
+            record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
+                         outcome=OUTCOME_SUCCESS, details=f"name={rule.name}")
 
             display_toast(success=True, message="Mise à jour réussie")
             return ""
@@ -183,6 +205,9 @@ def update_algo_rule(rule_id):
             return ""
 
     except Exception as e:
+            db.session.rollback()
+            record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
+                         outcome=OUTCOME_FAILURE)
             display_toast(success=False, message="erreur : " + str(e))
             app.logger.error(e)
             return jsonify(status="error", message=str(e)), 500

@@ -5,6 +5,8 @@ from communication import communikation
 from routes.admin_security import check_default_admin, require_permission, require_permission_api
 from extensions import scheduler
 from sockets import active_connections
+from audit_service import record_audit
+from audit_log import ACTION_CREATE, ACTION_UPDATE, OUTCOME_SUCCESS
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
 
@@ -20,6 +22,9 @@ def admin():
         security_card.visible = True
         security_card.position = 0
         db.session.commit()
+        record_audit(ACTION_UPDATE, "dashboard_card", target_id="security",
+                     outcome=OUTCOME_SUCCESS,
+                     details="auto-affichage (admin par défaut actif)")
 
     dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
     return render_template('/admin/admin.html',
@@ -35,6 +40,8 @@ def hide_dashboard_card():
     if card:
         card.visible = False
         db.session.commit()
+        record_audit(ACTION_UPDATE, "dashboard_card", target_id=card_name,
+                     outcome=OUTCOME_SUCCESS, details="visible=False")
         communikation("admin", event="refresh_dashboard_select")
         return '', 200
     else:
@@ -59,6 +66,8 @@ def dashboard_valid_select():
             card.visible = False
 
     db.session.commit()
+    record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
+                 details=f"visibles={','.join(data)}")
     communikation("admin", event="refresh_dashboard_select")
 
     dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
@@ -88,6 +97,8 @@ def save_dashboard_order():
             if card:
                 card.position = position  # Mettre à jour la position
         db.session.commit()  # Sauvegarder les modifications dans la base de données
+        record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
+                     details="réordonnancement")
         return '', 204  # Réponse vide avec succès
     return 'Invalid data', 400
 
@@ -112,6 +123,8 @@ def resize_dashboard_card():
     if card:
         card.size = new_size
         db.session.commit()
+        record_audit(ACTION_UPDATE, "dashboard_card", target_id=card_id,
+                     outcome=OUTCOME_SUCCESS, details=f"size={new_size}")
         return '', 204
     else:
         return 'Card non trouvée', 404
@@ -148,6 +161,8 @@ def add_dashboard_card():
     
     db.session.add(new_card)
     db.session.commit()
+    record_audit(ACTION_CREATE, "dashboard_card", target_id=new_card.id,
+                 outcome=OUTCOME_SUCCESS, details=f"name={name}")
     
     return '', 201
 
@@ -172,6 +187,8 @@ def save_dashboard_configuration():
             card.position = position
     
     db.session.commit()
+    record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
+                 details=f"config: visibles={','.join(map(str, visible_cards))}")
     communikation("admin", event="refresh_dashboard_select")
     
     # Retourner le HTML des cartes visibles avec leur contenu

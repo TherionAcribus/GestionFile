@@ -16,6 +16,10 @@ from spotify_support import (
     run_duck_cycle,
 )
 from ui_feedback import display_toast
+from audit_service import record_audit
+from audit_log import (
+    ACTION_CONNECT, ACTION_DISCONNECT, ACTION_UPDATE, OUTCOME_SUCCESS,
+)
 
 admin_music_bp = Blueprint('admin_music', __name__)
 
@@ -242,6 +246,7 @@ def clear_spotify_tokens():
 @require_permission('music_options')
 def spotify_logout():
     clear_spotify_tokens()
+    record_audit(ACTION_DISCONNECT, "spotify", outcome=OUTCOME_SUCCESS)
     communikation("update_screen", event="spotify_status", data=False)
     return redirect(url_for('admin_music.admin_music'))
 
@@ -263,6 +268,7 @@ def spotify_callback():
         app.logger.warning("Échec de l'obtention du jeton Spotify (OAuth)")
         return redirect(url_for('admin_music.error_page'))
 
+    record_audit(ACTION_CONNECT, "spotify", outcome=OUTCOME_SUCCESS)
     return redirect(url_for('admin_music.admin_music'))  # Rediriger vers votre page d'administration ou autre
 
 # [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
@@ -388,6 +394,8 @@ def change_volume():
     if config_option:
         config_option.value_int = volume
         db.session.commit()
+        record_audit(ACTION_UPDATE, "config", target_id="music_volume",
+                     outcome=OUTCOME_SUCCESS, details=f"value={volume}")
 
     # change le volume tout de suite
     set_volume(volume)
