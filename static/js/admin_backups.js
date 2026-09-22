@@ -3,9 +3,9 @@
 //
 // Le fragment etant reinjecte par HTMX, son <script> etait rejoue a chaque
 // echange : les ecouteurs `change` poses sur chaque case a cocher s'empilaient.
-// Les fonctions ci-dessous restent des globales (appelees par les onclick du
-// fragment) ; ce qui doit s'EXECUTER passe par la delegation et par une
-// initialisation declenchee a l'arrivee du fragment.
+// Tout ce qui doit s'EXECUTER passe par la delegation (attributs data-*) et
+// par une initialisation declenchee a l'arrivee du fragment : les anciens
+// onclick du fragment seraient bloques par la CSP (script-src 'self').
 
 function toggleAllExportChecks(checked) {
     document.querySelectorAll('.export-chk').forEach(function(chk) {
@@ -63,6 +63,19 @@ function updateExportEstimate() {
 }
 
 // --- Comportements delegues (poses une seule fois) -------------------------
+
+// « Tout selectionner » : remplace onchange="toggleAllExportChecks(...)".
+document.addEventListener('change', function (evt) {
+    if (!evt.target || evt.target.id !== 'chk_export_all') { return; }
+    toggleAllExportChecks(evt.target.checked);
+});
+
+// Soumission du formulaire d'export : remplace onclick="prepareExport()".
+// Le listener `submit` couvre aussi la touche Entree dans un champ.
+document.addEventListener('submit', function (evt) {
+    if (!evt.target || evt.target.id !== 'exportForm') { return; }
+    prepareExport();
+});
 
 // Cocher/decocher une section met a jour « Tout selectionner » et l'estimation.
 document.addEventListener('change', function (evt) {

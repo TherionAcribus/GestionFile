@@ -34,7 +34,7 @@
         class="btn btn-primary" id="closeModalButton" 
         href="#!"
         hx-post="/admin/announce/audio/save_selected_sound"
-        hx-vals='js:{"selected_sound": document.getElementById("selected_sound").innerText}'
+        data-param-selected_sound="#selected_sound@text"
         hx-target="#invisible"
         data-bs-target="#modal_display_gallery"
         data-bs-dismiss="modal"

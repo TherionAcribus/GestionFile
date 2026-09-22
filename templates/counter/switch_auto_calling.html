@@ -7,8 +7,8 @@
             {% if auto_calling %} checked {% endif %}
             hx-post="/counter/update_switch_auto_calling"
             hx-target="#invisible"
-            hx-vals='js:{"value": document.getElementById("switch_auto_calling").checked,
-                        "counter_id": {{ counter.id }}}'>
+            hx-vals='{"counter_id": {{ counter.id }}}'
+            data-param-value="#switch_auto_calling@checked">
     <span class="lever"></span>
     Oui
     </label>

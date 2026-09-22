@@ -60,12 +60,11 @@
                 <button class="btn btn-primary"
                     hx-target="#div_buttons_table"
                     hx-post="/admin/patient/add_new_button"
-                    hx-vals='js:{"label": document.getElementById("label").value, 
-                            "is_present": document.getElementById("is_present").checked,
-                            "shape": document.getElementById("shape").value,
-                            "activity": document.getElementById("activity").value,
-                            "parent_btn": document.getElementById("parent").value, 
-                            }'>
+                    data-param-label="#label"
+                    data-param-is_present="#is_present@checked"
+                    data-param-shape="#shape"
+                    data-param-activity="#activity"
+                    data-param-parent_btn="#parent">
                     Enregistrer
                 </button>
             </td>

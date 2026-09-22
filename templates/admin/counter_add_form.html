@@ -21,8 +21,7 @@
                     hx-target="#div_counter_table"
                     hx-post="/admin/counter/add_new_counter"
                     hx-include=".activities"
-                    hx-vals='js:{"name": document.getElementById("name").value     
-                        }'>
+                    data-param-name="#name">
                     Enregistrer
                 </button>
             </td>

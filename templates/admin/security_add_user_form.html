@@ -44,12 +44,11 @@
                 <button class="btn btn-primary"
                     hx-target="#div_user_table"
                     hx-post="/admin/security/add_new_user"
-                    hx-vals='js:{"username": document.getElementById("username").value,
-                                "email": document.getElementById("email").value,
-                                "password1": document.getElementById("password1").value,
-                                "password2": document.getElementById("password2").value,
-                                "role_id": document.getElementById("role").value
-                            }'>
+                    data-param-username="#username"
+                    data-param-email="#email"
+                    data-param-password1="#password1"
+                    data-param-password2="#password2"
+                    data-param-role_id="#role">
                     Enregistrer
                 </button>
             </td>

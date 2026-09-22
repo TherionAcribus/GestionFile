@@ -26,8 +26,7 @@
         <form id="exportForm" method="get" action="/admin/backup/export">
             <div class="mb-2">
                 <div class="form-check form-check-inline">
-                    <input class="form-check-input" type="checkbox" id="chk_export_all"
-                           onchange="toggleAllExportChecks(this.checked)">
+                    <input class="form-check-input" type="checkbox" id="chk_export_all">
                     <label class="form-check-label fw-bold" for="chk_export_all">Tout sélectionner</label>
                 </div>
             </div>
@@ -68,7 +67,7 @@
             <div id="exportSizeEstimate" class="small mt-2"></div>
 
             <input type="hidden" name="sections" id="export_sections_input" value="all">
-            <button type="submit" class="btn btn-primary mt-2" onclick="prepareExport()">
+            <button type="submit" class="btn btn-primary mt-2">
                 <i class="bi bi-download"></i> Exporter la sauvegarde
             </button>
         </form>

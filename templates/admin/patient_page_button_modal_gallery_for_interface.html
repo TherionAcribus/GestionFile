@@ -40,7 +40,8 @@
     <a href="#!" 
         class="btn btn-primary"
         hx-post="/admin/patient/update_button_image_from_gallery_for_interface"
-        hx-vals='js:{"button_id": "{{button_id}}", "image": document.getElementById("image_name_field").innerText}'
+        hx-vals='{"button_id": "{{button_id}}"}'
+        data-param-image="#image_name_field@text"
         {% if button_id == "print_button" %}
             hx-target="#div_image_print_button"
         {% elif button_id == "cancel_button" %}

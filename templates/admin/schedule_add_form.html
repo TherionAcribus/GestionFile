@@ -28,11 +28,10 @@
                 <button class="btn btn-primary"
                     hx-target="#div_schedule_table"
                     hx-post="/admin/schedule/add_new_schedule"
-                    hx-vals='js:{"name_schedule": document.getElementById("name_schedule").value, 
-                            "start_time": document.getElementById("start_time").value,
-                            "end_time": document.getElementById("end_time").value,
-                            "weekdays": getSelectedOptions("weekdays")
-                        }'>
+                    data-param-name_schedule="#name_schedule"
+                    data-param-start_time="#start_time"
+                    data-param-end_time="#end_time"
+                    data-param-weekdays="#weekdays@options">
                     Enregistrer
                 </button>
             </td>

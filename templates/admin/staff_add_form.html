@@ -27,10 +27,9 @@
                     hx-target="#div_staff_table"
                     hx-post="/admin/staff/add_new_staff"
                     hx-include=".activities"
-                    hx-vals='js:{"name": document.getElementById("name").value, 
-                            "initials": document.getElementById("initials").value, 
-                            "language": document.getElementById("language").value, 
-                            }'>
+                    data-param-name="#name"
+                    data-param-initials="#initials"
+                    data-param-language="#language">
                     Enregistrer
                 </button>
             </td>

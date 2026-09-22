@@ -27,8 +27,7 @@
                     hx-target="#invisible"
                     hx-include=".activities-{{ counter.id }}"
                     hx-post="/admin/counter/counter_update/{{ counter.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ counter.id }}").value
-                            }'>
+                    data-param-name="#name-{{ counter.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

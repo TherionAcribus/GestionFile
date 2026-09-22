@@ -51,15 +51,14 @@
                 <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
                     hx-post="/admin/algo/rule_update/{{ rule.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ rule.id }}").value,
-                                "activity_id": document.getElementById("activity-{{ rule.id }}").value,
-                                "priority_level": document.getElementById("priority_level-{{ rule.id }}").value,
-                                "min_patients": document.getElementById("min_patients-{{ rule.id }}").value,
-                                "max_patients": document.getElementById("max_patients-{{ rule.id }}").value,
-                                "max_overtaken": document.getElementById("max_overtaken-{{ rule.id }}").value,
-                                "start_time": document.getElementById("start_time-{{ rule.id }}").value,
-                                "end_time": document.getElementById("end_time-{{ rule.id }}").value
-                            }'>
+                    data-param-name="#name-{{ rule.id }}"
+                    data-param-activity_id="#activity-{{ rule.id }}"
+                    data-param-priority_level="#priority_level-{{ rule.id }}"
+                    data-param-min_patients="#min_patients-{{ rule.id }}"
+                    data-param-max_patients="#max_patients-{{ rule.id }}"
+                    data-param-max_overtaken="#max_overtaken-{{ rule.id }}"
+                    data-param-start_time="#start_time-{{ rule.id }}"
+                    data-param-end_time="#end_time-{{ rule.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

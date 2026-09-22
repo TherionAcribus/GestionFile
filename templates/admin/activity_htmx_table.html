@@ -68,14 +68,13 @@
                 <button class="btn btn-primary btnSaveLine" 
                     hx-target="#invisible"
                     hx-post="/admin/activity/activity_update/{{ activity.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ activity.id }}").value, 
-                            "letter": document.getElementById("letter-{{ activity.id }}").value,
-                            "inactivity_message": document.getElementById("inactivity_message-{{ activity.id }}").value,
-                            "specific_message": document.getElementById("specific_message-{{ activity.id }}").value,
-                            "notification": document.getElementById("notification-{{ activity.id }}").checked,
-                            "schedules": getSelectedOptions("schedules-{{ activity.id }}")
-                            {% if staff %}, "staff_id": document.getElementById("staff-{{ activity.id }}").value{% endif %}
-                            }'>
+                    data-param-name="#name-{{ activity.id }}"
+                    data-param-letter="#letter-{{ activity.id }}"
+                    data-param-inactivity_message="#inactivity_message-{{ activity.id }}"
+                    data-param-specific_message="#specific_message-{{ activity.id }}"
+                    data-param-notification="#notification-{{ activity.id }}@checked"
+                    data-param-schedules="#schedules-{{ activity.id }}@options"
+                    {% if staff %}data-param-staff_id="#staff-{{ activity.id }}"{% endif %}>
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

@@ -16,9 +16,9 @@
         hx-trigger="load"
         hx-target="#div_history_table"
         hx-swap="innerHTML"
-        hx-vals='js:{"search": (document.getElementById("history-search")||{}).value || "",
-                    "per_page": (document.getElementById("history-per_page")||{}).value || "",
-                    "sort": (document.getElementById("history-sort")||{}).value || "",
-                    "dir": (document.getElementById("history-dir")||{}).value || ""}'>
+        data-param-search="#history-search"
+        data-param-per_page="#history-per_page"
+        data-param-sort="#history-sort"
+        data-param-dir="#history-dir">
     </div>
 {% endblock %}

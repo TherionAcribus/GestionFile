@@ -649,3 +649,21 @@ function initActiviteIndisponible() {
 
 document.addEventListener('DOMContentLoaded', initActiviteIndisponible);
 document.addEventListener('htmx:afterSettle', initActiviteIndisponible);
+
+// Bouton « Imprimer » générique des fragments (htmx/patient_qr_right_page.html) :
+// l'ancien onclick="printDiv(...)" était bloqué par la CSP — et printDiv
+// n'existait d'ailleurs plus. Délégation sur data-print-target="<id>".
+document.addEventListener('click', function (e) {
+    var btn = (e.target && e.target.closest)
+        ? e.target.closest('[data-print-target]') : null;
+    if (!btn) return;
+    var target = document.getElementById(btn.getAttribute('data-print-target'));
+    if (!target) return;
+    var win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write('<!doctype html><html><body>' + target.innerHTML + '</body></html>');
+    win.document.close();
+    win.focus();
+    win.print();
+    win.close();
+});

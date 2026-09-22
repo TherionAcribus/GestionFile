@@ -5,7 +5,7 @@
     hx-trigger="change"
     hx-post="/admin/translations/change_language_target"
     hx-target="#translations_list"
-    hx-vals='js:{"language_code": document.getElementById("language_target").value}'
+    data-param-language_code="#language_target"
     >
         <option value="" disabled selected>Choix de la langue cible</option>
         {% for language in languages %}

@@ -1,7 +1,7 @@
 {% import '/admin/pagination.html' as pg %}
 {% import '/admin/macros.html' as macros %}
 {%- set status_vals -%}
-"ongoing": (document.getElementById('ongoing')||{}).selected, "standing": (document.getElementById('standing')||{}).selected, "calling": (document.getElementById('calling')||{}).selected, "done": (document.getElementById('done')||{}).selected
+data-param-ongoing="#ongoing@selected" data-param-standing="#standing@selected" data-param-calling="#calling@selected" data-param-done="#done@selected"
 {%- endset -%}
 {% set url = '/admin/queue/table' %}
 {% set target = '#div_queue_table' %}
@@ -56,10 +56,10 @@
                 <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
                     hx-post="/admin/queue/patient_update/{{ patient.id }}"
-                    hx-vals='js:{"call_number": document.getElementById("call_number-{{ patient.id }}").value,
-                                "activity_id": document.getElementById("activity-{{ patient.id }}").value,
-                                "status": document.getElementById("status-{{ patient.id }}").value,
-                                "counter_id": document.getElementById("counter-{{ patient.id }}").value}'>
+                    data-param-call_number="#call_number-{{ patient.id }}"
+                    data-param-activity_id="#activity-{{ patient.id }}"
+                    data-param-status="#status-{{ patient.id }}"
+                    data-param-counter_id="#counter-{{ patient.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
                 <button class="btn btn-danger"

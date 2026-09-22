@@ -41,16 +41,9 @@
             hx-post="/admin/security/save_role"
             hx-target="#div_role_table"
             hx-swap="innerHTML"
-            hx-vals='js:{
-                "name": document.getElementById("name").value,
-                "description": document.getElementById("description").value,
-                "permissions": JSON.stringify(
-                    Object.fromEntries(
-                        Array.from(document.querySelectorAll(".permission-checkbox"))
-                            .map(checkbox => [checkbox.dataset.permission, checkbox.checked])
-                    )
-                )
-            }'>
+            data-param-name="#name"
+            data-param-description="#description"
+            data-params-fn="rolePermissions">
             Créer le rôle
         </button>
     </div>

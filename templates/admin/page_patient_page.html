@@ -51,7 +51,8 @@
             hx-post="/admin/update_input"
             hx-target="#invisible"
             hx-trigger="change"
-            hx-vals='js:{"key": "page_patient_print_fail_behavior", "value": document.getElementById("page_patient_print_fail_behavior").value}'>
+            hx-vals='{"key": "page_patient_print_fail_behavior"}'
+            data-param-value="#page_patient_print_fail_behavior">
         <option value="ask" {% if page_patient_print_fail_behavior == 'ask' %}selected{% endif %}>
             Demander au patient (Réessayer / Appeler le personnel)
         </option>
@@ -117,7 +118,8 @@
     class="btn btn-primary"
         hx-post="/admin/update_input"
         hx-target="#invisible"
-        hx-vals='js:{"key": "page_patient_disable_default_message", "value": document.getElementById("page_patient_disable_default_message").value}'>
+        hx-vals='{"key": "page_patient_disable_default_message"}'
+        data-param-value="#page_patient_disable_default_message">
         Enregistrer
     </button>
 </div>

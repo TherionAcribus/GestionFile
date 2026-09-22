@@ -15,17 +15,15 @@
             hx-target="#div_queue_table"
             hx-swap="innerHTML"
             hx-trigger="change"
-            hx-vals='js:{
-                "ongoing": $("#select_patient_filter").val().includes("ongoing"),
-                "standing": $("#select_patient_filter").val().includes("standing"),
-                "calling": $("#select_patient_filter").val().includes("calling"),
-                "done": $("#select_patient_filter").val().includes("done"),
-                "search": (document.getElementById("queue-search")||{}).value || "",
-                "per_page": (document.getElementById("queue-per_page")||{}).value || "",
-                "sort": (document.getElementById("queue-sort")||{}).value || "",
-                "dir": (document.getElementById("queue-dir")||{}).value || "",
-                "page": 1
-            }'
+            hx-vals='{"page": 1}'
+            data-param-ongoing="#ongoing@selected"
+            data-param-standing="#standing@selected"
+            data-param-calling="#calling@selected"
+            data-param-done="#done@selected"
+            data-param-search="#queue-search"
+            data-param-per_page="#queue-per_page"
+            data-param-sort="#queue-sort"
+            data-param-dir="#queue-dir"
         >
             <option id="ongoing" selected value="ongoing">En cours</option>
             <option id="standing" selected value="standing">En attente</option>
@@ -39,7 +37,7 @@
 
     <!-- Barre d'outils pagination/tri/recherche (état persistant hors fragment) -->
     {% set queue_defaults = {'search': '', 'per_page': 25, 'sort': 'timestamp', 'direction': 'asc'} %}
-    {% set status_vals %}"ongoing": (document.getElementById('ongoing')||{}).selected, "standing": (document.getElementById('standing')||{}).selected, "calling": (document.getElementById('calling')||{}).selected, "done": (document.getElementById('done')||{}).selected{% endset %}
+    {% set status_vals %}data-param-ongoing="#ongoing@selected" data-param-standing="#standing@selected" data-param-calling="#calling@selected" data-param-done="#done@selected"{% endset %}
     {{ pg.list_toolbar('queue', '/admin/queue/table', 'post', '#div_queue_table', queue_defaults, status_vals, 'Rechercher (n° d\'appel, motif, statut)…') }}
 
     <!-- Queue table -->
@@ -48,14 +46,14 @@
         hx-trigger="load, refresh_queue_patient from:body"
         hx-target="#div_queue_table"
         hx-swap="innerHTML"
-        hx-vals='js:{"ongoing": document.getElementById("ongoing").selected,
-                    "standing": document.getElementById("standing").selected,
-                    "calling": document.getElementById("calling").selected,
-                    "done": document.getElementById("done").selected,
-                    "search": (document.getElementById("queue-search")||{}).value || "",
-                    "per_page": (document.getElementById("queue-per_page")||{}).value || "",
-                    "sort": (document.getElementById("queue-sort")||{}).value || "",
-                    "dir": (document.getElementById("queue-dir")||{}).value || ""}'
+        data-param-ongoing="#ongoing@selected"
+        data-param-standing="#standing@selected"
+        data-param-calling="#calling@selected"
+        data-param-done="#done@selected"
+        data-param-search="#queue-search"
+        data-param-per_page="#queue-per_page"
+        data-param-sort="#queue-sort"
+        data-param-dir="#queue-dir"
         >
     </div>
 
@@ -130,7 +128,7 @@
                 hx-target="#invisible"
                 hx-trigger="click"
                 hx-swap="innerHTML"
-                hx-vals='js:{"activity_id": document.getElementById("create_new_patient_auto").value}'
+                data-param-activity_id="#create_new_patient_auto"
                 >
                 Création rapide
             </button>
@@ -143,9 +141,5 @@
 
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
-
-    <script>
-
-    </script>
 
 {% endblock %}

@@ -30,7 +30,8 @@
         id="announce_voice_model"
         hx-post="/admin/announce/save_voice_model"
         hx-target="#invisible"
-        hx-vals='js:{"language_id": {{ language.id }}, "voice_model": document.getElementById("announce_voice_model").value}'>
+        hx-vals='{"language_id": {{ language.id }}}'
+        data-param-voice_model="#announce_voice_model">
         <option value="" disabled selected>Origine de la voix</option>
         <option value="gtts" {% if language.voice_model == "gtts" %}selected{% endif %}>gTTS (en ligne)</option>
         <option value="google" {% if language.voice_model == "google" %}selected{% endif %}>Google Voice</option>
@@ -44,7 +45,8 @@
     {% if language.voice_is_active %} checked {% endif %}
     hx-post="/admin/announce/save_voice_is_active" 
     hx-target="#invisible"
-    hx-vals='js:{"language_id": {{ language.id }}, "voice_is_active": document.getElementById("voice_is_active").checked}'>        
+    hx-vals='{"language_id": {{ language.id }}}'
+    data-param-voice_is_active="#voice_is_active@checked">        
     <label class="form-check-label" for="voice_is_active">L'audio de la langue est active</label>
 </div>
 

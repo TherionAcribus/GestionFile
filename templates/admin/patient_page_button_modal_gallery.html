@@ -41,7 +41,8 @@
     <a href="#!" 
         class="btn btn-primary"
         hx-post="/admin/patient/update_button_image_from_gallery"
-        hx-vals='js:{"button_id": {{button.id}}, "image": document.getElementById("image_name_field").innerText}'
+        hx-vals='{"button_id": {{button.id}}}'
+        data-param-image="#image_name_field@text"
         hx-target="#button-image-{{ button.id }}"
         hx-swap="innerHTML"
         data-bs-target="#modal_display_gallery"

@@ -38,13 +38,12 @@
                 <button class="btn btn-primary btnSaveLine" 
                     hx-target="#invisible"
                     hx-post="/admin/languages/language_update/{{ language.id }}"
-                    hx-vals='js:{"code": document.getElementById("code-{{ language.id }}").value, 
-                            "name": document.getElementById("name-{{ language.id }}").value,
-                            "translation": document.getElementById("translation-{{ language.id }}").value,
-                            "is_active": document.getElementById("is_active-{{ language.id }}").checked,
-                            "voice_is_active": document.getElementById("voice_is_active-{{ language.id }}").checked,
-                            "image_url": document.getElementById("image_url-{{ language.id }}").value
-                            }'>
+                    data-param-code="#code-{{ language.id }}"
+                    data-param-name="#name-{{ language.id }}"
+                    data-param-translation="#translation-{{ language.id }}"
+                    data-param-is_active="#is_active-{{ language.id }}@checked"
+                    data-param-voice_is_active="#voice_is_active-{{ language.id }}@checked"
+                    data-param-image_url="#image_url-{{ language.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

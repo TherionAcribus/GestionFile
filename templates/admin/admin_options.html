@@ -11,8 +11,8 @@
         id="admin_colors"
         hx-post="/admin/update_select"
         hx-target="#invisible"
-        hx-vals='js:{"key": "admin_colors", "value": document.getElementById("admin_colors").value}'
-        onchange="changeTheme()">
+        hx-vals='{"key": "admin_colors"}'
+        data-param-value="#admin_colors">
             <option value="" disabled selected>Palette de couleurs</option>
             {% for theme in themes %}
             <option value="{{ theme }}" 

@@ -380,9 +380,17 @@
     <script defer src="{{ url_for('static', filename='js/libs/bootstrap.bundle.min.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/libs/select2.min.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    {#  htmx_params.js : résolution déclarative des paramètres HTMX
+        (data-param-*) et collecteurs nommés. Remplace hx-vals="js:..." et
+        hx-on::*, incompatibles avec la CSP script-src 'self' (htmx compile
+        ces expressions avec Function()). Chargé avant les scripts qui
+        enregistrent des collecteurs via scripts_end (ex. dépendances de
+        couleurs CSS sur les pages d'apparence). #}
+    <script defer src="{{ url_for('static', filename='js/htmx_params.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/htmx_tables.js') }}"></script>
-    {#  admin_macros.js : fonctions appelées par les attributs onclick/onkeypress
-        des macros (macros.html). Elles y étaient définies EN LIGNE, dans le corps
+    {#  admin_macros.js : comportements des macros (macros.html), attachés par
+        délégation sur les attributs data-*. Elles y étaient définies EN LIGNE,
+        dans le corps
         des macros : `css_unit_bloc` étant appelé 71 fois sur une page de
         configuration CSS, les mêmes fonctions étaient renvoyées 71 fois dans une
         seule réponse HTML. Le fichier ne contient que des déclarations de
@@ -390,8 +398,8 @@
         sont définies avant toute interaction possible de l'utilisateur. #}
     <script defer src="{{ url_for('static', filename='js/admin_macros.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/admin_macros_forms.js') }}"></script>
-    {#  admin_fragments.js : fonctions appelées par les onclick des fragments
-        injectés par HTMX. Elles y étaient définies EN LIGNE, donc redéfinies à
+    {#  admin_fragments.js : comportements des fragments injectés par HTMX,
+        attachés par délégation. Ils étaient définis EN LIGNE, donc redéfinis à
         chaque échange. `selectImage` et `getSelectedOptions` étaient même
         dupliquées à l'identique dans deux gabarits chacune. #}
     <script defer src="{{ url_for('static', filename='js/admin_fragments.js') }}"></script>

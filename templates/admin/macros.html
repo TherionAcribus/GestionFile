@@ -96,13 +96,11 @@
         data-feedback-skip
         hx-post="/admin/update_input"
         hx-swap="none"
-        hx-vals='js:{
-            "key": "{{ key }}",
-            "value": document.getElementById("{{ key }}").value,
-            "check": "{{ check }}"
-        }'
-        hx-on::before-request="handleBeforeRequestConfig('{{ key }}')"
-        hx-on::after-request="handleAfterRequestConfig(event, '{{ key }}')"
+        hx-vals='{"key": "{{ key }}", "check": "{{ check }}"}'
+        data-param-value="#{{ key }}"
+        data-key="{{ key }}"
+        data-before-request="config"
+        data-after-request="config"
     >
         Enregistrer
     </button>
@@ -309,8 +307,8 @@
            {% if check == True %}checked{% endif %}
            hx-post="/admin/update_switch"
            hx-target="#invisible"
-           hx-vals='js:{"key": "{{key}}",
-                        "value": document.getElementById("{{key}}").checked}'>
+           hx-vals='{"key": "{{key}}"}'
+           data-param-value="#{{key}}@checked">
     <label class="form-check-label" for="{{key}}">{{label}}</label>
 </div>
 {% endmacro %}
@@ -562,11 +560,8 @@
         class="btn btn-primary"
         hx-post="/admin/update_css_variable"
         hx-target="#invisible"
-        hx-vals='js:{
-            "source": "{{ source }}",
-            "variable": "{{ variable }}", 
-            "value": document.getElementById("{{ source }}_{{ variable }}").value
-        }'
+        hx-vals='{"source": "{{ source }}", "variable": "{{ variable }}"}'
+        data-param-value="#{{ source }}_{{ variable }}"
     >
         Enregistrer
     </button>
@@ -616,13 +611,13 @@
         data-feedback-skip
         hx-post="/admin/update_css_variable"
         hx-swap="none"
-        hx-vals='js:{
-            "source": "{{ source }}",
-            "variable": "{{ variable }}",
-            "value": document.getElementById("{{ source }}_{{ variable }}").value + "{{ unit }}"
-        }'
-        hx-on::before-request="handleBeforeRequest('{{ source }}', '{{ variable }}')"
-        hx-on::after-request="handleAfterRequest(event, '{{ source }}', '{{ variable }}')"
+        hx-vals='{"source": "{{ source }}", "variable": "{{ variable }}"}'
+        data-param-value="#{{ source }}_{{ variable }}"
+        data-param-value-append="{{ unit }}"
+        data-css-source="{{ source }}"
+        data-css-variable="{{ variable }}"
+        data-before-request="css"
+        data-after-request="css"
     >
         Enregistrer
     </button>
@@ -686,20 +681,12 @@ class="btn btn-primary"
 disabled
 hx-post="/admin/update_css_variable"
 hx-target="#invisible"
-hx-vals='js:{
-    "source": "{{ source }}",
-    "variable": "{{ variable }}", 
-    "value": document.getElementById("{{ source }}_{{ variable }}").value,
-    "isParent": Boolean(colorMappings["{{ variable }}"]),
-    "dependencies": JSON.stringify(
-        colorMappings["{{ variable }}"] ? 
-        colorMappings["{{ variable }}"].targets.map(target => ({
-            variable: target,
-            value: document.getElementById("{{ source }}_{{ variable }}").value
-        })) : []
-    )
-}'
-hx-on::after-request="handleColorAfterRequest('{{ source }}', '{{ variable }}')"
+hx-vals='{"source": "{{ source }}", "variable": "{{ variable }}"}'
+data-param-value="#{{ source }}_{{ variable }}"
+data-params-fn="cssColorDependencies"
+data-css-source="{{ source }}"
+data-css-variable="{{ variable }}"
+data-after-request="color"
 >
 Enregistrer
 </button>
@@ -845,11 +832,9 @@ Enregistrer
                         id="{{ source }}_{{ variable }}_button"
                         class="btn btn-primary"
                         hx-swap="none"
-                        hx-vals='js:{
-                            "source": "{{ source }}",
-                            "variable": "{{ variable }}",
-                            "value": document.getElementById("{{ source }}_{{ variable }}").value + "{{ unit }}"
-                        }'
+                        hx-vals='{"source": "{{ source }}", "variable": "{{ variable }}"}'
+                        data-param-value="#{{ source }}_{{ variable }}"
+                        data-param-value-append="{{ unit }}"
                         hx-post="/admin/update_css_variable"
                         data-apply-number="{{ source }}:{{ variable }}:{{ unit }}"
                         >
@@ -927,13 +912,11 @@ Enregistrer
         data-feedback-skip
         hx-post="/admin/update_input"
         hx-swap="none"
-        hx-vals='js:{
-            "key": "{{ variable }}",
-            "value": document.getElementById("{{ variable }}").value,
-            "check": "{{ check }}"
-        }'
-        hx-on::before-request="handleBeforeRequestConfig('{{ variable }}')"
-        hx-on::after-request="handleAfterRequestConfig(event, '{{ variable }}')"
+        hx-vals='{"key": "{{ variable }}", "check": "{{ check }}"}'
+        data-param-value="#{{ variable }}"
+        data-key="{{ variable }}"
+        data-before-request="config"
+        data-after-request="config"
     >
         Enregistrer
     </button>

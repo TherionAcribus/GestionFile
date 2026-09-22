@@ -60,10 +60,12 @@ def test_simple_button_sends_key_not_variable():
 
 def test_simple_button_uses_robust_handlers():
     body = _macro_body(_read("templates/admin/macros.html"), "simple_button")
-    # Avant : désactive le bouton pendant la requête.
-    assert "handleBeforeRequestConfig('{{ variable }}')" in body
-    # Après : vérifie succès/échec via event.detail.successful + statut HTTP.
-    assert "handleAfterRequestConfig(event, '{{ variable }}')" in body
+    # Avant/après : câblage déclaratif lu par les écouteurs délégués
+    # d'admin_macros.js (handleBeforeRequestConfig / handleAfterRequestConfig) —
+    # hx-on:: est incompatible avec la CSP (Function()).
+    assert 'data-key="{{ variable }}"' in body
+    assert 'data-before-request="config"' in body
+    assert 'data-after-request="config"' in body
     # Plus de handleSimpleAfterRequest (qui ne vérifiait pas le succès).
     assert "handleSimpleAfterRequest" not in body
 
@@ -146,10 +148,13 @@ def test_handle_before_request_disables_button():
 
 def test_css_unit_button_wires_before_and_after_handlers():
     body = _macro_body(_read("templates/admin/macros.html"), "css_unit_button")
-    # Avant : désactive le bouton pendant la requête.
-    assert "handleBeforeRequest('{{ source }}', '{{ variable }}')" in body
-    # Après : passe event pour vérifier succès/échec.
-    assert "handleAfterRequest(event, '{{ source }}', '{{ variable }}')" in body
+    # Avant/après : câblage déclaratif lu par les écouteurs délégués
+    # d'admin_macros.js (handleBeforeRequest / handleAfterRequest) —
+    # hx-on:: est incompatible avec la CSP (Function()).
+    assert 'data-css-source="{{ source }}"' in body
+    assert 'data-css-variable="{{ variable }}"' in body
+    assert 'data-before-request="css"' in body
+    assert 'data-after-request="css"' in body
     # data-feedback-skip + hx-swap="none" (cohérent avec `button`).
     assert "data-feedback-skip" in body
     assert 'hx-swap="none"' in body

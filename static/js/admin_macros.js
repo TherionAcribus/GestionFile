@@ -7,8 +7,9 @@
 // HTML -- non cachables, reparsees a chaque affichage. Elles sont desormais
 // chargees une fois depuis admin/base.html.
 //
-// Elles restent des GLOBALES : les macros les appellent depuis des attributs
-// onclick / onkeypress, qui se resolvent au moment du clic.
+// Les macros declarent leur comportement en attributs data-* lus par les
+// ecouteurs deleges plus bas : les anciens onclick/onkeypress seraient
+// bloques par la CSP (script-src 'self').
 
 // --- extrait de macros.html, ligne 3 ---
 function handleInputChangeConfig(key) {
@@ -376,6 +377,40 @@ document.addEventListener('DOMContentLoaded', function () {
         var btn = e.target.closest('[data-copy-colors]');
         if (!btn) return;
         copyColorsFromPage(btn.getAttribute('data-copy-colors'));
+    });
+
+    // --- Crochets de requête HTMX ---
+    // Remplace hx-on::before-request / hx-on::after-request (compilés par
+    // htmx via Function(), incompatibles avec script-src 'self'). Les
+    // déclencheurs portent data-before-request / data-after-request :
+    //   "config" -> champs de config (handleBeforeRequestConfig, clé =
+    //               data-key) ;
+    //   "css"    -> variables CSS (handleBeforeRequest, source/variable =
+    //               data-css-source / data-css-variable) ;
+    //   "color"  -> sélecteur de couleur (handleColorAfterRequest, défini
+    //               dans admin_colors.js — absent des autres pages).
+    document.addEventListener('htmx:beforeRequest', function (e) {
+        var el = (e.detail && e.detail.elt) || e.target;
+        var kind = el && el.getAttribute && el.getAttribute('data-before-request');
+        if (kind === 'config') {
+            handleBeforeRequestConfig(el.getAttribute('data-key'));
+        } else if (kind === 'css') {
+            handleBeforeRequest(el.getAttribute('data-css-source'),
+                                el.getAttribute('data-css-variable'));
+        }
+    });
+    document.addEventListener('htmx:afterRequest', function (e) {
+        var el = (e.detail && e.detail.elt) || e.target;
+        var kind = el && el.getAttribute && el.getAttribute('data-after-request');
+        if (kind === 'config') {
+            handleAfterRequestConfig(e, el.getAttribute('data-key'));
+        } else if (kind === 'css') {
+            handleAfterRequest(e, el.getAttribute('data-css-source'),
+                               el.getAttribute('data-css-variable'));
+        } else if (kind === 'color' && typeof handleColorAfterRequest === 'function') {
+            handleColorAfterRequest(el.getAttribute('data-css-source'),
+                                    el.getAttribute('data-css-variable'));
+        }
     });
 
     // Re-attacher après un swap HTMX (nouveaux champs injectés).

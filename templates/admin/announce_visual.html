@@ -96,7 +96,8 @@
                 id="announce_text_up_patients_display"
                 hx-post="/admin/update_select"
                 hx-target="#invisible"
-                hx-vals='js:{"key": "announce_text_up_patients_display", "value": document.getElementById("announce_text_up_patients_display").value}'>
+                hx-vals='{"key": "announce_text_up_patients_display"}'
+                data-param-value="#announce_text_up_patients_display">
                 <option value="always" {% if announce_text_up_patients_display == "always" %}selected{% endif %}>Toujours affiché</option>
                 <option value="never" {% if announce_text_up_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
                 <option value="empty" {% if announce_text_up_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
@@ -180,7 +181,8 @@
                 id="announce_text_down_patients_display"
                 hx-post="/admin/update_select"
                 hx-target="#invisible"
-                hx-vals='js:{"key": "announce_text_down_patients_display", "value": document.getElementById("announce_text_down_patients_display").value}'>
+                hx-vals='{"key": "announce_text_down_patients_display"}'
+                data-param-value="#announce_text_down_patients_display">
                 <option value="never" {% if announce_text_down_patients_display == "never" %}selected{% endif %}>Jamais affiché</option>
                 <option value="empty" {% if announce_text_down_patients_display == "empty" %}selected{% endif %}>Affiché si liste vide</option>
                 </select>
@@ -272,7 +274,8 @@
                 id="announce_next_patients_alignment"
                 hx-post="/admin/update_select"
                 hx-target="#invisible"
-                hx-vals='js:{"key": "announce_next_patients_alignment", "value": document.getElementById("announce_next_patients_alignment").value}'>
+                hx-vals='{"key": "announce_next_patients_alignment"}'
+                data-param-value="#announce_next_patients_alignment">
                 <option value="center" {% if announce_next_patients_alignment == "center" %}selected{% endif %}>Centré</option>
                 <option value="left" {% if announce_next_patients_alignment == "left" %}selected{% endif %}>Gauche</option>
                 </select>

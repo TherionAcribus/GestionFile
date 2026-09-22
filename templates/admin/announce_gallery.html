@@ -13,7 +13,8 @@
           id="announce_infos_transition"
           hx-post="/admin/update_select"
           hx-target="#invisible"
-          hx-vals='js:{"key": "announce_infos_transition", "value": document.getElementById("announce_infos_transition").value}'>
+          hx-vals='{"key": "announce_infos_transition"}'
+          data-param-value="#announce_infos_transition">
           <option value="" disabled selected>Choisir le mode de transition</option>
           <option value="slide" {% if announce_infos_transition == "slide" %}selected{% endif %}>Slide</option>
           <option value="fade" {% if announce_infos_transition == "fade" %}selected{% endif %}>Fade</option>

@@ -48,16 +48,10 @@
                     hx-post="/admin/security/role_update/{{ role.id }}"
                     hx-trigger="click"
                     hx-swap="outerHTML"
-                    hx-vals='js:{
-                        "name": document.getElementById("name-{{ role.id }}").value,
-                        "description": document.getElementById("description-{{ role.id }}").value,
-                        "permissions": JSON.stringify(
-                            Object.fromEntries(
-                                Array.from(document.querySelectorAll("#role-{{ role.id }} .permission-checkbox"))
-                                    .map(checkbox => [checkbox.dataset.permission, checkbox.checked ? true : false])
-                            )
-                        )
-                    }'>
+                    data-param-name="#name-{{ role.id }}"
+                    data-param-description="#description-{{ role.id }}"
+                    data-params-fn="rolePermissions"
+                    data-params-scope="#role-{{ role.id }}">
                     Enregistrer
                 </button>
 

@@ -15,7 +15,8 @@
     id="music_announce_action"
     hx-post="/admin/update_select"
     hx-target="#invisible"
-    hx-vals='js:{"key": "music_announce_action", "value": document.getElementById("music_announce_action").value}'
+    hx-vals='{"key": "music_announce_action"}'
+    data-param-value="#music_announce_action"
     >
         <option value="" disabled selected>Que faire ?</option>
         <option value="pause" {% if music_announce_action == "pause" %} selected {% endif %}>Mettre la musique en pause</option>

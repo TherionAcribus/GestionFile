@@ -3,9 +3,9 @@
 //
 // Ces fragments sont injectes par HTMX ; leurs <script> etaient donc reexecutes
 // a chaque echange, redefinissant les memes fonctions. Elles sont desormais
-// chargees une fois depuis admin/base.html et restent des GLOBALES : les
-// attributs onclick des fragments les resolvent au moment du clic, quel que
-// soit le moment ou le fragment est arrive dans la page.
+// chargees une fois depuis admin/base.html. Les interactions utilisent des
+// ecouteurs deleges (attributs data-*) : les attributs onclick des fragments
+// seraient bloques par la CSP (script-src 'self').
 
 // --- extrait de templates/admin/announce_audio.html ---
 function updateGenerationTime(time, scope) {
@@ -90,4 +90,19 @@ function selectImage(imageName) {
     }
     return selectedValues;
 }
+
+// --- Comportements délégués (remplacent les onclick inline, CSP) -----------
+
+// Boutons « Tester l'annonce » de announce_audio.html : data-test-audio="scope".
+document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest ? evt.target.closest('[data-test-audio]') : null;
+    if (btn) { testAudio(btn.getAttribute('data-test-audio')); }
+});
+
+// Boutons « Sélectionner » de announce_audio_gallery_list.html : la liste est
+// réinjectée par HTMX dans la modale, la délégation couvre les arrivées tardives.
+document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest ? evt.target.closest('.select-sound-button') : null;
+    if (btn) { selectSound(btn); }
+});
 

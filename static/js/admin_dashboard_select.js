@@ -143,6 +143,26 @@ function saveCardConfiguration(evt) {
 }
 
 
+// --- Comportements délégués (remplacent les onclick inline, CSP) -----------
+// Le fragment est réinjecté par HTMX : délégation sur document, posée une
+// seule fois au chargement.
+document.addEventListener('click', function (evt) {
+    if (!evt.target || !evt.target.closest) { return; }
+    var btn = evt.target.closest('.btn-toggle-visibility');
+    if (btn) {
+        evt.stopPropagation();
+        toggleCardVisibility(btn.getAttribute('data-card-id'), btn);
+        return;
+    }
+    if (evt.target.closest('[data-card-manager-save]')) {
+        saveCardConfiguration(evt);
+        return;
+    }
+    if (evt.target.closest('.card-manager-header')) {
+        toggleCardManager(evt);
+    }
+});
+
 document.body.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target.id === 'card-list-sortable') {
         if (isCardManagerOpen) {

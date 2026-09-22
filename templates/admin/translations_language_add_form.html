@@ -28,13 +28,12 @@
                 <button class="btn btn-primary"
                     hx-target="#div_languages_table"
                     hx-post="/admin/languages/add_new_language"
-                    hx-vals='js:{"code": document.getElementById("code").value, 
-                            "name": document.getElementById("name").value,
-                            "translation": document.getElementById("translation").value,
-                            "image_url": document.getElementById("image_url").value,
-                            is_active: document.getElementById("is_active").checked,
-                            voice_is_active: document.getElementById("voice_is_active").checked
-                        }'>
+                    data-param-code="#code"
+                    data-param-name="#name"
+                    data-param-translation="#translation"
+                    data-param-image_url="#image_url"
+                    data-param-is_active="#is_active@checked"
+                    data-param-voice_is_active="#voice_is_active@checked">
                     Enregistrer
                 </button>
             </td>

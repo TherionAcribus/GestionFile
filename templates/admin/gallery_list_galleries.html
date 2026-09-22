@@ -16,7 +16,8 @@
                 hx-post="/admin/gallery/choose_gallery"
                 hx-trigger="change"
                 hx-target="#invisible"
-                hx-vals='js:{"gallery_name": "{{ gallery }}", "checked": document.getElementById("{{gallery}}").checked }'>
+                hx-vals='{"gallery_name": "{{ gallery }}"}'
+                data-param-checked="#{{gallery}}@checked">
             <span class="lever"></span>
         </div>
 

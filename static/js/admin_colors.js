@@ -1053,3 +1053,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Collecteur de paramètres pour le bouton couleur (macros.css_color_button),
+// résolu par htmx_params.js via data-params-fn : remplace l'ancien
+// hx-vals="js:{...}" qui construisait isParent/dependencies (colorMappings).
+// params.value est déjà rempli par data-param-value.
+window.HX_PARAM_COLLECTORS = window.HX_PARAM_COLLECTORS || {};
+window.HX_PARAM_COLLECTORS.cssColorDependencies = function (elt, params) {
+    var variable = elt.getAttribute('data-css-variable');
+    var mapping = colorMappings[variable];
+    params.isParent = Boolean(mapping);
+    params.dependencies = JSON.stringify(
+        mapping ? mapping.targets.map(function (target) {
+            return { variable: target, value: params.value };
+        }) : []
+    );
+};
+

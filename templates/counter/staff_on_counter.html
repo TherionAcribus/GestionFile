@@ -32,23 +32,23 @@
         <!-- Puour l'instant changer == quitter-->
         <a tabindex="0" class="btn filled"
         id="button_leave_counter"
-        hx-post="/counter/remove_staff" 
-        hx-target="#staff_on_counter" 
+        hx-post="/counter/remove_staff"
+        hx-target="#staff_on_counter"
         hx-swap="innerHTML"
         hx-trigger="click"
-        hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML, 
-                    "counter_id": document.getElementById("counter_id").innerHTML}'>
+        data-param-staff_id="#staff_id@html"
+        data-param-counter_id="#counter_id@html">
             <i class="material-icons">loop</i>Changer
         </a>
 
         <a tabindex="0" class="btn red filled"
         id="button_leave_counter"
-        hx-post="/counter/remove_staff" 
-        hx-target="#staff_on_counter" 
+        hx-post="/counter/remove_staff"
+        hx-target="#staff_on_counter"
         hx-swap="innerHTML"
         hx-trigger="click"
-        hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML, 
-                    "counter_id": document.getElementById("counter_id").innerHTML}'>
+        data-param-staff_id="#staff_id@html"
+        data-param-counter_id="#counter_id@html">
             <i class="material-icons">clear</i>Quitter
         </a>
 
@@ -56,7 +56,7 @@
 
 {% endif %}
 
-{# NOTE: un <script> declenchait ici l'evenement 'on_update_staff_on_counter'
+{# NOTE: un script declenchait ici l evenement on_update_staff_on_counter
    sur #list_of_activities. Cet element est entierement commente dans
-   counter/counter.html ("Pour l'instant suspendu") : le script ciblait donc
+   counter/counter.html (Pour l instant suspendu) : le script ciblait donc
    un element inexistant a chaque connexion au comptoir. #}

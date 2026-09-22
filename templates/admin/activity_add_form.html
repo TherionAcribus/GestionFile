@@ -60,16 +60,13 @@
                         hx-target="#div_activity_table"
                     {% endif %}
                     hx-post="/admin/activity/add_new_activity"
-                    hx-vals='js:{"name": document.getElementById("name").value, 
-                            "letter": document.getElementById("letter").value,
-                            "inactivity_message": document.getElementById("inactivity_message").value,
-                            "specific_message": document.getElementById("specific_message").value,
-                            "notification": document.getElementById("notification").checked,
-                            "schedules": getSelectedOptions("schedules"),
-                            {% if staff %}
-                                "staff_id": getSelectedOptions("staff")
-                            {% endif %}
-                        }'>
+                    data-param-name="#name"
+                    data-param-letter="#letter"
+                    data-param-inactivity_message="#inactivity_message"
+                    data-param-specific_message="#specific_message"
+                    data-param-notification="#notification@checked"
+                    data-param-schedules="#schedules@options"
+                    {% if staff %}data-param-staff_id="#staff@options"{% endif %}>
                     Enregistrer
                 </button>
             </td>

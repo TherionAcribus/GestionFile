@@ -79,7 +79,7 @@ function dashboardCardError(wrapper) {
         + '<span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Erreur de chargement</span>'
         + '</div><div class="card-body text-center">'
         + '<p class="text-muted small mb-2">Impossible de charger cette carte.</p>'
-        + '<button type="button" class="btn btn-sm btn-outline-primary" onclick="dashboardCardRetry(this)">'
+        + '<button type="button" class="btn btn-sm btn-outline-primary" data-card-retry>'
         + '<i class="bi bi-arrow-clockwise"></i> Réessayer</button>'
         + '</div></div></div>';
 }
@@ -91,6 +91,14 @@ function dashboardCardRetry(btn) {
     wrapper.innerHTML = dashboardSkeletonHTML(wrapper.getAttribute('data-card-id'));
     htmx.ajax('GET', url, { target: wrapper, swap: 'innerHTML' });
 }
+
+// Délégation : le bouton « Réessayer » est injecté dynamiquement — un
+// attribut onclick serait bloqué par la CSP.
+document.body.addEventListener('click', function (e) {
+    var btn = (e.target && e.target.closest)
+        ? e.target.closest('[data-card-retry]') : null;
+    if (btn) dashboardCardRetry(btn);
+});
 
 function dashboardSlotFromEvent(evt) {
     var t = evt.target;

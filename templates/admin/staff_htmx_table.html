@@ -31,10 +31,9 @@
                     hx-target="#invisible"
                     hx-include=".activities-{{ member.id }}"
                     hx-post="/admin/staff/member_update/{{ member.id }}"
-                    hx-vals='js:{"name": document.getElementById("name-{{ member.id }}").value,
-                            "initials": document.getElementById("initials-{{ member.id }}").value,
-                            "language": document.getElementById("language-{{ member.id }}").value,
-                            }'>
+                    data-param-name="#name-{{ member.id }}"
+                    data-param-initials="#initials-{{ member.id }}"
+                    data-param-language="#language-{{ member.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

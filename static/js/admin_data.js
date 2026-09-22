@@ -63,18 +63,20 @@ function confirmDeleteAggregated() {
     const days = document.getElementById('aggregatedDaysInput').value;
     const modal = new bootstrap.Modal(document.getElementById('modal_delete'));
     const modalBody = document.getElementById('modal-htmx');
-    
-    // Configure modal content
+
+    // Configure modal content. Le bouton de confirmation porte la valeur en
+    // data-days : un gestionnaire délégué (fin de fichier) appelle
+    // deleteAggregated — pas de onclick inline (CSP script-src 'self').
     document.getElementById('modalDeleteLabel').textContent = 'Confirmer la suppression';
     modalBody.innerHTML = `
         <p>Êtes-vous sûr de vouloir supprimer les statistiques agrégées plus anciennes que <strong>${days} jours</strong> ?</p>
         <p class="text-danger">Cette action est irréversible.</p>
         <div class="d-flex justify-content-end gap-2">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-            <button type="button" class="btn btn-danger" onclick="deleteAggregated(${days})">Confirmer la suppression</button>
+            <button type="button" class="btn btn-danger" data-delete-aggregated-days="${days}">Confirmer la suppression</button>
         </div>
     `;
-    
+
     modal.show();
 }
 
@@ -109,3 +111,19 @@ function deleteAggregated(days) {
         resultDiv.innerHTML = `<div class="alert alert-danger">Erreur réseau</div>`;
     });
 }
+
+// --- Comportements délégués (remplacent les onclick inline, CSP) -----------
+
+document.addEventListener('click', function (evt) {
+    if (!evt.target || !evt.target.closest) { return; }
+    var btn;
+    if (evt.target.closest('#btn-manual-archive')) {
+        triggerManualArchive();
+    } else if (evt.target.closest('#btn-delete-aggregated')) {
+        confirmDeleteAggregated();
+    } else if (evt.target.closest('#btn-save-auto-config')) {
+        saveAutoConfig();
+    } else if ((btn = evt.target.closest('[data-delete-aggregated-days]'))) {
+        deleteAggregated(parseInt(btn.getAttribute('data-delete-aggregated-days'), 10));
+    }
+});

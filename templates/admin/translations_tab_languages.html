@@ -6,10 +6,10 @@
     hx-trigger="load, refresh_languages_table"
     hx-target="#div_languages_table"
     hx-swap="innerHTML"
-    hx-vals='js:{"search": (document.getElementById("languages-search")||{}).value || "",
-                "per_page": (document.getElementById("languages-per_page")||{}).value || "",
-                "sort": (document.getElementById("languages-sort")||{}).value || "",
-                "dir": (document.getElementById("languages-dir")||{}).value || ""}'>
+    data-param-search="#languages-search"
+    data-param-per_page="#languages-per_page"
+    data-param-sort="#languages-sort"
+    data-param-dir="#languages-dir">
 </div>
 
 <!-- Ajout nouvelle activité -->

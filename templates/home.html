@@ -170,7 +170,7 @@
                 <div class="description">Interface pharmacien</div>
             </a>
             
-            <a href="#" class="nav-button btn-docs" onclick="alert('Documentation à venir prochainement !'); return false;">
+            <a href="#" class="nav-button btn-docs" data-docs-soon>
                 <i class="bi bi-book-fill"></i>
                 <div class="title">Documentation</div>
                 <div class="description">Guide d'utilisation (à venir)</div>
@@ -184,5 +184,6 @@
     </footer>
     
     <script src="{{ url_for('static', filename='js/libs/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/home.js') }}"></script>
 </body>
 </html>

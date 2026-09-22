@@ -7,10 +7,10 @@ hx-get="/admin/security/table"
 hx-trigger="load"
 hx-target="#div_user_table"
 hx-swap="innerHTML"
-hx-vals='js:{"search": (document.getElementById("users-search")||{}).value || "",
-            "per_page": (document.getElementById("users-per_page")||{}).value || "",
-            "sort": (document.getElementById("users-sort")||{}).value || "",
-            "dir": (document.getElementById("users-dir")||{}).value || ""}'>
+data-param-search="#users-search"
+data-param-per_page="#users-per_page"
+data-param-sort="#users-sort"
+data-param-dir="#users-dir">
 </div>
 
 <a class="btn btn-primary"

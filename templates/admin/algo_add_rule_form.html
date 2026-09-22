@@ -45,14 +45,13 @@
                 <button class="btn btn-primary"
                     hx-target="#div_algo_table"
                     hx-post="/admin/algo/add_new_rule"
-                    hx-vals='js:{"name": document.getElementById("name").value,
-                                "activity_id": document.getElementById("activity").value,
-                                "priority_level": document.getElementById("priority_level").value,
-                                "min_patients": document.getElementById("min_patients").value,
-                                "max_patients": document.getElementById("max_patients").value,
-                                "start_time": document.getElementById("start_time").value,
-                                "end_time": document.getElementById("end_time").value
-                            }'>
+                    data-param-name="#name"
+                    data-param-activity_id="#activity"
+                    data-param-priority_level="#priority_level"
+                    data-param-min_patients="#min_patients"
+                    data-param-max_patients="#max_patients"
+                    data-param-start_time="#start_time"
+                    data-param-end_time="#end_time">
                     Enregistrer
                 </button>
             </td>

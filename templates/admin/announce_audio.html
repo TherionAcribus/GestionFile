@@ -13,7 +13,8 @@
         id="announce_player"
         hx-post="/admin/update_select"
         hx-target="#invisible"
-        hx-vals='js:{"key": "announce_player", "value": document.getElementById("announce_player").value}'>
+        hx-vals='{"key": "announce_player"}'
+        data-param-value="#announce_player">
         <option value="" disabled selected>Lecteur audio</option>
         <option value="web" selected>Page web</option>
     </select>
@@ -61,7 +62,8 @@ Son actuel :
         hx-post="/admin/update_select"
         hx-target="#invisible"
         hx-trigger="change, load"
-        hx-vals='js:{"key": "announce_call_translation", "value": document.getElementById("announce_call_translation").value}'>
+        hx-vals='{"key": "announce_call_translation"}'
+        data-param-value="#announce_call_translation">
         <option value="fr">Uniquement en français</option>
         <option value="vo">Uniquement dans la langue du patient</option>
         <option value="both">Dans les deux langues (A venir)</option>
@@ -75,7 +77,7 @@ Son actuel :
         hx-post="/admin/announce/select_language_voice"
         hx-target="#div_select_voice"
         hx-trigger="change, load"
-        hx-vals='js:{"language_code": document.getElementById("language_choice").value}'>
+        data-param-language_code="#language_choice">
         {% for language in languages %}
             <option value="{{ language.code }}">{{ language.name }}</option>
         {% endfor %}
@@ -108,8 +110,8 @@ Son actuel :
                     </select>
                 </div>
                 <div class="btn-group">
-                    <button class="btn btn-primary" onclick="testAudio('test')">Tester l'annonce</button>
-                    <button class="btn btn-success" onclick="testAudio('announce')">Tester sur l'écran d'annonce</button>
+                    <button class="btn btn-primary" data-test-audio="test">Tester l'annonce</button>
+                    <button class="btn btn-success" data-test-audio="announce">Tester sur l'écran d'annonce</button>
                 </div>
             </div>
         </div>

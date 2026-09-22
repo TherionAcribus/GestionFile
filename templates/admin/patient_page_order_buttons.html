@@ -11,6 +11,6 @@
         class='btn btn-primary'
         hx-post="/admin/patient/update_button_order"
         hx-target="#invisible"
-        hx-vals="js:{'order[]': Array.from(document.querySelectorAll('.button-order-item')).map(item => item.getAttribute('data-id'))}"
+        data-param-order[]=".button-order-item@order"
         >Sauvegarder l'ordre</button>
 

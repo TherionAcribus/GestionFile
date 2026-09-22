@@ -104,7 +104,7 @@
         hx-trigger="on_update_staff_on_counter"
         hx-swap="innerHTML"
         hx-target="#list_of_activities"
-        hx-vals='js:{"staff_id": document.getElementById("staff_id").innerHTML}'>
+        >
     </div>
 -->
 
@@ -113,6 +113,7 @@
 
     <script src="{{ url_for('static', filename='js/libs/materialize-2.1.0.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/htmx_params.js') }}"></script>
     <script src="{{ url_for('static', filename='js/counter.js') }}"></script>
 </body>
 </html>

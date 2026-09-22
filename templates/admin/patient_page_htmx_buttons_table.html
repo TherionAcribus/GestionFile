@@ -73,12 +73,11 @@
                 <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
                     hx-post="/admin/patient/button_update/{{ button.id }}"
-                    hx-vals='js:{"label": document.getElementById("label-{{ button.id }}").value,
-                            "is_present": document.getElementById("is_present-{{ button.id }}").checked,
-                            "shape": document.getElementById("shape-{{ button.id }}").value,
-                            "activity": document.getElementById("activity-{{ button.id }}").value,
-                            "parent_btn": document.getElementById("parent-{{ button.id }}").value,
-                            }'>
+                    data-param-label="#label-{{ button.id }}"
+                    data-param-is_present="#is_present-{{ button.id }}@checked"
+                    data-param-shape="#shape-{{ button.id }}"
+                    data-param-activity="#activity-{{ button.id }}"
+                    data-param-parent_btn="#parent-{{ button.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

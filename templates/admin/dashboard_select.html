@@ -1,5 +1,5 @@
 <div class="card-manager">
-    <div class="card-manager-header" onclick="toggleCardManager(event)" style="cursor: pointer;">
+    <div class="card-manager-header" data-card-manager-toggle style="cursor: pointer;">
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <h5 class="mb-1"><i class="bi bi-layout-wtf"></i> Gestion des cartes du dashboard</h5>
@@ -29,8 +29,8 @@
                     <span class="card-item-name">{{ card.name }}</span>
                 </div>
                 <div class="card-item-actions">
-                    <button class="btn-toggle-visibility" 
-                            onclick="event.stopPropagation(); toggleCardVisibility('{{ card.id }}', this)"
+                    <button class="btn-toggle-visibility"
+                            data-card-id="{{ card.id }}"
                             title="{% if card.visible %}Masquer{% else %}Afficher{% endif %}">
                         <i class="bi bi-eye{% if not card.visible %}-slash{% endif %}"></i>
                     </button>
@@ -40,7 +40,7 @@
         </div>
         
         <div class="card-manager-footer">
-            <button class="btn btn-primary btn-sm" onclick="saveCardConfiguration(event)">
+            <button class="btn btn-primary btn-sm" data-card-manager-save>
                 <i class="bi bi-check-lg"></i> Appliquer les modifications
             </button>
         </div>

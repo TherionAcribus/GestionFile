@@ -36,11 +36,9 @@
                     hx-target="#invisible"
                     hx-post="/admin/security/user_update/{{ user.id }}"
                     hx-trigger="click"
-                    hx-vals='js:{
-                        "username": document.getElementById("username-{{ user.id }}").value,
-                        "email": document.getElementById("email-{{ user.id }}").value,
-                        "role_id": document.getElementById("role-{{ user.id }}").value
-                    }'>
+                    data-param-username="#username-{{ user.id }}"
+                    data-param-email="#email-{{ user.id }}"
+                    data-param-role_id="#role-{{ user.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

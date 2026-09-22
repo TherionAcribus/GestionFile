@@ -29,11 +29,10 @@
                 <button class="btn btn-primary btnSaveLine"
                     hx-target="#invisible"
                     hx-post="/admin/schedule/schedule_update/{{ schedule.id }}"
-                    hx-vals='js:{"name_schedule": document.getElementById("name_schedule-{{ schedule.id }}").value,
-                            "start_time": document.getElementById("start_time-{{ schedule.id }}").value,
-                            "end_time": document.getElementById("end_time-{{ schedule.id }}").value,
-                            "weekdays": getSelectedOptions("weekdays-{{ schedule.id }}")
-                            }'>
+                    data-param-name_schedule="#name_schedule-{{ schedule.id }}"
+                    data-param-start_time="#start_time-{{ schedule.id }}"
+                    data-param-end_time="#end_time-{{ schedule.id }}"
+                    data-param-weekdays="#weekdays-{{ schedule.id }}@options">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 

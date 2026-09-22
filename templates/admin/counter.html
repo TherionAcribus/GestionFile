@@ -31,7 +31,8 @@
           id="counter_order_mode"
           hx-post="/admin/update_select"
           hx-target="#invisible"
-          hx-vals='js:{"key": "counter_order", "value": document.getElementById("counter_order_mode").value}'>
+          hx-vals='{"key": "counter_order"}'
+          data-param-value="#counter_order_mode">
           <option value="" disabled selected>Choix de l'ordre pour les appels automatiques</option>
           <option value="order" {% if counter_order == "order" %}selected{% endif %}>Ordre ci-dessous</option>
           <option value="random" {% if counter_order == "random" %}selected{% endif %}>Aléatoire</option>

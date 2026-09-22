@@ -94,8 +94,12 @@ def test_button_macro_wires_before_and_after_handlers():
     assert 'hx-swap="none"' in body
     assert 'hx-target="#invisible"' not in body
     # Bouton désactivé pendant la requête + traitement du résultat.
-    assert "handleBeforeRequestConfig('{{ key }}')" in body
-    assert "handleAfterRequestConfig(event, '{{ key }}')" in body
+    # Le câblage est déclaratif : les écouteurs délégués d'admin_macros.js
+    # appellent handleBeforeRequestConfig/handleAfterRequestConfig (CSP :
+    # hx-on:: est compilé par Function(), interdit par script-src 'self').
+    assert 'data-key="{{ key }}"' in body
+    assert 'data-before-request="config"' in body
+    assert 'data-after-request="config"' in body
     # Zone de message près du champ.
     assert 'id="{{ key }}_result"' in body
 
