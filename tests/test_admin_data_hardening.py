@@ -73,7 +73,11 @@ def test_validate_days_rejects_non_integer():
 
 def test_manual_archive_uses_validate_days():
     source = _read("routes/admin_data.py")
+    # La validation vit dans _launch_retention : les deux handlers
+    # (archivage/purge en tâche de fond) passent par elle.
     body = _func_body(source, "manual_archive")
+    assert "_launch_retention" in body
+    body = _func_body(source, "_launch_retention")
     assert "_validate_days" in body
 
 
@@ -133,7 +137,9 @@ def test_update_config_bumps_generation():
 
 def test_manual_archive_logs_audit():
     source = _read("routes/admin_data.py")
-    body = _func_body(source, "manual_archive")
+    # L'audit est émis par _launch_retention (lancement, refus, échec de
+    # lancement) et par le worker en fin d'opération (retention_tasks.py).
+    body = _func_body(source, "_launch_retention")
     assert "record_audit" in body
 
 

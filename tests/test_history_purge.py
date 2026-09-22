@@ -35,12 +35,14 @@ from werkzeug.security import generate_password_hash
 
 import routes.admin_data as admin_data
 import scheduler_functions
+import services.retention_tasks as retention_tasks
 from app_holder import AppHolder
 from audit_log import ACTION_DELETE
 from models import (
     Activity,
     AggregatedStats,
     AuditLog,
+    IdempotencyKey,
     JobExecutionLog,
     PatientHistory,
     Role,
@@ -136,8 +138,27 @@ def client(app):
     return app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def _reset_retention_state():
+    """L'état de la tâche de rétention est global au module — on le réinitialise
+    entre les tests pour éviter toute contamination."""
+    retention_tasks._state.clear()
+    yield
+    retention_tasks._state.clear()
+
+
 def _login(client):
     client.post("/_test/login")
+
+
+def _run_sync(target, args, name):
+    """Remplace le worker thread par une exécution immédiate — les tests de la
+    tâche de fond restent déterministes (pas de course avec l'assertion)."""
+    target(*args)
+
+
+def _sync_task():
+    return patch("services.retention_tasks._spawn_worker", _run_sync)
 
 
 # ---------------------------------------------------------------------------
@@ -299,6 +320,111 @@ def test_auto_archive_job_logs_partial_failure(app):
 
 
 # ---------------------------------------------------------------------------
+# Tâche de fond : verrou, progression par journée, état pollable
+# ---------------------------------------------------------------------------
+
+def test_task_reports_progress_per_day(app, client):
+    """Chaque journée commitée met à jour l'état : jours faits/total, lignes,
+    détail par journée — puis résultat final."""
+    _login(client)
+    _add_second_old_day(app)  # deux journées distinctes à traiter
+    with _sync_task():
+        client.post("/admin/data/purge", data={"days": "365"})
+
+    with app.app_context():
+        state = retention_tasks.retention_task_state()
+        assert state["status"] == "done"
+        assert state["operation"] == "purge"
+        assert state["days_total"] == 2
+        assert state["days_done"] == 2
+        assert state["rows_done"] == 3          # A1, A2, B1
+        assert len(state["recent_days"]) == 2   # résultat par journée
+        assert "Purged 3" in state["result"]
+
+
+def test_task_lock_refuses_concurrent_run(app, client):
+    """Régression : une relance pendant l'exécution ne doit pas lancer une
+    seconde opération — le verrou DB (idempotency_key) le couvre aussi entre
+    processus."""
+    _login(client)
+    with app.app_context():
+        db.session.add(IdempotencyKey(key="retention_task_lock"))
+        db.session.commit()
+
+    response = client.post("/admin/data/purge", data={"days": "365"})
+    payload = response.get_json()
+    assert payload["success"] is False
+    assert payload["running"] is True
+
+    with app.app_context():
+        assert PatientHistory.query.count() == 3  # rien n'a été supprimé
+
+
+def test_task_lock_released_after_run(app, client):
+    _login(client)
+    with _sync_task():
+        client.post("/admin/data/purge", data={"days": "365"})
+    with app.app_context():
+        assert IdempotencyKey.query.get("retention_task_lock") is None
+
+
+def test_task_state_idle_and_external(app, client):
+    """Sans tâche locale : 'idle' ; si le verrou DB est détenu par un autre
+    processus, l'état le signale au lieu de prétendre idle."""
+    _login(client)
+    with app.app_context():
+        assert retention_tasks.retention_task_state()["status"] == "idle"
+        db.session.add(IdempotencyKey(key="retention_task_lock"))
+        db.session.commit()
+        state = retention_tasks.retention_task_state()
+        assert state["status"] == "running" and state["external"] is True
+        db.session.delete(IdempotencyKey.query.get("retention_task_lock"))
+        db.session.commit()
+
+
+def test_task_records_job_log_and_audit(app, client):
+    """La tâche consigne son issue : JobExecutionLog + audit — elle n'est pas
+    silencieuse hors requête."""
+    _login(client)
+    with _sync_task():
+        client.post("/admin/data/purge", data={"days": "365"})
+    with app.app_context():
+        log = JobExecutionLog.query.filter_by(job_id="Manual Purge").one()
+        assert log.status == "success"
+        assert "Purged 2" in log.error_message
+        audits = AuditLog.query.filter_by(resource="patient_history").all()
+        assert audits
+
+
+def test_task_records_partial_failure(app, client):
+    """create_daily_stats repose sur timestampdiff (MySQL) : sous SQLite
+    l'archivage échoue — la tâche doit consigner l'échec PARTIEL."""
+    _login(client)
+    with _sync_task():
+        client.post("/admin/data/archive", data={"days": "365"})
+    with app.app_context():
+        state = retention_tasks.retention_task_state()
+        assert state["status"] == "failed"
+        assert state["partial"] is True
+        log = JobExecutionLog.query.filter_by(job_id="Manual Archive").one()
+        assert log.status == "failed"
+        assert "PARTIEL" in log.error_message
+
+
+def test_progress_callback_called_per_day(app):
+    """Le paramètre progress() des boucles est appelé après chaque journée
+    commitée — c'est la source de la progression pollée."""
+    _add_second_old_day(app)
+    with app.app_context():
+        seen = []
+        scheduler_functions.purge_history(
+            365, progress=lambda day, rows, n: seen.append((day, rows, n)))
+        assert len(seen) == 2
+        assert seen[-1][2] == 2  # compteur de journées incrémenté
+        assert sum(r for _, r, _ in seen) == 3
+
+
+# ---------------------------------------------------------------------------
 # Décomptes préalables (modale de confirmation)
 # ---------------------------------------------------------------------------
 
@@ -330,15 +456,21 @@ def test_count_aggregated_before(app):
 # ---------------------------------------------------------------------------
 
 def test_purge_route_deletes_and_audits(app, client):
+    """La route ne purge plus dans la requête : elle lance la tâche de fond
+    (rendue synchrone ici) et répond immédiatement."""
     _login(client)
-    response = client.post("/admin/data/purge", data={"days": "365"})
+    with _sync_task():
+        response = client.post("/admin/data/purge", data={"days": "365"})
     assert response.status_code == 200
-    assert response.get_json()["success"] is True
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["task"] == "started"
     with app.app_context():
         assert PatientHistory.query.count() == 1
-        audit = AuditLog.query.filter_by(
-            action=ACTION_DELETE, resource="patient_history").one()
-        assert audit.outcome == "success"
+        audits = AuditLog.query.filter_by(
+            action=ACTION_DELETE, resource="patient_history").all()
+        assert audits  # lancement tracé + issue tracée par le worker
+        assert any(a.outcome == "success" for a in audits)
 
 
 def test_purge_route_rejects_invalid_days(app, client):
@@ -369,6 +501,8 @@ def test_data_routes_require_authentication(client):
     assert client.post("/admin/data/archive", data={"days": "365"}).status_code == 302
     assert client.post("/admin/data/purge", data={"days": "365"}).status_code == 302
     assert client.get("/admin/data/preview?days=30").status_code == 302
+    assert client.get("/admin/data/task").status_code == 302
+    assert client.get("/admin/data/storage").status_code == 302
 
 
 # ---------------------------------------------------------------------------
@@ -570,13 +704,18 @@ def test_purge_never_aggregates():
 
 def test_routes_use_explicit_functions():
     source = _read("routes/admin_data.py")
-    for route in ("/admin/data/archive", "/admin/data/purge", "/admin/data/preview"):
+    for route in ("/admin/data/archive", "/admin/data/purge",
+                  "/admin/data/preview", "/admin/data/task"):
         assert route in source
-    body = _func_body(source, "manual_archive")
-    assert "aggregate_history" in body
-    body = _func_body(source, "manual_purge")
-    assert "purge_history" in body
+    # Les handlers ne traitent plus dans la requête : ils délèguent à la
+    # tâche de fond (verrou + progression) via _launch_retention.
+    for func in ("manual_archive", "manual_purge"):
+        body = _func_body(source, func)
+        assert "_launch_retention" in body
+        assert "aggregate_history" not in body and "purge_history" not in body
+    body = _func_body(source, "_launch_retention")
     assert "_validate_days" in body
+    assert "start_retention_task" in body
     assert "record_audit" in body
 
 
@@ -615,6 +754,9 @@ def test_js_confirms_with_preview():
     # openDataConfirmModal, l'exécution par data-confirm-*.
     assert "openDataConfirmModal" in js
     assert "data-confirm-days" in js
+    # Exécution en tâche de fond : le client poll l'état de progression.
+    assert "/admin/data/task" in js
+    assert "pollRetentionTask" in js
 
 
 def test_auto_archive_job_checks_enabled_flag():

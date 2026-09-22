@@ -138,6 +138,8 @@ function openDataConfirmModal(mode, days, target) {
 // --- Actions ----------------------------------------------------------------
 
 // mode 'archive' -> POST /admin/data/archive ; 'purge' -> POST /admin/data/purge
+// L'opération tourne en tâche de fond (verrou + progression par journée) :
+// la route renvoie immédiatement, on interroge ensuite /admin/data/task.
 function runDataOperation(mode, days) {
     var modal = bootstrap.Modal.getInstance(document.getElementById('modal_delete'));
     var isPurge = mode === 'purge';
@@ -147,7 +149,7 @@ function runDataOperation(mode, days) {
 
     if (modal) { modal.hide(); }
 
-    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Traitement en cours...';
+    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Lancement...';
 
     fetch(isPurge ? '/admin/data/purge' : '/admin/data/archive', {
         method: 'POST',
@@ -156,21 +158,66 @@ function runDataOperation(mode, days) {
     })
     .then(function (response) { return response.json(); })
     .then(function (data) {
-        if (data.success) {
-            resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
-            setTimeout(function () { location.reload(); }, 2000);
+        if (data.task === 'started') {
+            pollRetentionTask(resultDiv);
+        } else if (data.running) {
+            resultDiv.innerHTML = '<div class="alert alert-warning">' + data.message + '</div>';
         } else {
-            // partial : échec après journées déjà validées — avertissement
-            // (résultat partiel), pas simple erreur.
-            var cls = data.partial ? 'alert-warning' : 'alert-danger';
-            resultDiv.innerHTML = '<div class="alert ' + cls + '">Erreur: ' + data.message + '</div>';
+            resultDiv.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.message + '</div>';
         }
-        loadStorageStats();
     })
     .catch(function (error) {
         console.error('Error:', error);
         resultDiv.innerHTML = '<div class="alert alert-danger">Erreur réseau</div>';
     });
+}
+
+function renderRetentionProgress(state) {
+    var total = state.days_total == null ? '…' : state.days_total;
+    var html = '<div><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ' +
+        'Opération en cours — <strong>' + state.days_done + ' / ' + total +
+        ' journée(s)</strong>, ' + state.rows_done + ' ligne(s) traitée(s)' +
+        (state.current_day ? ' — jour en cours : ' + state.current_day : '') + '</div>';
+    if (state.recent_days && state.recent_days.length) {
+        html += '<ul class="small text-muted mb-0 mt-1">' +
+            state.recent_days.slice(-5).map(function (d) {
+                return '<li>' + d.date + ' : ' + d.rows + ' ligne(s)</li>';
+            }).join('') + '</ul>';
+    }
+    return html;
+}
+
+function pollRetentionTask(resultDiv) {
+    fetch('/admin/data/task')
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            if (!data.success) {
+                resultDiv.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.message + '</div>';
+                return;
+            }
+            if (data.status === 'running') {
+                resultDiv.innerHTML = data.external
+                    ? '<div class="alert alert-info">Une opération de rétention est en cours (autre processus).</div>'
+                    : renderRetentionProgress(data);
+                setTimeout(function () { pollRetentionTask(resultDiv); }, 1500);
+                return;
+            }
+            if (data.status === 'done') {
+                resultDiv.innerHTML = '<div class="alert alert-success">' + data.result + '</div>';
+                loadStorageStats();
+                setTimeout(function () { location.reload(); }, 2500);
+                return;
+            }
+            if (data.status === 'failed') {
+                // partial : journées déjà validées — avertissement, pas simple erreur.
+                var cls = data.partial ? 'alert-warning' : 'alert-danger';
+                resultDiv.innerHTML = '<div class="alert ' + cls + '">' + data.error + '</div>';
+                loadStorageStats();
+            }
+        })
+        .catch(function () {
+            resultDiv.innerHTML = '<div class="alert alert-danger">Erreur réseau lors du suivi</div>';
+        });
 }
 
 function deleteAggregated(days) {

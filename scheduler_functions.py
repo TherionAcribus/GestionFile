@@ -574,7 +574,7 @@ def _raise_partial(operation, days_processed, rows_done, failed_date,
     raise PartialHistoryError(message) from error
 
 
-def aggregate_history(older_than_days, export_csv=False):
+def aggregate_history(older_than_days, export_csv=False, progress=None):
     """Archivage : agrège les lignes détaillées en statistiques quotidiennes
     (globales, par activité, langue et comptoir) PUIS les supprime.
 
@@ -584,7 +584,8 @@ def aggregate_history(older_than_days, export_csv=False):
 
     Commit par journée : un échec intermédiaire lève :class:`PartialHistoryError`
     après rollback — les journées déjà commitées restent validées et le
-    message le signale explicitement.
+    message le signale explicitement. ``progress(date, lignes, n_jours)`` est
+    appelé après chaque journée validée (suivi de la tâche de fond).
     """
     cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
 
@@ -603,6 +604,8 @@ def aggregate_history(older_than_days, export_csv=False):
                            process_date, backup_name, e)
         total_archived += archived
         days_processed += 1
+        if progress:
+            progress(process_date, archived, days_processed)
 
     message = f"Archived {total_archived} records from {days_processed} days."
     if backup_name:
@@ -610,7 +613,7 @@ def aggregate_history(older_than_days, export_csv=False):
     return message
 
 
-def purge_history(older_than_days, export_csv=False):
+def purge_history(older_than_days, export_csv=False, progress=None):
     """Purge définitive : supprime les lignes détaillées SANS agrégation.
 
     Contrairement à :func:`aggregate_history`, aucune statistique n'est
@@ -619,7 +622,8 @@ def purge_history(older_than_days, export_csv=False):
 
     Commit par journée : un échec intermédiaire lève :class:`PartialHistoryError`
     après rollback — les journées déjà commitées restent supprimées et le
-    message le signale explicitement.
+    message le signale explicitement. ``progress(date, lignes, n_jours)`` est
+    appelé après chaque journée validée (suivi de la tâche de fond).
     """
     cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
 
@@ -637,6 +641,8 @@ def purge_history(older_than_days, export_csv=False):
                            process_date, backup_name, e)
         total_deleted += deleted
         days_processed += 1
+        if progress:
+            progress(process_date, deleted, days_processed)
 
     message = f"Purged {total_deleted} records from {days_processed} days (no aggregation)."
     if backup_name:

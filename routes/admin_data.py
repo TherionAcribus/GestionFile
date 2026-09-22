@@ -2,8 +2,7 @@ from flask import Blueprint, render_template, request, jsonify, current_app
 from models import db, Patient, PatientHistory, AggregatedStats, ConfigOption, JobExecutionLog
 from routes.admin_security import require_permission
 from scheduler_functions import (
-    aggregate_history, purge_history, count_history_before,
-    PartialHistoryError, storage_stats,
+    count_history_before, storage_stats,
     count_aggregated_before, reconcile_auto_archive_job,
 )
 from sqlalchemy import text
@@ -11,7 +10,11 @@ from datetime import datetime, timedelta
 from config import time_tz
 import config_sync
 from audit_service import record_audit
-from audit_log import ACTION_UPDATE, ACTION_DELETE, ACTION_ARCHIVE, OUTCOME_SUCCESS, OUTCOME_FAILURE
+from audit_log import (
+    ACTION_UPDATE, ACTION_DELETE, ACTION_ARCHIVE,
+    OUTCOME_SUCCESS, OUTCOME_FAILURE, OUTCOME_DENIED,
+)
+from services.retention_tasks import retention_task_state, start_retention_task
 
 admin_data_bp = Blueprint('admin_data', __name__)
 
@@ -130,34 +133,13 @@ def storage_info():
 @require_permission('options')
 def manual_archive():
     """Archivage : agrégation des lignes détaillées en statistiques
-    quotidiennes, puis suppression des détails."""
-    days, error = _validate_days(request.form.get('days'))
-    if error:
-        return jsonify({'success': False, 'message': error})
+    quotidiennes, puis suppression des détails — en tâche de fond.
 
-    backup = request.form.get('backup') == 'true'
-
-    try:
-        result = aggregate_history(days, export_csv=backup)
-        record_audit(ACTION_ARCHIVE, "patient_history",
-                     outcome=OUTCOME_SUCCESS,
-                     details=f"archivage manuel >{days}j, export_csv={backup}")
-        return jsonify({'success': True, 'message': result})
-    except PartialHistoryError as e:
-        # Résultat partiel : signalé explicitement au client (détail complet
-        # dans les journaux et l'audit — pas de str(e) dans la réponse).
-        current_app.logger.error("Archivage manuel partiel (%dj) : %s", days, e)
-        record_audit(ACTION_ARCHIVE, "patient_history",
-                     outcome=OUTCOME_FAILURE,
-                     details=f"archivage manuel partiel >{days}j : {e}")
-        return jsonify({'success': False, 'partial': True,
-                        'message': "L'archivage a été interrompu : des journées ont déjà été traitées. Consultez les journaux du serveur."})
-    except Exception as e:
-        current_app.logger.error("Échec de l'archivage manuel (%dj) : %s", days, e)
-        record_audit(ACTION_ARCHIVE, "patient_history",
-                     outcome=OUTCOME_FAILURE,
-                     details=f"archivage manuel >{days}j")
-        return jsonify({'success': False, 'message': "L'archivage a échoué. Consultez les journaux du serveur."})
+    L'exécution synchrone dans la requête risquait un timeout HTTP sur gros
+    historique et une relance concurrente ; le résultat arrive via
+    ``GET /admin/data/task`` (progression par journée).
+    """
+    return _launch_retention('archive')
 
 
 @admin_data_bp.route('/admin/data/purge', methods=['POST'])
@@ -167,33 +149,48 @@ def manual_purge():
 
     Aucune statistique n'est conservée — contrairement à ``manual_archive``,
     ce n'est pas un archivage. ``backup=true`` exporte d'abord les lignes en
-    CSV (``instance/exports/``).
+    CSV (``instance/exports/``). Tâche de fond comme l'archivage.
     """
+    return _launch_retention('purge')
+
+
+def _launch_retention(operation):
+    """Valide les entrées puis délègue au runner de tâche de fond verrouillé."""
     days, error = _validate_days(request.form.get('days'))
     if error:
         return jsonify({'success': False, 'message': error})
 
     backup = request.form.get('backup') == 'true'
+    action = ACTION_ARCHIVE if operation == 'archive' else ACTION_DELETE
 
     try:
-        result = purge_history(days, export_csv=backup)
-        record_audit(ACTION_DELETE, "patient_history",
-                     outcome=OUTCOME_SUCCESS,
-                     details=f"purge définitive >{days}j, export_csv={backup}")
-        return jsonify({'success': True, 'message': result})
-    except PartialHistoryError as e:
-        current_app.logger.error("Purge partielle de l'historique (%dj) : %s", days, e)
-        record_audit(ACTION_DELETE, "patient_history",
-                     outcome=OUTCOME_FAILURE,
-                     details=f"purge partielle >{days}j : {e}")
-        return jsonify({'success': False, 'partial': True,
-                        'message': "La purge a été interrompue : des journées ont déjà été supprimées. Consultez les journaux du serveur."})
+        started, state = start_retention_task(
+            current_app._get_current_object(), operation, days, backup)
     except Exception as e:
-        current_app.logger.error("Échec de la purge de l'historique (%dj) : %s", days, e)
-        record_audit(ACTION_DELETE, "patient_history",
-                     outcome=OUTCOME_FAILURE,
-                     details=f"purge définitive >{days}j")
-        return jsonify({'success': False, 'message': "La purge a échoué. Consultez les journaux du serveur."})
+        current_app.logger.error("Lancement de la tâche '%s' impossible : %s",
+                                 operation, e)
+        record_audit(action, "patient_history", outcome=OUTCOME_FAILURE,
+                     details=f"{operation} manuel >{days}j : lancement impossible")
+        return jsonify({'success': False,
+                        'message': "Le lancement a échoué. Consultez les journaux du serveur."})
+
+    if not started:
+        record_audit(action, "patient_history", outcome=OUTCOME_DENIED,
+                     details=f"{operation} manuel >{days}j refusé : opération déjà en cours")
+        return jsonify({'success': False, 'running': True,
+                        'message': "Une opération d'archivage/purge est déjà en cours."})
+
+    record_audit(action, "patient_history", outcome=OUTCOME_SUCCESS,
+                 details=f"{operation} manuel lancé en tâche de fond >{days}j, export_csv={backup}")
+    return jsonify({'success': True, 'task': 'started',
+                    'operation': operation, 'state': state})
+
+
+@admin_data_bp.route('/admin/data/task')
+@require_permission('options')
+def retention_task_status():
+    """Progression de la tâche de rétention en cours (polling du client)."""
+    return jsonify({'success': True, **retention_task_state()})
 
 @admin_data_bp.route('/admin/data/config', methods=['POST'])
 @require_permission('options')
