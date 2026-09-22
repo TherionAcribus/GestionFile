@@ -13,6 +13,13 @@ from routes.admin_security import require_permission
 import time
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
 from ui_feedback import display_toast
+from upload_security import (
+    ALLOWED_AUDIO_EXTENSIONS,
+    MAX_SERVICE_ACCOUNT_JSON_BYTES,
+    accept_audio_upload,
+    read_upload_bounded,
+    validate_service_account_json,
+)
 
 def allowed_json_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() == 'json'
@@ -162,7 +169,7 @@ def delete_sound(sound_filename):
         if sound_path.exists() and sound_path.is_file():
             sound_path.unlink()
             app.logger.info(f"Son supprimé : {sound_filename}")
-            return redirect (url_for('gallery_audio_list'))
+            return redirect (url_for('.gallery_audio_list'))
         else:
             app.logger.error(f"Fichier non trouvé : {sound_filename}")
             display_toast(success=False, message="Fichier non trouvé")
@@ -199,7 +206,9 @@ def select_signal():
 
 
 def allowed_audio_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config["ALLOWED_AUDIO_EXTENSIONS"]
+    # Liste blanche fixe (module upload_security) : la clé de config
+    # ALLOWED_AUDIO_EXTENSIONS n'existait pas — KeyError à chaque appel.
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_AUDIO_EXTENSIONS
 
 
 @admin_announce_bp.route('/admin/announce/audio/upload', methods=['POST'])
@@ -210,31 +219,35 @@ def upload_signal_file():
     file = request.files['file']
     if file.filename == '':
         return redirect(request.url)
-    if file and allowed_audio_file(file.filename):
-        signals_dir = _signals_dir()
-        signals_dir.mkdir(parents=True, exist_ok=True)
 
-        filename = secure_filename(file.filename)
-        if not filename:
-            display_toast(success=False, message="Nom de fichier invalide")
-            return redirect(url_for('gallery_audio_list'))
-        if not allowed_audio_file(filename):
-            display_toast(success=False, message="Format de fichier non autorisé")
-            return redirect(url_for('gallery_audio_list'))
+    # Validation bornée : extension en liste blanche + taille + contenu réel
+    # (octets magiques WAV/MP3) — un fichier renommé .mp3 est refusé.
+    ok, error, result = accept_audio_upload(file)
+    if not ok:
+        display_toast(success=False, message=error)
+        return redirect(url_for('.gallery_audio_list'))
 
-        try:
-            target_path = safe_path_under(signals_dir, filename)
-        except UnsafePathError:
-            display_toast(success=False, message="Nom de fichier invalide")
-            return redirect(url_for('gallery_audio_list'))
+    signals_dir = _signals_dir()
+    signals_dir.mkdir(parents=True, exist_ok=True)
 
-        if target_path.exists():
-            display_toast(success=False, message="Un fichier avec ce nom existe déjà")
-            return redirect(url_for('gallery_audio_list'))
+    filename = secure_filename(file.filename)
+    if not filename:
+        display_toast(success=False, message="Nom de fichier invalide")
+        return redirect(url_for('.gallery_audio_list'))
 
-        file.save(str(target_path))
-    
-    return redirect(url_for('gallery_audio_list'))
+    try:
+        target_path = safe_path_under(signals_dir, filename)
+    except UnsafePathError:
+        display_toast(success=False, message="Nom de fichier invalide")
+        return redirect(url_for('.gallery_audio_list'))
+
+    if target_path.exists():
+        display_toast(success=False, message="Un fichier avec ce nom existe déjà")
+        return redirect(url_for('.gallery_audio_list'))
+
+    target_path.write_bytes(result["data"])
+
+    return redirect(url_for('.gallery_audio_list'))
 
 
 @admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['POST'])
@@ -290,10 +303,20 @@ def upload_google_key():
     if file.filename == '':
         return '<div class="alert alert-danger">Le nom du fichier est vide.</div>'
     if file and allowed_json_file(file.filename):
-        secure_filename(file.filename)
-        file_content = file.read()
+        # Lecture bornée (le fichier n'est jamais chargé entièrement au-delà
+        # de la limite) puis validation du schéma « compte de service » —
+        # le contenu stocké est le JSON normalisé, toujours déchiffrable et
+        # exploitable par get_google_credentials.
+        ok, error, raw = read_upload_bounded(
+            file, max_bytes=MAX_SERVICE_ACCOUNT_JSON_BYTES
+        )
+        if not ok:
+            return f'<div class="alert alert-danger">{error}</div>'
+        ok, error, normalized = validate_service_account_json(raw)
+        if not ok:
+            return f'<div class="alert alert-danger">{error}</div>'
         # Chiffrer le contenu du fichier
-        encrypted_content = cipher_suite.encrypt(file_content)
+        encrypted_content = cipher_suite.encrypt(normalized)
         # Convertir en chaîne de caractères pour le stockage
         encrypted_content_str = encrypted_content.decode('utf-8')
         # Enregistrer dans la base de données
