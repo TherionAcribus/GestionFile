@@ -643,6 +643,96 @@ def purge_history(older_than_days, export_csv=False):
         message += f" Sauvegarde CSV : {backup_name}."
     return message
 
+# Tables soumises à la rétention (file, historique, stats agrégées).
+_RETENTION_TABLES = ('patient', 'patient_history', 'aggregated_stats')
+
+
+def _format_bytes(n):
+    """Taille lisible (o/Ko/Mo/Go/To)."""
+    for unit in ('o', 'Ko', 'Mo', 'Go'):
+        if n < 1024:
+            return f"{n:.0f} {unit}" if unit == 'o' else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.2f} To"
+
+
+def storage_stats():
+    """Distingue espace logique réutilisable et taille physique du tablespace.
+
+    Point audit : un ``DELETE`` libère des pages réutilisables par le moteur
+    mais ne réduit pas le fichier — sous InnoDB la restitution dépend du mode
+    de tablespace (cf. doc MySQL ``delete`` / ``innodb-disk-management``).
+    L'interface doit donc afficher séparément :
+
+    * ``physical_bytes`` — taille occupée sur disque ;
+    * ``reusable_bytes`` — espace déjà libéré, réutilisable en interne ;
+    * ``maintenance`` — l'opération de compaction qui rend l'espace au
+      système (``OPTIMIZE TABLE`` sous MySQL, ``VACUUM`` sous SQLite) :
+      longue, gourmande en espace temporaire — **opération DBA à planifier,
+      jamais exécutée automatiquement après chaque purge**.
+
+    À plus long terme, partitionner ``patient_history`` par date permettrait
+    de restituer l'espace proprement via ``DROP PARTITION`` — sans
+    compactage.
+    """
+    dialect = db.engine.dialect.name
+
+    if dialect == 'mysql':
+        names = ", ".join(f"'{t}'" for t in _RETENTION_TABLES)
+        schema = (current_app.config.get('MYSQL_DATABASE')
+                  or db.engine.url.database)
+        rows = db.session.execute(text(
+            "SELECT table_name, data_length, index_length, data_free,"
+            "       table_rows FROM information_schema.TABLES "
+            f"WHERE table_schema = :schema AND table_name IN ({names})"),
+            {'schema': schema}).all()
+        tables = []
+        for name, data_len, idx_len, data_free, est_rows in rows:
+            physical = int(data_len or 0) + int(idx_len or 0)
+            reusable = int(data_free or 0)
+            tables.append({
+                'name': name,
+                'rows_estimate': est_rows,
+                'physical_bytes': physical,
+                'physical': _format_bytes(physical),
+                # InnoDB : data_free = pages allouées mais inutilisées du
+                # tablespace de la table (innodb_file_per_table). En mode
+                # tablespace partagé, la valeur reflète le tablespace global.
+                'reusable_bytes': reusable,
+                'reusable': _format_bytes(reusable),
+            })
+        return {
+            'supported': True,
+            'engine': 'mysql',
+            'tables': tables,
+            'maintenance': 'OPTIMIZE TABLE patient_history',
+        }
+
+    if dialect == 'sqlite':
+        pragma = lambda q: db.session.execute(text(q)).scalar() or 0
+        page_size = pragma("PRAGMA page_size")
+        physical = pragma("PRAGMA page_count") * page_size
+        reusable = pragma("PRAGMA freelist_count") * page_size
+        # Pas de relevé par table via PRAGMA : le fichier est rapporté au
+        # niveau base, ce qui suffit à distinguer logique vs physique.
+        return {
+            'supported': True,
+            'engine': 'sqlite',
+            'tables': [{
+                'name': db.engine.url.database or 'base SQLite',
+                'rows_estimate': None,
+                'physical_bytes': physical,
+                'physical': _format_bytes(physical),
+                'reusable_bytes': reusable,
+                'reusable': _format_bytes(reusable),
+            }],
+            'auto_vacuum': pragma("PRAGMA auto_vacuum"),
+            'maintenance': 'VACUUM',
+        }
+
+    return {'supported': False, 'engine': dialect}
+
+
 def create_daily_stats(date, base_query):
     """Cree les statistiques agregees pour une journee donnee.
 

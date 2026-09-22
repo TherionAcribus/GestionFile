@@ -20,6 +20,46 @@ function describePreview(info) {
     return '<p><strong>' + info.rows + ' ligne(s)</strong>' + days + ' concernée(s)' + range + '.</p>';
 }
 
+// --- Espace disque : logique réutilisable vs physique -----------------------
+
+function loadStorageStats() {
+    var container = document.getElementById('storageStats');
+    if (!container) { return; }
+
+    fetch('/admin/data/storage')
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+            var cmdEl = document.getElementById('maintenanceCommand');
+            if (!data.success || !data.supported) {
+                container.innerHTML =
+                    '<span class="text-muted">Relevé indisponible' +
+                    (data.engine ? ' pour ce moteur (' + data.engine + ')' : '') +
+                    '.</span>';
+                if (cmdEl) { cmdEl.textContent = 'OPTIMIZE TABLE / VACUUM selon le moteur'; }
+                return;
+            }
+
+            var rows = data.tables.map(function (t) {
+                return '<tr><td><code>' + t.name + '</code></td>' +
+                    '<td class="text-end">' + (t.rows_estimate == null ? '—' : t.rows_estimate) + '</td>' +
+                    '<td class="text-end">' + t.physical + '</td>' +
+                    '<td class="text-end">' + t.reusable + '</td></tr>';
+            }).join('');
+
+            container.innerHTML =
+                '<table class="table table-sm mb-0">' +
+                '<thead><tr><th>Table</th><th class="text-end">Lignes (est.)</th>' +
+                '<th class="text-end">Taille physique</th>' +
+                '<th class="text-end">Espace réutilisable</th></tr></thead>' +
+                '<tbody>' + rows + '</tbody></table>';
+            if (cmdEl) { cmdEl.textContent = data.maintenance; }
+        })
+        .catch(function () {
+            container.innerHTML =
+                '<span class="text-muted">Erreur réseau lors du relevé.</span>';
+        });
+}
+
 function showModalError(modalBody, message) {
     modalBody.innerHTML =
         '<div class="alert alert-danger">' + message + '</div>' +
@@ -72,9 +112,15 @@ function openDataConfirmModal(mode, days, target) {
                     'individuels seront supprimés.</p>';
             }
 
+            var diskNote = isAggregated ? '' :
+                '<p class="text-muted small mb-2">L\'espace libéré reste ' +
+                'réutilisable par la base ; le fichier disque n\'est réduit ' +
+                'que par une maintenance planifiée (carte « Espace disque »).</p>';
+
             modalBody.innerHTML =
                 explanation +
                 describePreview(info) +
+                diskNote +
                 '<p class="text-danger">Cette action est irréversible.</p>' +
                 '<div class="d-flex justify-content-end gap-2">' +
                 '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>' +
@@ -114,8 +160,12 @@ function runDataOperation(mode, days) {
             resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
             setTimeout(function () { location.reload(); }, 2000);
         } else {
-            resultDiv.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.message + '</div>';
+            // partial : échec après journées déjà validées — avertissement
+            // (résultat partiel), pas simple erreur.
+            var cls = data.partial ? 'alert-warning' : 'alert-danger';
+            resultDiv.innerHTML = '<div class="alert ' + cls + '">Erreur: ' + data.message + '</div>';
         }
+        loadStorageStats();
     })
     .catch(function (error) {
         console.error('Error:', error);
@@ -144,6 +194,7 @@ function deleteAggregated(days) {
         } else {
             resultDiv.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.message + '</div>';
         }
+        loadStorageStats();
     })
     .catch(function (error) {
         console.error('Error:', error);
@@ -199,3 +250,6 @@ document.addEventListener('click', function (evt) {
         }
     }
 });
+
+// Relevé initial de la carte « Espace disque ».
+document.addEventListener('DOMContentLoaded', loadStorageStats);

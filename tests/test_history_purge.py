@@ -643,6 +643,73 @@ def test_update_config_returns_warning_on_scheduler_failure():
     assert "'warning'" in body
 
 
+# ---------------------------------------------------------------------------
+# Espace disque : logique réutilisable vs physique du tablespace
+# ---------------------------------------------------------------------------
+
+def test_storage_stats_sqlite(app):
+    """Sur SQLite : taille du fichier vs pages de la freelist (réutilisables),
+    VACUUM comme opération de maintenance."""
+    with app.app_context():
+        info = scheduler_functions.storage_stats()
+        assert info["supported"] is True
+        assert info["engine"] == "sqlite"
+        table = info["tables"][0]
+        assert table["physical_bytes"] > 0
+        assert table["reusable_bytes"] >= 0
+        assert info["maintenance"] == "VACUUM"
+
+
+def test_storage_stats_distinguishes_logical_and_physical(app):
+    """Le relevé expose séparément les deux notions — c'est le cœur du point."""
+    with app.app_context():
+        info = scheduler_functions.storage_stats()
+        table = info["tables"][0]
+        assert "physical_bytes" in table and "reusable_bytes" in table
+        assert "physical" in table and "reusable" in table  # formats lisibles
+
+
+def test_storage_route_returns_stats(app, client):
+    _login(client)
+    response = client.get("/admin/data/storage")
+    info = response.get_json()
+    assert info["success"] is True
+    assert info["supported"] is True
+
+
+def test_storage_route_requires_authentication(client):
+    assert client.get("/admin/data/storage").status_code == 302
+
+
+def test_no_automatic_optimize_after_purge():
+    """Régression : OPTIMIZE TABLE/VACUUM ne doit JAMAIS être exécuté par les
+    purges (opération longue et gourmande) — c'est une maintenance planifiée."""
+    source = _read("scheduler_functions.py")
+    for func in ("aggregate_history", "purge_history"):
+        body = _func_body(source, func)
+        assert "OPTIMIZE TABLE" not in body and "VACUUM" not in body
+    qsrc = _read("services/queue_service.py")
+    assert "OPTIMIZE TABLE" not in qsrc and "VACUUM" not in qsrc
+
+
+def test_storage_stats_mysql_branch_uses_information_schema():
+    source = _read("scheduler_functions.py")
+    body = _func_body(source, "storage_stats")
+    assert "information_schema.TABLES" in body   # taille physique MySQL
+    assert "data_free" in body                   # espace réutilisable InnoDB
+    assert "OPTIMIZE TABLE" in body              # maintenance planifiée (info)
+
+
+def test_template_and_js_expose_storage_card():
+    html = _read("templates/admin/data.html")
+    assert "storageStats" in html
+    assert "maintenance" in html.lower()
+    assert "partitionn" in html  # piste long terme : partitionnement par date
+    js = _read("static/js/admin_data.js")
+    assert "/admin/data/storage" in js
+    assert "loadStorageStats" in js
+
+
 def test_history_loops_rollback_and_mark_partial():
     """Régression : chaque boucle journée doit rollbacker sur échec et
     signaler explicitement le résultat partiel (commit par journée)."""

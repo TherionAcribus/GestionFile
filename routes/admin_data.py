@@ -3,7 +3,7 @@ from models import db, Patient, PatientHistory, AggregatedStats, ConfigOption, J
 from routes.admin_security import require_permission
 from scheduler_functions import (
     aggregate_history, purge_history, count_history_before,
-    PartialHistoryError,
+    PartialHistoryError, storage_stats,
     count_aggregated_before, reconcile_auto_archive_job,
 )
 from sqlalchemy import text
@@ -105,6 +105,24 @@ def preview_data():
         return jsonify({'success': False, 'message': "Le décompte a échoué. Consultez les journaux du serveur."})
 
     return jsonify({'success': True, 'target': target, **info})
+
+
+@admin_data_bp.route('/admin/data/storage')
+@require_permission('options')
+def storage_info():
+    """Relevé espace disque : logique réutilisable vs physique du tablespace.
+
+    Lecture seule — alimente la carte « Espace disque ». La purge libère de
+    l'espace **logique** (réutilisable par le moteur) ; la restitution
+    physique au système relève d'une maintenance planifiée (OPTIMIZE TABLE /
+    VACUUM), volontairement non automatisable ici.
+    """
+    try:
+        return jsonify({'success': True, **storage_stats()})
+    except Exception as e:
+        current_app.logger.error("Échec du relevé d'espace disque : %s", e)
+        return jsonify({'success': False,
+                        'message': "Le relevé d'espace disque a échoué. Consultez les journaux du serveur."})
 
 
 @admin_data_bp.route('/admin/data/archive', methods=['POST'])

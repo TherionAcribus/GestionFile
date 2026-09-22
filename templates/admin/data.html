@@ -49,6 +49,30 @@
     </div>
 </div>
 
+<!-- Storage Card : espace logique réutilisable vs taille physique -->
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white">
+        Espace disque — logique vs physique
+    </div>
+    <div class="card-body">
+        <div id="storageStats">
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            Relevé en cours...
+        </div>
+        <p class="text-muted small mt-3 mb-0">
+            Une purge supprime les lignes <em>logiquement</em> : l'espace libéré reste
+            dans le fichier de la base et y est <strong>réutilisable</strong>, mais le
+            fichier ne diminue pas automatiquement. La restitution au système relève
+            d'une <strong>opération de maintenance planifiée par le DBA</strong>
+            (<code id="maintenanceCommand"></code>) — potentiellement longue et
+            gourmande en espace temporaire : à exécuter en fenêtre de maintenance,
+            <strong>jamais après chaque purge</strong>. À plus long terme, le
+            partitionnement de <code>patient_history</code> par date permettrait de
+            restituer l'espace proprement (suppression de partition).
+        </p>
+    </div>
+</div>
+
 <!-- Manual Archive Card : agrégation puis suppression des détails -->
 <div class="card mb-4">
     <div class="card-header bg-warning text-dark">
