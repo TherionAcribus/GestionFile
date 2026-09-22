@@ -96,6 +96,23 @@ class Config:
     SECURITY_POST_LOGIN_VIEW = '/admin'
     SECURITY_REDIRECT_BEHAVIOR = 'spa'
 
+    # --- Cookies de session et « se souvenir de moi » (audit sécurité) ---
+    # HttpOnly (défaut Flask, posé explicitement) + SameSite=Lax : le cookie
+    # n'est pas lisible en JS ni envoyé sur les POST cross-site — il complète
+    # la protection CSRF pour les requêtes navigateur.
+    # Secure : uniquement en HTTPS — en HTTP local le navigateur refuserait le
+    # cookie. Activer via COOKIE_SECURE=1 dès que le site est servi en TLS
+    # (reverse proxy, PaaS). NON déduit automatiquement : l'application ne voit
+    # pas si le proxy amont chiffre, un défaut à True casserait le HTTP local.
+    _COOKIE_SECURE = os.getenv("COOKIE_SECURE", "").strip().lower() in {
+        "1", "true", "yes", "on"}
+    SESSION_COOKIE_SECURE = _COOKIE_SECURE
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = _COOKIE_SECURE
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+
     # Définir les valeurs par défaut ici
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement
     site = os.getenv('SITE', 'prod')

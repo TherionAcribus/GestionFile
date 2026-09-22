@@ -1,6 +1,6 @@
-"""Point 1 (audit Admin) — /logout_all doit être POST-only avec CSRF.
+"""Point 1 (audit Admin) — /admin/logout_all doit être POST-only avec CSRF.
 
-La route ``/logout_all`` supprime toutes les sessions Flask : c'est une
+La route ``/admin/logout_all`` révoque toutes les sessions Flask : c'est une
 opération destructive (déconnexion de tous les utilisateurs). Elle était
 auparavant accessible en **GET**, ce qui permettait à un lien ou une image
 intégrée de déclencher la déconnexion de tous les utilisateurs (CSRF par GET).
@@ -34,15 +34,15 @@ def _read(rel):
 # ---------------------------------------------------------------------------
 
 def test_logout_all_is_post_only():
-    """La route /logout_all doit être déclarée avec methods=['POST'].
+    """La route /admin/logout_all doit être déclarée avec methods=['POST'].
     Sans methods explicite, Flask accepte GET par défaut."""
     source = _read("routes/admin_security.py")
     m = re.search(
-        r"@\w+\.route\(\s*['\"]\/logout_all['\"]\s*,\s*methods\s*=\s*(\[[^\]]*\])",
+        r"@\w+\.route\(\s*['\"]\/admin\/logout_all['\"]\s*,\s*methods\s*=\s*(\[[^\]]*\])",
         source,
     )
     assert m, (
-        "La route /logout_all doit avoir methods=['POST'] explicite. "
+        "La route /admin/logout_all doit avoir methods=['POST'] explicite. "
         "Sans methods, Flask accepte GET par défaut (CSRF par lien/image)."
     )
     methods = m.group(1)
@@ -57,9 +57,9 @@ def test_logout_all_still_has_permission_guard():
     source = _read("routes/admin_security.py")
     # Trouver le bloc route + décorateurs
     m = re.search(
-        r"@\w+\.route\(\s*['\"]\/logout_all['\"].*?\n.*?\n.*?def logout_all",
+        r"@\w+\.route\(\s*['\"]\/admin\/logout_all['\"].*?\n.*?\n.*?def logout_all",
         source, re.DOTALL)
-    assert m, "route /logout_all introuvable"
+    assert m, "route /admin/logout_all introuvable"
     block = m.group(0)
     assert "require_permission('security')" in block
 

@@ -1,6 +1,7 @@
-import os
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app as app
-from flask_login import current_user
+import uuid
+import flask_login
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session, current_app as app
+from flask_login import current_user, logout_user
 from functools import wraps
 from sqlalchemy.orm import selectinload
 from models import db, Role, User, DashboardCard
@@ -643,28 +644,37 @@ class ExtendedLoginForm(FlaskForm):
         app.logger.info(f"Validation OK pour username: {self.username.data}")
         return True
     
-@admin_security_bp.route('/logout_all', methods=['POST'])
+@admin_security_bp.route('/admin/logout_all', methods=['POST'])
 @require_permission('security')
 def logout_all():
-    """ Déconnexion de tous les utilisateurs
-    Cela permet de restaurer la base de données User
+    """Déconnexion de tous les utilisateurs.
+
+    Utile avant une restauration de la base « Users » ou en cas d'urgence.
 
     Point 1 (audit Admin) : cette route était auparavant accessible en GET,
     ce qui permettait à un lien ou une image intégrée de déclencher la
     déconnexion de tous les utilisateurs (CSRF par GET). Elle est désormais
     POST-only : Flask renvoie 405 sur un GET, et le décorateur global CSRF
     (before_request dans app.py) valide le jeton sur les POST navigateur.
+
+    Révocation RÉELLE : les sessions sont des cookies signés portés par les
+    navigateurs — il n'y a aucun stockage serveur (Flask-Session n'est pas
+    configuré ; supprimer des fichiers ``flask_session`` ne révoquait rien).
+    Flask-Login mémorise ``fs_uniquifier`` comme identifiant de session, et le
+    cookie « se souvenir de moi » l'encode également : renouveler le
+    ``fs_uniquifier`` de CHAQUE compte rend donc tous les cookies existants
+    invalides — le user_loader ne les résout plus vers un utilisateur.
     """
     app.logger.info("Logout all users")
-    # Supprimer toutes les sessions
-    if os.path.exists('flask_session'):
-        for filename in os.listdir('flask_session'):
-            file_path = os.path.join('flask_session', filename)
-            try:
-                if os.path.isfile(file_path):
-                    os.unlink(file_path)
-            except Exception as e:
-                app.logger.warning(f"Suppression de session impossible ({file_path}): {e}")
+    for user in User.query.all():
+        user.fs_uniquifier = str(uuid.uuid4())
+    db.session.commit()
+
+    # La session de l'admin qui déclenche l'action est elle-même révoquée
+    # (son fs_uniquifier vient de changer) : on la termine proprement plutôt
+    # que de laisser un cookie mort côté navigateur.
+    logout_user()
+    session.clear()
 
     record_audit(ACTION_LOGOUT_ALL, "session", outcome=OUTCOME_SUCCESS)
     return redirect(url_for('admin_security.login'))
@@ -981,7 +991,22 @@ def update_password(user_id):
             return display_security_table()
 
         user.set_password(password1)
+        # Révocation des sessions du compte : le cookie de session et le cookie
+        # « se souvenir de moi » encodent fs_uniquifier — le renouveler invalide
+        # tous les cookies émis avant le changement (un cookie volé devient
+        # inutilisable).
+        user.fs_uniquifier = str(uuid.uuid4())
         db.session.commit()
+
+        # Cas particulier : l'admin change SON PROPRE mot de passe. Sa session
+        # courante vient aussi d'être invalidée — on la ré-émet avec le nouvel
+        # identifiant pour ne pas le déconnecter à la prochaine requête (ses
+        # AUTRES sessions et son ancien cookie remember restent révoqués).
+        # flask_login.login_user suffit : flask_security.login_user referait
+        # toute la chaîne d'authentification (2FA, fraîcheur), hors de propos
+        # pour une simple ré-émission d'identifiant de session.
+        if current_user.is_authenticated and current_user.id == user.id:
+            flask_login.login_user(user)
 
         # Le mot de passe lui-même n'est JAMAIS journalisé, seulement le fait
         # qu'il a été changé et sur quel compte.
