@@ -7,7 +7,10 @@ from datetime import datetime, timedelta
 from flask import current_app
 from sqlalchemy import func, text
 from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats
-from services.queue_service import archive_and_purge_all_patients, purge_all_patients
+from services.queue_service import (
+    archive_and_purge_all_patients, archive_and_purge_old_patients,
+    purge_all_patients, purge_old_patients,
+)
 from app_holder import AppHolder
 from config import time_tz
 from communication import communikation
@@ -197,21 +200,24 @@ def add_scheduler_clear_all_patients():
     
 
 def clear_old_patients_table(app):
-    # Vérifie si la fonctionnalité est activée dans la configuration
+    """Purge de démarrage des patients antérieurs à aujourd'hui.
+
+    Point audit : ce chemin supprimait directement les lignes, sans
+    historisation, sans audit et sans rollback explicite — après une
+    interruption du serveur, des patients non encore transférés étaient
+    perdus même avec ``CRON_TRANSFER_PATIENT_TO_HISTORY`` activé. Il délègue
+    désormais aux mêmes services transactionnels que le job nocturne : la
+    conservation dans l'historique y est respectée de la même façon.
+    """
     if current_app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
-        # Obtenez la date actuelle en UTC
         today = datetime.now(time_tz).date()
-        
-        # Construisez la requête pour trouver tous les patients dont la date est antérieure à aujourd'hui
-        old_patients = Patient.query.filter(Patient.timestamp < today)
-        
-        # Supprimez ces patients
-        if old_patients.count() > 0:
-            old_patients.delete(synchronize_session='fetch')
-            db.session.commit()
-            # TODO à remettre une fois "communikation" déplacé
-            #current_app.communikation("update_patient")
-            current_app.logger.info(f"Deleted old patients not from today ({today}).")
+        if current_app.config.get("CRON_TRANSFER_PATIENT_TO_HISTORY", False):
+            deleted = archive_and_purge_old_patients(today)
+        else:
+            deleted = purge_old_patients(today)
+        if deleted:
+            current_app.logger.info(
+                f"Deleted {deleted} old patients not from today ({today}).")
     else:
         current_app.logger.info("Deletion of old patients is disabled.")
 

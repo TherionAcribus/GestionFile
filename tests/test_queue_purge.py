@@ -12,7 +12,7 @@ planifié l'appelle sous ``app.app_context()`` et consigne ``JobExecutionLog``.
 
 import ast
 import inspect
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -152,13 +152,15 @@ def test_service_rolls_back_audits_failure_and_reraises(app):
 def test_archive_and_purge_copies_then_deletes_atomically(app):
     """Historique rempli, file vidée, clé d'idempotence renseignée, audit."""
     with app.app_context():
-        patient = Patient.query.one()
+        # L'id est capturée avant : après un DELETE bulk (synchronize_session
+        # off), l'objet ORM expiré n'est plus relisable.
+        patient_id = Patient.query.one().id
         removed = archive_and_purge_all_patients()
         assert removed == 1
         assert Patient.query.count() == 0
         history = PatientHistory.query.one()
         assert history.call_number == "A1"
-        assert history.patient_source_id == patient.id
+        assert history.patient_source_id == patient_id
         audit = AuditLog.query.filter_by(action=ACTION_CLEAR).one()
         assert audit.outcome == OUTCOME_SUCCESS
 
@@ -407,3 +409,79 @@ def test_two_phase_transfer_removed():
         src = inspect.getsource(mod)
         assert "transfer_patients_to_history" not in src
         assert "archive_and_purge_all_patients" in src
+
+
+# ---------------------------------------------------------------------------
+# Purge de démarrage (clear_old_patients_table) : même service que le job
+# ---------------------------------------------------------------------------
+
+def _add_old_patient(app):
+    with app.app_context():
+        activity = Activity.query.first()
+        db.session.add(Patient(
+            call_number="A9", status="standing", activity_id=activity.id,
+            timestamp=datetime.now() - timedelta(days=3),
+        ))
+        db.session.commit()
+
+
+def test_startup_cleanup_archives_old_patients_when_transfer_enabled(app):
+    """Régression : la purge de démarrage contournait l'historisation — les
+    patients de la veille étaient perdus malgré le drapeau de transfert."""
+    app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"] = True
+    app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"] = True
+    _add_old_patient(app)
+
+    with app.app_context():
+        scheduler_functions.clear_old_patients_table(app)
+        # Le patient d'hier est historisé (avec sa clé source), celui
+        # d'aujourd'hui reste en file.
+        history = PatientHistory.query.one()
+        assert history.call_number == "A9"
+        assert history.patient_source_id is not None
+        assert Patient.query.count() == 1
+        assert AuditLog.query.filter_by(action=ACTION_CLEAR).count() == 1
+
+
+def test_startup_cleanup_purges_without_history_when_transfer_disabled(app):
+    app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"] = True
+    app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"] = False
+    _add_old_patient(app)
+
+    with app.app_context():
+        scheduler_functions.clear_old_patients_table(app)
+        assert PatientHistory.query.count() == 0
+        assert Patient.query.count() == 1  # seul le patient du jour reste
+
+
+def test_startup_cleanup_disabled_flag_deletes_nothing(app):
+    app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"] = False
+    _add_old_patient(app)
+
+    with app.app_context():
+        scheduler_functions.clear_old_patients_table(app)
+        assert Patient.query.count() == 2
+        assert PatientHistory.query.count() == 0
+
+
+def test_startup_cleanup_uses_transactional_service():
+    """Garde statique : clear_old_patients_table ne supprime plus elle-même —
+    elle délègue aux services (historisation/audit/rollback garantis)."""
+    source = inspect.getsource(scheduler_functions.clear_old_patients_table)
+    assert "archive_and_purge_old_patients" in source
+    assert "purge_old_patients" in source
+    assert ".delete(" not in source
+
+
+def test_public_purge_functions_delegate_to_audited_cores():
+    """L'audit succès/échec vit dans _purge/_archive_and_purge : chaque
+    fonction publique doit déléguer à l'un d'eux (cf. test_audit_wiring)."""
+    delegates = {
+        "purge_all_patients": "_purge(",
+        "archive_and_purge_all_patients": "_archive_and_purge(",
+        "purge_old_patients": "_purge(",
+        "archive_and_purge_old_patients": "_archive_and_purge(",
+    }
+    for func, core in delegates.items():
+        body = inspect.getsource(getattr(queue_service, func))
+        assert core in body, f"{func} ne délègue plus à {core} (audit perdu)"

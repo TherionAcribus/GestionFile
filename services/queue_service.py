@@ -1,4 +1,4 @@
-"""Service « file d'attente » — purge globale des patients.
+"""Service « file d'attente » — purge des patients.
 
 Point audit : la purge vivait dans la VUE ``clear_all_patients_from_db`` de
 ``routes/admin_queue.py``, décorée par ``@require_permission`` :
@@ -18,9 +18,15 @@ Second point audit (atomicité) : la copie vers ``PatientHistory`` et la purge
 étaient validées en **deux transactions** — une copie réussie suivie d'une
 suppression en échec laissait la file intacte, et la relance du lendemain
 recopiait les mêmes patients (doublons d'historique, rien ne les bloquait).
-``archive_and_purge_all_patients`` valide copie et suppression dans **une
-seule transaction**, et la colonne unique ``patient_source_id`` interdit les
+``archive_and_purge_*`` valide copie et suppression dans **une seule
+transaction**, et la colonne unique ``patient_source_id`` interdit les
 doublons même en cas de concurrence.
+
+Troisième point audit : la purge de démarrage (``clear_old_patients_table``,
+patients antérieurs à aujourd'hui) supprimait directement, sans
+historisation ni audit. Les variantes ``*_old_patients`` ci-dessous partagent
+le même cœur transactionnel : le chemin de démarrage respecte désormais
+``CRON_TRANSFER_PATIENT_TO_HISTORY`` comme le job nocturne.
 """
 
 from flask import current_app
@@ -33,10 +39,31 @@ from models import Patient, PatientHistory, db
 from routes.announce import refresh_announce_screens
 
 
-def _post_purge_effects(deleted, archived=False):
+def _history_row_for(patient):
+    """Ligne ``PatientHistory`` produite par un ``Patient`` de la file.
+
+    ``patient_source_id`` (unique) sert de clé d'idempotence : un patient ne
+    peut produire qu'une seule ligne d'historique.
+    """
+    return PatientHistory(
+        call_number=patient.call_number,
+        timestamp=patient.timestamp,
+        timestamp_counter=patient.timestamp_counter,
+        timestamp_end=patient.timestamp_end,
+        day_of_week=patient.timestamp.strftime('%A'),
+        status=patient.status,
+        counter_id=patient.counter_id,
+        activity_id=patient.activity_id,
+        overtaken=patient.overtaken,
+        language_id=patient.language_id,
+        patient_source_id=patient.id,
+    )
+
+
+def _post_purge_effects(deleted, label, archived=False):
     """Effets de bord communs après une purge validée : audit, puis
     rafraîchissement des clients web, écrans d'annonce et comptoirs."""
-    current_app.logger.info("La table Patient a été vidée (%s lignes)", deleted)
+    current_app.logger.info("%s (%s lignes)", label, deleted)
     details = f"{deleted} patient(s) supprimé(s)"
     if archived:
         details += ", copiés dans l'historique"
@@ -48,17 +75,50 @@ def _post_purge_effects(deleted, archived=False):
     communikation("app_counter", event="refresh_after_clear_patient_list")
 
 
+def _purge(query, label):
+    """Supprime les patients de ``query``, sans archivage. Commit unique."""
+    try:
+        deleted = query.delete(synchronize_session=False)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # L'audit d'échec vit dans le service (et non dans la vue) : la trace
+        # est ainsi garantie aussi pour l'exécution planifiée.
+        record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE,
+                     details=f"{label} : {e}")
+        raise
+    _post_purge_effects(deleted, label)
+    return deleted
+
+
+def _archive_and_purge(query, label):
+    """Copie les patients de ``query`` dans ``PatientHistory`` PUIS les
+    supprime — **une seule transaction** pour les deux.
+
+    Plus d'état intermédiaire où la copie serait validée sans la suppression
+    (ni l'inverse), et ``patient_source_id`` unique transforme toute
+    exécution concurrente ou relancée en échec propre plutôt qu'en doublons.
+
+    Boucle ORM plutôt qu'un ``INSERT … SELECT`` : ``day_of_week`` est calculé
+    en Python (``strftime('%A')``, nom anglais stable quel que soit le
+    dialecte/locale SQL) — la transaction unique fournit déjà l'atomicité.
+    """
+    try:
+        for patient in query.all():
+            db.session.add(_history_row_for(patient))
+        deleted = query.delete(synchronize_session=False)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE,
+                     details=f"{label} : {e}")
+        raise
+    _post_purge_effects(deleted, label, archived=True)
+    return deleted
+
+
 def purge_all_patients():
     """Vide la table Patient et synchronise les effets de bord.
-
-    Enchaîne, comme le faisait l'ancienne vue :
-
-    1. suppression de toutes les lignes ``Patient`` (commit) ;
-    2. journal d'audit métier (succès) ;
-    3. rafraîchissement de la file chez les clients web ;
-    4. rechargement des écrans d'annonce ;
-    5. remise à disposition des comptoirs ;
-    6. notification des applications comptoir.
 
     Retourne le nombre de lignes supprimées. En cas d'échec : rollback,
     audit ``OUTCOME_FAILURE`` (tracé ici pour couvrir aussi l'exécution
@@ -66,60 +126,34 @@ def purge_all_patients():
     HTTP ou tâche planifiée) qui choisit sa traduction (toast /
     JobExecutionLog).
     """
-    try:
-        deleted = db.session.query(Patient).delete()
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        # L'audit d'échec vit dans le service (et non dans la vue) : la trace
-        # est ainsi garantie aussi pour l'exécution planifiée.
-        record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE,
-                     details=str(e))
-        raise
-
-    _post_purge_effects(deleted)
-    return deleted
+    return _purge(db.session.query(Patient), "La table Patient a été vidée")
 
 
 def archive_and_purge_all_patients():
     """Copie toute la file dans ``PatientHistory`` PUIS la vide — atomique.
 
-    Une **seule transaction** stage les INSERT d'historique et le DELETE de
-    la file : il n'existe plus d'état intermédiaire où la copie serait
-    validée sans la suppression (ni l'inverse). Chaque ligne historique porte
-    ``patient_source_id`` (unique) : une exécution concurrente ou relancée
-    lève ``IntegrityError`` et fait tout échouer proprement, plutôt que de
-    dupliquer les dossiers.
-
-    Boucle ORM plutôt qu'un ``INSERT … SELECT`` : ``day_of_week`` est calculé
-    en Python (``strftime('%A')``, nom anglais stable quel que soit le
-    dialecte/locale SQL) — la transaction unique fournit déjà l'atomicité.
-
     Mêmes audit et effets de bord que :func:`purge_all_patients`. Retourne le
     nombre de lignes supprimées de la file.
     """
-    try:
-        for patient in Patient.query.all():
-            db.session.add(PatientHistory(
-                call_number=patient.call_number,
-                timestamp=patient.timestamp,
-                timestamp_counter=patient.timestamp_counter,
-                timestamp_end=patient.timestamp_end,
-                day_of_week=patient.timestamp.strftime('%A'),
-                status=patient.status,
-                counter_id=patient.counter_id,
-                activity_id=patient.activity_id,
-                overtaken=patient.overtaken,
-                language_id=patient.language_id,
-                patient_source_id=patient.id,
-            ))
-        deleted = db.session.query(Patient).delete()
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE,
-                     details=f"archivage+purge : {e}")
-        raise
+    return _archive_and_purge(
+        db.session.query(Patient), "La table Patient a été vidée")
 
-    _post_purge_effects(deleted, archived=True)
-    return deleted
+
+def purge_old_patients(today):
+    """Supprime les patients antérieurs à ``today`` (date), sans archivage.
+
+    Chemin de la purge de démarrage : passe par le même service que le job
+    nocturne — audit et rollback garantis.
+    """
+    return _purge(
+        db.session.query(Patient).filter(Patient.timestamp < today),
+        f"Purge des patients antérieurs à {today}")
+
+
+def archive_and_purge_old_patients(today):
+    """Copie dans l'historique puis supprime les patients antérieurs à
+    ``today`` — atomique, même contrat que :func:`archive_and_purge_all_patients`.
+    """
+    return _archive_and_purge(
+        db.session.query(Patient).filter(Patient.timestamp < today),
+        f"Archivage+purge des patients antérieurs à {today}")

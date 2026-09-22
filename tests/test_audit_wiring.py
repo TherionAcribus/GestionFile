@@ -46,9 +46,11 @@ _AUDITED = [
     ("routes/admin_security.py", "logout_all"),
     # Purge de la file : le métier (et son audit succès/échec) vit dans le
     # service depuis le découplage route/planificateur — la vue appelle le
-    # service, l'audit reste donc garanti pour les deux appelants.
-    ("services/queue_service.py", "purge_all_patients"),
-    ("services/queue_service.py", "archive_and_purge_all_patients"),
+    # service, l'audit reste donc garanti pour les deux appelants. Les
+    # fonctions publiques délèguent toutes à ces deux noyaux audités (garde
+    # de délégation dans test_queue_purge).
+    ("services/queue_service.py", "_purge"),
+    ("services/queue_service.py", "_archive_and_purge"),
     ("routes/admin_queue.py", "delete_patient"),
     ("routes/admin_backup.py", "backup_import"),
     ("routes/admin_backup.py", "backup_import_multi"),
