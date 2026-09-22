@@ -5,11 +5,12 @@ from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
 from routes.announce import refresh_announce_screens
 from communication import communikation
+from services.queue_service import purge_all_patients
 from bdd import transfer_patients_to_history
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
 from audit_service import record_audit
-from audit_log import ACTION_DELETE, ACTION_CLEAR, OUTCOME_SUCCESS, OUTCOME_FAILURE
+from audit_log import ACTION_DELETE, OUTCOME_SUCCESS, OUTCOME_FAILURE
 from ui_feedback import display_toast
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
@@ -91,42 +92,44 @@ def confirm_delete_patient_table_with_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
                             saving=True)
 
+def _purge_patients_response():
+    """Traduit ``purge_all_patients`` en réponse de vue (toast + statut).
+
+    Partagée par les deux routes de purge : la variante « avec sauvegarde » ne
+    doit PAS appeler la vue sœur décorée (double contrôle de permission +
+    couplage vue→vue, cf. le point audit dans ``services.queue_service``).
+    """
+    try:
+        purge_all_patients()
+    except Exception as e:
+        current_app.logger.error("Échec de la purge de la file : %s", e)
+        display_toast(success=False, message=str(e))
+        return "", 200
+    return display_toast(message="La table Patient a été vidée")
+
+
 @admin_queue_bp.route('/admin/database/clear_all_patients_with_saving', methods=['POST'])
 @require_permission('queue')
 def clear_all_patients_from_db_with_saving():
-    success = transfer_patients_to_history()
-    if success:
-        clear_all_patients_from_db()
-    else:
-        current_app.logger.error("Failed to transfer patients to history")
-        display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
+    # Point audit : la réponse de la purge n'était pas renvoyée — la suppression
+    # pouvait réussir puis Flask répondait 500 (« view did not return »).
+    # Chaque branche renvoie désormais une réponse.
+    if transfer_patients_to_history():
+        return _purge_patients_response()
+    current_app.logger.error("Failed to transfer patients to history")
+    display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
+    return "", 200
 
 @admin_queue_bp.route('/admin/database/clear_all_patients', methods=['POST'])
 @require_permission('queue')
-def clear_all_patients_from_db(app_context=None):
-    # je dois passer le contexte dans le cas d'APscheduler car dans un Thread différent d'où "app_context",
-    # je ne peux pas utiliser simplement current_app. Par contre quand appelé par le bouton supprimé on utilise current_app
-    app_context = current_app if not app_context else app_context
-    with current_app.app_context():  # Nécessaire pour pouvoir effacer la table via le CRON
-        try:
-            deleted = db.session.query(Patient).delete()
-            db.session.commit()
-            app_context.logger.info("La table Patient a été vidée")
-            record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_SUCCESS,
-                         details=f"{deleted} patient(s) supprimé(s)")
-            communikation("update_patient")
-            # rafraichissement de la page Announce
-            refresh_announce_screens()
-            # mise à jour des dispos des comptoirs
-            clear_counter_table()
-            communikation("app_counter", event="refresh_after_clear_patient_list")
-            return display_toast(message="La table Patient a été vidée")
-        except Exception as e:
-            db.session.rollback()
-            app_context.logger.error(str(e))
-            record_audit(ACTION_CLEAR, "queue", outcome=OUTCOME_FAILURE)
-            display_toast(success = False, message=str(e))
-            return "", 200
+def clear_all_patients_from_db():
+    """Vide la file d'attente — voir ``services.queue_service.purge_all_patients``.
+
+    Le métier est extrait (point audit) : la tâche planifiée l'appelle sans
+    passer par cette vue décorée — ``@require_permission`` exige une requête
+    HTTP (``current_user``), indisponible dans un job APScheduler.
+    """
+    return _purge_patients_response()
 
 
 # mise à jour des informations d'un patient

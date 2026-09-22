@@ -44,7 +44,10 @@ _AUDITED = [
     ("routes/admin_security.py", "update_password"),
     ("routes/admin_security.py", "reset_admin"),
     ("routes/admin_security.py", "logout_all"),
-    ("routes/admin_queue.py", "clear_all_patients_from_db"),
+    # Purge de la file : le métier (et son audit succès/échec) vit dans le
+    # service depuis le découplage route/planificateur — la vue appelle le
+    # service, l'audit reste donc garanti pour les deux appelants.
+    ("services/queue_service.py", "purge_all_patients"),
     ("routes/admin_queue.py", "delete_patient"),
     ("routes/admin_backup.py", "backup_import"),
     ("routes/admin_backup.py", "backup_import_multi"),

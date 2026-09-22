@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from flask import current_app
 from sqlalchemy import func, text
 from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats
-from routes.admin_queue import clear_all_patients_from_db
+from services.queue_service import purge_all_patients
 from bdd import transfer_patients_to_history
 from app_holder import AppHolder
 from config import time_tz
@@ -276,7 +276,10 @@ def remove_scheduler_clear_announce_calls():
 def clear_all_patients_job():
     """Efface tous les patients en utilisant le contexte de l'application globale"""
     app = AppHolder.get_app()
-    current_app.logger.debug("Clear all patients")
+    # ``app.logger`` et non ``current_app`` : le contexte applicatif n'est pas
+    # encore poussé à ce stade — ``current_app`` lèverait RuntimeError dans le
+    # processus scheduler (aucun contexte ambiant n'y existe).
+    app.logger.debug("Clear all patients")
 
     with app.app_context():
         _refresh_config(app)
@@ -284,9 +287,13 @@ def clear_all_patients_job():
             success = True
             if app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"]:
                 success = transfer_patients_to_history()
-                
+
             if success:
-                clear_all_patients_from_db(app)
+                # Service métier sans décorateur (point audit) : l'ancienne
+                # version appelait la VUE clear_all_patients_from_db, décorée
+                # par @require_permission — hors requête HTTP, current_user
+                # est indisponible et la tâche échouait avant la purge.
+                purge_all_patients()
                 
                 # Log du succès
                 log = JobExecutionLog(
