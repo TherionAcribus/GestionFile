@@ -48,6 +48,7 @@ _AUDITED = [
     # service depuis le découplage route/planificateur — la vue appelle le
     # service, l'audit reste donc garanti pour les deux appelants.
     ("services/queue_service.py", "purge_all_patients"),
+    ("services/queue_service.py", "archive_and_purge_all_patients"),
     ("routes/admin_queue.py", "delete_patient"),
     ("routes/admin_backup.py", "backup_import"),
     ("routes/admin_backup.py", "backup_import_multi"),

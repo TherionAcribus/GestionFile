@@ -35,7 +35,7 @@ from models import (
     User,
     db,
 )
-from services.queue_service import purge_all_patients
+from services.queue_service import archive_and_purge_all_patients, purge_all_patients
 
 
 @pytest.fixture()
@@ -146,6 +146,48 @@ def test_service_rolls_back_audits_failure_and_reraises(app):
 
 
 # ---------------------------------------------------------------------------
+# archive_and_purge_all_patients : copie + purge en UNE transaction
+# ---------------------------------------------------------------------------
+
+def test_archive_and_purge_copies_then_deletes_atomically(app):
+    """Historique rempli, file vidée, clé d'idempotence renseignée, audit."""
+    with app.app_context():
+        patient = Patient.query.one()
+        removed = archive_and_purge_all_patients()
+        assert removed == 1
+        assert Patient.query.count() == 0
+        history = PatientHistory.query.one()
+        assert history.call_number == "A1"
+        assert history.patient_source_id == patient.id
+        audit = AuditLog.query.filter_by(action=ACTION_CLEAR).one()
+        assert audit.outcome == OUTCOME_SUCCESS
+
+
+def test_archive_and_purge_rolls_back_everything_on_duplicate(app):
+    """Idempotence : une ligne d'historique portant déjà le patient_source_id
+    du patient fait échouer le transfert — rollback complet, ni doublon ni
+    suppression partielle (le défaut historique de la copie non atomique)."""
+    with app.app_context():
+        patient = Patient.query.one()
+        db.session.add(PatientHistory(
+            call_number="A1", timestamp=patient.timestamp,
+            day_of_week="Monday", status="called",
+            activity_id=patient.activity_id,
+            patient_source_id=patient.id,
+        ))
+        db.session.commit()
+
+        with pytest.raises(Exception):
+            archive_and_purge_all_patients()
+
+        # Rollback complet : la file est intacte, un seul enregistrement.
+        assert Patient.query.count() == 1
+        assert PatientHistory.query.count() == 1
+        audit = AuditLog.query.filter_by(action=ACTION_CLEAR).one()
+        assert audit.outcome == OUTCOME_FAILURE
+
+
+# ---------------------------------------------------------------------------
 # Routes : toujours une réponse, jamais un tuple tombé dans le vide
 # ---------------------------------------------------------------------------
 
@@ -166,15 +208,20 @@ def test_route_clear_all_with_saving_returns_response(app, client):
     assert response.status_code == 204
     with app.app_context():
         assert Patient.query.count() == 0
-        assert PatientHistory.query.count() == 1  # transfert effectué
+        history = PatientHistory.query.one()
+        assert history.call_number == "A1"
+        # Clé d'idempotence : la ligne d'historique porte l'id du patient
+        # dont elle provient.
+        assert history.patient_source_id is not None
 
 
-def test_route_with_saving_aborts_when_transfer_fails(app, client):
-    """Si le transfert vers l'historique échoue, la purge n'a pas lieu et la
-    vue renvoie quand même une réponse (toast d'erreur)."""
+def test_route_with_saving_aborts_when_archive_fails(app, client):
+    """Si l'archivage+purge échoue, la file reste intacte (la transaction
+    unique a fait rollback) et la vue renvoie une réponse (toast d'erreur)."""
     _login(client)
     with patch(
-        "routes.admin_queue.transfer_patients_to_history", return_value=False
+        "routes.admin_queue.archive_and_purge_all_patients",
+        side_effect=RuntimeError("db down"),
     ):
         response = client.post("/admin/database/clear_all_patients_with_saving")
     assert response.status_code == 200
@@ -245,36 +292,50 @@ def test_scheduler_job_logs_failure(app):
         assert Patient.query.count() == 1  # purge non effectuée
 
 
-def test_scheduler_job_transfers_before_purging(app):
-    """CRON_TRANSFER_PATIENT_TO_HISTORY conserve le transfert préalable."""
+def test_scheduler_job_archives_before_purging(app):
+    """CRON_TRANSFER_PATIENT_TO_HISTORY choisit la variante atomique
+    archive+purge ; sans le drapeau, la purge simple."""
     app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"] = True
     with patch.object(AppHolder, "get_app", return_value=app), patch(
         "scheduler_functions._refresh_config"
     ), patch(
-        "scheduler_functions.transfer_patients_to_history", return_value=True
-    ) as mock_transfer, patch(
+        "scheduler_functions.archive_and_purge_all_patients"
+    ) as mock_archive, patch(
         "scheduler_functions.purge_all_patients"
     ) as mock_purge:
         scheduler_functions.clear_all_patients_job()
-        mock_transfer.assert_called_once_with()
+        mock_archive.assert_called_once_with()
+        mock_purge.assert_not_called()
+
+    app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"] = False
+    with patch.object(AppHolder, "get_app", return_value=app), patch(
+        "scheduler_functions._refresh_config"
+    ), patch(
+        "scheduler_functions.archive_and_purge_all_patients"
+    ) as mock_archive, patch(
+        "scheduler_functions.purge_all_patients"
+    ) as mock_purge:
+        scheduler_functions.clear_all_patients_job()
+        mock_archive.assert_not_called()
         mock_purge.assert_called_once_with()
 
 
-def test_scheduler_job_skips_purge_when_transfer_fails(app):
+def test_scheduler_job_fails_when_archive_fails(app):
+    """Un échec de l'archivage atomique est consigné 'failed' — et comme la
+    transaction est unique, la file reste intacte (rien à relancer)."""
     app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"] = True
     with patch.object(AppHolder, "get_app", return_value=app), patch(
         "scheduler_functions._refresh_config"
     ), patch(
-        "scheduler_functions.transfer_patients_to_history", return_value=False
-    ), patch(
-        "scheduler_functions.purge_all_patients"
-    ) as mock_purge:
+        "scheduler_functions.archive_and_purge_all_patients",
+        side_effect=RuntimeError("db down"),
+    ):
         scheduler_functions.clear_all_patients_job()
-        mock_purge.assert_not_called()
 
     with app.app_context():
         log = JobExecutionLog.query.filter_by(job_id="Clear Patient Table").one()
         assert log.status == "failed"
+        assert Patient.query.count() == 1
 
 
 # ---------------------------------------------------------------------------
@@ -299,7 +360,8 @@ def test_scheduler_uses_service_not_route_view():
     """scheduler_functions appelle le service et n'importe plus de fonction de
     vue protégée depuis routes.admin_queue."""
     source = inspect.getsource(scheduler_functions)
-    assert "from services.queue_service import purge_all_patients" in source
+    assert "from services.queue_service import" in source
+    assert "purge_all_patients" in source
     assert "from routes.admin_queue import" not in source
     assert "purge_all_patients()" in source
 
@@ -336,3 +398,12 @@ def test_routes_keep_permission_decorators():
     """Les deux routes HTTP restent protégées par @require_permission."""
     source = inspect.getsource(admin_queue)
     assert source.count("@require_permission('queue')") >= 2
+
+
+def test_two_phase_transfer_removed():
+    """Régression : plus de copie validée séparément de la purge — les deux
+    appelants passent par le service atomique."""
+    for mod in (admin_queue, scheduler_functions):
+        src = inspect.getsource(mod)
+        assert "transfer_patients_to_history" not in src
+        assert "archive_and_purge_all_patients" in src

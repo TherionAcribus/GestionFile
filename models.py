@@ -193,6 +193,9 @@ class PatientHistory(db.Model):
         # Graphiques filtrés par activité / comptoir sur une plage de dates.
         db.Index('ix_patient_history_activity_timestamp', 'activity_id', 'timestamp'),
         db.Index('ix_patient_history_counter_timestamp', 'counter_id', 'timestamp'),
+        # Un patient ne produit qu'une seule ligne d'historique : une relance
+        # du transfert après échec lève IntegrityError au lieu de dupliquer.
+        db.UniqueConstraint('patient_source_id', name='uq_patient_history_source'),
     )
     id = db.Column(db.Integer, Sequence('patient_history_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
@@ -205,6 +208,11 @@ class PatientHistory(db.Model):
     activity_id = db.Column(db.Integer, nullable=False)
     overtaken = db.Column(db.Integer, default=0)
     language_id = db.Column(db.Integer, nullable=True)
+    # Clé d'idempotence du transfert Patient -> PatientHistory : id du patient
+    # dont provient la ligne. Unique (NULL toléré, ex. lignes antérieures) pour
+    # interdire les doublons si le transfert est relancé — même motif que
+    # Patient.print_job_id.
+    patient_source_id = db.Column(db.Integer, nullable=True)
 
     def __repr__(self):
         return f'<PatientHistory {self.call_number}> ({self.id})'
@@ -219,6 +227,7 @@ class PatientHistory(db.Model):
             "status": self.status,
             "counter_id": self.counter_id,
             "language_id": self.language_id,
+            "patient_source_id": self.patient_source_id,
         }
 
 class AggregatedStats(db.Model):

@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 from flask import current_app
 from sqlalchemy import func, text
 from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats
-from services.queue_service import purge_all_patients
-from bdd import transfer_patients_to_history
+from services.queue_service import archive_and_purge_all_patients, purge_all_patients
 from app_holder import AppHolder
 from config import time_tz
 from communication import communikation
@@ -285,37 +284,27 @@ def clear_all_patients_job():
     with app.app_context():
         _refresh_config(app)
         try:
-            success = True
+            # Services métier sans décorateur (point audit) : l'ancienne
+            # version appelait la VUE clear_all_patients_from_db, décorée
+            # par @require_permission — hors requête HTTP, current_user
+            # est indisponible et la tâche échouait avant la purge.
+            # Variante « avec archivage » : copie + purge dans UNE transaction
+            # (point audit) — plus de fenêtre où la copie serait validée sans
+            # la suppression, ni doublons d'historique à la relance.
             if app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"]:
-                success = transfer_patients_to_history()
-
-            if success:
-                # Service métier sans décorateur (point audit) : l'ancienne
-                # version appelait la VUE clear_all_patients_from_db, décorée
-                # par @require_permission — hors requête HTTP, current_user
-                # est indisponible et la tâche échouait avant la purge.
-                purge_all_patients()
-                
-                # Log du succès
-                log = JobExecutionLog(
-                    job_id='Clear Patient Table',
-                    status='success'
-                )
-                db.session.add(log)
-                db.session.commit()
-                app.logger.info("Clear patients job completed successfully")
-                
+                archive_and_purge_all_patients()
             else:
-                # Log de l'échec du transfert
-                log = JobExecutionLog(
-                    job_id='Clear Patient Table',
-                    status='failed',
-                    error_message='Transfer to history failed'
-                )
-                db.session.add(log)
-                db.session.commit()
-                app.logger.error("Clear patients job failed: Transfer to history failed")
-                
+                purge_all_patients()
+
+            # Log du succès
+            log = JobExecutionLog(
+                job_id='Clear Patient Table',
+                status='success'
+            )
+            db.session.add(log)
+            db.session.commit()
+            app.logger.info("Clear patients job completed successfully")
+
         except Exception as e:
             # Log de l'erreur
             log = JobExecutionLog(
@@ -570,7 +559,7 @@ def count_aggregated_before(older_than_days):
 _HISTORY_EXPORT_FIELDS = (
     'id', 'call_number', 'timestamp', 'timestamp_counter', 'timestamp_end',
     'day_of_week', 'status', 'counter_id', 'activity_id', 'language_id',
-    'overtaken',
+    'overtaken', 'patient_source_id',
 )
 
 

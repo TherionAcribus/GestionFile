@@ -5,8 +5,7 @@ from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
 from routes.announce import refresh_announce_screens
 from communication import communikation
-from services.queue_service import purge_all_patients
-from bdd import transfer_patients_to_history
+from services.queue_service import archive_and_purge_all_patients, purge_all_patients
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
 from audit_service import record_audit
@@ -92,15 +91,19 @@ def confirm_delete_patient_table_with_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
                             saving=True)
 
-def _purge_patients_response():
-    """Traduit ``purge_all_patients`` en réponse de vue (toast + statut).
+def _purge_patients_response(archive=False):
+    """Traduit la purge de la file en réponse de vue (toast + statut).
 
-    Partagée par les deux routes de purge : la variante « avec sauvegarde » ne
-    doit PAS appeler la vue sœur décorée (double contrôle de permission +
-    couplage vue→vue, cf. le point audit dans ``services.queue_service``).
+    ``archive=True`` copie d'abord la file dans l'historique — copie et
+    suppression sont atomiques dans le service (une seule transaction, plus
+    la clé d'idempotence ``patient_source_id`` contre les doublons à la
+    relance).
     """
     try:
-        purge_all_patients()
+        if archive:
+            archive_and_purge_all_patients()
+        else:
+            purge_all_patients()
     except Exception as e:
         current_app.logger.error("Échec de la purge de la file : %s", e)
         display_toast(success=False, message="La purge de la file a échoué.")
@@ -111,14 +114,11 @@ def _purge_patients_response():
 @admin_queue_bp.route('/admin/database/clear_all_patients_with_saving', methods=['POST'])
 @require_permission('queue')
 def clear_all_patients_from_db_with_saving():
-    # Point audit : la réponse de la purge n'était pas renvoyée — la suppression
-    # pouvait réussir puis Flask répondait 500 (« view did not return »).
-    # Chaque branche renvoie désormais une réponse.
-    if transfer_patients_to_history():
-        return _purge_patients_response()
-    current_app.logger.error("Failed to transfer patients to history")
-    display_toast(success=False, message="Echec de transfert des patients vers l'historique. La suppression des patients est annulée.")
-    return "", 200
+    # Point audit : la copie vers l'historique puis la purge étaient validées
+    # en deux transactions — une copie réussie suivie d'une suppression en
+    # échec produisait des doublons à la relance. Le service valide les deux
+    # en une seule transaction.
+    return _purge_patients_response(archive=True)
 
 @admin_queue_bp.route('/admin/database/clear_all_patients', methods=['POST'])
 @require_permission('queue')
