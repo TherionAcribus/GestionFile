@@ -67,25 +67,13 @@ def disable_buttons_for_activity_job(activity_id):
                 raise ValueError(f"Activity with id {activity_id} not found")
 
             disable_buttons_for_activity(app, activity_id)
-            
-            # Log du succès
-            log = JobExecutionLog(
-                job_id=f'Disable_Buttons_Activity_{activity_id}',
-                status='success'
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution(
+                f'Disable_Buttons_Activity_{activity_id}', 'success')
             app.logger.info(f"Successfully disabled buttons for activity: {activity.name}")
-            
+
         except Exception as e:
-            # Log de l'erreur
-            log = JobExecutionLog(
-                job_id=f'Disable_Buttons_Activity_{activity_id}',
-                status='failed',
-                error_message=str(e)
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution(
+                f'Disable_Buttons_Activity_{activity_id}', 'failed', str(e))
             app.logger.error(f"Failed to disable buttons for activity {activity_id}: {str(e)}")
 
 @with_app_context
@@ -118,25 +106,13 @@ def enable_buttons_for_activity_job(activity_id):
                 raise ValueError(f"Activity with id {activity_id} not found")
 
             enable_buttons_for_activity(app, activity_id)
-            
-            # Log du succès
-            log = JobExecutionLog(
-                job_id=f'Enable_Buttons_Activity_{activity_id}',
-                status='success'
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution(
+                f'Enable_Buttons_Activity_{activity_id}', 'success')
             app.logger.info(f"Successfully enabled buttons for activity: {activity.name}")
-            
+
         except Exception as e:
-            # Log de l'erreur
-            log = JobExecutionLog(
-                job_id=f'Enable_Buttons_Activity_{activity_id}',
-                status='failed',
-                error_message=str(e)
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution(
+                f'Enable_Buttons_Activity_{activity_id}', 'failed', str(e))
             app.logger.error(f"Failed to enable buttons for activity {activity_id}: {str(e)}")
 
 @with_app_context
@@ -302,24 +278,11 @@ def clear_all_patients_job():
             else:
                 purge_all_patients()
 
-            # Log du succès
-            log = JobExecutionLog(
-                job_id='Clear Patient Table',
-                status='success'
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution('Clear Patient Table', 'success')
             app.logger.info("Clear patients job completed successfully")
 
         except Exception as e:
-            # Log de l'erreur
-            log = JobExecutionLog(
-                job_id='Clear Patient Table',
-                status='failed',
-                error_message=str(e)
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution('Clear Patient Table', 'failed', str(e))
             app.logger.error(f"Clear patients job failed with error: {str(e)}")
 
 def clear_announce_calls_job():
@@ -330,25 +293,11 @@ def clear_announce_calls_job():
         _refresh_config(app)
         try:
             clear_announces_call()
-            
-            # Log du succès
-            log = JobExecutionLog(
-                job_id='Clear Announce Calls',
-                status='success'
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution('Clear Announce Calls', 'success')
             app.logger.info("Clear announce calls job completed successfully")
-            
+
         except Exception as e:
-            # Log de l'erreur
-            log = JobExecutionLog(
-                job_id='Clear Announce Calls',
-                status='failed',
-                error_message=str(e)
-            )
-            db.session.add(log)
-            db.session.commit()
+            _record_job_execution('Clear Announce Calls', 'failed', str(e))
             app.logger.error(f"Clear announce calls job failed with error: {str(e)}")
 
 ANNOUNCEMENT_CACHE_RETENTION_DAYS = 31
@@ -394,6 +343,22 @@ def clear_announces_call():
         raise  # Relance l'exception pour le logging dans clear_announce_calls_job
 
 AUTO_ARCHIVE_JOB_ID = 'Auto Archive Data'
+
+
+def _record_job_execution(job_id, status, error_message=None):
+    """Journalise le résultat d'un job dans une transaction saine.
+
+    Point audit : les ``except`` des jobs faisaient ``db.session.add(log)`` +
+    ``commit()`` sur une session potentiellement laissée en échec par
+    l'opération métier — le commit du journal levait alors un
+    ``PendingRollbackError`` qui masquait l'erreur d'origine. Le ``rollback()``
+    préalable rend la journalisation inconditionnellement sûre (sans effet
+    sur une session déjà propre).
+    """
+    db.session.rollback()
+    db.session.add(JobExecutionLog(
+        job_id=job_id, status=status, error_message=error_message))
+    db.session.commit()
 
 
 def reconcile_auto_archive_job():
@@ -454,13 +419,9 @@ def auto_archive_job():
                     app.logger.error(
                         "Retrait du job '%s' impossible : %s",
                         AUTO_ARCHIVE_JOB_ID, e)
-                log = JobExecutionLog(
-                    job_id=AUTO_ARCHIVE_JOB_ID,
-                    status='skipped',
-                    error_message='DATA_AUTO_ARCHIVE_ENABLED désactivé'
-                )
-                db.session.add(log)
-                db.session.commit()
+                _record_job_execution(
+                    AUTO_ARCHIVE_JOB_ID, 'skipped',
+                    'DATA_AUTO_ARCHIVE_ENABLED désactivé')
                 return
 
             days = app.config.get('DATA_ARCHIVE_DAYS', 365)
@@ -475,24 +436,14 @@ def auto_archive_job():
                     result = aggregate_history(days)
                 else:
                     result = purge_history(days)
-                
-                log = JobExecutionLog(
-                    job_id=AUTO_ARCHIVE_JOB_ID,
-                    status='success',
-                    error_message=result
-                )
-                db.session.add(log)
-                db.session.commit()
+
+                _record_job_execution(AUTO_ARCHIVE_JOB_ID, 'success', result)
                 app.logger.info(f"Auto archive job completed: {result}")
 
         except Exception as e:
-            log = JobExecutionLog(
-                job_id=AUTO_ARCHIVE_JOB_ID,
-                status='failed',
-                error_message=str(e)
-            )
-            db.session.add(log)
-            db.session.commit()
+            # _record_job_execution rollback d'abord : la journalisation ne
+            # masque plus un échec métier (PendingRollbackError, point audit).
+            _record_job_execution(AUTO_ARCHIVE_JOB_ID, 'failed', str(e))
             app.logger.error(f"Auto archive job failed: {str(e)}")
 
 def _history_dates_before(cutoff_date):
@@ -596,6 +547,33 @@ def export_history_csv(cutoff_date):
     return filename
 
 
+class PartialHistoryError(RuntimeError):
+    """Archivage/purge interrompu après des journées déjà validées.
+
+    La suppression est volontairement commitée **par journée** (borne la
+    taille des transactions sur un gros historique) : un échec en cours de
+    route laisse donc un résultat partiel — les journées déjà traitées sont
+    définitives. Cette exception rend le partialité explicite dans le
+    journal du job, l'audit et la réponse HTTP.
+    """
+
+
+def _raise_partial(operation, days_processed, rows_done, failed_date,
+                   backup_name, error):
+    """Rollback explicite puis exception marquée « partiel ».
+
+    Le rollback remet la session dans un état sain AVANT que l'appelant ne
+    journalise l'échec (sinon : PendingRollbackError masquant l'erreur).
+    """
+    db.session.rollback()
+    message = (
+        f"{operation} PARTIEL : {days_processed} journée(s) déjà validée(s) "
+        f"({rows_done} lignes) ; échec sur la journée du {failed_date} : {error}")
+    if backup_name:
+        message += f". Sauvegarde CSV : {backup_name}"
+    raise PartialHistoryError(message) from error
+
+
 def aggregate_history(older_than_days, export_csv=False):
     """Archivage : agrège les lignes détaillées en statistiques quotidiennes
     (globales, par activité, langue et comptoir) PUIS les supprime.
@@ -603,6 +581,10 @@ def aggregate_history(older_than_days, export_csv=False):
     Les dossiers individuels disparaissent — seules les moyennes par jour
     subsistent. ``export_csv=True`` conserve une copie CSV des détails dans
     ``instance/exports/`` avant toute suppression.
+
+    Commit par journée : un échec intermédiaire lève :class:`PartialHistoryError`
+    après rollback — les journées déjà commitées restent validées et le
+    message le signale explicitement.
     """
     cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
 
@@ -612,10 +594,15 @@ def aggregate_history(older_than_days, export_csv=False):
     days_processed = 0
 
     for process_date, day_query in _history_days_before(cutoff_date):
-        create_daily_stats(process_date, day_query)
-        total_archived += day_query.delete(synchronize_session=False)
+        try:
+            create_daily_stats(process_date, day_query)
+            archived = day_query.delete(synchronize_session=False)
+            db.session.commit()
+        except Exception as e:
+            _raise_partial("Archivage", days_processed, total_archived,
+                           process_date, backup_name, e)
+        total_archived += archived
         days_processed += 1
-        db.session.commit()
 
     message = f"Archived {total_archived} records from {days_processed} days."
     if backup_name:
@@ -629,6 +616,10 @@ def purge_history(older_than_days, export_csv=False):
     Contrairement à :func:`aggregate_history`, aucune statistique n'est
     conservée — ce n'est pas un archivage. ``export_csv=True`` écrit d'abord
     une copie CSV des lignes dans ``instance/exports/``.
+
+    Commit par journée : un échec intermédiaire lève :class:`PartialHistoryError`
+    après rollback — les journées déjà commitées restent supprimées et le
+    message le signale explicitement.
     """
     cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
 
@@ -637,10 +628,15 @@ def purge_history(older_than_days, export_csv=False):
     total_deleted = 0
     days_processed = 0
 
-    for _process_date, day_query in _history_days_before(cutoff_date):
-        total_deleted += day_query.delete(synchronize_session=False)
+    for process_date, day_query in _history_days_before(cutoff_date):
+        try:
+            deleted = day_query.delete(synchronize_session=False)
+            db.session.commit()
+        except Exception as e:
+            _raise_partial("Purge", days_processed, total_deleted,
+                           process_date, backup_name, e)
+        total_deleted += deleted
         days_processed += 1
-        db.session.commit()
 
     message = f"Purged {total_deleted} records from {days_processed} days (no aggregation)."
     if backup_name:

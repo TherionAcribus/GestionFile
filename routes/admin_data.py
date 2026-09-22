@@ -3,6 +3,7 @@ from models import db, Patient, PatientHistory, AggregatedStats, ConfigOption, J
 from routes.admin_security import require_permission
 from scheduler_functions import (
     aggregate_history, purge_history, count_history_before,
+    PartialHistoryError,
     count_aggregated_before, reconcile_auto_archive_job,
 )
 from sqlalchemy import text
@@ -123,6 +124,15 @@ def manual_archive():
                      outcome=OUTCOME_SUCCESS,
                      details=f"archivage manuel >{days}j, export_csv={backup}")
         return jsonify({'success': True, 'message': result})
+    except PartialHistoryError as e:
+        # Résultat partiel : signalé explicitement au client (détail complet
+        # dans les journaux et l'audit — pas de str(e) dans la réponse).
+        current_app.logger.error("Archivage manuel partiel (%dj) : %s", days, e)
+        record_audit(ACTION_ARCHIVE, "patient_history",
+                     outcome=OUTCOME_FAILURE,
+                     details=f"archivage manuel partiel >{days}j : {e}")
+        return jsonify({'success': False, 'partial': True,
+                        'message': "L'archivage a été interrompu : des journées ont déjà été traitées. Consultez les journaux du serveur."})
     except Exception as e:
         current_app.logger.error("Échec de l'archivage manuel (%dj) : %s", days, e)
         record_audit(ACTION_ARCHIVE, "patient_history",
@@ -152,6 +162,13 @@ def manual_purge():
                      outcome=OUTCOME_SUCCESS,
                      details=f"purge définitive >{days}j, export_csv={backup}")
         return jsonify({'success': True, 'message': result})
+    except PartialHistoryError as e:
+        current_app.logger.error("Purge partielle de l'historique (%dj) : %s", days, e)
+        record_audit(ACTION_DELETE, "patient_history",
+                     outcome=OUTCOME_FAILURE,
+                     details=f"purge partielle >{days}j : {e}")
+        return jsonify({'success': False, 'partial': True,
+                        'message': "La purge a été interrompue : des journées ont déjà été supprimées. Consultez les journaux du serveur."})
     except Exception as e:
         current_app.logger.error("Échec de la purge de l'historique (%dj) : %s", days, e)
         record_audit(ACTION_DELETE, "patient_history",

@@ -179,6 +179,126 @@ def test_purge_history_no_export_by_default(app, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Échec en cours de boucle : rollback explicite + résultat PARTIEL explicite
+# ---------------------------------------------------------------------------
+
+def _add_second_old_day(app):
+    """Un second jour d'historique, pour provoquer un échec en cours de route."""
+    with app.app_context():
+        activity = Activity.query.first()
+        db.session.add(PatientHistory(
+            call_number="B1", timestamp=datetime.now() - timedelta(days=800),
+            day_of_week="Monday", status="called", activity_id=activity.id,
+        ))
+        db.session.commit()
+
+
+def test_purge_history_rolls_back_and_reports_partial(app):
+    """Régression : sans rollback, la session restait en échec et la
+    journalisation de l'erreur (job planifié) levait PendingRollbackError,
+    masquant l'erreur d'origine. Le résultat partiel doit être explicite."""
+    _add_second_old_day(app)
+
+    with app.app_context():
+        real_commit = db.session.commit
+        calls = []
+
+        def flaky_commit():
+            calls.append(1)
+            if len(calls) == 2:
+                raise RuntimeError("db down")
+            return real_commit()
+
+        with patch.object(db.session, "commit", side_effect=flaky_commit):
+            with pytest.raises(scheduler_functions.PartialHistoryError) as exc:
+                scheduler_functions.purge_history(365)
+
+        message = str(exc.value)
+        assert "PARTIEL" in message
+        assert "1 journée(s)" in message          # premier jour déjà commité
+        assert "db down" in message               # erreur d'origine conservée
+
+        # Une seule journée supprimée (la première traitée — l'ordre des
+        # journées n'est pas garanti), l'autre restaurée par le rollback ;
+        # la ligne récente est toujours hors périmètre.
+        assert PatientHistory.query.count() in (2, 3)
+        assert PatientHistory.query.filter_by(call_number="A3").count() == 1
+        # La session est saine : un commit ultérieur fonctionne (pas de
+        # PendingRollbackError au moment de journaliser l'échec).
+        scheduler_functions._record_job_execution("T", "failed", message)
+        log = JobExecutionLog.query.filter_by(job_id="T").one()
+        assert "PARTIEL" in log.error_message
+
+
+def test_aggregate_history_partial_failure_reports_progress(app):
+    """Même contrat côté archivage : un échec de create_daily_stats sur la
+    seconde journée annule cette journée, conserve la première, signale le
+    résultat partiel."""
+    _add_second_old_day(app)
+
+    with app.app_context():
+        with patch.object(
+            scheduler_functions, "create_daily_stats",
+            side_effect=[None, RuntimeError("stats ko")],
+        ):
+            with pytest.raises(scheduler_functions.PartialHistoryError) as exc:
+                scheduler_functions.aggregate_history(365)
+
+        assert "PARTIEL" in str(exc.value)
+        assert "stats ko" in str(exc.value)
+        # Jour 1 supprimé (commité), jour 2 restauré par le rollback — l'ordre
+        # des journées n'étant pas garanti, on vérifie qu'une seule journée
+        # a disparu et que la ligne récente est intacte.
+        assert PatientHistory.query.count() in (2, 3)
+        assert PatientHistory.query.filter_by(call_number="A3").count() == 1
+
+
+def test_record_job_execution_on_dirty_session(app):
+    """Journaliser après une session en échec : sans le rollback interne, le
+    commit du journal lèverait PendingRollbackError."""
+    with app.app_context():
+        # Violation de la contrainte unique -> flush en échec -> session
+        # « pending rollback ».
+        db.session.add_all([
+            PatientHistory(call_number="X1", timestamp=datetime.now(),
+                           day_of_week="Mon", status="called",
+                           activity_id=1, patient_source_id=999),
+            PatientHistory(call_number="X2", timestamp=datetime.now(),
+                           day_of_week="Mon", status="called",
+                           activity_id=1, patient_source_id=999),
+        ])
+        with pytest.raises(Exception):
+            db.session.commit()
+
+        scheduler_functions._record_job_execution("Test Job", "failed", "origine")
+        log = JobExecutionLog.query.filter_by(job_id="Test Job").one()
+        assert log.error_message == "origine"
+
+
+def test_auto_archive_job_logs_partial_failure(app):
+    """Un archivage partiel est journalisé 'failed' avec le détail — le
+    résultat n'est pas présenté comme un succès ni masqué."""
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = True
+    app.config["DATA_ARCHIVE_DAYS"] = 365
+    app.config["DATA_ARCHIVE_COMPRESSED"] = False
+
+    with patch.object(AppHolder, "get_app", return_value=app), patch(
+        "scheduler_functions._refresh_config"
+    ), patch(
+        "scheduler_functions.purge_history",
+        side_effect=scheduler_functions.PartialHistoryError(
+            "Purge PARTIEL : 3 journée(s) déjà validée(s)"),
+    ):
+        scheduler_functions.auto_archive_job()
+
+    with app.app_context():
+        log = JobExecutionLog.query.filter_by(
+            job_id="Auto Archive Data").one()
+        assert log.status == "failed"
+        assert "PARTIEL" in log.error_message
+
+
+# ---------------------------------------------------------------------------
 # Décomptes préalables (modale de confirmation)
 # ---------------------------------------------------------------------------
 
@@ -521,3 +641,27 @@ def test_update_config_returns_warning_on_scheduler_failure():
     body = _func_body(source, "update_config")
     assert "scheduler_warning" in body
     assert "'warning'" in body
+
+
+def test_history_loops_rollback_and_mark_partial():
+    """Régression : chaque boucle journée doit rollbacker sur échec et
+    signaler explicitement le résultat partiel (commit par journée)."""
+    source = _read("scheduler_functions.py")
+    for func in ("aggregate_history", "purge_history"):
+        body = _func_body(source, func)
+        assert "db.session.rollback()" in body or "_raise_partial" in body
+        assert "PARTIEL" in _func_body(source, "_raise_partial")
+
+
+def test_jobs_log_via_clean_session_helper():
+    """Tous les wrappers de job journalisent via _record_job_execution, qui
+    rollback d'abord — jamais add+commit sur une session potentiellement en
+    échec."""
+    source = _read("scheduler_functions.py")
+    for job in ("clear_all_patients_job", "clear_announce_calls_job",
+                "auto_archive_job", "disable_buttons_for_activity_job",
+                "enable_buttons_for_activity_job"):
+        body = _func_body(source, job)
+        assert "_record_job_execution" in body, (
+            f"{job} journalise encore directement")
+        assert "db.session.commit()" not in body
