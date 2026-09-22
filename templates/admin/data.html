@@ -49,34 +49,71 @@
     </div>
 </div>
 
-<!-- Manual Action Card -->
+<!-- Manual Archive Card : agrégation puis suppression des détails -->
 <div class="card mb-4">
     <div class="card-header bg-warning text-dark">
-        Archivage Manuel
+        Archivage manuel — agréger puis supprimer
     </div>
     <div class="card-body">
-        <form id="manualArchiveForm">
-            <div class="row align-items-center">
-                <div class="col-auto">
-                    <label for="daysInput" class="col-form-label">Archiver les données plus anciennes que (jours) :</label>
-                </div>
-                <div class="col-auto">
-                    <input type="number" id="daysInput" name="days" class="form-control" value="365" min="1">
-                </div>
-                <div class="col-auto">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="compressCheck" name="compress" value="true" checked>
-                        <label class="form-check-label" for="compressCheck">
-                            Compresser (agréger) les données
-                        </label>
-                    </div>
-                </div>
-                <div class="col-auto">
-                    <button type="button" class="btn btn-warning" id="btn-manual-archive">Lancer l'archivage</button>
+        <p class="text-muted">
+            Les lignes détaillées de l'historique sont remplacées par des
+            statistiques quotidiennes agrégées (globales, par activité, langue
+            et comptoir). <strong>Les dossiers individuels sont supprimés</strong> :
+            seules les moyennes par jour restent consultables.
+        </p>
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label for="daysInput" class="col-form-label">Traiter les données plus anciennes que (jours) :</label>
+            </div>
+            <div class="col-auto">
+                <input type="number" id="daysInput" name="days" class="form-control" value="365" min="1">
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="archiveBackupCheck" value="true">
+                    <label class="form-check-label" for="archiveBackupCheck">
+                        Exporter les lignes en CSV avant suppression
+                    </label>
                 </div>
             </div>
-        </form>
+            <div class="col-auto">
+                <button type="button" class="btn btn-warning" id="btn-manual-archive">Agréger puis supprimer</button>
+            </div>
+        </div>
         <div id="manualResult" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- Purge Card : suppression définitive, sans agrégation -->
+<div class="card mb-4">
+    <div class="card-header bg-danger text-white">
+        Purge de l'historique — suppression définitive
+    </div>
+    <div class="card-body">
+        <p class="text-danger">
+            <strong>Aucune statistique n'est conservée.</strong> Contrairement à
+            l'archivage, les lignes supprimées sont perdues définitivement.
+        </p>
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <label for="purgeDaysInput" class="col-form-label">Supprimer les données plus anciennes que (jours) :</label>
+            </div>
+            <div class="col-auto">
+                <input type="number" id="purgeDaysInput" class="form-control" value="365" min="1">
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="purgeBackupCheck" value="true" checked>
+                    <label class="form-check-label" for="purgeBackupCheck">
+                        Exporter les lignes en CSV avant suppression (recommandé)
+                    </label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="button" class="btn btn-danger" id="btn-purge-history">Supprimer définitivement</button>
+            </div>
+        </div>
+        <div id="purgeResult" class="mt-3"></div>
     </div>
 </div>
 
@@ -124,7 +161,7 @@
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="autoCompress" name="archive_compressed" value="true" {% if config.archive_compressed %}checked{% endif %}>
                     <label class="form-check-label" for="autoCompress">
-                        Compresser lors de l'archivage automatique
+                        Agréger les données avant suppression — <strong>décoché = purge définitive</strong>, aucune statistique conservée
                     </label>
                 </div>
             </div>

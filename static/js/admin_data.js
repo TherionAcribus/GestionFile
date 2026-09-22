@@ -2,37 +2,152 @@
 // Charge en fin de page via le bloc `scripts_end` de admin/base.html : le
 // navigateur peut le mettre en cache, et le gabarit redevient du HTML.
 
-function triggerManualArchive() {
-    const btn = document.querySelector('#manualArchiveForm button');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Traitement...';
-    
-    const days = document.getElementById('daysInput').value;
-    const compress = document.getElementById('compressCheck').checked;
-    
-    fetch('/admin/data/manual', {
+// --- Décompte préalable (modale de confirmation) ---------------------------
+
+function fetchDataPreview(days, target) {
+    return fetch('/admin/data/preview?days=' + encodeURIComponent(days) + '&target=' + target)
+        .then(function (response) { return response.json(); });
+}
+
+function describePreview(info) {
+    if (!info.rows) {
+        return '<p><strong>Aucune ligne</strong> n\'est concernée par ce critère.</p>';
+    }
+    var range = (info.oldest && info.newest)
+        ? ' (du <strong>' + info.oldest + '</strong> au <strong>' + info.newest + '</strong>)'
+        : '';
+    var days = info.days ? ', réparties sur <strong>' + info.days + ' jour(s)</strong>' : '';
+    return '<p><strong>' + info.rows + ' ligne(s)</strong>' + days + ' concernée(s)' + range + '.</p>';
+}
+
+function showModalError(modalBody, message) {
+    modalBody.innerHTML =
+        '<div class="alert alert-danger">' + message + '</div>' +
+        '<div class="d-flex justify-content-end">' +
+        '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>' +
+        '</div>';
+}
+
+// Ouvre la modale de confirmation après décompte. `mode` : 'archive' (agrège
+// puis supprime) ou 'purge' (suppression définitive, sans statistiques).
+function openDataConfirmModal(mode, days, target) {
+    var daysInt = parseInt(days, 10);
+    var modal = new bootstrap.Modal(document.getElementById('modal_delete'));
+    var modalBody = document.getElementById('modal-htmx');
+    var isPurge = mode === 'purge';
+    var isAggregated = target === 'aggregated';
+
+    if (!Number.isFinite(daysInt)) {
+        showModalError(modalBody, 'Nombre de jours invalide.');
+        modal.show();
+        return;
+    }
+
+    document.getElementById('modalDeleteLabel').textContent = isPurge
+        ? 'Confirmer la purge définitive'
+        : (isAggregated ? 'Confirmer la suppression' : 'Confirmer l\'archivage');
+
+    modalBody.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Décompte des lignes concernées...';
+    modal.show();
+
+    fetchDataPreview(daysInt, target)
+        .then(function (info) {
+            if (!info.success) {
+                showModalError(modalBody, info.message || 'Le décompte a échoué.');
+                return;
+            }
+
+            var explanation;
+            if (isAggregated) {
+                explanation = '<p>Les <strong>statistiques agrégées</strong> plus anciennes que ' +
+                    '<strong>' + daysInt + ' jours</strong> seront supprimées.</p>';
+            } else if (isPurge) {
+                explanation = '<p>Les lignes détaillées de l\'historique plus anciennes que ' +
+                    '<strong>' + daysInt + ' jours</strong> seront <strong>supprimées sans ' +
+                    'aucune agrégation</strong> : aucune statistique ne sera conservée.</p>';
+            } else {
+                explanation = '<p>Les lignes détaillées de l\'historique plus anciennes que ' +
+                    '<strong>' + daysInt + ' jours</strong> seront remplacées par des ' +
+                    '<strong>statistiques quotidiennes agrégées</strong>. Les dossiers ' +
+                    'individuels seront supprimés.</p>';
+            }
+
+            modalBody.innerHTML =
+                explanation +
+                describePreview(info) +
+                '<p class="text-danger">Cette action est irréversible.</p>' +
+                '<div class="d-flex justify-content-end gap-2">' +
+                '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>' +
+                '<button type="button" class="btn ' + (isPurge ? 'btn-danger' : 'btn-warning') + '" ' +
+                'data-confirm-mode="' + mode + '" data-confirm-days="' + daysInt + '" ' +
+                'data-confirm-target="' + target + '"' +
+                (info.rows ? '' : ' disabled') + '>Confirmer</button>' +
+                '</div>';
+        })
+        .catch(function () {
+            showModalError(modalBody, 'Erreur réseau lors du décompte.');
+        });
+}
+
+// --- Actions ----------------------------------------------------------------
+
+// mode 'archive' -> POST /admin/data/archive ; 'purge' -> POST /admin/data/purge
+function runDataOperation(mode, days) {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('modal_delete'));
+    var isPurge = mode === 'purge';
+    var resultDiv = document.getElementById(isPurge ? 'purgeResult' : 'manualResult');
+    var backupCheck = document.getElementById(isPurge ? 'purgeBackupCheck' : 'archiveBackupCheck');
+    var backup = backupCheck ? backupCheck.checked : false;
+
+    if (modal) { modal.hide(); }
+
+    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Traitement en cours...';
+
+    fetch(isPurge ? '/admin/data/purge' : '/admin/data/archive', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `days=${days}&compress=${compress}`
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'days=' + encodeURIComponent(days) + '&backup=' + backup
     })
-    .then(response => response.json())
-    .then(data => {
-        const resultDiv = document.getElementById('manualResult');
+    .then(function (response) { return response.json(); })
+    .then(function (data) {
         if (data.success) {
-            resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
-            setTimeout(() => location.reload(), 2000);
+            resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+            setTimeout(function () { location.reload(); }, 2000);
         } else {
-            resultDiv.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
-            btn.disabled = false;
-            btn.textContent = "Lancer l'archivage";
+            resultDiv.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.message + '</div>';
         }
     })
-    .catch(error => {
+    .catch(function (error) {
         console.error('Error:', error);
-        btn.disabled = false;
-        btn.textContent = "Lancer l'archivage";
+        resultDiv.innerHTML = '<div class="alert alert-danger">Erreur réseau</div>';
+    });
+}
+
+function deleteAggregated(days) {
+    var modal = bootstrap.Modal.getInstance(document.getElementById('modal_delete'));
+    var resultDiv = document.getElementById('deleteAggregatedResult');
+
+    if (modal) { modal.hide(); }
+
+    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Suppression en cours...';
+
+    fetch('/admin/data/delete_aggregated', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'days=' + encodeURIComponent(days)
+    })
+    .then(function (response) { return response.json(); })
+    .then(function (data) {
+        if (data.success) {
+            resultDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+            setTimeout(function () { location.reload(); }, 2000);
+        } else {
+            resultDiv.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.message + '</div>';
+        }
+    })
+    .catch(function (error) {
+        console.error('Error:', error);
+        resultDiv.innerHTML = '<div class="alert alert-danger">Erreur réseau</div>';
     });
 }
 
@@ -59,71 +174,24 @@ function saveAutoConfig() {
     });
 }
 
-function confirmDeleteAggregated() {
-    const days = document.getElementById('aggregatedDaysInput').value;
-    const modal = new bootstrap.Modal(document.getElementById('modal_delete'));
-    const modalBody = document.getElementById('modal-htmx');
-
-    // Configure modal content. Le bouton de confirmation porte la valeur en
-    // data-days : un gestionnaire délégué (fin de fichier) appelle
-    // deleteAggregated — pas de onclick inline (CSP script-src 'self').
-    document.getElementById('modalDeleteLabel').textContent = 'Confirmer la suppression';
-    modalBody.innerHTML = `
-        <p>Êtes-vous sûr de vouloir supprimer les statistiques agrégées plus anciennes que <strong>${days} jours</strong> ?</p>
-        <p class="text-danger">Cette action est irréversible.</p>
-        <div class="d-flex justify-content-end gap-2">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
-            <button type="button" class="btn btn-danger" data-delete-aggregated-days="${days}">Confirmer la suppression</button>
-        </div>
-    `;
-
-    modal.show();
-}
-
-function deleteAggregated(days) {
-    const modal = bootstrap.Modal.getInstance(document.getElementById('modal_delete'));
-    const resultDiv = document.getElementById('deleteAggregatedResult');
-    
-    // Close modal
-    modal.hide();
-    
-    // Show loading state
-    resultDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Suppression en cours...';
-    
-    fetch('/admin/data/delete_aggregated', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `days=${days}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
-            setTimeout(() => location.reload(), 2000);
-        } else {
-            resultDiv.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        resultDiv.innerHTML = `<div class="alert alert-danger">Erreur réseau</div>`;
-    });
-}
-
-// --- Comportements délégués (remplacent les onclick inline, CSP) -----------
+// --- Comportements délégués (pas de onclick inline, CSP script-src 'self') ---
 
 document.addEventListener('click', function (evt) {
     if (!evt.target || !evt.target.closest) { return; }
     var btn;
     if (evt.target.closest('#btn-manual-archive')) {
-        triggerManualArchive();
+        openDataConfirmModal('archive', document.getElementById('daysInput').value, 'history');
+    } else if (evt.target.closest('#btn-purge-history')) {
+        openDataConfirmModal('purge', document.getElementById('purgeDaysInput').value, 'history');
     } else if (evt.target.closest('#btn-delete-aggregated')) {
-        confirmDeleteAggregated();
+        openDataConfirmModal('aggregated', document.getElementById('aggregatedDaysInput').value, 'aggregated');
     } else if (evt.target.closest('#btn-save-auto-config')) {
         saveAutoConfig();
-    } else if ((btn = evt.target.closest('[data-delete-aggregated-days]'))) {
-        deleteAggregated(parseInt(btn.getAttribute('data-delete-aggregated-days'), 10));
+    } else if ((btn = evt.target.closest('[data-confirm-days]'))) {
+        if (btn.getAttribute('data-confirm-target') === 'aggregated') {
+            deleteAggregated(btn.getAttribute('data-confirm-days'));
+        } else {
+            runDataOperation(btn.getAttribute('data-confirm-mode'), btn.getAttribute('data-confirm-days'));
+        }
     }
 });

@@ -1,14 +1,17 @@
 from flask import Blueprint, render_template, request, jsonify, current_app
 from models import db, Patient, PatientHistory, AggregatedStats, ConfigOption, JobExecutionLog
 from routes.admin_security import require_permission
-from scheduler_functions import archive_data, auto_archive_job
+from scheduler_functions import (
+    aggregate_history, purge_history, count_history_before,
+    count_aggregated_before, auto_archive_job,
+)
 from sqlalchemy import text
 from datetime import datetime, timedelta
 from config import time_tz
 from extensions import scheduler
 import config_sync
 from audit_service import record_audit
-from audit_log import ACTION_UPDATE, ACTION_DELETE, ACTION_CLEAR, OUTCOME_SUCCESS, OUTCOME_FAILURE
+from audit_log import ACTION_UPDATE, ACTION_DELETE, ACTION_ARCHIVE, OUTCOME_SUCCESS, OUTCOME_FAILURE
 
 admin_data_bp = Blueprint('admin_data', __name__)
 
@@ -78,27 +81,84 @@ def admin_data():
 
     return render_template('admin/data.html', stats=stats, db_size=db_size, config=config)
 
-@admin_data_bp.route('/admin/data/manual', methods=['POST'])
+@admin_data_bp.route('/admin/data/preview')
+@require_permission('options')
+def preview_data():
+    """Décompte préalable des lignes concernées, sans effet de bord.
+
+    Alimente la modale de confirmation : l'utilisateur voit le nombre de
+    lignes et la plage de dates AVANT de valider l'archivage ou la purge.
+    Lecture seule, donc GET.
+    """
+    days, error = _validate_days(request.args.get('days'))
+    if error:
+        return jsonify({'success': False, 'message': error})
+
+    target = request.args.get('target', 'history')
+    try:
+        if target == 'aggregated':
+            info = count_aggregated_before(days)
+        else:
+            info = count_history_before(days)
+    except Exception as e:
+        current_app.logger.error("Échec du décompte préalable (%s, %sj) : %s", target, days, e)
+        return jsonify({'success': False, 'message': "Le décompte a échoué. Consultez les journaux du serveur."})
+
+    return jsonify({'success': True, 'target': target, **info})
+
+
+@admin_data_bp.route('/admin/data/archive', methods=['POST'])
 @require_permission('options')
 def manual_archive():
+    """Archivage : agrégation des lignes détaillées en statistiques
+    quotidiennes, puis suppression des détails."""
     days, error = _validate_days(request.form.get('days'))
     if error:
         return jsonify({'success': False, 'message': error})
 
-    compress = request.form.get('compress') == 'true'
+    backup = request.form.get('backup') == 'true'
 
     try:
-        result = archive_data(days, compress)
-        record_audit(ACTION_CLEAR, "patient_history",
+        result = aggregate_history(days, export_csv=backup)
+        record_audit(ACTION_ARCHIVE, "patient_history",
                      outcome=OUTCOME_SUCCESS,
-                     details=f"archivage manuel >{days}j, compress={compress}")
+                     details=f"archivage manuel >{days}j, export_csv={backup}")
         return jsonify({'success': True, 'message': result})
     except Exception as e:
         current_app.logger.error("Échec de l'archivage manuel (%dj) : %s", days, e)
-        record_audit(ACTION_CLEAR, "patient_history",
+        record_audit(ACTION_ARCHIVE, "patient_history",
                      outcome=OUTCOME_FAILURE,
                      details=f"archivage manuel >{days}j")
         return jsonify({'success': False, 'message': "L'archivage a échoué. Consultez les journaux du serveur."})
+
+
+@admin_data_bp.route('/admin/data/purge', methods=['POST'])
+@require_permission('options')
+def manual_purge():
+    """Purge définitive : suppression des lignes détaillées SANS agrégation.
+
+    Aucune statistique n'est conservée — contrairement à ``manual_archive``,
+    ce n'est pas un archivage. ``backup=true`` exporte d'abord les lignes en
+    CSV (``instance/exports/``).
+    """
+    days, error = _validate_days(request.form.get('days'))
+    if error:
+        return jsonify({'success': False, 'message': error})
+
+    backup = request.form.get('backup') == 'true'
+
+    try:
+        result = purge_history(days, export_csv=backup)
+        record_audit(ACTION_DELETE, "patient_history",
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"purge définitive >{days}j, export_csv={backup}")
+        return jsonify({'success': True, 'message': result})
+    except Exception as e:
+        current_app.logger.error("Échec de la purge de l'historique (%dj) : %s", days, e)
+        record_audit(ACTION_DELETE, "patient_history",
+                     outcome=OUTCOME_FAILURE,
+                     details=f"purge définitive >{days}j")
+        return jsonify({'success': False, 'message': "La purge a échoué. Consultez les journaux du serveur."})
 
 @admin_data_bp.route('/admin/data/config', methods=['POST'])
 @require_permission('options')

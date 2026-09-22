@@ -41,6 +41,7 @@ ACTION_CREATE = "create"
 ACTION_UPDATE = "update"
 ACTION_DELETE = "delete"
 ACTION_CLEAR = "clear"          # vidage massif (ex. toute la file)
+ACTION_ARCHIVE = "archive"      # agrégation puis suppression des détails
 ACTION_RESTORE = "restore"      # restauration d'une sauvegarde
 ACTION_IMPORT = "import"        # import de données
 ACTION_ACTIVATE = "activate"

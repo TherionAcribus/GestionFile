@@ -1,3 +1,4 @@
+import csv
 import os
 import re
 import time
@@ -406,9 +407,16 @@ def auto_archive_job():
         try:
             days = app.config.get('DATA_ARCHIVE_DAYS', 365)
             compress = app.config.get('DATA_ARCHIVE_COMPRESSED', True)
-            
+
             if days is not None:
-                result = archive_data(days, compress)
+                # Deux opérations distinctes : l'agrégation (archivage, les
+                # moyennes quotidiennes subsistent) et la purge définitive
+                # (aucune statistique conservée). L'ancien ``archive_data``
+                # compress=True/False masquait cette différence.
+                if compress:
+                    result = aggregate_history(days)
+                else:
+                    result = purge_history(days)
                 
                 log = JobExecutionLog(
                     job_id='Auto Archive Data',
@@ -429,41 +437,157 @@ def auto_archive_job():
             db.session.commit()
             app.logger.error(f"Auto archive job failed: {str(e)}")
 
-def archive_data(older_than_days, compress=True):
-    """Archive les données plus vieilles que X jours"""
-    cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
-    
-    # Récupérer les dates distinctes concernées
-    dates_to_process = db.session.query(func.date(PatientHistory.timestamp)).filter(
+def _history_dates_before(cutoff_date):
+    """Dates distinctes de PatientHistory antérieures au cutoff.
+
+    MySQL renvoie des ``datetime.date``, SQLite des chaînes ISO : on
+    normalise en ``date`` pour que ``datetime.combine`` fonctionne sur les
+    deux moteurs.
+    """
+    rows = db.session.query(func.date(PatientHistory.timestamp)).filter(
         PatientHistory.timestamp < cutoff_date
     ).distinct().all()
-    
-    dates_to_process = [d[0] for d in dates_to_process]
-    
-    total_archived = 0
-    
-    for process_date in dates_to_process:
-        # Filtre pour la journée en cours
+
+    dates = []
+    for (day,) in rows:
+        if isinstance(day, str):
+            day = datetime.strptime(day, "%Y-%m-%d").date()
+        elif isinstance(day, datetime):
+            day = day.date()
+        dates.append(day)
+    return dates
+
+
+def _history_days_before(cutoff_date):
+    """Itère sur les journées d'historique antérieures au cutoff.
+
+    Cède ``(date, query_du_jour)``. Traiter la suppression par journée borne
+    la taille de chaque transaction : sur un gros historique, un DELETE unique
+    sur plusieurs années gonflerait le journal d'annulation.
+    """
+    for process_date in _history_dates_before(cutoff_date):
         day_start = datetime.combine(process_date, datetime.min.time())
         day_end = datetime.combine(process_date, datetime.max.time())
-        
-        patients_query = PatientHistory.query.filter(
+        day_query = PatientHistory.query.filter(
             PatientHistory.timestamp.between(day_start, day_end)
         )
-        
-        count = patients_query.count()
-        if count == 0:
-            continue
-            
-        if compress:
-            create_daily_stats(process_date, patients_query)
-            
-        # Suppression des données
-        patients_query.delete(synchronize_session=False)
-        total_archived += count
+        if day_query.count():
+            yield process_date, day_query
+
+
+def count_history_before(older_than_days):
+    """Décompte préalable, sans effet de bord, pour la modale de confirmation."""
+    cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
+    days = _history_dates_before(cutoff_date)
+    return {
+        'rows': PatientHistory.query.filter(
+            PatientHistory.timestamp < cutoff_date).count(),
+        'days': len(days),
+        'oldest': str(min(days)) if days else None,
+        'newest': str(max(days)) if days else None,
+    }
+
+
+def count_aggregated_before(older_than_days):
+    """Même décompte pour les statistiques agrégées."""
+    cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
+    base = AggregatedStats.query.filter(AggregatedStats.date < cutoff_date)
+    bounds = db.session.query(
+        func.min(AggregatedStats.date), func.max(AggregatedStats.date)
+    ).filter(AggregatedStats.date < cutoff_date).first()
+    oldest, newest = bounds if bounds else (None, None)
+    return {
+        'rows': base.count(),
+        'days': None,
+        'oldest': str(oldest) if oldest else None,
+        'newest': str(newest) if newest else None,
+    }
+
+
+_HISTORY_EXPORT_FIELDS = (
+    'id', 'call_number', 'timestamp', 'timestamp_counter', 'timestamp_end',
+    'day_of_week', 'status', 'counter_id', 'activity_id', 'language_id',
+    'overtaken',
+)
+
+
+def export_history_csv(cutoff_date):
+    """Exporte en CSV les lignes détaillées sur le point d'être supprimées.
+
+    Écrit ``instance/exports/patient_history_<horodatage>.csv`` et retourne
+    le nom du fichier (le chemin complet reste dans les journaux serveur).
+    ``yield_per`` évite de charger tout l'historique en mémoire.
+    """
+    export_dir = os.path.join(current_app.instance_path, 'exports')
+    os.makedirs(export_dir, exist_ok=True)
+    filename = f"patient_history_{datetime.now(time_tz).strftime('%Y%m%d_%H%M%S')}.csv"
+    path = os.path.join(export_dir, filename)
+
+    query = (PatientHistory.query
+             .filter(PatientHistory.timestamp < cutoff_date)
+             .order_by(PatientHistory.timestamp)
+             .yield_per(1000))
+
+    with open(path, 'w', newline='', encoding='utf-8') as fh:
+        writer = csv.writer(fh)
+        writer.writerow(_HISTORY_EXPORT_FIELDS)
+        for row in query:
+            writer.writerow([getattr(row, field) for field in _HISTORY_EXPORT_FIELDS])
+
+    current_app.logger.info("Historique exporté avant suppression : %s", path)
+    return filename
+
+
+def aggregate_history(older_than_days, export_csv=False):
+    """Archivage : agrège les lignes détaillées en statistiques quotidiennes
+    (globales, par activité, langue et comptoir) PUIS les supprime.
+
+    Les dossiers individuels disparaissent — seules les moyennes par jour
+    subsistent. ``export_csv=True`` conserve une copie CSV des détails dans
+    ``instance/exports/`` avant toute suppression.
+    """
+    cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
+
+    backup_name = export_history_csv(cutoff_date) if export_csv else None
+
+    total_archived = 0
+    days_processed = 0
+
+    for process_date, day_query in _history_days_before(cutoff_date):
+        create_daily_stats(process_date, day_query)
+        total_archived += day_query.delete(synchronize_session=False)
+        days_processed += 1
         db.session.commit()
-        
-    return f"Archived {total_archived} records from {len(dates_to_process)} days."
+
+    message = f"Archived {total_archived} records from {days_processed} days."
+    if backup_name:
+        message += f" Sauvegarde CSV : {backup_name}."
+    return message
+
+
+def purge_history(older_than_days, export_csv=False):
+    """Purge définitive : supprime les lignes détaillées SANS agrégation.
+
+    Contrairement à :func:`aggregate_history`, aucune statistique n'est
+    conservée — ce n'est pas un archivage. ``export_csv=True`` écrit d'abord
+    une copie CSV des lignes dans ``instance/exports/``.
+    """
+    cutoff_date = datetime.now(time_tz).date() - timedelta(days=int(older_than_days))
+
+    backup_name = export_history_csv(cutoff_date) if export_csv else None
+
+    total_deleted = 0
+    days_processed = 0
+
+    for _process_date, day_query in _history_days_before(cutoff_date):
+        total_deleted += day_query.delete(synchronize_session=False)
+        days_processed += 1
+        db.session.commit()
+
+    message = f"Purged {total_deleted} records from {days_processed} days (no aggregation)."
+    if backup_name:
+        message += f" Sauvegarde CSV : {backup_name}."
+    return message
 
 def create_daily_stats(date, base_query):
     """Cree les statistiques agregees pour une journee donnee.
