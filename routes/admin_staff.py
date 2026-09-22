@@ -79,8 +79,8 @@ def update_member(member_id):
         db.session.rollback()
         record_audit(ACTION_UPDATE, "staff", target_id=member_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="Erreur : " + str(e))
-        return jsonify(status="error", message=str(e)), 500
+        display_toast(success=False, message="La mise à jour a échoué.")
+        return jsonify(status="error", message="La mise à jour a échoué."), 500
 
 
 # affiche la modale pour confirmer la suppression d'un membre
@@ -112,7 +112,8 @@ def delete_staff(member_id):
         db.session.rollback()
         record_audit(ACTION_DELETE, "staff", target_id=member_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="Erreur : " + str(e))
+        display_toast(success=False, message="La suppression a échoué.")
+        app.logger.exception("Echec de la suppression d'un membre")
         return display_staff_table()
     
 
@@ -183,7 +184,8 @@ def add_new_staff():
         db.session.rollback()
         record_audit(ACTION_CREATE, "staff", target_id=request.form.get('name'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message= "Erreur : " + str(e))
+        display_toast(success=False, message="L'ajout a échoué.")
+        app.logger.exception("Echec de l'ajout d'un membre")
         return display_staff_table()
     
 

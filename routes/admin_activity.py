@@ -179,8 +179,8 @@ def delete_activity(activity_id, staff=None):
         db.session.rollback()
         record_audit(ACTION_DELETE, "activity", target_id=activity_id,
                      outcome=OUTCOME_FAILURE)
-        app.logger.error(str(e))
-        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.exception("Echec de la suppression d'une activite")
+        display_toast(success=False, message="La suppression a échoué.")
         return return_good_display_activity(staff)
 
 
@@ -290,7 +290,8 @@ def add_new_activity():
         record_audit(ACTION_CREATE, "activity",
                      target_id=request.form.get('name'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.exception("Echec de l'ajout d'une activite")
+        display_toast(success=False, message="L'ajout a échoué.")
         return return_good_display_activity(staff_id)
 
 

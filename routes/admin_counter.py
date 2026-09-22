@@ -67,8 +67,8 @@ def update_counter(counter_id):
             db.session.rollback()
             record_audit(ACTION_UPDATE, "counter", target_id=counter_id,
                          outcome=OUTCOME_FAILURE)
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
+            display_toast(success=False, message="La mise à jour a échoué.")
+            app.logger.exception("Echec de la mise a jour d'un comptoir")
             return ""
 
 
@@ -105,8 +105,8 @@ def delete_counter(counter_id):
         db.session.rollback()
         record_audit(ACTION_DELETE, "counter", target_id=counter_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
+        display_toast(success=False, message="La suppression a échoué.")
+        app.logger.exception("Echec de la suppression d'un comptoir")
         return display_counter_table()
 
 
@@ -177,8 +177,8 @@ def add_new_counter():
         db.session.rollback()
         record_audit(ACTION_CREATE, "counter", target_id=request.form.get('name'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
+        display_toast(success=False, message="L'ajout a échoué.")
+        app.logger.exception("Echec de l'ajout d'un comptoir")
         return display_counter_table()
 
 
@@ -208,7 +208,8 @@ def update_counter_order():
         db.session.rollback()
         record_audit(ACTION_UPDATE, "counter", outcome=OUTCOME_FAILURE,
                      details="réordonnancement")
-        display_toast(success=False, message=f"Erreur: {e}")
+        display_toast(success=False, message="La mise à jour a échoué.")
+        app.logger.exception("Echec du reordonnancement des comptoirs")
 
 @admin_counter_bp.route('/admin/counter/dashboard')
 @require_permission_dashboard('counter')

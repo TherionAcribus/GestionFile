@@ -58,6 +58,6 @@ def transfer_patients_to_history():
     except Exception as e:
         # En cas d'erreur, annuler toutes les transactions
         db.session.rollback()
-        app.logger.info(f"Erreur lors de la copie dans patients dans l'historique : {e}")
-        display_toast(success=False, message=f"Erreur lors de la copie dans patients dans l'historique : {e}")
+        app.logger.exception("Erreur lors de la copie des patients dans l'historique")
+        display_toast(success=False, message="Erreur lors de la copie des patients dans l'historique.")
         return False

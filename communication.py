@@ -91,7 +91,7 @@ def communication_websocket(stream, data=None, flag=None, client_id=None, event=
         return "Message sent!"
     except Exception as e:
         logging.error(f"Échec de l'envoi du message SocketIO: {e}")
-        return f"Failed to send message: {e}", 500
+        return "Failed to send message", 500
 
 
 

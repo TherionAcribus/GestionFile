@@ -28,7 +28,8 @@ def send_message():
         socketio.emit('new_message', {'data': message})
         return "Message sent!"
     except Exception as e:
-        return f"Failed to send message: {e}", 500
+        app.logger.exception("Échec d'émission du message Socket.IO")
+        return "Failed to send message", 500
 
 
 
@@ -61,7 +62,7 @@ def rabbitmq_status_local():
         # elle affichait donc "tout va bien" en toute circonstance, le diagnostic
         # partant sur stdout. Meme contrat que /test ci-dessus.
         app.logger.warning("Connexion RabbitMQ (local) impossible : %s", e)
-        return jsonify({"status": "RabbitMQ is not running", "error": str(e)}), 500
+        return jsonify({"status": "RabbitMQ is not running"}), 500
 
 
 
@@ -117,7 +118,7 @@ def readyz():
             "status": "not_ready",
             "checks": {
                 "database": "ok",
-                "rabbitmq": "Connection refused"
+                "rabbitmq": "error"
             }
         }
     """
@@ -129,7 +130,10 @@ def readyz():
         db.session.execute(db.text("SELECT 1"))
         checks["database"] = "ok"
     except Exception as e:
-        checks["database"] = str(e)
+        # Le détail (DSN, dialecte, pile interne) reste dans les journaux : la
+        # sonde est exposée hors authentification pour les orchestrateurs.
+        app.logger.exception("Sonde /readyz : base de données injoignable")
+        checks["database"] = "error"
         ready = False
 
     # --- Check RabbitMQ (seulement si activé) ---
@@ -140,7 +144,8 @@ def readyz():
             connection.close()
             checks["rabbitmq"] = "ok"
         except Exception as e:
-            checks["rabbitmq"] = str(e)
+            app.logger.exception("Sonde /readyz : RabbitMQ injoignable")
+            checks["rabbitmq"] = "error"
             ready = False
 
     status_code = 200 if ready else 503

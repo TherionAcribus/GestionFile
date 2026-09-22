@@ -281,11 +281,11 @@ def update_counter_auto_calling(counter_id, auto_calling_value):
     except SQLAlchemyError as e:
         db.session.rollback()
         app.logger.exception("Erreur base de donnees sur l'appel automatique")
-        return False, str(e), 500
+        return False, "La mise à jour de l'appel automatique a échoué.", 500
     except Exception as e:
         db.session.rollback()
         app.logger.exception("Erreur inattendue sur l'appel automatique")
-        return False, str(e), 500
+        return False, "La mise à jour de l'appel automatique a échoué.", 500
 
 
 # Route fusionnee web + App (point C12). Deux conventions de parametres

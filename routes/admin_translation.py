@@ -119,8 +119,8 @@ def update_language(language_id):
         db.session.rollback()
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="Erreur : " + str(e))
-        return jsonify(status="error", message=str(e)), 500
+        display_toast(success=False, message="La mise à jour a échoué.")
+        return jsonify(status="error", message="La mise à jour a échoué."), 500
 
 
 @admin_translation_bp.route('/admin/languages/confirm_delete/<int:language_id>', methods=['GET'])
@@ -154,7 +154,8 @@ def delete_language(language_id):
         db.session.rollback()
         record_audit(ACTION_DELETE, "language", target_id=language_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="Erreur : " + str(e))
+        display_toast(success=False, message="La suppression a échoué.")
+        app.logger.exception("Echec de la suppression d'une langue")
         return display_languages_table()
     
 
@@ -226,7 +227,8 @@ def add_new_language():
         db.session.rollback()
         record_audit(ACTION_CREATE, "language", target_id=request.form.get('code'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message= "Erreur : " + str(e))
+        display_toast(success=False, message="L'ajout a échoué.")
+        app.logger.exception("Echec de l'ajout d'une langue")
         return display_languages_table()
     
 @admin_translation_bp.route('/admin/languages/upload_flag_image', methods=['POST'])
@@ -276,7 +278,8 @@ def update_languages_order():
         db.session.rollback()
         record_audit(ACTION_UPDATE, "language", outcome=OUTCOME_FAILURE,
                      details="réordonnancement")
-        display_toast(success=False, message=f"Erreur: {e}")
+        display_toast(success=False, message="La mise à jour a échoué.")
+        app.logger.exception("Echec du reordonnancement des langues")
 
 
 def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, language_code, text):

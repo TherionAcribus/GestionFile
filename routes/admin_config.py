@@ -125,7 +125,7 @@ def update_switch():
         record_audit(ACTION_UPDATE, "config", target_id=key,
                      outcome=OUTCOME_FAILURE)
         app.logger.error("Échec de mise à jour du switch %r : %s", key, e)
-        return display_toast(success=False, message=str(e))
+        return display_toast(success=False, message="La mise à jour a échoué.")
 
     # Paramètre nécessitant un redémarrage : la valeur est persistée mais n'est
     # PAS appliquée à chaud (ni ici ni sur les autres processus). On ne mute donc
@@ -435,7 +435,7 @@ def update_select():
         record_audit(ACTION_UPDATE, "config", target_id=key,
                      outcome=OUTCOME_FAILURE)
         app.logger.error("Échec de mise à jour du select %r : %s", key, e)
-        return display_toast(success=False, message=str(e))
+        return display_toast(success=False, message="La mise à jour a échoué.")
 
     # Paramètre nécessitant un redémarrage : persisté mais non appliqué à chaud.
     if spec.restart_required:

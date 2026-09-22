@@ -457,8 +457,8 @@ def announce_save_google_voice():
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_FAILURE, details="voice_google")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        display_toast(success=False, message=f"Erreur : {e}")
-        return f"Erreur : {e}", 400
+        display_toast(success=False, message="L'enregistrement a échoué.")
+        return "L'enregistrement a échoué.", 400
 
 
 @admin_announce_bp.route('/admin/announce/select_language_voice', methods=['POST'])
@@ -506,8 +506,8 @@ def announce_save_voice_model():
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_FAILURE, details="voice_model")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        display_toast(success=False, message=f"Erreur : {e}")
-        return f"Erreur : {e}", 400
+        display_toast(success=False, message="L'enregistrement a échoué.")
+        return "L'enregistrement a échoué.", 400
 
 
 @admin_announce_bp.route('/admin/announce/save_gtts_voice', methods=['POST'])
@@ -538,8 +538,8 @@ def announce_save_gtts_voice():
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_FAILURE, details="voice_gtts")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        display_toast(success=False, message=f"Erreur : {e}")
-        return f"Erreur : {e}", 400
+        display_toast(success=False, message="L'enregistrement a échoué.")
+        return "L'enregistrement a échoué.", 400
     
 @admin_announce_bp.route('/admin/announce/save_voice_is_active', methods=['POST'])
 @require_permission('announce')
@@ -566,5 +566,5 @@ def announce_save_voice_is_active():
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_FAILURE, details="voice_is_active")
         app.logger.exception("Echec de l'enregistrement du parametre de voix")
-        display_toast(success=False, message=f"Erreur : {e}")
-        return f"Erreur : {e}", 400
+        display_toast(success=False, message="L'enregistrement a échoué.")
+        return "L'enregistrement a échoué.", 400

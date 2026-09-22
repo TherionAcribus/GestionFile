@@ -372,7 +372,7 @@ def add_new_user():
         db.session.rollback()
         app.logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
         record_audit(ACTION_CREATE, "user", target_id=username, outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message=f"Erreur lors de la création : {str(e)}")
+        display_toast(success=False, message="La création a échoué.")
         return display_security_table()
 
 
@@ -435,7 +435,7 @@ def security_update_user(user_id):
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message=f"Erreur lors de la mise à jour : {str(e)}")
+        display_toast(success=False, message="La mise à jour a échoué.")
         app.logger.error(f"Error in security_update_user: {str(e)}")
         return display_security_table()
 
@@ -480,7 +480,7 @@ def delete_user2(user_id):
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message=f"Erreur lors de la suppression : {str(e)}")
+        display_toast(success=False, message="La suppression a échoué.")
         app.logger.error(f"Error in delete_user: {str(e)}")
         return display_security_table()
 
@@ -768,9 +768,10 @@ def reset_admin():
         display_toast(success=True, message="Utilisateur admin réinitialisé avec succès")
         return display_security_table()
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Error in reset_admin: {str(e)}")
         record_audit(ACTION_RESET, "user", target_id="admin", outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message=f"Erreur lors de la réinitialisation : {str(e)}")
+        display_toast(success=False, message="La réinitialisation a échoué.")
         return display_security_table()
 
 @admin_security_bp.route('/admin/security/role_update/<int:role_id>', methods=['POST'])
@@ -840,14 +841,15 @@ def security_update_role(role_id):
             app.logger.error(f"Type d'erreur: {type(e)}")
             record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
             display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': "La mise à jour a échoué."}), 500
 
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Erreur générale: {str(e)}")
         app.logger.error(f"Type d'erreur: {type(e)}")
         record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': "La mise à jour a échoué."}), 500
 
 @admin_security_bp.route('/admin/security/save_role', methods=['POST'])
 @require_permission('security')
@@ -945,7 +947,8 @@ def delete_role(role_id):
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_DELETE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="La suppression a échoué.")
+        app.logger.exception("Echec de la suppression d'un role")
         return display_security_role_table()
 
 @admin_security_bp.route('/admin/security/change_password/<int:user_id>', methods=['GET'])
@@ -960,7 +963,8 @@ def change_password_form(user_id):
         return render_template('admin/security_change_password.html', user_id=user_id)
 
     except Exception as e:
-        display_toast(success=False, message=f"Erreur : {str(e)}")
+        app.logger.exception("Echec de l'affichage du formulaire de mot de passe")
+        display_toast(success=False, message="Une erreur est survenue.")
         return ""
 
 @admin_security_bp.route('/admin/security/update_password/<int:user_id>', methods=['POST'])
@@ -1018,7 +1022,7 @@ def update_password(user_id):
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_UPDATE, "password", target_id=user_id, outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message=f"Erreur lors de la mise à jour : {str(e)}")
+        display_toast(success=False, message="La mise à jour a échoué.")
         app.logger.error(f"Error in update_password: {str(e)}")
         return display_security_table()
 

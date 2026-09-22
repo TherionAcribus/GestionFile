@@ -148,6 +148,11 @@ def test_update_counter_failure_writes_failure_audit_and_rolls_back(
     )
 
     assert resp.status_code == 200  # la route rend un toast d'erreur, pas 500
+    # Le détail technique reste dans les journaux : jamais dans la réponse
+    # (toast inclus — transporté via l'en-tête HX-Trigger).
+    leak = "commit explosé"
+    assert leak not in resp.get_data(as_text=True)
+    assert leak not in (resp.headers.get("HX-Trigger") or "")
     with app.app_context():
         assert Counter.query.get(cid).name == "Comptoir 1"
 

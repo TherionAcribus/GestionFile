@@ -280,9 +280,9 @@ def update_button(button_id):
             db.session.rollback()
             record_audit(ACTION_UPDATE, "button", target_id=button_id,
                          outcome=OUTCOME_FAILURE)
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
+            display_toast(success=False, message="La mise à jour a échoué.")
+            app.logger.exception("Echec de la mise a jour d'un bouton")
+            return jsonify(status="error", message="La mise à jour a échoué."), 500
 
 @admin_patient_bp.route('/admin/patient/update_button_order', methods=['POST'])
 @require_permission('patient')
@@ -303,7 +303,8 @@ def update_button_order():
         db.session.rollback()
         record_audit(ACTION_UPDATE, "button", outcome=OUTCOME_FAILURE,
                      details="réordonnancement")
-        display_toast(success=False, message=f"Erreur: {e}")
+        display_toast(success=False, message="La mise à jour a échoué.")
+        app.logger.exception("Echec du reordonnancement des boutons")
 
 
 # affiche le formulaire pour ajouter un membre
@@ -392,8 +393,8 @@ def add_new_button():
         db.session.rollback()
         record_audit(ACTION_CREATE, "button", target_id=request.form.get('label'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
+        display_toast(success=False, message="L'ajout a échoué.")
+        app.logger.exception("Echec de l'ajout d'un bouton")
         return display_button_table()
 
 
@@ -429,8 +430,8 @@ def delete_button(button_id):
         db.session.rollback()
         record_audit(ACTION_DELETE, "button", target_id=button_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
-        app.logger.error(e)
+        display_toast(success=False, message="La suppression a échoué.")
+        app.logger.exception("Echec de la suppression d'un bouton")
         return display_button_table()
 
 

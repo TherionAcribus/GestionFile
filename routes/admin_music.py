@@ -320,7 +320,7 @@ def spotify_exception_handler(func):
             return func(*args, **kwargs)
         except spotipy.exceptions.SpotifyException as e:
             app.logger.error(f"Failed during Spotify operation in function {func.__name__}: {e}")
-            display_toast(success=False, message="Error :" + str(e))
+            display_toast(success=False, message="L'opération Spotify a échoué.")
             # Retourner une réponse d'erreur standardisée
             return '', 500  # Code 500 pour une erreur serveur
     return wrapper

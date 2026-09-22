@@ -103,7 +103,7 @@ def _purge_patients_response():
         purge_all_patients()
     except Exception as e:
         current_app.logger.error("Échec de la purge de la file : %s", e)
-        display_toast(success=False, message=str(e))
+        display_toast(success=False, message="La purge de la file a échoué.")
         return "", 200
     return display_toast(message="La table Patient a été vidée")
 
@@ -162,9 +162,9 @@ def update_patient(patient_id):
             return ""
 
     except Exception as e:
-            display_toast(success = False, message=str(e))
-            current_app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
+            display_toast(success=False, message="La mise à jour a échoué.")
+            current_app.logger.exception("Echec de la mise a jour d'un patient")
+            return jsonify(status="error", message="La mise à jour a échoué."), 500
 
 
 # affiche la modale pour confirmer la suppression d'un patient particulier
@@ -197,9 +197,9 @@ def delete_patient(patient_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(e)
+        current_app.logger.exception("Echec de la suppression d'un patient")
         record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message=str(e))
+        display_toast(success=False, message="La suppression a échoué.")
         return "", 500
 
 

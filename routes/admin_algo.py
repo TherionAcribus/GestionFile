@@ -73,7 +73,7 @@ def change_overtaken_limit():
         record_audit(ACTION_UPDATE, "config", target_id="algo_overtaken_limit",
                      outcome=OUTCOME_FAILURE)
         app.logger.exception("Echec de l'enregistrement de la limite de depassement")
-        return display_toast(success=False, message=str(e))
+        return display_toast(success=False, message="La mise à jour a échoué.")
 
 
 # affiche le formulaire pour ajouter une regle de l'algo
@@ -131,7 +131,7 @@ def add_new_rule():
         record_audit(ACTION_CREATE, "algo_rule",
                      target_id=request.form.get('name'), outcome=OUTCOME_FAILURE)
         app.logger.exception("Echec de l'ajout d'une regle d'algorithme")
-        display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="L'ajout a échoué.")
         return display_algo_table()
 
 
@@ -165,7 +165,7 @@ def delete_algo(algo_id):
         db.session.rollback()
         record_audit(ACTION_DELETE, "algo_rule", target_id=algo_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
+        display_toast(success=False, message="La suppression a échoué.")
         return display_algo_table()
 
 
@@ -208,6 +208,6 @@ def update_algo_rule(rule_id):
             db.session.rollback()
             record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
                          outcome=OUTCOME_FAILURE)
-            display_toast(success=False, message="erreur : " + str(e))
-            app.logger.error(e)
-            return jsonify(status="error", message=str(e)), 500
+            display_toast(success=False, message="La mise à jour a échoué.")
+            app.logger.exception("Echec de la mise a jour d'une regle d'algorithme")
+            return jsonify(status="error", message="La mise à jour a échoué."), 500

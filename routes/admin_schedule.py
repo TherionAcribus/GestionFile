@@ -69,8 +69,8 @@ def update_schedule(schedule_id):
         db.session.rollback()
         record_audit(ACTION_UPDATE, "schedule", target_id=schedule_id,
                      outcome=OUTCOME_FAILURE)
-        app.logger.error(str(e))
-        display_toast(success = False, message=str(e))
+        app.logger.exception("Echec de la mise a jour d'une plage horaire")
+        display_toast(success=False, message="La mise à jour a échoué.")
         return ""
 
 
@@ -137,7 +137,8 @@ def add_new_schedule():
         record_audit(ACTION_CREATE, "schedule",
                      target_id=request.form.get('name_schedule'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.exception("Echec de l'ajout d'une plage horaire")
+        display_toast(success=False, message="L'ajout a échoué.")
         return display_schedule_table()
     
 
@@ -173,5 +174,6 @@ def delete_schedule(schedule_id):
         db.session.rollback()
         record_audit(ACTION_DELETE, "schedule", target_id=schedule_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="erreur : " + str(e))
+        app.logger.exception("Echec de la suppression d'une plage horaire")
+        display_toast(success=False, message="La suppression a échoué.")
         return display_schedule_table()
