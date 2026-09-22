@@ -167,7 +167,11 @@ function saveAutoConfig() {
     .then(data => {
         const resultDiv = document.getElementById('configResult');
         if (data.success) {
-            resultDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            // warning : config persistée mais scheduler non mis à jour — le
+            // succès affiché doit rester honnête.
+            const cls = data.warning ? 'alert-warning' : 'alert-success';
+            const msg = data.warning ? `${data.message} ${data.warning}` : data.message;
+            resultDiv.innerHTML = `<div class="alert ${cls}">${msg}</div>`;
         } else {
             resultDiv.innerHTML = `<div class="alert alert-danger">Erreur: ${data.message}</div>`;
         }

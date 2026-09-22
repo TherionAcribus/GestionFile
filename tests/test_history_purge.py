@@ -26,7 +26,7 @@ import csv
 import os
 import re
 from datetime import datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask, jsonify
@@ -260,6 +260,7 @@ def test_auto_archive_job_dispatches_on_compress(app):
     L'ancien archive_data(compress=...) masquait cette différence."""
     app.config["DATA_ARCHIVE_DAYS"] = 365
     app.config["DATA_ARCHIVE_COMPRESSED"] = False
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = True
 
     with patch.object(AppHolder, "get_app", return_value=app), patch(
         "scheduler_functions._refresh_config"
@@ -287,6 +288,143 @@ def test_auto_archive_job_dispatches_on_compress(app):
         scheduler_functions.auto_archive_job()
         mock_agg.assert_called_once_with(365)
         mock_purge.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Désactivation automatique fiable : garde du job + réconciliation
+# ---------------------------------------------------------------------------
+
+def test_auto_archive_job_skips_when_disabled(app):
+    """Un job resté dans le jobstore alors que l'option est désactivée ne doit
+    PAS s'exécuter : il saute, consigne 'skipped' et se retire lui-même."""
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = False
+
+    fake_scheduler = MagicMock()
+    with patch.object(AppHolder, "get_app", return_value=app), patch(
+        "scheduler_functions._refresh_config"
+    ), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ), patch(
+        "scheduler_functions.aggregate_history"
+    ) as mock_agg, patch(
+        "scheduler_functions.purge_history"
+    ) as mock_purge:
+        scheduler_functions.auto_archive_job()
+        mock_agg.assert_not_called()
+        mock_purge.assert_not_called()
+        fake_scheduler.remove_job.assert_called_once_with(
+            scheduler_functions.AUTO_ARCHIVE_JOB_ID)
+
+    with app.app_context():
+        log = JobExecutionLog.query.filter_by(job_id="Auto Archive Data").one()
+        assert log.status == "skipped"
+
+
+def test_auto_archive_job_runs_when_enabled(app):
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = True
+    app.config["DATA_ARCHIVE_DAYS"] = 365
+    app.config["DATA_ARCHIVE_COMPRESSED"] = True
+
+    with patch.object(AppHolder, "get_app", return_value=app), patch(
+        "scheduler_functions._refresh_config"
+    ), patch(
+        "scheduler_functions.aggregate_history", return_value="ok"
+    ) as mock_agg:
+        scheduler_functions.auto_archive_job()
+        mock_agg.assert_called_once_with(365)
+
+
+def test_reconcile_adds_job_when_enabled(app):
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = True
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = None  # absent du jobstore
+
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        # Premier get_job (absent) -> add ; second (vérification) -> présent.
+        fake_scheduler.get_job.side_effect = [None, MagicMock()]
+        action = scheduler_functions.reconcile_auto_archive_job()
+        assert action == "added"
+        assert fake_scheduler.add_job.call_count == 1
+        kwargs = fake_scheduler.add_job.call_args.kwargs
+        assert kwargs["id"] == scheduler_functions.AUTO_ARCHIVE_JOB_ID
+        assert kwargs["func"] is scheduler_functions.auto_archive_job
+
+
+def test_reconcile_removes_job_when_disabled(app):
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = False
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = MagicMock()  # présent
+
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        action = scheduler_functions.reconcile_auto_archive_job()
+        assert action == "removed"
+        fake_scheduler.remove_job.assert_called_once_with(
+            scheduler_functions.AUTO_ARCHIVE_JOB_ID)
+
+
+def test_reconcile_unchanged_when_consistent(app):
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = False
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = None
+
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        assert scheduler_functions.reconcile_auto_archive_job() == "unchanged"
+        fake_scheduler.add_job.assert_not_called()
+        fake_scheduler.remove_job.assert_not_called()
+
+
+def test_reconcile_raises_when_add_does_not_take(app):
+    """add_job suivi d'un get_job toujours vide -> exception (avertissement
+    côté route, journal côté démarrage)."""
+    app.config["DATA_AUTO_ARCHIVE_ENABLED"] = True
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = None  # toujours absent
+
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        with pytest.raises(RuntimeError):
+            scheduler_functions.reconcile_auto_archive_job()
+
+
+def test_update_config_warns_when_scheduler_fails(app, client):
+    """Régression : un échec du scheduler ne doit plus être masqué par un
+    succès — la réponse porte un avertissement explicite."""
+    _login(client)
+    with patch(
+        "routes.admin_data.reconcile_auto_archive_job",
+        side_effect=RuntimeError("jobstore down"),
+    ):
+        response = client.post("/admin/data/config", data={
+            "archive_days": "365",
+            "archive_compressed": "true",
+            "auto_archive_enabled": "true",
+        })
+    payload = response.get_json()
+    assert payload["success"] is True          # la config EST persistée
+    assert "warning" in payload                # mais le client est prévenu
+
+
+def test_update_config_no_warning_when_scheduler_ok(app, client):
+    _login(client)
+    with patch(
+        "routes.admin_data.reconcile_auto_archive_job", return_value="added"
+    ) as mock_reconcile:
+        response = client.post("/admin/data/config", data={
+            "archive_days": "365",
+            "archive_compressed": "true",
+            "auto_archive_enabled": "true",
+        })
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert "warning" not in payload
+    mock_reconcile.assert_called_once_with()
 
 
 # ---------------------------------------------------------------------------
@@ -357,3 +495,29 @@ def test_js_confirms_with_preview():
     # openDataConfirmModal, l'exécution par data-confirm-*.
     assert "openDataConfirmModal" in js
     assert "data-confirm-days" in js
+
+
+def test_auto_archive_job_checks_enabled_flag():
+    """Régression : le job ne doit plus jamais archiver sans vérifier
+    DATA_AUTO_ARCHIVE_ENABLED."""
+    source = _read("scheduler_functions.py")
+    body = _func_body(source, "auto_archive_job")
+    assert "DATA_AUTO_ARCHIVE_ENABLED" in body
+
+
+def test_startup_reconciles_jobs():
+    """Le démarrage des rôles qui exécutent des tâches (scheduler / all)
+    réconcilie le jobstore persistant avec la configuration."""
+    source = _read("app.py")
+    assert "_reconcile_scheduler_jobs()" in source
+    body = _func_body(source, "_reconcile_scheduler_jobs")
+    assert "reconcile_auto_archive_job" in body
+
+
+def test_update_config_returns_warning_on_scheduler_failure():
+    """Un échec du scheduler ne doit plus être absorbé en silence : la route
+    doit renvoyer un avertissement exploitable par l'interface."""
+    source = _read("routes/admin_data.py")
+    body = _func_body(source, "update_config")
+    assert "scheduler_warning" in body
+    assert "'warning'" in body

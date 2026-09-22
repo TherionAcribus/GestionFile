@@ -3,12 +3,11 @@ from models import db, Patient, PatientHistory, AggregatedStats, ConfigOption, J
 from routes.admin_security import require_permission
 from scheduler_functions import (
     aggregate_history, purge_history, count_history_before,
-    count_aggregated_before, auto_archive_job,
+    count_aggregated_before, reconcile_auto_archive_job,
 )
 from sqlalchemy import text
 from datetime import datetime, timedelta
 from config import time_tz
-from extensions import scheduler
 import config_sync
 from audit_service import record_audit
 from audit_log import ACTION_UPDATE, ACTION_DELETE, ACTION_ARCHIVE, OUTCOME_SUCCESS, OUTCOME_FAILURE
@@ -211,31 +210,30 @@ def update_config():
     for key, (type_, value) in keys.items():
         current_app.config[key] = value
 
-    # Manage Scheduler
-    job_id = 'Auto Archive Data'
+    # Manage Scheduler : aligne le job persistant sur le drapeau d'activation.
+    scheduler_warning = None
     try:
-        if current_app.config['DATA_AUTO_ARCHIVE_ENABLED']:
-            if not scheduler.get_job(job_id):
-                scheduler.add_job(
-                    id=job_id,
-                    func=auto_archive_job,
-                    trigger='cron',
-                    hour=3, # Default 3 AM
-                    minute=30
-                )
-        else:
-            if scheduler.get_job(job_id):
-                scheduler.remove_job(job_id)
+        action = reconcile_auto_archive_job()
+        if action != 'unchanged':
+            current_app.logger.info(
+                "Job d'archivage %s (auto_archive=%s)", action, auto_archive_enabled)
     except Exception as e:
         # Le scheduler peut échouer indépendamment de la base (ex: job store
-        # non disponible). La config est déjà persistée : on journalise sans
-        # faire échouer la requête.
+        # non disponible). La config est persistée : on signale la divergence
+        # au client au lieu d'un faux succès silencieux.
         current_app.logger.error("Gestion du scheduler d'archivage impossible : %s", e)
+        scheduler_warning = (
+            "Configuration enregistrée, mais le planificateur n'a pas pu être "
+            "mis à jour : l'état affiché peut différer de l'exécution réelle. "
+            "Consultez les journaux du serveur.")
 
     record_audit(ACTION_UPDATE, "data_config",
                  outcome=OUTCOME_SUCCESS,
                  details=f"archive_days={archive_days}, auto={auto_archive_enabled}")
-    return jsonify({'success': True, 'message': 'Configuration updated'})
+    response = {'success': True, 'message': 'Configuration enregistrée.'}
+    if scheduler_warning:
+        response['warning'] = scheduler_warning
+    return jsonify(response)
 
 @admin_data_bp.route('/admin/data/delete_aggregated', methods=['POST'])
 @require_permission('options')

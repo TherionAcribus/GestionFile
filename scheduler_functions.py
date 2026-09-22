@@ -398,6 +398,45 @@ def clear_announces_call():
         current_app.logger.error(error_message)
         raise  # Relance l'exception pour le logging dans clear_announce_calls_job
 
+AUTO_ARCHIVE_JOB_ID = 'Auto Archive Data'
+
+
+def reconcile_auto_archive_job():
+    """Aligne le job d'archivage sur ``DATA_AUTO_ARCHIVE_ENABLED``.
+
+    Le jobstore est persistant et partagé entre processus : un job restant
+    d'une activation précédente continuerait à tourner alors que l'interface
+    affiche l'archivage désactivé (et inversement). Appelée au démarrage du
+    scheduler et après chaque changement de configuration.
+
+    Retourne ``'added'``, ``'removed'`` ou ``'unchanged'``. Lève l'exception
+    du jobstore à l'appelant (démarrage : journal ; route : avertissement
+    renvoyé au client).
+    """
+    enabled = bool(current_app.config.get('DATA_AUTO_ARCHIVE_ENABLED', False))
+
+    if enabled and not scheduler.get_job(AUTO_ARCHIVE_JOB_ID):
+        scheduler.add_job(
+            id=AUTO_ARCHIVE_JOB_ID,
+            func=auto_archive_job,
+            trigger='cron',
+            hour=3,  # Default 3 AM
+            minute=30,
+            misfire_grace_time=300,
+            coalesce=True,
+            max_instances=1
+        )
+        if not scheduler.get_job(AUTO_ARCHIVE_JOB_ID):
+            raise RuntimeError("le job d'archivage n'a pas été planifié")
+        return 'added'
+
+    if not enabled and scheduler.get_job(AUTO_ARCHIVE_JOB_ID):
+        scheduler.remove_job(AUTO_ARCHIVE_JOB_ID)
+        return 'removed'
+
+    return 'unchanged'
+
+
 def auto_archive_job():
     """Tâche planifiée pour l'archivage automatique"""
     app = AppHolder.get_app()
@@ -405,6 +444,30 @@ def auto_archive_job():
     with app.app_context():
         _refresh_config(app)
         try:
+            # Garde-fou : le job peut subsister dans le jobstore persistant
+            # alors que l'option a été désactivée (retrait en échec côté
+            # route, ou job antérieur à l'existence du drapeau). La base fait
+            # foi — pas le jobstore.
+            if not app.config.get('DATA_AUTO_ARCHIVE_ENABLED', False):
+                app.logger.warning(
+                    "Auto archive job skipped: DATA_AUTO_ARCHIVE_ENABLED is off")
+                # Réconciliation d'exécution : on se retire soi-même pour ne
+                # plus être relancé (en plus de la réconciliation du démarrage).
+                try:
+                    scheduler.remove_job(AUTO_ARCHIVE_JOB_ID)
+                except Exception as e:
+                    app.logger.error(
+                        "Retrait du job '%s' impossible : %s",
+                        AUTO_ARCHIVE_JOB_ID, e)
+                log = JobExecutionLog(
+                    job_id=AUTO_ARCHIVE_JOB_ID,
+                    status='skipped',
+                    error_message='DATA_AUTO_ARCHIVE_ENABLED désactivé'
+                )
+                db.session.add(log)
+                db.session.commit()
+                return
+
             days = app.config.get('DATA_ARCHIVE_DAYS', 365)
             compress = app.config.get('DATA_ARCHIVE_COMPRESSED', True)
 
@@ -419,17 +482,17 @@ def auto_archive_job():
                     result = purge_history(days)
                 
                 log = JobExecutionLog(
-                    job_id='Auto Archive Data',
+                    job_id=AUTO_ARCHIVE_JOB_ID,
                     status='success',
                     error_message=result
                 )
                 db.session.add(log)
                 db.session.commit()
                 app.logger.info(f"Auto archive job completed: {result}")
-            
+
         except Exception as e:
             log = JobExecutionLog(
-                job_id='Auto Archive Data',
+                job_id=AUTO_ARCHIVE_JOB_ID,
                 status='failed',
                 error_message=str(e)
             )

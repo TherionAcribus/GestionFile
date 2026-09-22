@@ -44,7 +44,7 @@ from routes.admin_backup import admin_backup_bp
 from routes.api_system import api_system_bp
 from routes.calling import calling_bp
 from routes.admin_config import admin_config_bp
-from scheduler_functions import clear_old_patients_table
+from scheduler_functions import clear_old_patients_table, reconcile_auto_archive_job
 from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
@@ -766,6 +766,28 @@ def _sync_configuration_across_processes():
 # allowed_image_file de ui_feedback.py, l'appel patient de services/).
 app.load_configuration = load_configuration
 
+
+def _reconcile_scheduler_jobs():
+    """Aligne les jobs persistants sur la configuration, au démarrage.
+
+    Le jobstore SQLAlchemy survit aux redémarrages et est partagé entre
+    processus : sans réconciliation, un job « Auto Archive Data » restant
+    d'une activation passée continuerait à s'exécuter alors que l'option a
+    été désactivée — et réciproquement, une option activée dont l'ajout avait
+    échoué resterait sans effet.
+    """
+    try:
+        with app.app_context():
+            action = reconcile_auto_archive_job()
+        if action != 'unchanged':
+            app.logger.info(
+                "Job d'archivage réconcilié avec la configuration : %s", action)
+    except Exception as e:
+        # Jobstore indisponible au démarrage : on journalise sans bloquer le
+        # lancement — la garde dans auto_archive_job reste en place.
+        app.logger.error("Réconciliation des jobs planifiés impossible : %s", e)
+
+
 if __name__ == "__main__":
 
     app.logger.info(f"Starting with APP_ROLE={APP_ROLE}")
@@ -776,6 +798,7 @@ if __name__ == "__main__":
         if APP_ROLE == "scheduler":
             start_scheduler(active=True)
             app.logger.info("Scheduler started in active mode (APP_ROLE=scheduler)")
+            _reconcile_scheduler_jobs()
             # Ce process ne sert aucune connexion WebSocket (pas de socketio.run()),
             # mais s'il partage un message_queue (START_RABBITMQ) avec les process
             # "web", les communikation()/socketio.emit() appelés depuis les tâches
@@ -794,6 +817,7 @@ if __name__ == "__main__":
             else:
                 start_scheduler(active=True)
                 app.logger.info("Scheduler started in active mode (APP_ROLE=all)")
+                _reconcile_scheduler_jobs()
 
             #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
             socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)
