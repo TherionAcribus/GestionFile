@@ -11,7 +11,14 @@ from models import (
 )
 from diagnostics import collect_patient_page_alerts
 from python.engine import get_futur_patient, qr_code_data_uri
-from utils import format_ticket_text
+from utils import (
+    escpos_to_preview_lines,
+    format_ticket_text,
+    get_activity_message_translation,
+    get_text_translation,
+    render_ticket_escpos,
+    validate_ticket_text,
+)
 from communication import communikation, send_app_notification
 from routes.counter import action_add_paper
 from routes.admin_security import require_permission, require_permission_dashboard
@@ -574,6 +581,99 @@ def delete_button_image(button_id):
 
 
 _TEST_JOB_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_TICKET_PREVIEW_LANGUAGE = re.compile(r"^[A-Za-z_-]{2,10}$")
+_TICKET_PREVIEW_MAX_SOURCE_CHARS = 6000
+
+
+def _ticket_preview_error(message):
+    return render_template("admin/ticket_preview.html", error=message)
+
+
+@admin_patient_bp.route("/admin/patient/ticket_preview", methods=["POST"])
+@require_permission('patient')
+def ticket_preview():
+    """Apercu non persistant du ticket avec le moteur de l'impression reelle."""
+    try:
+        line_width = int(request.values.get("printer_width", ""))
+    except (TypeError, ValueError):
+        return _ticket_preview_error(
+            "La largeur d'impression doit être un nombre entier.")
+    if not 1 <= line_width <= 256:
+        return _ticket_preview_error(
+            "La largeur d'impression doit être comprise entre 1 et 256 caractères.")
+
+    call_number = str(request.values.get("call_number", "A-1")).strip() or "A-1"
+    if len(call_number) > 64:
+        return _ticket_preview_error(
+            "Le numéro d'appel de démonstration est trop long.")
+
+    try:
+        activity_id = int(request.values.get("activity", ""))
+    except (TypeError, ValueError):
+        return _ticket_preview_error("Sélectionnez une activité valide.")
+    activity = db.session.get(Activity, activity_id)
+    if activity is None:
+        return _ticket_preview_error("L'activité sélectionnée n'existe plus.")
+
+    language_code = str(request.values.get("language", "fr")).strip().lower()
+    if not _TICKET_PREVIEW_LANGUAGE.match(language_code):
+        return _ticket_preview_error("Sélectionnez une langue valide.")
+
+    if language_code == "fr":
+        named_sources = (
+            ("En-tête", request.values.get("ticket_header", "")),
+            ("Corps", request.values.get("ticket_message", "")),
+            ("Pied", request.values.get("ticket_footer", "")),
+        )
+        for label, source in named_sources:
+            check = validate_ticket_text(source)
+            if not check["success"]:
+                return _ticket_preview_error(f"{label} : {check['value']}")
+        text_list = [source for _label, source in named_sources]
+        source_label = "Modifications en cours"
+    else:
+        text_list = [
+            get_text_translation("ticket_header", language_code)["translation"],
+            get_text_translation("ticket_message", language_code)["translation"],
+            get_text_translation("ticket_footer", language_code)["translation"],
+        ]
+        source_label = "Traductions enregistrées"
+
+    if sum(len(str(text or "")) for text in text_list) > _TICKET_PREVIEW_MAX_SOURCE_CHARS:
+        return _ticket_preview_error("Le contenu du ticket est trop long pour être prévisualisé.")
+
+    display_specific = request.values.get("display_specific_message") == "true"
+    if display_specific:
+        specific_message = (
+            activity.specific_message if language_code == "fr"
+            else get_activity_message_translation(activity, language_code)
+        )
+        text_list.append(specific_message or "")
+
+    patient = get_futur_patient(call_number, activity)
+    escpos_text = render_ticket_escpos(
+        text_list,
+        patient,
+        line_width=line_width,
+        language_code=language_code,
+    )
+    lines = escpos_to_preview_lines(escpos_text)
+    visible_characters = sum(
+        len(segment["text"])
+        for line in lines
+        for segment in line["segments"]
+    )
+    return render_template(
+        "admin/ticket_preview.html",
+        error=None,
+        lines=lines,
+        line_width=line_width,
+        line_count=len(lines),
+        visible_characters=visible_characters,
+        language_code=language_code.upper(),
+        source_label=source_label,
+        width_marker="0" * line_width,
+    )
 
 
 def _test_print_job_id():
@@ -822,4 +922,3 @@ def dashboard_staff():
                             dashboardcard=dashboardcard,
                             printer_error=get_printer_error(),
                             printer_infos=printer_infos)
-

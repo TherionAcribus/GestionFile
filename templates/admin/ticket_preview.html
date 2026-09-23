@@ -1,0 +1,41 @@
+{% if error %}
+<div class="alert alert-warning mb-0" role="alert">
+    <div class="d-flex gap-2 align-items-start">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        <div>
+            <strong>Aperçu indisponible</strong>
+            <div>{{ error }}</div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="ticket-preview-meta d-flex flex-wrap gap-2 mb-3">
+    <span class="badge text-bg-secondary">{{ language_code }}</span>
+    <span class="badge text-bg-light">{{ line_width }} caractères / ligne</span>
+    <span class="badge text-bg-light">{{ line_count }} ligne{% if line_count != 1 %}s{% endif %}</span>
+    <span class="badge text-bg-light">{{ visible_characters }} caractères visibles</span>
+    <span class="badge text-bg-info">{{ source_label }}</span>
+</div>
+
+<div class="ticket-preview-stage">
+    <div class="ticket-preview-paper" role="img"
+         aria-label="Aperçu du ticket d'impression, {{ line_count }} lignes">
+        <div class="ticket-preview-width-marker" aria-hidden="true">{{ width_marker }}</div>
+        {% for line in lines %}
+        <div class="ticket-preview-line ticket-preview-align-{{ line.alignment }}{% if line.double %} ticket-preview-line-double{% endif %}">{%- if line.segments -%}
+            {%- for segment in line.segments -%}<span class="{% if segment.double %}ticket-preview-double {% endif %}{% if segment.bold %}ticket-preview-bold {% endif %}{% if segment.underline %}ticket-preview-underline{% endif %}">{{ segment.text }}</span>{%- endfor -%}
+            {%- else -%}&nbsp;{%- endif -%}</div>
+        {% endfor %}
+        <div class="ticket-preview-cut" aria-hidden="true">
+            <span></span>
+            <i class="bi bi-scissors"></i>
+            <span></span>
+        </div>
+    </div>
+</div>
+
+<p class="form-text mt-2 mb-0">
+    Aperçu indicatif utilisant les mêmes balises, retours à la ligne et règles
+    d'enveloppe que l'impression. La police exacte dépend du modèle d'imprimante.
+</p>
+{% endif %}

@@ -290,12 +290,12 @@ def replace_balise_announces(template, patient):
     return replace_balises(template, patient)
 
 
-def replace_balise_phone(template, patient):
+def replace_balise_phone(template, patient, language_code=None):
     """ Remplace les balises dans les textes « avant appel » (page patient,
     ticket, téléphone). Même moteur que les annonces : aucune balise ne peut
     lever d'exception. Pour le nom de l'activité ({A}), on reprend le libellé
     du bouton pour plus de cohérence avec ce que le patient a choisi."""
-    return replace_balises(template, patient)
+    return replace_balises(template, patient, language_code)
 
 
 def replace_balise_welcome(template):
@@ -385,11 +385,121 @@ def choose_text_translation(key):
     return text
 
 
+def render_ticket_escpos(text_list, new_patient, line_width, language_code=None):
+    """Rend un ticket en texte ESC/POS, sans l'encoder en base64.
+
+    Ce point d'entree commun est utilise par l'impression physique et par
+    l'apercu Admin. Les deux chemins partagent ainsi exactement le remplacement
+    des balises, l'enveloppe et les commandes de mise en forme.
+    """
+    combined_text = "\n".join("" if text is None else str(text)
+                              for text in text_list)
+    combined_text = replace_balise_phone(
+        combined_text, new_patient, language_code=language_code)
+    return convert_markdown_to_escpos(combined_text, line_width=line_width)
+
+
+_ESCPOS_PREVIEW_COMMANDS = {
+    '\x1b\x61\x01': ("alignment", "center"),
+    '\x1b\x61\x00': ("alignment", "left"),
+    '\x1d\x21\x11': ("double", True),
+    '\x1d\x21\x00': ("double", False),
+    '\x1b\x45\x01': ("bold", True),
+    '\x1b\x45\x00': ("bold", False),
+    '\x1b\x2d\x01': ("underline", True),
+    '\x1b\x2d\x00': ("underline", False),
+}
+
+
+def escpos_to_preview_lines(escpos_text):
+    """Transforme le flux ESC/POS produit par ce module en lignes affichables.
+
+    Le resultat ne contient que du texte et des booleens/classes connues. Le
+    gabarit Jinja echappe ensuite le texte : aucune saisie administrateur n'est
+    interpretee comme du HTML.
+    """
+    state = {
+        "alignment": "left",
+        "double": False,
+        "bold": False,
+        "underline": False,
+    }
+    lines = []
+    segments = []
+    buffer = []
+    segment_state = None
+    line_alignment = None
+
+    def style_key():
+        return (state["double"], state["bold"], state["underline"])
+
+    def flush_segment():
+        nonlocal buffer, segment_state
+        if not buffer:
+            return
+        double, bold, underline = segment_state
+        segments.append({
+            "text": "".join(buffer),
+            "double": double,
+            "bold": bold,
+            "underline": underline,
+        })
+        buffer = []
+
+    def flush_line():
+        nonlocal segments, line_alignment
+        flush_segment()
+        lines.append({
+            "alignment": line_alignment or state["alignment"],
+            "segments": segments,
+            "double": any(segment["double"] for segment in segments),
+        })
+        segments = []
+        line_alignment = None
+
+    text = str(escpos_text or "")
+    index = 0
+    while index < len(text):
+        command = next(
+            (candidate for candidate in _ESCPOS_PREVIEW_COMMANDS
+             if text.startswith(candidate, index)),
+            None,
+        )
+        if command is not None:
+            flush_segment()
+            attribute, value = _ESCPOS_PREVIEW_COMMANDS[command]
+            state[attribute] = value
+            index += len(command)
+            continue
+
+        char = text[index]
+        index += 1
+        if char == "\n":
+            flush_line()
+            continue
+        if char == "\r":
+            continue
+        if char == "\t":
+            char = "    "
+
+        current_style = style_key()
+        if segment_state != current_style:
+            flush_segment()
+            segment_state = current_style
+        if line_alignment is None:
+            line_alignment = state["alignment"]
+        buffer.append(char)
+
+    if buffer or segments or not lines:
+        flush_line()
+    return lines
+
+
 def format_ticket_text(new_patient, activity):
     app.logger.debug('ticket_text %s', new_patient)
     app.logger.debug("%s", app.config['TICKET_DISPLAY_SPECIFIC_MESSAGE'])
-    if session.get('language_code') != "fr":
-        language_code = session.get('language_code')
+    language_code = session.get('language_code', 'fr') or 'fr'
+    if language_code != "fr":
         text_list = [
         get_text_translation("ticket_header", language_code)["translation"],
         get_text_translation('ticket_message',language_code)["translation"],
@@ -410,10 +520,11 @@ def format_ticket_text(new_patient, activity):
         if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
             text_list.append(activity.specific_message)
             
-    combined_text = "\n".join(text_list)
-    combined_text = replace_balise_phone(combined_text, new_patient)
-    formatted_text = convert_markdown_to_escpos(combined_text, line_width=app.config["PRINTER_WIDTH"])
+    formatted_text = render_ticket_escpos(
+        text_list,
+        new_patient,
+        line_width=app.config["PRINTER_WIDTH"],
+        language_code=language_code,
+    )
     encoded_text = base64.b64encode(formatted_text.encode('utf-8')).decode('utf-8')
     return encoded_text
-
-
