@@ -8,7 +8,7 @@ Pour chaque clé autorisée, on déclare :
 
 - ``config_name``      : nom de la clé dans ``app.config`` (majuscules) ;
 - ``value_type``       : colonne de ``ConfigOption`` (``value_str`` /
-                         ``value_int`` / ``value_bool``) ;
+                         ``value_int`` / ``value_bool`` / ``value_text``) ;
 - ``permission``       : ressource de permission requise. La modification exige
                          qu'au moins un rôle de l'utilisateur porte
                          ``admin_<permission>`` à ``True`` ;
@@ -130,9 +130,14 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     # On stocke désormais le Markdown brut ; convert_markdown_to_escpos est
     # appelé à l'impression avec PRINTER_WIDTH courant (utils.format_ticket_text).
     # D'éventuelles lignes résiduelles en base sont ignorées.
-    "ticket_header": ("TICKET_HEADER", "value_str"),
-    "ticket_message": ("TICKET_MESSAGE", "value_str"),
-    "ticket_footer": ("TICKET_FOOTER", "value_str"),
+    # Textes de ticket en ``value_text`` : les zones de saisie n'ont pas de
+    # limite alors que ``value_str`` est bornée à 200 caractères — au-delà,
+    # erreur/troncature MySQL, et une restauration rangeait la chaîne dans
+    # ``value_text`` que le chargeur ne relisait pas (texte perdu).
+    # Migration alembic : déplacement value_str -> value_text des données.
+    "ticket_header": ("TICKET_HEADER", "value_text"),
+    "ticket_message": ("TICKET_MESSAGE", "value_text"),
+    "ticket_footer": ("TICKET_FOOTER", "value_text"),
     "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
     "mail_server": ("MAIL_SERVER", "value_str"),
     "mail_port": ("MAIL_PORT", "value_int"),
@@ -336,7 +341,7 @@ class ParamSpec:
     """Spécification d'un paramètre modifiable."""
     key: str
     config_name: str
-    value_type: str          # value_str | value_int | value_bool
+    value_type: str          # value_str | value_int | value_bool | value_text
     permission: str
     validator: str           # bool | int | text | welcome | before_call | after_call
     kind: str                # switch | input | select
@@ -378,6 +383,38 @@ def get_spec(key):
 def is_known_key(key) -> bool:
     """``True`` si ``key`` est une clé de configuration autorisée."""
     return isinstance(key, str) and key in PARAM_REGISTRY
+
+
+def column_values_for(key, value):
+    """Répartition ``{colonne ConfigOption: valeur}`` pour un paramètre.
+
+    Clé connue du registre : la colonne déclarée (``spec.value_type``) est la
+    SEULE remplie — une écriture ne doit pas dépendre de la longueur de la
+    chaîne. Un texte de ticket vit en ``value_text`` : le ranger en
+    ``value_str`` sous prétexte qu'il fait moins de 200 caractères le rendrait
+    invisible au chargement (``config_loader`` ne lit que la colonne déclarée).
+
+    Clé inconnue (sauvegarde ancienne, clé retirée du registre) : heuristique
+    historique — bool/int/json puis chaîne <200 → ``value_str``, sinon
+    ``value_text``.
+    """
+    columns = {
+        "value_str": None,
+        "value_int": None,
+        "value_bool": None,
+        "value_text": None,
+        "value_json": None,
+    }
+    spec = get_spec(key)
+    if spec is not None:
+        columns[spec.value_type] = value
+    else:
+        columns["value_str"] = value if isinstance(value, str) and len(value) < 200 else None
+        columns["value_int"] = value if isinstance(value, int) and not isinstance(value, bool) else None
+        columns["value_bool"] = value if isinstance(value, bool) else None
+        columns["value_text"] = value if isinstance(value, str) and len(value) >= 200 else None
+        columns["value_json"] = value if isinstance(value, (dict, list)) else None
+    return columns
 
 
 #: Ensemble des clés nécessitant un redémarrage (miroir public de ``_RESTART_REQUIRED``).

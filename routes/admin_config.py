@@ -18,7 +18,7 @@ from communication import communikation
 from extensions import scheduler
 from flask_security import current_user
 from models import db, ConfigOption, DashboardCard, JobExecutionLog
-from params_registry import BALISE_LETTERS, get_spec
+from params_registry import BALISE_LETTERS, get_spec, column_values_for
 from routes.admin_security import (
     permission_error_response,
     user_has_permission,
@@ -323,21 +323,16 @@ def update_input():
     # (PRINTER_WIDTH). On n'écrit plus de version préformatée ``*_printer`` —
     # elle était figée à 42 caractères à l'enregistrement et devenait
     # obsolète dès que la largeur d'impression changeait.
-    is_int = spec.value_type == "value_int"
     try:
-        # MAJ BDD — option principale. La colonne cible vient du registre serveur.
+        # MAJ BDD — la colonne cible vient du registre serveur (value_str /
+        # value_int / value_text pour les textes longs comme les tickets) ;
+        # les autres colonnes sont vidées : une seule source de vérité.
         config_option = ConfigOption.query.filter_by(config_key=key).first()
-        if config_option:
-            if is_int:
-                config_option.value_int = value
-            else:
-                config_option.value_str = value
-        else:
-            if is_int:
-                config_option = ConfigOption(config_key=key, value_int=value)
-            else:
-                config_option = ConfigOption(config_key=key, value_str=value)
+        if not config_option:
+            config_option = ConfigOption(config_key=key)
             db.session.add(config_option)
+        for column, column_value in column_values_for(key, value).items():
+            setattr(config_option, column, column_value)
 
         # Point 11 : génération incrémentée dans la même transaction pour la
         # convergence inter-processus (sauf paramètre nécessitant un redémarrage).

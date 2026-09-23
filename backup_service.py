@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from flask import current_app
 from path_security import UnsafePathError, safe_relative_path
-from params_registry import is_secret_key
+from params_registry import is_secret_key, column_values_for
 import config_sync
 from models import (
     db, Pharmacist, Counter, Activity, ActivitySchedule, Weekday,
@@ -490,23 +490,16 @@ class ConfigSection(BackupSection):
             # n'y figure pas ; refuser tout de même une injection éventuelle).
             if is_secret_key(key):
                 continue
+            # La colonne vient du registre pour les clés connues (un texte de
+            # ticket restauré dans value_str serait invisible : le chargeur lit
+            # value_text) ; heuristique historique pour les clés inconnues.
+            values = column_values_for(key, value)
             option = ConfigOption.query.filter_by(config_key=key).first()
             if option:
-                option.value_str = value if isinstance(value, str) and len(value) < 200 else None
-                option.value_int = value if isinstance(value, int) and not isinstance(value, bool) else None
-                option.value_bool = value if isinstance(value, bool) else None
-                option.value_text = value if isinstance(value, str) and len(value) >= 200 else None
-                option.value_json = value if isinstance(value, (dict, list)) else None
+                for column, column_value in values.items():
+                    setattr(option, column, column_value)
             else:
-                option = ConfigOption(
-                    config_key=key,
-                    value_str=value if isinstance(value, str) and len(value) < 200 else None,
-                    value_int=value if isinstance(value, int) and not isinstance(value, bool) else None,
-                    value_bool=value if isinstance(value, bool) else None,
-                    value_text=value if isinstance(value, str) and len(value) >= 200 else None,
-                    value_json=value if isinstance(value, (dict, list)) else None,
-                )
-                db.session.add(option)
+                db.session.add(ConfigOption(config_key=key, **values))
         # Point 11 : une restauration modifie massivement la configuration ;
         # incrémenter la génération (même transaction) pour que les autres
         # processus rechargent app.config.
@@ -560,23 +553,16 @@ class _PageConfigSection(BackupSection):
                 continue
             if is_secret_key(key):
                 continue
+            # La colonne vient du registre pour les clés connues (un texte de
+            # ticket restauré dans value_str serait invisible : le chargeur lit
+            # value_text) ; heuristique historique pour les clés inconnues.
+            values = column_values_for(key, value)
             option = ConfigOption.query.filter_by(config_key=key).first()
             if option:
-                option.value_str = value if isinstance(value, str) and len(value) < 200 else None
-                option.value_int = value if isinstance(value, int) and not isinstance(value, bool) else None
-                option.value_bool = value if isinstance(value, bool) else None
-                option.value_text = value if isinstance(value, str) and len(value) >= 200 else None
-                option.value_json = value if isinstance(value, (dict, list)) else None
+                for column, column_value in values.items():
+                    setattr(option, column, column_value)
             else:
-                option = ConfigOption(
-                    config_key=key,
-                    value_str=value if isinstance(value, str) and len(value) < 200 else None,
-                    value_int=value if isinstance(value, int) and not isinstance(value, bool) else None,
-                    value_bool=value if isinstance(value, bool) else None,
-                    value_text=value if isinstance(value, str) and len(value) >= 200 else None,
-                    value_json=value if isinstance(value, (dict, list)) else None,
-                )
-                db.session.add(option)
+                db.session.add(ConfigOption(config_key=key, **values))
         # Point 11 : propager le changement aux autres processus.
         config_sync.bump_generation()
         db.session.commit()

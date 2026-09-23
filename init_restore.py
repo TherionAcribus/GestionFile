@@ -8,6 +8,7 @@ from flask import current_app
 from io import BytesIO
 
 from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
+from params_registry import column_values_for
 
 # Point 12 (audit Admin) — Restauration MySQL : validation des identifiants.
 #
@@ -168,23 +169,20 @@ def load_config_table_from_json(json_file, db, ConfigVersion, ConfigOption, rest
 
                 for key, value in data['configurations'].items():
                     config_option = ConfigOption.query.filter_by(config_key=key).first()
-                    
+                    # La colonne vient du registre pour les clés connues (un
+                    # texte de ticket écrit dans value_str serait invisible :
+                    # le chargeur lit value_text) ; heuristique historique
+                    # pour les clés inconnues.
+                    values = column_values_for(key, value)
+
                     if config_option:
                         if restore:
                             current_app.logger.info(f"Mise à jour de {key}")
-                            config_option.value_str = value if isinstance(value, str) and len(value) < 200 else None
-                            config_option.value_int = value if isinstance(value, int) else None
-                            config_option.value_bool = value if isinstance(value, bool) else None
-                            config_option.value_text = value if isinstance(value, str) and len(value) >= 200 else None
+                            for column, column_value in values.items():
+                                setattr(config_option, column, column_value)
                     else:
                         current_app.logger.info(f"Création de {key}")
-                        new_option = ConfigOption(
-                            config_key=key,
-                            value_str=value if isinstance(value, str) and len(value) < 200 else None,
-                            value_int=value if isinstance(value, int) else None,
-                            value_bool=value if isinstance(value, bool) else None,
-                            value_text=value if isinstance(value, str) and len(value) >= 200 else None
-                        )
+                        new_option = ConfigOption(config_key=key, **values)
                         db.session.add(new_option)
 
                 db.session.commit()
