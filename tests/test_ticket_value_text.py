@@ -205,3 +205,8 @@ def test_migration_deplace_les_textes_de_ticket():
     for key in _TICKET_KEYS:
         assert key in source
     assert "value_text = value_str" in source  # UPDATE config_option
+    # Et purge des clés dérivées ESC/POS, pour qu'elles ne traînent ni en base
+    # ni dans les sauvegardes exportées.
+    assert "DELETE FROM config_option" in source
+    for key in _TICKET_KEYS:
+        assert f"{key}_printer" in source

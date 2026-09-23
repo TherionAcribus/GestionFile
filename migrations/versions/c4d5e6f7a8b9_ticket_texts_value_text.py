@@ -9,7 +9,10 @@ le texte disparaissait apres une restauration.
 Les trois cles ``ticket_header`` / ``ticket_message`` / ``ticket_footer`` sont
 desormais declarees ``value_text`` dans params_registry. Cette migration
 deplace les donnees existantes et realigne les traductions collectees
-(``translation.column_name`` 'value_str' -> 'value_text').
+(``translation.column_name`` 'value_str' -> 'value_text'). Elle purge aussi
+les cles derivees ``ticket_*_printer`` (ESC/POS preformate a 42, rendu
+obsolet par la conversion a l'impression) pour qu'elles ne subsistent pas
+en base ni dans les sauvegardes.
 
 Revision ID: c4d5e6f7a8b9
 Revises: a1b2c3d4e5f7
@@ -33,6 +36,13 @@ def upgrade():
     op.execute(
         "UPDATE config_option SET value_text = value_str, value_str = NULL "
         "WHERE config_key IN " + _TICKET_KEYS + " AND value_str IS NOT NULL"
+    )
+    # Purger les cles derivees ticket_*_printer : versions ESC/POS preformatees
+    # a 42 caracteres, obsoletes depuis le rendu a la demande — et exportables
+    # dans les sauvegardes si elles restaient en base.
+    op.execute(
+        "DELETE FROM config_option WHERE config_key IN "
+        "('ticket_header_printer', 'ticket_message_printer', 'ticket_footer_printer')"
     )
     # Traductions collectees sur l'ancienne colonne : supprimer d'abord les
     # lignes qui entreraient en conflit avec un doublon 'value_text' existant
