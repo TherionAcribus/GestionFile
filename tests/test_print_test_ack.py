@@ -268,3 +268,16 @@ def test_gabarit_ticket_expose_la_zone_de_retour():
     html = _read("templates/admin/page_patient_ticket.html")
     assert 'id="print_test_result"' in html
     assert html.count("data-print-test") >= 2
+    assert "<button" in html   # le declencheur de test est un vrai <button>
+
+
+def test_aucune_balise_btn_factice_dans_les_gabarits():
+    """``<btn>`` n'existe pas en HTML : les navigateurs le traitent en
+    element inconnu (pas de clavier, pas de focus correct). Deux occurrences
+    ont ete corrigees (page_patient_ticket.html, translations_tab_texts.html)
+    — ce test empeche le retour de la faute de frappe."""
+    import glob
+    for path in glob.glob(os.path.join(_SERVEUR, "templates", "**", "*.html"),
+                          recursive=True):
+        rel = os.path.relpath(path, _SERVEUR)
+        assert not re.search(r"<btn[\s>]", _read(rel)), rel

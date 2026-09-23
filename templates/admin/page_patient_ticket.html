@@ -5,12 +5,12 @@
 
 {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
 
-<btn class="btn btn-primary" id="btn_test_width" data-print-test
+<button type="button" class="btn btn-primary" id="btn_test_width" data-print-test
     hx-post="/admin/patient/print_test_ticket_size"
     hx-target="#invisible"
     >
     Tester la largeur d'impression
-</btn>
+</button>
 
 <h5>Message du ticket</h5>
 
