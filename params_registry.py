@@ -248,6 +248,10 @@ BALISE_LETTERS = {
     "welcome": "PDH",
     "before_call": "PDHAN",
     "after_call": "PDHANMC",
+    # Textes de ticket : même famille que « before_call » ({P} {N} {A} {D} {H}
+    # — les boutons du macro balises_for_printer/textbloc_for_printer), plus un
+    # contrôle d'équilibre du balisage d'impression (utils.validate_ticket_text).
+    "ticket": "PDHAN",
 }
 
 _WELCOME_KEYS = {
@@ -274,6 +278,13 @@ _BEFORE_CALL_KEYS = {
     "phone_line4", "phone_line5", "phone_line6",
     "phone_your_turn_line1", "phone_your_turn_line2", "phone_your_turn_line3",
     "phone_your_turn_line4", "phone_your_turn_line5", "phone_your_turn_line6",
+}
+
+# Textes imprimés sur le ticket : balises {X} + balisage [center]/[double]/
+# [separator]/**/__ à équilibrer — sans cela une balise inconnue ou une mise
+# en forme non fermée était enregistrée puis imprimée littéralement.
+_TICKET_TEXT_KEYS = {
+    "ticket_header", "ticket_message", "ticket_footer",
 }
 
 
@@ -327,6 +338,8 @@ def _validator_for(key: str, value_type: str) -> str:
         return "after_call"
     if key in _BEFORE_CALL_KEYS:
         return "before_call"
+    if key in _TICKET_TEXT_KEYS:
+        return "ticket"
     return "text"
 
 

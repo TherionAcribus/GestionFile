@@ -56,7 +56,8 @@ def test_value_type_matches_validator():
         elif spec.value_type == "value_int":
             assert spec.validator == "int"
         else:
-            assert spec.validator in ("text", "welcome", "before_call", "after_call")
+            assert spec.validator in ("text", "welcome", "before_call",
+                                      "after_call", "ticket")
 
 
 @pytest.mark.parametrize("key,permission", [

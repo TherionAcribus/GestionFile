@@ -6,6 +6,7 @@ from communication import communikation
 from routes.admin_security import require_permission, require_permission_api
 from pagination import parse_page_params, paginate_query
 from ui_feedback import display_toast
+from utils import validate_config_text
 from image_storage import accept_image_upload
 from path_security import safe_path_under
 from audit_service import record_audit
@@ -468,7 +469,23 @@ def save_translations():
         if key.startswith("translation|"):
             _, table_name, column_name, row_id, key_name = key.split('|')
             row_id = int(row_id)
-            
+
+            # Même validation que le champ d'administration source : un texte
+            # de ConfigOption traduit avec une balise inconnue ou un balisage
+            # non fermé s'afficherait / s'imprimerait littéralement. Échec =>
+            # tout est annulé (le commit est unique, en fin de route).
+            if table_name == "ConfigOption":
+                text_check = validate_config_text(key_name, value)
+                if not text_check["success"]:
+                    db.session.rollback()
+                    record_audit(ACTION_UPDATE, "translation",
+                                 outcome=OUTCOME_FAILURE,
+                                 details=f"langue={language_code}, clé={key_name}")
+                    display_toast(success=False,
+                                  message=f"{key_name} : {text_check['value']}")
+                    return "", 200
+                value = text_check["value"]
+
             # Rechercher la traduction existante ou en créer une nouvelle
             translation = Translation.query.filter_by(
                 table_name=table_name,

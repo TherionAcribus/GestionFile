@@ -18,7 +18,7 @@ from communication import communikation
 from extensions import scheduler
 from flask_security import current_user
 from models import db, ConfigOption, DashboardCard, JobExecutionLog
-from params_registry import BALISE_LETTERS, get_spec, column_values_for
+from params_registry import get_spec, column_values_for
 from routes.admin_security import (
     permission_error_response,
     user_has_permission,
@@ -33,7 +33,7 @@ from scheduler_functions import (
     scheduler_clear_announce_calls,
 )
 from ui_feedback import display_toast
-from utils import validate_and_transform_text
+from utils import validate_config_text
 from audit_service import record_audit
 from audit_log import ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS
 
@@ -311,8 +311,12 @@ def update_input():
             value = int(value)
         else:
             return config_change_response(success=False, message="L'entrée doit être un nombre.")
-    elif validator in BALISE_LETTERS:
-        text_check = validate_and_transform_text(value, BALISE_LETTERS[validator])
+    else:
+        # Le validateur du registre décide : balises {X} autorisées selon la
+        # famille de texte (welcome / before_call / after_call / ticket), et
+        # balisage d'impression équilibré pour les tickets. Les validateurs
+        # sans règle (« text », « bool ») renvoient la valeur inchangée.
+        text_check = validate_config_text(key, value)
         if text_check["success"]:
             value = text_check["value"]
         else:

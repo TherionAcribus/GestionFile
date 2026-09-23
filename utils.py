@@ -4,6 +4,7 @@ from datetime import datetime, date
 from flask import session, has_request_context, current_app as app
 from models import Button, Translation, db
 from communication import send_app_notification
+from params_registry import BALISE_LETTERS, get_spec
 
 def validate_and_transform_text(user_input, allowed_letters):
     """ Vérification et transformation des entrées avec des lettres autorisées spécifiques"""
@@ -18,6 +19,58 @@ def validate_and_transform_text(user_input, allowed_letters):
     
     app.logger.debug('corrected_input %s', corrected_input)
     return {"success": True, "value": corrected_input}
+
+
+#: Balisages d'impression du ticket à paire obligatoire : un ouvrant sans
+#: fermant (ou un marqueur impair) serait imprimé littéralement sur le ticket.
+_TICKET_PAIRED_TAGS = (("[center]", "[/center]"), ("[double]", "[/double]"))
+_TICKET_PAIRED_MARKERS = ("**", "__")
+
+
+def validate_ticket_text(value):
+    """Valide un texte de ticket avant enregistrement.
+
+    Deux contrôles : les balises ``{X}`` (famille « ticket » : {P} {D} {H}
+    {A} {N}, comme les boutons proposés par l'interface) et l'équilibre du
+    balisage d'impression — ``[center]…[/center]``, ``[double]…[/double]``,
+    ``**gras**``, ``__souligné__`` (``[separator]`` est autonome). Sans cela,
+    une balise inconnue ou une mise en forme non fermée était enregistrée puis
+    imprimée littéralement.
+    """
+    check = validate_and_transform_text(value, BALISE_LETTERS["ticket"])
+    if not check["success"]:
+        return check
+    text = check["value"]
+    for open_tag, close_tag in _TICKET_PAIRED_TAGS:
+        if text.count(open_tag) != text.count(close_tag):
+            return {"success": False, "value":
+                    f"Balisage non fermé : chaque {open_tag} doit être fermé par {close_tag}."}
+    for marker in _TICKET_PAIRED_MARKERS:
+        if text.count(marker) % 2:
+            return {"success": False, "value":
+                    f"Balisage non fermé : {marker} doit aller par paire."}
+    return {"success": True, "value": text}
+
+
+def validate_config_text(key, value):
+    """Valide ``value`` pour la clé de configuration ``key`` selon le
+    validateur déclaré dans le registre.
+
+    Renvoie ``{"success": bool, "value": ...}`` — même contrat que
+    ``validate_and_transform_text`` (value = texte corrigé ou message
+    d'erreur). Utilisé par ``update_input`` et par la sauvegarde des
+    traductions : un texte traduit doit respecter les mêmes balises que la
+    source française. Les validateurs sans règle (« text », « bool », « int »)
+    renvoient la valeur inchangée.
+    """
+    spec = get_spec(key)
+    if spec is None:
+        return {"success": True, "value": value}
+    if spec.validator == "ticket":
+        return validate_ticket_text(value)
+    if spec.validator in BALISE_LETTERS:
+        return validate_and_transform_text(value, BALISE_LETTERS[spec.validator])
+    return {"success": True, "value": value}
 
 
 def parse_time(time_str):
