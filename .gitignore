@@ -29,3 +29,10 @@ instance/*.db
 # Historiquement suivi par git : voir .gitleaksignore. Les jetons Spotify
 # sont desormais stockes en base (SpotifyDBCacheHandler).
 .cache
+
+# Dossiers temporaires des tests (peuvent rester verrouilles par une ACL)
+.test-tmp-*/
+
+# Fichier cree par accident via une redirection "2>nul" sous Git Bash
+# (nul est un nom de peripherique reserve Windows : git add echoue dessus).
+nul

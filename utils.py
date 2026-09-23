@@ -345,10 +345,14 @@ def format_ticket_text(new_patient, activity):
         if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
             text_list.append(get_activity_message_translation(activity, language_code))
     else:
+        # Source Markdown brute : la conversion ESC/POS est faite plus bas, au
+        # moment de l'impression, avec la largeur courante (PRINTER_WIDTH).
+        # Ne PAS lire les clés TICKET_*_PRINTER : c'étaient des versions
+        # préformatées à 42 caractères figées à l'enregistrement (supprimées).
         text_list = [
-            app.config['TICKET_HEADER_PRINTER'],
-            app.config['TICKET_MESSAGE_PRINTER'],
-            app.config['TICKET_FOOTER_PRINTER']
+            app.config['TICKET_HEADER'],
+            app.config['TICKET_MESSAGE'],
+            app.config['TICKET_FOOTER']
         ]
         if app.config["TICKET_DISPLAY_SPECIFIC_MESSAGE"]:
             text_list.append(activity.specific_message)

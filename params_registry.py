@@ -125,12 +125,14 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_button_print_ticket_picture": ("PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE", "value_str"),
     "page_patient_button_cancel_display_picture": ("PAGE_PATIENT_BUTTON_CANCEL_DISPLAY_PICTURE", "value_bool"),
     "page_patient_button_cancel_picture": ("PAGE_PATIENT_BUTTON_CANCEL_PICTURE", "value_str"),
+    # SUPPRIMÉ : ticket_*_printer — versions ESC/POS préformatées (largeur 42
+    # figée à l'enregistrement, obsolète dès que printer_width changeait).
+    # On stocke désormais le Markdown brut ; convert_markdown_to_escpos est
+    # appelé à l'impression avec PRINTER_WIDTH courant (utils.format_ticket_text).
+    # D'éventuelles lignes résiduelles en base sont ignorées.
     "ticket_header": ("TICKET_HEADER", "value_str"),
-    "ticket_header_printer": ("TICKET_HEADER_PRINTER", "value_str"),
     "ticket_message": ("TICKET_MESSAGE", "value_str"),
-    "ticket_message_printer": ("TICKET_MESSAGE_PRINTER", "value_str"),
     "ticket_footer": ("TICKET_FOOTER", "value_str"),
-    "ticket_footer_printer": ("TICKET_FOOTER_PRINTER", "value_str"),
     "ticket_display_specific_message": ("TICKET_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
     "mail_server": ("MAIL_SERVER", "value_str"),
     "mail_port": ("MAIL_PORT", "value_int"),

@@ -80,11 +80,12 @@ def application(tmp_path):
         PAGE_PATIENT_INTERFACE_DONE_BACK="retour",
         PAGE_PATIENT_INTERFACE_DONE_PRINT="imprimer",
         PAGE_PATIENT_INTERFACE_DONE_EXTEND="prolonger",
-        # Clés lues par format_ticket_text (chemin print_and_validate).
+        # Clés lues par format_ticket_text (chemin print_and_validate) :
+        # Markdown brut, converti en ESC/POS à l'impression (PRINTER_WIDTH).
         TICKET_DISPLAY_SPECIFIC_MESSAGE=False,
-        TICKET_HEADER_PRINTER="",
-        TICKET_MESSAGE_PRINTER="{N}",
-        TICKET_FOOTER_PRINTER="",
+        TICKET_HEADER="",
+        TICKET_MESSAGE="{N}",
+        TICKET_FOOTER="",
         PRINTER_WIDTH=48,
     )
     db.init_app(app)

@@ -33,7 +33,7 @@ from scheduler_functions import (
     scheduler_clear_announce_calls,
 )
 from ui_feedback import display_toast
-from utils import convert_markdown_to_escpos, validate_and_transform_text
+from utils import validate_and_transform_text
 from audit_service import record_audit
 from audit_log import ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS
 
@@ -318,14 +318,11 @@ def update_input():
         else:
             return config_change_response(success=False, message=text_check["value"])
 
-    # Cas particulier des tickets : la version ESC/POS est enregistrée dans la
-    # MÊME transaction que l'option principale (plus de commit intermédiaire pour
-    # une seule opération logique) et n'est reflétée dans app.config qu'après le
-    # commit final.
-    is_ticket = key.startswith("ticket_")
-    escpos_text = convert_markdown_to_escpos(value) if is_ticket else None
-    key_printer = (key + "_printer") if is_ticket else None
-
+    # Les textes de ticket sont stockés en Markdown BRUT uniquement : la
+    # conversion ESC/POS se fait à l'impression avec la largeur courante
+    # (PRINTER_WIDTH). On n'écrit plus de version préformatée ``*_printer`` —
+    # elle était figée à 42 caractères à l'enregistrement et devenait
+    # obsolète dès que la largeur d'impression changeait.
     is_int = spec.value_type == "value_int"
     try:
         # MAJ BDD — option principale. La colonne cible vient du registre serveur.
@@ -342,15 +339,6 @@ def update_input():
                 config_option = ConfigOption(config_key=key, value_str=value)
             db.session.add(config_option)
 
-        # MAJ BDD — version imprimante du ticket (même transaction, un seul commit).
-        if is_ticket:
-            printer_option = ConfigOption.query.filter_by(config_key=key_printer).first()
-            if printer_option:
-                printer_option.value_str = escpos_text
-            else:
-                printer_option = ConfigOption(config_key=key_printer, value_str=escpos_text)
-                db.session.add(printer_option)
-
         # Point 11 : génération incrémentée dans la même transaction pour la
         # convergence inter-processus (sauf paramètre nécessitant un redémarrage).
         if not spec.restart_required:
@@ -364,8 +352,8 @@ def update_input():
             details="(secret modifié)" if spec.secret else f"value={value}",
         )
     except Exception as e:
-        # Toute exception annule l'ensemble de la transaction : ni l'option ni la
-        # version imprimante ne sont modifiées, et app.config reste intact.
+        # Toute exception annule la transaction : l'option n'est pas modifiée
+        # et app.config reste intact.
         db.session.rollback()
         record_audit(ACTION_UPDATE, "config", target_id=key,
                      outcome=OUTCOME_FAILURE)
@@ -383,8 +371,6 @@ def update_input():
 
     # Commit réussi : refléter en mémoire (app.config) puis effets de bord.
     app.config[spec.config_name] = value
-    if is_ticket:
-        app.config[key_printer.upper()] = escpos_text
     special_functions_with_input(key)
     # Réponse directe à l'auteur de la requête (pas de diffusion WebSocket à
     # tous les administrateurs pour une sauvegarde de champ individuelle).
