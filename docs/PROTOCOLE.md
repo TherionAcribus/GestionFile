@@ -83,7 +83,8 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `refresh_title` | `null` | Recharge le titre |
 | `refresh_buttons` | `null` | Recharge les boutons d'activité |
 | `update_scan_phone` | `{call_number, patient_id}` — salle `scan_<journey>` | Signale le scan du QR du parcours affiché par cette borne |
-| `print_ticket` | `string` — ESC/POS **base64** | Impression (ticket de test admin) |
+| `print_ticket` | `string` — ESC/POS **base64** ; `flag` = `job_id` optionnel | Impression (ticket de test admin). Quand `flag` est présent, la borne acquitte via `print_test_result` |
+| `print_test_result` (borne → serveur) | `{job_id, success, code, message, borne_id}` | Acquittement du tirage de test, relayé tel quel sur `/socket_admin` |
 
 Chaque parcours QR est identifié par un UUID (`journey`) généré à l'affichage
 de la page de validation, encodé dans l'URL du QR (`?journey=<uuid>`). La
@@ -123,7 +124,9 @@ Tous ces évènements déclenchent un rafraîchissement HTMX ciblé ; `data` est
 `refresh_languages_order`, `refresh_dashboard_select`, `refresh_gallery_list`,
 `display_new_gallery` (`string` — nom), `refresh_sound`,
 `audio_test` (`string` — URL), `refresh_printer_dashboard`,
-`refresh_counter_dashboard`, `refresh_schedule_tasks_list`.
+`refresh_counter_dashboard`, `refresh_schedule_tasks_list`,
+`print_test_result` (`{job_id, success, code, message, borne_id}` — acquittement
+d'un tirage de test, relais de l'évènement émis par la borne).
 
 ### `/socket_phone`
 

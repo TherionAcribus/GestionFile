@@ -5,7 +5,7 @@
 
 {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
 
-<btn class="btn btn-primary"
+<btn class="btn btn-primary" id="btn_test_width" data-print-test
     hx-post="/admin/patient/print_test_ticket_size"
     hx-target="#invisible"
     >
@@ -24,7 +24,7 @@
                 "Afficher le message spécifique à l'activité sur le ticket")
 }}
 
-<form id="qrcode-form" 
+<form id="qrcode-form" data-print-test
     hx-post="/admin/patient/print_ticket_test"
     hx-trigger="submit"
     class="row g-3 align-items-end">
@@ -58,3 +58,7 @@
         </button>
     </div>
 </form>
+
+<!-- Acquittements des tirages de test (envoyé / imprimé / indisponible /
+     papier / aucun retour) — alimenté par admin.js via /socket_admin. -->
+<div id="print_test_result" class="mt-2" aria-live="polite"></div>

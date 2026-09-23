@@ -181,6 +181,38 @@ def leave_scan_journey(_data=None):
     _leave_scan_journeys()
 
 
+# --- Acquittement des tirages de test ---------------------------------------
+# L'impression de test admin émet ``print_ticket`` avec un ``job_id`` dans le
+# champ ``flag`` de l'enveloppe. La borne (patients.js) renvoie le résultat du
+# pont d'impression via ``print_test_result`` ; on le relaie aux pages admin
+# (/socket_admin) pour afficher « envoyé / imprimé / indisponible / plus de
+# papier » au lieu du 204 muet d'avant. Le job_id est un uuid généré à la
+# demande : sans session valide sur /socket_patient, un client ne peut pas
+# émettre ici, et un job_id inconnu est simplement ignoré par l'interface.
+
+_TEST_JOB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+@socketio.on("print_test_result", namespace="/socket_patient")
+def print_test_result(data):
+    if not isinstance(data, dict):
+        return
+    job_id = str(data.get("job_id") or "")
+    if not _TEST_JOB_ID_RE.match(job_id):
+        return
+    payload = {
+        "job_id": job_id,
+        "success": bool(data.get("success")),
+        "code": str(data.get("code") or "unknown")[:64],
+        "message": str(data.get("message") or "")[:300],
+        "borne_id": str(data.get("borne_id") or "")[:80],
+    }
+    # Import local : communication importe routes.pyside -> models ; le
+    # module sockets est importé très tôt par app.py.
+    from communication import communikation
+    communikation("admin", event="print_test_result", data=payload)
+
+
 @socketio.on("connect", namespace="/socket_admin")
 def connect_admin():
     # Admin : authentification TOUJOURS requise (point 1.2). SECURITY_LOGIN_ADMIN

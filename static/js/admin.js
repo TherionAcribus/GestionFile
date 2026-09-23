@@ -133,6 +133,11 @@ document.addEventListener('DOMContentLoaded', function () {
     AdminRealtime.on(NS_ADMIN, 'refresh_sound', function () { refresh_sound(); }, '#announce_current_signal');
     AdminRealtime.on(NS_ADMIN, 'audio_test', function (msg) { playAudio(msg); }, '#announce_current_signal');
 
+    // Acquittement des tirages de test (onglet Ticket). Pas d'ancrage : la
+    // page Ticket est chargée en HTMX après DOMContentLoaded, l'abonnement
+    // doit exister avant que l'onglet ne s'ouvre.
+    AdminRealtime.on(NS_ADMIN, 'print_test_result', function (msg) { print_test_result(msg); });
+
     // Dashboard : sélecteur de cartes et cartes "glanceable".
     AdminRealtime.on(NS_ADMIN, 'refresh_printer_dashboard', function (msg) { refresh_printer_dashboard(msg); }, '#sortable-dashboard');
     AdminRealtime.on(NS_ADMIN, 'refresh_counter_dashboard', function (msg) { refresh_counter_dashboard(msg); }, '#sortable-dashboard');
@@ -847,3 +852,109 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
+
+
+// ---------------------------------------------------------------------------
+//  Tirage de test de ticket (onglet Ticket de la page patient)
+//
+//  Cycle : submit htmx -> 204 (emission sur /socket_patient) -> la borne
+//  imprime via le pont pywebview puis renvoie ``print_test_result``, relaye
+//  ici via /socket_admin. Le job_id est genere cote client et injecte dans la
+//  requete pour correler l'acquittement (champ ``flag`` de l'enveloppe).
+//  Les declencheurs portent l'attribut ``data-print-test``.
+// ---------------------------------------------------------------------------
+
+var _printTestJobs = Object.create(null);   // job_id -> {timer, acks}
+var PRINT_TEST_TIMEOUT_MS = 15000;
+
+var PRINT_TEST_LABELS = {
+    print_ok: 'Ticket imprimé',
+    no_paper: 'Plus de papier',
+    low_paper: 'Papier bientôt épuisé',
+    error_init: 'Imprimante indisponible (non initialisée)',
+    error_not_initialized: 'Imprimante indisponible',
+    error_print: 'Erreur lors de l\'impression',
+    error_grant: 'Imprimante indisponible (permissions USB)',
+    no_api: 'Pont d\'impression indisponible sur la borne',
+    invalid_data: 'Données refusées par la borne',
+    busy: 'Borne occupée (impression en cours)',
+    no_data: 'Données d\'impression absentes'
+};
+
+function _printTestMakeJobId() {
+    if (window.crypto && crypto.randomUUID) { return crypto.randomUUID(); }
+    return 'job-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function _printTestWrite(html, jobId) {
+    var zone = document.getElementById('print_test_result');
+    if (!zone) { return; }
+    var block = document.createElement('div');
+    block.setAttribute('data-print-job', jobId);
+    block.className = 'mb-2 pb-1 border-bottom';
+    block.innerHTML = html;
+    zone.insertBefore(block, zone.firstChild);
+}
+
+function _printTestAppend(jobId, html) {
+    var block = document.querySelector('[data-print-job="' + jobId + '"]');
+    if (!block) { return; }
+    block.insertAdjacentHTML('beforeend', html);
+}
+
+// Injecte le job_id dans la requete htmx (champ ``flag`` de l'enveloppe
+// ``print_ticket`` cote serveur).
+document.body.addEventListener('htmx:configRequest', function (evt) {
+    var elt = evt.detail && evt.detail.elt;
+    if (!elt || !elt.hasAttribute || !elt.hasAttribute('data-print-test')) { return; }
+    var jobId = _printTestMakeJobId();
+    evt.detail.parameters.job_id = jobId;
+    elt.dataset.printJobId = jobId;
+});
+
+// Apres l'emission : on attend l'acquittement de la borne ; sans retour sous
+// PRINT_TEST_TIMEOUT_MS, on l'indique (borne deconnectee, page non a jour...).
+document.body.addEventListener('htmx:afterRequest', function (evt) {
+    var elt = evt.detail && evt.detail.elt;
+    if (!elt || !elt.hasAttribute || !elt.hasAttribute('data-print-test')) { return; }
+    var jobId = elt.dataset.printJobId || '';
+    var xhr = evt.detail.xhr;
+    if (evt.detail.failed || !xhr || xhr.status !== 204 || !jobId) {
+        _printTestWrite('<div class="text-danger">Envoi de la demande impossible (HTTP ' +
+            (xhr ? xhr.status : '?') + ').</div>', jobId || _printTestMakeJobId());
+        return;
+    }
+    _printTestWrite(
+        '<div class="text-muted">Demande envoyée aux bornes — en attente du retour…</div>',
+        jobId);
+    _printTestJobs[jobId] = {
+        acks: 0,
+        timer: setTimeout(function () {
+            var job = _printTestJobs[jobId];
+            if (job && job.acks === 0) {
+                _printTestAppend(jobId,
+                    '<div class="text-warning">Aucun retour de la borne après ' +
+                    Math.round(PRINT_TEST_TIMEOUT_MS / 1000) +
+                    ' s — la borne est-elle connectée ?</div>');
+            }
+            delete _printTestJobs[jobId];
+        }, PRINT_TEST_TIMEOUT_MS)
+    };
+});
+
+// Acquittement relaye par /socket_admin : une ligne par borne repondante.
+function print_test_result(msg) {
+    var data = msg && msg.data ? msg.data : {};
+    var jobId = String(data.job_id || '');
+    if (!jobId || !document.querySelector('[data-print-job="' + jobId + '"]')) { return; }
+    var job = _printTestJobs[jobId];
+    if (job) { job.acks += 1; }
+    var borne = data.borne_id ? String(data.borne_id) : 'borne inconnue';
+    var label = PRINT_TEST_LABELS[data.code] || data.message || 'Échec (' + data.code + ')';
+    var cls = data.success ? 'text-success' : 'text-danger';
+    var mark = data.success ? '✔' : '✘';
+    _printTestAppend(jobId,
+        '<div class="' + cls + '">' + mark + ' ' +
+        borne.replace(/[<>&"]/g, '') + ' : ' +
+        String(label).replace(/[<>&"]/g, '') + '</div>');
+}

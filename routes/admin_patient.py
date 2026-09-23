@@ -1,7 +1,10 @@
 import os
 import base64
 import datetime
-from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app
+import json
+import re
+import uuid
+from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app, make_response
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
     record_printer_status, get_printer_infos, get_printer_error,
@@ -570,6 +573,33 @@ def delete_button_image(button_id):
     return "<div>Pas d'image</div>"
 
 
+_TEST_JOB_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _test_print_job_id():
+    """Identifiant de corrélation du tirage de test.
+
+    Fourni par le client admin (hidden/champ ``job_id``) pour que la page
+    sache quel acquittement attendre ; sinon généré ici. L'identifiant
+    voyage dans le champ ``flag`` de l'enveloppe ``print_ticket`` — les
+    anciennes bornes l'ignorent, les nouvelles acquittent via
+    ``print_test_result`` (voir sockets.py)."""
+    job_id = request.values.get("job_id", "")
+    if job_id and _TEST_JOB_ID.match(str(job_id)):
+        return str(job_id)
+    return uuid.uuid4().hex
+
+
+def _test_print_sent_response(job_id):
+    """Réponse 204 + évènement HX-Trigger indiquant que la demande a été
+    émise vers les bornes (l'acquittement d'impression arrive ensuite via
+    /socket_admin, évènement ``print_test_result``)."""
+    response = make_response("", 204)
+    response.headers["HX-Trigger"] = json.dumps(
+        {"print_test_sent": {"job_id": job_id}})
+    return response
+
+
 @admin_patient_bp.route("/admin/patient/print_test_ticket_size", methods=['POST'])
 @require_permission('patient')
 def print_ticket_test_size():
@@ -580,8 +610,10 @@ def print_ticket_test_size():
     text = "123456789012345678901234567890123456789012345678901234567890"
     app.logger.debug("%s", text)
     payload = base64.b64encode(text.encode("utf-8")).decode("utf-8")
-    communikation(stream="patient", data=payload, event="print_ticket")
-    return "", 204
+    job_id = _test_print_job_id()
+    communikation(stream="patient", data=payload, event="print_ticket",
+                  flag=job_id)
+    return _test_print_sent_response(job_id)
 
 @admin_patient_bp.route("/admin/patient/print_ticket_test", methods=['POST'])
 @require_permission('patient')
@@ -595,8 +627,10 @@ def print_ticket_test():
     patient = get_futur_patient(call_number, activity)
     # format_ticket_text renvoie déjà du base64 ESC/POS, prêt pour print_ticket.
     text = format_ticket_text(patient, activity)
-    communikation(stream="patient", data=text, event="print_ticket")
-    return "", 204
+    job_id = _test_print_job_id()
+    communikation(stream="patient", data=text, event="print_ticket",
+                  flag=job_id)
+    return _test_print_sent_response(job_id)
 
 
 @admin_patient_bp.route('/admin/patient/qr_code/test', methods=['GET'])

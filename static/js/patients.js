@@ -87,9 +87,21 @@ document.addEventListener('DOMContentLoaded', (event) => {
     // est le même que le flux normal : base64 ESC/POS passé au pont pywebview.
     // Une page ouverte dans un navigateur classique n'imprime rien
     // (sendPrintTicket renvoie 'no_api' sans window.pywebview).
+    // msg.flag porte le job_id de corrélation : le résultat est renvoyé au
+    // serveur (print_test_result) qui le relaie aux pages admin.
     patientSocket.on('print_ticket', function(msg) {
         console.log("Print ticket demandé par l'admin");
-        sendPrintTicket(msg.data);
+        var jobId = (msg && msg.flag) ? String(msg.flag) : '';
+        sendPrintTicket(msg.data).then(function(result) {
+            if (!jobId) { return; }
+            patientSocket.emit('print_test_result', {
+                job_id: jobId,
+                success: !!(result && result.success),
+                code: (result && result.code) ? String(result.code) : 'unknown',
+                message: (result && result.message) ? String(result.message) : '',
+                borne_id: (result && result.borne_id) ? String(result.borne_id) : ''
+            });
+        });
     });
 
     patientSocket.on('connect_error', function(err) {
