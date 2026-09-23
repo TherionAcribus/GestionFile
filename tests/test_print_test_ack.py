@@ -109,13 +109,67 @@ def test_routes_vraiment_applees(application, monkeypatch):
         monkeypatch.setattr(admin_patient, "format_ticket_text",
                             lambda p, a: "QkFTRTY0")
         from flask import session
-        session["x"] = "init"
+        session["language_code"] = "fr"   # langue admin avant l'essai
         resp = admin_patient.print_ticket_test.__wrapped__()
+        # La langue demandee pour l'essai (form: fr ici) est restauree.
+        assert session["language_code"] == "fr"
 
     assert resp.status_code == 204
     assert len(emissions) == 1
     assert emissions[0][1]["flag"] == "job-live"
     assert emissions[0][1]["event"] == "print_ticket"
+
+
+def test_langue_session_restauree_apres_essai_etranger(application, monkeypatch):
+    """Un essai en espagnol ne change pas durablement la langue admin :
+    la valeur precedente est restauree, y compris son ABSENCE."""
+    from routes import admin_patient
+    from flask import session
+
+    monkeypatch.setattr(admin_patient, "Activity",
+                        type("A", (), {"query": type(
+                            "Q", (), {"get": staticmethod(lambda i: None)})()}))
+    monkeypatch.setattr(admin_patient, "get_futur_patient", lambda c, a: None)
+    monkeypatch.setattr(admin_patient, "format_ticket_text", lambda p, a: "WA==")
+    monkeypatch.setattr(admin_patient, "communikation", lambda *a, **k: None)
+
+    ctx = dict(method="POST",
+               data={"call_number": "A-1", "activity": "1",
+                     "language": "es"})
+
+    # Session deja en allemand -> on retrouve l'allemand apres l'essai.
+    with application.test_request_context("/admin/patient/print_ticket_test",
+                                          **ctx):
+        session["language_code"] = "de"
+        admin_patient.print_ticket_test.__wrapped__()
+        assert session["language_code"] == "de"
+
+    # Pas de langue en session -> la clef est retiree, pas posee.
+    with application.test_request_context("/admin/patient/print_ticket_test",
+                                          **ctx):
+        admin_patient.print_ticket_test.__wrapped__()
+        assert "language_code" not in session
+
+
+def test_route_qr_restaure_la_langue(application, monkeypatch):
+    """La route de test QR remettait systematiquement 'fr' : elle doit
+    maintenant restaurer la valeur precedente comme print_ticket_test."""
+    from routes import admin_patient
+    from flask import session
+
+    monkeypatch.setattr(admin_patient, "Activity",
+                        type("A", (), {"query": type(
+                            "Q", (), {"get": staticmethod(lambda i: None)})()}))
+    monkeypatch.setattr(admin_patient, "get_futur_patient", lambda c, a: None)
+    monkeypatch.setattr(admin_patient, "qr_code_data_uri", lambda p: "data:x")
+    monkeypatch.setattr(admin_patient, "render_template",
+                        lambda *a, **k: "ok")
+
+    with application.test_request_context(
+            "/admin/patient/qr_code/test?language=es"):
+        session["language_code"] = "de"
+        admin_patient.admin_patient_qr_code_modal.__wrapped__()
+        assert session["language_code"] == "de"
 
 
 # --- Relais socket borne -> admin -------------------------------------------
@@ -179,6 +233,18 @@ def test_relais_tronque_les_champs(monkeypatch):
 
 
 # --- Gardes statiques borne / admin ------------------------------------------
+
+def test_routes_de_test_restaurent_la_langue_session():
+    """Les deux routes d'essai sauvegardent puis restaurent
+    ``session['language_code']`` (try/finally) — pas de valeur codee en dur."""
+    source = _read("routes/admin_patient.py")
+    for func in ("print_ticket_test", "admin_patient_qr_code_modal"):
+        body = _func_body(source, func)
+        assert "previous_language" in body
+        assert "finally" in body
+        assert 'session["language_code"] = "fr"' not in body, \
+            f"{func} impose le francais au lieu de restaurer la session"
+
 
 def test_patients_js_acquitte_le_resultat():
     js = _read("static/js/patients.js")

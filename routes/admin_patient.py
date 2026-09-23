@@ -623,10 +623,20 @@ def print_ticket_test():
     activity = Activity.query.get(activity_id)
     language_code = request.values.get("language", "fr")
     app.logger.debug('language_code %s', language_code)
+    # La langue de test est posée en session car format_ticket_text la lit
+    # implicitement — mais elle est RESTAURÉE ensuite : un essai en espagnol
+    # ne doit pas changer durablement la langue de la session admin.
+    previous_language = session.get("language_code")
     session["language_code"] = language_code
-    patient = get_futur_patient(call_number, activity)
-    # format_ticket_text renvoie déjà du base64 ESC/POS, prêt pour print_ticket.
-    text = format_ticket_text(patient, activity)
+    try:
+        patient = get_futur_patient(call_number, activity)
+        # format_ticket_text renvoie déjà du base64 ESC/POS, prêt pour print_ticket.
+        text = format_ticket_text(patient, activity)
+    finally:
+        if previous_language is None:
+            session.pop("language_code", None)
+        else:
+            session["language_code"] = previous_language
     job_id = _test_print_job_id()
     communikation(stream="patient", data=text, event="print_ticket",
                   flag=job_id)
@@ -639,14 +649,20 @@ def admin_patient_qr_code_modal():
     call_number = request.values.get('call_number', 'A-1')
     activity_id = request.values.get('activity', 1)
     language_code = request.values.get("language", "fr")
+    # Même mécanisme que print_ticket_test : la langue de test est posée le
+    # temps de générer le QR puis RESTAURÉE à sa valeur précédente (avant, on
+    # repartait en français quelle que soit la langue de la session).
+    previous_language = session.get("language_code")
     session["language_code"] = language_code
-    
-    activity = Activity.query.get(activity_id)
-    patient = get_futur_patient(call_number, activity)
-    qr_code = qr_code_data_uri(patient)
- 
-    # retour en français
-    session["language_code"] = "fr"
+    try:
+        activity = Activity.query.get(activity_id)
+        patient = get_futur_patient(call_number, activity)
+        qr_code = qr_code_data_uri(patient)
+    finally:
+        if previous_language is None:
+            session.pop("language_code", None)
+        else:
+            session["language_code"] = previous_language
 
     return render_template('/admin/patient_page_qr_code_test_modal.html',
                             qr_code=qr_code)
