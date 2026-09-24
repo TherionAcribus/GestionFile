@@ -100,24 +100,34 @@ class MultiCssVariableManager:
         source = self.sources[source_name]
         return current_app.config[source.config_key]
 
-    def update_variable(self, source_name: str, variable_name: str, new_value: str) -> None:
-        """Met à jour une variable CSS pour une source spécifique"""
+    def stage_variable(self, source_name: str, variable_name: str, new_value: str) -> None:
+        """Prépare la mise à jour en base SANS commit : l'appelant contrôle la
+        transaction et peut y joindre ``config_sync.bump_generation`` (la
+        propagation multi-processus exige l'atomicité avec le changement)."""
         source = self.sources[source_name]
+        var = source.model.query.filter_by(variable=variable_name).first()
+        if var:
+            var.value = new_value
+        else:
+            # Création si n'existe pas
+            var = source.model(variable=variable_name, value=new_value)
+            db.session.add(var)
+
+    def set_cached_variable(self, source_name: str, variable_name: str, new_value: str) -> None:
+        """Reflète une variable persistée dans ``app.config`` (mémoire du
+        processus) — à n'appeler qu'APRÈS un commit réussi."""
+        source = self.sources[source_name]
+        if source.config_key not in current_app.config:
+            current_app.config[source.config_key] = {}
+        current_app.config[source.config_key][variable_name] = new_value
+
+    def update_variable(self, source_name: str, variable_name: str, new_value: str) -> None:
+        """Met à jour une variable CSS pour une source spécifique (commit
+        autonome — usage hors requête)."""
         with current_app.app_context():
-            # Mise à jour en base
-            var = source.model.query.filter_by(variable=variable_name).first()
-            if var:
-                var.value = new_value
-            else:
-                # Création si n'existe pas
-                var = source.model(variable=variable_name, value=new_value)
-                db.session.add(var)
-            
+            self.stage_variable(source_name, variable_name, new_value)
             db.session.commit()
-            # Mise à jour dans app.config
-            if source.config_key not in current_app.config:
-                current_app.config[source.config_key] = {}
-            current_app.config[source.config_key][variable_name] = new_value
+            self.set_cached_variable(source_name, variable_name, new_value)
 
     def reload_source(self, source_name: str) -> None:
         """Recharge toutes les variables d'une source spécifique"""

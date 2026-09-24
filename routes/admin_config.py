@@ -251,23 +251,16 @@ def update_css_variable():
     if not is_safe_css_value(value):
         return jsonify({'status': 'error', 'message': 'Valeur CSS non autorisée.'}), 400
 
+    manager = app.css_variable_manager
     try:
-        # Met à jour la variable dans la base de données
-        app.css_variable_manager.update_variable(source_name, variable_name, value)
-
-        # Met à jour toutes les variables dépendantes
+        # Une seule transaction : variables + dépendances + génération de
+        # configuration — les autres processus rechargeront leurs variables
+        # CSS via load_configuration (point « sync multi-processus »).
+        manager.stage_variable(source_name, variable_name, value)
         for dep_variable in dependencies:
-            app.css_variable_manager.update_variable(
-                source_name,
-                dep_variable,
-                value
-            )
-
-        # Récupère toutes les variables pour générer le CSS
-        variables = app.css_variable_manager.get_all_variables(source_name)
-
-        # Génère le nouveau CSS
-        new_css_url = app.css_manager.generate_css(variables, mode=source_name)
+            manager.stage_variable(source_name, dep_variable, value)
+        config_sync.bump_generation()
+        db.session.commit()
     except Exception as e:
         # Rollback avant l'audit : css_variable_manager partage db.session et
         # peut laisser des mutations partielles en attente.
@@ -277,6 +270,13 @@ def update_css_variable():
                      outcome=OUTCOME_FAILURE)
         app.logger.error("Échec update_css_variable (%s/%s) : %s", source_name, variable_name, e)
         return jsonify({'status': 'error', 'message': 'La mise à jour de la variable a échoué.'}), 500
+
+    # Commit réussi : mémoire du processus, puis régénération de la feuille.
+    manager.set_cached_variable(source_name, variable_name, value)
+    for dep_variable in dependencies:
+        manager.set_cached_variable(source_name, dep_variable, value)
+    new_css_url = app.css_manager.generate_css(
+        manager.get_all_variables(source_name), mode=source_name)
 
     record_audit(ACTION_UPDATE, "css_variable",
                  target_id=f"{source_name}.{variable_name}",
@@ -334,27 +334,42 @@ def copy_colors():
                 if not is_valid_css_variable_name(name) or name not in target_vars:
                     return jsonify({'status': 'error', 'message': 'Variable cible invalide.'}), 400
 
-        # Pour chaque mapping, lire la valeur source et l'écrire dans la cible
+        # Pour chaque mapping, lire la valeur source et la préparer en cible.
+        # Une valeur déjà stockée ne doit pas propager une chaîne qui ne
+        # passerait plus is_safe_css_value (données héritées d'avant le
+        # contrôle).
+        manager = app.css_variable_manager
+        staged = []  # (source, variable, valeur) à refléter en mémoire après commit
         for mapping in mappings:
             source_var = mapping.get('source_var')
             target_var = mapping.get('target_var')
             source_source = mapping.get('source_source')  # ex: 'patient', 'announce', 'phone'
             target_source = mapping.get('target_source')
 
-            value = app.css_variable_manager.get_variable(source_source, source_var)
-            if value:
+            value = manager.get_variable(source_source, source_var)
+            if value and is_safe_css_value(value):
                 # Met à jour la variable parente cible
-                app.css_variable_manager.update_variable(target_source, target_var, value)
+                manager.stage_variable(target_source, target_var, value)
+                staged.append((target_source, target_var, value))
 
                 # Met à jour aussi les variables dépendantes via colorMappings (côté client)
                 dep_variables = mapping.get('dependencies', [])
                 for dep_var in dep_variables:
-                    app.css_variable_manager.update_variable(target_source, dep_var, value)
+                    manager.stage_variable(target_source, dep_var, value)
+                    staged.append((target_source, dep_var, value))
+
+        # Une seule transaction : toutes les variables + génération de config
+        # (propagation aux autres processus via load_configuration).
+        config_sync.bump_generation()
+        db.session.commit()
+
+        for src, name, val in staged:
+            manager.set_cached_variable(src, name, val)
 
         # Régénère le CSS pour la/les source(s) cible(s)
         target_sources = set(m.get('target_source') for m in mappings)
         for ts in target_sources:
-            variables = app.css_variable_manager.get_all_variables(ts)
+            variables = manager.get_all_variables(ts)
             app.css_manager.generate_css(variables, mode=ts)
 
         record_audit(ACTION_UPDATE, "css_variable", target_id=target_page,

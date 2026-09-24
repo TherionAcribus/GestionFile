@@ -155,6 +155,21 @@ def load_configuration(app):
     # app.config (PRINTER_INFOS / PRINTER_ERROR) : un état par process,
     # partiel en multi-worker et perdu au redémarrage.
 
+    # Variables CSS : les tables *CssVariable sont rechargées dans app.config
+    # et les feuilles personnalisées régénérées — le fichier CSS est LOCAL à
+    # chaque processus, il faut le réécrire ici pour que les répliques
+    # convergent (le compteur de génération ne suffisait pas : rien ne relisait
+    # ces tables lors d'un rechargement). Les gardes couvrent le premier
+    # appel : load_configuration tourne AVANT l'init des gestionnaires CSS.
+    css_var_manager = getattr(app, "css_variable_manager", None)
+    if css_var_manager is not None:
+        css_var_manager.reload_all()
+        css_manager = getattr(app, "css_manager", None)
+        if css_manager is not None:
+            for mode in css_manager.css_configs:
+                css_manager.generate_css(
+                    css_var_manager.get_all_variables(mode), mode=mode)
+
     # TMP FIX adresse galleries
     app.config["ANNOUNCE_GALLERY_FOLDERS"]= "static/galleries"
 
