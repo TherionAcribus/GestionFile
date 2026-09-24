@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 
 from variables import MultiCssVariableManager
 
@@ -59,7 +60,7 @@ class CSSManager:
         Génère uniquement les surcharges de variables pour le mode spécifié
         """
         if mode not in self.css_configs:
-            raise ValueError("Mode must be either 'patient' or 'announce'")
+            raise ValueError("Mode must be 'patient', 'announce' or 'phone'")
             
         custom_path = os.path.join(self.css_dir, self.css_configs[mode]["custom"])
         
@@ -72,11 +73,25 @@ class CSSManager:
         css_content += "}\n"
         
         # Sauvegarde dans le fichier personnalisé approprié
+        temporary_path = None
         try:
-            with open(custom_path, 'w') as f:
-                f.write(css_content)
+            with tempfile.NamedTemporaryFile(
+                mode='w', encoding='utf-8', dir=self.css_dir,
+                prefix=f".{self.css_configs[mode]['custom']}.",
+                suffix='.tmp', delete=False,
+            ) as temporary_file:
+                temporary_path = temporary_file.name
+                temporary_file.write(css_content)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.replace(temporary_path, custom_path)
             return f'/static/css/{self.css_configs[mode]["custom"]}'
         except OSError:
+            if temporary_path and os.path.exists(temporary_path):
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
             # Repli volontaire sur la feuille source : la personnalisation est
             # perdue pour cette generation. Trace en ERROR -- l'echec etait
             # jusqu'ici totalement invisible cote serveur.

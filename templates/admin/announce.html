@@ -3,7 +3,10 @@
 {% block title %}Page "Annonce"{% endblock %}
 
 {% block content %}
-    <h3>Page "Annonce"</h3>
+    <div class="d-flex align-items-center justify-content-between gap-2">
+        <h3>Page "Annonce"</h3>
+        {% if page_editor_enabled('announce') %}<a class="btn btn-primary" href="/admin/page-editor/announce"><i class="bi bi-layout-wtf"></i> Éditeur visuel</a>{% endif %}
+    </div>
 
     <div class="row">
         <div class="col-12">

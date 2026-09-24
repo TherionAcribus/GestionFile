@@ -74,6 +74,14 @@ def authorize_config_change(key, expected_value_type=None):
         app.logger.warning("Modification de paramètre refusée (clé inconnue) : %r", key)
         return None, (jsonify({"error": "Unknown parameter"}), 400)
 
+    # Les structures JSON de l'éditeur visuel ne sont jamais modifiables par
+    # les routes génériques update_input/update_select : elles doivent passer
+    # par le schéma strict, le base_hash et la publication transactionnelle de
+    # /admin/page-editor.
+    if spec.value_type == "value_json":
+        app.logger.warning("Modification JSON hors éditeur refusée : %r", key)
+        return None, (jsonify({"error": "Editor-managed parameter"}), 400)
+
     if expected_value_type is not None and spec.value_type != expected_value_type:
         app.logger.warning(
             "Modification de paramètre refusée (type %s attendu pour %s, registre=%s)",
@@ -681,5 +689,4 @@ def config_change_response(success=True, message=None):
         message = "Enregistré." if success else "Échec de l'enregistrement."
     status = 200 if success else 400
     return message, status, {"Content-Type": "text/plain; charset=utf-8"}
-
 

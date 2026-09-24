@@ -51,6 +51,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-pharmaline}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
       RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F}
+      PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce}
       APP_ROLE: web
     depends_on:
       mysql:
@@ -92,6 +93,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-pharmaline}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
       RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F}
+      PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce}
       APP_ROLE: scheduler
     depends_on:
       mysql:

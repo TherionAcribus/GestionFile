@@ -1,7 +1,7 @@
 {
     "name": "gf_phone_css_variables",
     "type": "default",
-    "version": "0.10",
+    "version": "0.11",
     "timestamp": "2024-12-10 14:35:26",
     "comments": "Version initiale",
     "variables": {
@@ -88,6 +88,7 @@
         "phone_your_turn_line2_border_size": "2px",
         "phone_your_turn_line3_font_color": "#000000",
         "phone_your_turn_line3_font_size": "20px",
+        "phone_your_turn_line3_font_weight": "400",
         "phone_your_turn_line4_font_weight": "400",
         "phone_your_turn_line3_background_color": "#B1F1F1",
         "phone_your_turn_line3_background_height": "100px",

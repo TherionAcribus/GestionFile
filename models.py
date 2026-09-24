@@ -493,6 +493,46 @@ class ConfigOption(db.Model):
         return f'<ConfigOption {self.config_key}: {self.value_str or self.value_int or self.value_bool or self.value_text}>'
 
 
+class PageEditorState(db.Model):
+    __tablename__ = 'page_editor_state'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_key = db.Column(db.String(20), unique=True, nullable=False)
+    draft_json = db.Column(db.JSON, nullable=True)
+    draft_base_hash = db.Column(db.String(64), nullable=True)
+    draft_version = db.Column(db.Integer, nullable=False, default=0)
+    draft_updated_by_id = db.Column(db.Integer, db.ForeignKey('app_users.id'), nullable=True)
+    draft_updated_at = db.Column(db.DateTime, nullable=True)
+    published_revision = db.Column(db.Integer, nullable=False, default=0)
+    published_by_id = db.Column(db.Integer, db.ForeignKey('app_users.id'), nullable=True)
+    published_at = db.Column(db.DateTime, nullable=True)
+
+    draft_updated_by = db.relationship('User', foreign_keys=[draft_updated_by_id])
+    published_by = db.relationship('User', foreign_keys=[published_by_id])
+
+
+class PageEditorRevision(db.Model):
+    __tablename__ = 'page_editor_revision'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_key = db.Column(db.String(20), nullable=False, index=True)
+    revision = db.Column(db.Integer, nullable=False)
+    snapshot_json = db.Column(db.JSON, nullable=False)
+    published_by_id = db.Column(db.Integer, db.ForeignKey('app_users.id'), nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(time_tz),
+    )
+
+    published_by = db.relationship('User', foreign_keys=[published_by_id])
+
+    __table_args__ = (
+        db.UniqueConstraint('page_key', 'revision', name='uq_page_editor_revision'),
+        db.Index('ix_page_editor_page_revision', 'page_key', 'revision'),
+    )
+
+
 class SpotifyToken(db.Model):
     """Jeton OAuth Spotify de l'officine, stocké **côté serveur**.
 

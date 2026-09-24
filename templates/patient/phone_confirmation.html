@@ -1,19 +1,8 @@
+{% import 'shared/page_components.html' as page_components %}
 <div id="div_infos"
     data-activity-id="{{ activity_id }}"
     data-language-code="{{ language_code }}"
     class="{% if phone_center %}text-center{% endif %}">
     
-    {% for phone_line in phone_lines %}
-        <div 
-            {%if your_turn %}
-                id="phone_your_turn_line{{ loop.index }}"
-            {% else %}
-                id="phone_line{{ loop.index }}" 
-            {% endif %}
-            class="phone_line">{{ phone_line | safe }}</div>
-    {% endfor %}
-
-    {% if phone_display_specific_message %}
-        <div id="specific_message">{{ specific_message | safe }}</div>
-    {% endif %}
+    {{ page_components.phone_lines(phone_lines, your_turn, specific_message, phone_display_specific_message) }}
 </div>

@@ -44,11 +44,13 @@ from routes.admin_backup import admin_backup_bp
 from routes.api_system import api_system_bp
 from routes.calling import calling_bp
 from routes.admin_config import admin_config_bp
+from routes.admin_page_editor import admin_page_editor_bp
 from scheduler_functions import clear_old_patients_table, reconcile_auto_archive_job
 from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
 from css_manager import CSSManager
+from page_editor import enabled_pages, layout_style
 
 from app_holder import AppHolder
 
@@ -336,6 +338,7 @@ def create_app(config_class=Config):
     app.register_blueprint(api_system_bp, url_prefix='')
     app.register_blueprint(calling_bp, url_prefix='')
     app.register_blueprint(admin_config_bp, url_prefix='')
+    app.register_blueprint(admin_page_editor_bp, url_prefix='')
 
     # Temps reel et ordonnanceur : crees a vide dans extensions.py, lies ici.
     # Auparavant ils etaient instancies au niveau module APRES create_app(), ce
@@ -809,7 +812,12 @@ def _reconcile_scheduler_jobs():
 @app.context_processor
 def inject_user():
     from routes.admin_security import user_has_permission
-    return dict(current_user=current_user, user_has_permission=user_has_permission)
+    return dict(
+        current_user=current_user,
+        user_has_permission=user_has_permission,
+        page_layout_style=layout_style,
+        page_editor_enabled=lambda page: page in enabled_pages(),
+    )
 
 
 if __name__ == "__main__":

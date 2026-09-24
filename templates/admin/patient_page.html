@@ -3,7 +3,10 @@
 {% block title %}Page Patient{% endblock %}
 
 {% block content %}
-    <h3 class="text-center">Page patient</h3>
+    <div class="d-flex align-items-center justify-content-between gap-2">
+        <h3 class="text-center">Page patient</h3>
+        {% if page_editor_enabled('patient') %}<a class="btn btn-primary" href="/admin/page-editor/patient"><i class="bi bi-layout-wtf"></i> Éditeur visuel</a>{% endif %}
+    </div>
 
     <div class="row">
         <div class="col-12">

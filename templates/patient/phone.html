@@ -1,3 +1,4 @@
+{% import 'shared/page_components.html' as page_components %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -9,6 +10,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}">
     {# Les surcharges personnalisées sont chargées après #}
     <link rel="stylesheet" href="{{ get_css_url(mode='phone') }}">
+    {{ page_layout_style('phone') }}
     <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/libs/socket.io.min.js') }}"></script>
 </head>
@@ -16,9 +18,7 @@
 
     <div class="container">
 
-        <div id="div_title_area">
-            <h1 id="text_title">{{phone_title}}</h1>
-        </div>
+        {{ page_components.phone_title(phone_title) }}
         <div id="div_infos"
             data-activity-id="{{ activity_id }}"
             data-language-code="{{ language_code }}"

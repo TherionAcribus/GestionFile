@@ -112,6 +112,9 @@ class Config:
     REMEMBER_COOKIE_SECURE = _COOKIE_SECURE
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
+    PAGE_EDITOR_ENABLED_PAGES = os.getenv(
+        "PAGE_EDITOR_ENABLED_PAGES", "announce"
+    )
 
     # Définir les valeurs par défaut ici
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement

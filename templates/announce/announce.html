@@ -1,3 +1,4 @@
+{% import 'shared/page_components.html' as page_components %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -13,6 +14,7 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">
         {# Les surcharges personnalisées sont chargées après #}
         <link rel="stylesheet" href="{{ get_css_url(mode='announce') }}">
+        {{ page_layout_style('announce') }}
         <!-- Swiper — servi localement : la CSP (script-src/style-src 'self')
              bloque le CDN, et l'écran doit fonctionner sans Internet. -->
         <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/swiper-bundle.min.css') }}">
@@ -34,12 +36,7 @@
             <span id="announce_text_down_patients_display">{{announce_text_down_patients_display}}</span>
         </div>
 
-        <div id="div_title_area"  hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML">
-            <p id="text_title" data-action="initialize-audio">
-                {{announce_title}}</p>
-            <p id="text_subtitle">
-                {{announce_subtitle}}</p>
-        </div>
+        {{ page_components.announce_header(announce_title, announce_subtitle) }}
 
         {# Indicateur de fraîcheur : announce.js le rend visible quand la
            connexion est coupée ou la resynchronisation échoue — l'écran tourne
@@ -50,7 +47,7 @@
             {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
             <div id="left_side">                
 
-                <div id="div_display_text_up"
+                <div id="div_display_text_up" data-page-editor-component="top_message"
                     {% if announce_text_up_patients == "" or announce_text_up_patients_display == "never" %} 
                         style="display: none;"
                     {% endif %}
@@ -58,7 +55,7 @@
                     {{announce_text_up_patients}}
                 </div>
 
-                <div id="div_calling">
+                <div id="div_calling" data-page-editor-component="calls">
                     <ul id="patient_list">
                         {% for call_patient in call_patients %}
                             <li 
@@ -71,7 +68,7 @@
                     </ul>
                 </div>
                 
-                <div id="div_display_text_down"
+                <div id="div_display_text_down" data-page-editor-component="empty_message"
                     {% if announce_text_down_patients == "" or announce_text_down_patients_display == "never" %} 
                         style="display: none;"
                     {% endif %}>
@@ -79,7 +76,7 @@
                 </div>
 
                 {% if announce_ongoing_display %}
-                    <div id="div_ongoing"
+                    <div id="div_ongoing" data-page-editor-component="ongoing"
                             hx-trigger="refresh_ongoing, load" 
                             hx-get="/announce/patients_ongoing" 
                             hx-swap="innerHTML">
@@ -89,7 +86,7 @@
             </div>
 
         {% if announce_infos_display %}
-            <div id="div_pub"
+            <div id="div_pub" data-page-editor-component="gallery"
                 hx-get="/announce/init_gallery"
                 hx-swap="innerHTML"
                 hx-trigger="load">
@@ -102,7 +99,7 @@
 
         <div id="div_footer">
             {% if announce_next_patients_display %}
-                <div id="div_next_patients"
+                <div id="div_next_patients" data-page-editor-component="next"
                      hx-trigger="refresh_next_patients, load" 
                      hx-get="/announce/patients_next" 
                      hx-swap="innerHTML">

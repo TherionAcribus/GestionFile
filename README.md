@@ -47,6 +47,26 @@ Si MySQL n’est pas disponible sur la machine, tu peux démarrer en SQLite :
 DATABASE_TYPE=sqlite
 ```
 
+### Éditeur visuel des pages
+
+L’éditeur quasi-WYSIWYG est disponible dans l’administration après migration :
+
+```powershell
+flask db upgrade
+```
+
+La variable suivante contrôle les adaptateurs exposés. `announce` est activé
+par défaut ; `patient` et `phone` sont déjà disponibles pour un déploiement
+progressif après validation des aperçus sur les appareils réels :
+
+```dotenv
+PAGE_EDITOR_ENABLED_PAGES=announce
+# PAGE_EDITOR_ENABLED_PAGES=announce,patient,phone
+```
+
+La publication ne recharge jamais automatiquement les écrans en service :
+l’action **Appliquer/recharger les écrans** reste explicite.
+
 ## Dépannage MySQL
 
 Erreur typique :

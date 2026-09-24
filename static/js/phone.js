@@ -90,6 +90,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
             }
         });
 
+        phoneSocket.on('refresh', function() {
+            window.onbeforeunload = null;
+            window.location.reload();
+        });
+
 
     }
 

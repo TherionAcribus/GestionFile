@@ -3,7 +3,10 @@
 {% block title %}Page "Annonce"{% endblock %}
 
 {% block content %}
-    <h3 class="text-center">Page "Téléphone patient"</h3>
+    <div class="d-flex align-items-center justify-content-between gap-2">
+        <h3 class="text-center">Page "Téléphone patient"</h3>
+        {% if page_editor_enabled('phone') %}<a class="btn btn-primary" href="/admin/page-editor/phone"><i class="bi bi-layout-wtf"></i> Éditeur visuel</a>{% endif %}
+    </div>
     <p>Cette page permet de paramétrer les éléments qui s'affichent sur le téléphone du patient quand celui-ci scanne le QRCode.<br>
     Pour la mise en page, utilisez le Markdown.</p>
 

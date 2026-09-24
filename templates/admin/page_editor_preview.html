@@ -1,0 +1,96 @@
+{% import 'shared/page_components.html' as page_components %}
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Aperçu {{ adapter.label }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
+    {% if page == 'announce' %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">
+        <link rel="stylesheet" href="{{ get_css_url(mode='announce') }}">
+    {% elif page == 'patient' %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/patient.css') }}">
+        <link rel="stylesheet" href="{{ get_css_url(mode='patient') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/patient_full.css') }}">
+    {% else %}
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}">
+        <link rel="stylesheet" href="{{ get_css_url(mode='phone') }}">
+    {% endif %}
+    <style id="page-editor-preview-vars">
+        :root {
+            {% for key, value in payload.css.items() %}--{{ key }}: {{ value }};{% endfor %}
+        }
+        [data-page-editor-component] { cursor: pointer; }
+        [data-page-editor-selected="true"] { outline: max(2px, .15vw) solid #ffb300 !important; outline-offset: max(-2px, -.15vw); }
+        .page-editor-gallery-placeholder { align-items:center; background:linear-gradient(135deg,#dfe9f3,#fff); color:#345; display:flex; font-size:3vw; height:100%; justify-content:center; min-height:12rem; }
+        .page-editor-demo-button { align-items:center; background:var(--square_button_color, darkcyan); border-radius:1rem; color:white; display:flex; font-size:2rem; justify-content:center; margin:1rem; min-height:7rem; padding:1rem 2rem; }
+        .page-editor-demo-flags { bottom:1rem; display:flex; gap:1rem; position:absolute; right:1rem; }
+        .page-editor-demo-flag { background:#fff; border:2px solid #777; border-radius:.25rem; display:grid; font-size:1.5rem; height:var(--flag_size,70px); place-items:center; width:var(--flag_size,70px); }
+    </style>
+    {{ page_layout_style(page, payload.layout) }}
+</head>
+<body data-page="{{ page }}" data-scenario="{{ scenario }}">
+{% if page == 'announce' %}
+    <div id="full_page">
+        {{ page_components.announce_header(payload.config.announce_title, payload.config.announce_subtitle, true) }}
+        <div class="div_center" id="{{ 'div_center_divided' if scenario == 'gallery' else 'div_center_not_divided' }}">
+            <div id="left_side">
+                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients">{{ payload.config.announce_text_up_patients }}</div>
+                <div id="div_calling" data-page-editor-component="calls">
+                    <ul id="patient_list">
+                    {% if scenario != 'empty' %}
+                        <li class="text_patient_calling">Patient 042 — Comptoir 3</li>
+                        {% if scenario == 'multiple' %}<li class="text_patient_calling">Patient 057 — Comptoir 1</li>{% endif %}
+                    {% endif %}
+                    </ul>
+                </div>
+                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" {% if scenario != 'empty' %}hidden{% endif %}>{{ payload.config.announce_text_down_patients }}</div>
+                <div id="div_ongoing" data-page-editor-component="ongoing"><p data-config-key="announce_ongoing_text">{{ payload.config.announce_ongoing_text }}</p><p>Patient 031 — Comptoir 2</p></div>
+            </div>
+            <div id="div_pub" data-page-editor-component="gallery" {% if scenario != 'gallery' %}hidden{% endif %}><div class="page-editor-gallery-placeholder">Galerie de démonstration</div></div>
+        </div>
+        <div id="div_footer">
+            <div id="div_next_patients" data-page-editor-component="next"><span data-config-key="announce_next_patients_text">{{ payload.config.announce_next_patients_text }}</span> 061 · 064 · 072</div>
+        </div>
+    </div>
+{% elif page == 'patient' %}
+    <div id="main">
+        {{ page_components.patient_title(payload.config.page_patient_title, true) }}
+        <div id="div_buttons_parents" data-page-editor-component="buttons">
+            {% if scenario == 'children' %}
+                <div class="page-editor-demo-button">Ordonnance</div><div class="page-editor-demo-button">Conseil</div>
+            {% elif scenario == 'validation' %}
+                <div class="page-editor-demo-button">Imprimer mon ticket</div><div class="page-editor-demo-button">Scanner le QR code</div>
+            {% elif scenario == 'conclusion' %}
+                <div class="page-editor-demo-button">Votre numéro : 042</div>
+            {% else %}
+                <div class="page-editor-demo-button">Retrait de commande</div><div class="page-editor-demo-button">Avec ordonnance</div><div class="page-editor-demo-button">Sans ordonnance</div>
+            {% endif %}
+        </div>
+        <div id="div_buttons_children" class="buttons_children_active" data-page-editor-component="subtitle" data-config-key="page_patient_subtitle">{{ payload.config.page_patient_subtitle }}</div>
+        <div class="language-selector page-editor-demo-flags" data-page-editor-component="languages"><span class="page-editor-demo-flag">FR</span><span class="page-editor-demo-flag">EN</span></div>
+    </div>
+{% else %}
+    <div class="container">
+        {{ page_components.phone_title(payload.config.phone_title, true) }}
+        <div id="div_infos">
+            {% if scenario == 'waiting' %}
+                <p>En attente de validation pour le numéro 042</p><p>Veuillez patienter…</p>
+            {% else %}
+                {{ page_components.phone_lines(
+                    phone_your_turn_lines if scenario == 'your-turn' else phone_confirmation_lines,
+                    scenario == 'your-turn',
+                    'Message de l’activité sélectionnée.',
+                    true,
+                    true
+                ) }}
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+<script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
+<script src="{{ url_for('static', filename='js/page_editor_preview.js') }}"></script>
+</body>
+</html>

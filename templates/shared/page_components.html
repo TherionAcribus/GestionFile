@@ -1,0 +1,31 @@
+{% macro announce_header(title, subtitle, preview=false) -%}
+<div id="div_title_area"
+     {% if not preview %}hx-trigger="refresh" hx-get="/current_patients" hx-swap="innerHTML"{% endif %}>
+    <p id="text_title" data-page-editor-component="title"{% if not preview %} data-action="initialize-audio"{% endif %}{% if preview %} data-config-key="announce_title"{% endif %}>{{ title }}</p>
+    <p id="text_subtitle" data-page-editor-component="subtitle"{% if preview %} data-config-key="announce_subtitle"{% endif %}>{{ subtitle }}</p>
+</div>
+{%- endmacro %}
+
+{% macro patient_title(title='', preview=false) -%}
+<div id="div_title_area" data-page-editor-component="title"
+     {% if not preview %}hx-get="/patient/patient_title" hx-trigger="load, refresh_title" hx-target="#div_title_area" hx-swap="innerHTML"{% endif %}>
+    {% if preview %}<h1 data-config-key="page_patient_title">{{ title }}</h1>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro phone_title(title, preview=false) -%}
+<div id="div_title_area" data-page-editor-component="title">
+    <h1 id="text_title"{% if preview %} data-config-key="phone_title"{% endif %}>{{ title }}</h1>
+</div>
+{%- endmacro %}
+
+{% macro phone_lines(lines, your_turn=false, specific_message='', show_specific=true, preview=false) -%}
+{% for phone_line in lines %}
+    {% set key = ('phone_your_turn_line' if your_turn else 'phone_line') ~ loop.index %}
+    {% set component = ('your_turn_line' if your_turn else 'line') ~ loop.index %}
+    <div id="{{ key }}" class="phone_line" data-page-editor-component="{{ component }}"{% if preview %} data-config-key="{{ key }}"{% endif %}>{{ phone_line | safe }}</div>
+{% endfor %}
+{% if show_specific %}
+    <div id="specific_message" data-page-editor-component="specific">{{ specific_message | safe }}</div>
+{% endif %}
+{%- endmacro %}

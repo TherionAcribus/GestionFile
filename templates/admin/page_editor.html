@@ -1,0 +1,71 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Éditeur visuel · {{ page_label }}{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/page_editor.css') }}">
+{% endblock %}
+
+{% block content %}
+<main id="page-editor" data-page="{{ page }}" aria-busy="true">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+            <h2 class="mb-1">{{ page_label }}</h2>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
+                <a class="btn btn-primary active" aria-current="page" href="{{ url_for('admin_page_editor.editor', page=page) }}">Éditeur visuel</a>
+                {% set advanced_urls = {'announce': '/admin/announce', 'patient': '/admin/patient', 'phone': '/admin/phone'} %}
+                <a class="btn btn-outline-primary" href="{{ advanced_urls[page] }}">Mode avancé</a>
+            </div>
+        </div>
+        <div class="page-editor-actions" role="toolbar" aria-label="Actions du brouillon">
+            <button id="editor-undo" class="btn btn-outline-secondary" type="button" disabled><i class="bi bi-arrow-counterclockwise"></i> Annuler</button>
+            <button id="editor-redo" class="btn btn-outline-secondary" type="button" disabled><i class="bi bi-arrow-clockwise"></i> Rétablir</button>
+            <button id="editor-discard" class="btn btn-outline-danger" type="button">Annuler les changements</button>
+            <button id="editor-save" class="btn btn-outline-primary" type="button">Enregistrer le brouillon</button>
+            <button id="editor-publish" class="btn btn-success" type="button">Publier</button>
+            <button id="editor-apply" class="btn btn-warning" type="button" disabled>Appliquer/recharger les écrans</button>
+        </div>
+    </div>
+
+    <div id="editor-status" class="alert alert-light py-2" role="status" aria-live="polite">Chargement de l’éditeur…</div>
+
+    <div class="page-editor-grid">
+        <aside class="page-editor-panel" aria-labelledby="components-title">
+            <h3 id="components-title" class="h5">Composants</h3>
+            <p class="small text-muted">Déplacez les blocs ou utilisez les boutons de l’inspecteur.</p>
+            <div id="editor-zones"></div>
+        </aside>
+
+        <section class="page-editor-canvas" aria-labelledby="preview-title">
+            <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+                <div>
+                    <label class="form-label mb-1" for="editor-scenario">Scénario</label>
+                    <select id="editor-scenario" class="form-select form-select-sm"></select>
+                </div>
+                <div>
+                    <label class="form-label mb-1" for="editor-viewport">Format</label>
+                    <select id="editor-viewport" class="form-select form-select-sm"></select>
+                </div>
+                <button id="editor-history-toggle" class="btn btn-sm btn-outline-secondary ms-auto" type="button" aria-expanded="false" aria-controls="editor-history">Historique</button>
+            </div>
+            <h3 id="preview-title" class="visually-hidden">Prévisualisation</h3>
+            <div id="editor-preview-shell" class="page-editor-preview-shell">
+                <iframe id="editor-preview" title="Prévisualisation de la page" sandbox="allow-scripts allow-same-origin"></iframe>
+            </div>
+            <section id="editor-history" class="page-editor-history mt-3" hidden>
+                <h3 class="h5">Dernières publications</h3>
+                <div id="editor-revisions"></div>
+            </section>
+        </section>
+
+        <aside class="page-editor-panel" aria-labelledby="inspector-title">
+            <h3 id="inspector-title" class="h5">Propriétés</h3>
+            <div id="editor-inspector" class="text-muted">Sélectionnez un composant.</div>
+        </aside>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts_end %}
+<script defer src="{{ url_for('static', filename='js/page_editor.js') }}"></script>
+{% endblock %}

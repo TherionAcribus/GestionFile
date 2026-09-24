@@ -1,3 +1,4 @@
+{% import 'shared/page_components.html' as page_components %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -20,6 +21,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/patient.css') }}">
     {# Les surcharges personnalisées sont chargées après #}
     <link rel="stylesheet" href="{{ get_css_url() }}">
+    {{ page_layout_style('patient') }}
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/patient_full.css') }}">
     <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
@@ -28,21 +30,16 @@
 <body>
 
     <div id="main">
-        <div id="div_title_area"
-            hx-get="/patient/patient_title"
-            hx-trigger="load, refresh_title"
-            hx-target="#div_title_area"
-            hx-swap="innerHTML">
-        </div>
+        {{ page_components.patient_title() }}
 
-        <div id="div_buttons_parents"
+        <div id="div_buttons_parents" data-page-editor-component="buttons"
             hx-get="/patient/patient_buttons"
             hx-trigger="load, refresh_buttons"
             hx-target="#div_buttons_parents"
             hx-swap="innerHTML">
         </div>
 
-            <div id="div_buttons_children"
+            <div id="div_buttons_children" data-page-editor-component="subtitle"
                 class="buttons_children_active"
                 hx-get="/patient/default_subtitle"
                 hx-trigger="load, refresh_subtitle"
@@ -53,7 +50,7 @@
         {# Le sélecteur n'a de sens qu'à partir de deux langues actives : avec une
            seule langue, on n'affiche pas un drapeau unique cliquable pour rien. #}
         {% if page_patient_display_translations and languages|length > 1 %}
-            <div class="language-selector">
+            <div class="language-selector" data-page-editor-component="languages">
                 {% for language in languages %}
                     {% if language.flag_url and language.flag_url != 'None' %}
                         <img class="flag" src="/static/images/flags/{{language.flag_url}}" alt="{{language.translation}}" hx-get="/patient/change_language/{{language.code}}" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
