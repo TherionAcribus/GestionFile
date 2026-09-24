@@ -788,6 +788,15 @@ def _reconcile_scheduler_jobs():
         app.logger.error("Réconciliation des jobs planifiés impossible : %s", e)
 
 
+# Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
+# NOTE : doit rester AVANT le bloc __main__ — socketio.run() bloque et tout code
+# placé après ne s'exécuterait jamais quand on lance `python app.py`.
+@app.context_processor
+def inject_user():
+    from routes.admin_security import user_has_permission
+    return dict(current_user=current_user, user_has_permission=user_has_permission)
+
+
 if __name__ == "__main__":
 
     app.logger.info(f"Starting with APP_ROLE={APP_ROLE}")
@@ -821,12 +830,6 @@ if __name__ == "__main__":
 
             #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
             socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)
-
-# Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
-@app.context_processor
-def inject_user():
-    from routes.admin_security import user_has_permission
-    return dict(current_user=current_user, user_has_permission=user_has_permission)
 
 app.logger.debug("Starting Flask...")
 app.logger.info(f"Starting Flask on port {server_port} with debug={app.debug}")
