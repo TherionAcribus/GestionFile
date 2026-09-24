@@ -5,7 +5,7 @@ import qrcode
 from flask import Blueprint, url_for, request, session, current_app as app, jsonify
 from datetime import datetime, date, timedelta
 from sqlalchemy import and_
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from google.cloud import texttospeech
 from google.oauth2 import service_account
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
@@ -726,14 +726,21 @@ def set_server_url(app, request):
 
 
 def get_google_credentials():
-    cipher_suite = Fernet(app.config["BASE32_KEY"])
     config_option = ConfigOption.query.filter_by(config_key='voice_google_key').first()
-    if config_option and config_option.value_json:
-        encrypted_content = config_option.value_json.encode('utf-8')
+    if not config_option or not config_option.value_json:
+        return None
+    base32_key = app.config.get("BASE32_KEY")
+    if not base32_key:
+        app.logger.warning(
+            "BASE32_KEY non configurée : la clé Google stockée ne peut pas être déchiffrée.")
+        return None
+    try:
+        cipher_suite = Fernet(base32_key)
         # Déchiffrer le contenu de la clé JSON
-        decrypted_content = cipher_suite.decrypt(encrypted_content)
-        return decrypted_content  # Bytes du fichier JSON
-    return None
+        return cipher_suite.decrypt(config_option.value_json.encode('utf-8'))
+    except (ValueError, InvalidToken) as e:
+        app.logger.error("Déchiffrement de la clé Google impossible : %s", e)
+        return None
 
 
 def counter_become_inactive(counter_id):

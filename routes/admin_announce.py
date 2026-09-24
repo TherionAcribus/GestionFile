@@ -306,8 +306,6 @@ def announce_audio_test(scope):
 @require_permission('announce')
 def upload_google_key():
 
-    cipher_suite = Fernet(app.config["BASE32_KEY"])
-
     if 'google_key_file' not in request.files:
         return '<div class="alert alert-danger">Aucun fichier sélectionné.</div>'
     file = request.files['google_key_file']
@@ -326,6 +324,16 @@ def upload_google_key():
         ok, error, normalized = validate_service_account_json(raw)
         if not ok:
             return f'<div class="alert alert-danger">{error}</div>'
+        base32_key = app.config.get("BASE32_KEY")
+        if not base32_key:
+            return ('<div class="alert alert-danger">BASE32_KEY n\'est pas '
+                    'configurée : impossible de chiffrer la clé.</div>')
+        try:
+            cipher_suite = Fernet(base32_key)
+        except ValueError:
+            return ('<div class="alert alert-danger">BASE32_KEY invalide : elle '
+                    'doit être une clé Fernet (32 octets encodés en base64 '
+                    'url-safe).</div>')
         # Chiffrer le contenu du fichier
         encrypted_content = cipher_suite.encrypt(normalized)
         # Convertir en chaîne de caractères pour le stockage
