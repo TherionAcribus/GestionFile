@@ -18,6 +18,23 @@ ALIGNMENTS = frozenset({"left", "center", "right", "stretch"})
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 _PAYLOAD_KEYS = frozenset({"schema_version", "page", "base_hash", "layout", "config", "css"})
 _LAYOUT_KEYS = frozenset({"zone", "order", "visible", "span", "alignment"})
+_PALETTE_ROLES = (
+    {
+        "id": "primary",
+        "label": "Couleur principale",
+        "description": "Fonds, bandeaux et boutons principaux",
+    },
+    {
+        "id": "secondary",
+        "label": "Couleur secondaire",
+        "description": "Textes et éléments de contraste",
+    },
+    {
+        "id": "border",
+        "label": "Couleur des bordures",
+        "description": "Contours et séparateurs de la page",
+    },
+)
 
 
 def _component(label, zone, selector, *, config=None, css=None, span=12):
@@ -263,6 +280,32 @@ def _css_field_types(adapter):
     }
 
 
+def _palette_data(adapter):
+    color_keys = {
+        item["key"]
+        for component in adapter["components"].values()
+        for item in component["css"]
+        if item["type"] == "color"
+    }
+    keys_by_role = {
+        "primary": sorted(
+            key for key in color_keys
+            if "background_color" in key or key == "square_button_color"
+        ),
+        "secondary": sorted(
+            key for key in color_keys if "font_color" in key
+        ),
+        "border": sorted(
+            key for key in color_keys if "border_color" in key
+        ),
+    }
+    return [
+        {**role, "keys": keys_by_role[role["id"]]}
+        for role in _PALETTE_ROLES
+        if keys_by_role[role["id"]]
+    ]
+
+
 def _normalize_css_value(value, field_type):
     if isinstance(value, str) and field_type == "color" and re.fullmatch(r"[0-9A-Fa-f]{3,8}", value):
         return f"#{value}"
@@ -463,5 +506,6 @@ def public_adapter_data(page):
         "viewports": adapter["viewports"],
         "scenarios": adapter["scenarios"],
         "components": adapter["components"],
+        "palette": _palette_data(adapter),
         "default_layout": default_layout(page),
     }

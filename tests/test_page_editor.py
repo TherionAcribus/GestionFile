@@ -6,7 +6,15 @@ from flask_login import LoginManager
 
 from css_manager import CSSManager
 from models import ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
-from page_editor import ADAPTERS, current_payload, default_layout, layout_style, payload_hash, validate_payload
+from page_editor import (
+    ADAPTERS,
+    current_payload,
+    default_layout,
+    layout_style,
+    payload_hash,
+    public_adapter_data,
+    validate_payload,
+)
 from params_registry import get_spec
 from routes.admin_page_editor import _render_phone_markdown, admin_page_editor_bp
 from routes.admin_config import authorize_config_change
@@ -125,6 +133,21 @@ def authenticated_client(editor_app):
 def test_each_adapter_accepts_its_complete_payload(page):
     payload = make_payload(page)
     assert validate_payload(page, payload) == payload
+
+
+@pytest.mark.parametrize("page", ["announce", "patient", "phone"])
+def test_palette_only_groups_registered_color_variables(page):
+    adapter = ADAPTERS[page]
+    registered_colors = {
+        field["key"]
+        for component in adapter["components"].values()
+        for field in component["css"]
+        if field["type"] == "color"
+    }
+    palette = public_adapter_data(page)["palette"]
+    assert {role["id"] for role in palette} == {"primary", "secondary", "border"}
+    assert all(role["keys"] for role in palette)
+    assert all(set(role["keys"]) <= registered_colors for role in palette)
 
 
 @pytest.mark.parametrize(

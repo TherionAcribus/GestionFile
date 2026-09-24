@@ -37,6 +37,29 @@
         return JSON.parse(JSON.stringify(value));
     }
 
+    function colorToHex(value) {
+        const raw = String(value || '').trim();
+        const shortHex = raw.match(/^#?([0-9a-f]{3,4})$/i);
+        if (shortHex) {
+            return '#' + shortHex[1].slice(0, 3).split('').map(function (part) { return part + part; }).join('').toLowerCase();
+        }
+        const longHex = raw.match(/^#?([0-9a-f]{6})(?:[0-9a-f]{2})?$/i);
+        if (longHex) return '#' + longHex[1].toLowerCase();
+
+        const probe = document.createElement('span');
+        probe.style.color = raw;
+        if (!probe.style.color) return null;
+        probe.hidden = true;
+        document.body.appendChild(probe);
+        const computed = window.getComputedStyle(probe).color;
+        probe.remove();
+        const rgb = computed.match(/^rgba?\(\s*(\d+)\D+(\d+)\D+(\d+)/i);
+        if (!rgb) return null;
+        return '#' + rgb.slice(1, 4).map(function (part) {
+            return Number(part).toString(16).padStart(2, '0');
+        }).join('');
+    }
+
     function setStatus(message, kind) {
         statusBox.textContent = message;
         statusBox.className = 'alert py-2 alert-' + (kind || 'light');
@@ -160,6 +183,7 @@
         label.className = 'form-label';
         label.textContent = labelText;
         if (control.id) label.htmlFor = control.id;
+        if (control.dataset.labelFor) label.htmlFor = control.dataset.labelFor;
         wrapper.append(label, control);
         return wrapper;
     }
@@ -201,10 +225,145 @@
         });
     }
 
+    function createColorControl(id, value, change) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'page-editor-color-control';
+
+        const picker = document.createElement('input');
+        picker.type = 'color';
+        picker.className = 'form-control form-control-color page-editor-color-picker';
+        picker.id = id + '-picker';
+        picker.title = 'Choisir une couleur';
+        picker.setAttribute('aria-label', 'Choisir une couleur');
+
+        const text = document.createElement('input');
+        text.type = 'text';
+        text.className = 'form-control page-editor-color-value';
+        text.id = id;
+        text.value = value || '';
+        text.placeholder = '#008B8B';
+        text.autocomplete = 'off';
+        wrapper.dataset.labelFor = text.id;
+
+        const initialHex = colorToHex(text.value);
+        picker.value = initialHex || '#000000';
+        if (!initialHex && text.value) text.classList.add('is-invalid');
+
+        bindValue(text, change);
+        text.addEventListener('input', function () {
+            const hex = colorToHex(text.value);
+            text.classList.toggle('is-invalid', !hex);
+            if (hex) picker.value = hex;
+        });
+        picker.addEventListener('input', function () {
+            text.value = picker.value.toUpperCase();
+            text.classList.remove('is-invalid');
+            text.dispatchEvent(new Event('input', {bubbles: true}));
+        });
+        picker.addEventListener('change', function () {
+            text.dispatchEvent(new Event('change', {bubbles: true}));
+        });
+        wrapper.append(picker, text);
+        return wrapper;
+    }
+
+    function mostCommonPaletteColor(keys) {
+        const counts = new Map();
+        keys.forEach(function (key) {
+            const hex = colorToHex(payload.css[key]);
+            if (hex) counts.set(hex, (counts.get(hex) || 0) + 1);
+        });
+        return Array.from(counts.entries()).sort(function (left, right) {
+            return right[1] - left[1];
+        })[0]?.[0] || '#008B8B';
+    }
+
+    function renderPagePalette() {
+        if (!adapter.palette || !adapter.palette.length) return;
+        const paletteFields = addFieldset('Palette de la page');
+        const help = document.createElement('p');
+        help.className = 'small text-muted mb-3';
+        help.textContent = 'Définissez vos couleurs puis appliquez-les en une fois aux éléments correspondants.';
+        paletteFields.appendChild(help);
+
+        adapter.palette.forEach(function (role) {
+            const colors = new Set(role.keys.map(function (key) { return colorToHex(payload.css[key]); }).filter(Boolean));
+            const card = document.createElement('div');
+            card.className = 'page-editor-palette-card';
+
+            const heading = document.createElement('div');
+            heading.className = 'd-flex align-items-start justify-content-between gap-2 mb-2';
+            const text = document.createElement('div');
+            const label = document.createElement('div');
+            label.className = 'fw-semibold';
+            label.textContent = role.label;
+            const description = document.createElement('div');
+            description.className = 'small text-muted';
+            description.textContent = role.description;
+            text.append(label, description);
+            heading.appendChild(text);
+            if (colors.size > 1) {
+                const mixed = document.createElement('span');
+                mixed.className = 'badge text-bg-light border';
+                mixed.textContent = 'Mixte';
+                heading.appendChild(mixed);
+            }
+
+            const controls = document.createElement('div');
+            controls.className = 'page-editor-palette-controls';
+            const picker = document.createElement('input');
+            picker.type = 'color';
+            picker.className = 'form-control form-control-color page-editor-color-picker';
+            picker.id = 'editor-palette-' + role.id + '-picker';
+            picker.value = mostCommonPaletteColor(role.keys);
+            picker.setAttribute('aria-label', role.label);
+            const value = document.createElement('input');
+            value.type = 'text';
+            value.className = 'form-control page-editor-color-value';
+            value.id = 'editor-palette-' + role.id;
+            value.value = picker.value.toUpperCase();
+            value.autocomplete = 'off';
+            value.setAttribute('aria-label', role.label + ' en notation CSS');
+            const apply = document.createElement('button');
+            apply.type = 'button';
+            apply.className = 'btn btn-outline-primary';
+            apply.textContent = 'Appliquer';
+
+            function validatePaletteColor() {
+                const hex = colorToHex(value.value);
+                value.classList.toggle('is-invalid', !hex);
+                apply.disabled = !hex;
+                if (hex) picker.value = hex;
+                return hex;
+            }
+
+            picker.addEventListener('input', function () {
+                value.value = picker.value.toUpperCase();
+                validatePaletteColor();
+            });
+            value.addEventListener('input', validatePaletteColor);
+            apply.addEventListener('click', function () {
+                const hex = validatePaletteColor();
+                if (!hex) return;
+                mutate(function () {
+                    role.keys.forEach(function (key) { payload.css[key] = hex.toUpperCase(); });
+                }, role.label + ' appliquée à ' + role.keys.length + ' réglage(s).');
+            });
+
+            controls.append(picker, value, apply);
+            card.append(heading, controls);
+            paletteFields.appendChild(card);
+        });
+    }
+
     function renderInspector() {
         inspector.replaceChildren();
+        renderPagePalette();
         if (!selectedComponent || !adapter.components[selectedComponent]) {
-            inspector.textContent = 'Sélectionnez un composant.';
+            const empty = document.createElement('p');
+            empty.className = 'text-muted';
+            empty.textContent = 'Sélectionnez un composant.';
+            inspector.appendChild(empty);
             return;
         }
         const definition = adapter.components[selectedComponent];
@@ -290,13 +449,22 @@
         if (definition.css.length) {
             const appearanceFields = addFieldset('Apparence');
             definition.css.forEach(function (field) {
-                const control = document.createElement('input');
-                control.type = 'text';
-                control.className = 'form-control';
-                control.id = 'editor-css-' + field.key;
-                control.value = payload.css[field.key] || '';
-                control.placeholder = field.type === 'color' ? '#008B8B' : (field.type === 'number' ? '400' : '32px');
-                bindValue(control, function (element) { payload.css[field.key] = element.value; });
+                let control;
+                if (field.type === 'color') {
+                    control = createColorControl(
+                        'editor-css-' + field.key,
+                        payload.css[field.key],
+                        function (element) { payload.css[field.key] = element.value; }
+                    );
+                } else {
+                    control = document.createElement('input');
+                    control.type = 'text';
+                    control.className = 'form-control';
+                    control.id = 'editor-css-' + field.key;
+                    control.value = payload.css[field.key] || '';
+                    control.placeholder = field.type === 'number' ? '400' : '32px';
+                    bindValue(control, function (element) { payload.css[field.key] = element.value; });
+                }
                 appearanceFields.appendChild(formGroup(field.label, control));
             });
         }

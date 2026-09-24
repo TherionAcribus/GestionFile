@@ -29,14 +29,15 @@ def browser(playwright):
 
 @pytest.fixture(scope="session")
 def admin_page(browser):
-    page = browser.new_page()
+    context = browser.new_context()
+    page = context.new_page()
     page.goto(f"{BASE_URL}/admin")
     page.fill('input[name="username"]', "admin")
     page.fill('input[name="password"]', "admin")
     page.click('input[type="submit"][value="Login"]')
     page.wait_for_url(f"{BASE_URL}/admin")
     yield page
-    page.close()
+    context.close()
 
 
 def open_editor(page: Page):
@@ -57,7 +58,18 @@ def test_edit_resize_scenario_undo_and_keyboard_move(admin_page: Page):
     admin_page.locator("#editor-field-span").evaluate(
         "element => { element.value = '8'; element.dispatchEvent(new Event('input', {bubbles:true})); element.dispatchEvent(new Event('change', {bubbles:true})); }"
     )
-    expect(admin_page.frame_locator("#editor-preview").locator("#text_title")).to_have_css("width", "1280px")
+    applied_width = admin_page.frame_locator("#editor-preview").locator("#text_title").evaluate(
+        "element => element.style.width"
+    )
+    assert applied_width == "66.6667%"
+
+    admin_page.locator("#editor-palette-primary").fill("#123456")
+    admin_page.locator("#editor-palette-primary").locator("xpath=following-sibling::button").click()
+    preview_primary = admin_page.frame_locator("#editor-preview").locator("html").evaluate(
+        "element => element.style.getPropertyValue('--title_background_color')"
+    )
+    assert preview_primary == "#123456"
+    admin_page.locator("#editor-undo").click()
 
     admin_page.locator("#editor-scenario").select_option("gallery")
     expect(admin_page.frame_locator("#editor-preview").locator("#div_pub")).to_be_visible()

@@ -102,6 +102,58 @@
     font-weight: 600;
 }
 
+.page-editor-color-control,
+.page-editor-palette-controls {
+    align-items: stretch;
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: 3rem minmax(0, 1fr);
+}
+
+.page-editor-palette-controls {
+    grid-template-columns: 3rem minmax(0, 1fr);
+}
+
+.page-editor-palette-controls .btn {
+    grid-column: 1 / -1;
+}
+
+.page-editor-color-picker {
+    cursor: pointer;
+    height: 2.6rem;
+    min-width: 3rem;
+    padding: .2rem;
+    width: 3rem;
+}
+
+.page-editor-color-picker::-webkit-color-swatch {
+    border: 0;
+    border-radius: .25rem;
+}
+
+.page-editor-color-picker::-moz-color-swatch {
+    border: 0;
+    border-radius: .25rem;
+}
+
+.page-editor-color-value {
+    font-family: var(--bs-font-monospace);
+    min-width: 0;
+    text-transform: uppercase;
+}
+
+.page-editor-palette-card {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    margin-bottom: .75rem;
+    padding: .75rem;
+}
+
+.page-editor-palette-card:last-child {
+    margin-bottom: 0;
+}
+
 @media (max-width: 1199px) {
     .page-editor-grid {
         grid-template-columns: minmax(190px, 1fr) minmax(400px, 2fr);
