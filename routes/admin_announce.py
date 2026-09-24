@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, jsonify
@@ -346,6 +347,9 @@ def upload_google_key():
             config_option = ConfigOption(config_key='voice_google_key', value_json=encrypted_content_str)
             db.session.add(config_option)
         db.session.commit()
+        # Nouvelle clé : les entrées de cache indexées sur l'ancienne
+        # empreinte deviennent inutiles.
+        _GOOGLE_VOICES_CACHE.clear()
         # Pas de détail : la valeur est un secret chiffré — on trace
         # l'action, jamais le contenu.
         record_audit(ACTION_UPDATE, "config", target_id="voice_google_key",
@@ -354,6 +358,14 @@ def upload_google_key():
     else:
         return '<div class="alert alert-danger">Format de fichier non autorisé. Veuillez télécharger un fichier JSON.</div>'
 
+
+
+# Cache en mémoire des voix Google Cloud, indexé par empreinte de la clé
+# déchiffrée. ``client.list_voices()`` est un appel réseau synchrone : sans
+# cache, chaque changement de filtre bloquait un worker sur Google. Une clé
+# différente produit une autre empreinte — pas de confusion entre comptes.
+_GOOGLE_VOICES_CACHE = {}
+_GOOGLE_VOICES_CACHE_MAX_KEYS = 4
 
 
 @admin_announce_bp.route('/admin/announce/google/filter_voices', methods=['POST'])
@@ -369,20 +381,22 @@ def filter_voices():
     google_voices = []
     if credentials_json:
         # Récupérer les voix filtrées
-        google_voices = list_google_voices(credentials_json, language=selected_language, gender=selected_gender, voice_type=selected_type)
+        try:
+            google_voices = list_google_voices(credentials_json, language=selected_language, gender=selected_gender, voice_type=selected_type)
+        except Exception as e:
+            app.logger.warning("Impossible de lister les voix Google Cloud : %s", e)
+            display_toast(success=False, message="Impossible de récupérer les voix Google Cloud.")
 
     # Renvoyer la liste filtrée dans le select
-    return render_template('/admin/announce_google_voice_list.html', 
+    return render_template('/admin/announce_google_voice_list.html',
                             google_voices=google_voices,
                             voice_google_name=app.config['VOICE_GOOGLE_NAME'],
                             credentials_json=credentials_json)
 
 
-def list_google_voices(credentials_json,language=None, gender=None, voice_type=None):
-    """Récupère la liste des voix disponibles avec filtres et retourne un dictionnaire."""
+def _fetch_google_voices(credentials_json):
+    """Appel réseau à Google Cloud : liste complète des voix, sans filtre."""
 
-    # Récupérer les credentials déchiffrés
-    
     if not credentials_json:
         raise RuntimeError("Clé Google Cloud non configurée.")
 
@@ -398,38 +412,57 @@ def list_google_voices(credentials_json,language=None, gender=None, voice_type=N
     # donc aucune collision entre apercu des voix et annonce patient.
     client = texttospeech.TextToSpeechClient(credentials=credentials)
 
-    # Effectuer la requête pour lister les voix disponibles
-    voices = client.list_voices()
+    # Timeout borné : sans lui, un service Google lent bloque le worker.
+    voices = client.list_voices(timeout=30)
 
-    # Liste des voix sous forme de dictionnaire
+    return [
+        {
+            "name": voice.name,
+            "language_codes": list(voice.language_codes),
+            "ssml_gender": texttospeech.SsmlVoiceGender(voice.ssml_gender).name,
+            "natural_sample_rate_hertz": voice.natural_sample_rate_hertz,
+        }
+        for voice in voices.voices
+    ]
+
+
+def list_google_voices(credentials_json, language=None, gender=None, voice_type=None):
+    """Récupère la liste des voix disponibles avec filtres et retourne un dictionnaire."""
+
+    fingerprint = hashlib.sha256(credentials_json or b"").hexdigest()
+    all_voices = _GOOGLE_VOICES_CACHE.get(fingerprint)
+    if all_voices is None:
+        all_voices = _fetch_google_voices(credentials_json)
+        if len(_GOOGLE_VOICES_CACHE) >= _GOOGLE_VOICES_CACHE_MAX_KEYS:
+            _GOOGLE_VOICES_CACHE.clear()
+        _GOOGLE_VOICES_CACHE[fingerprint] = all_voices
+
+    # Filtrage en mémoire — aucun appel réseau par changement de filtre.
     voice_list = []
 
-    for voice in voices.voices:
+    for voice in all_voices:
         # Filtrer par langue si précisé
-        if not any(lang_code.startswith(language) for lang_code in voice.language_codes):
+        if language and not any(code.startswith(language) for code in voice["language_codes"]):
             continue
 
         # Filtrer par genre si précisé
-        ssml_gender = texttospeech.SsmlVoiceGender(voice.ssml_gender).name
-        if gender and ssml_gender.lower() != gender.lower():
+        if gender and voice["ssml_gender"].lower() != gender.lower():
             continue
 
         # Filtrer par type de voix (ex. Wavenet, Standard) si précisé
-        if voice_type and voice_type.lower() not in voice.name.lower():
+        if voice_type and voice_type.lower() not in voice["name"].lower():
             continue
 
         # Trouver le code de langue complet correspondant
-        full_language_code = next((code for code in voice.language_codes if code.startswith(language)), voice.language_codes[0]) if language else voice.language_codes[0]
+        full_language_code = next((code for code in voice["language_codes"] if code.startswith(language)), voice["language_codes"][0]) if language else voice["language_codes"][0]
 
-        # Créer un dictionnaire pour chaque voix filtrée
-        voice_info = {
-            "name": voice.name,
-            "language_codes": voice.language_codes,
+        voice_list.append({
+            "name": voice["name"],
+            "language_codes": voice["language_codes"],
             "full_language_code": full_language_code,
-            "ssml_gender": ssml_gender,
-            "natural_sample_rate_hertz": voice.natural_sample_rate_hertz
-        }
-        voice_list.append(voice_info)
+            "ssml_gender": voice["ssml_gender"],
+            "natural_sample_rate_hertz": voice["natural_sample_rate_hertz"],
+        })
 
     return voice_list
 

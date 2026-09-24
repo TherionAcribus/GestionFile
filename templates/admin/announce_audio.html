@@ -33,7 +33,7 @@ Son actuel :
 <div id="announce_current_signal"
         hx-get="/admin/announce/audio/current_signal"
         hx-target="#announce_current_signal"
-        hx-trigger="load, refresh_sound"
+        hx-trigger="shown.bs.tab once from:#audio-tab, refresh_sound"
         hx-swap="innerHTML">    
 </div>
 
@@ -75,7 +75,7 @@ Son actuel :
         id="language_choice"
         hx-post="/admin/announce/select_language_voice"
         hx-target="#div_select_voice"
-        hx-trigger="change, load"
+        hx-trigger="change, shown.bs.tab once from:#audio-tab"
         data-param-language_code="#language_choice">
         {% for language in languages %}
             <option value="{{ language.code }}">{{ language.name }}</option>
