@@ -32,6 +32,7 @@
     let undoStack = [];
     let redoStack = [];
     let sortableInstances = [];
+    let paletteSources = [];
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -285,6 +286,73 @@
         help.className = 'small text-muted mb-3';
         help.textContent = 'Définissez vos couleurs puis appliquez-les en une fois aux éléments correspondants.';
         paletteFields.appendChild(help);
+
+        if (paletteSources.length) {
+            const copyCard = document.createElement('div');
+            copyCard.className = 'page-editor-palette-copy';
+            const copyHeading = document.createElement('div');
+            copyHeading.className = 'fw-semibold mb-1';
+            copyHeading.textContent = 'Réutiliser une palette';
+            const copyHelp = document.createElement('div');
+            copyHelp.className = 'small text-muted mb-2';
+            copyHelp.textContent = 'Importe les couleurs publiées d’une autre page dans ce brouillon.';
+            const copyControls = document.createElement('div');
+            copyControls.className = 'page-editor-palette-copy-controls';
+            const sourceSelect = document.createElement('select');
+            sourceSelect.id = 'editor-palette-source';
+            sourceSelect.className = 'form-select form-select-sm';
+            sourceSelect.setAttribute('aria-label', 'Page dont réutiliser la palette');
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = 'Choisir une page…';
+            sourceSelect.appendChild(placeholder);
+            paletteSources.forEach(function (source) {
+                const option = document.createElement('option');
+                option.value = source.page;
+                option.textContent = source.label;
+                sourceSelect.appendChild(option);
+            });
+            const copyButton = document.createElement('button');
+            copyButton.id = 'editor-palette-copy';
+            copyButton.type = 'button';
+            copyButton.className = 'btn btn-sm btn-outline-primary';
+            copyButton.textContent = 'Copier la palette';
+            copyButton.disabled = true;
+            sourceSelect.addEventListener('change', function () {
+                copyButton.disabled = !sourceSelect.value;
+            });
+            copyButton.addEventListener('click', function () {
+                const source = paletteSources.find(function (item) { return item.page === sourceSelect.value; });
+                if (!source) return;
+                const sourceRoles = new Map(source.roles.map(function (role) { return [role.id, role]; }));
+                const paletteChanges = [];
+                adapter.palette.forEach(function (targetRole) {
+                    const sourceRole = sourceRoles.get(targetRole.id);
+                    if (!sourceRole) return;
+                    const counts = new Map();
+                    sourceRole.values.forEach(function (raw) {
+                        const hex = colorToHex(raw);
+                        if (hex) counts.set(hex, (counts.get(hex) || 0) + 1);
+                    });
+                    const color = Array.from(counts.entries()).sort(function (left, right) {
+                        return right[1] - left[1];
+                    })[0]?.[0];
+                    if (color) paletteChanges.push({role: targetRole, color: color.toUpperCase()});
+                });
+                if (!paletteChanges.length) {
+                    setStatus('Aucune couleur compatible dans cette palette.', 'warning');
+                    return;
+                }
+                mutate(function () {
+                    paletteChanges.forEach(function (change) {
+                        change.role.keys.forEach(function (key) { payload.css[key] = change.color; });
+                    });
+                }, 'Palette « ' + source.label + ' » appliquée à ' + paletteChanges.length + ' groupe(s).');
+            });
+            copyControls.append(sourceSelect, copyButton);
+            copyCard.append(copyHeading, copyHelp, copyControls);
+            paletteFields.appendChild(copyCard);
+        }
 
         adapter.palette.forEach(function (role) {
             const colors = new Set(role.keys.map(function (key) { return colorToHex(payload.css[key]); }).filter(Boolean));
@@ -597,6 +665,7 @@
         try {
             const state = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/state');
             adapter = state.adapter;
+            paletteSources = state.palette_sources || [];
             published = clone(state.published);
             hasDraft = Boolean(state.draft);
             payload = clone(state.draft || state.published);

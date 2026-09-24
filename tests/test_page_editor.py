@@ -1,4 +1,5 @@
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 from flask import Flask
@@ -11,6 +12,7 @@ from page_editor import (
     current_payload,
     default_layout,
     layout_style,
+    palette_source_data,
     payload_hash,
     public_adapter_data,
     validate_payload,
@@ -22,7 +24,11 @@ from routes.admin_page_editor import (
     _render_phone_markdown,
     admin_page_editor_bp,
 )
-from routes.admin_config import authorize_config_change
+from routes.admin_config import (
+    COLOR_PAGE_ROLES,
+    admin_config_bp,
+    authorize_config_change,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -103,9 +109,19 @@ def editor_app():
             app.config[get_spec(key).config_name] = value
         app.config[adapter["config_name"]] = deepcopy(initial["layout"])
         css_values[adapter["css_source"]].update(initial["css"])
+    for definition in COLOR_PAGE_ROLES.values():
+        source_values = css_values[definition["source"]]
+        for role, variable in definition["roles"].items():
+            source_values.setdefault(variable, {
+                "main": "#008B8B",
+                "secondary": "#B6F5F5",
+                "text": "#FFFFFF",
+                "border": "#000000",
+            }[role])
     app.css_variable_manager = DummyCssVariableManager(css_values)
     app.css_manager = DummyCssManager()
     app.register_blueprint(admin_page_editor_bp)
+    app.register_blueprint(admin_config_bp)
 
     with app.app_context():
         # L'extension db est partagée par toute la suite et peut conserver des
@@ -184,6 +200,136 @@ def test_palette_only_groups_registered_color_variables(page):
     assert {role["id"] for role in palette} == {"primary", "secondary", "border"}
     assert all(role["keys"] for role in palette)
     assert all(set(role["keys"]) <= registered_colors for role in palette)
+
+
+def test_palette_source_contains_only_published_role_values(editor_app):
+    app, _ = editor_app
+    with app.app_context():
+        primary = next(
+            role for role in public_adapter_data("patient")["palette"]
+            if role["id"] == "primary"
+        )
+        for key in primary["keys"]:
+            app.css_variable_manager.values["patient"][key] = "#123456"
+        source = palette_source_data("patient")
+
+    primary_source = next(role for role in source["roles"] if role["id"] == "primary")
+    assert source["page"] == "patient"
+    assert primary_source["values"] == ["#123456"] * len(primary["keys"])
+    assert "config" not in source
+
+
+def test_editor_state_exposes_only_authorized_palette_sources(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    response = client.get("/admin/page-editor/announce/state")
+    assert response.status_code == 200
+    assert {source["page"] for source in response.get_json()["palette_sources"]} == {
+        "patient", "phone"
+    }
+
+    with app.app_context():
+        role = Role.query.filter_by(name="page-editor").one()
+        role.admin_phone = False
+        db.session.commit()
+    filtered = client.get("/admin/page-editor/announce/state")
+    assert {source["page"] for source in filtered.get_json()["palette_sources"]} == {"patient"}
+
+
+def _advanced_palette_request(source_page="patient", target_page="announce"):
+    source = COLOR_PAGE_ROLES[source_page]
+    target = COLOR_PAGE_ROLES[target_page]
+    mappings = []
+    for role in source["roles"].keys() & target["roles"].keys():
+        target_var = target["roles"][role]
+        dependency = next(
+            (
+                key for key in ADAPTERS[target_page]["components"]["title"]["css"]
+                if key["type"] == "color" and role in {
+                    "main": "background",
+                    "text": "font",
+                    "border": "border",
+                } and {
+                    "main": "background",
+                    "text": "font",
+                    "border": "border",
+                }[role] in key["key"]
+            ),
+            None,
+        )
+        mappings.append({
+            "source_var": source["roles"][role],
+            "target_var": target_var,
+            "source_source": source["source"],
+            "target_source": target["source"],
+            "dependencies": [dependency["key"]] if dependency else [],
+        })
+    return {
+        "source_page": source_page,
+        "target_page": target_page,
+        "mappings": mappings,
+    }
+
+
+def test_advanced_palette_copy_updates_registered_roles_atomically(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    source_colors = {
+        "main": "#112233",
+        "secondary": "#223344",
+        "text": "#334455",
+        "border": "#445566",
+    }
+    with app.app_context():
+        for role, value in source_colors.items():
+            variable = COLOR_PAGE_ROLES["patient"]["roles"][role]
+            app.css_variable_manager.values["patient"][variable] = value
+
+    request_body = _advanced_palette_request()
+    response = client.post("/admin/copy_colors", json=request_body)
+    assert response.status_code == 200
+
+    with app.app_context():
+        for role, expected in source_colors.items():
+            target_var = COLOR_PAGE_ROLES["announce"]["roles"][role]
+            assert app.css_variable_manager.values["announce"][target_var] == expected
+        for mapping in request_body["mappings"]:
+            for dependency in mapping["dependencies"]:
+                assert app.css_variable_manager.values["announce"][dependency] == (
+                    app.css_variable_manager.values["patient"][mapping["source_var"]]
+                )
+
+
+def test_advanced_palette_copy_rejects_forged_mapping(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    request_body = _advanced_palette_request()
+    request_body["mappings"][0]["source_var"] = "patient_title_font_size"
+    response = client.post("/admin/copy_colors", json=request_body)
+    assert response.status_code == 400
+    assert "interdite" in response.get_json()["message"]
+
+
+def test_advanced_palette_copy_requires_source_permission(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        role = Role.query.filter_by(name="page-editor").one()
+        role.admin_patient = False
+        db.session.commit()
+
+    response = client.post("/admin/copy_colors", json=_advanced_palette_request())
+    assert response.status_code == 403
+
+
+def test_advanced_client_palette_registry_matches_server():
+    javascript = (Path(__file__).resolve().parents[1] / "static/js/admin_colors.js").read_text(
+        encoding="utf-8"
+    )
+    for page, definition in COLOR_PAGE_ROLES.items():
+        assert f"'{page}':" in javascript
+        for variable in definition["roles"].values():
+            assert f"'{variable}'" in javascript
 
 
 @pytest.mark.parametrize(

@@ -22,14 +22,17 @@ from models import (
     db,
 )
 from page_editor import (
+    ADAPTERS,
     current_payload,
+    enabled_pages,
     get_adapter,
+    palette_source_data,
     payload_hash,
     public_adapter_data,
     validate_payload,
 )
 from params_registry import column_values_for, get_spec
-from routes.admin_security import permission_error_response
+from routes.admin_security import permission_error_response, user_has_permission
 from utils import balise_values
 
 
@@ -223,6 +226,13 @@ def _state_document(page, adapter):
         ),
         "published_revision": state.published_revision if state else 0,
         "revisions": [_revision_document(item) for item in revisions],
+        "palette_sources": [
+            palette_source_data(source_page)
+            for source_page in sorted(enabled_pages())
+            if source_page != page
+            and source_page in ADAPTERS
+            and user_has_permission(current_user, ADAPTERS[source_page]["permission"])
+        ],
     }
 
 

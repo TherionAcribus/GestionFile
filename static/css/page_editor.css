@@ -150,6 +150,20 @@
     padding: .75rem;
 }
 
+.page-editor-palette-copy {
+    background: color-mix(in srgb, var(--bs-primary) 5%, var(--bs-body-bg));
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));
+    border-radius: .5rem;
+    margin-bottom: .75rem;
+    padding: .75rem;
+}
+
+.page-editor-palette-copy-controls {
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: 1fr;
+}
+
 .page-editor-palette-card:last-child {
     margin-bottom: 0;
 }

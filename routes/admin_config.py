@@ -51,6 +51,52 @@ CSS_SOURCE_PERMISSION = {
     'phone': 'phone',
 }
 
+# Correspondances autorisées pour la copie de palettes. Le navigateur choisit
+# uniquement les pages ; les rôles et variables attendus restent définis côté
+# serveur afin qu'une requête forgée ne puisse pas détourner cette route pour
+# modifier une variable CSS arbitraire.
+COLOR_PAGE_ROLES = {
+    'patient': {
+        'source': 'patient',
+        'permission': 'patient',
+        'roles': {
+            'main': 'patient_main_color',
+            'secondary': 'patient_secondary_color',
+            'text': 'patient_third_color',
+            'border': 'patient_border_color',
+        },
+    },
+    'announce': {
+        'source': 'announce',
+        'permission': 'announce',
+        'roles': {
+            'main': 'announce_main_color',
+            'secondary': 'announce_secondary_color',
+            'text': 'announce_third_color',
+            'border': 'announce_border_color',
+        },
+    },
+    'phone': {
+        'source': 'phone',
+        'permission': 'phone',
+        'roles': {
+            'main': 'phone_main_color',
+            'secondary': 'phone_secondary_color',
+            'text': 'phone_third_color',
+            'border': 'phone_border_color',
+        },
+    },
+    'phone_your_turn': {
+        'source': 'phone',
+        'permission': 'phone',
+        'roles': {
+            'main': 'phone_your_turn_main_color',
+            'text': 'phone_your_turn_third_color',
+            'border': 'phone_your_turn_border_color',
+        },
+    },
+}
+
 def authorize_config_change(key, expected_value_type=None):
     """Contrôle d'accès commun aux routes de modification des paramètres.
 
@@ -316,31 +362,61 @@ def copy_colors():
         if not isinstance(mappings, list):
             return jsonify({'status': 'error', 'message': 'Les mappings doivent être une liste.'}), 400
 
-        # Permission : l'écriture porte sur chaque page cible ; l'utilisateur doit
-        # avoir la permission de modifier toutes les pages ciblées.
-        for target_source in {m.get('target_source') for m in mappings}:
-            resource = CSS_SOURCE_PERMISSION.get(target_source)
-            if resource is None:
-                return jsonify({'status': 'error', 'message': 'Source cible invalide'}), 400
+        source_definition = COLOR_PAGE_ROLES.get(source_page)
+        target_definition = COLOR_PAGE_ROLES.get(target_page)
+        if source_definition is None or target_definition is None or source_page == target_page:
+            return jsonify({'status': 'error', 'message': 'Pages de palette invalides.'}), 400
+
+        # Lecture de la source et écriture de la cible exigent leurs permissions
+        # respectives. Les couleurs ne sont pas secrètes, mais cette règle évite
+        # une différence de contrôle d'accès entre les deux modes d'édition.
+        for resource in {source_definition['permission'], target_definition['permission']}:
             refusal = permission_error_response(resource, api=True)
             if refusal is not None:
                 return refusal
 
-        # Validation AVANT toute écriture : les noms de variables cibles et de
-        # dépendances doivent être des identifiants stricts correspondant à des
-        # variables existantes (sinon des entrées arbitraires — voire des
-        # séquences d'injection CSS — seraient créées puis écrites dans la
-        # feuille personnalisée). La source doit elle aussi être connue.
+        source_source = source_definition['source']
+        target_source = target_definition['source']
+        source_variables = app.css_variable_manager.get_all_variables(source_source)
+        target_variables = app.css_variable_manager.get_all_variables(target_source)
+        common_roles = set(source_definition['roles']) & set(target_definition['roles'])
+        expected_pairs = {
+            (
+                source_definition['roles'][role],
+                target_definition['roles'][role],
+            )
+            for role in common_roles
+        }
+        received_pairs = set()
+
+        # Validation AVANT toute écriture : chaque correspondance doit être un
+        # rôle attendu du registre serveur. Les dépendances restent limitées à
+        # des variables de couleur existantes sur la page cible.
         for mapping in mappings:
-            source_source = mapping.get('source_source')
-            target_source = mapping.get('target_source')
-            if source_source not in CSS_SOURCE_PERMISSION:
-                return jsonify({'status': 'error', 'message': 'Source invalide'}), 400
-            target_vars = app.css_variable_manager.get_all_variables(target_source)
-            names = [mapping.get('target_var'), *mapping.get('dependencies', [])]
-            for name in names:
-                if not is_valid_css_variable_name(name) or name not in target_vars:
+            if not isinstance(mapping, dict) or not isinstance(mapping.get('dependencies'), list):
+                return jsonify({'status': 'error', 'message': 'Correspondance de palette invalide.'}), 400
+            if (
+                mapping.get('source_source') != source_source
+                or mapping.get('target_source') != target_source
+            ):
+                return jsonify({'status': 'error', 'message': 'Sources de palette invalides.'}), 400
+            pair = (mapping.get('source_var'), mapping.get('target_var'))
+            if pair not in expected_pairs or pair in received_pairs:
+                return jsonify({'status': 'error', 'message': 'Correspondance de palette interdite.'}), 400
+            received_pairs.add(pair)
+            source_var, target_var = pair
+            if source_var not in source_variables or target_var not in target_variables:
+                return jsonify({'status': 'error', 'message': 'Variable de palette inconnue.'}), 400
+            for name in mapping['dependencies']:
+                if (
+                    not is_valid_css_variable_name(name)
+                    or not name.endswith('_color')
+                    or name not in target_variables
+                ):
                     return jsonify({'status': 'error', 'message': 'Variable cible invalide.'}), 400
+
+        if received_pairs != expected_pairs:
+            return jsonify({'status': 'error', 'message': 'Palette incomplète.'}), 400
 
         # Pour chaque mapping, lire la valeur source et la préparer en cible.
         # Une valeur déjà stockée ne doit pas propager une chaîne qui ne
@@ -351,20 +427,16 @@ def copy_colors():
         for mapping in mappings:
             source_var = mapping.get('source_var')
             target_var = mapping.get('target_var')
-            source_source = mapping.get('source_source')  # ex: 'patient', 'announce', 'phone'
-            target_source = mapping.get('target_source')
-
             value = manager.get_variable(source_source, source_var)
-            if value and is_safe_css_value(value):
-                # Met à jour la variable parente cible
-                manager.stage_variable(target_source, target_var, value)
-                staged.append((target_source, target_var, value))
+            if not value or not is_safe_css_value(value):
+                db.session.rollback()
+                return jsonify({'status': 'error', 'message': 'Couleur source invalide.'}), 400
+            manager.stage_variable(target_source, target_var, value)
+            staged.append((target_source, target_var, value))
 
-                # Met à jour aussi les variables dépendantes via colorMappings (côté client)
-                dep_variables = mapping.get('dependencies', [])
-                for dep_var in dep_variables:
-                    manager.stage_variable(target_source, dep_var, value)
-                    staged.append((target_source, dep_var, value))
+            for dep_var in mapping.get('dependencies', []):
+                manager.stage_variable(target_source, dep_var, value)
+                staged.append((target_source, dep_var, value))
 
         # Une seule transaction : toutes les variables + génération de config
         # (propagation aux autres processus via load_configuration).
@@ -375,10 +447,8 @@ def copy_colors():
             manager.set_cached_variable(src, name, val)
 
         # Régénère le CSS pour la/les source(s) cible(s)
-        target_sources = set(m.get('target_source') for m in mappings)
-        for ts in target_sources:
-            variables = manager.get_all_variables(ts)
-            app.css_manager.generate_css(variables, mode=ts)
+        variables = manager.get_all_variables(target_source)
+        app.css_manager.generate_css(variables, mode=target_source)
 
         record_audit(ACTION_UPDATE, "css_variable", target_id=target_page,
                      outcome=OUTCOME_SUCCESS,
@@ -689,4 +759,3 @@ def config_change_response(success=True, message=None):
         message = "Enregistré." if success else "Échec de l'enregistrement."
     status = 200 if success else 400
     return message, status, {"Content-Type": "text/plain; charset=utf-8"}
-

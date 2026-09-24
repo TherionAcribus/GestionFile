@@ -354,6 +354,26 @@ def current_payload(page):
     return payload
 
 
+def palette_source_data(page):
+    """Expose la palette publiée d'une page sans révéler d'autres réglages."""
+    adapter = ADAPTERS.get(page)
+    if adapter is None:
+        return None
+    payload = current_payload(page)
+    return {
+        "page": page,
+        "label": adapter["label"],
+        "roles": [
+            {
+                "id": role["id"],
+                "label": role["label"],
+                "values": [payload["css"].get(key) for key in role["keys"]],
+            }
+            for role in _palette_data(adapter)
+        ],
+    }
+
+
 def payload_hash(payload):
     canonical = {
         "schema_version": payload.get("schema_version"),

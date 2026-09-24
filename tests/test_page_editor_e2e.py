@@ -109,6 +109,24 @@ def test_edit_resize_scenario_undo_and_keyboard_move(admin_page: Page):
     admin_page.locator("#editor-discard").click()
 
 
+def test_copy_published_palette_stays_in_visual_draft(admin_page: Page):
+    open_editor(admin_page)
+    original = admin_page.locator("#editor-palette-primary").input_value()
+    admin_page.locator("#editor-palette-primary").fill("#123456")
+    admin_page.locator("#editor-palette-primary").locator("xpath=following-sibling::button").click()
+    admin_page.locator("#editor-palette-source").select_option("patient")
+    admin_page.locator("#editor-palette-copy").click()
+
+    expect(admin_page.locator("#editor-status")).to_contain_text("Palette « Borne patient » appliquée")
+    assert admin_page.locator("#editor-palette-primary").input_value() != "#123456"
+    expect(admin_page.locator("#editor-save")).to_be_enabled()
+
+    admin_page.once("dialog", lambda dialog: dialog.accept())
+    admin_page.reload()
+    expect(admin_page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+    expect(admin_page.locator("#editor-palette-primary")).to_have_value(original)
+
+
 def test_publish_matches_new_real_screen_without_forced_reload(admin_page: Page):
     open_editor(admin_page)
     admin_page.locator('[data-component-id="title"]').click()

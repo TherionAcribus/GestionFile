@@ -40,3 +40,12 @@ def test_color_javascript_validates_and_synchronizes_controls():
     assert "setCustomValidity" in source
     assert "input.value = newValue" in source
     assert "trigger('change.select2')" not in source
+
+
+def test_visual_editor_can_copy_a_published_palette_into_the_draft():
+    source = _read("static/js/page_editor.js")
+    assert "state.palette_sources || []" in source
+    assert "editor-palette-source" in source
+    assert "editor-palette-copy" in source
+    assert "payload.css[key] = change.color" in source
+    assert "mutate(function ()" in source
