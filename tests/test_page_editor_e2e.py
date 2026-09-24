@@ -52,6 +52,10 @@ def test_edit_resize_scenario_undo_and_keyboard_move(admin_page: Page):
     title.click()
     textarea = admin_page.locator("#editor-config-announce_title")
     original = textarea.input_value()
+    textarea.fill("Bienvenue ")
+    admin_page.get_by_role("button", name="Insérer {P} : Nom de la pharmacie").click()
+    expect(textarea).to_have_value("Bienvenue {P}")
+    assert "{P}" not in admin_page.frame_locator("#editor-preview").locator("#text_title").inner_text()
     textarea.fill("Aperçu E2E")
     expect(admin_page.frame_locator("#editor-preview").locator("#text_title")).to_have_text("Aperçu E2E")
 

@@ -8,7 +8,7 @@ from copy import deepcopy
 from flask import current_app
 from markupsafe import Markup
 
-from params_registry import get_spec
+from params_registry import BALISE_LETTERS, get_spec
 from utils import validate_config_text
 from variables import is_safe_css_value
 
@@ -35,6 +35,15 @@ _PALETTE_ROLES = (
         "description": "Contours et séparateurs de la page",
     },
 )
+_MARKER_LABELS = {
+    "P": ("Pharmacie", "Nom de la pharmacie"),
+    "N": ("Patient", "Numéro d’appel du patient"),
+    "A": ("Activité", "Activité choisie par le patient"),
+    "M": ("Équipe", "Nom du membre de l’équipe"),
+    "C": ("Comptoir", "Nom du comptoir"),
+    "D": ("Date", "Date du jour"),
+    "H": ("Heure", "Heure actuelle"),
+}
 
 
 def _component(label, zone, selector, *, config=None, css=None, span=12):
@@ -499,13 +508,27 @@ def public_adapter_data(page):
     adapter = ADAPTERS.get(page)
     if adapter is None:
         return None
+    components = deepcopy(adapter["components"])
+    for component in components.values():
+        for field in component["config"]:
+            spec = get_spec(field["key"])
+            letters = BALISE_LETTERS.get(spec.validator, "") if spec else ""
+            if letters:
+                field["markers"] = [
+                    {
+                        "token": f"{{{letter}}}",
+                        "label": _MARKER_LABELS[letter][0],
+                        "description": _MARKER_LABELS[letter][1],
+                    }
+                    for letter in "PNAMCDH" if letter in letters
+                ]
     return {
         "page": page,
         "label": adapter["label"],
         "zones": adapter["zones"],
         "viewports": adapter["viewports"],
         "scenarios": adapter["scenarios"],
-        "components": adapter["components"],
+        "components": components,
         "palette": _palette_data(adapter),
         "default_layout": default_layout(page),
     }

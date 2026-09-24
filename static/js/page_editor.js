@@ -356,6 +356,43 @@
         });
     }
 
+    function createMarkerToolbar(control, markers) {
+        const toolbar = document.createElement('div');
+        toolbar.className = 'page-editor-markers';
+        const heading = document.createElement('div');
+        heading.className = 'page-editor-markers-heading';
+        heading.textContent = 'Balises dynamiques';
+        heading.title = 'Ces balises sont remplacées automatiquement par les informations réelles à l’affichage.';
+        const buttons = document.createElement('div');
+        buttons.className = 'page-editor-marker-list';
+
+        markers.forEach(function (marker) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'page-editor-marker';
+            button.title = marker.description;
+            button.setAttribute('aria-label', 'Insérer ' + marker.token + ' : ' + marker.description);
+            const token = document.createElement('code');
+            token.textContent = marker.token;
+            const label = document.createElement('span');
+            label.textContent = marker.label;
+            button.append(token, label);
+            button.addEventListener('pointerdown', function (event) {
+                event.preventDefault();
+            });
+            button.addEventListener('click', function () {
+                const start = control.selectionStart ?? control.value.length;
+                const end = control.selectionEnd ?? start;
+                control.focus();
+                control.setRangeText(marker.token, start, end, 'end');
+                control.dispatchEvent(new Event('input', {bubbles: true}));
+            });
+            buttons.appendChild(button);
+        });
+        toolbar.append(heading, buttons);
+        return toolbar;
+    }
+
     function renderInspector() {
         inspector.replaceChildren();
         renderPagePalette();
@@ -442,7 +479,11 @@
                     bindValue(control, function (element) { payload.config[field.key] = element.value; });
                 }
                 control.id = 'editor-config-' + field.key;
-                contentFields.appendChild(formGroup(field.label, control));
+                const group = formGroup(field.label, control);
+                if (field.markers && field.markers.length && control instanceof HTMLTextAreaElement) {
+                    group.appendChild(createMarkerToolbar(control, field.markers));
+                }
+                contentFields.appendChild(group);
             });
         }
 

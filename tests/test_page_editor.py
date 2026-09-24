@@ -187,6 +187,26 @@ def test_palette_only_groups_registered_color_variables(page):
 
 
 @pytest.mark.parametrize(
+    ("page", "key", "expected"),
+    [
+        ("announce", "announce_title", ["{P}", "{D}", "{H}"]),
+        ("announce", "announce_call_text", ["{P}", "{N}", "{A}", "{M}", "{C}", "{D}", "{H}"]),
+        ("patient", "page_patient_title", ["{P}", "{D}", "{H}"]),
+        ("phone", "phone_line1", ["{P}", "{N}", "{A}", "{D}", "{H}"]),
+    ],
+)
+def test_text_fields_expose_only_their_allowed_markers(page, key, expected):
+    components = public_adapter_data(page)["components"]
+    field = next(
+        field
+        for component in components.values()
+        for field in component["config"]
+        if field["key"] == key
+    )
+    assert [marker["token"] for marker in field["markers"]] == expected
+
+
+@pytest.mark.parametrize(
     "mutation",
     [
         lambda payload: payload.update({"unexpected": True}),

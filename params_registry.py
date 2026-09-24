@@ -263,6 +263,7 @@ _WELCOME_KEYS = {
     "announce_subtitle",
     "announce_text_up_patients",
     "announce_text_down_patients",
+    "page_patient_title",
 }
 
 _AFTER_CALL_KEYS = {
