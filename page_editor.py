@@ -608,6 +608,68 @@ def validate_payload(page, payload):
     return result
 
 
+#: Libellés des propriétés de disposition, pour le diff publié/brouillon.
+_LAYOUT_PROP_LABELS = {
+    "visible": "Affichage",
+    "zone": "Zone",
+    "order": "Ordre",
+    "span": "Largeur",
+    "alignment": "Alignement",
+}
+
+
+def payload_diff(page, working):
+    """Différences libellées entre ``working`` et la version publiée.
+
+    ``working`` doit être un payload déjà normalisé par ``validate_payload``.
+    Le résultat sert au panneau « Comparer » et au récapitulatif affiché avant
+    publication : chaque changement porte le libellé affiché dans l'inspecteur
+    plutôt que la clé technique.
+    """
+    adapter = ADAPTERS[page]
+    published = current_payload(page)
+    field_labels = {}
+    field_component = {}
+    for component_id, component in adapter["components"].items():
+        for section in ("config", "css"):
+            for field in component[section]:
+                field_labels[field["key"]] = field["label"]
+                field_component[field["key"]] = component["label"]
+
+    changes = []
+    for section in ("config", "css"):
+        keys = set(published[section]) | set(working.get(section) or {})
+        for key in sorted(keys):
+            old = published[section].get(key)
+            new = (working.get(section) or {}).get(key)
+            if old != new:
+                changes.append({
+                    "section": section,
+                    "component": field_component.get(key),
+                    "key": key,
+                    "label": field_labels.get(key, key),
+                    "old": old,
+                    "new": new,
+                })
+    for component_id, component in adapter["components"].items():
+        old_item = published["layout"].get(component_id) or {}
+        new_item = (working.get("layout") or {}).get(component_id) or {}
+        for prop in ("visible", "zone", "order", "span", "alignment"):
+            if old_item.get(prop) != new_item.get(prop):
+                changes.append({
+                    "section": "layout",
+                    "component": component["label"],
+                    "key": prop,
+                    "label": _LAYOUT_PROP_LABELS[prop],
+                    "old": old_item.get(prop),
+                    "new": new_item.get(prop),
+                })
+    counts = {"config": 0, "css": 0, "layout": 0}
+    for change in changes:
+        counts[change["section"]] += 1
+    return {"identical": not changes, "counts": counts, "changes": changes}
+
+
 def layout_style(page, layout=None, preview=False):
     adapter = ADAPTERS.get(page)
     if adapter is None:

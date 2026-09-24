@@ -17,6 +17,7 @@
     const saveButton = document.getElementById('editor-save');
     const publishButton = document.getElementById('editor-publish');
     const discardButton = document.getElementById('editor-discard');
+    const diffButton = document.getElementById('editor-diff');
     const applyButton = document.getElementById('editor-apply');
     const historyButton = document.getElementById('editor-history-toggle');
     const historyPanel = document.getElementById('editor-history');
@@ -89,19 +90,23 @@
         return (light + 0.05) / (dark + 0.05);
     }
 
-    function appendContrastWarning(container, definition) {
+    function componentContrastRatio(definition) {
         const fontField = definition.css.find(function (field) {
             return field.type === 'color' && field.key.endsWith('font_color');
         });
         const backgroundField = definition.css.find(function (field) {
             return field.type === 'color' && field.key.endsWith('background_color');
         });
-        if (!fontField || !backgroundField) return;
+        if (!fontField || !backgroundField) return null;
         const font = colorToHex(payload.css[fontField.key]);
         const background = colorToHex(payload.css[backgroundField.key]);
-        if (!font || !background) return;
-        const ratio = contrastRatio(font, background);
-        if (ratio >= 3) return;
+        if (!font || !background) return null;
+        return contrastRatio(font, background);
+    }
+
+    function appendContrastWarning(container, definition) {
+        const ratio = componentContrastRatio(definition);
+        if (ratio === null || ratio >= 3) return;
         const warning = document.createElement('div');
         warning.className = 'alert alert-warning py-2 small';
         warning.setAttribute('role', 'note');
@@ -116,6 +121,8 @@
         footer: 'Pied de page',
         overlay: 'Superposition',
     };
+
+    const ALIGNMENT_LABELS = {stretch: 'Étendre', left: 'Gauche', center: 'Centre', right: 'Droite'};
 
     const backupKey = 'page-editor-backup-' + page;
 
@@ -955,6 +962,266 @@
         }
     }
 
+    // --- Comparaison publié/brouillon et contrôle qualité ---
+
+    const SECTION_LABELS = {layout: 'Disposition', config: 'Contenu', css: 'Apparence'};
+
+    function formatDiffValue(change, value) {
+        if (change.section === 'layout') {
+            if (change.key === 'visible') return value ? 'affiché' : 'masqué';
+            if (change.key === 'zone') return ZONE_LABELS[value] || String(value);
+            if (change.key === 'span') return String(value) + '/12';
+            if (change.key === 'alignment') return ALIGNMENT_LABELS[value] || String(value);
+        }
+        if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+        if (value === null || value === undefined || value === '') return '∅';
+        const text = String(value);
+        return text.length > 60 ? text.slice(0, 57) + '…' : text;
+    }
+
+    function buildDiffList(diff) {
+        const container = document.createElement('div');
+        if (diff.identical) {
+            const empty = document.createElement('p');
+            empty.className = 'text-muted';
+            empty.textContent = 'Aucune différence avec la version publiée.';
+            container.appendChild(empty);
+            return container;
+        }
+        const total = diff.changes.length;
+        const summary = document.createElement('p');
+        const parts = ['layout', 'config', 'css']
+            .filter(function (section) { return diff.counts[section] > 0; })
+            .map(function (section) { return diff.counts[section] + ' ' + SECTION_LABELS[section].toLowerCase(); });
+        summary.textContent = total + ' modification(s) : ' + parts.join(' · ');
+        container.appendChild(summary);
+        ['layout', 'config', 'css'].forEach(function (section) {
+            const sectionChanges = diff.changes.filter(function (change) { return change.section === section; });
+            if (!sectionChanges.length) return;
+            const heading = document.createElement('h6');
+            heading.className = 'mt-3 mb-1';
+            heading.textContent = SECTION_LABELS[section];
+            const list = document.createElement('ul');
+            list.className = 'page-editor-diff-list';
+            sectionChanges.forEach(function (change) {
+                const item = document.createElement('li');
+                const subject = document.createElement('strong');
+                subject.textContent = (change.component ? change.component + ' · ' : '') + change.label;
+                const arrow = document.createElement('span');
+                arrow.textContent = ' : ' + formatDiffValue(change, change.old) + ' → ';
+                const value = document.createElement('span');
+                value.className = 'page-editor-diff-new';
+                value.textContent = formatDiffValue(change, change.new);
+                item.append(subject, arrow, value);
+                list.appendChild(item);
+            });
+            container.append(heading, list);
+        });
+        return container;
+    }
+
+    // Contrôles de qualité : mesures dans le DOM réel de l'aperçu (même origine)
+    // plus états connus côté payload (masqués, désactivés, contrastes).
+    function runQualityChecks() {
+        const findings = [];
+        Object.keys(payload.layout).forEach(function (componentId) {
+            if (!payload.layout[componentId].visible) {
+                const label = adapter.components[componentId]
+                    ? adapter.components[componentId].label : componentId;
+                findings.push({level: 'warning', message: '« ' + label + ' » sera masqué.'});
+            }
+        });
+        Object.keys(disabledComponents).forEach(function (componentId) {
+            findings.push({level: 'info', message: disabledComponents[componentId]});
+        });
+        Object.keys(adapter.components).forEach(function (componentId) {
+            const definition = adapter.components[componentId];
+            if (definition.managed_bool && !payload.config[definition.managed_bool]) {
+                findings.push({level: 'info', message: '« ' + definition.label + ' » est désactivé (case « Afficher » décochée).'});
+            }
+        });
+        Object.keys(adapter.components).forEach(function (componentId) {
+            const definition = adapter.components[componentId];
+            const ratio = componentContrastRatio(definition);
+            if (ratio !== null && ratio < 3) {
+                findings.push({
+                    level: 'warning',
+                    message: 'Contraste faible (' + ratio.toFixed(1) + ':1) sur « ' + definition.label + ' ».',
+                });
+            }
+        });
+
+        try {
+            const doc = preview.contentDocument;
+            const viewport = adapter.viewports.find(function (item) {
+                return item.id === viewportSelect.value;
+            }) || adapter.viewports[0];
+            if (!doc || !doc.documentElement) return findings;
+            if (doc.documentElement.scrollWidth > viewport.width + 4) {
+                findings.push({
+                    level: 'warning',
+                    message: 'Du contenu dépasse la largeur du format « ' + viewport.label + ' ».',
+                });
+            }
+            const minFont = {announce: 20, patient: 14, phone: 12}[page] || 12;
+            const smallFonts = new Set();
+            doc.querySelectorAll('[data-page-editor-component]').forEach(function (componentEl) {
+                if (componentEl.offsetParent === null) return;
+                const componentId = componentEl.dataset.pageEditorComponent;
+                const label = (adapter.components[componentId] || {}).label || componentId;
+                Array.from(componentEl.querySelectorAll('*')).concat([componentEl]).forEach(function (el) {
+                    const text = Array.from(el.childNodes).some(function (node) {
+                        return node.nodeType === Node.TEXT_NODE && node.textContent.trim();
+                    });
+                    if (!text || el.offsetParent === null) return;
+                    const size = parseFloat(preview.contentWindow.getComputedStyle(el).fontSize);
+                    if (size > 0 && size < minFont) smallFonts.add(label);
+                });
+            });
+            smallFonts.forEach(function (label) {
+                findings.push({
+                    level: 'warning',
+                    message: 'Texte potentiellement trop petit sur « ' + label + ' » (< ' + minFont + 'px).',
+                });
+            });
+            if (page === 'patient') {
+                let smallTargets = 0;
+                doc.querySelectorAll('button, a, [role="button"], .page-editor-demo-button').forEach(function (el) {
+                    if (el.offsetParent === null) return;
+                    if (el.getBoundingClientRect().height < 44) smallTargets += 1;
+                });
+                if (smallTargets) {
+                    findings.push({
+                        level: 'warning',
+                        message: smallTargets + ' zone(s) tactile(s) de moins de 44px de haut : difficiles à toucher sur la borne.',
+                    });
+                }
+            }
+        } catch (error) {
+            findings.push({level: 'info', message: 'Aperçu non chargé : contrôles visuels ignorés.'});
+        }
+        return findings;
+    }
+
+    function openDialog(options) {
+        return new Promise(function (resolve) {
+            const backdrop = document.createElement('div');
+            backdrop.className = 'page-editor-dialog-backdrop';
+            const dialog = document.createElement('div');
+            dialog.className = 'page-editor-dialog';
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.setAttribute('aria-label', options.title);
+
+            const header = document.createElement('div');
+            header.className = 'page-editor-dialog-header';
+            const title = document.createElement('h5');
+            title.className = 'mb-0';
+            title.textContent = options.title;
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'btn-close';
+            closeButton.setAttribute('aria-label', 'Fermer');
+            header.append(title, closeButton);
+
+            const body = document.createElement('div');
+            body.className = 'page-editor-dialog-body';
+            body.appendChild(options.body);
+
+            const footer = document.createElement('div');
+            footer.className = 'page-editor-dialog-footer';
+            let focusTarget = closeButton;
+            (options.actions || []).forEach(function (action) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = action.className || 'btn btn-secondary';
+                button.textContent = action.label;
+                button.addEventListener('click', function () { close(action.value); });
+                if (action.autofocus) focusTarget = button;
+                footer.appendChild(button);
+            });
+
+            function close(result) {
+                document.removeEventListener('keydown', onKey);
+                backdrop.remove();
+                resolve(result);
+            }
+            function onKey(event) {
+                if (event.key === 'Escape') close(null);
+            }
+            closeButton.addEventListener('click', function () { close(null); });
+            backdrop.addEventListener('mousedown', function (event) {
+                if (event.target === backdrop) close(null);
+            });
+            document.addEventListener('keydown', onKey);
+            dialog.append(header, body, footer);
+            backdrop.appendChild(dialog);
+            document.body.appendChild(backdrop);
+            focusTarget.focus();
+        });
+    }
+
+    function buildFindingsList() {
+        const findings = runQualityChecks();
+        if (!findings.length) return null;
+        const fragment = document.createElement('div');
+        const heading = document.createElement('h6');
+        heading.className = 'mt-3 mb-1';
+        heading.textContent = 'Points de vigilance';
+        const list = document.createElement('ul');
+        list.className = 'page-editor-diff-list';
+        findings.forEach(function (finding) {
+            const item = document.createElement('li');
+            item.className = finding.level === 'warning' ? 'text-warning-emphasis' : 'text-muted';
+            item.textContent = finding.message;
+            list.appendChild(item);
+        });
+        fragment.append(heading, list);
+        return fragment;
+    }
+
+    async function fetchDiff() {
+        return await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/diff', {
+            method: 'POST',
+            body: JSON.stringify({payload: payload}),
+        });
+    }
+
+    async function showDiff() {
+        try {
+            const diff = await fetchDiff();
+            const body = buildDiffList(diff);
+            const findings = buildFindingsList();
+            if (findings) body.appendChild(findings);
+            await openDialog({
+                title: 'Différences avec la version publiée',
+                body: body,
+                actions: [{label: 'Fermer', className: 'btn btn-secondary', value: true, autofocus: true}],
+            });
+        } catch (error) {
+            setStatus(error.message, 'danger');
+        }
+    }
+
+    async function confirmPublish() {
+        const diff = await fetchDiff();
+        const body = buildDiffList(diff);
+        const findings = buildFindingsList();
+        if (findings) body.appendChild(findings);
+        const note = document.createElement('p');
+        note.className = 'small text-muted mt-3 mb-0';
+        note.textContent = 'Les écrans en service ne seront pas rechargés automatiquement : utilisez « Appliquer/recharger les écrans » au moment opportun.';
+        body.appendChild(note);
+        return await openDialog({
+            title: 'Publier les modifications ?',
+            body: body,
+            actions: [
+                {label: 'Annuler', className: 'btn btn-outline-secondary', value: false},
+                {label: 'Publier', className: 'btn btn-success', value: true, autofocus: true},
+            ],
+        });
+    }
+
     async function publish() {
         try {
             publishButton.disabled = true;
@@ -964,6 +1231,11 @@
                 // brouillon : publier maintenant diffuserait une version
                 // incomplète.
                 setStatus('Des modifications récentes ne sont pas enregistrées : cliquez à nouveau sur « Publier ».', 'warning');
+                publishButton.disabled = false;
+                return;
+            }
+            const approved = await confirmPublish();
+            if (!approved) {
                 publishButton.disabled = false;
                 return;
             }
@@ -1036,6 +1308,7 @@
         saveDraft().catch(function (error) { setStatus(error.message, error.status === 409 ? 'warning' : 'danger'); });
     });
     publishButton.addEventListener('click', publish);
+    diffButton.addEventListener('click', showDiff);
     discardButton.addEventListener('click', discard);
     applyButton.addEventListener('click', async function () {
         if (!window.confirm('Recharger maintenant les écrans connectés en service ?')) return;

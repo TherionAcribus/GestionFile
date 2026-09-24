@@ -28,6 +28,7 @@ from page_editor import (
     enabled_pages,
     get_adapter,
     palette_source_data,
+    payload_diff,
     payload_hash,
     public_adapter_data,
     validate_payload,
@@ -490,6 +491,21 @@ def render_preview_content(page):
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
     return jsonify({"html": _render_phone_markdown(normalized["config"], _preview_tokens())})
+
+
+@admin_page_editor_bp.post("/admin/page-editor/<page>/diff")
+def diff(page):
+    """Compare le payload envoyé à la version publiée (panneau « Comparer »
+    et récapitulatif avant publication)."""
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    body = request.get_json(silent=True) or {}
+    try:
+        normalized = validate_payload(page, body.get("payload"))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(payload_diff(page, normalized))
 
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/publish")

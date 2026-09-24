@@ -509,6 +509,50 @@ def test_shared_draft_uses_optimistic_version(editor_app):
     assert stale.status_code == 409
 
 
+def test_diff_reports_labeled_changes(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    working = make_payload("announce")
+    identical = client.post("/admin/page-editor/announce/diff", json={"payload": working})
+    assert identical.status_code == 200
+    assert identical.get_json() == {
+        "identical": True,
+        "counts": {"config": 0, "css": 0, "layout": 0},
+        "changes": [],
+    }
+
+    working["config"]["announce_title"] = "Titre modifié"
+    working["css"]["title_font_size"] = "48px"
+    working["layout"]["title"]["visible"] = False
+    response = client.post("/admin/page-editor/announce/diff", json={"payload": working})
+    assert response.status_code == 200
+    diff = response.get_json()
+    assert diff["identical"] is False
+    assert diff["counts"] == {"config": 1, "css": 1, "layout": 1}
+    config_change = next(c for c in diff["changes"] if c["section"] == "config")
+    assert config_change["key"] == "announce_title"
+    assert config_change["component"] == "Titre"
+    assert config_change["new"] == "Titre modifié"
+    layout_change = next(c for c in diff["changes"] if c["section"] == "layout")
+    assert layout_change["key"] == "visible"
+    assert layout_change["old"] is True and layout_change["new"] is False
+
+
+def test_diff_validates_payload_and_requires_permission(editor_app):
+    app, _ = editor_app
+    anonymous = app.test_client()
+    working = make_payload("announce")
+    assert anonymous.post(
+        "/admin/page-editor/announce/diff", json={"payload": working}
+    ).status_code == 401
+
+    client = authenticated_client(editor_app)
+    working["css"]["title_font_size"] = "banane"
+    response = client.post("/admin/page-editor/announce/diff", json={"payload": working})
+    assert response.status_code == 400
+    assert "title_font_size" in response.get_json()["error"]
+
+
 def test_publish_is_atomic_and_detects_advanced_mode_conflict(editor_app):
     app, _ = editor_app
     client = authenticated_client(editor_app)
