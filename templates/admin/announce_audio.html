@@ -15,8 +15,8 @@
         hx-target="#invisible"
         hx-vals='{"key": "announce_player"}'
         data-param-value="#announce_player">
-        <option value="" disabled selected>Lecteur audio</option>
-        <option value="web" selected>Page web</option>
+        <option value="" disabled>Lecteur audio</option>
+        <option value="web" {% if announce_player == "web" %}selected{% endif %}>Page web</option>
     </select>
     <label>Choix du lecteur audio</label>
 </div>
@@ -61,12 +61,11 @@ Son actuel :
         id="announce_call_translation"
         hx-post="/admin/update_select"
         hx-target="#invisible"
-        hx-trigger="change, load"
         hx-vals='{"key": "announce_call_translation"}'
         data-param-value="#announce_call_translation">
-        <option value="fr">Uniquement en français</option>
-        <option value="vo">Uniquement dans la langue du patient</option>
-        <option value="both">Dans les deux langues (A venir)</option>
+        <option value="fr" {% if announce_call_translation == "fr" %}selected{% endif %}>Uniquement en français</option>
+        <option value="vo" {% if announce_call_translation == "vo" %}selected{% endif %}>Uniquement dans la langue du patient</option>
+        <option value="both" {% if announce_call_translation == "both" %}selected{% endif %}>Dans les deux langues (A venir)</option>
     </select>
 </div>
 
