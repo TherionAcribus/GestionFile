@@ -5,7 +5,7 @@ from flask import Flask
 from flask_login import LoginManager
 
 from css_manager import CSSManager
-from models import ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
+from models import Activity, Button, ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
 from page_editor import (
     ADAPTERS,
     current_payload,
@@ -16,7 +16,12 @@ from page_editor import (
     validate_payload,
 )
 from params_registry import get_spec
-from routes.admin_page_editor import _render_phone_markdown, admin_page_editor_bp
+from routes.admin_page_editor import (
+    _patient_preview_data,
+    _preview_tokens,
+    _render_phone_markdown,
+    admin_page_editor_bp,
+)
 from routes.admin_config import authorize_config_change
 
 
@@ -106,7 +111,12 @@ def editor_app():
         # L'extension db est partagée par toute la suite et peut conserver des
         # métadonnées de binds ajoutées par d'autres modules de tests.
         db.create_all(bind_key=None)
-        role = Role(name="announce-editor", admin_announce=True)
+        role = Role(
+            name="page-editor",
+            admin_announce=True,
+            admin_patient=True,
+            admin_phone=True,
+        )
         user = User(username="editor", password="unused", active=True)
         user.roles.append(role)
         db.session.add(user)
@@ -127,6 +137,32 @@ def authenticated_client(editor_app):
         session["_user_id"] = str(user_id)
         session["_fresh"] = True
     return client
+
+
+def test_preview_uses_real_pharmacy_and_button_configuration(editor_app):
+    app, _ = editor_app
+    with app.app_context():
+        app.config["PHARMACY_NAME"] = "Pharmacie du Centre"
+        activity = Activity(name="Ordonnances", letter="O", specific_message="Préparez votre ordonnance")
+        button = Button(
+            label="Déposer une ordonnance",
+            activity=activity,
+            is_present=True,
+            is_active=True,
+            shape="square",
+            sort_order=1,
+        )
+        db.session.add_all([activity, button])
+        db.session.commit()
+
+        tokens = _preview_tokens()
+        preview = _patient_preview_data("home", tokens)
+
+        assert tokens["{P}"] == "Pharmacie du Centre"
+        assert tokens["{A}"] == "Déposer une ordonnance"
+        assert preview["preview_buttons"] == [button]
+        assert preview["preview_activity_label"] == "Déposer une ordonnance"
+        assert preview["preview_specific_message"] == "Préparez votre ordonnance"
 
 
 @pytest.mark.parametrize("page", ["announce", "patient", "phone"])

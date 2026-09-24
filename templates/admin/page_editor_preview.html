@@ -34,47 +34,71 @@
 <body data-page="{{ page }}" data-scenario="{{ scenario }}">
 {% if page == 'announce' %}
     <div id="full_page">
-        {{ page_components.announce_header(payload.config.announce_title, payload.config.announce_subtitle, true) }}
+        {{ page_components.announce_header(preview_config.announce_title, preview_config.announce_subtitle, true) }}
         <div class="div_center" id="{{ 'div_center_divided' if scenario == 'gallery' else 'div_center_not_divided' }}">
             <div id="left_side">
-                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients">{{ payload.config.announce_text_up_patients }}</div>
+                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients">{{ preview_config.announce_text_up_patients }}</div>
                 <div id="div_calling" data-page-editor-component="calls">
                     <ul id="patient_list">
                     {% if scenario != 'empty' %}
-                        <li class="text_patient_calling">Patient 042 — Comptoir 3</li>
-                        {% if scenario == 'multiple' %}<li class="text_patient_calling">Patient 057 — Comptoir 1</li>{% endif %}
+                        <li class="text_patient_calling" data-config-key="announce_call_text" data-preview-number="042">{{ preview_call_texts[0] }}</li>
+                        {% if scenario == 'multiple' %}<li class="text_patient_calling" data-config-key="announce_call_text" data-preview-number="057">{{ preview_call_texts[1] }}</li>{% endif %}
                     {% endif %}
                     </ul>
                 </div>
-                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" {% if scenario != 'empty' %}hidden{% endif %}>{{ payload.config.announce_text_down_patients }}</div>
-                <div id="div_ongoing" data-page-editor-component="ongoing"><p data-config-key="announce_ongoing_text">{{ payload.config.announce_ongoing_text }}</p><p>Patient 031 — Comptoir 2</p></div>
+                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" {% if scenario != 'empty' %}hidden{% endif %}>{{ preview_config.announce_text_down_patients }}</div>
+                <div id="div_ongoing" data-page-editor-component="ongoing"><p data-config-key="announce_ongoing_text" data-preview-number="042">{{ preview_config.announce_ongoing_text }}</p></div>
             </div>
             <div id="div_pub" data-page-editor-component="gallery" {% if scenario != 'gallery' %}hidden{% endif %}><div class="page-editor-gallery-placeholder">Galerie de démonstration</div></div>
         </div>
         <div id="div_footer">
-            <div id="div_next_patients" data-page-editor-component="next"><span data-config-key="announce_next_patients_text">{{ payload.config.announce_next_patients_text }}</span> 061 · 064 · 072</div>
+            <div id="div_next_patients" data-page-editor-component="next"><span data-config-key="announce_next_patients_text">{{ preview_config.announce_next_patients_text }}</span> 061 · 064 · 072</div>
         </div>
     </div>
 {% elif page == 'patient' %}
     <div id="main">
-        {{ page_components.patient_title(payload.config.page_patient_title, true) }}
+        {{ page_components.patient_title(preview_config.page_patient_title, true) }}
         <div id="div_buttons_parents" data-page-editor-component="buttons">
-            {% if scenario == 'children' %}
-                <div class="page-editor-demo-button">Ordonnance</div><div class="page-editor-demo-button">Conseil</div>
+            {% if scenario in ('home', 'children') %}
+                {% if preview_buttons %}
+                    {% with buttons=preview_buttons, max_length=preview_buttons_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, page_patient_interface_validate_cancel=preview_patient_interface.validate_cancel %}
+                        {% include 'patient/patient_buttons_left.html' %}
+                    {% endwith %}
+                {% else %}
+                    <div class="div_no_buttons_message"><p class="no_buttons_title">Aucun bouton configuré</p></div>
+                {% endif %}
             {% elif scenario == 'validation' %}
-                <div class="page-editor-demo-button">Imprimer mon ticket</div><div class="page-editor-demo-button">Scanner le QR code</div>
+                <div class="div_summary">
+                    <div class="div_text_summary"><p class="text_summary">{{ preview_activity_label }}</p></div>
+                    <div class="div_validation_buttons">
+                        <div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.validate_print }}</p></div>
+                        <div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.validate_scan }}</p></div>
+                        <div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.validate_cancel }}</p></div>
+                    </div>
+                </div>
             {% elif scenario == 'conclusion' %}
-                <div class="page-editor-demo-button">Votre numéro : 042</div>
-            {% else %}
-                <div class="page-editor-demo-button">Retrait de commande</div><div class="page-editor-demo-button">Avec ordonnance</div><div class="page-editor-demo-button">Sans ordonnance</div>
+                <div class="div_summary">
+                    <div class="div_text_summary"><p class="text_summary">{{ preview_patient_interface.confirmation }}</p></div>
+                    <div class="div_validation_buttons"><div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.done_back }}</p></div></div>
+                </div>
             {% endif %}
         </div>
-        <div id="div_buttons_children" class="buttons_children_active" data-page-editor-component="subtitle" data-config-key="page_patient_subtitle">{{ payload.config.page_patient_subtitle }}</div>
-        <div class="language-selector page-editor-demo-flags" data-page-editor-component="languages"><span class="page-editor-demo-flag">FR</span><span class="page-editor-demo-flag">EN</span></div>
+        <div id="div_buttons_children" class="buttons_children_active" data-page-editor-component="subtitle" data-config-key="page_patient_subtitle">{{ preview_specific_message if scenario in ('validation', 'conclusion') and preview_specific_message else preview_config.page_patient_subtitle }}</div>
+        {% if payload.config.page_patient_display_translations and preview_languages|length > 1 %}
+            <div class="language-selector page-editor-demo-flags" data-page-editor-component="languages">
+                {% for language in preview_languages %}
+                    {% if language.flag_url and language.flag_url != 'None' %}
+                        <img class="flag" src="/static/images/flags/{{ language.flag_url }}" alt="{{ language.translation }}">
+                    {% else %}
+                        <span class="page-editor-demo-flag">{{ language.code|upper }}</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
     </div>
 {% else %}
     <div class="container">
-        {{ page_components.phone_title(payload.config.phone_title, true) }}
+        {{ page_components.phone_title(preview_config.phone_title, true) }}
         <div id="div_infos">
             {% if scenario == 'waiting' %}
                 <p>En attente de validation pour le numéro 042</p><p>Veuillez patienter…</p>
@@ -82,14 +106,15 @@
                 {{ page_components.phone_lines(
                     phone_your_turn_lines if scenario == 'your-turn' else phone_confirmation_lines,
                     scenario == 'your-turn',
-                    'Message de l’activité sélectionnée.',
-                    true,
+                    preview_phone_specific_message,
+                    preview_phone_display_specific_message,
                     true
                 ) }}
             {% endif %}
         </div>
     </div>
 {% endif %}
+<script id="page-editor-preview-tokens" type="application/json">{{ preview_tokens | tojson }}</script>
 <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/page_editor_preview.js') }}"></script>
 </body>

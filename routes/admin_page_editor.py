@@ -11,7 +11,16 @@ from audit_log import ACTION_DELETE, ACTION_RESTORE, ACTION_UPDATE, OUTCOME_FAIL
 from audit_service import record_audit
 from communication import communikation
 from config import time_tz
-from models import ConfigOption, PageEditorRevision, PageEditorState, db
+from models import (
+    Button,
+    ConfigOption,
+    Counter,
+    Language,
+    PageEditorRevision,
+    PageEditorState,
+    Pharmacist,
+    db,
+)
 from page_editor import (
     current_payload,
     get_adapter,
@@ -21,11 +30,12 @@ from page_editor import (
 )
 from params_registry import column_values_for, get_spec
 from routes.admin_security import permission_error_response
+from utils import balise_values
 
 
 admin_page_editor_bp = Blueprint("admin_page_editor", __name__)
 
-_PREVIEW_TOKENS = {
+_DEFAULT_PREVIEW_TOKENS = {
     "{P}": "Pharmacie Démonstration",
     "{D}": "24/09/2026",
     "{H}": "10:30",
@@ -36,19 +46,48 @@ _PREVIEW_TOKENS = {
 }
 
 
-def _demo_text(value):
+def _first_preview_button():
+    return (
+        Button.query.filter_by(is_present=True)
+        .order_by(Button.sort_order, Button.id)
+        .first()
+    )
+
+
+def _preview_tokens():
+    values = balise_values()
+    button = _first_preview_button()
+    counter = (
+        Counter.query.filter(Counter.staff_id.isnot(None))
+        .order_by(Counter.id)
+        .first()
+        or Counter.query.order_by(Counter.id).first()
+    )
+    staff = counter.staff if counter and counter.staff else (
+        Pharmacist.query.filter_by(is_active=True).order_by(Pharmacist.id).first()
+    )
+    values.update({
+        "N": "042",
+        "A": button.label if button else "Activité",
+        "C": counter.name if counter else "Comptoir 1",
+        "M": staff.name if staff else "Équipe",
+    })
+    return {f"{{{key}}}": str(value or "") for key, value in values.items()}
+
+
+def _demo_text(value, tokens=None):
     result = str(value or "")
-    for token, replacement in _PREVIEW_TOKENS.items():
+    for token, replacement in (tokens or _DEFAULT_PREVIEW_TOKENS).items():
         result = result.replace(token, replacement)
     return result
 
 
-def _render_phone_markdown(config):
+def _render_phone_markdown(config, tokens=None):
     rendered = {}
     for key, value in config.items():
         if not (key.startswith("phone_line") or key.startswith("phone_your_turn_line")):
             continue
-        html = markdown2.markdown(_demo_text(value), safe_mode="escape")
+        html = markdown2.markdown(_demo_text(value, tokens), safe_mode="escape")
         rendered[key] = bleach.clean(
             html,
             tags={"p", "br", "strong", "em", "ul", "ol", "li", "a", "code"},
@@ -57,6 +96,75 @@ def _render_phone_markdown(config):
             strip=True,
         )
     return rendered
+
+
+def _patient_preview_data(scenario, tokens):
+    top_level = (
+        Button.query.filter_by(is_present=True, parent_button_id=None)
+        .order_by(Button.sort_order, Button.id)
+        .all()
+    )
+    buttons = top_level
+    children = False
+    if scenario == "children":
+        parent = next(
+            (
+                button for button in top_level
+                if button.is_parent and any(child.is_present for child in button.dependent_buttons)
+            ),
+            None,
+        )
+        if parent is not None:
+            buttons = sorted(
+                (child for child in parent.dependent_buttons if child.is_present),
+                key=lambda child: (child.sort_order, child.id),
+            )
+            children = True
+
+    empty_parent_ids = {
+        button.id for button in buttons
+        if button.is_parent and not any(child.is_present for child in button.dependent_buttons)
+    }
+    selected_button = next(
+        (button for button in buttons if button.activity is not None),
+        next((button for button in top_level if button.activity is not None), None),
+    )
+    return {
+        "preview_buttons": buttons,
+        "preview_buttons_children": children,
+        "preview_buttons_max_length": 2 if buttons and buttons[0].shape == "square" else 4,
+        "preview_empty_parent_ids": empty_parent_ids,
+        "preview_languages": (
+            Language.query.filter_by(is_active=True)
+            .order_by(Language.sort_order, Language.id)
+            .all()
+        ),
+        "preview_activity_label": selected_button.label if selected_button else "Activité",
+        "preview_specific_message": (
+            selected_button.activity.specific_message
+            if selected_button and selected_button.activity else ""
+        ),
+        "preview_patient_interface": {
+            "validate_print": current_app.config.get(
+                "PAGE_PATIENT_INTERFACE_VALIDATE_PRINT", "Imprimer mon ticket"
+            ),
+            "validate_scan": current_app.config.get(
+                "PAGE_PATIENT_INTERFACE_VALIDATE_SCAN", "Scanner le QR code"
+            ),
+            "validate_cancel": current_app.config.get(
+                "PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL", "Annuler"
+            ),
+            "done_back": current_app.config.get(
+                "PAGE_PATIENT_INTERFACE_DONE_BACK", "Terminer"
+            ),
+            "confirmation": _demo_text(
+                current_app.config.get(
+                    "PAGE_PATIENT_CONFIRMATION_MESSAGE", "Votre numéro : {N}"
+                ),
+                tokens,
+            ),
+        },
+    }
 
 
 def _page_context(page, *, api):
@@ -290,17 +398,41 @@ def preview(page):
         deepcopy(state_row.draft_json)
         if state_row and state_row.draft_json else current_payload(page)
     )
+    tokens = _preview_tokens()
+    preview_config = {
+        key: _demo_text(value, tokens) if isinstance(value, str) else value
+        for key, value in payload["config"].items()
+    }
     phone_html = {}
     if page == "phone":
-        phone_html = _render_phone_markdown(payload["config"])
+        phone_html = _render_phone_markdown(payload["config"], tokens)
+    patient_preview = _patient_preview_data(scenario, tokens) if page == "patient" else {}
+    second_call_tokens = dict(tokens)
+    second_call_tokens["{N}"] = "057"
+    preview_call_texts = [
+        _demo_text(payload["config"].get("announce_call_text", ""), tokens),
+        _demo_text(payload["config"].get("announce_call_text", ""), second_call_tokens),
+    ]
+    preview_button = _first_preview_button()
     return render_template(
         "admin/page_editor_preview.html",
         page=page,
         scenario=scenario,
         payload=payload,
+        preview_config=preview_config,
+        preview_tokens=tokens,
+        preview_call_texts=preview_call_texts,
+        preview_phone_specific_message=(
+            preview_button.activity.specific_message
+            if preview_button and preview_button.activity else ""
+        ),
+        preview_phone_display_specific_message=current_app.config.get(
+            "PHONE_DISPLAY_SPECIFIC_MESSAGE", True
+        ),
         adapter=public_adapter_data(page),
         phone_confirmation_lines=[phone_html.get(f"phone_line{index}", "") for index in range(1, 7)],
         phone_your_turn_lines=[phone_html.get(f"phone_your_turn_line{index}", "") for index in range(1, 7)],
+        **patient_preview,
     )
 
 
@@ -316,7 +448,7 @@ def render_preview_content(page):
         normalized = validate_payload(page, body.get("payload"))
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
-    return jsonify({"html": _render_phone_markdown(normalized["config"])})
+    return jsonify({"html": _render_phone_markdown(normalized["config"], _preview_tokens())})
 
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/publish")

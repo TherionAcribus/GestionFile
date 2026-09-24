@@ -1,21 +1,16 @@
 (function () {
     'use strict';
 
-    const tokenValues = {
-        '{P}': '042',
-        '{D}': 'Pharmacie Démonstration',
-        '{H}': '10:30',
-        '{A}': 'Ordonnances',
-        '{N}': '3',
-        '{M}': 'Message de démonstration',
-        '{C}': 'Comptoir 3'
-    };
+    const tokensNode = document.getElementById('page-editor-preview-tokens');
+    const tokenValues = tokensNode ? JSON.parse(tokensNode.textContent) : {};
     let markdownTimer = null;
     let markdownRequest = 0;
 
-    function demoText(value) {
+    function demoText(value, element) {
         let result = String(value == null ? '' : value);
-        Object.entries(tokenValues).forEach(function (entry) {
+        const values = Object.assign({}, tokenValues);
+        if (element?.dataset.previewNumber) values['{N}'] = element.dataset.previewNumber;
+        Object.entries(values).forEach(function (entry) {
             result = result.split(entry[0]).join(entry[1]);
         });
         return result;
@@ -29,7 +24,7 @@
         Object.entries(payload.config || {}).forEach(function (entry) {
             if (document.body.dataset.page === 'phone' && (entry[0].startsWith('phone_line') || entry[0].startsWith('phone_your_turn_line'))) return;
             document.querySelectorAll('[data-config-key="' + CSS.escape(entry[0]) + '"]').forEach(function (element) {
-                element.textContent = demoText(entry[1]);
+                element.textContent = demoText(entry[1], element);
             });
         });
         if (document.body.dataset.page === 'phone') renderPhoneMarkdown(payload);
