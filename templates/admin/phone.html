@@ -1,16 +1,23 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Page "Annonce"{% endblock %}
+{% block title %}Téléphone patient{% endblock %}
 
 {% block content %}
-    <div class="d-flex align-items-center justify-content-between gap-2">
-        <h3 class="text-center">Page "Téléphone patient"</h3>
-        {% if page_editor_enabled('phone') %}<a class="btn btn-primary" href="/admin/page-editor/phone"><i class="bi bi-layout-wtf"></i> Éditeur visuel</a>{% endif %}
+<div class="advanced-editor-page">
+    <div class="advanced-editor-header">
+        <div>
+            <h2 class="mb-1">Téléphone patient</h2>
+            <p class="text-muted mb-2">Réglages détaillés des messages et de l’apparence affichés après le scan du QR Code.</p>
+            {% if page_editor_enabled('phone') %}
+            <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
+                <a class="btn btn-outline-primary" href="/admin/page-editor/phone">Éditeur visuel</a>
+                <a class="btn btn-primary active" aria-current="page" href="/admin/phone">Mode avancé</a>
+            </div>
+            {% endif %}
+        </div>
     </div>
-    <p>Cette page permet de paramétrer les éléments qui s'affichent sur le téléphone du patient quand celui-ci scanne le QRCode.<br>
-    Pour la mise en page, utilisez le Markdown.</p>
 
-    <div class="row">
+    <div class="row advanced-editor-workspace">
         <div class="col-12">
             <!-- Nav tabs -->
             <ul class="nav nav-tabs" id="phoneTab" role="tablist">
@@ -35,7 +42,7 @@
     </div>
 
     {{ macros.backup_buttons_page("css_phone", "config_phone", "Page Téléphone") }}
-
+</div>
 {% endblock %}
 
 {# Personnalisation CSS (selecteurs de couleur, copie de palette entre pages,

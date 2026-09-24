@@ -34,27 +34,55 @@
     outline-offset: 2px;
 }
 
-.variables_calling {
-    background-color: rgb(215, 242, 250);
-    padding: 3px;
-    /* Ces éléments sont désormais de vrais <button> (accessibles au clavier) ;
-       on neutralise l'apparence par défaut pour conserver le rendu « balise »
-       en ligne d'origine. */
-    border: none;
-    border-radius: 3px;
-    font: inherit;
-    color: inherit;
-    line-height: inherit;
+.admin-markers {
+    background: color-mix(in srgb, var(--bs-primary) 5%, var(--bs-body-bg));
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
+    border-radius: .5rem;
+    margin-top: .5rem;
+    padding: .6rem;
+}
+
+.admin-markers-heading {
+    color: var(--bs-secondary-color);
+    font-size: .75rem;
+    font-weight: 600;
+    letter-spacing: .025em;
+    margin-bottom: .45rem;
+    text-transform: uppercase;
+}
+
+.admin-marker-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+}
+
+.variables_calling.admin-marker {
+    align-items: center;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 999px;
+    color: var(--bs-body-color);
     cursor: pointer;
+    display: inline-flex;
+    font-size: .75rem;
+    gap: .3rem;
+    line-height: 1;
+    padding: .4rem .55rem;
 }
 
-.variables_calling:hover {
-    background-color: rgb(190, 232, 245);
+.variables_calling.admin-marker code {
+    color: var(--bs-primary);
+    font-size: .8rem;
+    font-weight: 700;
 }
 
-.variables_calling:focus-visible {
-    outline: 2px solid #0d6efd;
-    outline-offset: 1px;
+.variables_calling.admin-marker:hover,
+.variables_calling.admin-marker:focus-visible {
+    background: var(--bs-primary-bg-subtle);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 .15rem rgba(var(--bs-primary-rgb), .14);
+    outline: 0;
 }
 
 .button-order-item {
@@ -78,7 +106,142 @@
 }
 
 .admin_css_textbloc {
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
+}
+
+.advanced-editor-page {
+    padding-bottom: 1.5rem;
+}
+
+.advanced-editor-header {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--bs-border-color);
     display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding: 1rem 0;
+}
+
+.advanced-editor-workspace {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .65rem;
+    box-shadow: 0 .15rem .5rem rgba(0, 0, 0, .04);
+    margin: 0 0 1.25rem;
+    overflow: hidden;
+}
+
+.advanced-editor-workspace > .col-12 {
+    padding: 0;
+}
+
+.advanced-editor-workspace .nav-tabs {
+    background: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+    gap: .25rem;
+    padding: .75rem .75rem 0;
+}
+
+.advanced-editor-workspace .tab-content {
+    padding: 1rem;
+}
+
+.advanced-editor-workspace .accordion-item {
+    border-color: var(--bs-border-color);
+    overflow: hidden;
+}
+
+.advanced-editor-workspace .accordion-button {
+    font-weight: 600;
+}
+
+.admin-setting-card,
+.admin-palette-card {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    margin-left: 0;
+    margin-right: 0;
+    padding: .85rem .35rem;
+}
+
+.admin-palette-card {
+    background: color-mix(in srgb, var(--bs-primary) 4%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--bs-primary) 16%, var(--bs-border-color));
+}
+
+.admin-palette-color {
+    min-width: min(100%, 320px);
+}
+
+.admin-color-control {
+    min-width: 0;
+}
+
+.admin-color-control > .form-label {
+    font-weight: 600;
+    margin-bottom: .35rem !important;
+}
+
+.admin-color-inputs {
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: 3rem minmax(8rem, 1fr);
+}
+
+.admin-color-picker {
+    cursor: pointer;
+    height: 2.6rem;
+    min-width: 3rem;
+    padding: .2rem;
+    width: 3rem;
+}
+
+.admin-color-picker::-webkit-color-swatch {
+    border: 0;
+    border-radius: .25rem;
+}
+
+.admin-color-picker::-moz-color-swatch {
+    border: 0;
+    border-radius: .25rem;
+}
+
+.admin-color-value {
+    font-family: var(--bs-font-monospace);
+    min-width: 0;
+    text-transform: uppercase;
+}
+
+.admin-palette-copy {
+    background: color-mix(in srgb, var(--bs-primary) 5%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));
+}
+
+.admin-palette-copy-title {
+    color: var(--bs-primary-text-emphasis);
+    font-weight: 600;
+}
+
+.admin-palette-copy-select {
+    max-width: 300px;
+}
+
+@media (max-width: 767px) {
+    .admin_css_textbloc {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-setting-card .d-flex,
+    .admin-palette-card .d-flex {
+        align-items: stretch !important;
+    }
+
+    .advanced-editor-workspace .tab-content {
+        padding: .75rem;
+    }
 }
 
 

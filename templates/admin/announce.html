@@ -3,12 +3,21 @@
 {% block title %}Page "Annonce"{% endblock %}
 
 {% block content %}
-    <div class="d-flex align-items-center justify-content-between gap-2">
-        <h3>Page "Annonce"</h3>
-        {% if page_editor_enabled('announce') %}<a class="btn btn-primary" href="/admin/page-editor/announce"><i class="bi bi-layout-wtf"></i> Éditeur visuel</a>{% endif %}
+<div class="advanced-editor-page">
+    <div class="advanced-editor-header">
+        <div>
+            <h2 class="mb-1">Page « Annonce »</h2>
+            <p class="text-muted mb-2">Réglages détaillés des contenus, couleurs, dimensions et fonctions de l’écran.</p>
+            {% if page_editor_enabled('announce') %}
+            <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
+                <a class="btn btn-outline-primary" href="/admin/page-editor/announce">Éditeur visuel</a>
+                <a class="btn btn-primary active" aria-current="page" href="/admin/announce">Mode avancé</a>
+            </div>
+            {% endif %}
+        </div>
     </div>
 
-    <div class="row">
+    <div class="row advanced-editor-workspace">
         <div class="col-12">
             <!-- Nav tabs -->
             <ul class="nav nav-tabs" id="announceTab" role="tablist">
@@ -52,7 +61,7 @@
                 hx-swap="none">Relancer la page "Annonce"
         </button>
     </div>
-
+</div>
 
 {% endblock %}
 

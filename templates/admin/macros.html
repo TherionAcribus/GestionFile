@@ -1,76 +1,80 @@
 {% macro balises_before_call(key) %}
-<div>
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{P}">{P}</button>
-    pour le nom de la pharmacie,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{N}">{N}</button>
-    pour le numéro du patient,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{A}">{A}</button>
-    pour l'activité,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{D}">{D}</button>
-    pour la date,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{H}">{H}</button>
-    pour l'heure.
+<div class="admin-markers" aria-label="Balises dynamiques">
+    <div class="admin-markers-heading">Balises dynamiques</div>
+    <div class="admin-marker-list">
+        {{ marker_button(key, "{P}", "Pharmacie") }}
+        {{ marker_button(key, "{N}", "Patient") }}
+        {{ marker_button(key, "{A}", "Activité") }}
+        {{ marker_button(key, "{D}", "Date") }}
+        {{ marker_button(key, "{H}", "Heure") }}
+    </div>
 </div>
 {% endmacro %}
 
 {% macro balises_web(key) %}
-<div>
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="#">#</button>
-    pour un titre 1,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="##">##</button>
-    pour un titre 2,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="###">###</button>
-    pour un titre 3,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="*italique*">*italique*</button>
-    pour un texte en italique,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="**gras**">**gras**</button>
-    pour un texte en gras,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="***">***</button>
-    pour une séparation,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="&lt;p align=&quot;center&quot;&gt;&lt;/p&gt;">&lt;p align="center"&gt;&lt;/p&gt;</button>
-    pour centrer un texte. Les autres balises markdown sont également utilisables.
+<div class="admin-markers admin-markers-format" aria-label="Mise en forme Markdown">
+    <div class="admin-markers-heading">Mise en forme</div>
+    <div class="admin-marker-list">
+        {{ marker_button(key, "# ", "Titre 1") }}
+        {{ marker_button(key, "## ", "Titre 2") }}
+        {{ marker_button(key, "### ", "Titre 3") }}
+        {{ marker_button(key, "*italique*", "Italique") }}
+        {{ marker_button(key, "**gras**", "Gras") }}
+        {{ marker_button(key, "***", "Séparateur") }}
+        {{ marker_button(key, "<p align=\"center\"></p>", "Centrer") }}
+    </div>
 </div>
 {% endmacro %}
 
 {% macro balises_for_printer(key) %}
-<div>
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="[center][/center]">Centrer</button>,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="[double][/double]">Double taille</button>,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="**Texte en gras**">Gras</button>,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="__Texte souligné__">Souligné</button>,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="[separator]">Séparateur</button>
+<div class="admin-markers admin-markers-format" aria-label="Mise en forme du ticket">
+    <div class="admin-markers-heading">Mise en forme du ticket</div>
+    <div class="admin-marker-list">
+        {{ marker_button(key, "[center][/center]", "Centrer") }}
+        {{ marker_button(key, "[double][/double]", "Double taille") }}
+        {{ marker_button(key, "**Texte en gras**", "Gras") }}
+        {{ marker_button(key, "__Texte souligné__", "Souligné") }}
+        {{ marker_button(key, "[separator]", "Séparateur") }}
+    </div>
 </div>
 {% endmacro %}
 
 {% macro balises_after_call(key) %}
-<div>
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{P}">{P}</button>
-    pour le nom de la pharmacie,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{N}">{N}</button>
-    pour le numéro du patient,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{A}">{A}</button>
-    pour l'activité,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{M}">{M}</button>
-    pour le membre de l'équipe,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{C}">{C}</button>
-    pour le comptoir,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{D}">{D}</button>
-    pour la date,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{H}">{H}</button>
-    pour l'heure.
+<div class="admin-markers" aria-label="Balises dynamiques">
+    <div class="admin-markers-heading">Balises dynamiques</div>
+    <div class="admin-marker-list">
+        {{ marker_button(key, "{P}", "Pharmacie") }}
+        {{ marker_button(key, "{N}", "Patient") }}
+        {{ marker_button(key, "{A}", "Activité") }}
+        {{ marker_button(key, "{M}", "Équipe") }}
+        {{ marker_button(key, "{C}", "Comptoir") }}
+        {{ marker_button(key, "{D}", "Date") }}
+        {{ marker_button(key, "{H}", "Heure") }}
+    </div>
 </div>
 {% endmacro %}
 
 
 {% macro balises_welcome(key) %}
-<div>
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{P}">{P}</button>
-    pour le nom de la pharmacie,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{D}">{D}</button>
-    pour la date,
-    <button type="button" class="variables_calling" data-placeholder-key="{{ key }}" data-placeholder-text="{H}">{H}</button>
-    pour l'heure.
+<div class="admin-markers" aria-label="Balises dynamiques">
+    <div class="admin-markers-heading">Balises dynamiques</div>
+    <div class="admin-marker-list">
+        {{ marker_button(key, "{P}", "Pharmacie") }}
+        {{ marker_button(key, "{D}", "Date") }}
+        {{ marker_button(key, "{H}", "Heure") }}
+    </div>
 </div>
+{% endmacro %}
+
+{% macro marker_button(key, token, label) %}
+<button type="button"
+        class="variables_calling admin-marker"
+        data-placeholder-key="{{ key }}"
+        data-placeholder-text="{{ token }}"
+        title="Insérer {{ token }} : {{ label }}"
+        aria-label="Insérer {{ token }} : {{ label }}">
+    <code>{{ token }}</code><span>{{ label }}</span>
+</button>
 {% endmacro %}
 
 
@@ -182,7 +186,7 @@
 
 {# Macro pour les blocs de texte avec balises #}
 {% macro textbloc_with_balises(key, value, label, balises_macro, balises_key, display_balises_web=False) %}
-<div class="row mb-4">
+<div class="row mb-4 admin-setting-card admin-text-setting">
     <div class="col-12">
         <div class="d-flex align-items-start">
             <div class="flex-grow-1">
@@ -224,7 +228,7 @@
 
 {# Macro pour bloc printer #}
 {% macro textbloc_for_printer(key, value, label) %}
-<div class="row mb-4">
+<div class="row mb-4 admin-setting-card admin-text-setting">
     <div class="col-12">
         <div class="d-flex align-items-start">
             <div class="flex-grow-1">
@@ -643,33 +647,33 @@
 
 {# Macro pour l'input de couleur #}
 {% macro css_color_input(source, variable, value, label) %}
-<div class="d-flex">
-    <div class="ms-4">
-        <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+<div class="admin-color-control"
+     data-admin-color-control
+     data-color-source="{{ source }}"
+     data-color-variable="{{ variable }}">
+    <label for="{{ source }}_{{ variable }}" class="form-label mb-0">{{ label }}</label>
+    <div class="admin-color-inputs">
+        <input
+            type="color"
+            id="{{ source }}_{{ variable }}_picker"
+            class="form-control form-control-color admin-color-picker"
+            value="{{ value }}"
+            title="Choisir {{ label|lower }}"
+            aria-label="Choisir {{ label|lower }}"
+            data-initial-value="{{ value }}"
+        >
+        <input
+            type="text"
+            id="{{ source }}_{{ variable }}"
+            class="form-control admin-color-value"
+            value="{{ value }}"
+            autocomplete="off"
+            spellcheck="false"
+            aria-describedby="{{ source }}_{{ variable }}_help"
+            data-initial-value="{{ value }}"
+        >
     </div>
-    <div class="ms-2 me-2">
-        <div class="input-group">
-            <input
-                type="color"
-                id="{{ source }}_{{ variable }}_picker"
-                class="form-control form-control-color me-2"
-                value="{{ value }}"
-                title="Choisir une couleur"
-                data-color-source="{{ source }}"
-                data-color-variable="{{ variable }}"
-                data-initial-value="{{ value }}"
-                style="width: 60px;"
-            >
-            <select 
-                id="{{ source }}_{{ variable }}"
-                class="form-select color-select2 ms-4"
-                style="width: 150px; max-width: 200px;"
-                data-initial-value="{{ value }}"
-            >
-                <option value="{{ value }}">{{ value }}</option>
-            </select>
-        </div>
-    </div>
+    <div id="{{ source }}_{{ variable }}_help" class="form-text">Hexadécimal, couleur CSS ou « transparent ».</div>
 </div>
 {% endmacro %}
 
@@ -711,7 +715,7 @@ Enregistrer
 
 {# Macro pour le bloc complet - sans le script #}
 {% macro css_color_bloc(source, variable, value, label) %}
-<div class="row mb-4">
+<div class="row mb-4 admin-setting-card admin-color-setting">
     <div class="col-12">
         <div class="d-flex align-items-center">
             <div class="flex-grow-1">
@@ -727,24 +731,24 @@ Enregistrer
 
 {# Macro pour le bloc complet - avec collapse pour les variables dépendantes #}
 {% macro parent_css_color_bloc(source, variable, value, label) %}
-<div class="row mb-4">
+<div class="row mb-4 admin-palette-card" data-palette-variable="{{ variable }}">
     <div class="col-12">
         {# Flexbox principal avec largeur limitée #}
-        <div class="d-flex flex-wrap align-items-center gap-3 mb-2" style="max-width: 800px;">
+        <div class="d-flex flex-wrap align-items-end gap-3 mb-2">
             {# Zone du colorpicker #}
-            <div class="flex-grow-1" style="min-width: 300px; max-width: 400px;">
+            <div class="flex-grow-1 admin-palette-color">
                 {{ css_color_input(source, variable, value, label) }}
             </div>
 
             {# Boutons groupés #}
             <div class="d-flex gap-2 align-items-center">
                 {# Bouton de configuration #}
-                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                <button class="btn btn-outline-secondary btn-sm" type="button"
                         data-bs-toggle="collapse" 
                         data-bs-target="#collapse-{{ variable }}" 
                         aria-expanded="false" 
                         aria-controls="collapse-{{ variable }}">
-                    <i class="fas fa-cog"></i> Choisir les éléments à modifier
+                    <i class="bi bi-sliders"></i> Éléments associés
                 </button>
                 
                 {# Bouton de validation #}
@@ -753,7 +757,7 @@ Enregistrer
         </div>
 
         {# Contenu du collapse #}
-        <div class="collapse" id="collapse-{{ variable }}" style="max-width: 800px;">
+        <div class="collapse" id="collapse-{{ variable }}">
             <div class="card card-body">
                 {# Boutons de sélection #}
                 <div class="d-flex flex-wrap gap-2 mb-3">
@@ -942,15 +946,15 @@ Enregistrer
 
 {# Macro pour copier les couleurs d'une autre page #}
 {% macro copy_colors_bloc(current_page_key) %}
-<div class="card mb-4 border-info" data-copy-colors-page="{{ current_page_key }}">
-    <div class="card-body py-2">
+<div class="card mb-4 admin-palette-copy" data-copy-colors-page="{{ current_page_key }}">
+    <div class="card-body">
         <div class="d-flex flex-wrap align-items-center gap-3">
-            <span class="fw-bold text-info"><i class="fas fa-palette"></i> Copier les couleurs depuis :</span>
-            <select id="copy_colors_select_{{ current_page_key }}" class="form-select form-select-sm" style="max-width: 300px;">
+            <span class="admin-palette-copy-title"><i class="bi bi-palette"></i> Réutiliser une palette</span>
+            <select id="copy_colors_select_{{ current_page_key }}" class="form-select form-select-sm admin-palette-copy-select">
                 <option value="">-- Choisir une page --</option>
             </select>
-            <button type="button" class="btn btn-sm btn-outline-info" data-copy-colors="{{ current_page_key }}">
-                <i class="fas fa-copy"></i> Copier
+            <button type="button" class="btn btn-sm btn-outline-primary" data-copy-colors="{{ current_page_key }}">
+                <i class="bi bi-copy"></i> Copier la palette
             </button>
         </div>
     </div>

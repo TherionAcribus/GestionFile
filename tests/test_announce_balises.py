@@ -224,5 +224,5 @@ def test_macro_after_call_insere_m_pour_le_membre():
                                "templates", "admin", "macros.html"),
                   encoding="utf-8").read()
     bloc = source.split("balises_after_call", 1)[1].split("endmacro", 1)[0]
-    assert 'data-placeholder-text="{M}">{M}<' in bloc
+    assert 'marker_button(key, "{M}", "Équipe")' in bloc
     assert 'data-placeholder-text="{A}">{M}<' not in bloc

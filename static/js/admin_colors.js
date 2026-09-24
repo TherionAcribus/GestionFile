@@ -750,60 +750,58 @@ function formatColorOption(color) {
     </span>`);
 }
 
+function cssColorToHex(value) {
+    if (!value || !CSS.supports('color', value)) return null;
+    const context = document.createElement('canvas').getContext('2d');
+    context.fillStyle = '#000000';
+    context.fillStyle = value;
+    const normalized = context.fillStyle;
+    if (/^#[0-9a-f]{6}$/i.test(normalized)) return normalized.toUpperCase();
+    const match = normalized.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if (!match) return null;
+    return '#' + match.slice(1, 4).map(function(part) {
+        return Number(part).toString(16).padStart(2, '0');
+    }).join('').toUpperCase();
+}
+
 function initColorPickers() {
-    $('.color-select2').each(function() {
-        const $select = $(this);
-        if (!$select.data('select2')) {  // Vérifie si Select2 n'est pas déjà initialisé
-            const selectId = this.id;
-            
-            // Récupère la première partie comme source et le reste comme variable
-            const firstUnderscore = selectId.indexOf('_');
-            const source = selectId.substring(0, firstUnderscore);
-            const variable = selectId.substring(firstUnderscore + 1);
-            const colorPickerId = `${source}_${variable}_picker`;
+    document.querySelectorAll('[data-admin-color-control]').forEach(function(control) {
+        if (control.dataset.colorControlInit === '1') return;
+        control.dataset.colorControlInit = '1';
 
-            $select.select2({
-                data: getColorData(),
-                templateResult: formatColorOption,
-                templateSelection: formatColorOption
-            });
+        const source = control.dataset.colorSource;
+        const variable = control.dataset.colorVariable;
+        const picker = document.getElementById(`${source}_${variable}_picker`);
+        const valueInput = document.getElementById(`${source}_${variable}`);
+        if (!picker || !valueInput) return;
 
-            // Synchronisation Select2 -> ColorPicker
-            $select.on('select2:select', function(e) {
-                const colorPicker = document.getElementById(colorPickerId);
-                if (colorPicker) {
-                    colorPicker.value = e.params.data.id;
-                    handleColorChange(source, variable);
-                }
-            });
+        const syncFromText = function() {
+            const value = valueInput.value.trim();
+            const hex = cssColorToHex(value);
+            const isValid = Boolean(hex) || value.toLowerCase() === 'transparent';
+            valueInput.classList.toggle('is-invalid', !isValid);
+            valueInput.setCustomValidity(isValid ? '' : 'Saisissez une couleur CSS valide.');
+            if (hex) picker.value = hex;
+        };
 
-            // Synchronisation ColorPicker -> Select2
-            const colorPicker = document.getElementById(colorPickerId);
-            if (colorPicker) {
-                colorPicker.addEventListener('input', function(e) {
-                    const color = e.target.value.toUpperCase();
-                    const colorName = Object.entries(cssNamedColors).find(([_, hex]) => 
-                        hex.toUpperCase() === color)?.[0] || color;
-                    
-                    // Mise à jour ou création de l'option dans Select2
-                    if (!$select.find(`option[value="${color}"]`).length) {
-                        $select.append(new Option(`${colorName} ${color}`, color, false, false));
-                    }
-                    $select.val(color).trigger('change');
-                    handleColorChange(source, variable);
-                });
-            }
-        }
+        picker.addEventListener('input', function() {
+            valueInput.value = picker.value.toUpperCase();
+            syncFromText();
+        });
+        valueInput.addEventListener('input', syncFromText);
+        syncFromText();
     });
 }
 
 function handleColorChange(source, variable) {
-    // On ne gère que l'activation du bouton
     const input = document.getElementById(`${source}_${variable}`);
     const button = document.getElementById(`${source}_${variable}_button`);
+    if (!input || !button) return;
     const initialValue = input.dataset.initialValue;
-    
-    button.disabled = input.value === initialValue;
+    const value = input.value.trim();
+    const isValid = Boolean(cssColorToHex(value)) || value.toLowerCase() === 'transparent';
+
+    button.disabled = !isValid || value === initialValue;
 }
 
 
@@ -846,24 +844,15 @@ function updateDependentColors(source, parentVariable, newValue, selectedVariabl
     // Mise à jour de l'interface pour les variables sélectionnées
     selectedVariables.forEach(targetVar => {
         const picker = document.getElementById(`${source}_${targetVar}_picker`);
-        if (picker) {
-            picker.value = newValue;
-        }
-
-        const select = $(`#${source}_${targetVar}`);
-        if (select.length) {
-            const colorName = Object.entries(cssNamedColors).find(([_, hex]) => 
-                hex.toUpperCase() === newValue.toUpperCase())?.[0] || newValue;
-            
-            if (!select.find(`option[value="${newValue}"]`).length) {
-                select.append(new Option(`${colorName} ${newValue}`, newValue, false, false));
-            }
-            select.val(newValue).trigger('change.select2');  // Utiliser change.select2 pour éviter la propagation
-        }
+        const hex = cssColorToHex(newValue);
+        if (picker && hex) picker.value = hex;
 
         const input = document.getElementById(`${source}_${targetVar}`);
         if (input) {
+            input.value = newValue;
             input.dataset.initialValue = newValue;
+            input.classList.remove('is-invalid');
+            input.setCustomValidity('');
         }
     });
 
@@ -1068,4 +1057,3 @@ window.HX_PARAM_COLLECTORS.cssColorDependencies = function (elt, params) {
         }) : []
     );
 };
-

@@ -46,6 +46,31 @@ def open_editor(page: Page):
     expect(page.frame_locator("#editor-preview").locator("#text_title")).to_be_visible()
 
 
+@pytest.mark.parametrize("route", ["announce", "patient", "phone"])
+def test_advanced_mode_uses_shared_editor_design(admin_page: Page, route):
+    admin_page.goto(f"{BASE_URL}/admin/{route}")
+    expect(admin_page.locator(".advanced-editor-page")).to_be_visible()
+    expect(admin_page.locator(".advanced-editor-workspace")).to_be_visible()
+    expect(admin_page.get_by_role("link", name="Mode avancé")).to_have_attribute("aria-current", "page")
+
+    color_control = admin_page.locator("[data-admin-color-control]").first
+    expect(color_control).to_be_visible()
+    value_input = color_control.locator(".admin-color-value")
+    picker = color_control.locator(".admin-color-picker")
+    original = value_input.input_value()
+    value_input.fill("#123456")
+    expect(picker).to_have_value("#123456")
+    value_input.fill(original)
+
+    marker = admin_page.locator(".admin-marker").first
+    expect(marker).to_have_count(1)
+    collapse = marker.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' accordion-collapse ')][1]")
+    collapse_id = collapse.get_attribute("id")
+    if collapse_id and not marker.is_visible():
+        admin_page.locator(f'[data-bs-target="#{collapse_id}"]').click()
+    expect(marker).to_be_visible()
+
+
 def test_edit_resize_scenario_undo_and_keyboard_move(admin_page: Page):
     open_editor(admin_page)
     title = admin_page.locator('[data-component-id="title"]')
