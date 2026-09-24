@@ -5,7 +5,7 @@ import time
 from functools import wraps
 from datetime import datetime, timedelta
 from flask import current_app
-from sqlalchemy import func, text
+from sqlalchemy import bindparam, func, text
 from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats
 from services.queue_service import (
     archive_and_purge_all_patients, archive_and_purge_old_patients,
@@ -684,14 +684,14 @@ def storage_stats():
     dialect = db.engine.dialect.name
 
     if dialect == 'mysql':
-        names = ", ".join(f"'{t}'" for t in _RETENTION_TABLES)
         schema = (current_app.config.get('MYSQL_DATABASE')
                   or db.engine.url.database)
         rows = db.session.execute(text(
             "SELECT table_name, data_length, index_length, data_free,"
             "       table_rows FROM information_schema.TABLES "
-            f"WHERE table_schema = :schema AND table_name IN ({names})"),
-            {'schema': schema}).all()
+            "WHERE table_schema = :schema AND table_name IN :names")
+            .bindparams(bindparam("names", expanding=True)),
+            {'schema': schema, 'names': list(_RETENTION_TABLES)}).all()
         tables = []
         for name, data_len, idx_len, data_free, est_rows in rows:
             physical = int(data_len or 0) + int(idx_len or 0)

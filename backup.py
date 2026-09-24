@@ -86,12 +86,14 @@ def backup_database(db_name, cursor):
         create_table_sql = cursor.fetchone()[1] + ";\n\n"
         buffer.write(create_table_sql.encode('utf-8'))
 
-        cursor.execute(f"SELECT * FROM {db_name}.{table_name}")
+        # Identifiants non paramétrables : db_name provient d'une liste en dur
+        # (backup_mysql) et table_name de SHOW TABLES — aucune entrée utilisateur.
+        cursor.execute(f"SELECT * FROM {db_name}.{table_name}")  # nosec B608
         rows = cursor.fetchall()
         if rows:
             columns = [desc[0] for desc in cursor.description]
             columns_str = ', '.join(columns)
-            buffer.write(f"INSERT INTO {table_name} ({columns_str}) VALUES\n".encode('utf-8'))
+            buffer.write(f"INSERT INTO {table_name} ({columns_str}) VALUES\n".encode('utf-8'))  # nosec B608 -- identifiants issus de SHOW TABLES
 
             for row in rows:
                 values_str = ', '.join(["'{}'".format(str(value).replace("'", "\\'")) if value is not None else 'NULL' for value in row])

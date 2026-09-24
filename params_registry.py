@@ -16,7 +16,8 @@ Pour chaque clé autorisée, on déclare :
                          indicatif ;
 - ``validator``        : type de validation appliqué **côté serveur** —
                          ``bool`` / ``int`` / ``text`` / ``welcome`` /
-                         ``before_call`` / ``after_call`` ;
+                         ``before_call`` / ``after_call`` / ``ticket`` /
+                         ``theme`` / ``sound_file`` ;
 - ``restart_required`` : ``True`` si le paramètre ne prend effet qu'après
                          redémarrage du serveur.
 
@@ -393,7 +394,7 @@ class ParamSpec:
     config_name: str
     value_type: str          # value_str | value_int | value_bool | value_text
     permission: str
-    validator: str           # bool | int | text | welcome | before_call | after_call | ticket | theme
+    validator: str           # bool | int | text | welcome | before_call | after_call | ticket | theme | sound_file
     kind: str                # switch | input | select
     restart_required: bool = False
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)

@@ -852,7 +852,7 @@ if __name__ == "__main__":
                 _reconcile_scheduler_jobs()
 
             #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
-            socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)
+            socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)  # nosec B104 -- écoute LAN requise (bornes/comptoirs)
 
 app.logger.debug("Starting Flask...")
 app.logger.info(f"Starting Flask on port {server_port} with debug={app.debug}")

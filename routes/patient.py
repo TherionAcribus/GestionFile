@@ -700,17 +700,15 @@ def phone_patient_ping():
     phone_lines = []
 
     if language_code != "fr":
-        for line in range(1, 7):            
-            exec(f"phone_line{line} = get_text_translation('phone_line{line}', language_code)['translation']"),
-            exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
-            phone_lines.append(eval(f"phone_line{line}"))
+        for line in range(1, 7):
+            phone_line = get_text_translation(f'phone_line{line}', language_code)['translation']
+            phone_lines.append(replace_balise_phone(phone_line, patient))
         activity = Activity.query.get(activity_id)
         specific_message = get_activity_message_translation(activity, session.get('language_code', 'fr'))
     else:
         for line in range(1, 7):
-            exec(f"phone_line{line} = app.config['PHONE_LINE{line}']"),
-            exec(f"phone_line{line} = replace_balise_phone(phone_line{line}, patient)"),
-            phone_lines.append(eval(f"phone_line{line}"))
+            phone_line = app.config[f'PHONE_LINE{line}']
+            phone_lines.append(replace_balise_phone(phone_line, patient))
         specific_message= Activity.query.get(activity_id).specific_message
 
     # Convertir le texte des phone_lines de markdown en HTML
@@ -752,17 +750,15 @@ def phone_patient_your_turn():
     phone_lines = []
 
     if language_code != "fr":
-        for line in range(1, 7):            
-            exec(f"phone_your_turn_line{line} = get_text_translation('phone_your_turn_line{line}', language_code)['translation']"),
-            exec(f"phone_your_turn_line{line} = replace_balise_phone(phone_your_turn_line{line}, patient)"),
-            phone_lines.append(eval(f"phone_your_turn_line{line}"))
+        for line in range(1, 7):
+            phone_line = get_text_translation(f'phone_your_turn_line{line}', language_code)['translation']
+            phone_lines.append(replace_balise_phone(phone_line, patient))
         activity = Activity.query.get(activity_id)
         specific_message = get_activity_message_translation(activity, session.get('language_code', 'fr'))
     else:
         for line in range(1, 7):
-            exec(f"phone_your_turn_line{line} = app.config['PHONE_YOUR_TURN_LINE{line}']"),
-            exec(f"phone_your_turn_line{line} = replace_balise_phone(phone_your_turn_line{line}, patient)"),
-            phone_lines.append(eval(f"phone_your_turn_line{line}"))
+            phone_line = app.config[f'PHONE_YOUR_TURN_LINE{line}']
+            phone_lines.append(replace_balise_phone(phone_line, patient))
         specific_message= Activity.query.get(activity_id).specific_message
 
     # Convertir le texte des phone_lines de markdown en HTML

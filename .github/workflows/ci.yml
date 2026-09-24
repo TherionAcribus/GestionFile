@@ -16,8 +16,8 @@ jobs:
     name: lint (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install ruff
@@ -37,10 +37,10 @@ jobs:
       # l'historique de `.cache` (git log --all) pour vérifier que chaque
       # commit fuitant est acquitté dans .gitleaksignore. Avec la profondeur
       # par défaut (1), l'historique est vide et le test échoue.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dev dependencies
@@ -55,8 +55,8 @@ jobs:
     name: deps (verrou à jour)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
       - name: Recompiler et comparer
         run: |
           cp requirements.txt /tmp/req.txt
@@ -75,8 +75,8 @@ jobs:
     name: security (bandit + pip-audit)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install security tools
