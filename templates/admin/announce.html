@@ -10,31 +10,31 @@
             <!-- Nav tabs -->
             <ul class="nav nav-tabs" id="announceTab" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="visual-tab" data-bs-toggle="tab" data-bs-target="#tab_visual" type="button" role="tab" aria-controls="tab_visual" aria-selected="true">Visuel</button>
+                    <button class="nav-link {% if active_tab == 'visual' %}active{% endif %}" id="visual-tab" data-bs-toggle="tab" data-bs-target="#tab_visual" type="button" role="tab" aria-controls="tab_visual" aria-selected="{{ 'true' if active_tab == 'visual' else 'false' }}">Visuel</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="false">Audio</button>
+                    <button class="nav-link {% if active_tab == 'audio' %}active{% endif %}" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="{{ 'true' if active_tab == 'audio' else 'false' }}">Audio</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#tab_gallery" type="button" role="tab" aria-controls="tab_gallery" aria-selected="false">Galerie</button>
+                    <button class="nav-link {% if active_tab == 'gallery' %}active{% endif %}" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#tab_gallery" type="button" role="tab" aria-controls="tab_gallery" aria-selected="{{ 'true' if active_tab == 'gallery' else 'false' }}">Galerie</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="googleVoice-tab" data-bs-toggle="tab" data-bs-target="#tab_googleVoice" type="button" role="tab" aria-controls="tab_googleVoice" aria-selected="false">Google Voice</button>
+                    <button class="nav-link {% if active_tab == 'googleVoice' %}active{% endif %}" id="googleVoice-tab" data-bs-toggle="tab" data-bs-target="#tab_googleVoice" type="button" role="tab" aria-controls="tab_googleVoice" aria-selected="{{ 'true' if active_tab == 'googleVoice' else 'false' }}">Google Voice</button>
                 </li>
             </ul>
 
             <!-- Tab content -->
             <div class="tab-content" id="announceTabContent">
-                <div class="tab-pane fade show active" id="tab_visual" role="tabpanel" aria-labelledby="visual-tab">
+                <div class="tab-pane fade {% if active_tab == 'visual' %}show active{% endif %}" id="tab_visual" role="tabpanel" aria-labelledby="visual-tab">
                     {% include 'admin/announce_visual.html' %}
                 </div>
-                <div class="tab-pane fade" id="tab_audio" role="tabpanel" aria-labelledby="audio-tab">
+                <div class="tab-pane fade {% if active_tab == 'audio' %}show active{% endif %}" id="tab_audio" role="tabpanel" aria-labelledby="audio-tab">
                     {% include 'admin/announce_audio.html' %}
                 </div>
-                <div class="tab-pane fade" id="tab_gallery" role="tabpanel" aria-labelledby="gallery-tab">
+                <div class="tab-pane fade {% if active_tab == 'gallery' %}show active{% endif %}" id="tab_gallery" role="tabpanel" aria-labelledby="gallery-tab">
                     {% include 'admin/announce_gallery.html' %}
                 </div>
-                <div class="tab-pane fade" id="tab_googleVoice" role="tabpanel" aria-labelledby="googleVoice-tab">
+                <div class="tab-pane fade {% if active_tab == 'googleVoice' %}show active{% endif %}" id="tab_googleVoice" role="tabpanel" aria-labelledby="googleVoice-tab">
                     {% include 'admin/announce_google_voice.html' %}
                 </div>
             </div>

@@ -1,9 +1,11 @@
 <div class="container mt-5">
     <h5>Configurer la clé Google Cloud</h5>
+    {# voice_google_key signifie « clé présente et déchiffrable » — Google
+       peut encore la refuser à l'usage. Ne pas prétendre qu'elle est valide. #}
     {% if voice_google_key %}
-        <div class="alert alert-success" role="alert">Votre clé Google Cloud est valide.</div>
+        <div class="alert alert-success" role="alert">Une clé Google Cloud est enregistrée.</div>
     {% else %}
-        <div class="alert alert-danger" role="alert">Votre clé Google Cloud n'est pas valide ou n'existe pas. Veuillez la télécharger si vous voulez utiliser la fonctionnalité.</div>
+        <div class="alert alert-danger" role="alert">Aucune clé Google Cloud enregistrée (ou elle est illisible). Téléchargez-la pour utiliser la fonctionnalité.</div>
     {% endif %}
     <form id="google-key-form" enctype="multipart/form-data" hx-post="/admin/announce/google/add_key" hx-target="#upload-result" hx-swap="innerHTML">
         <div class="form-group">

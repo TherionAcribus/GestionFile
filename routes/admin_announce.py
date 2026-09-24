@@ -50,7 +50,8 @@ def announce_page(tab=None):
     variables=app.css_variable_manager.get_all_variables('announce')
     app.logger.debug('variables %s', variables)
 
-    return render_template('/admin/announce.html', 
+    return render_template('/admin/announce.html',
+                            active_tab=tab,
                             announce_sound = app.config['ANNOUNCE_SOUND'],
                             announce_alert = app.config['ANNOUNCE_ALERT'],
                             announce_player = app.config['ANNOUNCE_PLAYER'],

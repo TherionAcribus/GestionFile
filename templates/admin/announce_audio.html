@@ -30,10 +30,13 @@ announce_alert,
 
 Son actuel :
 
+{# Accès direct à /admin/announce/audio : l'onglet est déjà actif, aucun
+   shown.bs.tab ne sera émis — on charge alors au rendu. Sinon on attend la
+   première ouverture de l'onglet (pas d'appel réseau pour un onglet caché). #}
 <div id="announce_current_signal"
         hx-get="/admin/announce/audio/current_signal"
         hx-target="#announce_current_signal"
-        hx-trigger="shown.bs.tab once from:#audio-tab, refresh_sound"
+        hx-trigger="{% if active_tab == 'audio' %}load{% else %}shown.bs.tab once from:#audio-tab{% endif %}, refresh_sound"
         hx-swap="innerHTML">    
 </div>
 
@@ -65,7 +68,10 @@ Son actuel :
         data-param-value="#announce_call_translation">
         <option value="fr" {% if announce_call_translation == "fr" %}selected{% endif %}>Uniquement en français</option>
         <option value="vo" {% if announce_call_translation == "vo" %}selected{% endif %}>Uniquement dans la langue du patient</option>
-        <option value="both" {% if announce_call_translation == "both" %}selected{% endif %}>Dans les deux langues (A venir)</option>
+        {# Non implémenté : le moteur traite « both » comme la langue du
+           patient. Désactivé pour empêcher un enregistrement trompeur —
+           reste affiché si une valeur existante est « both ». #}
+        <option value="both" disabled {% if announce_call_translation == "both" %}selected{% endif %}>Dans les deux langues (A venir)</option>
     </select>
 </div>
 
@@ -75,7 +81,7 @@ Son actuel :
         id="language_choice"
         hx-post="/admin/announce/select_language_voice"
         hx-target="#div_select_voice"
-        hx-trigger="change, shown.bs.tab once from:#audio-tab"
+        hx-trigger="change, {% if active_tab == 'audio' %}load{% else %}shown.bs.tab once from:#audio-tab{% endif %}"
         data-param-language_code="#language_choice">
         {% for language in languages %}
             <option value="{{ language.code }}">{{ language.name }}</option>
