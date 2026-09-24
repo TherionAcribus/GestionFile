@@ -23,6 +23,7 @@ from models import (
 )
 from page_editor import (
     ADAPTERS,
+    advanced_disabled_components,
     current_payload,
     enabled_pages,
     get_adapter,
@@ -215,6 +216,7 @@ def _state_document(page, adapter):
         "adapter": public_adapter_data(page),
         "published": published,
         "draft": draft,
+        "disabled_components": advanced_disabled_components(page),
         "draft_version": state.draft_version if state else 0,
         "draft_updated_at": (
             state.draft_updated_at.isoformat()
@@ -344,7 +346,16 @@ def save_draft(page):
             db.session.rollback()
             return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
 
-        base_hash = state_row.draft_base_hash or payload_hash(current_payload(page))
+        # L'empreinte de base reflète la configuration que l'utilisateur avait
+        # sous les yeux : pour un premier brouillon c'est celle envoyée par le
+        # client (le "published" chargé dans l'éditeur) ; ensuite on conserve
+        # celle du brouillon partagé. Écraser systématiquement avec l'état
+        # courant masquait un changement fait en mode avancé entre l'ouverture
+        # de l'éditeur et la première sauvegarde.
+        if state_row.draft_json is not None:
+            base_hash = state_row.draft_base_hash or payload_hash(current_payload(page))
+        else:
+            base_hash = normalized["base_hash"]
         normalized["base_hash"] = base_hash
         state_row.draft_json = normalized
         state_row.draft_base_hash = base_hash
@@ -424,12 +435,32 @@ def preview(page):
         _demo_text(payload["config"].get("announce_call_text", ""), second_call_tokens),
     ]
     preview_button = _first_preview_button()
+    announce_flags = {}
+    if page == "announce":
+        announce_flags = {
+            "ongoing": bool(current_app.config.get(
+                get_spec("announce_ongoing_display").config_name, True)),
+            "next": bool(current_app.config.get(
+                get_spec("announce_next_patients_display").config_name, True)),
+            "text_up": current_app.config.get(
+                get_spec("announce_text_up_patients_display").config_name) != "never",
+            "text_down": current_app.config.get(
+                get_spec("announce_text_down_patients_display").config_name) != "never",
+        }
+    hidden_components = [
+        component_id
+        for component_id, item in payload["layout"].items()
+        if not item.get("visible", True)
+    ]
     return render_template(
         "admin/page_editor_preview.html",
         page=page,
         scenario=scenario,
         payload=payload,
         preview_config=preview_config,
+        preview_announce_flags=announce_flags,
+        preview_hidden_components=hidden_components,
+        preview_phone_center=bool(current_app.config.get("PHONE_CENTER", False)),
         preview_tokens=tokens,
         preview_call_texts=preview_call_texts,
         preview_phone_specific_message=(
@@ -498,29 +529,40 @@ def publish(page):
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/revisions/<int:revision>/restore")
 def restore(page, revision):
+    """Charge une ancienne révision dans le brouillon (sans publier).
+
+    Publier directement la révision supprimait le brouillon partagé en cours
+    sans avertissement : la restauration produit un brouillon que
+    l'utilisateur prévisualise puis publie explicitement.
+    """
     adapter, refusal = _page_context(page, api=True)
     if refusal is not None:
         return refusal
+    body = request.get_json(silent=True) or {}
     try:
         state_row = _locked_state(page, create=True)
         source = PageEditorRevision.query.filter_by(
             page_key=page, revision=revision
         ).first()
         if source is None:
+            db.session.rollback()
             return jsonify({"error": "Révision inconnue."}), 404
+        expected = body.get("draft_version")
+        if state_row.draft_json is not None and expected != state_row.draft_version:
+            db.session.rollback()
+            return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
         restored_payload = deepcopy(source.snapshot_json)
         restored_payload["base_hash"] = payload_hash(current_payload(page))
-        new_revision, _ = _publish(
-            page, adapter, state_row, restored_payload,
-            require_base_match=False,
-        )
+        state_row.draft_json = restored_payload
+        state_row.draft_base_hash = restored_payload["base_hash"]
+        state_row.draft_version += 1
+        state_row.draft_updated_by_id = current_user.id
+        state_row.draft_updated_at = datetime.now(time_tz)
+        db.session.commit()
         record_audit(ACTION_RESTORE, "page_design", target_id=page,
-                     details=f"source={revision} revision={new_revision}")
-        return jsonify({"success": True, "revision": new_revision,
+                     details=f"source={revision} -> brouillon")
+        return jsonify({"success": True, "revision": revision,
                         "draft_version": state_row.draft_version})
-    except ValueError as error:
-        db.session.rollback()
-        return jsonify({"error": str(error)}), 400
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Restauration visuelle impossible (%s)", page)

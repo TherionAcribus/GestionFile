@@ -57,6 +57,8 @@ html, body {
     text-align: center;
     font-weight: bold;
     background-color:var(--title_background_color);
+    min-height: var(--title_background_height);
+    box-sizing: border-box;
     padding: 10px 20px; /* Ajoute un peu de padding pour l'espacement */
     white-space: nowrap; /* Empêche le retour à la ligne */
     flex-shrink: 0; /* Empêche de réduire la taille de cet élément */
@@ -140,7 +142,7 @@ html, body {
 }
 
 
-.text_patient_calling, .text_patient_ongoing {
+.text_patient_calling {
     text-align: center;
     margin: auto;
     font-size: var(--calling_font_size);
@@ -148,6 +150,23 @@ html, body {
     color: var(--calling_font_color); 
     -webkit-text-stroke-color: var(--calling_font_border_color);
     -webkit-text-stroke-width: var(--calling_font_border_size);
+    margin-top: 0;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+#div_ongoing {
+    background-color: var(--ongoing_background_color);
+}
+
+.text_patient_ongoing {
+    text-align: center;
+    margin: auto;
+    font-size: var(--ongoing_font_size);
+    font-weight: 900;
+    color: var(--ongoing_font_color); 
+    -webkit-text-stroke-color: var(--ongoing_font_border_color);
+    -webkit-text-stroke-width: var(--ongoing_font_border_size);
     margin-top: 0;
     padding-top: 10px;
     padding-bottom: 10px;

@@ -18,26 +18,30 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}">
         <link rel="stylesheet" href="{{ get_css_url(mode='phone') }}">
     {% endif %}
-    <style id="page-editor-preview-vars">
-        :root {
-            {% for key, value in payload.css.items() %}--{{ key }}: {{ value }};{% endfor %}
-        }
+    {{ preview_vars_style(payload.css) }}
+    <style>
         [data-page-editor-component] { cursor: pointer; }
         [data-page-editor-selected="true"] { outline: max(2px, .15vw) solid #ffb300 !important; outline-offset: max(-2px, -.15vw); }
         .page-editor-gallery-placeholder { align-items:center; background:linear-gradient(135deg,#dfe9f3,#fff); color:#345; display:flex; font-size:3vw; height:100%; justify-content:center; min-height:12rem; }
         .page-editor-demo-button { align-items:center; background:var(--square_button_color, darkcyan); border-radius:1rem; color:white; display:flex; font-size:2rem; justify-content:center; margin:1rem; min-height:7rem; padding:1rem 2rem; }
         .page-editor-demo-flags { bottom:1rem; display:flex; gap:1rem; position:absolute; right:1rem; }
         .page-editor-demo-flag { background:#fff; border:2px solid #777; border-radius:.25rem; display:grid; font-size:1.5rem; height:var(--flag_size,70px); place-items:center; width:var(--flag_size,70px); }
+        /* En aperçu, la grille du centre est pilotée par des classes dédiées
+           (le JS les fait basculer quand « Afficher la galerie » change) au
+           lieu des identifiants div_center_divided/not_divided des pages
+           réelles, qui sont figés au rendu serveur. */
+        #pe_center.pe-grid-2 { grid-template-columns: 1fr 1fr; }
+        #pe_center.pe-grid-1 { grid-template-columns: 1fr; }
     </style>
-    {{ page_layout_style(page, payload.layout) }}
+    {{ page_layout_style(page, payload.layout, preview=True) }}
 </head>
 <body data-page="{{ page }}" data-scenario="{{ scenario }}">
 {% if page == 'announce' %}
     <div id="full_page">
         {{ page_components.announce_header(preview_config.announce_title, preview_config.announce_subtitle, true) }}
-        <div class="div_center" id="{{ 'div_center_divided' if scenario == 'gallery' else 'div_center_not_divided' }}">
+        <div class="div_center {{ 'pe-grid-2' if scenario == 'gallery' and payload.config.announce_infos_display else 'pe-grid-1' }}" id="pe_center" data-scenario="{{ scenario }}">
             <div id="left_side">
-                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients">{{ preview_config.announce_text_up_patients }}</div>
+                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients" data-hide-empty="1" {% if not preview_announce_flags.text_up %}data-adv-hidden{% endif %}>{{ preview_config.announce_text_up_patients }}</div>
                 <div id="div_calling" data-page-editor-component="calls">
                     <ul id="patient_list">
                     {% if scenario != 'empty' %}
@@ -46,13 +50,21 @@
                     {% endif %}
                     </ul>
                 </div>
-                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" {% if scenario != 'empty' %}hidden{% endif %}>{{ preview_config.announce_text_down_patients }}</div>
-                <div id="div_ongoing" data-page-editor-component="ongoing"><p data-config-key="announce_ongoing_text" data-preview-number="042">{{ preview_config.announce_ongoing_text }}</p></div>
+                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" data-hide-empty="1" {% if not preview_announce_flags.text_down %}data-adv-hidden{% endif %} {% if scenario != 'empty' %}hidden{% endif %}>{{ preview_config.announce_text_down_patients }}</div>
+                <div id="div_ongoing" data-page-editor-component="ongoing" {% if not preview_announce_flags.ongoing %}data-adv-hidden{% endif %}><p class="text_patient_ongoing" data-config-key="announce_ongoing_text" data-preview-number="042">{{ preview_config.announce_ongoing_text }}</p></div>
             </div>
-            <div id="div_pub" data-page-editor-component="gallery" {% if scenario != 'gallery' %}hidden{% endif %}><div class="page-editor-gallery-placeholder">Galerie de démonstration</div></div>
+            <div id="div_pub" data-page-editor-component="gallery" data-config-bool="announce_infos_display" {% if not payload.config.announce_infos_display %}data-config-hidden{% endif %} {% if scenario != 'gallery' %}hidden{% endif %}><div class="page-editor-gallery-placeholder">Galerie de démonstration</div></div>
         </div>
         <div id="div_footer">
-            <div id="div_next_patients" data-page-editor-component="next"><span data-config-key="announce_next_patients_text">{{ preview_config.announce_next_patients_text }}</span> 061 · 064 · 072</div>
+            <div id="div_next_patients" data-page-editor-component="next" {% if not preview_announce_flags.next %}data-adv-hidden{% endif %}>
+                <div id="div_next_patients_content">
+                    <div class="next_patients_wrapper">
+                        <span class="next_patients_label" data-config-key="announce_next_patients_text">{{ preview_config.announce_next_patients_text }}</span>
+                        <span class="next_patients_list">061, 064, 072</span>
+                        <span class="next_patients_hint">(ordre indicatif)</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 {% elif page == 'patient' %}
@@ -83,9 +95,12 @@
                 </div>
             {% endif %}
         </div>
-        <div id="div_buttons_children" class="buttons_children_active" data-page-editor-component="subtitle" data-config-key="page_patient_subtitle">{{ preview_specific_message if scenario in ('validation', 'conclusion') and preview_specific_message else preview_config.page_patient_subtitle }}</div>
-        {% if payload.config.page_patient_display_translations and preview_languages|length > 1 %}
-            <div class="language-selector page-editor-demo-flags" data-page-editor-component="languages">
+        {% set show_specific = scenario in ('validation', 'conclusion') and preview_specific_message %}
+        <div id="div_buttons_children" class="{{ 'buttons_children_specific_message' if show_specific else 'buttons_children_active' }}" data-page-editor-component="subtitle">
+            <div class="{{ 'div_text_explanation_specific_message' if show_specific else 'div_text_explanation' }}" data-config-key="page_patient_subtitle">{{ preview_specific_message if show_specific else preview_config.page_patient_subtitle }}</div>
+        </div>
+        {% if preview_languages|length > 1 %}
+            <div class="language-selector page-editor-demo-flags" data-page-editor-component="languages" data-config-bool="page_patient_display_translations" {% if not payload.config.page_patient_display_translations %}data-config-hidden{% endif %}>
                 {% for language in preview_languages %}
                     {% if language.flag_url and language.flag_url != 'None' %}
                         <img class="flag" src="/static/images/flags/{{ language.flag_url }}" alt="{{ language.translation }}">
@@ -99,7 +114,7 @@
 {% else %}
     <div class="container">
         {{ page_components.phone_title(preview_config.phone_title, true) }}
-        <div id="div_infos">
+        <div id="div_infos"{% if preview_phone_center %} class="text-center"{% endif %}>
             {% if scenario == 'waiting' %}
                 <p>En attente de validation pour le numéro 042</p><p>Veuillez patienter…</p>
             {% else %}
@@ -115,6 +130,7 @@
     </div>
 {% endif %}
 <script id="page-editor-preview-tokens" type="application/json">{{ preview_tokens | tojson }}</script>
+<script id="page-editor-initial-hidden" type="application/json">{{ preview_hidden_components | tojson }}</script>
 <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/page_editor_preview.js') }}"></script>
 </body>

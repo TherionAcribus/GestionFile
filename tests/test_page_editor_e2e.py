@@ -106,6 +106,7 @@ def test_edit_resize_scenario_undo_and_keyboard_move(admin_page: Page):
     admin_page.locator("#editor-undo").click()
     textarea = admin_page.locator("#editor-config-announce_title")
     textarea.fill(original)
+    admin_page.once("dialog", lambda dialog: dialog.accept())
     admin_page.locator("#editor-discard").click()
 
 

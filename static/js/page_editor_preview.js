@@ -3,6 +3,8 @@
 
     const tokensNode = document.getElementById('page-editor-preview-tokens');
     const tokenValues = tokensNode ? JSON.parse(tokensNode.textContent) : {};
+    const hiddenNode = document.getElementById('page-editor-initial-hidden');
+    const initialHidden = hiddenNode ? JSON.parse(hiddenNode.textContent) : [];
     let markdownTimer = null;
     let markdownRequest = 0;
 
@@ -28,10 +30,25 @@
             });
         });
         if (document.body.dataset.page === 'phone') renderPhoneMarkdown(payload);
+        document.querySelectorAll('[data-config-bool]').forEach(function (element) {
+            element.toggleAttribute('data-config-hidden', !payload.config[element.dataset.configBool]);
+        });
+        document.querySelectorAll('[data-hide-empty]').forEach(function (element) {
+            const value = payload.config[element.dataset.configKey];
+            element.toggleAttribute('data-config-hidden', !String(value == null ? '' : value).trim());
+        });
+        if (document.body.dataset.page === 'announce') {
+            const center = document.getElementById('pe_center');
+            if (center) {
+                const divided = Boolean(payload.config.announce_infos_display) && center.dataset.scenario === 'gallery';
+                center.classList.toggle('pe-grid-2', divided);
+                center.classList.toggle('pe-grid-1', !divided);
+            }
+        }
         Object.entries(payload.layout || {}).forEach(function (entry) {
             document.querySelectorAll('[data-page-editor-component="' + CSS.escape(entry[0]) + '"]').forEach(function (element) {
                 const item = entry[1];
-                element.style.display = item.visible ? '' : 'none';
+                element.toggleAttribute('data-page-editor-hidden', !item.visible);
                 element.style.order = String(item.order);
                 element.style.width = ((item.span / 12) * 100).toFixed(4) + '%';
                 element.style.alignSelf = item.alignment === 'left' ? 'flex-start' : (item.alignment === 'right' ? 'flex-end' : item.alignment);
@@ -85,6 +102,15 @@
             type: 'page-editor:selected',
             componentId: component.dataset.pageEditorComponent
         }, window.location.origin);
+    });
+
+    // Applique l'état masqué du chargement avant le premier postMessage du
+    // parent (la feuille générée côté serveur n'émet plus de règle
+    // ``display:none`` figée en aperçu : tout passe par cet attribut).
+    initialHidden.forEach(function (componentId) {
+        document.querySelectorAll('[data-page-editor-component="' + CSS.escape(componentId) + '"]').forEach(function (element) {
+            element.setAttribute('data-page-editor-hidden', 'true');
+        });
     });
 
     window.parent.postMessage({type: 'page-editor:ready'}, window.location.origin);

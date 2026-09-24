@@ -1,3 +1,11 @@
+.page-editor-toolbar {
+    background: var(--bs-body-bg);
+    padding: .5rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
 .page-editor-actions {
     display: flex;
     flex-wrap: wrap;
@@ -58,6 +66,16 @@
 
 .page-editor-component.is-hidden {
     opacity: .55;
+}
+
+.page-editor-component.is-disabled {
+    border-style: dashed;
+    font-style: italic;
+    opacity: .6;
+}
+
+.page-editor-component.is-inactive {
+    opacity: .65;
 }
 
 .page-editor-preview-shell {

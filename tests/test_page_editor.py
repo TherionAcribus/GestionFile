@@ -442,6 +442,20 @@ def test_layout_style_uses_server_selectors_and_safe_alignment():
     assert "position:absolute" not in css
 
 
+def test_layout_style_preview_hides_via_toggleable_attribute():
+    app = Flask(__name__)
+    with app.app_context():
+        layout = deepcopy(default_layout("announce"))
+        layout["title"]["visible"] = False
+        preview_css = str(layout_style("announce", layout, preview=True))
+        real_css = str(layout_style("announce", layout))
+    # En aperçu, pas de règle figée : la visibilité se bascule via l'attribut
+    # data-page-editor-hidden piloté par page_editor_preview.js.
+    assert "#text_title{display:none" not in preview_css
+    assert "data-page-editor-hidden" in preview_css
+    assert "#text_title{display:none!important}" in real_css
+
+
 def test_custom_css_is_replaced_atomically(tmp_path):
     manager = CSSManager()
     manager.css_dir = str(tmp_path)
@@ -500,6 +514,9 @@ def test_publish_is_atomic_and_detects_advanced_mode_conflict(editor_app):
     client = authenticated_client(editor_app)
     payload = make_payload("announce")
     payload["config"]["announce_title"] = "Titre publié"
+    # Comme le vrai client : base_hash = empreinte de la version publiée
+    # chargée dans l'éditeur (ici la configuration initiale du fixture).
+    payload["base_hash"] = payload_hash(make_payload("announce"))
     saved = client.put(
         "/admin/page-editor/announce/draft",
         json={"draft_version": 0, "payload": payload},
@@ -523,6 +540,7 @@ def test_publish_rolls_back_every_database_change_on_failure(editor_app, monkeyp
     client = authenticated_client(editor_app)
     payload = make_payload("announce")
     payload["config"]["announce_title"] = "Titre à annuler"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
     saved = client.put(
         "/admin/page-editor/announce/draft",
         json={"draft_version": 0, "payload": payload},
@@ -552,6 +570,14 @@ def test_publish_restore_and_revision_retention(editor_app):
 
     for revision_number in range(1, 12):
         payload = make_payload("announce")
+        # Comme le vrai client : base_hash = empreinte de la version publiée
+        # chargée dans l'éditeur, ici la révision précédente.
+        previous = make_payload("announce")
+        previous["config"]["announce_title"] = (
+            "Texte de démonstration" if revision_number == 1
+            else f"Titre {revision_number - 1}"
+        )
+        payload["base_hash"] = payload_hash(previous)
         payload["config"]["announce_title"] = f"Titre {revision_number}"
         saved_response = client.put(
             "/admin/page-editor/announce/draft",
@@ -576,7 +602,99 @@ def test_publish_restore_and_revision_retention(editor_app):
 
     restored = client.post("/admin/page-editor/announce/revisions/2/restore", json={})
     assert restored.status_code == 200
-    assert restored.get_json()["revision"] == 12
+    restored_version = restored.get_json()["draft_version"]
+    with app.app_context():
+        # La restauration charge la révision dans le brouillon sans publier :
+        # la configuration courante reste inchangée tant que rien n'est publié.
+        assert ConfigOption.query.filter_by(config_key="announce_title").one().value_str == "Titre 11"
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_json["config"]["announce_title"] == "Titre 2"
+    republished = client.post(
+        "/admin/page-editor/announce/publish",
+        json={"draft_version": restored_version},
+    )
+    assert republished.status_code == 200
+    assert republished.get_json()["revision"] == 12
     with app.app_context():
         assert ConfigOption.query.filter_by(config_key="announce_title").one().value_str == "Titre 2"
         assert PageEditorRevision.query.filter_by(page_key="announce").count() == 10
+
+
+def test_restore_preserves_shared_draft_and_detects_conflict(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+
+    payload = make_payload("announce")
+    saved = client.put("/admin/page-editor/announce/draft",
+                       json={"draft_version": 0, "payload": payload}).get_json()
+    published = client.post("/admin/page-editor/announce/publish",
+                            json={"draft_version": saved["draft_version"]})
+    assert published.status_code == 200
+    draft_version = published.get_json()["draft_version"]
+
+    other = make_payload("announce")
+    other["config"]["announce_title"] = "Brouillon à protéger"
+    saved = client.put("/admin/page-editor/announce/draft",
+                       json={"draft_version": draft_version, "payload": other})
+    draft_version = saved.get_json()["draft_version"]
+
+    stale = client.post("/admin/page-editor/announce/revisions/1/restore",
+                        json={"draft_version": draft_version - 1})
+    assert stale.status_code == 409
+    with app.app_context():
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_json["config"]["announce_title"] == "Brouillon à protéger"
+
+    restored = client.post("/admin/page-editor/announce/revisions/1/restore",
+                           json={"draft_version": draft_version})
+    assert restored.status_code == 200
+    with app.app_context():
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_json["config"]["announce_title"] == "Texte de démonstration"
+        assert state.published_revision == 1
+
+
+def test_advanced_change_between_load_and_first_save_blocks_publish(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    loaded = client.get("/admin/page-editor/announce/state").get_json()
+    payload = loaded["published"]
+    payload["config"]["announce_title"] = "Titre édité"
+
+    # Changement en mode avancé entre l'ouverture de l'éditeur et la
+    # première sauvegarde du brouillon : il ne doit pas être écrasé
+    # silencieusement.
+    with app.app_context():
+        app.config["ANNOUNCE_SUBTITLE"] = "Modification avancée concurrente"
+
+    saved = client.put("/admin/page-editor/announce/draft",
+                       json={"draft_version": loaded["draft_version"],
+                             "payload": payload})
+    assert saved.status_code == 200
+    conflict = client.post("/admin/page-editor/announce/publish",
+                           json={"draft_version": saved.get_json()["draft_version"]})
+    assert conflict.status_code == 409
+    with app.app_context():
+        assert ConfigOption.query.filter_by(config_key="announce_title").first() is None
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "ok"),
+    [
+        ("title_font_size", "banane", False),
+        ("title_font_size", "32px", True),
+        ("title_font_size", "calc(2rem + 4px)", True),
+        ("title_font_color", "pas-une-couleur-123", False),
+        ("title_font_color", "darkcyan", True),
+        ("title_font_color", "rgb(10, 20, 30)", True),
+        ("title_font_color", "#12ab34", True),
+    ],
+)
+def test_css_values_are_checked_against_their_field_type(key, value, ok):
+    payload = make_payload("announce")
+    payload["css"][key] = value
+    if ok:
+        assert validate_payload("announce", payload)["css"][key] == value
+    else:
+        with pytest.raises(ValueError, match="CSS"):
+            validate_payload("announce", payload)

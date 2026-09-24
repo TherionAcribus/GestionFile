@@ -8,7 +8,7 @@
 
 {% block content %}
 <main id="page-editor" data-page="{{ page }}" aria-busy="true">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="page-editor-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <div>
             <h2 class="mb-1">{{ page_label }}</h2>
             <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
@@ -45,6 +45,10 @@
                 <div>
                     <label class="form-label mb-1" for="editor-viewport">Format</label>
                     <select id="editor-viewport" class="form-select form-select-sm"></select>
+                </div>
+                <div class="form-check ms-2 mt-3">
+                    <input class="form-check-input" type="checkbox" id="editor-real-size">
+                    <label class="form-check-label" for="editor-real-size">Taille réelle</label>
                 </div>
                 <button id="editor-history-toggle" class="btn btn-sm btn-outline-secondary ms-auto" type="button" aria-expanded="false" aria-controls="editor-history">Historique</button>
             </div>

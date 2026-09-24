@@ -21,6 +21,7 @@
     const historyButton = document.getElementById('editor-history-toggle');
     const historyPanel = document.getElementById('editor-history');
     const revisionsContainer = document.getElementById('editor-revisions');
+    const realSizeToggle = document.getElementById('editor-real-size');
 
     let adapter;
     let payload;
@@ -28,14 +29,21 @@
     let draftVersion = 0;
     let hasDraft = false;
     let dirty = false;
+    let saving = false;
+    let saveQueued = false;
     let selectedComponent = null;
     let undoStack = [];
     let redoStack = [];
     let sortableInstances = [];
     let paletteSources = [];
+    let disabledComponents = {};
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
+    }
+
+    function canonical(value) {
+        return JSON.stringify({layout: value.layout, config: value.config, css: value.css});
     }
 
     function colorToHex(value) {
@@ -61,7 +69,73 @@
         }).join('');
     }
 
+    function contrastRatio(foreground, background) {
+        // Ratio WCAG — les écrans affichent de grands textes : le seuil
+        // « grand texte » (3:1) est le repère pertinent ici.
+        const parse = function (hex) {
+            return [1, 3, 5].map(function (index) {
+                return parseInt(hex.slice(index, index + 2), 16) / 255;
+            });
+        };
+        const channel = function (value) {
+            return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+        };
+        const luminance = function (hex) {
+            const rgb = parse(hex).map(channel);
+            return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+        };
+        const light = Math.max(luminance(foreground), luminance(background));
+        const dark = Math.min(luminance(foreground), luminance(background));
+        return (light + 0.05) / (dark + 0.05);
+    }
+
+    function appendContrastWarning(container, definition) {
+        const fontField = definition.css.find(function (field) {
+            return field.type === 'color' && field.key.endsWith('font_color');
+        });
+        const backgroundField = definition.css.find(function (field) {
+            return field.type === 'color' && field.key.endsWith('background_color');
+        });
+        if (!fontField || !backgroundField) return;
+        const font = colorToHex(payload.css[fontField.key]);
+        const background = colorToHex(payload.css[backgroundField.key]);
+        if (!font || !background) return;
+        const ratio = contrastRatio(font, background);
+        if (ratio >= 3) return;
+        const warning = document.createElement('div');
+        warning.className = 'alert alert-warning py-2 small';
+        warning.setAttribute('role', 'note');
+        warning.textContent = 'Contraste faible (' + ratio.toFixed(1) + ':1) entre le texte et le fond : illisible à distance.';
+        container.appendChild(warning);
+    }
+
+    const ZONE_LABELS = {
+        header: 'En-tête',
+        main: 'Contenu',
+        aside: 'Zone latérale',
+        footer: 'Pied de page',
+        overlay: 'Superposition',
+    };
+
+    const backupKey = 'page-editor-backup-' + page;
+
+    function persistBackup() {
+        // Filet local : si l'onglet se ferme ou la session expire, la copie
+        // la plus récente est proposée à la réouverture (voir offerLocalBackup).
+        try {
+            localStorage.setItem(backupKey, JSON.stringify({
+                payload: payload,
+                saved_at: Date.now(),
+            }));
+        } catch (error) { /* stockage plein ou désactivé : sans conséquence */ }
+    }
+
+    function clearBackup() {
+        try { localStorage.removeItem(backupKey); } catch (error) {}
+    }
+
     function setStatus(message, kind) {
+        statusBox.replaceChildren();
         statusBox.textContent = message;
         statusBox.className = 'alert py-2 alert-' + (kind || 'light');
     }
@@ -80,6 +154,30 @@
         return data;
     }
 
+    // Retirer un champ encore focalisé déclenche un blur → change → re-rendu
+    // pendant le re-rendu en cours : la file d'attente évite le re-render
+    // récursif qui casserait ``replaceChildren``.
+    let rendering = false;
+    let renderQueued = false;
+
+    function rerenderAll() {
+        if (rendering) {
+            renderQueued = true;
+            return;
+        }
+        rendering = true;
+        try {
+            renderPalette();
+            renderInspector();
+        } finally {
+            rendering = false;
+        }
+        if (renderQueued) {
+            renderQueued = false;
+            rerenderAll();
+        }
+    }
+
     function pushPayloadToPreview() {
         if (!preview.contentWindow || !payload) return;
         preview.contentWindow.postMessage({type: 'page-editor:update', payload: payload}, window.location.origin);
@@ -89,8 +187,9 @@
     function updateButtons() {
         undoButton.disabled = undoStack.length === 0;
         redoButton.disabled = redoStack.length === 0;
-        saveButton.disabled = !dirty;
-        publishButton.disabled = !dirty && !hasDraft;
+        saveButton.disabled = !dirty || saving;
+        publishButton.disabled = saving || (!dirty && !hasDraft);
+        discardButton.disabled = saving;
         root.dataset.dirty = dirty ? 'true' : 'false';
     }
 
@@ -100,8 +199,8 @@
         redoStack = [];
         change();
         dirty = true;
-        renderPalette();
-        renderInspector();
+        persistBackup();
+        rerenderAll();
         pushPayloadToPreview();
         updateButtons();
         setStatus(message || 'Modifications non enregistrées.', 'warning');
@@ -119,7 +218,7 @@
             const section = document.createElement('section');
             section.className = 'page-editor-zone';
             const title = document.createElement('h4');
-            title.textContent = zone;
+            title.textContent = ZONE_LABELS[zone] || zone;
             const list = document.createElement('div');
             list.className = 'page-editor-component-list';
             list.dataset.zone = zone;
@@ -129,17 +228,33 @@
                 return payload.layout[left].order - payload.layout[right].order;
             });
             componentIds.forEach(function (componentId) {
+                const component = adapter.components[componentId];
+                const disabledReason = disabledComponents[componentId]
+                    || (component.managed_bool && !payload.config[component.managed_bool]
+                        ? 'Désactivé : la case « Afficher » de ce composant est décochée.' : null);
+                const inScenario = !component.scenarios || component.scenarios.includes(scenarioSelect.value);
                 const button = document.createElement('button');
                 button.type = 'button';
-                button.className = 'page-editor-component' + (payload.layout[componentId].visible ? '' : ' is-hidden');
+                button.className = 'page-editor-component'
+                    + (payload.layout[componentId].visible ? '' : ' is-hidden')
+                    + (disabledReason ? ' is-disabled' : '')
+                    + (inScenario ? '' : ' is-inactive');
                 button.dataset.componentId = componentId;
                 button.setAttribute('aria-pressed', componentId === selectedComponent ? 'true' : 'false');
+                if (disabledReason) button.title = disabledReason;
+                else if (!inScenario) button.title = 'Non affiché dans le scénario courant.';
                 const icon = document.createElement('i');
                 icon.className = 'bi bi-grip-vertical';
                 icon.setAttribute('aria-hidden', 'true');
                 const label = document.createElement('span');
-                label.textContent = adapter.components[componentId].label;
+                label.textContent = component.label;
                 button.append(icon, label);
+                if (disabledReason || !inScenario) {
+                    const badge = document.createElement('i');
+                    badge.className = 'bi ' + (disabledReason ? 'bi-slash-circle' : 'bi-eye-slash') + ' ms-auto';
+                    badge.setAttribute('aria-hidden', 'true');
+                    button.appendChild(badge);
+                }
                 button.addEventListener('click', function () { selectComponent(componentId); });
                 list.appendChild(button);
             });
@@ -167,8 +282,8 @@
                     undoStack.push(before);
                     redoStack = [];
                     dirty = true;
-                    renderPalette();
-                    renderInspector();
+                    persistBackup();
+                    rerenderAll();
                     pushPayloadToPreview();
                     updateButtons();
                     setStatus('Ordre des composants modifié.', 'warning');
@@ -218,11 +333,19 @@
                 if (undoStack.length > 50) undoStack.shift();
                 beforeEdit = null;
                 redoStack = [];
+                persistBackup();
             }
-            renderPalette();
-            renderInspector();
+            const focusId = document.activeElement && document.activeElement.id;
+            rerenderAll();
             pushPayloadToPreview();
             updateButtons();
+            // L'inspecteur est reconstruit à chaque changement : sans restauration
+            // explicite, le focus retombe sur <body> et la navigation clavier
+            // repart de zéro.
+            if (focusId) {
+                const refocused = document.getElementById(focusId);
+                if (refocused) refocused.focus();
+            }
         });
     }
 
@@ -463,8 +586,8 @@
 
     function renderInspector() {
         inspector.replaceChildren();
-        renderPagePalette();
         if (!selectedComponent || !adapter.components[selectedComponent]) {
+            renderPagePalette();
             const empty = document.createElement('p');
             empty.className = 'text-muted';
             empty.textContent = 'Sélectionnez un composant.';
@@ -504,6 +627,25 @@
         bindValue(span, function (control) { layout.span = Number(control.value); });
         layoutFields.appendChild(formGroup('Largeur (' + layout.span + '/12)', span));
 
+        const spanPresets = document.createElement('div');
+        spanPresets.className = 'btn-group btn-group-sm w-100 mb-3';
+        spanPresets.setAttribute('role', 'group');
+        spanPresets.setAttribute('aria-label', 'Largeurs prédéfinies');
+        [['25 %', 3], ['33 %', 4], ['50 %', 6], ['66 %', 8], ['75 %', 9], ['100 %', 12]].forEach(function (preset) {
+            const presetButton = document.createElement('button');
+            presetButton.type = 'button';
+            presetButton.className = 'btn btn-outline-secondary'
+                + (layout.span === preset[1] ? ' active' : '');
+            presetButton.textContent = preset[0];
+            presetButton.addEventListener('click', function () {
+                if (layout.span === preset[1]) return;
+                mutate(function () { layout.span = preset[1]; },
+                    'Largeur réglée sur ' + preset[0] + '.');
+            });
+            spanPresets.appendChild(presetButton);
+        });
+        layoutFields.appendChild(spanPresets);
+
         const alignment = document.createElement('select');
         alignment.className = 'form-select';
         alignment.id = 'editor-field-alignment';
@@ -528,6 +670,25 @@
             movement.appendChild(button);
         });
         layoutFields.appendChild(movement);
+
+        const resetButton = document.createElement('button');
+        resetButton.type = 'button';
+        resetButton.className = 'btn btn-sm btn-outline-secondary w-100 mt-2';
+        resetButton.textContent = 'Réinitialiser ce composant';
+        resetButton.title = 'Reprend les réglages de la version publiée pour ce composant.';
+        resetButton.addEventListener('click', function () {
+            if (!published || !published.layout[selectedComponent]) return;
+            mutate(function () {
+                payload.layout[selectedComponent] = clone(published.layout[selectedComponent]);
+                definition.config.forEach(function (field) {
+                    payload.config[field.key] = clone(published.config[field.key]);
+                });
+                definition.css.forEach(function (field) {
+                    payload.css[field.key] = clone(published.css[field.key]);
+                });
+            }, 'Composant réinitialisé sur la version publiée.');
+        });
+        layoutFields.appendChild(resetButton);
 
         if (definition.config.length) {
             const contentFields = addFieldset('Contenu');
@@ -576,13 +737,17 @@
                 }
                 appearanceFields.appendChild(formGroup(field.label, control));
             });
+            appendContrastWarning(appearanceFields, definition);
         }
+
+        // La palette de la page est rendue après les propriétés du composant :
+        // les réglages du bloc sélectionné restent accessibles immédiatement.
+        renderPagePalette();
     }
 
     function selectComponent(componentId) {
         selectedComponent = componentId;
-        renderPalette();
-        renderInspector();
+        rerenderAll();
         pushPayloadToPreview();
     }
 
@@ -628,7 +793,9 @@
     function resizePreview() {
         const viewport = adapter.viewports.find(function (item) { return item.id === viewportSelect.value; }) || adapter.viewports[0];
         const availableWidth = Math.max(280, previewShell.clientWidth - 32);
-        const scale = Math.min(1, availableWidth / viewport.width);
+        const scale = realSizeToggle && realSizeToggle.checked
+            ? 1
+            : Math.min(1, availableWidth / viewport.width);
         preview.width = String(viewport.width);
         preview.height = String(viewport.height);
         preview.style.transform = 'translateX(-50%) scale(' + scale + ')';
@@ -660,12 +827,58 @@
         revisionsContainer.appendChild(list);
     }
 
+    function offerLocalBackup(state) {
+        let backup = null;
+        try {
+            backup = JSON.parse(localStorage.getItem(backupKey) || 'null');
+        } catch (error) { /* JSON corrompu : ignoré */ }
+        if (!backup || !backup.payload || backup.payload.page !== page) return;
+        if (canonical(backup.payload) === canonical(payload)) {
+            clearBackup();
+            return;
+        }
+        const serverTime = state.draft_updated_at ? Date.parse(state.draft_updated_at) : 0;
+        if (!backup.saved_at || backup.saved_at <= serverTime) {
+            clearBackup();
+            return;
+        }
+        statusBox.replaceChildren();
+        statusBox.className = 'alert py-2 alert-warning';
+        const text = document.createElement('span');
+        text.textContent = 'Une copie locale non synchronisée ('
+            + new Date(backup.saved_at).toLocaleString('fr-FR')
+            + ') a été retrouvée.';
+        const restoreButton = document.createElement('button');
+        restoreButton.type = 'button';
+        restoreButton.className = 'btn btn-sm btn-warning ms-2';
+        restoreButton.textContent = 'Restaurer';
+        restoreButton.addEventListener('click', function () {
+            payload = clone(backup.payload);
+            dirty = true;
+            rerenderAll();
+            pushPayloadToPreview();
+            updateButtons();
+            setStatus('Copie locale restaurée : enregistrez le brouillon pour la conserver.', 'warning');
+        });
+        const ignoreButton = document.createElement('button');
+        ignoreButton.type = 'button';
+        ignoreButton.className = 'btn btn-sm btn-outline-secondary ms-1';
+        ignoreButton.textContent = 'Ignorer';
+        ignoreButton.addEventListener('click', function () {
+            clearBackup();
+            setStatus(hasDraft ? 'Brouillon partagé chargé.' : 'Configuration publiée chargée.',
+                hasDraft ? 'info' : 'light');
+        });
+        statusBox.append(text, restoreButton, ignoreButton);
+    }
+
     async function loadState(message) {
         root.setAttribute('aria-busy', 'true');
         try {
             const state = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/state');
             adapter = state.adapter;
             paletteSources = state.palette_sources || [];
+            disabledComponents = state.disabled_components || {};
             published = clone(state.published);
             hasDraft = Boolean(state.draft);
             payload = clone(state.draft || state.published);
@@ -681,7 +894,15 @@
             loadPreview();
             applyButton.disabled = state.published_revision < 1;
             updateButtons();
-            setStatus(message || (hasDraft ? 'Brouillon partagé chargé.' : 'Configuration publiée chargée.'), hasDraft ? 'info' : 'light');
+            if (message) {
+                setStatus(message, hasDraft ? 'info' : 'light');
+            } else {
+                offerLocalBackup(state);
+                if (!statusBox.querySelector('button')) {
+                    setStatus(hasDraft ? 'Brouillon partagé chargé.' : 'Configuration publiée chargée.',
+                        hasDraft ? 'info' : 'light');
+                }
+            }
         } catch (error) {
             setStatus(error.message, 'danger');
         } finally {
@@ -690,27 +911,67 @@
     }
 
     async function saveDraft() {
-        const data = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/draft', {
-            method: 'PUT',
-            body: JSON.stringify({draft_version: draftVersion, payload: payload})
-        });
-        payload = clone(data.draft);
-        draftVersion = data.draft_version;
-        hasDraft = true;
-        dirty = false;
+        // Une sauvegarde en cours ne doit pas être lancée en double ni
+        // écraser la saisie faite pendant la requête : on mémorise l'état
+        // envoyé et on ne remplace le document local que s'il n'a pas bougé.
+        if (saving) {
+            saveQueued = true;
+            return null;
+        }
+        saving = true;
         updateButtons();
-        setStatus('Brouillon partagé enregistré.', 'success');
-        return data;
+        const sent = canonical(payload);
+        try {
+            const data = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/draft', {
+                method: 'PUT',
+                body: JSON.stringify({draft_version: draftVersion, payload: payload})
+            });
+            draftVersion = data.draft_version;
+            hasDraft = true;
+            if (canonical(payload) === sent) {
+                payload = clone(data.draft);
+                dirty = false;
+                if (canonical(payload) !== sent) {
+                    // Le serveur a normalisé des valeurs : les refléter dans
+                    // l'inspecteur pour éviter toute divergence silencieuse.
+                    rerenderAll();
+                    pushPayloadToPreview();
+                }
+                setStatus('Brouillon partagé enregistré.', 'success');
+            } else {
+                dirty = true;
+                setStatus('Brouillon enregistré ; les modifications saisies pendant l’enregistrement restent à sauvegarder.', 'warning');
+            }
+            return data;
+        } finally {
+            saving = false;
+            updateButtons();
+            if (saveQueued) {
+                saveQueued = false;
+                saveDraft().catch(function (error) {
+                    setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
+                });
+            }
+        }
     }
 
     async function publish() {
         try {
             publishButton.disabled = true;
             if (dirty || !hasDraft) await saveDraft();
+            if (dirty) {
+                // Une saisie pendant l'enregistrement n'est pas dans le
+                // brouillon : publier maintenant diffuserait une version
+                // incomplète.
+                setStatus('Des modifications récentes ne sont pas enregistrées : cliquez à nouveau sur « Publier ».', 'warning');
+                publishButton.disabled = false;
+                return;
+            }
             const result = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/publish', {
                 method: 'POST',
                 body: JSON.stringify({draft_version: draftVersion})
             });
+            clearBackup();
             await loadState('Révision ' + result.revision + ' publiée. Les écrans en service ne sont pas rechargés automatiquement.');
             applyButton.disabled = false;
             setStatus('Publication terminée. Utilisez « Appliquer/recharger les écrans » au moment opportun.', 'success');
@@ -721,6 +982,10 @@
     }
 
     async function discard() {
+        const question = hasDraft
+            ? 'Supprimer le brouillon partagé et revenir à la version publiée ?'
+            : 'Abandonner les modifications non enregistrées ?';
+        if (!window.confirm(question)) return;
         try {
             if (hasDraft) {
                 await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/draft', {
@@ -728,6 +993,7 @@
                     body: JSON.stringify({draft_version: draftVersion})
                 });
             }
+            clearBackup();
             await loadState('Brouillon annulé.');
         } catch (error) {
             setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
@@ -735,15 +1001,18 @@
     }
 
     async function restoreRevision(revision) {
-        if (!window.confirm('Restaurer et publier la révision ' + revision + ' ?')) return;
+        const warning = hasDraft || dirty
+            ? 'Le brouillon actuel sera remplacé par la révision ' + revision + '. Continuer ?'
+            : 'Charger la révision ' + revision + ' dans le brouillon ?';
+        if (!window.confirm(warning)) return;
         try {
             const result = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/revisions/' + revision + '/restore', {
-                method: 'POST', body: '{}'
+                method: 'POST',
+                body: JSON.stringify({draft_version: draftVersion})
             });
-            await loadState('Révision restaurée et republiée sous le numéro ' + result.revision + '.');
-            applyButton.disabled = false;
+            await loadState('Révision ' + result.revision + ' chargée dans le brouillon : prévisualisez puis publiez pour l’appliquer.');
         } catch (error) {
-            setStatus(error.message, 'danger');
+            setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
         }
     }
 
@@ -752,7 +1021,7 @@
         redoStack.push(clone(payload));
         payload = undoStack.pop();
         dirty = true;
-        renderPalette(); renderInspector(); pushPayloadToPreview(); updateButtons();
+        rerenderAll(); pushPayloadToPreview(); updateButtons();
         setStatus('Modification annulée.', 'warning');
     });
     redoButton.addEventListener('click', function () {
@@ -760,7 +1029,7 @@
         undoStack.push(clone(payload));
         payload = redoStack.pop();
         dirty = true;
-        renderPalette(); renderInspector(); pushPayloadToPreview(); updateButtons();
+        rerenderAll(); pushPayloadToPreview(); updateButtons();
         setStatus('Modification rétablie.', 'warning');
     });
     saveButton.addEventListener('click', function () {
@@ -769,6 +1038,7 @@
     publishButton.addEventListener('click', publish);
     discardButton.addEventListener('click', discard);
     applyButton.addEventListener('click', async function () {
+        if (!window.confirm('Recharger maintenant les écrans connectés en service ?')) return;
         try {
             await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/apply', {method: 'POST', body: '{}'});
             setStatus('Ordre de rechargement envoyé aux écrans connectés.', 'success');
@@ -780,8 +1050,12 @@
         historyPanel.hidden = !historyPanel.hidden;
         historyButton.setAttribute('aria-expanded', historyPanel.hidden ? 'false' : 'true');
     });
-    scenarioSelect.addEventListener('change', loadPreview);
+    scenarioSelect.addEventListener('change', function () {
+        renderPalette();
+        loadPreview();
+    });
     viewportSelect.addEventListener('change', resizePreview);
+    if (realSizeToggle) realSizeToggle.addEventListener('change', resizePreview);
     preview.addEventListener('load', function () { resizePreview(); pushPayloadToPreview(); });
     window.addEventListener('resize', resizePreview);
     window.addEventListener('message', function (event) {
@@ -790,9 +1064,26 @@
         if (event.data.type === 'page-editor:selected' && adapter.components[event.data.componentId]) selectComponent(event.data.componentId);
     });
     window.addEventListener('beforeunload', function (event) {
-        if (!dirty) return;
+        if (!dirty && !saving) return;
         event.preventDefault();
         event.returnValue = '';
+    });
+
+    // Ctrl+Z / Ctrl+Maj+Z / Ctrl+Y hors champs de saisie (dans un champ, le
+    // navigateur applique déjà son propre undo sur le texte).
+    document.addEventListener('keydown', function (event) {
+        const target = event.target;
+        if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT'
+            || target.tagName === 'SELECT' || target.isContentEditable)) return;
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+        const key = event.key.toLowerCase();
+        if (key === 'z' && !event.shiftKey && !undoButton.disabled) {
+            event.preventDefault();
+            undoButton.click();
+        } else if ((key === 'y' || (key === 'z' && event.shiftKey)) && !redoButton.disabled) {
+            event.preventDefault();
+            redoButton.click();
+        }
     });
 
     loadState();

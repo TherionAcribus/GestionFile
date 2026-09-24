@@ -50,7 +50,7 @@ from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
 from css_manager import CSSManager
-from page_editor import enabled_pages, layout_style
+from page_editor import enabled_pages, layout_style, preview_vars_style
 
 from app_holder import AppHolder
 
@@ -816,6 +816,7 @@ def inject_user():
         current_user=current_user,
         user_has_permission=user_has_permission,
         page_layout_style=layout_style,
+        preview_vars_style=preview_vars_style,
         page_editor_enabled=lambda page: page in enabled_pages(),
     )
 

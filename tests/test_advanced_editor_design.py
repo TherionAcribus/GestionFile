@@ -49,3 +49,27 @@ def test_visual_editor_can_copy_a_published_palette_into_the_draft():
     assert "editor-palette-copy" in source
     assert "payload.css[key] = change.color" in source
     assert "mutate(function ()" in source
+
+
+def test_preview_toggles_visibility_and_conditions_via_attributes():
+    source = _read("static/js/page_editor_preview.js")
+    assert "data-page-editor-hidden" in source
+    assert "data-config-bool" in source
+    assert "data-hide-empty" in source
+    assert "page-editor-initial-hidden" in source
+
+
+def test_editor_keeps_in_flight_edits_and_restore_goes_to_draft():
+    source = _read("static/js/page_editor.js")
+    assert "let saving = false;" in source
+    assert "saveQueued" in source
+    assert "canonical(payload) === sent" in source
+    assert "dans le brouillon" in source
+
+
+def test_editor_exposes_local_backup_contrast_and_zone_labels():
+    source = _read("static/js/page_editor.js")
+    assert "page-editor-backup-" in source
+    assert "offerLocalBackup" in source
+    assert "appendContrastWarning" in source
+    assert "ZONE_LABELS" in source

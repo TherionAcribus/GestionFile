@@ -67,6 +67,18 @@ PAGE_EDITOR_ENABLED_PAGES=announce
 La publication ne recharge jamais automatiquement les écrans en service :
 l’action **Appliquer/recharger les écrans** reste explicite.
 
+Comportements clés de l’éditeur :
+
+- Le brouillon est **partagé** entre administrateurs et versionné
+  (`draft_version`) : une écriture concurrente renvoie un conflit 409 plutôt
+  qu’un écrasement silencieux.
+- Publier exige que la configuration avancée n’ait pas changé depuis le
+  chargement de l’éditeur (empreinte `base_hash`), sinon conflit 409.
+- **Restaurer** une révision la charge dans le brouillon pour prévisualisation
+  — elle n’est publiée que par un clic explicite sur « Publier ».
+- Une copie locale non synchronisée est proposée à la réouverture si
+  l’onglet a été fermé ou la session expirée avant l’enregistrement.
+
 ## Dépannage MySQL
 
 Erreur typique :

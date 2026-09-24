@@ -46,13 +46,16 @@ _MARKER_LABELS = {
 }
 
 
-def _component(label, zone, selector, *, config=None, css=None, span=12):
+def _component(label, zone, selector, *, config=None, css=None, span=12,
+               scenarios=None, managed_bool=None):
     return {
         "label": label,
         "zone": zone,
         "zones": [zone],
         "selector": selector,
         "span": span,
+        "scenarios": scenarios,
+        "managed_bool": managed_bool,
         "config": config or [],
         "css": css or [],
     }
@@ -99,6 +102,7 @@ ADAPTERS = {
                      {"key": "text_up_font_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "text_up_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "calls": _component("Appels en cours", "main", "#div_calling",
+                scenarios=["active", "multiple", "gallery"],
                 config=[{"key": "announce_call_text", "label": "Format", "type": "text"}],
                 css=[{"key": "calling_font_size", "label": "Taille", "type": "size"},
                      {"key": "calling_font_color", "label": "Couleur", "type": "color"},
@@ -106,6 +110,7 @@ ADAPTERS = {
                      {"key": "calling_font_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "calling_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "empty_message": _component("Message file vide", "main", "#div_display_text_down",
+                scenarios=["empty"],
                 config=[{"key": "announce_text_down_patients", "label": "Texte", "type": "text"}],
                 css=[{"key": "text_down_font_size", "label": "Taille", "type": "size"},
                      {"key": "text_down_font_color", "label": "Couleur", "type": "color"},
@@ -120,6 +125,7 @@ ADAPTERS = {
                      {"key": "ongoing_font_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "ongoing_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "gallery": _component("Galerie", "aside", "#div_pub", span=6,
+                scenarios=["gallery"], managed_bool="announce_infos_display",
                 config=[{"key": "announce_infos_display", "label": "Afficher", "type": "bool"}]),
             "next": _component("Prochains patients", "footer", "#div_next_patients",
                 config=[{"key": "announce_next_patients_text", "label": "Texte", "type": "text"}],
@@ -169,6 +175,7 @@ ADAPTERS = {
                      {"key": "subtitle_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "subtitle_border_color", "label": "Couleur contour", "type": "color"}]),
             "languages": _component("Choix de langue", "overlay", ".language-selector",
+                managed_bool="page_patient_display_translations",
                 config=[{"key": "page_patient_display_translations", "label": "Afficher", "type": "bool"}],
                 css=[{"key": "flag_size", "label": "Taille drapeau", "type": "size"}]),
         },
@@ -196,7 +203,7 @@ ADAPTERS = {
 
 for index in range(1, 7):
     ADAPTERS["phone"]["components"][f"line{index}"] = _component(
-        f"Ligne {index}", "main", f"#phone_line{index}",
+        f"Ligne {index}", "main", f"#phone_line{index}", scenarios=["confirmation"],
         config=[{"key": f"phone_line{index}", "label": "Texte Markdown", "type": "text"}],
         css=[{"key": f"phone_line{index}_font_size", "label": "Taille", "type": "size"},
              {"key": f"phone_line{index}_font_color", "label": "Couleur", "type": "color"},
@@ -208,6 +215,7 @@ for index in range(1, 7):
     )
     ADAPTERS["phone"]["components"][f"your_turn_line{index}"] = _component(
         f"Appel — ligne {index}", "main", f"#phone_your_turn_line{index}",
+        scenarios=["your-turn"],
         config=[{"key": f"phone_your_turn_line{index}", "label": "Texte Markdown", "type": "text"}],
         css=[{"key": f"phone_your_turn_line{index}_font_size", "label": "Taille", "type": "size"},
              {"key": f"phone_your_turn_line{index}_font_color", "label": "Couleur", "type": "color"},
@@ -319,6 +327,126 @@ def _normalize_css_value(value, field_type):
     if isinstance(value, str) and field_type == "color" and re.fullmatch(r"[0-9A-Fa-f]{3,8}", value):
         return f"#{value}"
     return value
+
+
+#: Validation par type de champ CSS — en plus du filtre anti-injection
+#: ``is_safe_css_value``, chaque valeur doit être une valeur CSS utilisable
+#: pour sa propriété (une taille, une couleur, une graisse…).
+_CSS_SIZE_RE = re.compile(
+    r"^-?\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|vmin|vmax|pt|pc|cm|mm|in|ch|ex|lh|rlh)?$",
+    re.IGNORECASE,
+)
+_CSS_FN_RE = re.compile(r"^(?:var|calc|min|max|clamp)\(.*\)$", re.IGNORECASE | re.DOTALL)
+_CSS_COLOR_FN_RE = re.compile(
+    r"^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|var)\(.*\)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_CSS_NAMED_COLORS = frozenset({
+    "aliceblue", "antiquewhite", "aqua", "aquamarine", "azure", "beige",
+    "bisque", "black", "blanchedalmond", "blue", "blueviolet", "brown",
+    "burlywood", "cadetblue", "chartreuse", "chocolate", "coral",
+    "cornflowerblue", "cornsilk", "crimson", "cyan", "darkblue", "darkcyan",
+    "darkgoldenrod", "darkgray", "darkgreen", "darkgrey", "darkkhaki",
+    "darkmagenta", "darkolivegreen", "darkorange", "darkorchid", "darkred",
+    "darksalmon", "darkseagreen", "darkslateblue", "darkslategray",
+    "darkslategrey", "darkturquoise", "darkviolet", "deeppink",
+    "deepskyblue", "dimgray", "dimgrey", "dodgerblue", "firebrick",
+    "floralwhite", "forestgreen", "fuchsia", "gainsboro", "ghostwhite",
+    "gold", "goldenrod", "gray", "green", "greenyellow", "grey", "honeydew",
+    "hotpink", "indianred", "indigo", "ivory", "khaki", "lavender",
+    "lavenderblush", "lawngreen", "lemonchiffon", "lightblue", "lightcoral",
+    "lightcyan", "lightgoldenrodyellow", "lightgray", "lightgreen",
+    "lightgrey", "lightpink", "lightsalmon", "lightseagreen",
+    "lightskyblue", "lightslategray", "lightslategrey", "lightsteelblue",
+    "lightyellow", "lime", "limegreen", "linen", "magenta", "maroon",
+    "mediumaquamarine", "mediumblue", "mediumorchid", "mediumpurple",
+    "mediumseagreen", "mediumslateblue", "mediumspringgreen",
+    "mediumturquoise", "mediumvioletred", "midnightblue", "mintcream",
+    "mistyrose", "moccasin", "navajowhite", "navy", "oldlace", "olive",
+    "olivedrab", "orange", "orangered", "orchid", "palegoldenrod",
+    "palegreen", "paleturquoise", "palevioletred", "papayawhip",
+    "peachpuff", "peru", "pink", "plum", "powderblue", "purple",
+    "rebeccapurple", "red", "rosybrown", "royalblue", "saddlebrown",
+    "salmon", "sandybrown", "seagreen", "seashell", "sienna", "silver",
+    "skyblue", "slateblue", "slategray", "slategrey", "snow",
+    "springgreen", "steelblue", "tan", "teal", "thistle", "tomato",
+    "turquoise", "violet", "wheat", "white", "whitesmoke", "yellow",
+    "yellowgreen", "transparent", "currentcolor", "inherit", "initial",
+    "unset", "revert",
+})
+_CSS_SIZE_KEYWORDS = frozenset({"auto", "inherit", "initial", "unset", "revert"})
+_FONT_WEIGHT_KEYWORDS = frozenset({"normal", "bold", "bolder", "lighter"})
+
+
+def _is_css_size(value):
+    return bool(
+        _CSS_SIZE_RE.match(value)
+        or _CSS_FN_RE.match(value)
+        or value.lower() in _CSS_SIZE_KEYWORDS
+    )
+
+
+def _is_css_color(value):
+    lowered = value.lower()
+    return bool(
+        re.fullmatch(r"#[0-9a-f]{3,8}", lowered)
+        or _CSS_COLOR_FN_RE.match(value)
+        or lowered in _CSS_NAMED_COLORS
+    )
+
+
+def _is_css_number(value):
+    lowered = value.lower()
+    if lowered in _FONT_WEIGHT_KEYWORDS:
+        return True
+    try:
+        return 1 <= int(value) <= 1000
+    except ValueError:
+        return False
+
+
+def _is_valid_css_for_type(value, field_type):
+    if field_type == "color":
+        return _is_css_color(value)
+    if field_type == "number":
+        return _is_css_number(value)
+    return _is_css_size(value)
+
+
+#: Correspondance entre un composant et un réglage du mode avancé qui peut le
+#: désactiver entièrement. Utilisée pour l'aperçu et les badges de l'éditeur.
+_ADVANCED_DISABLED_RULES = {
+    ("announce", "ongoing"): ("announce_ongoing_display", "Le bloc « patients au comptoir » est désactivé dans le mode avancé."),
+    ("announce", "next"): ("announce_next_patients_display", "Le bloc « prochains patients » est désactivé dans le mode avancé."),
+}
+_ADVANCED_NEVER_RULES = {
+    ("announce", "top_message"): ("announce_text_up_patients_display", "L'affichage de ce message est réglé sur « jamais » dans le mode avancé."),
+    ("announce", "empty_message"): ("announce_text_down_patients_display", "L'affichage de ce message est réglé sur « jamais » dans le mode avancé."),
+}
+
+
+def advanced_disabled_reason(page, component_id):
+    """Raison pour laquelle le mode avancé désactive ce composant, sinon ``None``."""
+    flag = _ADVANCED_DISABLED_RULES.get((page, component_id))
+    if flag is not None:
+        spec = get_spec(flag[0])
+        if spec and not current_app.config.get(spec.config_name, True):
+            return flag[1]
+    never = _ADVANCED_NEVER_RULES.get((page, component_id))
+    if never is not None:
+        spec = get_spec(never[0])
+        if spec and current_app.config.get(spec.config_name) == "never":
+            return never[1]
+    return None
+
+
+def advanced_disabled_components(page):
+    """``{component_id: raison}`` pour les composants désactivés hors éditeur."""
+    return {
+        component_id: reason
+        for component_id in ADAPTERS[page]["components"]
+        if (reason := advanced_disabled_reason(page, component_id))
+    }
 
 
 def current_payload(page):
@@ -435,7 +563,10 @@ def validate_payload(page, payload):
         value = _normalize_css_value(value, css_types[key])
         if not is_safe_css_value(value):
             raise ValueError(f"Valeur CSS invalide pour {key}.")
-        normalized_css[key] = value.strip()
+        stripped = value.strip()
+        if not _is_valid_css_for_type(stripped, css_types[key]):
+            raise ValueError(f"Valeur CSS inutilisable pour {key}.")
+        normalized_css[key] = stripped
 
     raw_layout = payload.get("layout")
     if not isinstance(raw_layout, dict) or set(raw_layout) != set(adapter["components"]):
@@ -477,7 +608,7 @@ def validate_payload(page, payload):
     return result
 
 
-def layout_style(page, layout=None):
+def layout_style(page, layout=None, preview=False):
     adapter = ADAPTERS.get(page)
     if adapter is None:
         return Markup("")
@@ -486,13 +617,21 @@ def layout_style(page, layout=None):
     if not isinstance(layout, dict):
         layout = defaults
     rules = []
+    if preview:
+        # En aperçu, la visibilité est pilotée par l'attribut
+        # ``data-page-editor-hidden`` (page_editor_preview.js) et non par une
+        # règle ``!important`` figée — sinon un composant masqué au chargement
+        # ne peut jamais être réaffiché sans recharger l'aperçu.
+        rules.append("[data-page-editor-hidden]{display:none!important}")
+        rules.append("[data-config-hidden],[data-adv-hidden]{display:none!important}")
     for component_id, component in adapter["components"].items():
         item = layout.get(component_id, {})
         if not isinstance(item, dict):
             item = defaults[component_id]
         selector = component["selector"]
         if not item.get("visible", True):
-            rules.append(f"{selector}{{display:none!important}}")
+            if not preview:
+                rules.append(f"{selector}{{display:none!important}}")
             continue
         try:
             order = max(0, min(1000, int(item.get("order", defaults[component_id]["order"]))))
@@ -522,6 +661,22 @@ def layout_style(page, layout=None):
     elif page == "phone":
         rules.append(".container,#div_infos{display:flex;flex-flow:row wrap;align-content:flex-start;align-items:stretch}")
     return Markup("<style data-page-editor-layout>" + "".join(rules) + "</style>")
+
+
+def preview_vars_style(css):
+    """Bloc ``<style>`` des variables CSS de l'aperçu, généré côté serveur.
+
+    Évite d'écrire une boucle Jinja dans un bloc ``<style>`` (illisible pour
+    les linters CSS) et refiltre chaque valeur au passage.
+    """
+    declarations = "".join(
+        f"--{key}:{value};"
+        for key, value in (css or {}).items()
+        if is_safe_css_value(value)
+    )
+    return Markup(
+        f'<style id="page-editor-preview-vars">:root{{{declarations}}}</style>'
+    )
 
 
 def public_adapter_data(page):
