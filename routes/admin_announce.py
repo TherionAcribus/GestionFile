@@ -1,9 +1,11 @@
 import hashlib
 import json
+import re
 from pathlib import Path
 from flask import Blueprint, render_template, request, url_for, redirect, send_from_directory, current_app as app, jsonify
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
+from flask_security import current_user
 from google.cloud import texttospeech
 from google.oauth2 import service_account
 import gtts
@@ -205,6 +207,19 @@ def select_signal():
     if not filename:
         return "", 204
 
+    # Le nom doit désigner un fichier sonore réel : extension en liste
+    # blanche, segment de chemin sain et existence dans le dossier des
+    # signaux — sinon une chaîne arbitraire était persistée en config.
+    try:
+        validate_path_segment(filename, what="sound filename")
+        sound_path = safe_path_under(_signals_dir(), filename)
+    except UnsafePathError:
+        return display_toast(success=False, message="Nom de fichier invalide.")
+    if not allowed_audio_file(filename):
+        return display_toast(success=False, message="Format de fichier non autorisé.")
+    if not sound_path.is_file():
+        return display_toast(success=False, message="Fichier sonore introuvable.")
+
     config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
     if not config:
         return display_toast(success=False, message="Option non trouvée.")
@@ -277,20 +292,54 @@ def upload_signal_file():
     return redirect(url_for('.gallery_audio_list'))
 
 
+# Throttling du test vocal : la génération TTS est synchrone et peut appeler
+# un service externe — un utilisateur ne doit pas pouvoir la déclencher en
+# rafale (même pattern que le test d'e-mail, cf. admin_app).
+_audio_test_last_run: dict = {}  # {username: timestamp monotonique}
+_AUDIO_TEST_COOLDOWN = 5.0  # secondes
+
+# Numéro d'appel de test : colonne Patient.call_number = String(10), format
+# attendu type « A-1 ». La borne évite les charges arbitraires (la valeur
+# participe au texte synthétisé, donc à la clé du cache audio).
+_CALL_NUMBER_RE = re.compile(r"[A-Za-z0-9-]{1,10}")
+
+
 @admin_announce_bp.route('/admin/announce/audio/test/<string:scope>', methods=['POST'])
 @require_permission('announce')
 def announce_audio_test(scope):
     language_code = request.values.get('language_code', 'fr')
     call_number = request.values.get('call_number', 'A-1')
 
+    if scope not in ("test", "announce"):
+        return jsonify({"error": "Portée de test invalide."}), 400
+    if not _CALL_NUMBER_RE.fullmatch(call_number or ""):
+        return jsonify({"error": "Numéro d'appel invalide (10 caractères max, lettres/chiffres/tiret)."}), 400
+
+    # Throttling par utilisateur AVANT toute génération.
+    username = getattr(current_user, "username", "unknown")
+    now = time.monotonic()
+    remaining = _AUDIO_TEST_COOLDOWN - (now - _audio_test_last_run.get(username, 0.0))
+    if remaining > 0:
+        app.logger.warning("Test vocal throttled pour %s (%.0fs restantes)", username, remaining)
+        return jsonify({"error": "Veuillez patienter avant de relancer un test."}), 429
+
+    # La langue doit exister : une valeur forgée cassait la génération plus
+    # loin (patient.language = None -> AttributeError dans le moteur TTS).
+    language = None
+    if language_code != "fr":
+        language = Language.query.filter_by(code=language_code).first()
+        if language is None:
+            return jsonify({"error": "Langue inconnue."}), 400
+
     # Création d'un patient temporaire pour le test
     activity = Activity.query.first()
     patient = get_futur_patient(call_number, activity)
 
-    if language_code != "fr":
-        language = Language.query.filter_by(code=language_code).first()
+    if language is not None:
         patient.language = language
         patient.language_code = language_code
+
+    _audio_test_last_run[username] = now
 
     # Recherche du premier comptoir occupé par un pharmacien
     counter = Counter.query.filter(Counter.staff_id.isnot(None)).first()
@@ -490,9 +539,18 @@ def announce_save_google_voice():
     voice_google_name = voice_data[0] if len(voice_data) > 0 else ''
     voice_google_region = voice_data[1] if len(voice_data) > 1 else ''
 
-    try:
-        language = Language.query.get(language_id)
+    # Format des noms Google (« fr-FR-Wavenet-A ») et régions (« fr-FR ») :
+    # borne la valeur stockée en base plutôt qu'une chaîne arbitraire.
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", voice_google_name or ""):
+        return display_toast(success=False, message="Aucune voix sélectionnée.")
+    if voice_google_region and not re.fullmatch(r"[a-zA-Z-]{2,20}", voice_google_region):
+        return display_toast(success=False, message="Région de voix invalide.")
 
+    language = Language.query.get(language_id)
+    if language is None:
+        return display_toast(success=False, message="Langue inconnue.")
+
+    try:
         language.voice_google_name = voice_google_name
         language.voice_google_region = voice_google_region
         if language.code == "fr":
@@ -528,6 +586,8 @@ def announce_select_language_voice():
     language_code = request.form.get('language_code', 'fr')
     app.logger.debug('language_code %s', language_code)
     language = Language.query.filter_by(code=language_code).first()
+    if language is None:
+        return display_toast(success=False, message="Langue inconnue.")
     languages = Language.query.all()
     return render_template('/admin/announce_tabs_choice_voices.html',
                         gtts_languages = gtts.lang.tts_langs(),
@@ -545,9 +605,15 @@ def announce_save_voice_model():
     voice_model = request.form.get('voice_model')
     app.logger.debug('voice_model %s %s', voice_model, language_id)
 
-    try:
-        language = Language.query.get(language_id)
+    # Choix fermé : le moteur TTS ne connaît que ces deux modèles.
+    if voice_model not in ("gtts", "google"):
+        return display_toast(success=False, message="Modèle de voix non autorisé.")
 
+    language = Language.query.get(language_id)
+    if language is None:
+        return display_toast(success=False, message="Langue inconnue.")
+
+    try:
         language.voice_model = voice_model
         if language.code == "fr":
             config_sync.bump_generation()
@@ -579,9 +645,15 @@ def announce_save_gtts_voice():
     language_id = request.form.get('language_id')
     voice_gtts_name = request.form.get('gtts_voice_name')
 
-    try:
-        language = Language.query.get(language_id)
+    # Choix fermé : seuls les codes langue gTTS réels sont enregistrables.
+    if voice_gtts_name not in gtts.lang.tts_langs():
+        return display_toast(success=False, message="Voix gTTS inconnue.")
 
+    language = Language.query.get(language_id)
+    if language is None:
+        return display_toast(success=False, message="Langue inconnue.")
+
+    try:
         language.voice_gtts_name = voice_gtts_name
         if language.code == "fr":
             config_sync.bump_generation()
@@ -612,10 +684,12 @@ def announce_save_voice_is_active():
     language_id = request.form.get('language_id')
     voice_is_active = request.form.get('voice_is_active')
 
-    try:
-        language = Language.query.get(language_id)
+    language = Language.query.get(language_id)
+    if language is None:
+        return display_toast(success=False, message="Langue inconnue.")
 
-        language.voice_is_active = True if voice_is_active == 'true' else False 
+    try:
+        language.voice_is_active = True if voice_is_active == 'true' else False
         db.session.commit()
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_SUCCESS,

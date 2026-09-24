@@ -1,7 +1,42 @@
+import re
+
 from flask import Flask, current_app
 from typing import Dict, Optional, Type
 from dataclasses import dataclass
 from models import db, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable
+
+
+#: Nom de variable CSS : identifiant strict (le préfixe ``--`` est ajouté à
+#: la génération de la feuille). Tout autre caractère permettrait de casser
+#: le fichier généré ou d'y injecter des déclarations arbitraires.
+_CSS_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+
+#: Une valeur de variable est recopiée telle quelle dans ``--nom: valeur;``.
+#: On refuse tout ce qui permet de sortir de la déclaration (``;``, ``}``,
+#: saut de ligne, délimiteurs de chaîne, ``<`` ``>``) ou de charger/exécuter
+#: une ressource (``url(``, ``expression(``, ``@import``, ``javascript:``…).
+#: Couleurs, tailles, ``var(--x)``, ``calc()`` et dégradés restent valides.
+_CSS_VALUE_FORBIDDEN = re.compile(
+    r"[{};<>\"'\\\n\r\x00-\x1f]"
+    r"|url\s*\(|expression\s*\(|@import|javascript:|vbscript:|-moz-binding|behavior\s*:",
+    re.IGNORECASE,
+)
+_CSS_VALUE_MAX_LENGTH = 200
+
+
+def is_valid_css_variable_name(name) -> bool:
+    """``True`` si ``name`` est un nom de variable CSS exploitable."""
+    return isinstance(name, str) and bool(_CSS_VARIABLE_NAME_RE.match(name))
+
+
+def is_safe_css_value(value) -> bool:
+    """``True`` si ``value`` peut être écrite sans danger dans la feuille
+    personnalisée générée sous la forme ``--nom: valeur;``."""
+    return (
+        isinstance(value, str)
+        and 0 < len(value.strip()) <= _CSS_VALUE_MAX_LENGTH
+        and not _CSS_VALUE_FORBIDDEN.search(value)
+    )
 
 @dataclass
 class CssSource:

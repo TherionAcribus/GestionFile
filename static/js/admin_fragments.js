@@ -26,15 +26,29 @@ function testAudio(scope) {
     let language_code = document.getElementById('language_code').value;
     let call_number = document.getElementById('call_number').value;
 
-    fetch(`/admin/announce/audio/test/${scope}?language_code=${language_code}&call_number=${call_number}`, { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            updateGenerationTime(data.generation_time, scope);
+    // Anti double-clic : la génération TTS est synchrone côté serveur et peut
+    // appeler un service externe — on bloque les boutons le temps de la requête.
+    const buttons = document.querySelectorAll('[data-test-audio]');
+    buttons.forEach(function (btn) { btn.disabled = true; });
+
+    const params = new URLSearchParams({ language_code: language_code, call_number: call_number });
+    fetch(`/admin/announce/audio/test/${scope}?${params}`, { method: 'POST' })
+        .then(response => response.json().then(data => ({ ok: response.ok, data: data })))
+        .then(result => {
+            if (!result.ok) {
+                document.getElementById('generation-time').textContent = result.data.error || 'Test refusé';
+                document.getElementById('generation-time-info').style.display = 'none';
+                return;
+            }
+            updateGenerationTime(result.data.generation_time, scope);
         })
         .catch(error => {
             console.error('Error:', error);
             document.getElementById('generation-time').textContent = 'Error measuring generation time';
             document.getElementById('generation-time-info').style.display = 'none';
+        })
+        .finally(() => {
+            buttons.forEach(function (btn) { btn.disabled = false; });
         });
 }
 

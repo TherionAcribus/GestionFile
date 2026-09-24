@@ -288,6 +288,30 @@ _TICKET_TEXT_KEYS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Valeurs autorisées pour les clés à choix fermé (listes déroulantes).
+# ``update_select`` n'appliquait AUCUNE validation de domaine : n'importe
+# quelle chaîne forgée côté client était persistée. Chaque ensemble reflète
+# exactement les options proposées par l'interface — une valeur hors ensemble
+# est rejetée avant toute écriture.
+# ---------------------------------------------------------------------------
+_ANNOUNCE_TRANSITIONS = frozenset({"slide", "fade", "cube", "coverflow", "flip", "cards"})
+
+_ENUM_VALUES: dict[str, frozenset[str]] = {
+    "announce_player": frozenset({"web"}),
+    "announce_call_translation": frozenset({"fr", "vo", "both"}),
+    "announce_call_text_transition": _ANNOUNCE_TRANSITIONS,
+    "announce_infos_transition": _ANNOUNCE_TRANSITIONS,
+    "announce_text_up_patients_display": frozenset({"always", "never", "empty", "full"}),
+    "announce_text_down_patients_display": frozenset({"never", "empty"}),
+    "announce_next_patients_alignment": frozenset({"center", "left"}),
+    "counter_order": frozenset({"order", "random"}),
+    "music_announce_action": frozenset({"pause", "down", "nothing"}),
+    # Modifié via update_input (select à hx-post="/admin/update_input").
+    "page_patient_print_fail_behavior": frozenset({"ask", "keep", "cancel"}),
+}
+
+
 # Ressources de permission connues (miroir des champs ``admin_*`` du modèle Role).
 KNOWN_PERMISSIONS = {
     "security", "counter", "activity", "schedule", "algo", "translation",
@@ -340,6 +364,16 @@ def _validator_for(key: str, value_type: str) -> str:
         return "before_call"
     if key in _TICKET_TEXT_KEYS:
         return "ticket"
+    # admin_colors devient le nom du fichier de thème chargé par
+    # admin/base.html : la valeur doit correspondre à un fichier
+    # static/css/themes/*.css réel, pas à une chaîne arbitraire.
+    if key == "admin_colors":
+        return "theme"
+    # announce_alert_filename doit désigner un fichier sonore existant
+    # (vérifié côté route, cf. _closed_value_allowed) — pas seulement
+    # dans select_signal, sinon update_select contournerait le contrôle.
+    if key == "announce_alert_filename":
+        return "sound_file"
     return "text"
 
 
@@ -356,10 +390,11 @@ class ParamSpec:
     config_name: str
     value_type: str          # value_str | value_int | value_bool | value_text
     permission: str
-    validator: str           # bool | int | text | welcome | before_call | after_call
+    validator: str           # bool | int | text | welcome | before_call | after_call | ticket | theme
     kind: str                # switch | input | select
     restart_required: bool = False
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)
+    allowed_values: frozenset | None = None  # choix fermé (listes déroulantes)
 
 
 def _build_registry() -> dict[str, ParamSpec]:
@@ -374,6 +409,7 @@ def _build_registry() -> dict[str, ParamSpec]:
             kind=_kind_for(value_type),
             restart_required=key in _RESTART_REQUIRED,
             secret=key in SECRET_CONFIG_KEYS,
+            allowed_values=_ENUM_VALUES.get(key),
         )
     return registry
 

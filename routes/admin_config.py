@@ -10,6 +10,8 @@ validateur — c'est lui, et non la vue, qui décide de ce qui est modifiable.
 """
 
 import json
+import os
+from pathlib import Path
 
 from flask import Blueprint, current_app as app, jsonify, render_template, request
 
@@ -34,6 +36,9 @@ from scheduler_functions import (
 )
 from ui_feedback import display_toast
 from utils import validate_config_text
+from variables import is_safe_css_value, is_valid_css_variable_name
+from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
+from upload_security import ALLOWED_AUDIO_EXTENSIONS
 from audit_service import record_audit
 from audit_log import ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS
 
@@ -83,6 +88,58 @@ def authorize_config_change(key, expected_value_type=None):
 
     return spec, None
 
+
+def _admin_theme_names():
+    """Noms des thèmes admin réellement disponibles (static/css/themes/*.css).
+
+    ``admin_colors`` devient le nom du fichier de thème chargé par
+    ``admin/base.html`` : la valeur doit correspondre à un fichier existant,
+    pas à une chaîne arbitraire forgée côté client.
+    """
+    themes_path = os.path.join(app.static_folder, 'css', 'themes')
+    try:
+        return {os.path.splitext(name)[0]
+                for name in os.listdir(themes_path) if name.endswith('.css')}
+    except OSError:
+        return set()
+
+
+def _signal_file_exists(filename) -> bool:
+    """``True`` si ``filename`` est un fichier audio réel du dossier signaux.
+
+    Même contrôle que ``select_signal`` (admin_announce) : extension en liste
+    blanche, segment de chemin sain, fichier existant. Sans lui, la clé
+    ``announce_alert_filename`` restait inscriptible en chaîne arbitraire via
+    ``update_select``/``update_input``.
+    """
+    if (not isinstance(filename, str) or '.' not in filename
+            or filename.rsplit('.', 1)[1].lower() not in ALLOWED_AUDIO_EXTENSIONS):
+        return False
+    try:
+        validate_path_segment(filename, what="sound filename")
+        signals_dir = to_abs_base_dir(
+            Path("static") / "audio" / "signals", root_dir=app.root_path)
+        return safe_path_under(signals_dir, filename).is_file()
+    except UnsafePathError:
+        return False
+
+
+def _closed_value_allowed(spec, value) -> bool:
+    """Validation de domaine des paramètres à choix fermé.
+
+    ``spec.allowed_values`` couvre les listes déroulantes statiques ; les
+    validateurs ``theme``/``sound_file`` couvrent les choix dérivés de
+    ressources serveur (fichiers de thème, fichiers audio). Sans ces gardes,
+    ``update_select`` persistait n'importe quelle chaîne envoyée par le
+    navigateur.
+    """
+    if spec.allowed_values is not None and value not in spec.allowed_values:
+        return False
+    if spec.validator == "theme" and value not in _admin_theme_names():
+        return False
+    if spec.validator == "sound_file" and not _signal_file_exists(value):
+        return False
+    return True
 
 
 @admin_config_bp.route('/admin/update_switch', methods=['POST'])
@@ -176,6 +233,24 @@ def update_css_variable():
     if refusal is not None:
         return refusal
 
+    # Nom de variable : identifiant CSS strict, et seules les variables
+    # EXISTANTES sont modifiables — sinon ``update_variable`` créerait une
+    # entrée arbitraire ensuite écrite dans la feuille personnalisée.
+    if not is_valid_css_variable_name(variable_name):
+        return jsonify({'status': 'error', 'message': 'Nom de variable invalide.'}), 400
+    known_variables = app.css_variable_manager.get_all_variables(source_name)
+    if variable_name not in known_variables:
+        return jsonify({'status': 'error', 'message': 'Variable inconnue.'}), 400
+    for dep_variable in dependencies:
+        if not is_valid_css_variable_name(dep_variable) or dep_variable not in known_variables:
+            return jsonify({'status': 'error', 'message': 'Variable dépendante invalide.'}), 400
+
+    # La valeur est recopiée telle quelle dans ``--nom: valeur;`` : elle doit
+    # rester une valeur CSS inerte (couleur, taille…) — jamais une séquence
+    # capable de sortir de la déclaration ou de charger une ressource.
+    if not is_safe_css_value(value):
+        return jsonify({'status': 'error', 'message': 'Valeur CSS non autorisée.'}), 400
+
     try:
         # Met à jour la variable dans la base de données
         app.css_variable_manager.update_variable(source_name, variable_name, value)
@@ -242,6 +317,22 @@ def copy_colors():
             refusal = permission_error_response(resource, api=True)
             if refusal is not None:
                 return refusal
+
+        # Validation AVANT toute écriture : les noms de variables cibles et de
+        # dépendances doivent être des identifiants stricts correspondant à des
+        # variables existantes (sinon des entrées arbitraires — voire des
+        # séquences d'injection CSS — seraient créées puis écrites dans la
+        # feuille personnalisée). La source doit elle aussi être connue.
+        for mapping in mappings:
+            source_source = mapping.get('source_source')
+            target_source = mapping.get('target_source')
+            if source_source not in CSS_SOURCE_PERMISSION:
+                return jsonify({'status': 'error', 'message': 'Source invalide'}), 400
+            target_vars = app.css_variable_manager.get_all_variables(target_source)
+            names = [mapping.get('target_var'), *mapping.get('dependencies', [])]
+            for name in names:
+                if not is_valid_css_variable_name(name) or name not in target_vars:
+                    return jsonify({'status': 'error', 'message': 'Variable cible invalide.'}), 400
 
         # Pour chaque mapping, lire la valeur source et l'écrire dans la cible
         for mapping in mappings:
@@ -322,6 +413,12 @@ def update_input():
         else:
             return config_change_response(success=False, message=text_check["value"])
 
+    # Même garde que les selects pour les clés à choix fermé modifiables via
+    # update_input (ex. page_patient_print_fail_behavior, admin_colors).
+    if not _closed_value_allowed(spec, value):
+        app.logger.warning("Valeur d'input refusée pour %r : %r", key, value)
+        return config_change_response(success=False, message="Valeur non autorisée pour ce paramètre.")
+
     # Les textes de ticket sont stockés en Markdown BRUT uniquement : la
     # conversion ESC/POS se fait à l'impression avec la largeur courante
     # (PRINTER_WIDTH). On n'écrit plus de version préformatée ``*_printer`` —
@@ -398,6 +495,13 @@ def update_select():
     spec, error = authorize_config_change(key, expected_value_type="value_str")
     if error:
         return error
+
+    # Choix fermé : seules les options déclarées (registre / ressources
+    # serveur) sont acceptées — une liste déroulante ne doit pas pouvoir
+    # enregistrer une chaîne arbitraire forgée côté client.
+    if not _closed_value_allowed(spec, value):
+        app.logger.warning("Valeur de select refusée pour %r : %r", key, value)
+        return display_toast(success=False, message="Valeur non autorisée pour ce paramètre.")
 
     # Validation de l'existence de l'option AVANT toute mutation.
     config_option = ConfigOption.query.filter_by(config_key=key).first()
