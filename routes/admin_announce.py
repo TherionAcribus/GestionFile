@@ -11,6 +11,7 @@ from models import ConfigOption, Activity, Counter, Language, db
 from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
 from communication import communikation
 from routes.admin_security import require_permission
+import config_sync
 import time
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
 from ui_feedback import display_toast
@@ -201,17 +202,31 @@ def current_signal():
 def select_signal():
     app.logger.debug("%s", request.values)
     filename = request.form.get('selected_sound')
-    if filename:
-        app.config['ANNOUNCE_ALERT_FILENAME'] = filename
-        config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
-        app.logger.debug("%s", config)
+    if not filename:
+        return "", 204
+
+    config = ConfigOption.query.filter_by(config_key='announce_alert_filename').first()
+    if not config:
+        return display_toast(success=False, message="Option non trouvée.")
+
+    try:
         config.value_str = filename
+        # Même transaction : les autres processus rechargeront la valeur.
+        config_sync.bump_generation()
         db.session.commit()
         record_audit(ACTION_UPDATE, "config", target_id="announce_alert_filename",
                      outcome=OUTCOME_SUCCESS, details=f"value={filename}")
+    except Exception as e:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "config", target_id="announce_alert_filename",
+                     outcome=OUTCOME_FAILURE)
+        app.logger.error("Échec d'enregistrement du signal %r : %s", filename, e)
+        return display_toast(success=False, message="La mise à jour a échoué.")
 
-        communikation("admin", event="refresh_sound")
-
+    # app.config n'est muté qu'APRÈS un commit réussi : la mémoire ne doit
+    # jamais refléter une valeur que la base n'a pas enregistrée.
+    app.config['ANNOUNCE_ALERT_FILENAME'] = filename
+    communikation("admin", event="refresh_sound")
     return "", 204
 
 
@@ -479,7 +494,11 @@ def announce_save_google_voice():
         language = Language.query.get(language_id)
 
         language.voice_google_name = voice_google_name
-        language.voice_google_region = voice_google_region  
+        language.voice_google_region = voice_google_region
+        if language.code == "fr":
+            # Les miroirs app.config VOICE_GOOGLE_* des autres processus sont
+            # repeuplés par load_configuration() (relecture de la ligne « fr »).
+            config_sync.bump_generation()
         db.session.commit()
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_SUCCESS,
@@ -487,7 +506,7 @@ def announce_save_google_voice():
 
         if language.code == "fr":
             app.config["VOICE_GOOGLE_NAME"] = voice_google_name
-            app.config["VOICE_GOOGLE_REGION"] = voice_google_region  
+            app.config["VOICE_GOOGLE_REGION"] = voice_google_region
 
         display_toast(success=True, message="Voix sauvegardée")
 
@@ -530,6 +549,8 @@ def announce_save_voice_model():
         language = Language.query.get(language_id)
 
         language.voice_model = voice_model
+        if language.code == "fr":
+            config_sync.bump_generation()
         db.session.commit()
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_SUCCESS,
@@ -562,6 +583,8 @@ def announce_save_gtts_voice():
         language = Language.query.get(language_id)
 
         language.voice_gtts_name = voice_gtts_name
+        if language.code == "fr":
+            config_sync.bump_generation()
         db.session.commit()
         record_audit(ACTION_UPDATE, "language", target_id=language_id,
                      outcome=OUTCOME_SUCCESS,
