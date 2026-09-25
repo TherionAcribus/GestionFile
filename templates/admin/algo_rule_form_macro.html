@@ -1,0 +1,92 @@
+{# Formulaire d'une règle de l'algorithme — commun création/édition.
+   Vrai <form> avec des champs nommés : htmx sérialise les cases « jours »
+   (plusieurs days_of_week) et csrf.js ajoute le jeton. `p` préfixe les id
+   (plusieurs formulaires coexistent sur la page). #}
+{% macro rule_form(p, rule, activities, days, url, submit_label, cancel_target=None) %}
+{% set selected_days = rule.days_of_week.split(',') if rule else ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+<form class="algo-rule-form" hx-post="{{ url }}" hx-target="#div_algo_table" hx-swap="innerHTML">
+    <input type="hidden" name="days_of_week_present" value="1">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_name">Nom de la règle</label>
+            <input type="text" class="form-control" id="{{ p }}_name" name="name" maxlength="100" required
+                   value="{{ rule.name if rule else '' }}" placeholder="Ex. : Retrait rapide le matin">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_activity">Activité prioritaire</label>
+            <select class="form-select" id="{{ p }}_activity" name="activity_id" required>
+                {% for activity in activities %}
+                    <option value="{{ activity.id }}" {% if rule and activity.id == rule.activity_id %}selected{% endif %}>{{ activity.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_priority">Niveau</label>
+            <select class="form-select" id="{{ p }}_priority" name="priority_level" aria-describedby="{{ p }}_priority_help">
+                {% for number in [1, 2, 3, 4, 5] %}
+                    <option value="{{ number }}" {% if (rule.priority_level if rule else 1) == number %}selected{% endif %}>
+                        {{ number }}{% if number == 1 %} — examiné en premier{% elif number == 5 %} — examiné en dernier{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+            <div class="form-text" id="{{ p }}_priority_help">Utile seulement si plusieurs règles sont en vigueur en même temps.</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_overtaken">Peut passer devant au maximum</label>
+            <div class="input-group">
+                <input type="number" min="0" class="form-control" id="{{ p }}_overtaken" name="max_overtaken" required
+                       value="{{ rule.max_overtaken if rule else 3 }}" aria-describedby="{{ p }}_overtaken_help">
+                <span class="input-group-text">patients</span>
+            </div>
+            <div class="form-text" id="{{ p }}_overtaken_help">999 = sans limite ; 0 = la règle n'a aucun effet.</div>
+        </div>
+
+        <div class="col-md-6">
+            <span class="form-label d-block">Créneau horaire</span>
+            <div class="input-group">
+                <span class="input-group-text">de</span>
+                <input type="time" class="form-control" name="start_time" required aria-label="Heure de début"
+                       value="{{ rule.start_time.strftime('%H:%M') if rule else '00:00' }}">
+                <span class="input-group-text">à</span>
+                <input type="time" class="form-control" name="end_time" required aria-label="Heure de fin"
+                       value="{{ rule.end_time.strftime('%H:%M') if rule else '23:59' }}">
+            </div>
+        </div>
+        <div class="col-md-6">
+            <span class="form-label d-block">Quand la file compte</span>
+            <div class="input-group">
+                <span class="input-group-text">de</span>
+                <input type="number" min="0" class="form-control" name="min_patients" required aria-label="Nombre minimum de patients en attente"
+                       value="{{ rule.min_patients if rule else 0 }}">
+                <span class="input-group-text">à</span>
+                <input type="number" min="0" class="form-control" name="max_patients" required aria-label="Nombre maximum de patients en attente"
+                       value="{{ rule.max_patients if rule else 999 }}">
+                <span class="input-group-text">patients</span>
+            </div>
+            <div class="form-text">0 à 999 = quelle que soit l'affluence.</div>
+        </div>
+
+        <div class="col-12">
+            <fieldset>
+                <legend class="form-label fs-6 mb-1">Jours d'application</legend>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for abbr, label in days %}
+                        <input type="checkbox" class="btn-check" name="days_of_week" value="{{ abbr }}"
+                               id="{{ p }}_day_{{ abbr }}" autocomplete="off"
+                               {% if abbr in selected_days %}checked{% endif %}>
+                        <label class="btn btn-outline-primary btn-sm algo-day" for="{{ p }}_day_{{ abbr }}">{{ label }}</label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> {{ submit_label }}</button>
+        {% if cancel_target %}
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="{{ cancel_target }}">Annuler</button>
+        {% endif %}
+    </div>
+</form>
+{% endmacro %}

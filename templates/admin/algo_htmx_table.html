@@ -1,93 +1,58 @@
-<div class="table-responsive">
-<table id="algo_table" class="table table-striped table-hover align-middle">
-    <thead>
-        <tr>
-            <th>Nom</th>
-            <th>Activité</th>
-            <th>Priorité<br><small class="text-muted fw-normal">1 = la plus haute</small></th>
-            <th>Min Patients</th>
-            <th>Max Patients</th>
-            <th>Dépassement Max</th>
-            <th>Début</th>
-            <th>Fin</th>
-            <th>Jours</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for rule in rules %}
-        <tr>
-            <td><input type="text" class="form-control" value="{{ rule.name }}" id="name-{{ rule.id }}" aria-label="Nom de la règle"></td>
-            <td>
-                <div class="input-field">
-                <select class="form-select" id="activity-{{ rule.id }}" aria-label="Activité">
-                    {% for activity in activities %}
-                        <option value="{{ activity.id }}" {{ 'selected' if activity.id == rule.activity.id else '' }}>{{ activity.name }} </option>
-                    {% endfor %}
-                </select>
+{% from 'admin/algo_rule_form_macro.html' import rule_form %}
+{# Liste des règles : une carte par règle avec sa phrase résumée
+   (algo_explain.summarize_rule) et son état à l'instant (rule_state), au
+   lieu de l'ancien tableau de 10 colonnes de champs. L'édition se déplie
+   sous la carte. Triées par niveau puis heure de début. #}
+{% set state_badges = {
+    'active': ('text-bg-success', 'En vigueur'),
+    'off_day': ('text-bg-light border', 'Pas aujourd\'hui'),
+    'off_hours': ('text-bg-light border', 'Hors créneau'),
+    'queue_range': ('text-bg-light border', 'Affluence hors plage'),
+} %}
+{% if not rules %}
+    <div class="text-center text-muted py-4">
+        <i class="bi bi-sliders fs-3 d-block mb-2" aria-hidden="true"></i>
+        Aucune règle pour l'instant. Cliquez sur « Nouvelle règle » pour en créer une.
+    </div>
+{% endif %}
+{% for item in rules %}
+    {% set rule = item.rule %}
+    {% set state_code, state_text = item.state %}
+    {% set badge_class, badge_label = state_badges[state_code] %}
+    <article class="card algo-rule-card mb-2{% if state_code == 'active' %} is-active{% endif %}" data-filter-item>
+        <div class="card-body d-flex flex-wrap gap-3 align-items-start">
+            <div class="flex-grow-1 algo-rule-text">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <span class="badge text-bg-primary" title="Niveau de priorité (1 = examiné en premier)">Niveau {{ rule.priority_level }}</span>
+                    <h6 class="mb-0">{{ rule.name }}</h6>
+                    <span class="badge {{ badge_class }}">{{ badge_label }}</span>
                 </div>
-            </td>
-            <td>
-                <div class="input-field">
-                <select class="form-select" id="priority_level-{{ rule.id }}" aria-label="Niveau de priorité (1 = la plus haute)">
-                    {% for number in [1, 2, 3, 4, 5] %}
-                        <option value="{{ number }}" {{ 'selected' if number == rule.priority_level else '' }}>{{ number }} </option>
-                    {% endfor %}
-                </select>
-                </div>
-            </td>
-            <td>
-                <input type="number" min="0" class="form-control" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}" aria-label="Nombre minimum de patients">
-            </td>
-            <td>
-                <input type="number" min="0" class="form-control" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}" aria-label="Nombre maximum de patients">
-            </td>
-            <td>
-                <input type="number" min="0" class="form-control" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}" aria-label="Dépassement maximum">
-            </td>
-            <td><input type="time" class="form-control" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}" aria-label="Heure de début"></td>
-            <td><input type="time" class="form-control" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}" aria-label="Heure de fin"></td>
-            <td>
-                <div class="input-field col">
-                    <select multiple id="days-{{ rule.id }}" class="js-select2-multiple"
-                            data-placeholder="Jours d'application" aria-label="Jours d'application">
-                        {% for abbr, label in days %}
-                            <option value="{{ abbr }}"
-                                    {% if abbr in rule.days_of_week.split(',') %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-
-            <td>
-                <button class="btn btn-primary btnSaveLine"
-                    hx-target="#invisible"
-                    hx-post="/admin/algo/rule_update/{{ rule.id }}"
-                    data-param-name="#name-{{ rule.id }}"
-                    data-param-activity_id="#activity-{{ rule.id }}"
-                    data-param-priority_level="#priority_level-{{ rule.id }}"
-                    data-param-min_patients="#min_patients-{{ rule.id }}"
-                    data-param-max_patients="#max_patients-{{ rule.id }}"
-                    data-param-max_overtaken="#max_overtaken-{{ rule.id }}"
-                    data-param-start_time="#start_time-{{ rule.id }}"
-                    data-param-end_time="#end_time-{{ rule.id }}"
-                    data-param-days_of_week="#days-{{ rule.id }}@options">
-                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
+                <p class="mb-0">{{ item.summary }}</p>
+                {% if state_code != 'active' %}
+                    <p class="mb-0 small text-muted">{{ state_text }}</p>
+                {% endif %}
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="collapse" data-bs-target="#rule_edit_{{ rule.id }}"
+                        aria-expanded="false" aria-controls="rule_edit_{{ rule.id }}">
+                    <i class="bi bi-pencil" aria-hidden="true"></i> Modifier
                 </button>
-
-                <button class="btn btn-danger"
-                    title="Supprimer cette règle"
-                    hx-get="/admin/algo/confirm_delete_rule/{{ rule.id }}"
-                    hx-target="#modal-htmx"
-                    hx-trigger="click"
-                    data-bs-target="#modal_delete"
-                    data-bs-toggle="modal">
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        aria-label="Supprimer la règle {{ rule.name }}"
+                        hx-get="/admin/algo/confirm_delete_rule/{{ rule.id }}"
+                        hx-target="#modal-htmx"
+                        hx-trigger="click"
+                        data-bs-target="#modal_delete"
+                        data-bs-toggle="modal">
                     <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
-            </td>
-
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-</div>
+            </div>
+        </div>
+        <div class="collapse" id="rule_edit_{{ rule.id }}">
+            <div class="card-body border-top">
+                {{ rule_form('r' ~ rule.id, rule, activities, days, '/admin/algo/rule_update/' ~ rule.id, 'Enregistrer', '#rule_edit_' ~ rule.id) }}
+            </div>
+        </div>
+    </article>
+{% endfor %}

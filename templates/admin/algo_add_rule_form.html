@@ -1,77 +1,16 @@
-<table id="new_staff_form">
-    <thead>
-        <tr>
-            <th>Nom</th>
-            <th>Activité</th>
-            <th>Priorité<br><small class="text-muted fw-normal">1 = la plus haute</small></th>
-            <th>Min Patients</th>
-            <th>Max Patients</th>
-            <th>Dépassement Max</th>
-            <th>Début</th>
-            <th>Fin</th>
-            <th>Jours</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><input type="text" value="" id="name" aria-label="Nom de la règle"></td>
-            <td>
-                <div class="input-field">
-                <select id="activity" aria-label="Activité">
-                    {% for activity in activities %}
-                        <option value="{{activity.id}}">{{ activity.name }} </option>
-                    {% endfor %}
-                </select>
-                </div>
-            </td>
-            <td>
-                <div class="input-field">
-                <select id="priority_level" aria-label="Niveau de priorité (1 = la plus haute)">
-                    {% for number in [1, 2, 3, 4, 5] %}
-                        <option value="{{ number }}">{{ number }}</option>
-                    {% endfor %}
-                </select>
-                </div>
-            </td>
-            <td>
-                <input type="number" min="0" value="0" id="min_patients" aria-label="Nombre minimum de patients">
-            </td>
-            <td>
-                <input type="number" min="0" value="999" id="max_patients" aria-label="Nombre maximum de patients">
-            </td>
-            <td>
-                <input type="number" min="0" value="999" id="max_overtaken" aria-label="Dépassement maximum">
-            </td>
-            <td><input type="time" value="00:00" id="start_time" aria-label="Heure de début"></td>
-            <td><input type="time" value="23:59" id="end_time" aria-label="Heure de fin"></td>
-            <td>
-                <div class="input-field col">
-                    <select multiple id="days_of_week" class="js-select2-multiple"
-                            data-placeholder="Jours d'application" aria-label="Jours d'application">
-                        {% for abbr, label in days %}
-                            <option value="{{ abbr }}" selected>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-
-            <td>
-                <button class="btn btn-primary"
-                    hx-target="#div_algo_table"
-                    hx-post="/admin/algo/add_new_rule"
-                    data-param-name="#name"
-                    data-param-activity_id="#activity"
-                    data-param-priority_level="#priority_level"
-                    data-param-min_patients="#min_patients"
-                    data-param-max_patients="#max_patients"
-                    data-param-max_overtaken="#max_overtaken"
-                    data-param-start_time="#start_time"
-                    data-param-end_time="#end_time"
-                    data-param-days_of_week="#days_of_week@options">
-                    Enregistrer
-                </button>
-            </td>
-        </tr>
-    </tbody>
-</table>
+{% from 'admin/algo_rule_form_macro.html' import rule_form %}
+<div class="card border-primary mb-3" id="algo_new_rule_card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Nouvelle règle</strong>
+        {# Vide le conteneur sans requête serveur (admin_fragments.js). #}
+        <button type="button" class="btn-close" aria-label="Fermer le formulaire"
+                data-clear-target="#div_add_rule_form"></button>
+    </div>
+    <div class="card-body">
+        {% if not activities %}
+            <p class="mb-0 text-muted">Créez d'abord une activité : une règle donne la priorité à une activité.</p>
+        {% else %}
+            {{ rule_form('new', None, activities, days, '/admin/algo/add_new_rule', 'Créer la règle') }}
+        {% endif %}
+    </div>
+</div>

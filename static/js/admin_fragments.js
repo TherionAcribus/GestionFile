@@ -133,3 +133,12 @@ document.addEventListener('click', function (evt) {
     if (btn) { selectSound(btn); }
 });
 
+
+// Bouton « fermer » d'un formulaire injecté par HTMX (ex. « Nouvelle règle »
+// de l'algorithme) : data-clear-target="#conteneur" vide le conteneur.
+document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest ? evt.target.closest('[data-clear-target]') : null;
+    if (!btn) { return; }
+    var target = document.querySelector(btn.getAttribute('data-clear-target'));
+    if (target) { target.innerHTML = ''; }
+});

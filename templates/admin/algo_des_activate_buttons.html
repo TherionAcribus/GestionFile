@@ -1,19 +1,47 @@
-<button class="btn btn-primary
-            {% if algo_activated %}disabled{% endif %}"
-        hx-post="/admin/algo/toggle_activation?action=activate"
-        hx-target="#div_buttons_activate_algo"
-        hx-trigger="click"
-        hx-swap="innerHTML"
-    >Activer l'Algorithme
-</button>
+{# Bloc d'état de l'algorithme (remplace les deux boutons Activer/Désactiver).
+   L'interrupteur envoie l'action inverse de l'état affiché ; la réponse
+   remplace tout le bloc. Le message reflète ce que fera le PROCHAIN appel,
+   avec les mêmes critères que algo_choice_next_patient. #}
+<div class="form-check form-switch fs-5 mb-2">
+    <input class="form-check-input" type="checkbox" role="switch" id="algo_activate_switch"
+           {% if algo_activated %}checked{% endif %}
+           hx-post="/admin/algo/toggle_activation?action={{ 'deactivate' if algo_activated else 'activate' }}"
+           hx-trigger="change"
+           hx-target="#div_buttons_activate_algo"
+           hx-swap="innerHTML">
+    <label class="form-check-label" for="algo_activate_switch">Algorithme de priorité activé</label>
+</div>
 
-<button class="btn btn-danger
-            {% if not algo_activated %}disabled{% endif %}"
-        hx-post="/admin/algo/toggle_activation?action=deactivate"
-        hx-target="#div_buttons_activate_algo"
-        hx-trigger="click"
-        hx-swap="innerHTML"
-    >Désactiver l'algorithme
-</button>
-
-Pour l'instant pas de redémarrage/arret automatique de l'algo.
+{% if not algo_activated %}
+    <div class="alert alert-secondary mb-0" role="status">
+        <i class="bi bi-list-ol" aria-hidden="true"></i>
+        Désactivé : les patients sont appelés dans leur <strong>ordre d'arrivée</strong>.
+        {% if rules_count %}Les {{ rules_count }} règle{{ 's' if rules_count > 1 }} ci-dessous sont conservées mais ignorées.{% endif %}
+    </div>
+{% elif rules_count == 0 %}
+    <div class="alert alert-info mb-0" role="status">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        Activé, mais aucune règle n'existe encore : l'ordre d'arrivée s'applique.
+        Créez une règle avec « Nouvelle règle ».
+    </div>
+{% elif blocked_patient %}
+    <div class="alert alert-warning mb-0" role="status">
+        <i class="bi bi-pause-circle" aria-hidden="true"></i>
+        <strong>En pause (garde-fou)</strong> : le patient {{ blocked_patient.call_number }} a déjà été
+        dépassé {{ blocked_patient.overtaken }} fois (limite : {{ overtaken_limit }}).
+        Ordre d'arrivée jusqu'à son appel, puis reprise automatique.
+    </div>
+{% elif active_rules %}
+    <div class="alert alert-success mb-0" role="status">
+        <i class="bi bi-check-circle" aria-hidden="true"></i>
+        Actif — {{ active_rules | length }} règle{{ 's' if active_rules | length > 1 }} en vigueur en ce moment
+        ({{ waiting }} patient{{ 's' if waiting > 1 }} en attente) :
+        {{ active_rules | map(attribute='name') | join(', ') }}.
+    </div>
+{% else %}
+    <div class="alert alert-info mb-0" role="status">
+        <i class="bi bi-clock" aria-hidden="true"></i>
+        Activé, mais aucune règle n'est en vigueur en ce moment
+        ({{ waiting }} patient{{ 's' if waiting > 1 }} en attente) : l'ordre d'arrivée s'applique.
+    </div>
+{% endif %}

@@ -784,3 +784,29 @@ font-size: 0.85rem;
 .voice-panel:has(#voice_model_google:checked) .voice-picker-gtts {
     display: none;
 }
+
+/* --- Page Algorithme de priorité ---------------------------------------- */
+.algo-section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.algo-section summary {
+    cursor: pointer;
+}
+
+.algo-guard > .flex-grow-1 {
+    flex: 0 1 22rem !important;
+}
+
+.algo-rule-card.is-active {
+    border-left: 4px solid var(--bs-success);
+}
+
+.algo-rule-text {
+    min-width: min(100%, 18rem);
+}
+
+.algo-day {
+    min-width: 3.25rem;
+}

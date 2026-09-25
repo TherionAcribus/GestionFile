@@ -1,26 +1,5 @@
 // Configuration pour chaque type de table
 const TABLE_CONFIGS = {
-    'algo_table': {
-        // Le gabarit utilise 'btnSaveLine' (comme les autres tables) —
-        // 'btn-save-rule' ne correspondait à rien : la détection de
-        // changement ne tournait jamais sur cette table.
-        buttonClass: 'btnSaveLine',
-        getFields: (id) => [
-            document.getElementById(`name-${id}`),
-            document.getElementById(`activity-${id}`),
-            document.getElementById(`priority_level-${id}`),
-            document.getElementById(`min_patients-${id}`),
-            document.getElementById(`max_patients-${id}`),
-            document.getElementById(`max_overtaken-${id}`),
-            document.getElementById(`start_time-${id}`),
-            document.getElementById(`end_time-${id}`)
-        ],
-        getSelect2: (id) => document.getElementById(`days-${id}`),
-        getSelect2Value: (select) => {
-            if (!select) return null;
-            return Array.from(select.selectedOptions).map(option => option.value).sort().join(',');
-        }
-    },
     'queue_table': {
         buttonClass: 'btnSaveLine',
         getFields: (id) => [
@@ -347,7 +326,9 @@ function applyTableFilter(input) {
     const container = document.querySelector(input.dataset.filterTarget || '');
     if (!container) return;
     const query = input.value.trim().toLowerCase();
-    container.querySelectorAll('tbody tr').forEach(row => {
+    // Lignes de tableau, ou cartes marquées data-filter-item (règles de
+    // l'algorithme).
+    container.querySelectorAll('tbody tr, [data-filter-item]').forEach(row => {
         const matches = !query || row.textContent.toLowerCase().includes(query);
         row.style.display = matches ? '' : 'none';
     });

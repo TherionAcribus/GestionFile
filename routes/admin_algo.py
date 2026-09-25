@@ -1,5 +1,10 @@
-from flask import Blueprint, render_template, request, jsonify, current_app as app
-from models import AlgoRule, Activity, ConfigOption, db, bump_queue_revision, DAY_ABBREVIATIONS, DAY_NAMES_FR
+import json
+from datetime import datetime
+
+from flask import Blueprint, render_template, request, current_app as app
+from models import AlgoRule, Activity, ConfigOption, Patient, db, bump_queue_revision, DAY_ABBREVIATIONS, DAY_NAMES_FR
+from algo_explain import STATE_ACTIVE, rule_state, summarize_rule
+from config import time_tz
 from routes.admin_security import require_permission
 from ui_feedback import display_toast
 from audit_service import record_audit
@@ -11,6 +16,43 @@ from form_validation import Champ, ENTIER, TEXTE, extraire, valider
 from utils import parse_time
 
 admin_algo_bp = Blueprint('admin_algo', __name__)
+
+# Toute modification de règle rafraîchit le bloc d'état en haut de page
+# (hx-trigger « algoChanged from:body »). Fusionné avec l'en-tête
+# adminFeedback par app._attach_admin_feedback.
+_ALGO_CHANGED = {"HX-Trigger": json.dumps({"algoChanged": True})}
+
+
+def _overtaken_limit():
+    try:
+        return int(app.config['ALGO_OVERTAKEN_LIMIT'])
+    except (TypeError, ValueError):
+        return 0
+
+
+def _now():
+    """Instant dans le fuseau de l'application, comme le moteur."""
+    return datetime.now(time_tz)
+
+
+def _rules_with_state(now=None, waiting=None):
+    """Règles triées (niveau, début, nom) avec résumé et état à l'instant."""
+    now = now or _now()
+    if waiting is None:
+        waiting = Patient.query.filter_by(status='standing').count()
+    now_time = now.time()
+    day_abbr = DAY_ABBREVIATIONS[now.weekday()]
+    rules = AlgoRule.query.order_by(
+        AlgoRule.priority_level, AlgoRule.start_time, AlgoRule.name).all()
+    return [
+        {
+            "rule": rule,
+            "summary": summarize_rule(rule),
+            "state": rule_state(rule, now_time=now_time, day_abbr=day_abbr,
+                                waiting=waiting),
+        }
+        for rule in rules
+    ]
 
 # Schéma commun création / édition : les conversions numériques sont faites
 # par `valider` (l'ancien code comparait des chaînes : "9" > "10" était vrai).
@@ -58,6 +100,10 @@ def valider_regle_algo(form):
     # vide -> tous les jours, comme le défaut historique du formulaire.
     days_raw = form.getlist("days_of_week")
     days = [d.strip() for d in days_raw if d and d.strip()]
+    # Le formulaire (cases à cocher) signale sa présence : tout décocher ne
+    # doit pas silencieusement signifier « tous les jours ».
+    if not days and form.get("days_of_week_present"):
+        return None, "Cochez au moins un jour d'application."
     if days:
         invalides = [d for d in days if d not in DAY_ABBREVIATIONS]
         if invalides:
@@ -75,24 +121,45 @@ def valider_regle_algo(form):
 @admin_algo_bp.route('/admin/algo')
 @require_permission('algo')
 def admin_algo():
-    algo_overtaken_limit = app.config['ALGO_OVERTAKEN_LIMIT']
     return render_template('/admin/algo.html',
-                            algo_overtaken_limit=algo_overtaken_limit)
+                            algo_overtaken_limit=app.config['ALGO_OVERTAKEN_LIMIT'])
 
 @admin_algo_bp.route('/admin/algo/table')
 @require_permission('algo')
 def display_algo_table():
-    rules = AlgoRule.query.all()
     activities = Activity.query.all()
-    return render_template('admin/algo_htmx_table.html', rules=rules,
+    return render_template('admin/algo_htmx_table.html',
+                           rules=_rules_with_state(),
                            activities=activities, days=DAY_NAMES_FR.items())
 
-# affiche le formulaire activer ou desactiver l'algorithme
+
+def _render_status():
+    """Bloc d'état : interrupteur + ce que fait l'algorithme en ce moment."""
+    limit = _overtaken_limit()
+    waiting = Patient.query.filter_by(status='standing').count()
+    rules = _rules_with_state(waiting=waiting)
+    active_rules = [r["rule"] for r in rules if r["state"][0] == STATE_ACTIVE]
+    # Même frein global que algo_choice_next_patient : un patient dépassé
+    # au moins `limit` fois suspend l'algorithme.
+    blocked_patient = (Patient.query
+                       .filter(Patient.status == 'standing',
+                               Patient.overtaken >= limit)
+                       .order_by(Patient.overtaken.desc())
+                       .first())
+    return render_template("admin/algo_des_activate_buttons.html",
+                           algo_activated=app.config['ALGO_IS_ACTIVATED'],
+                           rules_count=len(rules),
+                           active_rules=active_rules,
+                           waiting=waiting,
+                           blocked_patient=blocked_patient,
+                           overtaken_limit=limit)
+
+
+# bloc d'état + interrupteur d'activation
 @admin_algo_bp.route('/admin/button_des_activate_algo')
 @require_permission('algo')
 def button_des_activate_algo():
-    return render_template("admin/algo_des_activate_buttons.html",
-                            algo_activated= app.config['ALGO_IS_ACTIVATED'])
+    return _render_status()
 
 # active ou desactive l'algorithme, enregistre l'info, retourne les boutons
 @admin_algo_bp.route('/admin/algo/toggle_activation', methods=['POST'])
@@ -109,8 +176,7 @@ def toggle_activation():
     record_audit(ACTION_UPDATE, "config", target_id="algo_activate",
                  outcome=OUTCOME_SUCCESS, details=f"value={is_activated}")
 
-    return render_template("admin/algo_des_activate_buttons.html",
-                            algo_activated=app.config['ALGO_IS_ACTIVATED'])
+    return _render_status()
 
 
 # [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
@@ -154,8 +220,8 @@ def add_new_rule():
     try:
         valeurs, erreur = valider_regle_algo(request.form)
         if erreur:
-            display_toast(success=False, message=erreur)
-            return display_algo_table()
+            # 204 : rien n'est remplacé, la saisie reste dans le formulaire.
+            return display_toast(success=False, message=erreur)
 
         new_rule = AlgoRule(**valeurs)
         db.session.add(new_rule)
@@ -171,15 +237,14 @@ def add_new_rule():
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_rule_form"></div>"""
 
-        return f"{display_algo_table()}{clear_form_html}"
+        return f"{display_algo_table()}{clear_form_html}", 200, _ALGO_CHANGED
 
     except Exception as e:
         db.session.rollback()
         record_audit(ACTION_CREATE, "algo_rule",
                      target_id=request.form.get('name'), outcome=OUTCOME_FAILURE)
         app.logger.exception("Echec de l'ajout d'une regle d'algorithme")
-        display_toast(success=False, message="L'ajout a échoué.")
-        return display_algo_table()
+        return display_toast(success=False, message="L'ajout a échoué.")
 
 
 # affiche la modale pour confirmer la suppression d'un membre
@@ -207,7 +272,7 @@ def delete_algo(algo_id):
         record_audit(ACTION_DELETE, "algo_rule", target_id=algo_id,
                      outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Règle supprimée")
-        return display_algo_table()
+        return display_algo_table(), 200, _ALGO_CHANGED
 
     except Exception as e:
         db.session.rollback()
@@ -225,8 +290,8 @@ def update_algo_rule(rule_id):
         if rule:
             valeurs, erreur = valider_regle_algo(request.form)
             if erreur:
-                display_toast(success=False, message=erreur)
-                return ""
+                # 204 : la liste n'est pas remplacée, la saisie est conservée.
+                return display_toast(success=False, message=erreur)
 
             rule.name = valeurs["name"]
             rule.activity_id = valeurs["activity_id"]
@@ -244,16 +309,15 @@ def update_algo_rule(rule_id):
             record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
                          outcome=OUTCOME_SUCCESS, details=f"name={rule.name}")
 
-            display_toast(success=True, message="Mise à jour réussie")
-            return ""
+            display_toast(success=True, message="Règle enregistrée")
+            # Liste re-rendue : résumé et état « en vigueur » à jour.
+            return display_algo_table(), 200, _ALGO_CHANGED
         else:
-            display_toast(success=False, message="Règle introuvable")
-            return ""
+            return display_toast(success=False, message="Règle introuvable")
 
     except Exception as e:
             db.session.rollback()
             record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
                          outcome=OUTCOME_FAILURE)
-            display_toast(success=False, message="La mise à jour a échoué.")
             app.logger.exception("Echec de la mise a jour d'une regle d'algorithme")
-            return jsonify(status="error", message="La mise à jour a échoué."), 500
+            return display_toast(success=False, message="La mise à jour a échoué.")
