@@ -466,6 +466,106 @@ _BUILTIN_CSS_OVERRIDES = {
             "subtitle_specific_message_border_color": "#000000",
             "subtitle_specific_message_background_color": "#008B8B",
         },
+        "phone": {
+            "phone_secondary_color": "#B6F5F5",
+            "phone_title_font_size": "20px",
+            "phone_title_font_color": "#FFFFFF",
+            "phone_title_font_weight": "800",
+            "phone_title_border_size": "0px",
+            "phone_title_border_color": "#000000",
+            "phone_title_background_color": "#008B8B",
+            "phone_title_background_height": "10px",
+            "phone_line1_font_size": "30px",
+            "phone_line1_font_weight": "400",
+            "phone_line1_font_color": "#000000",
+            "phone_line1_background_color": "#B6F5F5",
+            "phone_line1_border_size": "0px",
+            "phone_line1_border_color": "#000000",
+            "phone_line2_font_size": "40px",
+            "phone_line2_font_weight": "800",
+            "phone_line2_font_color": "#000000",
+            "phone_line2_background_color": "#B6F5F5",
+            "phone_line2_border_size": "0px",
+            "phone_line2_border_color": "#000000",
+            "phone_line3_font_size": "30px",
+            "phone_line3_font_weight": "400",
+            "phone_line3_font_color": "#000000",
+            "phone_line3_background_color": "#B6F5F5",
+            "phone_line3_border_size": "0px",
+            "phone_line3_border_color": "#000000",
+            "phone_line4_font_size": "30px",
+            "phone_line4_font_weight": "800",
+            "phone_line4_font_color": "#000000",
+            "phone_line4_background_color": "#B6F5F5",
+            "phone_line4_border_size": "0px",
+            "phone_line4_border_color": "#000000",
+            "phone_line5_font_size": "30px",
+            "phone_line5_font_weight": "400",
+            "phone_line5_font_color": "#000000",
+            "phone_line5_background_color": "#B6F5F5",
+            "phone_line5_border_size": "0px",
+            "phone_line5_border_color": "#000000",
+            "phone_line6_font_size": "30px",
+            "phone_line6_font_weight": "400",
+            "phone_line6_font_color": "#000000",
+            "phone_line6_background_color": "#B6F5F5",
+            "phone_line6_border_size": "0px",
+            "phone_line6_border_color": "#000000",
+            "phone_line1_background_height": "0px",
+            "phone_line2_background_height": "2px",
+            "phone_line3_background_height": "0px",
+            "phone_line4_background_height": "0px",
+            "phone_line5_background_height": "0px",
+            "phone_line6_background_height": "0px",
+            "phone_specific_message_font_size": "30px",
+            "phone_specific_message_font_color": "#000000",
+            "phone_specific_message_background_color": "#B6F5F5",
+            "phone_specific_message_background_height": "50px",
+            "phone_specific_message_border_size": "0px",
+            "phone_specific_message_border_color": "#000000",
+            "phone_your_turn_line1_font_size": "20px",
+            "phone_your_turn_line1_font_weight": "400",
+            "phone_your_turn_line1_font_color": "#000000",
+            "phone_your_turn_line1_background_color": "#B1F1F1",
+            "phone_your_turn_line1_background_height": "100px",
+            "phone_your_turn_line1_border_size": "2px",
+            "phone_your_turn_line1_border_color": "#000000",
+            "phone_your_turn_line2_font_size": "20px",
+            "phone_your_turn_line2_font_weight": "400",
+            "phone_your_turn_line2_font_color": "#000000",
+            "phone_your_turn_line2_background_color": "#B1F1F1",
+            "phone_your_turn_line2_background_height": "100px",
+            "phone_your_turn_line2_border_size": "2px",
+            "phone_your_turn_line2_border_color": "#000000",
+            "phone_your_turn_line3_font_size": "20px",
+            "phone_your_turn_line3_font_weight": "400",
+            "phone_your_turn_line3_font_color": "#000000",
+            "phone_your_turn_line3_background_color": "#B1F1F1",
+            "phone_your_turn_line3_background_height": "100px",
+            "phone_your_turn_line3_border_size": "2px",
+            "phone_your_turn_line3_border_color": "#000000",
+            "phone_your_turn_line4_font_size": "20px",
+            "phone_your_turn_line4_font_weight": "400",
+            "phone_your_turn_line4_font_color": "#000000",
+            "phone_your_turn_line4_background_color": "#B1F1F1",
+            "phone_your_turn_line4_background_height": "100px",
+            "phone_your_turn_line4_border_size": "2px",
+            "phone_your_turn_line4_border_color": "#000000",
+            "phone_your_turn_line5_font_size": "20px",
+            "phone_your_turn_line5_font_weight": "400",
+            "phone_your_turn_line5_font_color": "#000000",
+            "phone_your_turn_line5_background_color": "#B1F1F1",
+            "phone_your_turn_line5_background_height": "100px",
+            "phone_your_turn_line5_border_size": "2px",
+            "phone_your_turn_line5_border_color": "#000000",
+            "phone_your_turn_line6_font_size": "20px",
+            "phone_your_turn_line6_font_weight": "400",
+            "phone_your_turn_line6_font_color": "#000000",
+            "phone_your_turn_line6_background_color": "#B1F1F1",
+            "phone_your_turn_line6_background_height": "100px",
+            "phone_your_turn_line6_border_size": "2px",
+            "phone_your_turn_line6_border_color": "#000000",
+        },
     },
 }
 
@@ -534,18 +634,21 @@ def builtin_themes(page):
                        subtitle_specific_message_font_size="46px" if large else "40px",
                        flag_size="110px" if large else "100px")
         else:
-            block("phone_title", on_primary, primary, "36px" if large else "30px")
-            css.update(phone_title_font_weight="700",
-                       phone_title_background_height="22px" if large else "18px")
+            block("phone_title", on_primary, primary, "24px" if large else "20px")
+            css.update(phone_title_font_weight="800",
+                       phone_title_background_height="14px" if large else "10px")
             for prefix in ("phone_line", "phone_your_turn_line"):
                 for index in range(1, 7):
-                    block(f"{prefix}{index}", text, surface, "30px" if large else "26px")
-                    css[f"{prefix}{index}_background_height"] = "14px" if large else "10px"
-                    css[f"{prefix}{index}_font_weight"] = "500"
-            block("phone_your_turn_line1", on_primary, primary, "48px" if large else "40px")
+                    block(f"{prefix}{index}", text, surface, "34px" if large else "30px")
+                    css[f"{prefix}{index}_background_height"] = "2px"
+                    css[f"{prefix}{index}_font_weight"] = "400"
+            for index in (2, 4):
+                css[f"phone_line{index}_font_weight"] = "800"
+            css["phone_line2_font_size"] = "44px" if large else "40px"
+            block("phone_your_turn_line1", on_primary, primary, "44px" if large else "40px")
             css["phone_your_turn_line1_font_weight"] = "700"
-            block("phone_specific_message", text, soft, "26px" if large else "22px")
-            css["phone_specific_message_background_height"] = "auto"
+            block("phone_specific_message", text, soft, "34px" if large else "30px")
+            css["phone_specific_message_background_height"] = "60px" if large else "50px"
 
         css.update(overrides.get(page, {}))
 

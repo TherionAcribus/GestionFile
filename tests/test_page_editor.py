@@ -620,9 +620,8 @@ def test_builtin_themes_are_read_only_and_do_not_write_state(editor_app, page):
     assert response.status_code == 200
     data = response.get_json()
     assert data["themes"] == []
-    expected = ["Officine", "Lisibilité renforcée", "Sauge & Lin", "Bleu Horizon", "Ardoise"]
-    if page in ("announce", "patient"):
-        expected.append("Classique")
+    expected = ["Officine", "Lisibilité renforcée", "Sauge & Lin", "Bleu Horizon", "Ardoise",
+                "Classique"]
     assert [theme["name"] for theme in data["builtins"]] == expected
     for theme in data["builtins"]:
         assert theme["builtin"] is True
