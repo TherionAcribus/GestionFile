@@ -1,6 +1,7 @@
 {% from 'admin/activity_form_macro.html' import activity_form %}
 {# Liste des activités (ou des demandes nominatives si is_staff) en cartes :
-   lettre, horaires lisibles, état « dans ses horaires » à l'instant (même
+   lettre, « en continu » (par défaut) ou plages lisibles, état « dans ses
+   horaires » à l'instant (même
    règle que l'activation des boutons de la borne), messages et
    notification résumés. L'édition se déplie sous la carte. #}
 {% set target = '#div_activity_staff_table' if is_staff else '#div_activity_table' %}
@@ -20,8 +21,8 @@
                 <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                     <h6 class="mb-0">{{ activity.name }}</h6>
                     <span class="visually-hidden">Lettre {{ activity.letter }}.</span>
-                    {% if not item.schedules %}
-                        <span class="badge text-bg-warning">Jamais proposée</span>
+                    {% if item.continuous %}
+                        <span class="badge text-bg-success">En continu</span>
                     {% elif item.open %}
                         <span class="badge text-bg-success">Dans ses horaires</span>
                     {% else %}
@@ -42,12 +43,12 @@
                         {% endif %}
                     </li>
                     <li><i class="bi bi-clock" aria-hidden="true"></i>
-                        {% if item.schedules %}{{ item.schedules | join(' ; ') }}{% else %}<span class="text-warning-emphasis">aucune plage horaire : l'activité n'apparaît jamais sur la borne.</span>{% endif %}
+                        {% if item.continuous %}Proposée en continu{% else %}Seulement : {{ item.schedules | join(' ; ') }}{% endif %}
                     </li>
                     {% if activity.specific_message %}
                     <li class="text-muted"><i class="bi bi-chat-left-text" aria-hidden="true"></i> Après le choix : « {{ activity.specific_message }} »</li>
                     {% endif %}
-                    {% if activity.inactivity_message %}
+                    {% if activity.inactivity_message and not item.continuous %}
                     <li class="text-muted"><i class="bi bi-moon" aria-hidden="true"></i> Hors horaires : « {{ activity.inactivity_message }} »</li>
                     {% endif %}
                 </ul>
@@ -71,7 +72,7 @@
         </div>
         <div class="collapse" id="edit_{{ p }}">
             <div class="card-body border-top">
-                {{ activity_form(p, activity, schedules, '/admin/activity/activity_update/' ~ activity.id, target, 'Enregistrer', staff=staff, cancel_target='#edit_' ~ p) }}
+                {{ activity_form(p, activity, schedules, '/admin/activity/activity_update/' ~ activity.id, target, 'Enregistrer', staff=staff, cancel_target='#edit_' ~ p, continuous=item.continuous) }}
             </div>
         </div>
     </article>

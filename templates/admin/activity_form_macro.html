@@ -4,7 +4,7 @@
    id (plusieurs formulaires coexistent sur la page). Une erreur de
    validation répond 204 : rien n'est remplacé, la saisie reste en place. #}
 
-{% macro activity_form(p, activity, schedules, url, target, submit_label, staff=None, cancel_target=None) %}
+{% macro activity_form(p, activity, schedules, url, target, submit_label, staff=None, cancel_target=None, continuous=False) %}
 {% set selected = activity.schedules | map(attribute='id') | list if activity else [] %}
 <form class="activity-form" hx-post="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML">
     <div class="row g-3">
@@ -34,26 +34,41 @@
             <div class="form-text" id="{{ p }}_letter_help">Préfixe des tickets : A-1, A-2…</div>
         </div>
 
-        <div class="col-12">
+        {# Par défaut : en continu (aucune plage). Les plages sont l'exception ;
+           elles ne s'affichent que si « certaines plages » est coché (CSS :has). #}
+        {% set restricted = activity and not (activity.schedules | length == 0 or continuous) %}
+        <div class="col-12 activity-availability">
             <fieldset>
-                <legend class="form-label fs-6 mb-1">Proposée sur la borne pendant</legend>
+                <legend class="form-label fs-6 mb-1">Proposée sur la borne</legend>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="availability" value="always"
+                           id="{{ p }}_avail_always" {% if not restricted %}checked{% endif %}>
+                    <label class="form-check-label" for="{{ p }}_avail_always">En continu <span class="text-muted small">(par défaut)</span></label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input activity-avail-restricted" type="radio" name="availability" value="schedules"
+                           id="{{ p }}_avail_schedules" {% if restricted %}checked{% endif %}
+                           {% if not schedules %}disabled{% endif %}>
+                    <label class="form-check-label" for="{{ p }}_avail_schedules">
+                        Seulement pendant certaines plages horaires
+                        {% if not schedules %}<span class="d-block form-text">Créez d'abord une plage dans l'onglet « Plages horaires ».</span>{% endif %}
+                    </label>
+                </div>
                 {% if schedules %}
-                <div class="activity-schedule-choices">
+                <div class="activity-schedule-choices mt-2 ms-4">
                     {% for item in schedules %}
                     {% set s = item.schedule %}
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="schedules" value="{{ s.id }}"
                                id="{{ p }}_sched_{{ s.id }}"
-                               {% if s.id in selected or (not activity and loop.first) %}checked{% endif %}>
+                               {% if restricted and s.id in selected %}checked{% endif %}>
                         <label class="form-check-label" for="{{ p }}_sched_{{ s.id }}">
                             {{ s.name }} <span class="text-muted small">— {{ item.summary }}</span>
                         </label>
                     </div>
                     {% endfor %}
+                    <div class="form-text">En dehors de ces plages, le patient qui choisit l'activité voit le message « hors horaires ».</div>
                 </div>
-                <div class="form-text">Aucune case cochée : l'activité n'est jamais proposée. Les plages se gèrent dans l'onglet « Plages horaires ».</div>
-                {% else %}
-                <p class="small text-warning mb-0"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Aucune plage horaire : créez-en une dans l'onglet « Plages horaires ».</p>
                 {% endif %}
             </fieldset>
         </div>
@@ -69,7 +84,7 @@
             </div>
         </div>
         <div class="col-md-6">
-            <label class="form-label" for="{{ p }}_inactivity">Message si choisie hors horaires <span class="text-muted fw-normal">(facultatif)</span></label>
+            <label class="form-label" for="{{ p }}_inactivity">Message si choisie hors horaires <span class="text-muted fw-normal">(facultatif, seulement avec des plages)</span></label>
             <textarea class="form-control" id="{{ p }}_inactivity" name="inactivity_message" rows="2" maxlength="255"
                       aria-describedby="{{ p }}_inactivity_help">{{ activity.inactivity_message if activity and activity.inactivity_message else '' }}</textarea>
             <div class="form-text" id="{{ p }}_inactivity_help">Ex. : « Service disponible de 9h à 12h ». Vide : message par défaut de la borne.</div>

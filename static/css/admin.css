@@ -843,3 +843,9 @@ font-size: 0.85rem;
 .schedule-day {
     min-width: 3.25rem;
 }
+
+/* Formulaire d'activité : les plages ne s'affichent qu'en mode « certaines
+   plages » (le mode par défaut est « en continu »). */
+.activity-availability:not(:has(.activity-avail-restricted:checked)) .activity-schedule-choices {
+    display: none;
+}

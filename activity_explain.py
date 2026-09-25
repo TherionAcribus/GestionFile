@@ -3,6 +3,10 @@
 Sert la page /admin/activity : résumé d'une plage horaire, activité « dans
 ses horaires » à un instant donné, lettres partagées entre activités.
 
+Règle : une activité est proposée EN CONTINU par défaut. Les plages horaires
+sont une restriction facultative — sans aucune plage, l'activité est
+toujours proposée (auparavant : jamais).
+
 ``is_open_at`` est aussi la règle utilisée par
 ``routes.admin_activity.update_bouton_after_scheduler_changed`` pour
 (dés)activer les boutons de la borne : la page affiche donc exactement ce
@@ -48,11 +52,37 @@ def describe_schedule(schedule) -> str:
     return f"{days}, {hours}"
 
 
-def is_open_at(schedules, weekday_english: str, current_time) -> bool:
-    """Vrai si l'une des plages couvre ce jour et cette heure (bornes incluses).
+_ALL_DAYS = set(_ENGLISH_TO_ABBR)
 
-    Sans aucune plage, l'activité n'est jamais proposée.
+
+def _is_full_time(schedule) -> bool:
+    """Plage 00:00–23:59, les 7 jours (ex. plage par défaut « continu »)."""
+    if schedule.start_time is None or schedule.end_time is None:
+        return False
+    days = {(getattr(w, "english_name", "") or "").strip().lower()
+            for w in schedule.weekdays or ()}
+    return (_hhmm(schedule.start_time) == "00:00"
+            and _hhmm(schedule.end_time) in ("23:59", "23:59:59")
+            and days >= _ALL_DAYS)
+
+
+def is_continuous(schedules) -> bool:
+    """Vrai si l'activité est proposée en continu : aucune plage, ou une plage
+    couvrant toute la semaine, toute la journée."""
+    schedules = list(schedules or ())
+    return not schedules or any(_is_full_time(s) for s in schedules)
+
+
+def is_open_at(schedules, weekday_english: str, current_time) -> bool:
+    """Vrai si l'activité est proposée à ce jour et cette heure.
+
+    Sans aucune plage : proposée en continu. Sinon, l'une des plages doit
+    couvrir ce jour et cette heure (bornes incluses).
     """
+    # En continu (y compris via une plage 00:00–23:59 sur 7 jours, qui sinon
+    # « fermerait » pendant la dernière minute de la journée).
+    if is_continuous(schedules):
+        return True
     day = (weekday_english or "").strip().lower()
     for schedule in schedules or ():
         if schedule.start_time is None or schedule.end_time is None:

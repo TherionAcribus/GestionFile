@@ -26,7 +26,7 @@ from werkzeug.security import generate_password_hash
 
 import routes.admin_activity as admin_activity
 import routes.admin_schedule as admin_schedule
-from activity_explain import describe_schedule, is_open_at, shared_letters, weekday_codes
+from activity_explain import describe_schedule, is_continuous, is_open_at, shared_letters, weekday_codes
 from models import Activity, ActivitySchedule, Pharmacist, Role, User, Weekday, db
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
@@ -62,7 +62,16 @@ def test_is_open_at_bornes_incluses_et_sans_plage():
     assert is_open_at(s, "Monday", time(12))
     assert not is_open_at(s, "Monday", time(12, 1))
     assert not is_open_at(s, "Tuesday", time(10))
-    assert not is_open_at([], "Monday", time(10))  # sans plage : jamais proposée
+    # Règle : sans plage, l'activité est proposée EN CONTINU (défaut).
+    assert is_open_at([], "Sunday", time(3))
+
+
+def test_en_continu_par_defaut_et_plage_pleine():
+    full = _sched(time(0), time(23, 59), *(d[1] for d in _DAYS))
+    assert is_continuous([]) and is_continuous([full])
+    assert not is_continuous([_sched(time(9), time(12), "monday")])
+    # Plage 00:00–23:59 : pas de « fermeture » pendant la dernière minute.
+    assert is_open_at([full], "Friday", time(23, 59, 30))
 
 
 def test_shared_letters():
@@ -180,7 +189,9 @@ def test_liste_en_cartes(client):
     assert "Voir Marie" not in html  # liste équipier séparée
     # Lundi 10h : Ordonnance (Matin) ouverte, Conseil (Samedi) fermée.
     assert html.count("Dans ses horaires") == 1 and "Hors horaires" in html
-    assert "Jamais proposée" in html
+    # « Sans horaire » : proposée en continu (et non plus « jamais proposée »).
+    assert "En continu" in html and "Jamais proposée" not in html
+    assert 'name="availability"' in html
     assert "même lettre que Conseil" in html
     assert "du lundi au vendredi, 09:00–12:00" in html
     assert 'name="schedules"' in html and 'name="notification"' in html
@@ -229,6 +240,34 @@ def test_modification_invalide_ne_touche_rien(app, client, over):
     response = client.post(f"/admin/activity/activity_update/{act.id}", data=_form(**over))
     assert response.status_code == 204
     assert _get(app, Activity, id=act.id).letter == "A"
+
+
+def test_en_continu_retire_les_plages(app, client):
+    act = _get(app, Activity, name="Ordonnance")
+    matin = _get(app, ActivitySchedule, name="Matin")
+    # Même si des plages sont cochées, « En continu » l'emporte.
+    response = client.post(f"/admin/activity/activity_update/{act.id}",
+                           data=_form(availability="always", schedules=[str(matin.id)]))
+    assert response.status_code == 200
+    with app.app_context():
+        assert db.session.get(Activity, act.id).schedules == []
+
+
+def test_mode_plages_sans_plage_cochee_refuse(app, client):
+    act = _get(app, Activity, name="Ordonnance")
+    response = client.post(f"/admin/activity/activity_update/{act.id}",
+                           data=_form(availability="schedules"))
+    assert response.status_code == 204
+    with app.app_context():
+        assert len(db.session.get(Activity, act.id).schedules) == 1
+
+
+def test_formulaire_de_creation_en_continu_par_defaut(client):
+    html = client.get("/admin/activity/add_form").get_data(as_text=True)
+    always = html.split('value="always"', 1)[1].split(">", 1)[0]
+    assert "checked" in always
+    restricted = html.split('value="schedules"', 1)[1].split(">", 1)[0]
+    assert "checked" not in restricted
 
 
 def test_demande_nominative_exige_un_membre(app, client):

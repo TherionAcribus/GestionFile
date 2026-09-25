@@ -3,7 +3,7 @@
 <div class="alert alert-warning small" role="note">
     <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
     Utilisée par : <strong>{{ activities | map(attribute='name') | join(', ') }}</strong>.
-    Ces activités ne seront plus proposées pendant ce créneau (et plus du tout si c'était leur seule plage).
+    Si c'était leur seule plage, elles redeviendront proposées <strong>en continu</strong> ; sinon elles gardent leurs autres plages.
 </div>
 {% endif %}
 

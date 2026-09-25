@@ -11,7 +11,7 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
-from activity_explain import describe_schedule, is_open_at, shared_letters
+from activity_explain import describe_schedule, is_continuous, is_open_at, shared_letters
 from extensions import scheduler
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
@@ -59,6 +59,7 @@ def _render_activity_list(is_staff):
     items = [
         {
             "activity": activity,
+            "continuous": is_continuous(activity.schedules),
             "open": is_open_at(activity.schedules, weekday, now.time()),
             "schedules": [describe_schedule(s) for s in activity.schedules],
             "shared_letter": shared.get(activity.id, []),
@@ -97,6 +98,9 @@ SCHEMA_ACTIVITE = (
     Champ("notification", type=BOOLEEN, libelle="La notification"),
     Champ("staff_id", type=ENTIER, libelle="Le membre d'equipe"),
     Champ("schedules", type=LISTE_ENTIERS, libelle="Les plages horaires"),
+    # « always » (défaut du formulaire) : proposée en continu, aucune plage.
+    # Absent (restauration, anciens clients) : les plages envoyées font foi.
+    Champ("availability", libelle="La disponibilité", choix=("always", "schedules")),
 )
 
 
@@ -110,6 +114,10 @@ def _valider_activite(form):
     if not letter.isalnum():
         return None, "La lettre doit être une lettre ou un chiffre."
     valeurs["letter"] = letter
+    if valeurs.get("availability") == "always":
+        valeurs["schedules"] = []
+    elif valeurs.get("availability") == "schedules" and not valeurs["schedules"]:
+        return None, "Cochez au moins une plage horaire, ou choisissez « En continu »."
     return valeurs, None
 
 
