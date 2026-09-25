@@ -1487,3 +1487,27 @@ def test_print_error_labels_registered_for_translation():
         "page_patient_interface_no_ticket",
         "page_patient_interface_print_failed_staff",
     } <= keys
+
+
+# --- Cohérence des défauts CSS seedés avec le thème « Officine » -------------
+
+@pytest.mark.parametrize("page,filename", [
+    ("patient", "default_patient_css_variables.json"),
+    ("announce", "default_announce_css_variables.json"),
+    ("phone", "default_phone_css_variables.json"),
+])
+def test_default_css_variables_json_match_officine_theme(page, filename):
+    """Les variables CSS seedées au premier démarrage portent les valeurs du
+    thème par défaut « Officine » : sinon chaque bump de version du JSON
+    réécrirait les anciennes couleurs par-dessus le thème (cf. régression
+    borne repassée en « classique » au bump 0.22)."""
+    from page_editor import builtin_themes
+
+    path = Path(__file__).resolve().parents[1] / "static" / "json" / filename
+    variables = json.loads(path.read_text(encoding="utf-8"))["variables"]
+    theme = next(t for t in builtin_themes(page) if t["id"] == "builtin-officine")
+
+    for key, expected in theme["snapshot"]["css"].items():
+        assert variables.get(key) == str(expected), (
+            f"{filename}: {key} = {variables.get(key)!r}, "
+            f"attendu {expected!r} (thème Officine)")
