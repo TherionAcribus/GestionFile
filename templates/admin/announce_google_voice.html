@@ -1,12 +1,16 @@
 <div class="container mt-5">
     <h5>Configurer la clé Google Cloud</h5>
     {# voice_google_key signifie « clé présente et déchiffrable » — Google
-       peut encore la refuser à l'usage. Ne pas prétendre qu'elle est valide. #}
-    {% if voice_google_key %}
-        <div class="alert alert-success" role="alert">Une clé Google Cloud est enregistrée.</div>
-    {% else %}
-        <div class="alert alert-danger" role="alert">Aucune clé Google Cloud enregistrée (ou elle est illisible). Téléchargez-la pour utiliser la fonctionnalité.</div>
-    {% endif %}
+       peut encore la refuser à l'usage. Ne pas prétendre qu'elle est valide.
+       #google-key-status est rafraîchi en OOB après chaque téléversement :
+       sans lui, l'alerte figée du rendu initial contredirait le résultat. #}
+    <div id="google-key-status">
+        {% if voice_google_key %}
+            <div class="alert alert-success" role="alert">Une clé Google Cloud est enregistrée.</div>
+        {% else %}
+            <div class="alert alert-danger" role="alert">Aucune clé Google Cloud enregistrée (ou elle est illisible). Téléchargez-la pour utiliser la fonctionnalité.</div>
+        {% endif %}
+    </div>
 
     <div class="accordion mb-3" id="accordionGoogleKeyHelp">
         <div class="accordion-item">
@@ -35,10 +39,13 @@
 
     <form id="google-key-form" enctype="multipart/form-data" hx-post="/admin/announce/google/add_key" hx-target="#upload-result" hx-swap="innerHTML">
         <div class="form-group">
-            <label for="googleKeyFile">Télécharger le fichier JSON de clés Google Cloud :</label>
-            <input type="file" class="form-control-file" id="googleKeyFile" name="google_key_file" accept=".json" required>
+            <label for="googleKeyFile" class="form-label">Fichier JSON de clés Google Cloud :</label>
+            <div id="google-key-dropzone" class="google-key-dropzone">
+                <input type="file" class="form-control" id="googleKeyFile" name="google_key_file" accept=".json" required>
+                <span class="google-key-dropzone-hint"><i class="bi bi-cloud-arrow-up"></i> ou glissez-déposez le fichier <code>.json</code> ici</span>
+            </div>
         </div>
-        <button type="submit" class="btn btn-primary">Enregistrer la clé</button>
+        <button type="submit" class="btn btn-primary mt-2">Enregistrer la clé</button>
     </form>
     <div id="upload-result" class="mt-3"></div>
 

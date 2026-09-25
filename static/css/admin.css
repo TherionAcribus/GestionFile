@@ -732,3 +732,24 @@ font-size: 0.85rem;
         font-size: 0.78rem;
     }
 }
+
+/* Onglet « Google Voice » de la page Annonce : zone de depot du fichier de
+   cle JSON (admin_google_voice.js). */
+.google-key-dropzone {
+    border: 2px dashed var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 1rem;
+    transition: border-color .15s ease, background-color .15s ease;
+}
+
+.google-key-dropzone.dragover {
+    border-color: var(--bs-primary);
+    background: color-mix(in srgb, var(--bs-primary) 8%, var(--bs-body-bg));
+}
+
+.google-key-dropzone-hint {
+    color: var(--bs-secondary-color);
+    display: block;
+    font-size: .875rem;
+    margin-top: .5rem;
+}

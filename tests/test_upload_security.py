@@ -286,18 +286,53 @@ def test_route_upload_google_key_stores_encrypted(app, client):
     flask_app, _ = app
     _login(client)
     payload = json.dumps(_service_account_dict()).encode("utf-8")
-    response = client.post(
-        "/admin/announce/google/add_key",
-        data={"google_key_file": (io.BytesIO(payload), "key.json")},
-        content_type="multipart/form-data",
-    )
+    # La route vérifie la clé auprès de Google après l'enregistrement : on
+    # coupe l'appel réseau en simulant une liste de voix.
+    with patch.object(
+        admin_announce, "list_google_voices", return_value=[{"name": "fr-FR-Wavenet-A"}]
+    ):
+        response = client.post(
+            "/admin/announce/google/add_key",
+            data={"google_key_file": (io.BytesIO(payload), "key.json")},
+            content_type="multipart/form-data",
+        )
     assert b"alert-success" in response.data
+    assert b"hx-swap-oob" in response.data
     with flask_app.app_context():
         option = ConfigOption.query.filter_by(config_key="voice_google_key").one()
         cipher = Fernet(flask_app.config["BASE32_KEY"])
         decrypted = json.loads(cipher.decrypt(option.value_json.encode()))
         assert decrypted["type"] == "service_account"
         assert decrypted["project_id"] == "demo-project"
+
+
+def test_route_upload_google_key_refused_by_google(app, client):
+    """Clé syntaxiquement valide mais refusée par Google : elle reste
+    enregistrée, la réponse l'annonce comme un avertissement et non un succès
+    (la bannière OOB ne prétend pas qu'elle fonctionne)."""
+    flask_app, _ = app
+    _login(client)
+    payload = json.dumps(_service_account_dict()).encode("utf-8")
+    from google.api_core import exceptions as gapi_exceptions
+
+    with patch.object(
+        admin_announce,
+        "list_google_voices",
+        side_effect=gapi_exceptions.PermissionDenied("API disabled"),
+    ):
+        response = client.post(
+            "/admin/announce/google/add_key",
+            data={"google_key_file": (io.BytesIO(payload), "key.json")},
+            content_type="multipart/form-data",
+        )
+    assert b"alert-warning" in response.data
+    assert b"hx-swap-oob" in response.data
+    assert b"accept" not in response.data
+    with flask_app.app_context():
+        assert (
+            ConfigOption.query.filter_by(config_key="voice_google_key").count()
+            == 1
+        )
 
 
 @pytest.mark.parametrize(

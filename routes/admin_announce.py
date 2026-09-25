@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 from flask_security import current_user
 from google.cloud import texttospeech
 from google.oauth2 import service_account
+from google.api_core import exceptions as gapi_exceptions
 import gtts
 from models import ConfigOption, Activity, Counter, Language, db
 from python.engine import get_futur_patient, generate_audio_calling, get_google_credentials
@@ -419,7 +420,40 @@ def upload_google_key():
         # l'action, jamais le contenu.
         record_audit(ACTION_UPDATE, "config", target_id="voice_google_key",
                      outcome=OUTCOME_SUCCESS)
-        return '<div class="alert alert-success">Clé Google Cloud enregistrée avec succès.</div>'
+
+        # Vérification réelle auprès de Google : la clé reste enregistrée
+        # quoiqu'il arrive, mais l'utilisateur doit savoir si elle fonctionne
+        # (API non activée et facturation absente sont les refus les plus
+        # fréquents). L'appel pré-remplit aussi le cache des voix — la clé
+        # déchiffrée retournée par get_google_credentials a la même empreinte
+        # que le JSON normalisé.
+        status_text = "Une clé Google Cloud est enregistrée."
+        try:
+            voice_count = len(list_google_voices(normalized))
+            status_text = ("Une clé Google Cloud est enregistrée et "
+                           "acceptée par Google.")
+            result = ('<div class="alert alert-success" role="alert">Clé Google Cloud '
+                      f'enregistrée et vérifiée ({voice_count} voix disponibles).</div>')
+        except (gapi_exceptions.PermissionDenied, gapi_exceptions.Forbidden):
+            result = ('<div class="alert alert-warning" role="alert">Clé enregistrée, '
+                      'mais Google la refuse : vérifiez que l\'API Cloud Text-to-Speech '
+                      'est activée et que la facturation est configurée sur le projet.</div>')
+        except gapi_exceptions.Unauthenticated:
+            result = ('<div class="alert alert-warning" role="alert">Clé enregistrée, '
+                      'mais Google la refuse : le compte de service ou la clé a '
+                      'été supprimé ou révoqué.</div>')
+        except Exception as exc:
+            app.logger.warning("Vérification de la clé Google impossible : %s", exc)
+            result = ('<div class="alert alert-warning" role="alert">Clé enregistrée, '
+                      'mais la vérification auprès de Google a échoué (connexion '
+                      'impossible). Elle pourra fonctionner une fois le réseau '
+                      'disponible.</div>')
+
+        # Swap OOB : met à jour la bannière d'état en haut de l'onglet, figée
+        # depuis le rendu initial — sinon elle contredirait le résultat.
+        status_oob = (f'<div id="google-key-status" hx-swap-oob="true">'
+                      f'<div class="alert alert-success" role="alert">{status_text}</div></div>')
+        return status_oob + result
     else:
         return '<div class="alert alert-danger">Format de fichier non autorisé. Veuillez télécharger un fichier JSON.</div>'
 
