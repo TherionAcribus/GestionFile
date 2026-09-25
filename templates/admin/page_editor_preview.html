@@ -93,6 +93,44 @@
                     <div class="div_text_summary"><p class="text_summary">{{ preview_patient_interface.confirmation }}</p></div>
                     <div class="div_validation_buttons"><div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.done_back }}</p></div></div>
                 </div>
+            {% elif scenario == 'print_error' %}
+                {# Reproduit l'overlay de conclusion_page.html : le message dépend
+                   du comportement d'échec choisi (Demander/Conserver/Annuler). #}
+                <div class="div_summary">
+                    <div id="print_status_overlay" data-page-editor-component="print_error" style="display:flex;">
+                        <div id="print_status_message" class="div_text_summary">
+                            <p class="text_summary" data-config-key="page_patient_interface_print_failed" data-number-styled
+                               data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["keep","cancel"]'
+                               {% if payload.config.page_patient_print_fail_behavior != 'ask' %}data-config-hidden{% endif %}>{{ preview_config.page_patient_interface_print_failed }}</p>
+                            <p class="text_summary" data-config-key="page_patient_interface_no_ticket" data-number-styled
+                               data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["ask","cancel"]'
+                               {% if payload.config.page_patient_print_fail_behavior != 'keep' %}data-config-hidden{% endif %}>{{ preview_config.page_patient_interface_no_ticket }}</p>
+                            <p class="text_summary" data-config-key="page_patient_interface_print_failed_staff" data-number-styled
+                               data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["ask","keep"]'
+                               {% if payload.config.page_patient_print_fail_behavior != 'cancel' %}data-config-hidden{% endif %}>{{ preview_config.page_patient_interface_print_failed_staff }}</p>
+                        </div>
+                        {# Le numéro est affiché en grand quand le message ne
+                           contient pas la balise {N} (même règle que la borne). #}
+                        <p class="print_status_number"
+                           data-print-error-number-for="page_patient_interface_print_failed"
+                           data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["keep","cancel"]'
+                           {% if payload.config.page_patient_print_fail_behavior != 'ask' or '{n}' in (payload.config.page_patient_interface_print_failed or '')|lower %}data-config-hidden{% endif %}>{{ preview_tokens['{N}'] }}</p>
+                        <p class="print_status_number"
+                           data-print-error-number-for="page_patient_interface_no_ticket"
+                           data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["ask","cancel"]'
+                           {% if payload.config.page_patient_print_fail_behavior != 'keep' or '{n}' in (payload.config.page_patient_interface_no_ticket or '')|lower %}data-config-hidden{% endif %}>{{ preview_tokens['{N}'] }}</p>
+                        <div id="print_status_buttons" class="div_validation_buttons"
+                             data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["keep","cancel"]'
+                             {% if payload.config.page_patient_print_fail_behavior != 'ask' %}data-config-hidden{% endif %}>
+                            <div class="div_validation_one_button" data-config-bool="page_patient_print_fail_show_retry" {% if not payload.config.page_patient_print_fail_show_retry %}data-config-hidden{% endif %}>
+                                <p class="validation_button" data-config-key="page_patient_interface_retry">{{ preview_config.page_patient_interface_retry }}</p>
+                            </div>
+                            <div class="div_validation_one_button" data-config-bool="page_patient_print_fail_show_staff" {% if not payload.config.page_patient_print_fail_show_staff %}data-config-hidden{% endif %}>
+                                <p class="validation_button" data-config-key="page_patient_interface_call_staff">{{ preview_config.page_patient_interface_call_staff }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             {% endif %}
         </div>
         {% set show_specific = scenario in ('validation', 'conclusion') and preview_specific_message and payload.config.page_patient_display_specific_message %}

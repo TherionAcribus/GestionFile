@@ -1,8 +1,8 @@
 {
     "name": "gf_patient_css_variables",
     "type": "default",
-    "version": "0.21",
-    "timestamp": "2026-07-17 08:00:00",
+    "version": "0.22",
+    "timestamp": "2026-07-18 08:00:00",
     "comments": "Valeurs alignées sur la configuration de production (borne 1280x800)",
     "variables": {
         "circle_button_size": "200px",
@@ -92,6 +92,12 @@
         "confirmation_text_font_size": "50px",
         "confirmation_text_border_size": "0px",
         "confirmation_text_border_color": "black",
-        "confirmation_text_background_color": "#b6f5f5"
+        "confirmation_text_background_color": "#b6f5f5",
+        "print_error_font_color": "#008B8B",
+        "print_error_font_size": "50px",
+        "print_error_border_size": "0px",
+        "print_error_border_color": "black",
+        "print_error_background_color": "#b6f5f5",
+        "print_error_number_size": "80px"
     }
 }

@@ -8,12 +8,37 @@
     let markdownTimer = null;
     let markdownRequest = 0;
 
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
     function demoText(value, element) {
         let result = String(value == null ? '' : value);
         const values = Object.assign({}, tokenValues);
         if (element?.dataset.previewNumber) values['{N}'] = element.dataset.previewNumber;
         Object.entries(values).forEach(function (entry) {
             result = result.split(entry[0]).join(entry[1]);
+        });
+        return result;
+    }
+
+    // Variante HTML : {N} devient un élément mis en valeur (.print_status_number),
+    // comme sur la borne où patients.js l'entoure d'un span dédié. Insensible
+    // à la casse, comme fillCallNumber/render_balises.
+    function demoHtml(value, element) {
+        let result = escapeHtml(value == null ? '' : value);
+        const values = Object.assign({}, tokenValues);
+        if (element?.dataset.previewNumber) values['{N}'] = element.dataset.previewNumber;
+        Object.entries(values).forEach(function (entry) {
+            const replacement = entry[0] === '{N}'
+                ? '<span class="print_status_number">' + escapeHtml(entry[1]) + '</span>'
+                : escapeHtml(entry[1]);
+            const pattern = new RegExp(
+                entry[0].replace(/[{}]/g, function (c) { return '\\' + c; }), 'gi');
+            result = result.replace(pattern, replacement);
         });
         return result;
     }
@@ -26,7 +51,11 @@
         Object.entries(payload.config || {}).forEach(function (entry) {
             if (document.body.dataset.page === 'phone' && (entry[0].startsWith('phone_line') || entry[0].startsWith('phone_your_turn_line'))) return;
             document.querySelectorAll('[data-config-key="' + CSS.escape(entry[0]) + '"]').forEach(function (element) {
-                element.textContent = demoText(entry[1], element);
+                if (element.hasAttribute('data-number-styled')) {
+                    element.innerHTML = demoHtml(entry[1], element);
+                } else {
+                    element.textContent = demoText(entry[1], element);
+                }
             });
         });
         if (document.body.dataset.page === 'phone') {
@@ -51,6 +80,12 @@
         document.querySelectorAll('[data-hide-empty]').forEach(function (element) {
             const value = payload.config[element.dataset.configKey];
             markHidden(element, !String(value == null ? '' : value).trim());
+        });
+        // Écran « Erreur d'impression » : le numéro en grand n'est ajouté que
+        // si le texte associé n'a pas de balise {N} — même règle que la borne.
+        document.querySelectorAll('[data-print-error-number-for]').forEach(function (element) {
+            const message = String(payload.config[element.dataset.printErrorNumberFor] || '');
+            markHidden(element, /\{n\}/i.test(message));
         });
         hiddenByConfig.forEach(function (hidden, element) {
             element.toggleAttribute('data-config-hidden', hidden);

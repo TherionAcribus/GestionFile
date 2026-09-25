@@ -420,3 +420,30 @@ def test_conclusion_page_route_par_patient_id(client, application):
     assert reponse.status_code == 200
     assert "NOUVELLE" in html
     assert "ANCIENNE" not in html
+
+
+# --- 6. Libellés d'impression : {N} réservé à la borne ------------------------
+
+def test_conclusion_print_labels_gardent_n_resolvent_les_autres_balises(
+        client, application):
+    """``print_ui_labels`` : {P} (et les autres balises « avant appel ») sont
+    résolus côté serveur, mais {N} reste littéral — patients.js le remplace par
+    le numéro dans un élément mis en valeur (.print_status_number)."""
+    import json
+    import re
+
+    application.config["PHARMACY_NAME"] = "Pharmacie Test"
+    application.config["PAGE_PATIENT_INTERFACE_PRINT_FAILED"] = \
+        "Impression impossible à {P}. Votre numéro est le {N}."
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+
+    reponse = client.get(f"/patient/conclusion_page/{nouveau_id}")
+
+    html = reponse.get_data(as_text=True)
+    assert reponse.status_code == 200
+    match = re.search(
+        r'<script id="print_ui_labels" type="application/json">(.*?)</script>',
+        html, re.S)
+    labels = json.loads(match.group(1))
+    assert labels["print_failed"] == \
+        "Impression impossible à Pharmacie Test. Votre numéro est le {N}."

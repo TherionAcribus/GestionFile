@@ -377,7 +377,7 @@ function conclusionTimer() {
 function printLabels() {
     var defaults = {
         printing: 'Impression en cours…',
-        print_failed: 'Impression impossible.',
+        print_failed: 'Impression impossible. Votre numéro est le {N}.',
         retry: 'Réessayer',
         call_staff: 'Appeler le personnel',
         staff_called: 'Le personnel a été prévenu. Veuillez noter votre numéro :',
@@ -455,13 +455,35 @@ function renderPrintOverlay(messageHtml, buttons) {
 function showPrintBusy() {
     conclusionTimer().stop();
     clearAbandonTimer();
-    renderPrintOverlay('<p class="text_summary">' + printLabels().printing + '</p>', []);
+    renderPrintOverlay(messageHtml(printLabels().printing), []);
+}
+
+// Numéro d'appel du patient : passé dans la réponse confirm_print, sinon lu
+// dans #print_data (attribut posé au rendu de conclusion_page.html). Sert à
+// résoudre la balise {N} des messages d'impression.
+function printCallNumber(callNumber) {
+    if (callNumber) return callNumber;
+    var el = document.getElementById('print_data');
+    return el ? (el.getAttribute('data-call-number') || '') : '';
+}
+
+// {N} est remplacé par le numéro dans un élément dédié (.print_status_number,
+// stylé depuis l'éditeur de page — composant « Erreur d'impression »).
+function fillCallNumber(text, callNumber) {
+    return String(text).replace(/\{n\}/gi,
+        '<span class="print_status_number">' + printCallNumber(callNumber) + '</span>');
+}
+
+function messageHtml(text, callNumber) {
+    return '<p class="text_summary">' + fillCallNumber(text, callNumber) + '</p>';
 }
 
 function bigNumberHtml(prefixText, callNumber) {
-    var html = '<p class="text_summary">' + prefixText + '</p>';
-    if (callNumber) {
-        html += '<p class="text_summary" style="font-size:3em;font-weight:bold;">' + callNumber + '</p>';
+    var html = messageHtml(prefixText, callNumber);
+    // Sans balise {N} dans le texte, le numéro reste affiché en grand en
+    // dessous du message (comportement d'origine).
+    if (printCallNumber(callNumber) && !/\{n\}/i.test(prefixText)) {
+        html += '<p class="print_status_number">' + printCallNumber(callNumber) + '</p>';
     }
     return html;
 }
@@ -496,7 +518,7 @@ function runPrintFlow(printData, printJobId) {
             _confirmFallbackTimer = setTimeout(function() {
                 _confirmFallbackTimer = null;
                 var L = printLabels();
-                renderPrintOverlay('<p class="text_summary">' + L.print_failed_staff + '</p>', [
+                renderPrintOverlay(messageHtml(L.print_failed_staff), [
                     { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
                 ]);
                 conclusionTimer().start();
@@ -521,7 +543,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
             break;
         case 'cancelled':
             // Annulé (mode cancel) : pas de confirmation normale + retour auto.
-            renderPrintOverlay('<p class="text_summary">' + L.print_failed_staff + '</p>', []);
+            renderPrintOverlay(messageHtml(L.print_failed_staff, data.call_number), []);
             conclusionTimer().start();
             break;
         case 'ask':
@@ -538,7 +560,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
             if (buttons.length === 0) {
                 buttons.push({ label: L.back, onClick: function() { clearAbandonTimer(); conclusionTimer().goHome(); } });
             }
-            renderPrintOverlay('<p class="text_summary">' + L.print_failed + '</p>', buttons);
+            renderPrintOverlay(bigNumberHtml(L.print_failed, data.call_number), buttons);
 
             clearAbandonTimer();
             var abandon = parseInt(data.abandon_timer, 10);
@@ -548,7 +570,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
             break;
         default:
             // 'expired' / inattendu : proposer le retour.
-            renderPrintOverlay('<p class="text_summary">' + L.print_failed_staff + '</p>', [
+            renderPrintOverlay(messageHtml(L.print_failed_staff), [
                 { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
             ]);
             conclusionTimer().start();
@@ -557,7 +579,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
 
 function callStaffFlow(printJobId) {
     var L = printLabels();
-    renderPrintOverlay('<p class="text_summary">' + L.call_staff + '…</p>', []);
+    renderPrintOverlay(messageHtml(L.call_staff + '…'), []);
     postPrintCallStaff(printJobId)
         .then(function(data) {
             renderPrintOverlay(bigNumberHtml(L.staff_called, data.call_number), []);
@@ -565,7 +587,7 @@ function callStaffFlow(printJobId) {
         })
         .catch(function(err) {
             console.error('Appel personnel: erreur', err);
-            renderPrintOverlay('<p class="text_summary">' + L.staff_called + '</p>', [
+            renderPrintOverlay(bigNumberHtml(L.staff_called), [
                 { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
             ]);
         });

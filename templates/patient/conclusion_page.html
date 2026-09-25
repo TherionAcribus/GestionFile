@@ -61,8 +61,8 @@
 
   <!-- Overlay d'état d'impression (impression en cours / échec + choix).
        Affiché/masqué et rempli par patients.js (runPrintFlow). -->
-  <div id="print_status_overlay"
-       style="display:none; flex-direction:column; align-items:center; justify-content:center; gap:24px; text-align:center; min-height:40vh;">
+  <div id="print_status_overlay" data-page-editor-component="print_error"
+       style="display:none;">
       <div id="print_status_message" class="div_text_summary"></div>
       <div id="print_status_buttons" class="div_validation_buttons"></div>
   </div>

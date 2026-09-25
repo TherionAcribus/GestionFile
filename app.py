@@ -124,7 +124,7 @@ def load_configuration(app):
     # Libellés patient du flux d'impression (traduisibles : FR = app.config,
     # autres langues via la table Translation avec repli FR).
     app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINTING", "Impression en cours…")
-    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_FAILED", "Impression impossible.")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_FAILED", "Impression impossible. Votre numéro est le {N}.")
     app.config.setdefault("PAGE_PATIENT_INTERFACE_RETRY", "Réessayer")
     app.config.setdefault("PAGE_PATIENT_INTERFACE_CALL_STAFF", "Appeler le personnel")
     app.config.setdefault("PAGE_PATIENT_INTERFACE_STAFF_CALLED", "Le personnel a été prévenu. Veuillez noter votre numéro :")

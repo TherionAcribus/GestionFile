@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from css_manager import CSSManager
 from models import Activity, Button, ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
 from page_editor import (
     ADAPTERS,
+    complete_css,
+    complete_layout,
     current_payload,
     default_layout,
     layout_style,
@@ -19,6 +22,7 @@ from page_editor import (
 )
 from params_registry import get_spec
 from routes.admin_page_editor import (
+    _draft_base_reference,
     _patient_preview_data,
     _preview_tokens,
     _render_phone_markdown,
@@ -1300,3 +1304,186 @@ def test_css_values_are_checked_against_their_field_type(key, value, ok):
     else:
         with pytest.raises(ValueError, match="CSS"):
             validate_payload("announce", payload)
+
+
+# --- Écran « Erreur d'impression » (borne patient) ----------------------------
+
+_PRINT_ERROR_CONFIG_KEYS = {
+    field["key"]
+    for field in ADAPTERS["patient"]["components"]["print_error"]["config"]
+}
+
+
+def _legacy_patient_draft():
+    """Brouillon tel qu'enregistré avant l'ajout du composant « Erreur
+    d'impression » : ni entrée de layout, ni réglages, ni variables CSS
+    propres au composant."""
+    draft = make_payload("patient")
+    del draft["layout"]["print_error"]
+    for key in [key for key in draft["css"] if key.startswith("print_error_")]:
+        del draft["css"][key]
+    for key in _PRINT_ERROR_CONFIG_KEYS & set(draft["config"]):
+        del draft["config"][key]
+    draft["base_hash"] = payload_hash(draft)
+    return draft
+
+
+def test_patient_adapter_exposes_print_error_scenario():
+    """Le scénario et le composant « Erreur d'impression » existent sur la page
+    patient : textes, comportement d'échec et apparence optionnelle (les champs
+    optionnels acceptent les brouillons écrits avant leur ajout)."""
+    adapter = ADAPTERS["patient"]
+    assert {"id": "print_error", "label": "Erreur d'impression"} in adapter["scenarios"]
+
+    component = adapter["components"]["print_error"]
+    assert component["zone"] == "main"
+    assert component["selector"] == "#print_status_overlay"
+    assert component["scenarios"] == ["print_error"]
+
+    config_keys = {field["key"] for field in component["config"]}
+    assert {
+        "page_patient_print_fail_behavior",
+        "page_patient_interface_print_failed",
+        "page_patient_interface_no_ticket",
+        "page_patient_interface_print_failed_staff",
+        "page_patient_interface_retry",
+        "page_patient_interface_call_staff",
+    } <= config_keys
+
+    css_fields = {field["key"]: field for field in component["css"]}
+    for key in ("print_error_font_size", "print_error_font_color",
+                "print_error_border_size", "print_error_border_color",
+                "print_error_background_color", "print_error_number_size"):
+        assert css_fields[key]["optional"] is True
+        assert css_fields[key]["default"]
+
+
+def test_print_error_text_fields_offer_call_number_marker():
+    """{N} (numéro d'appel, résolu côté borne) est proposé dans la barre
+    d'insertion des textes de l'écran d'erreur."""
+    components = public_adapter_data("patient")["components"]
+    fields = {field["key"]: field for field in components["print_error"]["config"]}
+    for key in ("page_patient_interface_print_failed",
+                "page_patient_interface_no_ticket",
+                "page_patient_interface_print_failed_staff"):
+        tokens = {marker["token"] for marker in fields[key]["markers"]}
+        assert "{N}" in tokens
+
+
+def test_validate_payload_accepts_draft_without_optional_print_error_css():
+    """Un payload sans les variables optionnelles ``print_error_*`` reste
+    valide : les anciens brouillons ne les connaissent pas."""
+    payload = _legacy_patient_draft()
+    # Le layout d'un ancien brouillon ne contient pas le composant : la
+    # validation directe doit donc l'exiger (le complément est fait côté
+    # routes, cf. _complete_payload).
+    with pytest.raises(ValueError, match="composants"):
+        validate_payload("patient", payload)
+
+    payload["layout"] = complete_layout("patient", payload["layout"])
+    assert validate_payload("patient", payload)["layout"]["print_error"]["zone"] == "main"
+
+
+def test_complete_layout_and_css_fill_missing_entries():
+    """``complete_layout``/``complete_css`` ajoutent les entrées apparues après
+    l'enregistrement du brouillon, sans écraser celles déjà présentes."""
+    draft = _legacy_patient_draft()
+    draft["layout"]["title"] = {
+        "zone": "header", "order": 5, "visible": False, "span": 6,
+        "alignment": "left",
+    }
+    layout = complete_layout("patient", draft["layout"])
+    assert layout["print_error"] == default_layout("patient")["print_error"]
+    assert layout["title"]["visible"] is False
+
+    # Sans gestionnaire de variables (contexte minimal), le défaut du champ
+    # sert de repli.
+    css = complete_css("patient", draft["css"])
+    assert css["print_error_font_size"] == "50px"
+    assert css["print_error_number_size"] == "80px"
+
+
+def test_state_completes_legacy_draft_with_print_error_component(editor_app):
+    """L'état servi à l'éditeur complète un brouillon antérieur : sans entrée
+    de layout pour le composant, l'éditeur casserait au premier rendu."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    draft = _legacy_patient_draft()
+    with app.app_context():
+        db.session.add(PageEditorState(
+            page_key="patient", draft_json=draft,
+            draft_base_hash=draft["base_hash"], draft_version=3,
+        ))
+        db.session.commit()
+
+    document = client.get("/admin/page-editor/patient/state").get_json()
+    assert document["draft"]["layout"]["print_error"]["zone"] == "main"
+    assert "print_error_font_size" in document["draft"]["css"]
+    assert "page_patient_interface_print_failed" in document["draft"]["config"]
+
+
+def test_publish_accepts_draft_predating_print_error_component(editor_app):
+    """Publier directement un ancien brouillon ne doit pas échouer : le
+    payload stocké est complété puis normalisé avant l'écriture."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    draft = _legacy_patient_draft()
+    with app.app_context():
+        base_hash = payload_hash(
+            _draft_base_reference(current_payload("patient"), draft))
+        db.session.add(PageEditorState(
+            page_key="patient", draft_json=draft,
+            draft_base_hash=base_hash, draft_version=5,
+        ))
+        db.session.commit()
+
+    response = client.post("/admin/page-editor/patient/publish",
+                           json={"draft_version": 5})
+    assert response.status_code == 200
+
+    with app.app_context():
+        layout = app.config["PAGE_PATIENT_LAYOUT"]
+        assert layout["print_error"]["zone"] == "main"
+        assert app.css_variable_manager.values["patient"]["print_error_font_size"]
+
+
+def test_print_error_preview_renders_overlay(editor_app):
+    """L'aperçu du scénario reproduit l'overlay de la borne : message lié à la
+    clé de config, numéro en grand masqué si le texte contient {N}, boutons du
+    mode « Demander »."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+
+    preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=print_error"
+    ).get_data(as_text=True)
+
+    assert 'id="print_status_overlay" data-page-editor-component="print_error"' in preview
+    assert 'data-config-key="page_patient_interface_print_failed" data-number-styled' in preview
+    assert 'data-print-error-number-for="page_patient_interface_print_failed"' in preview
+    assert 'data-config-key="page_patient_interface_retry"' in preview
+
+
+def test_layout_style_positions_print_error_without_forcing_display():
+    """La règle de layout positionne l'overlay mais ne force pas son affichage :
+    c'est patients.js qui le montre/masque (display inline)."""
+    style = str(layout_style("patient"))
+    assert "#print_status_overlay{order:" in style
+    assert "#print_status_overlay{display:none" not in style
+
+
+def test_print_error_labels_registered_for_translation():
+    """Les textes de l'écran d'impression rejoignent la liste des clés
+    traduisibles."""
+    keys_file = Path(__file__).resolve().parents[1] / "static" / "json" / "config_keys_to_translate.json"
+    keys = set(json.loads(keys_file.read_text(encoding="utf-8"))["config_keys_to_translate"])
+    assert {
+        "page_patient_interface_printing",
+        "page_patient_interface_print_failed",
+        "page_patient_interface_retry",
+        "page_patient_interface_call_staff",
+        "page_patient_interface_staff_called",
+        "page_patient_interface_no_ticket",
+        "page_patient_interface_print_failed_staff",
+    } <= keys

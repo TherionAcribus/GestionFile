@@ -279,6 +279,13 @@ _BEFORE_CALL_KEYS = {
     "page_patient_validation_message",
     "page_patient_confirmation_message",
     "page_patient_qrcode_data",
+    # Écran d'erreur d'impression : {N} (numéro d'appel) est résolu côté
+    # borne dans un élément mis en valeur, {P} {D} {H} {A} côté serveur.
+    "page_patient_interface_printing",
+    "page_patient_interface_print_failed",
+    "page_patient_interface_no_ticket",
+    "page_patient_interface_staff_called",
+    "page_patient_interface_print_failed_staff",
     "phone_title",
     "phone_line1", "phone_line2", "phone_line3",
     "phone_line4", "phone_line5", "phone_line6",

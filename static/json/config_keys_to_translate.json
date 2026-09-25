@@ -29,6 +29,13 @@
         "page_patient_interface_validate_cancel",
         "page_patient_interface_done_print",
         "page_patient_interface_done_extend",
-        "page_patient_interface_done_back"
+        "page_patient_interface_done_back",
+        "page_patient_interface_printing",
+        "page_patient_interface_print_failed",
+        "page_patient_interface_retry",
+        "page_patient_interface_call_staff",
+        "page_patient_interface_staff_called",
+        "page_patient_interface_no_ticket",
+        "page_patient_interface_print_failed_staff"
     ]
 }

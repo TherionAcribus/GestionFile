@@ -166,6 +166,7 @@ ADAPTERS = {
             {"id": "children", "label": "Sous-activités"},
             {"id": "validation", "label": "Validation QR / impression"},
             {"id": "conclusion", "label": "Conclusion"},
+            {"id": "print_error", "label": "Erreur d'impression"},
         ],
         "components": {
             "title": _component("Titre", "header", "#div_title_area",
@@ -201,6 +202,24 @@ ADAPTERS = {
                      {"key": "subtitle_background_height", "label": "Hauteur", "type": "size"},
                      {"key": "subtitle_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "subtitle_border_color", "label": "Couleur contour", "type": "color"}]),
+            # Écran affiché quand le ticket ne peut pas être imprimé (overlay
+            # rempli par patients.js selon le comportement d'échec choisi).
+            "print_error": _component("Erreur d'impression", "main", "#print_status_overlay",
+                scenarios=["print_error"],
+                config=[{"key": "page_patient_print_fail_behavior", "label": "Comportement en cas d'échec", "type": "select",
+                         "choices": [["ask", "Demander au patient"],
+                                     ["keep", "Conserver dans la file"],
+                                     ["cancel", "Annuler l'inscription"]]},
+                        {"key": "page_patient_print_fail_show_retry", "label": "Afficher le bouton « Réessayer » (mode Demander)", "type": "bool"},
+                        {"key": "page_patient_print_fail_show_staff", "label": "Afficher le bouton « Appeler le personnel » (mode Demander)", "type": "bool"},
+                        {"key": "page_patient_print_fail_abandon_timer", "label": "Retour auto à l'accueil si aucun choix (s, 0 = jamais)", "type": "int"},
+                        {"key": "page_patient_interface_printing", "label": "Message « impression en cours »", "type": "text"},
+                        {"key": "page_patient_interface_print_failed", "label": "Message d'échec (mode Demander)", "type": "text"},
+                        {"key": "page_patient_interface_no_ticket", "label": "Message si le patient est conservé (mode Conserver)", "type": "text"},
+                        {"key": "page_patient_interface_print_failed_staff", "label": "Message si l'inscription est annulée (mode Annuler)", "type": "text"},
+                        {"key": "page_patient_interface_staff_called", "label": "Message après « Appeler le personnel »", "type": "text"},
+                        {"key": "page_patient_interface_retry", "label": "Bouton « Réessayer »", "type": "text"},
+                        {"key": "page_patient_interface_call_staff", "label": "Bouton « Appeler le personnel »", "type": "text"}]),
             "languages": _component("Choix de langue", "overlay", ".language-selector",
                 managed_bool="page_patient_display_translations",
                 config=[{"key": "page_patient_display_translations", "label": "Afficher", "type": "bool"}],
@@ -336,6 +355,14 @@ _ADDITIONAL_CSS_FIELDS = {
             ("scan_explanation_border_size", "Contour des consignes QR", "size", "0px"),
             ("scan_explanation_border_color", "Couleur contour des consignes QR", "color", "#000000"),
             ("scan_explanation_background_color", "Fond des consignes QR", "color", "#B6F5F5"),
+        ],
+        "print_error": [
+            ("print_error_font_size", "Taille du message", "size", "50px"),
+            ("print_error_font_color", "Couleur du message", "color", "#008B8B"),
+            ("print_error_border_size", "Épaisseur contour", "size", "0px"),
+            ("print_error_border_color", "Couleur contour", "color", "#000000"),
+            ("print_error_background_color", "Fond du message", "color", "#B6F5F5"),
+            ("print_error_number_size", "Taille du numéro", "size", "80px"),
         ],
         "subtitle": [
             ("subtitle_no_activity_font_color", "Texte sans activité", "color", "#FFFFFF"),
@@ -480,6 +507,12 @@ _BUILTIN_CSS_OVERRIDES = {
             "scan_explanation_border_size": "0px",
             "scan_explanation_border_color": "#000000",
             "scan_explanation_background_color": "#B6F5F5",
+            "print_error_font_color": "#008B8B",
+            "print_error_font_size": "50px",
+            "print_error_border_size": "0px",
+            "print_error_border_color": "#000000",
+            "print_error_background_color": "#B6F5F5",
+            "print_error_number_size": "80px",
             "flag_size": "100px",
             "flag_border_size": "0px",
             "flag_border_color": "#FFFFFF",
@@ -664,6 +697,8 @@ def builtin_themes(page):
                        validation_text_font_size="56px" if large else "50px",
                        confirmation_text_font_size="56px" if large else "50px",
                        scan_explanation_font_size="56px" if large else "50px",
+                       print_error_font_size="56px" if large else "50px",
+                       print_error_number_size="90px" if large else "80px",
                        subtitle_no_activity_font_size="46px" if large else "40px",
                        subtitle_specific_message_font_size="46px" if large else "40px",
                        flag_size="110px" if large else "100px")
@@ -975,6 +1010,36 @@ def complete_config(page, config):
     for key in _managed_keys(ADAPTERS[page], "config") - set(completed):
         spec = get_spec(key)
         completed[key] = current_app.config.get(spec.config_name) if spec else None
+    return completed
+
+
+def complete_layout(page, layout):
+    """Ajoute à ``layout`` les composants apparus après l'enregistrement du
+    brouillon, avec leur disposition par défaut (visibles, en fin de zone).
+    Sans cela l'éditeur et ``validate_payload`` exigeraient des entrées que
+    les anciens brouillons ne pouvaient pas contenir."""
+    completed = dict(layout) if isinstance(layout, dict) else {}
+    for component_id, item in default_layout(page).items():
+        completed.setdefault(component_id, item)
+    return completed
+
+
+def complete_css(page, css):
+    """Idem pour les variables d'apparence : les champs ajoutés après coup
+    (optionnels) sont complétés avec la valeur publiée ou leur défaut."""
+    adapter = ADAPTERS[page]
+    manager = getattr(current_app, "css_variable_manager", None)
+    completed = dict(css) if isinstance(css, dict) else {}
+    for component in adapter["components"].values():
+        for field in component["css"]:
+            if field["key"] not in completed:
+                published = (
+                    manager.get_variable(adapter["css_source"], field["key"])
+                    if manager else None
+                )
+                completed[field["key"]] = _normalize_css_value(
+                    published or field.get("default"), field["type"],
+                )
     return completed
 
 

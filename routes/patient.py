@@ -2,7 +2,7 @@ import uuid
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
-from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation
+from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, check_kiosk_login_ticket, KIOSK_SESSION_KEY
@@ -566,16 +566,26 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
     # Libellés du flux d'impression, résolus dans la langue courante du patient
     # (repli FR). Injectés dans la page pour que patients.js (qui construit
     # l'overlay dynamiquement) les utilise au lieu de textes codés en dur.
-    print_ui_labels = {
-        "printing": choose_text_translation("page_patient_interface_printing"),
-        "print_failed": choose_text_translation("page_patient_interface_print_failed"),
-        "retry": choose_text_translation("page_patient_interface_retry"),
-        "call_staff": choose_text_translation("page_patient_interface_call_staff"),
-        "staff_called": choose_text_translation("page_patient_interface_staff_called"),
-        "no_ticket": choose_text_translation("page_patient_interface_no_ticket"),
-        "print_failed_staff": choose_text_translation("page_patient_interface_print_failed_staff"),
-        "back": choose_text_translation("page_patient_interface_done_back"),
+    # {N} n'est PAS résolu ici : la borne le remplace par le numéro dans un
+    # élément mis en valeur (.print_status_number). Les autres balises
+    # ({P} {D} {H} {A}) le sont, comme pour les autres textes « avant appel ».
+    _print_label_keys = {
+        "printing": "page_patient_interface_printing",
+        "print_failed": "page_patient_interface_print_failed",
+        "retry": "page_patient_interface_retry",
+        "call_staff": "page_patient_interface_call_staff",
+        "staff_called": "page_patient_interface_staff_called",
+        "no_ticket": "page_patient_interface_no_ticket",
+        "print_failed_staff": "page_patient_interface_print_failed_staff",
+        "back": "page_patient_interface_done_back",
     }
+    raw_labels = {name: choose_text_translation(key) for name, key in _print_label_keys.items()}
+    values = balise_values(
+        patient,
+        with_activity=any("{a}" in str(text).lower() for text in raw_labels.values()),
+    )
+    values.pop("N", None)
+    print_ui_labels = {name: render_balises(text, values) for name, text in raw_labels.items()}
 
     return render_template('patient/conclusion_page.html',
                         print_ui_labels=print_ui_labels,

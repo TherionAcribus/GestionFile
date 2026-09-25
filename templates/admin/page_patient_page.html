@@ -97,13 +97,13 @@
                     Langue française. Les autres langues utilisent la table des traductions
                     (repli sur le français si absente).
                 </small>
-                {{ macros.textarea_full("page_patient_interface_printing", page_patient_interface_printing, "« Impression en cours »") }}
-                {{ macros.textarea_full("page_patient_interface_print_failed", page_patient_interface_print_failed, "Titre de l'écran d'échec (mode Demander)") }}
+                {{ macros.textbloc_before_call("page_patient_interface_printing", page_patient_interface_printing, "« Impression en cours »") }}
+                {{ macros.textbloc_before_call("page_patient_interface_print_failed", page_patient_interface_print_failed, "Message de l'écran d'échec (mode Demander)") }}
                 {{ macros.textarea_full("page_patient_interface_retry", page_patient_interface_retry, "Bouton « Réessayer »") }}
                 {{ macros.textarea_full("page_patient_interface_call_staff", page_patient_interface_call_staff, "Bouton « Appeler le personnel »") }}
-                {{ macros.textarea_full("page_patient_interface_staff_called", page_patient_interface_staff_called, "Message après « Appeler le personnel »") }}
-                {{ macros.textarea_full("page_patient_interface_no_ticket", page_patient_interface_no_ticket, "Message quand le patient est conservé sans ticket (mode Conserver)") }}
-                {{ macros.textarea_full("page_patient_interface_print_failed_staff", page_patient_interface_print_failed_staff, "Message d'échec renvoyant vers le personnel (mode Annuler)") }}
+                {{ macros.textbloc_before_call("page_patient_interface_staff_called", page_patient_interface_staff_called, "Message après « Appeler le personnel »") }}
+                {{ macros.textbloc_before_call("page_patient_interface_no_ticket", page_patient_interface_no_ticket, "Message quand le patient est conservé sans ticket (mode Conserver)") }}
+                {{ macros.textbloc_before_call("page_patient_interface_print_failed_staff", page_patient_interface_print_failed_staff, "Message d'échec renvoyant vers le personnel (mode Annuler)") }}
             </div>
         </div>
     </div>

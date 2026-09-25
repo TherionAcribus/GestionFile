@@ -80,6 +80,12 @@
     --confirmation_text_border_size: 0px;
     --confirmation_text_border_color: black;
     --confirmation_text_background_color: #008B8B;
+    --print_error_font_size: 50px;
+    --print_error_font_color: #008B8B;
+    --print_error_border_size: 0px;
+    --print_error_border_color: black;
+    --print_error_background_color: #b6f5f5;
+    --print_error_number_size: 80px;
     --flag_size: 70px;
     --flag_border_color: black;
     --flag_border_size: 0px;
@@ -417,6 +423,42 @@ html, body {
     color: var(--confirmation_text_font_color);
     -webkit-text-stroke-color: var(--confirmation_text_border_color);
     -webkit-text-stroke-width: var(--confirmation_text_border_size);
+}
+
+/* Overlay d'état d'impression (échec, choix Réessayer/Personnel) : rempli
+   par patients.js. Stylé comme le texte de confirmation, réglages dans
+   l'éditeur de page — composant « Erreur d'impression ». */
+#print_status_overlay {
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    text-align: center;
+    min-height: 40vh;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+#print_status_message {
+    width: 100%;
+    font-size: var(--print_error_font_size);
+    font-weight: bold;
+    color: var(--print_error_font_color);
+    background-color: var(--print_error_background_color);
+    -webkit-text-stroke-color: var(--print_error_border_color);
+    -webkit-text-stroke-width: var(--print_error_border_size);
+    padding: 30px 50px;
+    border-radius: 20px;
+}
+
+#print_status_buttons {
+    margin-left: 0;
+}
+
+.print_status_number {
+    font-size: var(--print_error_number_size);
+    font-weight: bold;
 }
 
 .div_qr_plus_buttons{

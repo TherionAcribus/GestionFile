@@ -27,6 +27,8 @@ from page_editor import (
     advanced_disabled_components,
     builtin_themes,
     complete_config,
+    complete_css,
+    complete_layout,
     current_payload,
     enabled_pages,
     get_adapter,
@@ -213,8 +215,9 @@ def _state_document(page, adapter):
     if draft is not None:
         # Complète les réglages ajoutés depuis la création du brouillon pour
         # que l'inspecteur affiche leurs valeurs réelles et non des cases
-        # décochées par défaut.
-        draft["config"] = complete_config(page, draft.get("config"))
+        # décochées par défaut — et que le layout contienne les composants
+        # apparus depuis (sinon la publication serait refusée).
+        draft = _complete_payload(page, draft)
     revisions = (
         PageEditorRevision.query.filter_by(page_key=page)
         .order_by(PageEditorRevision.revision.desc())
@@ -264,7 +267,7 @@ def _draft_base_reference(current, draft):
     modèle."""
     reference = deepcopy(current)
     if isinstance(draft, dict):
-        for section in ("config", "css"):
+        for section in ("config", "css", "layout"):
             values = draft.get(section)
             if isinstance(values, dict):
                 reference[section] = {
@@ -273,8 +276,20 @@ def _draft_base_reference(current, draft):
     return reference
 
 
+def _complete_payload(page, payload):
+    """Brouillon ou instantané ancien : complète ``config``/``css``/``layout``
+    avec les réglages apparus depuis son enregistrement (valeur publiée ou
+    défaut), pour que la validation — qui exige tous les composants — accepte
+    les documents écrits avant leur ajout."""
+    completed = dict(payload or {})
+    completed["config"] = complete_config(page, completed.get("config"))
+    completed["css"] = complete_css(page, completed.get("css"))
+    completed["layout"] = complete_layout(page, completed.get("layout"))
+    return completed
+
+
 def _publish(page, adapter, state, payload, *, require_base_match):
-    normalized = validate_payload(page, payload)
+    normalized = validate_payload(page, _complete_payload(page, payload))
     current = current_payload(page)
     if require_base_match and state.draft_base_hash != payload_hash(
             _draft_base_reference(current, payload)):
@@ -448,7 +463,7 @@ def preview(page):
     )
     # Les brouillons antérieurs à l'exposition d'un réglage dans l'éditeur ne
     # contiennent pas sa clé : on les complète avec la configuration publiée.
-    payload["config"] = complete_config(page, payload.get("config"))
+    payload = _complete_payload(page, payload)
     tokens = _preview_tokens()
     preview_config = {
         key: _demo_text(value, tokens) if isinstance(value, str) else value
@@ -682,7 +697,7 @@ def restore(page, revision):
         if state_row.draft_json is not None and expected != state_row.draft_version:
             db.session.rollback()
             return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
-        restored_payload = deepcopy(source.snapshot_json)
+        restored_payload = _complete_payload(page, deepcopy(source.snapshot_json))
         restored_payload["base_hash"] = payload_hash(current_payload(page))
         state_row.draft_json = restored_payload
         state_row.draft_base_hash = restored_payload["base_hash"]
