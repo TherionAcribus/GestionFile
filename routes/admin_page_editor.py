@@ -25,6 +25,7 @@ from models import (
 from page_editor import (
     ADAPTERS,
     advanced_disabled_components,
+    builtin_themes,
     current_payload,
     enabled_pages,
     get_adapter,
@@ -565,7 +566,8 @@ def list_themes(page):
         .order_by(PageEditorTheme.name)
         .all()
     )
-    return jsonify({"themes": [_theme_document(theme) for theme in themes]})
+    return jsonify({"themes": [_theme_document(theme) for theme in themes],
+                    "builtins": builtin_themes(page)})
 
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/themes")

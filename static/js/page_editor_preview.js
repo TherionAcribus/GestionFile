@@ -40,7 +40,8 @@
         if (document.body.dataset.page === 'announce') {
             const center = document.getElementById('pe_center');
             if (center) {
-                const divided = Boolean(payload.config.announce_infos_display) && center.dataset.scenario === 'gallery';
+                const divided = Boolean(payload.config.announce_infos_display)
+                    && payload.layout?.gallery?.visible !== false && center.dataset.scenario === 'gallery';
                 center.classList.toggle('pe-grid-2', divided);
                 center.classList.toggle('pe-grid-1', !divided);
             }

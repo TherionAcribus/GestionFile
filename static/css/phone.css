@@ -101,6 +101,7 @@
 
 html {
     background-color: var(--phone_secondary_color);
+    color: var(--phone_line1_font_color);
 }
 
 #div_title_area {

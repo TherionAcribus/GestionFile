@@ -248,6 +248,149 @@ ADAPTERS["phone"]["components"]["specific"] = _component(
 )
 
 
+_ADDITIONAL_CSS_FIELDS = {
+    "announce": {"title": [
+        ("announce_secondary_color", "Fond de page", "color", "#B6F5F5"),
+    ]},
+    "phone": {"title": [
+        ("phone_secondary_color", "Fond de page", "color", "#B6F5F5"),
+    ]},
+    "patient": {
+        "buttons": [
+            ("patient_secondary_color", "Fond de page", "color", "#B6F5F5"),
+            ("square_button_text_color", "Texte des boutons", "color", "#FFFFFF"),
+            ("square_button_text_size", "Taille du texte des boutons", "size", "24px"),
+            ("square_button_text_border_size", "Contour du texte des boutons", "size", "0px"),
+            ("circle_button_color", "Fond des boutons ronds", "color", "#008B8B"),
+            ("circle_button_text_color", "Texte sous les boutons ronds", "color", "#008B8B"),
+            ("circle_button_text_size", "Taille du texte sous les boutons ronds", "size", "24px"),
+            ("circle_button_text_border_size", "Contour du texte sous les boutons ronds", "size", "0px"),
+            ("circle_button_border_size", "Bordure des boutons ronds", "size", "0px"),
+            ("circle_button_border_color", "Couleur bordure des boutons ronds", "color", "#000000"),
+            ("square_cancel_button_color", "Fond du bouton retour", "color", "#008B8B"),
+            ("square_cancel_button_text_color", "Texte du bouton retour", "color", "#FFFFFF"),
+            ("square_cancel_button_text_size", "Taille du texte retour", "size", "24px"),
+            ("square_cancel_button_text_border_size", "Contour du texte retour", "size", "0px"),
+            ("validation_button_color", "Fond des boutons de validation", "color", "#008B8B"),
+            ("validation_button_text_color", "Texte des boutons de validation", "color", "#FFFFFF"),
+            ("validation_button_text_size", "Taille du texte validation", "size", "24px"),
+            ("validation_button_text_border_size", "Contour du texte validation", "size", "0px"),
+            ("validation_button_height", "Hauteur des boutons de validation", "size", "90px"),
+            ("validation_text_font_color", "Texte du numéro", "color", "#FFFFFF"),
+            ("validation_text_font_size", "Taille du numéro", "size", "30px"),
+            ("validation_text_border_size", "Contour du numéro", "size", "0px"),
+            ("confirmation_text_font_color", "Texte de confirmation", "color", "#FFFFFF"),
+            ("confirmation_text_font_size", "Taille de confirmation", "size", "32px"),
+            ("confirmation_text_border_size", "Contour de confirmation", "size", "0px"),
+            ("scan_explanation_font_color", "Texte des consignes QR", "color", "#FFFFFF"),
+            ("scan_explanation_font_size", "Taille des consignes QR", "size", "26px"),
+            ("scan_explanation_border_size", "Contour des consignes QR", "size", "2px"),
+        ],
+        "subtitle": [
+            ("subtitle_no_activity_font_color", "Texte sans activité", "color", "#FFFFFF"),
+            ("subtitle_no_activity_background_color", "Fond sans activité", "color", "#008B8B"),
+            ("subtitle_no_activity_border_size", "Contour sans activité", "size", "0px"),
+            ("subtitle_specific_message_font_color", "Texte du message spécifique", "color", "#FFFFFF"),
+            ("subtitle_specific_message_background_color", "Fond du message spécifique", "color", "#008B8B"),
+            ("subtitle_specific_message_border_size", "Contour du message spécifique", "size", "0px"),
+        ],
+    },
+}
+
+for _page, _components in _ADDITIONAL_CSS_FIELDS.items():
+    for _component_id, _fields in _components.items():
+        ADAPTERS[_page]["components"][_component_id]["css"].extend(
+            {"key": key, "label": label, "type": field_type, "default": default, "optional": True}
+            for key, label, field_type, default in _fields
+        )
+
+
+_BUILTIN_THEMES = (
+    ("officine", "Officine", "Clair et rassurant — recommandé pour commencer.",
+     ("#F5F8F7", "#FFFFFF", "#18332F", "#176B52", "#E5F2EC", "#FFFFFF")),
+    ("lisibilite", "Lisibilité renforcée", "Textes agrandis ; galerie masquée sur l’affichage si vous appliquez la disposition.",
+     ("#FFFFFF", "#FFFFFF", "#111827", "#123B63", "#FFF1B8", "#FFFFFF")),
+    ("sauge-lin", "Sauge & Lin", "Des tons naturels et chaleureux, sans sacrifier la lisibilité.",
+     ("#FAF7F0", "#FFFEFA", "#29372F", "#365C46", "#E8EDE3", "#FFFFFF")),
+    ("bleu-horizon", "Bleu Horizon", "Une présentation claire et structurée, dans des tons bleus.",
+     ("#F3F6FA", "#FFFFFF", "#172B4D", "#245EA8", "#E7EFFA", "#FFFFFF")),
+    ("ardoise", "Ardoise", "Variante sombre — à tester sur place selon l’éclairage et les reflets.",
+     ("#17212B", "#243342", "#F3F6FA", "#7EDDB5", "#243342", "#17212B")),
+)
+
+
+def builtin_themes(page):
+    themes = []
+    for slug, name, description, colors in _BUILTIN_THEMES:
+        background, surface, text, primary, soft, on_primary = colors
+        large = slug == "lisibilite"
+        css = {}
+        for key, field_type in _css_field_types(ADAPTERS[page]).items():
+            if field_type == "color":
+                css[key] = text if "font_color" in key or "text_color" in key or "border_color" in key else surface
+            elif field_type == "number":
+                css[key] = "600"
+            else:
+                css[key] = "0px" if "border_size" in key else "24px"
+
+        def block(prefix, foreground, fill, size):
+            css.update({f"{prefix}_font_color": foreground, f"{prefix}_background_color": fill,
+                        f"{prefix}_font_size": size})
+
+        css[f"{page}_secondary_color"] = background
+        if page == "announce":
+            block("title", on_primary, primary, "64px" if large else "52px")
+            css.update(title_background_height="120px", subtitle_font_color=on_primary,
+                       subtitle_font_size="36px" if large else "28px")
+            block("calling", on_primary, primary, "80px" if large else "64px")
+            block("text_up", text, surface, "36px" if large else "28px")
+            block("text_down", text, surface, "48px" if large else "40px")
+            block("ongoing", text, soft, "40px" if large else "32px")
+            block("next_patients", text, soft, "36px" if large else "28px")
+        elif page == "patient":
+            block("patient_title", on_primary, primary, "48px" if large else "40px")
+            block("subtitle", text, soft, "32px" if large else "28px")
+            css.update(patient_title_background_height="96px", subtitle_background_height="80px",
+                       circle_button_size="160px", circle_button_color=primary,
+                       circle_button_text_color=text, circle_button_text_size="32px" if large else "28px",
+                       square_button_width="380px" if large else "340px",
+                       square_button_height="120px" if large else "104px", square_button_color=primary,
+                       square_button_text_color=on_primary, square_button_text_size="32px" if large else "28px",
+                       square_cancel_button_color=primary, square_cancel_button_text_color=on_primary,
+                       square_cancel_button_text_size="28px", validation_button_color=primary,
+                       validation_button_text_color=on_primary, validation_button_text_size="28px",
+                       validation_button_height="96px", validation_text_font_size="40px" if large else "32px",
+                       confirmation_text_font_size="36px" if large else "32px", scan_explanation_font_size="28px",
+                       subtitle_no_activity_background_color=soft, subtitle_specific_message_background_color=soft,
+                       flag_size="72px")
+        else:
+            block("phone_title", on_primary, primary, "28px" if large else "24px")
+            css.update(phone_title_font_weight="700", phone_title_background_height="16px")
+            for prefix in ("phone_line", "phone_your_turn_line"):
+                for index in range(1, 7):
+                    block(f"{prefix}{index}", text, surface, "24px" if large else "20px")
+                    css[f"{prefix}{index}_background_height"] = "12px" if large else "8px"
+                    css[f"{prefix}{index}_font_weight"] = "500"
+            block("phone_your_turn_line1", on_primary, primary, "32px" if large else "28px")
+            css["phone_your_turn_line1_font_weight"] = "700"
+            block("phone_specific_message", text, soft, "22px" if large else "18px")
+            css["phone_specific_message_background_height"] = "auto"
+
+        layout = default_layout(page)
+        for item in layout.values():
+            item.pop("visible")
+            item.update(span=12, alignment="center")
+        if page == "announce" and large:
+            layout["gallery"]["visible"] = False
+        themes.append({
+            "id": f"builtin-{slug}", "page": page, "name": name, "description": description,
+            "builtin": True, "recommended": slug == "officine",
+            "colors": list(colors[:5]),
+            "snapshot": {"css": css, "layout": layout, "config": {}},
+        })
+    return themes
+
+
 def enabled_pages():
     raw = current_app.config.get("PAGE_EDITOR_ENABLED_PAGES", "announce")
     if isinstance(raw, str):
@@ -455,13 +598,13 @@ def current_payload(page):
     for key in _managed_keys(adapter, "config"):
         spec = get_spec(key)
         config_values[key] = current_app.config.get(spec.config_name) if spec else None
-    css_types = _css_field_types(adapter)
     css_values = {
-        key: _normalize_css_value(
-            current_app.css_variable_manager.get_variable(adapter["css_source"], key),
-            css_types[key],
+        field["key"]: _normalize_css_value(
+            current_app.css_variable_manager.get_variable(adapter["css_source"], field["key"]) or field.get("default"),
+            field["type"],
         )
-        for key in _managed_keys(adapter, "css")
+        for component in adapter["components"].values()
+        for field in component["css"]
     }
     layout = default_layout(page)
     configured_layout = current_app.config.get(adapter["config_name"])
@@ -556,7 +699,10 @@ def validate_payload(page, payload):
     allowed_css = _managed_keys(adapter, "css")
     css_types = _css_field_types(adapter)
     css_values = payload.get("css")
-    if not isinstance(css_values, dict) or set(css_values) != allowed_css:
+    optional_css = {field["key"] for component in adapter["components"].values()
+                    for field in component["css"] if field.get("optional")}
+    if (not isinstance(css_values, dict) or not set(css_values) <= allowed_css
+            or not allowed_css - optional_css <= set(css_values)):
         raise ValueError("Variable d'apparence inconnue.")
     normalized_css = {}
     for key, value in css_values.items():
@@ -718,6 +864,9 @@ def layout_style(page, layout=None, preview=False):
         )
     if page == "announce":
         rules.append("#div_title_area,#left_side,#div_footer{display:flex;flex-flow:row wrap;align-content:flex-start;align-items:stretch}")
+        gallery = layout.get("gallery")
+        if not preview and isinstance(gallery, dict) and gallery.get("visible") is False:
+            rules.append("#div_center_divided{grid-template-columns:1fr}")
     elif page == "patient":
         rules.append("#main{display:flex;flex-flow:row wrap;align-content:flex-start;align-items:stretch}")
     elif page == "phone":

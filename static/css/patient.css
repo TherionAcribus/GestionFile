@@ -117,6 +117,7 @@ html, body {
     justify-content:space-around;
     align-items: center;
     background-color: var(--patient_secondary_color);
+    color: var(--circle_button_text_color);
 }
 
 .div_validation_buttons{

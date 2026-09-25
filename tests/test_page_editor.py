@@ -611,6 +611,216 @@ def test_screens_endpoint_reports_acks_and_pending(editor_app, monkeypatch):
     assert anonymous.get("/admin/page-editor/announce/screens").status_code == 401
 
 
+@pytest.mark.parametrize("page", list(ADAPTERS))
+def test_builtin_themes_are_read_only_and_do_not_write_state(editor_app, page):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    before = client.get(f"/admin/page-editor/{page}/state").get_json()
+    response = client.get(f"/admin/page-editor/{page}/themes")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["themes"] == []
+    assert [theme["name"] for theme in data["builtins"]] == [
+        "Officine", "Lisibilité renforcée", "Sauge & Lin", "Bleu Horizon", "Ardoise",
+    ]
+    for theme in data["builtins"]:
+        assert theme["builtin"] is True
+        assert theme["snapshot"]["config"] == {}
+        assert theme["page"] == page
+        assert client.delete(f"/admin/page-editor/{page}/themes/{theme['id']}").status_code == 404
+    after = client.get(f"/admin/page-editor/{page}/state").get_json()
+    assert before == after
+    assert app.test_client().get(f"/admin/page-editor/{page}/themes").status_code == 401
+    with app.app_context():
+        role = Role.query.filter_by(name="page-editor").one()
+        setattr(role, f"admin_{page}", False)
+        db.session.commit()
+    assert client.get(f"/admin/page-editor/{page}/themes").status_code == 403
+
+
+@pytest.mark.parametrize("page", list(ADAPTERS))
+@pytest.mark.parametrize("theme_index", range(5))
+def test_builtin_theme_payloads_are_valid_and_have_contrast(page, theme_index):
+    from page_editor import builtin_themes
+
+    theme = builtin_themes(page)[theme_index]
+    payload = make_payload(page)
+    original_config = deepcopy(payload["config"])
+    original_hash = payload["base_hash"]
+    payload["css"].update(theme["snapshot"]["css"])
+    for component_id, values in theme["snapshot"]["layout"].items():
+        payload["layout"][component_id].update(values)
+    assert validate_payload(page, payload) == payload
+    assert payload["config"] == original_config
+    assert payload["base_hash"] == original_hash
+    assert set(theme["snapshot"]["css"]) == set(payload["css"])
+    assert not any("visible" in values for component_id, values in theme["snapshot"]["layout"].items()
+                   if not (page == "announce" and theme_index == 1 and component_id == "gallery"))
+
+    def luminance(color):
+        rgb = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+        channels = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in rgb]
+        return sum(value * weight for value, weight in zip(channels, (0.2126, 0.7152, 0.0722)))
+
+    css = payload["css"]
+    for key, foreground in css.items():
+        suffix = next((suffix for suffix in ("_font_color", "_text_color") if key.endswith(suffix)), None)
+        if suffix is None:
+            continue
+        prefix = key.removesuffix(suffix)
+        background = css.get(prefix + "_background_color", css.get(prefix + "_color", css[page + "_secondary_color"]))
+        if page == "announce" and key == "subtitle_font_color":
+            background = css["title_background_color"]
+        if key == "circle_button_text_color":
+            background = css["patient_secondary_color"]
+        values = sorted((luminance(foreground), luminance(background)))
+        assert (values[1] + 0.05) / (values[0] + 0.05) >= 4.5, (theme["name"], page, key)
+    if page == "patient":
+        assert int(payload["css"]["square_button_height"].removesuffix("px")) >= 56
+    if page == "announce" and theme_index == 1:
+        assert payload["layout"]["gallery"]["visible"] is False
+        assert "#div_center_divided{grid-template-columns:1fr}" in layout_style(page, payload["layout"])
+
+
+@pytest.mark.parametrize("page", list(ADAPTERS))
+def test_builtin_theme_can_be_saved_and_published_without_changing_content(editor_app, page):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    initial = client.get(f"/admin/page-editor/{page}/state").get_json()["published"]
+    theme = client.get(f"/admin/page-editor/{page}/themes").get_json()["builtins"][4]
+    working = deepcopy(initial)
+    working["css"].update(theme["snapshot"]["css"])
+    for component_id, layout in theme["snapshot"]["layout"].items():
+        working["layout"][component_id].update(layout)
+    saved = client.put(f"/admin/page-editor/{page}/draft", json={"draft_version": 0, "payload": working})
+    assert saved.status_code == 200
+    state = client.get(f"/admin/page-editor/{page}/state").get_json()
+    assert state["published"] == initial
+    response = client.post(f"/admin/page-editor/{page}/publish", json={"draft_version": saved.get_json()["draft_version"]})
+    assert response.status_code == 200
+    published = client.get(f"/admin/page-editor/{page}/state").get_json()["published"]
+    assert published["css"] == working["css"]
+    assert published["config"] == initial["config"]
+    with app.app_context():
+        assert PageEditorRevision.query.filter_by(page_key=page).one().snapshot_json["css"] == working["css"]
+
+
+@pytest.mark.parametrize("page", list(ADAPTERS))
+def test_old_theme_css_still_validates(page):
+    payload = make_payload(page)
+    for component in ADAPTERS[page]["components"].values():
+        for field in component["css"]:
+            if field.get("optional"):
+                payload["css"].pop(field["key"])
+    assert validate_payload(page, payload) == payload
+    payload["css"]["unregistered_background_color"] = "#FFFFFF"
+    with pytest.raises(ValueError, match="apparence"):
+        validate_payload(page, payload)
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize("page_key", list(ADAPTERS))
+def test_builtin_themes_browser_flow(editor_app, page_key):
+    from threading import Thread
+
+    from jinja2 import FileSystemLoader
+    from werkzeug.serving import make_server
+
+    from page_editor import preview_vars_style
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    root = Path(__file__).resolve().parents[1]
+    app.static_folder = str(root / "static")
+    app.jinja_loader = FileSystemLoader(root / "templates")
+    app.jinja_env.globals.update(
+        csrf_token=lambda: "test", get_css_url=lambda mode=None: "/static/css/" + {"announce": "display", "patient": "patient", "phone": "phone"}[mode] + ".css",
+        page_layout_style=layout_style, preview_vars_style=preview_vars_style,
+        user_has_permission=lambda *args, **kwargs: True, page_editor_enabled=lambda page: True,
+    )
+    client = authenticated_client(editor_app)
+    before = client.get(f"/admin/page-editor/{page_key}/state").get_json()
+    baseline = before["published"]
+    theme_data = client.get(f"/admin/page-editor/{page_key}/themes").get_json()["builtins"]
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with playwright.sync_playwright() as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1280, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.on("dialog", lambda dialog: dialog.accept())
+                page.goto(f"{url}/admin/page-editor/{page_key}")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+
+                def working():
+                    return page.evaluate("key => JSON.parse(localStorage.getItem('page-editor-backup-' + key)).payload", page_key)
+
+                for theme in theme_data:
+                    page.locator("#editor-themes").click()
+                    row = page.locator(f"[data-theme-id='{theme['id']}']")
+                    playwright.expect(row.locator(".btn-outline-danger")).to_have_count(0)
+                    playwright.expect(row.locator(".page-editor-theme-swatches span")).to_have_count(5)
+                    page.locator("#editor-theme-section-layout").uncheck()
+                    page.locator("#editor-theme-section-content").check()
+                    row.locator(".btn-primary").click()
+                    playwright.expect(page.locator(".page-editor-dialog")).to_have_count(0)
+                    applied = working()
+                    assert applied["config"] == baseline["config"]
+                    assert applied["layout"] == baseline["layout"]
+                    assert applied["base_hash"] == baseline["base_hash"]
+                    assert applied["css"] == theme["snapshot"]["css"]
+                    preview = page.frame_locator("#editor-preview").locator("html")
+                    playwright.expect(preview).to_have_css("--" + page_key + "_secondary_color", theme["snapshot"]["css"][page_key + "_secondary_color"])
+                    page.locator("#editor-undo").click()
+                    assert working() == baseline
+
+                page.locator("#editor-themes").click()
+                page.locator("#editor-theme-section-appearance").uncheck()
+                page.locator("#editor-theme-section-layout").uncheck()
+                page.locator("#editor-theme-section-content").check()
+                row = page.locator("[data-theme-id='builtin-lisibilite']")
+                playwright.expect(row.locator(".btn-primary")).to_be_disabled()
+                page.locator("#editor-theme-section-layout").check()
+                row.locator(".btn-primary").click()
+                assert working()["css"] == baseline["css"]
+                assert working()["config"] == baseline["config"]
+                if page_key == "announce":
+                    assert working()["layout"]["gallery"]["visible"] is False
+                page.locator("#editor-themes").click()
+                page.locator("#editor-theme-name").fill("Ma variante")
+                page.locator("#editor-theme-save").click()
+                playwright.expect(page.locator(".page-editor-theme-item")).to_have_count(6)
+                playwright.expect(page.locator(".page-editor-theme-item .btn-outline-danger")).to_have_count(1)
+                page.set_viewport_size({"width": 390, "height": 844})
+                assert page.locator(".page-editor-dialog-body").evaluate("el => el.scrollWidth <= el.clientWidth")
+                assert not errors
+                assert client.get(f"/admin/page-editor/{page_key}/state").get_json() == before
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+def test_builtin_theme_snapshots_are_independent():
+    from page_editor import builtin_themes
+
+    first = builtin_themes("announce")
+    first[0]["snapshot"]["css"]["title_font_color"] = "#000000"
+    first[0]["snapshot"]["layout"]["title"]["span"] = 1
+    fresh = builtin_themes("announce")
+    assert fresh[0]["snapshot"]["css"]["title_font_color"] != "#000000"
+    assert fresh[0]["snapshot"]["layout"]["title"]["span"] == 12
+
+
 def test_themes_crud_and_validation(editor_app):
     app, _ = editor_app
     client = authenticated_client(editor_app)

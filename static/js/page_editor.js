@@ -1303,7 +1303,77 @@
         ['content', 'Contenu (textes, messages — remplace les textes actuels)', false],
     ];
 
-    function buildThemesBody(themes) {
+    function buildThemeList(themes, sectionChecks) {
+        const list = document.createElement('ul');
+        list.className = 'page-editor-theme-list';
+        themes.forEach(function (theme) {
+            const item = document.createElement('li');
+            item.className = 'page-editor-theme-item';
+            item.dataset.themeId = theme.id;
+            const info = document.createElement('div');
+            info.className = 'page-editor-theme-info';
+            const name = document.createElement('strong');
+            name.textContent = theme.name;
+            const meta = document.createElement('div');
+            meta.className = 'small text-muted';
+            meta.textContent = [
+                theme.recommended ? 'Recommandé' : '',
+                theme.updated_at ? new Date(theme.updated_at).toLocaleString('fr-FR') : '',
+                theme.author || '', theme.description || '',
+            ].filter(Boolean).join(' · ');
+            info.append(name, meta);
+            if (theme.colors) {
+                const swatches = document.createElement('div');
+                swatches.className = 'page-editor-theme-swatches';
+                swatches.setAttribute('aria-label', 'Palette : ' + theme.colors.join(', '));
+                theme.colors.forEach(function (color) {
+                    const swatch = document.createElement('span');
+                    swatch.style.backgroundColor = color;
+                    swatch.title = color;
+                    swatch.setAttribute('aria-hidden', 'true');
+                    swatches.appendChild(swatch);
+                });
+                info.appendChild(swatches);
+            }
+            const actions = document.createElement('div');
+            actions.className = 'page-editor-theme-actions';
+            const applyButton = document.createElement('button');
+            applyButton.type = 'button';
+            applyButton.className = 'btn btn-sm btn-primary';
+            applyButton.textContent = 'Appliquer';
+            applyButton.setAttribute('aria-label', 'Appliquer le thème ' + theme.name);
+            const updateAvailability = function () {
+                applyButton.disabled = !sectionChecks.appearance.checked && !sectionChecks.layout.checked
+                    && (theme.builtin || !sectionChecks.content.checked);
+            };
+            Object.values(sectionChecks).forEach(function (input) {
+                input.addEventListener('change', updateAvailability);
+            });
+            updateAvailability();
+            applyButton.addEventListener('click', function () {
+                applyTheme(theme, {
+                    appearance: sectionChecks.appearance.checked,
+                    layout: sectionChecks.layout.checked,
+                    content: !theme.builtin && sectionChecks.content.checked,
+                });
+            });
+            actions.appendChild(applyButton);
+            if (!theme.builtin) {
+                const deleteButton = document.createElement('button');
+                deleteButton.type = 'button';
+                deleteButton.className = 'btn btn-sm btn-outline-danger';
+                deleteButton.textContent = 'Supprimer';
+                deleteButton.setAttribute('aria-label', 'Supprimer le thème ' + theme.name);
+                deleteButton.addEventListener('click', function () { deleteTheme(theme); });
+                actions.appendChild(deleteButton);
+            }
+            item.append(info, actions);
+            list.appendChild(item);
+        });
+        return list;
+    }
+
+    function buildThemesBody(themes, builtins) {
         const container = document.createElement('div');
 
         const saveCard = document.createElement('div');
@@ -1317,12 +1387,14 @@
         nameInput.id = 'editor-theme-name';
         nameInput.placeholder = 'Nom du thème (ex. Lisibilité renforcée)';
         nameInput.maxLength = 80;
+        nameInput.setAttribute('aria-label', 'Nom du thème');
         const descInput = document.createElement('input');
         descInput.type = 'text';
         descInput.className = 'form-control form-control-sm mb-2';
         descInput.id = 'editor-theme-description';
         descInput.placeholder = 'Description (facultative)';
         descInput.maxLength = 300;
+        descInput.setAttribute('aria-label', 'Description du thème (facultative)');
         const saveButton = document.createElement('button');
         saveButton.type = 'button';
         saveButton.className = 'btn btn-sm btn-outline-primary';
@@ -1356,51 +1428,24 @@
             sectionChecks[entry[0]] = input;
         });
 
-        const listHeading = document.createElement('h6');
-        listHeading.className = 'mt-3 mb-1';
-        listHeading.textContent = 'Thèmes enregistrés';
+        const builtinHeading = document.createElement('h3');
+        builtinHeading.className = 'h6 mt-3 mb-1';
+        builtinHeading.textContent = 'Thèmes intégrés';
+        const note = document.createElement('p');
+        note.className = 'small text-muted';
+        note.textContent = 'Vos textes et options métier sont conservés, même si « Contenu » est coché. Ces modèles ne sont pas supprimables. Après application, vous pouvez enregistrer votre propre variante.';
+        container.append(builtinHeading, note, buildThemeList(builtins, sectionChecks));
+        const listHeading = document.createElement('h3');
+        listHeading.className = 'h6 mt-3 mb-1';
+        listHeading.textContent = 'Mes thèmes';
         container.appendChild(listHeading);
         if (!themes.length) {
             const empty = document.createElement('p');
             empty.className = 'text-muted';
-            empty.textContent = 'Aucun thème enregistré pour cette page.';
+            empty.textContent = 'Aucun thème personnel enregistré pour cette page.';
             container.appendChild(empty);
         }
-        const list = document.createElement('ul');
-        list.className = 'page-editor-diff-list';
-        themes.forEach(function (theme) {
-            const item = document.createElement('li');
-            item.className = 'page-editor-theme-item';
-            const info = document.createElement('div');
-            info.className = 'flex-grow-1 min-w-0';
-            const name = document.createElement('strong');
-            name.textContent = theme.name;
-            const meta = document.createElement('div');
-            meta.className = 'small text-muted';
-            meta.textContent = (theme.updated_at ? new Date(theme.updated_at).toLocaleString('fr-FR') : '')
-                + (theme.author ? ' · ' + theme.author : '')
-                + (theme.description ? ' — ' + theme.description : '');
-            info.append(name, meta);
-            const applyButton = document.createElement('button');
-            applyButton.type = 'button';
-            applyButton.className = 'btn btn-sm btn-primary';
-            applyButton.textContent = 'Appliquer';
-            applyButton.addEventListener('click', function () {
-                applyTheme(theme, {
-                    appearance: sectionChecks.appearance.checked,
-                    layout: sectionChecks.layout.checked,
-                    content: sectionChecks.content.checked,
-                });
-            });
-            const deleteButton = document.createElement('button');
-            deleteButton.type = 'button';
-            deleteButton.className = 'btn btn-sm btn-outline-danger';
-            deleteButton.textContent = 'Supprimer';
-            deleteButton.addEventListener('click', function () { deleteTheme(theme); });
-            item.append(info, applyButton, deleteButton);
-            list.appendChild(item);
-        });
-        container.appendChild(list);
+        container.appendChild(buildThemeList(themes, sectionChecks));
         return container;
     }
 
@@ -1414,7 +1459,7 @@
             const data = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/themes');
             openDialog({
                 title: 'Thèmes de la page',
-                body: buildThemesBody(data.themes),
+                body: buildThemesBody(data.themes, data.builtins || []),
                 actions: [{label: 'Fermer', className: 'btn btn-secondary', value: true, autofocus: true}],
             });
         } catch (error) {
@@ -1463,10 +1508,16 @@
     }
 
     function applyTheme(theme, sections) {
+        sections = Object.assign({}, sections, {content: !theme.builtin && sections.content});
         if (!sections.appearance && !sections.layout && !sections.content) {
             setStatus('Cochez au moins une section à appliquer.', 'warning');
             return;
         }
+        if ((dirty || sections.content) && !window.confirm(
+            'Appliquer « ' + theme.name + ' » remplacera les sections sélectionnées du travail courant.'
+            + (sections.content ? ' Les textes seront également remplacés.' : ' Vos textes sont conservés.')
+            + ' Vous pourrez annuler cette action.'
+        )) return;
         const applied = [];
         mutate(function () {
             if (sections.appearance) {
@@ -1474,7 +1525,13 @@
                 applied.push('apparence');
             }
             if (sections.layout) {
-                payload.layout = clone(theme.snapshot.layout);
+                if (theme.builtin) {
+                    Object.entries(theme.snapshot.layout).forEach(function (entry) {
+                        Object.assign(payload.layout[entry[0]], clone(entry[1]));
+                    });
+                } else {
+                    payload.layout = clone(theme.snapshot.layout);
+                }
                 applied.push('disposition');
             }
             if (sections.content) {
@@ -1576,6 +1633,7 @@
         redoStack.push(clone(payload));
         payload = undoStack.pop();
         dirty = true;
+        persistBackup();
         rerenderAll(); pushPayloadToPreview(); updateButtons();
         setStatus('Modification annulée.', 'warning');
     });
@@ -1584,6 +1642,7 @@
         undoStack.push(clone(payload));
         payload = redoStack.pop();
         dirty = true;
+        persistBackup();
         rerenderAll(); pushPayloadToPreview(); updateButtons();
         setStatus('Modification rétablie.', 'warning');
     });
