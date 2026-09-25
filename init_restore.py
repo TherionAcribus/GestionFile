@@ -9,6 +9,7 @@ from io import BytesIO
 
 from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
 from params_registry import column_values_for
+from page_editor import ADAPTERS, builtin_themes, default_layout
 
 # Point 12 (audit Admin) — Restauration MySQL : validation des identifiants.
 #
@@ -32,6 +33,43 @@ def _validate_identifier(name, kind="base"):
         )
         raise ValueError(f"Nom de {kind} invalide")
     return str(name)
+
+# THEME PAR DÉFAUT DE L'ÉDITEUR DE PAGES
+
+def _apply_builtin_page_theme(page, css_model, slug="officine"):
+    """Superpose le thème builtin ``slug`` aux réglages de ``page``.
+
+    Réservé au tout premier seed (installation) : il ne doit jamais écraser
+    des réglages existants lors d'une mise à jour ou d'une restauration —
+    les appels sont donc conditionnés par ``current_version is None``.
+    """
+    theme = next((t for t in builtin_themes(page) if t["id"] == f"builtin-{slug}"), None)
+    if theme is None:
+        return
+    for key, value in theme["snapshot"]["css"].items():
+        css_variable = css_model.query.filter_by(variable=key).first()
+        if css_variable:
+            css_variable.value = value
+        else:
+            db.session.add(css_model(variable=key, value=value))
+
+    # Disposition du thème : fusionnée sur la disposition par défaut — les
+    # thèmes builtin n'emportent pas « visible » (cf. applyTheme côté client,
+    # qui conserve la visibilité courante de chaque composant).
+    adapter = ADAPTERS[page]
+    layout = default_layout(page)
+    for component_id, item in theme["snapshot"]["layout"].items():
+        if component_id in layout:
+            layout[component_id].update(item)
+    option = ConfigOption.query.filter_by(config_key=adapter["layout_key"]).first()
+    values = column_values_for(adapter["layout_key"], layout)
+    if option:
+        for column, column_value in values.items():
+            setattr(option, column, column_value)
+    else:
+        db.session.add(ConfigOption(config_key=adapter["layout_key"], **values))
+    current_app.logger.info("Thème par défaut « %s » appliqué à la page %s", slug, page)
+
 
 def init_default_patient_css_variables_db_from_json():
     json_file='static/json/default_patient_css_variables.json'
@@ -66,6 +104,8 @@ def load_patient_css_variables_from_json(json_file, restore=False):
                             value=value)
                         db.session.add(new_variable)
 
+                if current_version is None and not restore:
+                    _apply_builtin_page_theme("patient", PatientCssVariable)
                 db.session.commit()
                 current_app.logger.info("Table CSS DATA VARIABLES mise à jour")
 
@@ -105,6 +145,8 @@ def load_announce_css_variables_from_json(json_file, restore=False):
                             value=value)
                         db.session.add(new_variable)
 
+                if current_version is None and not restore:
+                    _apply_builtin_page_theme("announce", AnnounceCssVariable)
                 db.session.commit()
                 current_app.logger.info("Table CSS DATA VARIABLES mise à jour")
 
@@ -143,6 +185,8 @@ def load_phone_css_variables_from_json(json_file, restore=False):
                             value=value)
                         db.session.add(new_variable)
 
+                if current_version is None and not restore:
+                    _apply_builtin_page_theme("phone", PhoneCssVariable)
                 db.session.commit()
                 current_app.logger.info("Table CSS DATA VARIABLES mise à jour")
 
