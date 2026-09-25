@@ -60,7 +60,7 @@ définie par `_csrf_is_exempt()` dans `app.py`.
 | Préfixe `/api/` | API machine authentifiées par **jeton applicatif** (`/api/get_app_token`, `/api/counter/*`, `/api/printer/status`, …). |
 | Préfixe `/app/` | Routes d'App_Comptoir (`/app/counter/*`), authentifiées par jeton. |
 | Préfixe `/patient` | Borne/kiosque patient (`/patients_submit`, `/patient/print_*`, `/patient/phone/*`). Endpoints publics sans session privilégiée. |
-| En-tête `X-App-Token` présent | Toute requête d'une application cliente (App_Comptoir, borne, imprimante). Un formulaire cross-site **ne peut pas** positionner d'en-tête personnalisé (protection intrinsèque), et le jeton est de toute façon revérifié par la route (`@require_app_token_or_login`). Couvre notamment les routes à double usage appelées à la fois par le navigateur comptoir et par App_Comptoir (`/validate_and_call_next`, `/validate_patient`, `/pause_patient`, `/counter/*`). |
+| En-tête `X-App-Token` présent | Toute requête d'une application cliente (App_Comptoir, borne, imprimante). Un formulaire cross-site **ne peut pas** positionner d'en-tête personnalisé (protection intrinsèque), et le jeton est de toute façon revérifié par la route (`@require_app_token_or_login`). Couvre les routes à double usage appelées à la fois par le navigateur comptoir et par App_Comptoir à la racine (`/validate_and_call_next`, `/validate_patient`, `/pause_patient`, `/call_specific_patient` — allowlist `_CSRF_APP_TOKEN_ELIGIBLE_PREFIXES`). |
 
 ### Limite connue (à traiter séparément)
 

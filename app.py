@@ -543,10 +543,14 @@ _CSRF_EXEMPT_PREFIXES = (
 # peuvent être exemptées par un jeton applicatif VALIDE. L'administration
 # (/admin) et Spotify (/spotify) n'en font JAMAIS partie : un simple en-tête ne
 # doit jamais suffire à contourner le CSRF sur une route sensible.
-# Aujourd'hui la seule route concernée est /validate_and_call_next/<counter_id>,
-# partagée par le comptoir navigateur et App_Comptoir.
+# Les quatre routes concernées sont les actions d'appel/validation de
+# routes/calling.py, partagées par le comptoir navigateur et App_Comptoir
+# (et toutes gardées par @require_app_token_or_login).
 _CSRF_APP_TOKEN_ELIGIBLE_PREFIXES = (
     "/validate_and_call_next",
+    "/validate_patient",
+    "/pause_patient",
+    "/call_specific_patient",
 )
 
 

@@ -10,8 +10,10 @@ Deux niveaux, exécutables **sans MySQL ni serveur** :
    - avec un jeton valide (en-tête ``X-CSRFToken``) -> **200** ;
    - endpoints machine/kiosque exemptés par PRÉFIXE (``/api/``, ``/app/``,
      ``/patient``, ``/socket.io``) -> **200** sans jeton ;
-   - route à double usage (``/validate_and_call_next``) : exemptée **uniquement**
-     avec un jeton applicatif **valide** ; un jeton bidon ne contourne PAS ;
+   - routes à double usage de ``routes/calling.py`` (``/validate_and_call_next``,
+     ``/validate_patient``, ``/pause_patient``, ``/call_specific_patient``) :
+     exemptées **uniquement** avec un jeton applicatif **valide** ; un jeton
+     bidon ne contourne PAS ;
    - l'administration (``/admin``) n'est **jamais** exemptée par un en-tête
      applicatif, même avec un jeton valide.
 
@@ -43,7 +45,12 @@ def _read(rel):
 
 # --- Reproduction fidèle de la garde de production (cf. app.py, point 2.2) ---
 _CSRF_EXEMPT_PREFIXES = ("/socket.io", "/api/", "/app/", "/patient")
-_CSRF_APP_TOKEN_ELIGIBLE_PREFIXES = ("/validate_and_call_next",)
+_CSRF_APP_TOKEN_ELIGIBLE_PREFIXES = (
+    "/validate_and_call_next",
+    "/validate_patient",
+    "/pause_patient",
+    "/call_specific_patient",
+)
 
 
 def _verify_app_token(token):
@@ -108,6 +115,20 @@ def _make_app():
     def _dual_post(cid):
         return jsonify({"ok": True})
 
+    # Les autres routes à double usage de routes/calling.py, appelées par
+    # App_Comptoir à la racine (hors /api/ et /app/).
+    @app.route("/validate_patient/<int:cid>/<int:pid>", methods=["POST"])
+    def _dual_validate(cid, pid):
+        return jsonify({"ok": True})
+
+    @app.route("/pause_patient/<int:cid>/<int:pid>", methods=["POST"])
+    def _dual_pause(cid, pid):
+        return jsonify({"ok": True})
+
+    @app.route("/call_specific_patient/<int:cid>/<int:pid>", methods=["POST"])
+    def _dual_call_specific(cid, pid):
+        return jsonify({"ok": True})
+
     @app.route("/api/counter/validate_patient/<int:pid>", methods=["POST"])
     def _api_post(pid):
         return jsonify({"ok": True})
@@ -166,6 +187,29 @@ def test_dual_use_route_exempt_with_valid_app_token(client):
     resp = client.post("/validate_and_call_next/1",
                        headers={"X-App-Token": _valid_app_token()})
     assert resp.status_code == 200
+
+
+@pytest.mark.parametrize("path", [
+    "/validate_and_call_next/1",
+    "/validate_patient/1/42",
+    "/pause_patient/1/42",
+    "/call_specific_patient/1/42",
+])
+def test_all_app_dual_use_routes_exempt_with_valid_token(client, path):
+    """Toutes les routes racine qu'App_Comptoir appelle en POST doivent être
+    exemptées avec un jeton applicatif valide — sinon l'App reçoit un 400 CSRF
+    (régression : seul /validate_and_call_next était allowlisté)."""
+    assert client.post(path, headers={"X-App-Token": _valid_app_token()}).status_code == 200
+
+
+@pytest.mark.parametrize("path", [
+    "/validate_patient/1/42",
+    "/pause_patient/1/42",
+    "/call_specific_patient/1/42",
+])
+def test_other_dual_use_routes_rejected_without_token(client, path):
+    """Sans jeton (requête navigateur), ces routes restent soumises au CSRF."""
+    assert client.post(path).status_code == 400
 
 
 # --- Point 2.2 : durcissement de l'exemption par en-tête applicatif ---
@@ -270,7 +314,10 @@ def test_app_token_exemption_is_hardened():
     allow = m2.group(1)
     assert "/admin" not in allow, "l'admin ne doit jamais être exemptée par en-tête"
     assert "/spotify" not in allow, "Spotify ne doit jamais être exemptée par en-tête"
-    assert "/validate_and_call_next" in allow
+    # Toutes les routes racine appelées par App_Comptoir (routes/calling.py).
+    for prefix in ('"/validate_and_call_next"', '"/validate_patient"',
+                   '"/pause_patient"', '"/call_specific_patient"'):
+        assert prefix in allow, f"{prefix} doit être exempté avec jeton valide"
 
 
 def test_browser_templates_include_csrf_token_and_script():
