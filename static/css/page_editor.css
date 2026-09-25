@@ -296,6 +296,18 @@
     font-weight: 600;
 }
 
+.page-editor-theme-item {
+    align-items: center;
+    border-bottom: 1px solid var(--bs-border-color);
+    display: flex;
+    gap: .5rem;
+    padding: .5rem 0;
+}
+
+.page-editor-theme-item:last-child {
+    border-bottom: 0;
+}
+
 @media (max-width: 1199px) {
     .page-editor-grid {
         grid-template-columns: minmax(190px, 1fr) minmax(400px, 2fr);

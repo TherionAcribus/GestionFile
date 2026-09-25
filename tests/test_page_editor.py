@@ -611,6 +611,61 @@ def test_screens_endpoint_reports_acks_and_pending(editor_app, monkeypatch):
     assert anonymous.get("/admin/page-editor/announce/screens").status_code == 401
 
 
+def test_themes_crud_and_validation(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = make_payload("announce")
+    payload["config"]["announce_title"] = "Thème hiver"
+
+    saved = client.post("/admin/page-editor/announce/themes", json={
+        "name": "Hiver", "description": "Ambiance froide", "payload": payload,
+    })
+    assert saved.status_code == 200
+    theme = saved.get_json()["theme"]
+    assert theme["name"] == "Hiver"
+    assert theme["snapshot"]["config"]["announce_title"] == "Thème hiver"
+    assert theme["author"] == "editor"
+
+    listed = client.get("/admin/page-editor/announce/themes").get_json()["themes"]
+    assert [item["name"] for item in listed] == ["Hiver"]
+
+    # Doublon refusé, puis écrasement explicite accepté.
+    duplicate = client.post("/admin/page-editor/announce/themes", json={
+        "name": "Hiver", "payload": payload,
+    })
+    assert duplicate.status_code == 409
+    assert duplicate.get_json()["exists"] is True
+    overwrite = client.post("/admin/page-editor/announce/themes", json={
+        "name": "Hiver", "payload": payload, "overwrite": True,
+    })
+    assert overwrite.status_code == 200
+    assert overwrite.get_json()["theme"]["id"] == theme["id"]
+
+    # Payload invalide et nom vide rejetés ; le snapshot est normalisé.
+    bad = make_payload("announce")
+    bad["css"]["title_font_size"] = "banane"
+    assert client.post("/admin/page-editor/announce/themes", json={
+        "name": "Bad", "payload": bad,
+    }).status_code == 400
+    assert client.post("/admin/page-editor/announce/themes", json={
+        "name": "   ", "payload": payload,
+    }).status_code == 400
+
+    # Suppression.
+    assert client.delete(
+        f"/admin/page-editor/announce/themes/{theme['id']}"
+    ).status_code == 200
+    assert client.get(
+        "/admin/page-editor/announce/themes"
+    ).get_json()["themes"] == []
+    assert client.delete(
+        f"/admin/page-editor/announce/themes/{theme['id']}"
+    ).status_code == 404
+
+    anonymous = app.test_client()
+    assert anonymous.get("/admin/page-editor/announce/themes").status_code == 401
+
+
 def test_publish_is_atomic_and_detects_advanced_mode_conflict(editor_app):
     app, _ = editor_app
     client = authenticated_client(editor_app)

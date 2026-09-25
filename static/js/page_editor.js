@@ -19,6 +19,7 @@
     const discardButton = document.getElementById('editor-discard');
     const diffButton = document.getElementById('editor-diff');
     const applyButton = document.getElementById('editor-apply');
+    const themesButton = document.getElementById('editor-themes');
     const screensButton = document.getElementById('editor-screens');
     const historyButton = document.getElementById('editor-history-toggle');
     const historyPanel = document.getElementById('editor-history');
@@ -1158,6 +1159,9 @@
             dialog.append(header, body, footer);
             backdrop.appendChild(dialog);
             document.body.appendChild(backdrop);
+            // Handle exposé pour les actions internes du dialogue (ex. la
+            // boîte « Thèmes » qui applique/supprime puis se ferme d'elle-même).
+            backdrop.closeDialog = close;
             focusTarget.focus();
         });
     }
@@ -1291,6 +1295,197 @@
         setStatus('Rechargement non confirmé par tous les écrans : vérifiez « Écrans ».', 'warning');
     }
 
+    // --- Thèmes nommés (instantanés réutilisables du payload) ---
+
+    const THEME_SECTIONS = [
+        ['appearance', 'Apparence (couleurs, tailles)', true],
+        ['layout', 'Disposition (zones, ordre, largeurs, visibilité)', true],
+        ['content', 'Contenu (textes, messages — remplace les textes actuels)', false],
+    ];
+
+    function buildThemesBody(themes) {
+        const container = document.createElement('div');
+
+        const saveCard = document.createElement('div');
+        saveCard.className = 'page-editor-palette-copy mb-3';
+        const saveHeading = document.createElement('div');
+        saveHeading.className = 'fw-semibold mb-1';
+        saveHeading.textContent = 'Enregistrer le brouillon courant comme thème';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'form-control form-control-sm mb-2';
+        nameInput.id = 'editor-theme-name';
+        nameInput.placeholder = 'Nom du thème (ex. Lisibilité renforcée)';
+        nameInput.maxLength = 80;
+        const descInput = document.createElement('input');
+        descInput.type = 'text';
+        descInput.className = 'form-control form-control-sm mb-2';
+        descInput.id = 'editor-theme-description';
+        descInput.placeholder = 'Description (facultative)';
+        descInput.maxLength = 300;
+        const saveButton = document.createElement('button');
+        saveButton.type = 'button';
+        saveButton.className = 'btn btn-sm btn-outline-primary';
+        saveButton.id = 'editor-theme-save';
+        saveButton.textContent = 'Enregistrer comme thème';
+        saveButton.addEventListener('click', function () {
+            saveTheme(nameInput.value, descInput.value);
+        });
+        saveCard.append(saveHeading, nameInput, descInput, saveButton);
+        container.appendChild(saveCard);
+
+        const sectionHeading = document.createElement('div');
+        sectionHeading.className = 'fw-semibold mb-1';
+        sectionHeading.textContent = 'Sections appliquées par « Appliquer »';
+        container.appendChild(sectionHeading);
+        const sectionChecks = {};
+        THEME_SECTIONS.forEach(function (entry) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'form-check mb-1';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'form-check-input';
+            input.id = 'editor-theme-section-' + entry[0];
+            input.checked = entry[2];
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = input.id;
+            label.textContent = entry[1];
+            wrapper.append(input, label);
+            container.appendChild(wrapper);
+            sectionChecks[entry[0]] = input;
+        });
+
+        const listHeading = document.createElement('h6');
+        listHeading.className = 'mt-3 mb-1';
+        listHeading.textContent = 'Thèmes enregistrés';
+        container.appendChild(listHeading);
+        if (!themes.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-muted';
+            empty.textContent = 'Aucun thème enregistré pour cette page.';
+            container.appendChild(empty);
+        }
+        const list = document.createElement('ul');
+        list.className = 'page-editor-diff-list';
+        themes.forEach(function (theme) {
+            const item = document.createElement('li');
+            item.className = 'page-editor-theme-item';
+            const info = document.createElement('div');
+            info.className = 'flex-grow-1 min-w-0';
+            const name = document.createElement('strong');
+            name.textContent = theme.name;
+            const meta = document.createElement('div');
+            meta.className = 'small text-muted';
+            meta.textContent = (theme.updated_at ? new Date(theme.updated_at).toLocaleString('fr-FR') : '')
+                + (theme.author ? ' · ' + theme.author : '')
+                + (theme.description ? ' — ' + theme.description : '');
+            info.append(name, meta);
+            const applyButton = document.createElement('button');
+            applyButton.type = 'button';
+            applyButton.className = 'btn btn-sm btn-primary';
+            applyButton.textContent = 'Appliquer';
+            applyButton.addEventListener('click', function () {
+                applyTheme(theme, {
+                    appearance: sectionChecks.appearance.checked,
+                    layout: sectionChecks.layout.checked,
+                    content: sectionChecks.content.checked,
+                });
+            });
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'btn btn-sm btn-outline-danger';
+            deleteButton.textContent = 'Supprimer';
+            deleteButton.addEventListener('click', function () { deleteTheme(theme); });
+            item.append(info, applyButton, deleteButton);
+            list.appendChild(item);
+        });
+        container.appendChild(list);
+        return container;
+    }
+
+    function closeThemesDialog() {
+        const backdrop = document.querySelector('.page-editor-dialog-backdrop');
+        if (backdrop && backdrop.closeDialog) backdrop.closeDialog(null);
+    }
+
+    async function showThemes() {
+        try {
+            const data = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/themes');
+            openDialog({
+                title: 'Thèmes de la page',
+                body: buildThemesBody(data.themes),
+                actions: [{label: 'Fermer', className: 'btn btn-secondary', value: true, autofocus: true}],
+            });
+        } catch (error) {
+            setStatus(error.message, 'danger');
+        }
+    }
+
+    async function saveTheme(name, description, overwrite) {
+        try {
+            await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/themes', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: name,
+                    description: description,
+                    overwrite: Boolean(overwrite),
+                    payload: payload,
+                }),
+            });
+            setStatus('Thème « ' + name.trim() + ' » enregistré.', 'success');
+            closeThemesDialog();
+            showThemes();
+        } catch (error) {
+            if (error.status === 409) {
+                if (window.confirm('Un thème porte déjà ce nom : le remplacer par le brouillon courant ?')) {
+                    return saveTheme(name, description, true);
+                }
+                return;
+            }
+            setStatus(error.message, 'danger');
+        }
+    }
+
+    async function deleteTheme(theme) {
+        if (!window.confirm('Supprimer le thème « ' + theme.name + ' » ?')) return;
+        try {
+            await requestJSON(
+                '/admin/page-editor/' + encodeURIComponent(page) + '/themes/' + theme.id,
+                {method: 'DELETE'}
+            );
+            setStatus('Thème « ' + theme.name + ' » supprimé.', 'success');
+            closeThemesDialog();
+            showThemes();
+        } catch (error) {
+            setStatus(error.message, 'danger');
+        }
+    }
+
+    function applyTheme(theme, sections) {
+        if (!sections.appearance && !sections.layout && !sections.content) {
+            setStatus('Cochez au moins une section à appliquer.', 'warning');
+            return;
+        }
+        const applied = [];
+        mutate(function () {
+            if (sections.appearance) {
+                Object.assign(payload.css, clone(theme.snapshot.css));
+                applied.push('apparence');
+            }
+            if (sections.layout) {
+                payload.layout = clone(theme.snapshot.layout);
+                applied.push('disposition');
+            }
+            if (sections.content) {
+                Object.assign(payload.config, clone(theme.snapshot.config));
+                applied.push('contenu');
+            }
+        });
+        setStatus('Thème « ' + theme.name + ' » appliqué (' + applied.join(', ') + ') — enregistrez puis publiez pour l’appliquer aux écrans.', 'info');
+        closeThemesDialog();
+    }
+
     async function confirmPublish() {
         const diff = await fetchDiff();
         const body = buildDiffList(diff);
@@ -1398,6 +1593,7 @@
     publishButton.addEventListener('click', publish);
     diffButton.addEventListener('click', showDiff);
     if (screensButton) screensButton.addEventListener('click', showScreens);
+    if (themesButton) themesButton.addEventListener('click', showThemes);
     discardButton.addEventListener('click', discard);
     applyButton.addEventListener('click', async function () {
         if (!window.confirm('Recharger maintenant les écrans connectés en service ?')) return;

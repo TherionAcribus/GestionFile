@@ -7,7 +7,7 @@ from flask import Blueprint, abort, current_app, jsonify, render_template, reque
 from flask_security import current_user
 
 import config_sync
-from audit_log import ACTION_DELETE, ACTION_RESTORE, ACTION_UPDATE, OUTCOME_FAILURE
+from audit_log import ACTION_CREATE, ACTION_DELETE, ACTION_RESTORE, ACTION_UPDATE, OUTCOME_FAILURE
 from audit_service import record_audit
 from communication import communikation
 from config import time_tz
@@ -18,6 +18,7 @@ from models import (
     Language,
     PageEditorRevision,
     PageEditorState,
+    PageEditorTheme,
     Pharmacist,
     db,
 )
@@ -541,6 +542,93 @@ def publish(page):
         record_audit(ACTION_UPDATE, "page_design", target_id=page,
                      outcome=OUTCOME_FAILURE)
         return jsonify({"error": "Publication impossible."}), 500
+
+
+def _theme_document(theme):
+    return {
+        "id": theme.id,
+        "name": theme.name,
+        "description": theme.description or "",
+        "updated_at": theme.updated_at.isoformat() if theme.updated_at else None,
+        "author": theme.created_by.username if theme.created_by else None,
+        "snapshot": deepcopy(theme.snapshot_json),
+    }
+
+
+@admin_page_editor_bp.get("/admin/page-editor/<page>/themes")
+def list_themes(page):
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    themes = (
+        PageEditorTheme.query.filter_by(page_key=page)
+        .order_by(PageEditorTheme.name)
+        .all()
+    )
+    return jsonify({"themes": [_theme_document(theme) for theme in themes]})
+
+
+@admin_page_editor_bp.post("/admin/page-editor/<page>/themes")
+def save_theme(page):
+    """Enregistre le brouillon courant comme thème nommé réutilisable.
+
+    Le snapshot est normalisé par ``validate_payload`` : un thème ne peut donc
+    pas contenir de valeur qui serait refusée à la publication.
+    """
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    if not name or len(name) > 80:
+        return jsonify({"error": "Le nom du thème doit faire entre 1 et 80 caractères."}), 400
+    description = str(body.get("description") or "").strip()[:300]
+    try:
+        normalized = validate_payload(page, body.get("payload"))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+
+    try:
+        theme = PageEditorTheme.query.filter_by(page_key=page, name=name).first()
+        if theme is not None and not body.get("overwrite"):
+            return jsonify({"error": "Un thème porte déjà ce nom.", "exists": True}), 409
+        if theme is None:
+            theme = PageEditorTheme(page_key=page, name=name)
+            db.session.add(theme)
+        theme.description = description
+        theme.snapshot_json = normalized
+        theme.created_by_id = current_user.id
+        theme.created_at = theme.created_at or datetime.now(time_tz)
+        theme.updated_at = datetime.now(time_tz)
+        db.session.commit()
+        record_audit(ACTION_CREATE, "page_design_theme", target_id=page,
+                     details=f"theme={name}")
+        return jsonify({"success": True, "theme": _theme_document(theme)})
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Enregistrement du thème impossible (%s)", page)
+        return jsonify({"error": "Enregistrement du thème impossible."}), 500
+
+
+@admin_page_editor_bp.delete("/admin/page-editor/<page>/themes/<int:theme_id>")
+def delete_theme(page, theme_id):
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    try:
+        theme = PageEditorTheme.query.filter_by(id=theme_id, page_key=page).first()
+        if theme is None:
+            return jsonify({"error": "Thème inconnu."}), 404
+        name = theme.name
+        db.session.delete(theme)
+        db.session.commit()
+        record_audit(ACTION_DELETE, "page_design_theme", target_id=page,
+                     details=f"theme={name}")
+        return jsonify({"success": True})
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Suppression du thème impossible (%s)", page)
+        return jsonify({"error": "Suppression du thème impossible."}), 500
 
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/revisions/<int:revision>/restore")

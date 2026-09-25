@@ -78,6 +78,13 @@ Comportements clés de l’éditeur :
   — elle n’est publiée que par un clic explicite sur « Publier ».
 - Une copie locale non synchronisée est proposée à la réouverture si
   l’onglet a été fermé ou la session expirée avant l’enregistrement.
+- Le bouton **Thèmes** permet d’enregistrer le brouillon courant comme
+  instantané nommé et de le réappliquer par sections (apparence,
+  disposition, contenu — l’application passe par le brouillon, jamais
+  directement en production).
+- Le bouton **Écrans** liste les appareils connectés, leur révision
+  déclarée via accusé Socket.IO et leur statut (à jour / ancienne
+  version / sans accusé).
 
 ## Dépannage MySQL
 

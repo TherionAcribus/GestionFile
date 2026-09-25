@@ -533,6 +533,36 @@ class PageEditorRevision(db.Model):
     )
 
 
+class PageEditorTheme(db.Model):
+    """Thème nommé : instantané réutilisable du payload d'une page (contenu,
+    disposition, apparence), créé et appliqué depuis l'éditeur visuel."""
+    __tablename__ = 'page_editor_theme'
+
+    id = db.Column(db.Integer, primary_key=True)
+    page_key = db.Column(db.String(20), nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    description = db.Column(db.String(300), nullable=True)
+    snapshot_json = db.Column(db.JSON, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('app_users.id'), nullable=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(time_tz),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(time_tz),
+        onupdate=lambda: datetime.now(time_tz),
+    )
+
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        db.UniqueConstraint('page_key', 'name', name='uq_page_editor_theme'),
+    )
+
+
 class SpotifyToken(db.Model):
     """Jeton OAuth Spotify de l'officine, stocké **côté serveur**.
 
