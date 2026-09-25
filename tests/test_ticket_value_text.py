@@ -83,6 +83,16 @@ def test_column_values_for_unknown_key_keeps_heuristic():
     assert reg.column_values_for("inconnue", {"a": 1})["value_json"] == {"a": 1}
 
 
+def test_column_values_for_empty_string_becomes_none_for_typed_columns():
+    """default_config.json déclare mail_port="" : une chaîne vide écrite en
+    INT/BOOL/JSON fait échouer l'INSERT sous MySQL strict au premier démarrage."""
+    for key in ("mail_port", "mail_use_tls", "announce_layout"):
+        cols = reg.column_values_for(key, "")
+        assert all(v is None for v in cols.values()), key
+    # Une colonne texte conserve la chaîne vide, valeur légitime.
+    assert reg.column_values_for("mail_server", "")["value_str"] == ""
+
+
 # ---------------------------------------------------------------------------
 # 3. Chaîne complète : écriture/restauration -> lecture chargeur
 # ---------------------------------------------------------------------------

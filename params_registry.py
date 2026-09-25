@@ -461,6 +461,11 @@ def column_values_for(key, value):
     }
     spec = get_spec(key)
     if spec is not None:
+        # Une chaîne vide signifie « non renseigné » pour les colonnes non
+        # textuelles : MySQL strict refuse '' en INT/BOOL/JSON (ex. mail_port
+        # vide dans default_config.json au premier démarrage).
+        if value == "" and spec.value_type not in ("value_str", "value_text"):
+            value = None
         columns[spec.value_type] = value
     else:
         columns["value_str"] = value if isinstance(value, str) and len(value) < 200 else None
