@@ -46,7 +46,7 @@
             "announce_next_patients_alignment": "center",
             "announce_call_sound": "Le patient {N} est invité au comptoir {C}",
             "announce_call_translation": "vo",
-            "announce_infos_display": true,
+            "announce_infos_display": false,
             "announce_infos_display_time": 30,
             "announce_infos_transition": "slide",
             "announce_gallery_folders": "static/galleries",
