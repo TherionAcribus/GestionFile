@@ -587,6 +587,37 @@ def restore(page, revision):
         return jsonify({"error": "Restauration impossible."}), 500
 
 
+@admin_page_editor_bp.get("/admin/page-editor/<page>/screens")
+def screens(page):
+    """Écrans connectés à la page et révision qu'ils déclarent afficher.
+
+    Un écran connecté mais muet (client d'une version antérieure sans émission
+    d'accusé) apparaît avec ``revision: null`` et le statut ``pending``.
+    """
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    from sockets import screen_status_for
+    state_row = PageEditorState.query.filter_by(page_key=page).first()
+    published_revision = state_row.published_revision if state_row else 0
+    items = []
+    for screen in screen_status_for(page):
+        revision = screen["revision"]
+        items.append({
+            **screen,
+            "status": (
+                "pending" if revision is None
+                else "current" if revision >= published_revision
+                else "stale"
+            ),
+        })
+    return jsonify({
+        "page": page,
+        "published_revision": published_revision,
+        "screens": items,
+    })
+
+
 @admin_page_editor_bp.post("/admin/page-editor/<page>/apply")
 def apply_to_screens(page):
     adapter, refusal = _page_context(page, api=True)

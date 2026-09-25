@@ -770,6 +770,20 @@ def get_queue_revision():
         return 0
 
 
+def page_editor_published_revision(page_key):
+    """ Révision publiée par l'éditeur visuel pour ``page_key`` (0 sinon).
+
+    Tolérant aux pannes : si la table page_editor_state n'existe pas encore
+    (migration non appliquée), on renvoie 0 plutôt que de faire échouer le
+    rendu des écrans. """
+    try:
+        state = PageEditorState.query.filter_by(page_key=page_key).first()
+        return state.published_revision if state else 0
+    except Exception:
+        db.session.rollback()
+        return 0
+
+
 def bump_queue_revision():
     """ Incrémente atomiquement la révision de la file et renvoie la nouvelle
     valeur. L'incrément se fait via un UPDATE conditionnel (« SET revision =

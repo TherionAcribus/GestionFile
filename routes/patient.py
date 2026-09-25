@@ -1,7 +1,7 @@
 import uuid
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
-from models import Language, Button, Activity, Patient, db, record_printer_status
+from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
@@ -55,7 +55,10 @@ def patients_front_page():
 
     return render_template('patient/patient_front_page.html',
                             languages=languages,
-                            page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"])
+                            page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
+                            # Révision publiée par l'éditeur visuel : renvoyée
+                            # dans l'accusé socket de (re)connexion.
+                            page_revision=page_editor_published_revision("patient"))
 
 
 @patient_bp.route('/patient/change_language/<language_code>')
@@ -623,7 +626,8 @@ def phone_patient(language_code, patient_id, activity_id):
                                                     activity_id=activity_id,
                                                     phone_title=phone_title,
                                                     journey_id=journey_id,
-                                                    language_code=language_code))
+                                                    language_code=language_code,
+                                                    page_revision=page_editor_published_revision("phone")))
             response.set_cookie('patient_id', "", expires=0)
             response.set_cookie('patient_call_number', "", expires=0)
             response.set_cookie('patient_token', "", expires=0)
@@ -633,7 +637,10 @@ def phone_patient(language_code, patient_id, activity_id):
                             patient_id=patient_id,
                             activity_id=activity_id,
                             journey_id=journey_id,
-                            language_code=language_code)
+                            language_code=language_code,
+                            # Révision publiée : renvoyée dans l'accusé socket
+                            # de (re)connexion (accusés « écran » de l'éditeur).
+                            page_revision=page_editor_published_revision("phone"))
 
 
 @patient_bp.route('/patient/phone/status', methods=['GET'])

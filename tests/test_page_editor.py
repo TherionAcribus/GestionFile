@@ -553,6 +553,64 @@ def test_diff_validates_payload_and_requires_permission(editor_app):
     assert "title_font_size" in response.get_json()["error"]
 
 
+def test_record_screen_ack_validates_input():
+    from types import SimpleNamespace
+
+    from sockets import page_screen_status, record_screen_ack
+
+    req = SimpleNamespace(sid="s-test")
+    record_screen_ack("announce", req, {"page": "announce", "revision": 3})
+    assert page_screen_status["announce"]["s-test"]["revision"] == 3
+
+    # Mauvaise page, révision invalide ou corps non dict : ignorés.
+    record_screen_ack("announce", req, {"page": "patient", "revision": 9})
+    record_screen_ack("announce", req, {"page": "announce", "revision": "banane"})
+    record_screen_ack("announce", req, "pas un dict")
+    record_screen_ack("inconnue", req, {"page": "inconnue", "revision": 1})
+    assert page_screen_status["announce"]["s-test"]["revision"] == 3
+    assert "inconnue" not in page_screen_status
+    page_screen_status["announce"].pop("s-test", None)
+
+
+def test_screens_endpoint_reports_acks_and_pending(editor_app, monkeypatch):
+    from types import SimpleNamespace
+
+    from extensions import socketio
+    from sockets import page_screen_status
+
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        db.session.add(PageEditorState(page_key="announce", published_revision=2))
+        db.session.commit()
+
+    # Deux écrans ont accusé ; un troisième est connecté sans accusé (client
+    # plus ancien) via la table des rooms du serveur Socket.IO simulée.
+    page_screen_status["announce"]["s-ok"] = {
+        "username": "écran hall", "revision": 2, "at": 1700000000.0}
+    page_screen_status["announce"]["s-vieux"] = {
+        "username": "écran salle", "revision": 1, "at": 1700000001.0}
+    fake_manager = SimpleNamespace(
+        rooms={"/socket_update_screen": {None: {"s-ok", "s-vieux", "s-muet"}}}
+    )
+    monkeypatch.setattr(socketio, "server", SimpleNamespace(manager=fake_manager))
+    try:
+        response = client.get("/admin/page-editor/announce/screens")
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["published_revision"] == 2
+        by_sid = {item["sid"]: item for item in data["screens"]}
+        assert by_sid["s-ok"]["status"] == "current"
+        assert by_sid["s-vieux"]["status"] == "stale"
+        assert by_sid["s-muet"]["status"] == "pending"
+        assert by_sid["s-muet"]["revision"] is None
+    finally:
+        page_screen_status["announce"].clear()
+
+    anonymous = app.test_client()
+    assert anonymous.get("/admin/page-editor/announce/screens").status_code == 401
+
+
 def test_publish_is_atomic_and_detects_advanced_mode_conflict(editor_app):
     app, _ = editor_app
     client = authenticated_client(editor_app)

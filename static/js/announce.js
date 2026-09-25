@@ -70,6 +70,14 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // Même rattrapage que sur le namespace général : c'est ce flux qui
         // porte add_calling/remove_calling.
         syncCallList();
+        // Accusé pour l'éditeur visuel : l'écran déclare la révision qu'il
+        // affiche réellement (méta injectée au rendu). Émis à CHAQUE
+        // connexion : couvre le rechargement demandé, la reconnexion réseau
+        // et le redémarrage de l'écran.
+        screenSocket.emit('page_editor_ack', {
+            page: 'announce',
+            revision: pageEditorRevision(),
+        });
     });
 
     screenSocket.on('disconnect', function() {
@@ -620,6 +628,11 @@ function remove_text_down(){
 // n'existe pas cote serveur : 404 puis reconnexion en boucle. Le rafraichissement
 // arrive de toute facon par Socket.IO -- screenSocket.on('refresh') appelle
 // refresh_page() plus haut dans ce fichier.
+
+function pageEditorRevision() {
+    var meta = document.querySelector('meta[name="page-editor-revision"]');
+    return meta ? (parseInt(meta.content, 10) || 0) : 0;
+}
 
 // refresh page pour appliquer les modifications
 function refresh_page() {

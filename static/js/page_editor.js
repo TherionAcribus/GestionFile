@@ -19,6 +19,7 @@
     const discardButton = document.getElementById('editor-discard');
     const diffButton = document.getElementById('editor-diff');
     const applyButton = document.getElementById('editor-apply');
+    const screensButton = document.getElementById('editor-screens');
     const historyButton = document.getElementById('editor-history-toggle');
     const historyPanel = document.getElementById('editor-history');
     const revisionsContainer = document.getElementById('editor-revisions');
@@ -1203,6 +1204,93 @@
         }
     }
 
+    // --- Écrans connectés et accusés de rechargement ---
+
+    const SCREEN_STATUS = {
+        current: {label: 'À jour', className: 'text-bg-success'},
+        stale: {label: 'Ancienne version', className: 'text-bg-warning'},
+        pending: {label: 'Sans accusé', className: 'text-bg-secondary'},
+    };
+
+    function buildScreensList(data) {
+        const container = document.createElement('div');
+        const intro = document.createElement('p');
+        intro.className = 'small text-muted';
+        intro.textContent = 'Révision publiée : ' + data.published_revision
+            + '. Chaque écran déclare la révision qu’il affiche à la (re)connexion '
+            + '— un écran « sans accusé » tourne probablement sous une version '
+            + 'antérieure à cette fonctionnalité.';
+        container.appendChild(intro);
+        if (!data.screens.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-muted';
+            empty.textContent = 'Aucun écran connecté sur cette page.';
+            container.appendChild(empty);
+            return container;
+        }
+        const list = document.createElement('ul');
+        list.className = 'page-editor-diff-list';
+        data.screens.forEach(function (screen) {
+            const item = document.createElement('li');
+            item.className = 'd-flex align-items-center gap-2';
+            const name = document.createElement('span');
+            const when = screen.at
+                ? ' · accusé ' + new Date(screen.at * 1000).toLocaleTimeString('fr-FR')
+                : '';
+            name.textContent = screen.username + ' (#' + screen.sid + ')'
+                + ' — révision ' + (screen.revision === null ? 'inconnue' : screen.revision) + when;
+            const badge = document.createElement('span');
+            const status = SCREEN_STATUS[screen.status] || SCREEN_STATUS.pending;
+            badge.className = 'badge ms-auto ' + status.className;
+            badge.textContent = status.label;
+            item.append(name, badge);
+            list.appendChild(item);
+        });
+        container.appendChild(list);
+        return container;
+    }
+
+    async function fetchScreens() {
+        return await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/screens');
+    }
+
+    async function showScreens() {
+        try {
+            const data = await fetchScreens();
+            await openDialog({
+                title: 'Écrans connectés',
+                body: buildScreensList(data),
+                actions: [{label: 'Fermer', className: 'btn btn-secondary', value: true, autofocus: true}],
+            });
+        } catch (error) {
+            setStatus(error.message, 'danger');
+        }
+    }
+
+    // Après « Appliquer » : surveille les accusés jusqu'à ce que tous les
+    // écrans connectés affichent la révision publiée (ou 30 s max).
+    async function watchScreenAcks() {
+        const deadline = Date.now() + 30000;
+        while (Date.now() < deadline) {
+            const data = await fetchScreens();
+            const total = data.screens.length;
+            const confirmed = data.screens.filter(function (screen) {
+                return screen.status === 'current';
+            }).length;
+            if (!total) {
+                setStatus('Ordre de rechargement envoyé ; aucun écran connecté détecté.', 'warning');
+                return;
+            }
+            if (confirmed === total) {
+                setStatus('Rechargement confirmé sur ' + total + ' écran(s).', 'success');
+                return;
+            }
+            setStatus('Ordre envoyé — ' + confirmed + '/' + total + ' écran(s) confirmé(s)…', 'info');
+            await new Promise(function (resolve) { setTimeout(resolve, 2000); });
+        }
+        setStatus('Rechargement non confirmé par tous les écrans : vérifiez « Écrans ».', 'warning');
+    }
+
     async function confirmPublish() {
         const diff = await fetchDiff();
         const body = buildDiffList(diff);
@@ -1309,12 +1397,14 @@
     });
     publishButton.addEventListener('click', publish);
     diffButton.addEventListener('click', showDiff);
+    if (screensButton) screensButton.addEventListener('click', showScreens);
     discardButton.addEventListener('click', discard);
     applyButton.addEventListener('click', async function () {
         if (!window.confirm('Recharger maintenant les écrans connectés en service ?')) return;
         try {
             await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/apply', {method: 'POST', body: '{}'});
             setStatus('Ordre de rechargement envoyé aux écrans connectés.', 'success');
+            await watchScreenAcks();
         } catch (error) {
             setStatus(error.message, 'danger');
         }

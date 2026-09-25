@@ -43,6 +43,12 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // Le réseau est de retour : toute la file d'acquittements
         // d'impression en attente peut être vidée.
         drainPrintConfirmations();
+        // Accusé pour l'éditeur visuel : la borne déclare la révision qu'elle
+        // affiche (méta injectée au rendu) à chaque (re)connexion.
+        patientSocket.emit('page_editor_ack', {
+            page: 'patient',
+            revision: pageEditorRevision(),
+        });
     });
 
     patientSocket.on('disconnect', function() {
@@ -133,6 +139,11 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
 
 // refresh page pour appliquer les modifications
+function pageEditorRevision() {
+    var meta = document.querySelector('meta[name="page-editor-revision"]');
+    return meta ? (parseInt(meta.content, 10) || 0) : 0;
+}
+
 function refresh_page() {
     console.log("Refresh page...");
     window.location.reload();

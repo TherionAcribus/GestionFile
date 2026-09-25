@@ -3,7 +3,7 @@ import json
 import random
 from flask import Blueprint, render_template, url_for, current_app as app, jsonify, request, redirect
 from sqlalchemy.orm import joinedload
-from models import Patient, Counter, ConfigOption, get_queue_revision
+from models import Patient, Counter, ConfigOption, get_queue_revision, page_editor_published_revision
 from utils import replace_balise_announces, replace_balise_welcome
 from communication import communikation
 from python.engine import get_next_patients_call_numbers
@@ -79,7 +79,10 @@ def display():
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
                             announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
                             announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],
-                            announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),)
+                            announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),
+                            # Révision publiée par l'éditeur visuel : renvoyée
+                            # au serveur dans l'accusé socket de (re)connexion.
+                            page_revision=page_editor_published_revision("announce"),)
 
 
 def _calling_patients_list():

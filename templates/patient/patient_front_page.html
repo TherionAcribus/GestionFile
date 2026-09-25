@@ -3,6 +3,9 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    {# Révision de l'éditeur visuel affichée : renvoyée au serveur dans
+       l'accusé socket page_editor_ack à chaque (re)connexion. #}
+    <meta name="page-editor-revision" content="{{ page_revision | default(0) }}">
     {# Content Security Policy : bloque tout chargement de ressource depuis une
        origine EXTERNE (script/style/image/police/connexion). C'est le cœur de la
        résilience hors ligne de la borne : plus aucune dépendance à un CDN. Les

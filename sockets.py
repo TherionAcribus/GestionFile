@@ -13,6 +13,7 @@ téléphone patient). L'émission des messages, elle, reste dans
 
 import logging
 import re
+import time
 
 from flask import current_app, request
 from flask_socketio import join_room, leave_room, rooms
@@ -45,6 +46,57 @@ active_connections = {namespace: set() for namespace in NAMESPACES}
 # {sid: {"username": ...}} — alimenté à la connexion, purgé à la déconnexion.
 connected_clients_info = {}
 
+# Accusés de rechargement des écrans pilotés par l'éditeur visuel :
+# {page: {sid: {"username": str, "revision": int, "at": float}}}. Chaque page
+# réelle (annonce, borne, téléphone) émet ``page_editor_ack`` à la connexion
+# de son socket avec la révision qu'elle affiche — l'éditeur en déduit qui a
+# bien rechargé après « Appliquer/recharger les écrans ».
+SCREEN_ACK_PAGES = {"announce": "/socket_update_screen",
+                    "patient": "/socket_patient",
+                    "phone": "/socket_phone"}
+page_screen_status = {page: {} for page in SCREEN_ACK_PAGES}
+
+
+def record_screen_ack(page, req, data):
+    """Mémorise l'accusé « page X affiche la révision N » d'un écran."""
+    if page not in page_screen_status or not isinstance(data, dict):
+        return
+    if str(data.get("page") or "") != page:
+        return
+    try:
+        revision = int(data.get("revision") or 0)
+    except (TypeError, ValueError):
+        return
+    if revision < 0 or revision > 1000000:
+        return
+    page_screen_status[page][req.sid] = {
+        "username": connected_clients_info.get(req.sid, {}).get("username", "Unknown"),
+        "revision": revision,
+        "at": time.time(),
+    }
+
+
+def screen_status_for(page):
+    """Écrans connectés à la page : accusés reçus + connectés sans accusé."""
+    bucket = page_screen_status.get(page, {})
+    namespace = SCREEN_ACK_PAGES[page]
+    try:
+        sids = set(
+            socketio.server.manager.rooms.get(namespace, {}).get(None, set())
+        )
+    except Exception:
+        sids = set()
+    screens = []
+    for sid in sorted(sids | set(bucket)):
+        ack = bucket.get(sid)
+        screens.append({
+            "sid": sid[:8],
+            "username": connected_clients_info.get(sid, {}).get("username", "Unknown"),
+            "revision": ack["revision"] if ack else None,
+            "at": ack["at"] if ack else None,
+        })
+    return screens
+
 
 def register_client(req):
     """Mémorise le nom d'utilisateur associé à la connexion.
@@ -62,6 +114,8 @@ def register_client(req):
 
 def forget_client(req):
     connected_clients_info.pop(req.sid, None)
+    for bucket in page_screen_status.values():
+        bucket.pop(req.sid, None)
 
 
 def _socket_require(flag_name, namespace):
@@ -102,6 +156,27 @@ def _handlers_simples(namespace, flag_name=None, libelle=None):
 # documenté ici pour que ce soit un choix visible et non un oubli.
 _handlers_simples("/socket_update_patient", None, "file patients")
 _handlers_simples("/socket_update_screen", "SECURITY_LOGIN_SCREEN", "ecran d'affichage")
+
+
+# --- Accusés de rechargement -------------------------------------------------
+# Un handler par namespace d'écran : le client émet ``page_editor_ack`` à
+# chaque (re)connexion avec la révision rendue dans sa page. Un écran connecté
+# mais sans accusé (client d'une version antérieure) reste visible via
+# ``screen_status_for`` et son statut « pending » dans l'éditeur.
+
+@socketio.on("page_editor_ack", namespace="/socket_update_screen")
+def screen_editor_ack(data):
+    record_screen_ack("announce", request, data)
+
+
+@socketio.on("page_editor_ack", namespace="/socket_patient")
+def patient_editor_ack(data):
+    record_screen_ack("patient", request, data)
+
+
+@socketio.on("page_editor_ack", namespace="/socket_phone")
+def phone_editor_ack(data):
+    record_screen_ack("phone", request, data)
 _handlers_simples("/socket_app_counter", "SECURITY_LOGIN_COUNTER", "App comptoir")
 _handlers_simples("/socket_app_screen", "SECURITY_LOGIN_SCREEN", "App ecran")
 _handlers_simples("/socket_counter", "SECURITY_LOGIN_COUNTER", "comptoir")

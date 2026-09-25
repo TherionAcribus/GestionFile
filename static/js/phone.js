@@ -78,6 +78,14 @@ document.addEventListener('DOMContentLoaded', (event) => {
                     }
                 })
                 .catch(error => console.error('Erreur lors de la vérification du statut:', error));
+
+            // Accusé pour l'éditeur visuel : le téléphone déclare la révision
+            // qu'il affiche (méta injectée au rendu) à chaque (re)connexion.
+            var revisionMeta = document.querySelector('meta[name="page-editor-revision"]');
+            phoneSocket.emit('page_editor_ack', {
+                page: 'phone',
+                revision: revisionMeta ? (parseInt(revisionMeta.content, 10) || 0) : 0,
+            });
         });
 
 
