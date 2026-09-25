@@ -3,40 +3,43 @@
 {% block title %}Activités{% endblock %}
 
 {% block content %}
+<div class="activity-page">
+    <h2 class="mb-1">Activités</h2>
+    <p class="text-muted">
+        Une activité est un <strong>motif de venue</strong> (ordonnance, retrait de commande, conseil…).
+        Le patient la choisit sur la <a href="/admin/patient">borne</a> ; elle donne la
+        <strong>lettre de son numéro</strong> (A-1, A-2…) et détermine quels comptoirs peuvent l'appeler
+        (compétences réglées dans <a href="/admin/staff">Équipe</a>).
+    </p>
 
-    <h3>Activités</h3>
+    <ul class="nav nav-tabs" id="activityTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'activity' %}active{% endif %}" id="activity-tab" data-bs-toggle="tab" data-bs-target="#tab_activity" type="button" role="tab" aria-controls="tab_activity" aria-selected="{{ 'true' if active_tab == 'activity' else 'false' }}">
+                <i class="bi bi-card-list" aria-hidden="true"></i> Activités
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'staff' %}active{% endif %}" id="staff-tab" data-bs-toggle="tab" data-bs-target="#tab_staff" type="button" role="tab" aria-controls="tab_staff" aria-selected="{{ 'true' if active_tab == 'staff' else 'false' }}">
+                <i class="bi bi-person-check" aria-hidden="true"></i> Demandes nominatives
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'schedule' %}active{% endif %}" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#tab_horaires" type="button" role="tab" aria-controls="tab_horaires" aria-selected="{{ 'true' if active_tab == 'schedule' else 'false' }}">
+                <i class="bi bi-clock" aria-hidden="true"></i> Plages horaires
+            </button>
+        </li>
+    </ul>
 
-    <div class="row">
-        <div class="col-12">
-            <!-- Nav tabs -->
-            <ul class="nav nav-tabs" id="activityTab" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="activity-tab" data-bs-toggle="tab" data-bs-target="#tab_activity" type="button" role="tab" aria-controls="tab_activity" aria-selected="true">Activités</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="schedule-tab" data-bs-toggle="tab" data-bs-target="#tab_horaires" type="button" role="tab" aria-controls="tab_horaires" aria-selected="false">Plages horaires</button>
-                </li>
-            </ul>
-
-            <!-- Tab content -->
-            <div class="tab-content" id="activityTabContent">
-                <div class="tab-pane fade show active" id="tab_activity" role="tabpanel" aria-labelledby="activity-tab">
-                    {% include 'admin/activity_tab_activity.html' %}
-                </div>
-                <div class="tab-pane fade" id="tab_horaires" role="tabpanel" aria-labelledby="schedule-tab">
-                    {% include 'admin/activity_tab_schedule.html' %}
-                </div>
-            </div>
+    <div class="tab-content pt-3" id="activityTabContent">
+        <div class="tab-pane fade {% if active_tab == 'activity' %}show active{% endif %}" id="tab_activity" role="tabpanel" aria-labelledby="activity-tab">
+            {% include 'admin/activity_tab_activity.html' %}
+        </div>
+        <div class="tab-pane fade {% if active_tab == 'staff' %}show active{% endif %}" id="tab_staff" role="tabpanel" aria-labelledby="staff-tab">
+            {% include 'admin/activity_tab_staff.html' %}
+        </div>
+        <div class="tab-pane fade {% if active_tab == 'schedule' %}show active{% endif %}" id="tab_horaires" role="tabpanel" aria-labelledby="schedule-tab">
+            {% include 'admin/activity_tab_schedule.html' %}
         </div>
     </div>
-
-    <!-- Modal Structure -->
-    <div class="modal fade" id="modal_delete_activity" tabindex="-1" aria-labelledby="modalDeleteActivityLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <!-- Modal content goes here -->
-            </div>
-        </div>
-    </div>
-    
+</div>
 {% endblock %}

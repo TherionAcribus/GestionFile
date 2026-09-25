@@ -32,54 +32,6 @@ const TABLE_CONFIGS = {
             });
         }
     },    
-    'schedule_table': {
-        buttonClass: 'btnSaveLine',
-        getFields: (id) => [
-            document.getElementById(`name_schedule-${id}`),
-            document.getElementById(`start_time-${id}`),
-            document.getElementById(`end_time-${id}`)
-        ],
-        getSelect2: (id) => document.getElementById(`weekdays-${id}`),
-        // Fonction pour obtenir la valeur du select2
-        getSelect2Value: (select) => {
-            if (!select) return null;
-            return Array.from(select.selectedOptions).map(option => option.value).sort().join(',');
-        }
-    },
-    'activity_table': {
-        buttonClass: 'btn-primary',
-        getFields: (id) => [
-            document.getElementById(`staff-${id}`),
-            document.getElementById(`name-${id}`),
-            document.getElementById(`letter-${id}`),
-            document.getElementById(`inactivity_message-${id}`),
-            document.getElementById(`specific_message-${id}`)
-        ],
-        getCheckbox: (id) => document.getElementById(`notification-${id}`),
-        getSelect2: (id) => document.getElementById(`schedules-${id}`),
-        // Fonction pour obtenir la valeur du select2
-        getSelect2Value: (select) => {
-            if (!select) return null;
-            return Array.from(select.selectedOptions).map(option => option.value).sort().join(',');
-        }
-    },
-    'staff_activity_table': {
-        buttonClass: 'btn-primary',
-        getFields: (id) => [
-            document.getElementById(`staff-${id}`),
-            document.getElementById(`name-${id}`),
-            document.getElementById(`letter-${id}`),
-            document.getElementById(`inactivity_message-${id}`),
-            document.getElementById(`specific_message-${id}`)
-        ],
-        getCheckbox: (id) => document.getElementById(`notification-${id}`),
-        getSelect2: (id) => document.getElementById(`schedules-${id}`),
-        // Fonction pour obtenir la valeur du select2
-        getSelect2Value: (select) => {
-            if (!select) return null;
-            return Array.from(select.selectedOptions).map(option => option.value).sort().join(',');
-        }
-    },
     'counter_table': {
         buttonClass: 'btnSaveLine',
         getFields: (id) => [

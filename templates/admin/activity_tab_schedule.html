@@ -1,3 +1,22 @@
+<div class="alert alert-light border small">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    Une plage horaire (ex. « Semaine 9h–19h ») se partage entre plusieurs activités.
+    En dehors de ses plages, une activité n'est plus proposée sur la borne : le patient
+    qui la choisit voit son <strong>message hors horaires</strong>. Modifier une plage
+    met à jour toutes les activités qui l'utilisent.
+</div>
+
+<div class="d-flex justify-content-end mb-2">
+    <button type="button" class="btn btn-primary"
+            hx-get="/admin/schedule/add_form"
+            hx-target="#div_add_schedule_form"
+            hx-swap="innerHTML show:#div_add_schedule_form:top">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> Nouvelle plage horaire
+    </button>
+</div>
+
+<div id="div_add_schedule_form"></div>
+
 <input type="search" class="form-control table-filter mb-2"
        placeholder="Rechercher une plage horaire…"
        aria-label="Filtrer la liste des plages horaires"
@@ -7,16 +26,8 @@
     hx-get="/admin/schedule/table"
     hx-trigger="load"
     hx-target="#div_schedule_table"
-    hx-swap="innerHTML">        
+    hx-swap="innerHTML">
+    <p class="text-muted small">Chargement…</p>
 </div>
-
-<!-- Ajout nouvelle plage horaire -->
-<a class="btn btn-primary"
-        hx-get="/admin/schedule/add_form"
-        hx-target="#div_add_schedule_form"
-        hx-swap="innerHTML">
-        Ajouter une plage horaire
-</a>    
-<div id="div_add_schedule_form"></div>
 
 {{ macros.backup_buttons("schedules", "Plages horaires") }}

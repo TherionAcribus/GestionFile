@@ -1,0 +1,33 @@
+{# Anciennes « activités équipier » : une activité rattachée à un membre de
+   l'équipe. Le patient qui la choisit est SURLIGNÉ dans la file du comptoir
+   où ce membre est connecté (App Comptoir, activity_is_staff). #}
+<div class="alert alert-light border small">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    Permet au patient de demander <strong>une personne précise</strong> (« Voir Marie »).
+    Il rejoint la file normalement, mais son numéro est <strong>mis en évidence</strong>
+    sur le comptoir où ce membre de l'équipe est connecté.
+</div>
+
+<div class="d-flex justify-content-end mb-2">
+    <button type="button" class="btn btn-primary"
+            hx-get="/admin/activity/add_staff_form"
+            hx-target="#div_add_activity_form_staff"
+            hx-swap="innerHTML show:#div_add_activity_form_staff:top">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> Nouvelle demande nominative
+    </button>
+</div>
+
+<div id="div_add_activity_form_staff"></div>
+
+<input type="search" class="form-control table-filter mb-2"
+       placeholder="Rechercher…"
+       aria-label="Filtrer la liste des demandes nominatives"
+       data-filter-target="#div_activity_staff_table">
+
+<div id="div_activity_staff_table"
+    hx-get="/admin/activity/table_staff"
+    hx-trigger="load, refresh_activity_staff_table"
+    hx-target="#div_activity_staff_table"
+    hx-swap="innerHTML">
+    <p class="text-muted small">Chargement…</p>
+</div>

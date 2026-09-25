@@ -810,3 +810,36 @@ font-size: 0.85rem;
 .algo-day {
     min-width: 3.25rem;
 }
+
+/* --- Page Activités ------------------------------------------------------ */
+.activity-letter {
+    align-items: center;
+    background: var(--bs-primary);
+    border-radius: .5rem;
+    color: var(--bs-white);
+    display: flex;
+    flex: 0 0 auto;
+    font-size: 1.5rem;
+    font-weight: 700;
+    height: 3rem;
+    justify-content: center;
+    width: 3rem;
+}
+
+.activity-card-text {
+    min-width: min(100%, 18rem);
+}
+
+.activity-card-text li + li {
+    margin-top: .15rem;
+}
+
+.activity-schedule-choices {
+    display: grid;
+    gap: .25rem 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+
+.schedule-day {
+    min-width: 3.25rem;
+}

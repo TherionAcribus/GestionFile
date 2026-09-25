@@ -1,40 +1,12 @@
-<table id="new_activity_form">
-    <thead>
-        <tr>
-            <th>Nom</th>
-            <th>Heure de début</th>
-            <th>Heure de fin</th>
-            <th>Jours</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><input type="text" class="form-control" name="name_schedule" value="" id="name_schedule"></td>
-            <td><input type="text" class="form-control" name="start_time" value="00:00" id="start_time"></td>
-            <td><input type="text" class="form-control" name="start_time" value="23:59" id="end_time"></td>
-
-            <td>
-                <div class="input-field col">   
-                    <select multiple id="weekdays">
-                        {% for weekday in weekdays %}
-                            <option value="{{weekday.id}}"
-                                    selected>{{weekday.name}}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-
-            <td>
-                <button class="btn btn-primary"
-                    hx-target="#div_schedule_table"
-                    hx-post="/admin/schedule/add_new_schedule"
-                    data-param-name_schedule="#name_schedule"
-                    data-param-start_time="#start_time"
-                    data-param-end_time="#end_time"
-                    data-param-weekdays="#weekdays@options">
-                    Enregistrer
-                </button>
-            </td>
-        </tr>
-    </tbody>
-</table>
+{% from 'admin/activity_form_macro.html' import schedule_form %}
+<div class="card border-primary mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Nouvelle plage horaire</strong>
+        {# Vide le conteneur sans requête serveur (admin_fragments.js). #}
+        <button type="button" class="btn-close" aria-label="Fermer le formulaire"
+                data-clear-target="#div_add_schedule_form"></button>
+    </div>
+    <div class="card-body">
+        {{ schedule_form('new_sched', None, weekdays, '/admin/schedule/add_new_schedule', 'Créer la plage') }}
+    </div>
+</div>

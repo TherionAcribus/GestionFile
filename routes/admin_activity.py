@@ -11,99 +11,165 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
+from activity_explain import describe_schedule, is_open_at, shared_letters
 from extensions import scheduler
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
+
+VALID_TABS = ('activity', 'staff', 'schedule')
+
+
+def _now():
+    """Heure de référence des horaires : la même que celle utilisée pour
+    (dés)activer les boutons (update_bouton_after_scheduler_changed)."""
+    return datetime.now()
+
 
 # page de base
 @admin_activity_bp.route('/admin/activity')
 @require_permission('activity')
 def admin_activity():
-    valid_tabs = ['activity', 'schedule']
+    # ?tab= était lu puis ignoré : l'onglet demandé est désormais ouvert.
     tab = request.args.get('tab', 'activity')
-    if tab not in valid_tabs:
+    if tab not in VALID_TABS:
         tab = 'activity'
+    return render_template('/admin/activity.html', active_tab=tab)
 
-    return render_template('/admin/activity.html')
 
-# affiche le tableau des activités 
+def _schedules_with_summary():
+    schedules = ActivitySchedule.query.options(
+        selectinload(ActivitySchedule.weekdays)).all()
+    return [{"schedule": s, "summary": describe_schedule(s)} for s in schedules]
+
+
+def _render_activity_list(is_staff):
+    """Liste des activités (ou des demandes « équipier ») en cartes."""
+    # Le gabarit lit activity.schedules pour chaque activité : selectinload
+    # charge les horaires en une requête IN groupée (évite un N+1).
+    activities = (Activity.query
+                  .options(selectinload(Activity.schedules)
+                           .selectinload(ActivitySchedule.weekdays))
+                  .filter_by(is_staff=is_staff)
+                  .order_by(Activity.letter, Activity.name)
+                  .all())
+    # Doublons de lettre cherchés sur TOUTES les activités (équipier compris).
+    shared = shared_letters(Activity.query.all())
+    now = _now()
+    weekday = now.strftime('%A')
+    items = [
+        {
+            "activity": activity,
+            "open": is_open_at(activity.schedules, weekday, now.time()),
+            "schedules": [describe_schedule(s) for s in activity.schedules],
+            "shared_letter": shared.get(activity.id, []),
+        }
+        for activity in activities
+    ]
+    return render_template('admin/activity_htmx_table.html',
+                           items=items,
+                           is_staff=is_staff,
+                           schedules=_schedules_with_summary(),
+                           staff=Pharmacist.query.all() if is_staff else None)
+
+
+# affiche la liste des activités
 @admin_activity_bp.route('/admin/activity/table')
 @require_permission('activity')
 def display_activity_table():
-    # Le gabarit teste `schedule in activity.schedules` pour chaque activité :
-    # selectinload charge les horaires en une requête IN groupée (évite un N+1).
-    activities = Activity.query.options(selectinload(Activity.schedules)).filter_by(is_staff=False).all()
-    schedules = ActivitySchedule.query.all()
-    return render_template('admin/activity_htmx_table.html',
-                            activities=activities,
-                            schedules=schedules)
+    return _render_activity_list(is_staff=False)
 
 
-# affiche le tableau des activités spécifique pour les membres de l'équipe
+# affiche la liste des activités « équipier » (demandes pour un membre précis)
 @admin_activity_bp.route('/admin/activity/table_staff')
 @require_permission('activity')
 def display_activity_table_staff():
-    activities = Activity.query.options(selectinload(Activity.schedules)).filter_by(is_staff=True).all()
-    schedules = ActivitySchedule.query.all()
-    staff = Pharmacist.query.all()
-    return render_template('admin/activity_htmx_table.html',
-                            staff=staff,
-                            activities=activities,
-                            schedules=schedules)
+    return _render_activity_list(is_staff=True)
 
 
-# mise à jour des informations d'une activité 
+#: Formulaire d'une activite — creation ET modification (point 5).
+SCHEMA_ACTIVITE = (
+    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=100),
+    Champ("letter", obligatoire=True, libelle="La lettre", longueur_max=1),
+    Champ("inactivity_message", libelle="Le message d'inactivite", defaut="",
+          longueur_max=255),
+    Champ("specific_message", libelle="Le message specifique", defaut="",
+          longueur_max=255),
+    Champ("notification", type=BOOLEEN, libelle="La notification"),
+    Champ("staff_id", type=ENTIER, libelle="Le membre d'equipe"),
+    Champ("schedules", type=LISTE_ENTIERS, libelle="Les plages horaires"),
+)
+
+
+def _valider_activite(form):
+    """``(valeurs, erreur)`` : schéma commun + lettre normalisée en majuscule."""
+    valeurs, erreurs = valider(
+        extraire(SCHEMA_ACTIVITE, form.get, form.getlist), SCHEMA_ACTIVITE)
+    if erreurs:
+        return None, erreurs[0]
+    letter = valeurs["letter"].strip().upper()
+    if not letter.isalnum():
+        return None, "La lettre doit être une lettre ou un chiffre."
+    valeurs["letter"] = letter
+    return valeurs, None
+
+
+# mise à jour des informations d'une activité
 @admin_activity_bp.route('/admin/activity/activity_update/<int:activity_id>', methods=['POST'])
 @require_permission('activity')
 def update_activity(activity_id):
-    activity = Activity.query.get(activity_id)
-    old_schedules = activity.schedules
+    activity = db.session.get(Activity, activity_id)
+    if activity is None:
+        return display_toast(success=False, message="Activité introuvable")
 
-    if activity:
-        if request.form.get('name') == '':
-            display_toast(success=False, message="Le nom est obligatoire")
-            return ""
-        if request.form.get('letter') == '':
-            display_toast(success=False, message="La lettre est obligatoire")
-            return ""
-        activity.name = request.form.get('name', activity.name)
-        activity.letter = request.form.get('letter', activity.letter)
-        activity.inactivity_message = request.form.get('inactivity_message', activity.inactivity_message)
-        activity.specific_message = request.form.get('specific_message', activity.specific_message)
-        activity.notification = True if request.form.get('notification', activity.notification) == "true" else False
+    valeurs, erreur = _valider_activite(request.form)
+    if erreur:
+        # 204 : la liste n'est pas remplacée, la saisie reste dans le formulaire.
+        return display_toast(success=False, message=erreur)
 
-        # Mettre à jour les horaires
-        schedule_ids = request.form.getlist('schedules')  # Cela devrait retourner une liste de IDs
-        activity.schedules = [ActivitySchedule.query.get(int(id)) for id in schedule_ids]
-        update_scheduler_for_activity(activity)
-        
-        # Si on a modifier les schedules, on met à jour le bouton
-        if activity.schedules != old_schedules:
-            update_bouton_after_scheduler_changed(activity)
+    previous_name = activity.name
+    previous_schedule_ids = {s.id for s in activity.schedules}
+    try:
+        activity.name = valeurs["name"]
+        activity.letter = valeurs["letter"]
+        activity.inactivity_message = valeurs["inactivity_message"]
+        activity.specific_message = valeurs["specific_message"]
+        activity.notification = valeurs["notification"]
+        # Plages inconnues ignorées (l'ancien code pouvait insérer None).
+        activity.schedules = [s for s in (db.session.get(ActivitySchedule, sid)
+                                          for sid in valeurs["schedules"]) if s]
 
-        if request.form.get("staff_id"):
-            activity.is_staff = True
-            activity.staff = Pharmacist.query.get(int(request.form.get("staff_id")))
-        else:
-            activity.is_staff = False
+        if activity.is_staff:
+            staff = db.session.get(Pharmacist, valeurs["staff_id"]) if valeurs["staff_id"] else None
+            if staff is None:
+                db.session.rollback()
+                return display_toast(success=False, message="Choisissez le membre de l'équipe.")
+            activity.staff = staff
 
         db.session.commit()
+    except Exception:
+        db.session.rollback()
         record_audit(ACTION_UPDATE, "activity", target_id=activity_id,
-                     outcome=OUTCOME_SUCCESS,
-                     details=f"name={activity.name}")
-        display_toast(success=True, message="Activité ajoutée avec succès")
-        return ""
-    else:
-        return display_toast(success=False, message="Activité introuvable")
+                     outcome=OUTCOME_FAILURE)
+        app.logger.exception("Echec de la mise a jour d'une activite")
+        return display_toast(success=False, message="La mise à jour a échoué.")
+
+    # Tâches planifiées : les identifiants contiennent le nom — un
+    # renommage laissait les anciennes tâches actives.
+    update_scheduler_for_activity(activity, previous_name=previous_name)
+    if {s.id for s in activity.schedules} != previous_schedule_ids:
+        update_bouton_after_scheduler_changed(activity)
+
+    record_audit(ACTION_UPDATE, "activity", target_id=activity_id,
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"name={activity.name}")
+    display_toast(success=True, message="Activité enregistrée")
+    return return_good_display_activity(activity.is_staff)
 
 
 def update_bouton_after_scheduler_changed(activity):
     """ Si on modifie le scheduler d'une activité, il faut vérifier où en est le bouton.
     Il faut donc éventuellement remettre le bouton en activité ou au contraire le rendre inactif."""
-    # Obtenir l'heure actuelle et le jour actuel
-    current_time = datetime.now().time()
-    current_weekday = datetime.now().strftime('%A')  # Renvoie le jour de la semaine en anglais
-    app.logger.debug('%s %s', current_weekday, current_time)
+    now = _now()
 
     # Charger l'activité avec ses horaires et boutons associés
     activity = Activity.query.options(
@@ -112,30 +178,17 @@ def update_bouton_after_scheduler_changed(activity):
     ).filter_by(id=activity.id).first()
 
     if not activity:
-        app.logger.debug(f"Activity with id {activity.id} not found.")
         return
 
-    # Initialiser le drapeau d'activité à False
-    is_activity_active = False
-
-    # Parcourir les créneaux horaires de l'activité
-    for schedule in activity.schedules:
-        app.logger.debug("%s", schedule)
-        for weekday in schedule.weekdays:
-            app.logger.debug("%s", weekday.english_name)
-            if weekday.english_name.lower() == current_weekday.lower():
-                if schedule.start_time <= current_time <= schedule.end_time:
-                    is_activity_active = True
-                    break
-        if is_activity_active:
-            break
+    # Même règle que l'affichage « Dans ses horaires » de la page admin.
+    is_activity_active = is_open_at(activity.schedules, now.strftime('%A'), now.time())
 
     # Mettre à jour les boutons associés à l'activité
     for button in activity.buttons:
         if button.is_active != is_activity_active:
             button.is_active = is_activity_active
             db.session.add(button)  # Ajouter le bouton à la session pour la mise à jour
-            display_toast(success=True, message=f"Le bouton '{button.label} 'vient de changer d'activité.")
+            display_toast(success=True, message=f"Le bouton « {button.label} » vient de changer d'état.")
 
     db.session.commit()  # Sauvegarder les modifications dans la base de données
 
@@ -147,7 +200,8 @@ def update_bouton_after_scheduler_changed(activity):
 @require_permission('activity')
 def confirm_delete_activity(activity_id):
     activity = Activity.query.get(activity_id)
-    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity)
+    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity,
+                           buttons_count=Button.query.filter_by(activity_id=activity_id).count())
 
 
 # affiche la modale pour confirmer la suppression d'une activité quand c'est un membre de l'équipe
@@ -155,10 +209,11 @@ def confirm_delete_activity(activity_id):
 @require_permission('activity')
 def confirm_delete_activity_staff(activity_id):
     activity = Activity.query.get(activity_id)
-    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity, staff=True)
+    return render_template('/admin/activity_modal_confirm_delete.html', activity=activity, staff=True,
+                           buttons_count=Button.query.filter_by(activity_id=activity_id).count())
 
 
-# supprime un membre de l'equipe
+# supprime une activité
 @admin_activity_bp.route('/admin/activity/delete/<int:activity_id>', methods=['DELETE'])
 @require_permission('activity')
 def delete_activity(activity_id, staff=None):
@@ -168,8 +223,12 @@ def delete_activity(activity_id, staff=None):
             display_toast(success=False, message="Activité non trouvée")
             return return_good_display_activity(staff)
 
+        name = activity.name
         db.session.delete(activity)
         db.session.commit()
+        # Sans cela, les tâches d'ouverture/fermeture continuaient de tourner
+        # (en échec) pour une activité qui n'existe plus.
+        remove_activity_jobs(name)
         record_audit(ACTION_DELETE, "activity", target_id=activity_id,
                      outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Activité supprimée avec succès")
@@ -193,31 +252,17 @@ def delete_activity_staff(activity_id, staff=None):
 @admin_activity_bp.route('/admin/activity/add_form')
 @require_permission('activity')
 def add_activity_form():
-    schedules = ActivitySchedule.query.all()
-    return render_template('/admin/activity_add_form.html', schedules=schedules)
+    return render_template('/admin/activity_add_form.html',
+                           schedules=_schedules_with_summary())
 
 
 # affiche le formulaire pour ajouter un activité lié à un membre de l'équipe
 @admin_activity_bp.route('/admin/activity/add_staff_form')
 @require_permission('activity')
 def add_activity_staff_form():
-
-    app.logger.debug("%s", Pharmacist.query.all())
-    return render_template('/admin/activity_add_form.html', 
-                            schedules=ActivitySchedule.query.all(),
+    return render_template('/admin/activity_add_form.html',
+                            schedules=_schedules_with_summary(),
                             staff=Pharmacist.query.all())
-
-
-#: Formulaire de creation d'une activite (point 5).
-SCHEMA_ACTIVITE = (
-    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=100),
-    Champ("letter", obligatoire=True, libelle="La lettre", longueur_max=1),
-    Champ("inactivity_message", libelle="Le message d'inactivite", defaut=""),
-    Champ("specific_message", libelle="Le message specifique", defaut=""),
-    Champ("notification", type=BOOLEEN, libelle="La notification"),
-    Champ("staff_id", type=ENTIER, libelle="Le membre d'equipe"),
-    Champ("schedules", type=LISTE_ENTIERS, libelle="Les plages horaires"),
-)
 
 
 # enregistre l'activité' dans la Bdd
@@ -226,13 +271,10 @@ SCHEMA_ACTIVITE = (
 def add_new_activity():
     staff_id = request.form.get("staff_id")
     try:
-        valeurs, erreurs = valider(
-            extraire(SCHEMA_ACTIVITE, request.form.get, request.form.getlist),
-            SCHEMA_ACTIVITE,
-        )
-        if erreurs:
-            display_toast(success=False, message=erreurs[0])
-            return return_good_display_activity(staff_id)
+        valeurs, erreur = _valider_activite(request.form)
+        if erreur:
+            # 204 : rien n'est remplacé, la saisie reste dans le formulaire.
+            return display_toast(success=False, message=erreur)
 
         schedule_ids = valeurs["schedules"]
         staff_id = valeurs["staff_id"]
@@ -260,29 +302,20 @@ def add_new_activity():
                 if schedule:
                     new_activity.schedules.append(schedule)
 
-        for schedule_id in schedule_ids:
-            schedule = ActivitySchedule.query.get(int(schedule_id))
-            scheduler.add_job(func=update_button_presence, args=[new_activity.id, True, app],
-                            trigger="cron", day_of_week='mon-sun', 
-                            hour=schedule.start_time.hour, minute=schedule.start_time.minute,
-                            id=f'activate_activity{new_activity.id}_schedule{schedule.id}')
-            scheduler.add_job(func=update_button_presence, args=[new_activity.id, False, app],
-                            trigger="cron", day_of_week='mon-sun', 
-                            hour=schedule.end_time.hour, minute=schedule.end_time.minute,
-                            id=f'desactivate_activity{new_activity.id}_schedule{schedule.id}')
+        # Même planification que la modification. L'ancien code créait ici
+        # d'autres tâches (fonction + objet application en argument, non
+        # sérialisables dans le jobstore SQLAlchemy) : l'activité était créée
+        # mais la route répondait « L'ajout a échoué ».
+        update_scheduler_for_activity(new_activity)
 
-        # Historique : `app.communication` n'a JAMAIS existe (la fonction
-        # s'appelle `communikation` et n'etait meme pas importee ici), puis
-        # l'emission corrigee visait /socket_update_admin, un namespace
-        # inexistant. Dans les deux cas le formulaire n'etait jamais vide ;
-        # le nettoyage est desormais assure par le swap-oob ci-dessous.
-
-        # Effacer le formulaire via swap-oob
-        clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""
+        # Effacer le formulaire via swap-oob (les deux conteneurs possibles).
+        clear_form_html = ('<div hx-swap-oob="innerHTML:#div_add_activity_form"></div>'
+                           '<div hx-swap-oob="innerHTML:#div_add_activity_form_staff"></div>')
 
         record_audit(ACTION_CREATE, "activity", target_id=new_activity.id,
                      outcome=OUTCOME_SUCCESS,
                      details=f"name={new_activity.name}")
+        display_toast(success=True, message="Activité créée")
         return f"{return_good_display_activity(staff_id)}{clear_form_html}"
 
     except Exception as e:
@@ -291,48 +324,48 @@ def add_new_activity():
                      target_id=request.form.get('name'),
                      outcome=OUTCOME_FAILURE)
         app.logger.exception("Echec de l'ajout d'une activite")
-        display_toast(success=False, message="L'ajout a échoué.")
-        return return_good_display_activity(staff_id)
+        return display_toast(success=False, message="L'ajout a échoué.")
 
 
 def return_good_display_activity(staff):
     """ Sert uniquement à retourner le bon affichage entre activité et activité == équipier"""
     if staff:
-        app.logger.debug('staff %s', staff)
         return display_activity_table_staff()
     else:
         return display_activity_table()
-    
 
-def update_button_presence(activity_id, is_present, app):
-    with app.app_context():  # Crée un contexte d'application
-        try:
-            buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity_id).all()
-            for button in buttons:
-                button.is_present = is_present
-            db.session.commit()
-            app.logger.info("Boutons de l'activite %s passes a is_present=%s", activity_id, is_present)
-        except Exception:
-            # Execute par le scheduler, hors requete : sans trace, l'echec
-            # d'ouverture/fermeture d'une activite passait totalement inapercu.
-            app.logger.exception("Echec de la mise a jour de la presence des boutons (activite %s)", activity_id)
-            db.session.rollback()
 
-def update_scheduler_for_activity(activity):
-    # Constantes pour la configuration
-    MISFIRE_GRACE_TIME = 300  # 5 minutes de délai de grâce
-    
-    job_id_disable_prefix = f"disable_{activity.name}_"
-    job_id_enable_prefix = f"enable_{activity.name}_"
+def _job_prefixes(name):
+    return (f"disable_{name}_", f"enable_{name}_")
 
-    # Nettoyage des jobs existants
+
+def remove_activity_jobs(*names):
+    """Supprime les tâches d'ouverture/fermeture planifiées pour ces noms."""
+    prefixes = tuple(p for name in names if name for p in _job_prefixes(name))
+    if not prefixes:
+        return
     try:
         for job in scheduler.get_jobs():
-            if job.id.startswith(job_id_disable_prefix) or job.id.startswith(job_id_enable_prefix):
+            if job.id.startswith(prefixes):
                 scheduler.remove_job(job.id)
                 app.logger.info(f"Removed existing job: {job.id}")
     except Exception as e:
-        app.logger.error(f"Error removing existing jobs for {activity.name}: {str(e)}")
+        app.logger.error(f"Error removing existing jobs for {names}: {str(e)}")
+
+
+def update_scheduler_for_activity(activity, previous_name=None):
+    """(Re)planifie l'ouverture/fermeture des boutons de l'activité.
+
+    ``previous_name`` : nom avant un renommage — ses tâches sont aussi
+    retirées (les identifiants de tâche contiennent le nom).
+    """
+    # Constantes pour la configuration
+    MISFIRE_GRACE_TIME = 300  # 5 minutes de délai de grâce
+
+    job_id_disable_prefix, job_id_enable_prefix = _job_prefixes(activity.name)
+
+    # Nettoyage des jobs existants
+    remove_activity_jobs(activity.name, previous_name)
 
     def is_full_day(start_time, end_time):
         return start_time == time(0, 0) and end_time == time(23, 59)

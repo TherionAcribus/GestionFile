@@ -1,4 +1,11 @@
-<p>Vous vous appretez à supprimer {{schedule.name}} définitivement. Confirmez-vous la suppression ? </p>
+<p>Vous vous apprêtez à supprimer définitivement la plage « {{ schedule.name }} ». Confirmez-vous la suppression ?</p>
+{% if activities %}
+<div class="alert alert-warning small" role="note">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    Utilisée par : <strong>{{ activities | map(attribute='name') | join(', ') }}</strong>.
+    Ces activités ne seront plus proposées pendant ce créneau (et plus du tout si c'était leur seule plage).
+</div>
+{% endif %}
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>

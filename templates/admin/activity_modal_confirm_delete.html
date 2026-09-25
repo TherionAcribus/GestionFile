@@ -1,5 +1,11 @@
-<p>Vous vous appretez à supprimer {{activity.name}} définitivement. 
-<br> Confirmez-vous la suppression ? </p>
+<p>Vous vous apprêtez à supprimer définitivement « {{ activity.name }} ». Confirmez-vous la suppression ?</p>
+{% if buttons_count %}
+<div class="alert alert-warning small" role="note">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    {{ buttons_count }} bouton{{ 's' if buttons_count > 1 }} de la borne {{ 'utilisent' if buttons_count > 1 else 'utilise' }} cette activité :
+    vérifiez-les ensuite dans <a href="/admin/patient">Borne patient</a>.
+</div>
+{% endif %}
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -11,8 +17,6 @@
         hx-delete="/admin/activity/delete/{{ activity.id }}"
         hx-target="#div_activity_table"
     {% endif %}
-    hx-target="#div_counter_table"
     data-bs-dismiss="modal"
     >Supprimer</button>
 </div>
-

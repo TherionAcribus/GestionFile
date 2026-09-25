@@ -1,0 +1,141 @@
+{# Formulaires de la page Activités — communs création/édition.
+   Vrais <form> à champs nommés : htmx sérialise les cases cochées (plusieurs
+   « schedules » / « weekdays ») et csrf.js ajoute le jeton. `p` préfixe les
+   id (plusieurs formulaires coexistent sur la page). Une erreur de
+   validation répond 204 : rien n'est remplacé, la saisie reste en place. #}
+
+{% macro activity_form(p, activity, schedules, url, target, submit_label, staff=None, cancel_target=None) %}
+{% set selected = activity.schedules | map(attribute='id') | list if activity else [] %}
+<form class="activity-form" hx-post="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML">
+    <div class="row g-3">
+        {% if staff is not none %}
+        <div class="col-12">
+            <label class="form-label" for="{{ p }}_staff">Membre de l'équipe demandé</label>
+            <select class="form-select" id="{{ p }}_staff" name="staff_id" required aria-describedby="{{ p }}_staff_help">
+                {% for member in staff %}
+                    <option value="{{ member.id }}" {% if activity and member.id == activity.staff_id %}selected{% endif %}>{{ member.name }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-text" id="{{ p }}_staff_help">Le numéro du patient sera mis en évidence sur le comptoir de cette personne.</div>
+        </div>
+        {% endif %}
+
+        <div class="col-md-8">
+            <label class="form-label" for="{{ p }}_name">Nom affiché</label>
+            <input type="text" class="form-control" id="{{ p }}_name" name="name" maxlength="100" required
+                   value="{{ activity.name if activity else '' }}"
+                   placeholder="{{ 'Ex. : Voir Marie' if staff is not none else 'Ex. : Ordonnance' }}">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" for="{{ p }}_letter">Lettre du numéro</label>
+            <input type="text" class="form-control text-uppercase activity-letter-input" id="{{ p }}_letter" name="letter"
+                   maxlength="1" required pattern="[A-Za-z0-9]" aria-describedby="{{ p }}_letter_help"
+                   value="{{ activity.letter if activity else '' }}">
+            <div class="form-text" id="{{ p }}_letter_help">Préfixe des tickets : A-1, A-2…</div>
+        </div>
+
+        <div class="col-12">
+            <fieldset>
+                <legend class="form-label fs-6 mb-1">Proposée sur la borne pendant</legend>
+                {% if schedules %}
+                <div class="activity-schedule-choices">
+                    {% for item in schedules %}
+                    {% set s = item.schedule %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="schedules" value="{{ s.id }}"
+                               id="{{ p }}_sched_{{ s.id }}"
+                               {% if s.id in selected or (not activity and loop.first) %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ p }}_sched_{{ s.id }}">
+                            {{ s.name }} <span class="text-muted small">— {{ item.summary }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="form-text">Aucune case cochée : l'activité n'est jamais proposée. Les plages se gèrent dans l'onglet « Plages horaires ».</div>
+                {% else %}
+                <p class="small text-warning mb-0"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Aucune plage horaire : créez-en une dans l'onglet « Plages horaires ».</p>
+                {% endif %}
+            </fieldset>
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_specific">Message affiché au patient après son choix <span class="text-muted fw-normal">(facultatif)</span></label>
+            <textarea class="form-control" id="{{ p }}_specific" name="specific_message" rows="2" maxlength="255"
+                      aria-describedby="{{ p }}_specific_help">{{ activity.specific_message if activity and activity.specific_message else '' }}</textarea>
+            <div class="form-text" id="{{ p }}_specific_help">
+                Ex. : « Munissez-vous de votre carte Vitale ». Affiché sur la borne, et aussi sur le ticket
+                et la page téléphone si ces options sont activées (<a href="/admin/patient">Borne</a>,
+                <a href="/admin/phone">Téléphone</a>).
+            </div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_inactivity">Message si choisie hors horaires <span class="text-muted fw-normal">(facultatif)</span></label>
+            <textarea class="form-control" id="{{ p }}_inactivity" name="inactivity_message" rows="2" maxlength="255"
+                      aria-describedby="{{ p }}_inactivity_help">{{ activity.inactivity_message if activity and activity.inactivity_message else '' }}</textarea>
+            <div class="form-text" id="{{ p }}_inactivity_help">Ex. : « Service disponible de 9h à 12h ». Vide : message par défaut de la borne.</div>
+        </div>
+
+        <div class="col-12">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" name="notification" value="true"
+                       id="{{ p }}_notification" {% if activity and activity.notification %}checked{% endif %}
+                       aria-describedby="{{ p }}_notification_help">
+                <label class="form-check-label" for="{{ p }}_notification">Prévenir les comptoirs à chaque nouveau patient</label>
+                <div class="form-text" id="{{ p }}_notification_help">Une notification « {{ activity.name if activity else 'Activité' }} : A-12 » s'affiche sur l'application comptoir.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> {{ submit_label }}</button>
+        {% if cancel_target %}
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="{{ cancel_target }}">Annuler</button>
+        {% endif %}
+    </div>
+</form>
+{% endmacro %}
+
+
+{% macro schedule_form(p, schedule, weekdays, url, submit_label, cancel_target=None) %}
+{% set selected = schedule.weekdays | map(attribute='id') | list if schedule else weekdays | map(attribute='id') | list %}
+<form class="schedule-form" hx-post="{{ url }}" hx-target="#div_schedule_table" hx-swap="innerHTML">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_name">Nom de la plage</label>
+            <input type="text" class="form-control" id="{{ p }}_name" name="name_schedule" maxlength="50" required
+                   value="{{ schedule.name if schedule else '' }}" placeholder="Ex. : Semaine matin">
+        </div>
+        <div class="col-md-6">
+            <span class="form-label d-block">Horaires</span>
+            <div class="input-group">
+                <span class="input-group-text">de</span>
+                <input type="time" class="form-control" name="start_time" required aria-label="Heure de début"
+                       value="{{ schedule.start_time.strftime('%H:%M') if schedule and schedule.start_time else '09:00' }}">
+                <span class="input-group-text">à</span>
+                <input type="time" class="form-control" name="end_time" required aria-label="Heure de fin"
+                       value="{{ schedule.end_time.strftime('%H:%M') if schedule and schedule.end_time else '19:00' }}">
+            </div>
+            <div class="form-text">Journée entière : de 00:00 à 23:59.</div>
+        </div>
+        <div class="col-12">
+            <fieldset>
+                <legend class="form-label fs-6 mb-1">Jours</legend>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for weekday in weekdays %}
+                        <input type="checkbox" class="btn-check" name="weekdays" value="{{ weekday.id }}"
+                               id="{{ p }}_day_{{ weekday.id }}" autocomplete="off"
+                               {% if weekday.id in selected %}checked{% endif %}>
+                        <label class="btn btn-outline-primary btn-sm schedule-day" for="{{ p }}_day_{{ weekday.id }}">{{ weekday.name[:3] }}</label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+        </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> {{ submit_label }}</button>
+        {% if cancel_target %}
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="{{ cancel_target }}">Annuler</button>
+        {% endif %}
+    </div>
+</form>
+{% endmacro %}

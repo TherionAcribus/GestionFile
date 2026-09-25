@@ -70,9 +70,9 @@ def test_user_roles_eager_loaded():
 # activité -> horaires
 # --------------------------------------------------------------------------
 
+# Les deux listes (activités / équipier) passent par le même rendu.
 @pytest.mark.parametrize("marker", [
-    "def display_activity_table",
-    "def display_activity_table_staff",
+    "def _render_activity_list",
 ])
 def test_activity_schedules_eager_loaded(marker):
     body = _body("routes/admin_activity.py", marker)

@@ -1,75 +1,20 @@
-<table id="new_activity_form">
-    <thead>
-        <tr>
-            {% if staff %}
-                <th>Membre de l'équipe</th>
-            {% endif %}
-            <th>Nom</th>
-            <th>Lettre</th>
-            <th>Horaires</th>
-            <th>Message si inactivité</th>
-            <th>Message spécifique</th>
-            <th>Notification</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            {% if staff %}
-            <td>
-                <div class="input-field col s10">   
-                    <select class="form-select" id="staff">
-                        {% for member in staff %}
-                            <option value="{{member.id}}">{{member.name}}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-            {% endif %}
-            <td><input type="text" class="form-control" name="name" value="" id="name"></td>
-            <td><input type="text" class="form-control" name="letter" value="" id="letter"></td>
-            <td>
-                <div class="mb-3 col-10">   
-                    <select class="form-select" multiple id="schedules">
-                        {% for schedule in schedules %}
-                            <option value="{{schedule.id}}"
-                                    {% if schedule.id == 1 %}selected{% endif %}>{{schedule.name}}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-            <td>
-                <input type="text" class="form-control" name="inactivity_message" id="inactivity_message">
-            </td>
-            <td>
-                <input type="text" class="form-control" name="specific_message" id="specific_message">
-            </td>
-            <td>
-                <p>
-                    <label>
-                        <input id ="notification" class="form-check-input" type="checkbox">
-                        <span></span>
-                    </label>
-                </p>
-            </td>
-            <td>
-                <button class="btn btn-primary"
-                    {% if staff %}
-                        hx-target="#div_activity_staff_table"
-                    {% else %}
-                        hx-target="#div_activity_table"
-                    {% endif %}
-                    hx-post="/admin/activity/add_new_activity"
-                    data-param-name="#name"
-                    data-param-letter="#letter"
-                    data-param-inactivity_message="#inactivity_message"
-                    data-param-specific_message="#specific_message"
-                    data-param-notification="#notification@checked"
-                    data-param-schedules="#schedules@options"
-                    {% if staff %}data-param-staff_id="#staff@options"{% endif %}>
-                    Enregistrer
-                </button>
-            </td>
-        </tr>
-    </tbody>
-</table>
+{% from 'admin/activity_form_macro.html' import activity_form %}
+{% set is_staff = staff is defined and staff is not none %}
+{% set container = '#div_add_activity_form_staff' if is_staff else '#div_add_activity_form' %}
+<div class="card border-primary mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>{{ 'Nouvelle demande nominative' if is_staff else 'Nouvelle activité' }}</strong>
+        {# Vide le conteneur sans requête serveur (admin_fragments.js). #}
+        <button type="button" class="btn-close" aria-label="Fermer le formulaire"
+                data-clear-target="{{ container }}"></button>
+    </div>
+    <div class="card-body">
+        {% if is_staff and not staff %}
+            <p class="mb-0 text-muted">Ajoutez d'abord un membre dans <a href="/admin/staff">Équipe</a>.</p>
+        {% else %}
+            {{ activity_form('new_' ~ ('s' if is_staff else 'a'), None, schedules, '/admin/activity/add_new_activity',
+                             '#div_activity_staff_table' if is_staff else '#div_activity_table',
+                             'Créer', staff=staff if is_staff else None) }}
+        {% endif %}
+    </div>
+</div>
