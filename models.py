@@ -542,7 +542,18 @@ class ActivitySchedule(db.Model):
 
 
 
-# pour l'instant les jours ne sont pas utilisées... Peut être plus simple d'ajouter une table pour les jours de la semaine ????
+# Abréviations anglaises stockées dans AlgoRule.days_of_week ('Mon,Tue,...'),
+# indexées par datetime.weekday() (0 = lundi). strftime('%a') est exclu : son
+# résultat dépend de la locale de la machine.
+DAY_ABBREVIATIONS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
+
+# Libellés français pour l'administration (dans l'ordre lundi -> dimanche).
+DAY_NAMES_FR = {
+    'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mer', 'Thu': 'Jeu',
+    'Fri': 'Ven', 'Sat': 'Sam', 'Sun': 'Dim',
+}
+
+
 class AlgoRule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -552,21 +563,25 @@ class AlgoRule(db.Model):
     
     min_patients = db.Column(db.Integer, nullable=False, default=0)
     max_patients = db.Column(db.Integer, nullable=False, default=999)
-    CheckConstraint('min_patients <= max_patients', name='ck_priority_rules_min_max_patients')
 
     max_overtaken = db.Column(db.Integer, nullable=False, default=999)
-    
+
     start_time = db.Column(db.Time, nullable=False)  # Heure de début de la validité de la règle
     end_time = db.Column(db.Time, nullable=False)    # Heure de fin de la validité de la règle
-    CheckConstraint('start_time < end_time', name='ck_priority_rules_start_end_time')
-    
-    days_of_week = db.Column(db.String(30), nullable=False, default='Mon,Tue,Wed,Thu,Fri')  # Jours de la semaine, par exemple "Mon,Tue,Wed,Thu,Fri"
-    
-    priority_level = db.Column(db.Integer, nullable=False, default=1)  # Niveau de priorité, 1 étant le plus bas
-    CheckConstraint('priority_level > 0', name='ck_priority_rules_priority_level')
 
+    days_of_week = db.Column(db.String(30), nullable=False, default='Mon,Tue,Wed,Thu,Fri')  # Jours de la semaine, par exemple "Mon,Tue,Wed,Thu,Fri"
+
+    priority_level = db.Column(db.Integer, nullable=False, default=1)  # Niveau de priorité, 1 étant le plus haut (examiné en premier)
+
+    # Les contraintes doivent être dans __table_args__ : déclarées en attributs
+    # de classe elles étaient ignorées par SQLAlchemy (aucun CHECK créé).
     __table_args__ = (
         UniqueConstraint('activity_id', 'start_time', 'end_time', 'days_of_week', name='uq_priority_rule_combination'),
+        CheckConstraint('min_patients >= 0', name='ck_priority_rules_min_patients_nonneg'),
+        CheckConstraint('min_patients <= max_patients', name='ck_priority_rules_min_max_patients'),
+        CheckConstraint('max_overtaken >= 0', name='ck_priority_rules_max_overtaken_nonneg'),
+        CheckConstraint('start_time < end_time', name='ck_priority_rules_start_end_time'),
+        CheckConstraint('priority_level BETWEEN 1 AND 5', name='ck_priority_rules_priority_level'),
     )
 
     def __repr__(self):

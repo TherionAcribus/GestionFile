@@ -4,12 +4,13 @@
         <tr>
             <th>Nom</th>
             <th>Activité</th>
-            <th>Priorité</th>
+            <th>Priorité<br><small class="text-muted fw-normal">1 = la plus haute</small></th>
             <th>Min Patients</th>
             <th>Max Patients</th>
             <th>Dépassement Max</th>
             <th>Début</th>
             <th>Fin</th>
+            <th>Jours</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -28,7 +29,7 @@
             </td>
             <td>
                 <div class="input-field">
-                <select class="form-select" id="priority_level-{{ rule.id }}" aria-label="Niveau de priorité">
+                <select class="form-select" id="priority_level-{{ rule.id }}" aria-label="Niveau de priorité (1 = la plus haute)">
                     {% for number in [1, 2, 3, 4, 5] %}
                         <option value="{{ number }}" {{ 'selected' if number == rule.priority_level else '' }}>{{ number }} </option>
                     {% endfor %}
@@ -36,16 +37,27 @@
                 </div>
             </td>
             <td>
-                <input type="text" class="form-control" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}" aria-label="Nombre minimum de patients">
+                <input type="number" min="0" class="form-control" value="{{ rule.min_patients }}" id="min_patients-{{ rule.id }}" aria-label="Nombre minimum de patients">
             </td>
             <td>
-                <input type="text" class="form-control" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}" aria-label="Nombre maximum de patients">
+                <input type="number" min="0" class="form-control" value="{{ rule.max_patients }}" id="max_patients-{{ rule.id }}" aria-label="Nombre maximum de patients">
             </td>
             <td>
-                <input type="text" class="form-control" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}" aria-label="Dépassement maximum">
+                <input type="number" min="0" class="form-control" value="{{ rule.max_overtaken }}" id="max_overtaken-{{ rule.id }}" aria-label="Dépassement maximum">
             </td>
             <td><input type="time" class="form-control" value="{{ rule.start_time.strftime('%H:%M') }}" id="start_time-{{ rule.id }}" aria-label="Heure de début"></td>
             <td><input type="time" class="form-control" value="{{ rule.end_time.strftime('%H:%M') }}" id="end_time-{{ rule.id }}" aria-label="Heure de fin"></td>
+            <td>
+                <div class="input-field col">
+                    <select multiple id="days-{{ rule.id }}" class="js-select2-multiple"
+                            data-placeholder="Jours d'application" aria-label="Jours d'application">
+                        {% for abbr, label in days %}
+                            <option value="{{ abbr }}"
+                                    {% if abbr in rule.days_of_week.split(',') %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </td>
 
             <td>
                 <button class="btn btn-primary btnSaveLine"
@@ -58,7 +70,8 @@
                     data-param-max_patients="#max_patients-{{ rule.id }}"
                     data-param-max_overtaken="#max_overtaken-{{ rule.id }}"
                     data-param-start_time="#start_time-{{ rule.id }}"
-                    data-param-end_time="#end_time-{{ rule.id }}">
+                    data-param-end_time="#end_time-{{ rule.id }}"
+                    data-param-days_of_week="#days-{{ rule.id }}@options">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
@@ -69,7 +82,7 @@
                     hx-trigger="click"
                     data-bs-target="#modal_delete"
                     data-bs-toggle="modal">
-                <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
             </td>
 

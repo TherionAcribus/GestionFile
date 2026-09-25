@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, request, jsonify, current_app as app
-from datetime import datetime
-from models import AlgoRule, Activity, ConfigOption, db
+from models import AlgoRule, Activity, ConfigOption, db, bump_queue_revision, DAY_ABBREVIATIONS, DAY_NAMES_FR
 from routes.admin_security import require_permission
 from ui_feedback import display_toast
 from audit_service import record_audit
@@ -8,8 +7,69 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
+from form_validation import Champ, ENTIER, TEXTE, extraire, valider
+from utils import parse_time
 
 admin_algo_bp = Blueprint('admin_algo', __name__)
+
+# Schéma commun création / édition : les conversions numériques sont faites
+# par `valider` (l'ancien code comparait des chaînes : "9" > "10" était vrai).
+SCHEMA_REGLE = (
+    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=100),
+    Champ("activity_id", type=ENTIER, obligatoire=True, libelle="L'activité"),
+    Champ("priority_level", type=ENTIER, obligatoire=True, libelle="Le niveau de priorité",
+          choix=(1, 2, 3, 4, 5)),
+    Champ("min_patients", type=ENTIER, obligatoire=True, libelle="Le minimum de patients"),
+    Champ("max_patients", type=ENTIER, obligatoire=True, libelle="Le maximum de patients"),
+    Champ("max_overtaken", type=ENTIER, obligatoire=True, libelle="Le dépassement maximum"),
+    Champ("start_time", type=TEXTE, obligatoire=True, libelle="L'heure de début"),
+    Champ("end_time", type=TEXTE, obligatoire=True, libelle="L'heure de fin"),
+)
+
+
+def valider_regle_algo(form):
+    """Validation croisée d'une règle : conversions, bornes, jours, activité.
+
+    Renvoie ``(valeurs, erreur)`` — ``valeurs`` prêt pour le modèle si
+    ``erreur`` est None. Les contrôles reflètent les CHECK de la table (le
+    serveur reste le dernier rempart même sans contrainte SQL sur une vieille
+    base).
+    """
+    valeurs, erreurs = valider(
+        extraire(SCHEMA_REGLE, form.get, form.getlist), SCHEMA_REGLE)
+    if erreurs:
+        return None, erreurs[0]
+
+    if valeurs["min_patients"] < 0 or valeurs["max_overtaken"] < 0:
+        return None, "Les nombres de patients ne peuvent pas être négatifs."
+    if valeurs["min_patients"] > valeurs["max_patients"]:
+        return None, "Le nombre de patients maximum doit être supérieur au nombre de patients minimum"
+
+    start_time = parse_time(valeurs["start_time"])
+    end_time = parse_time(valeurs["end_time"])
+    if start_time is None or end_time is None:
+        return None, "Format d'heure invalide (HH:MM attendu)."
+    if start_time >= end_time:
+        return None, "L'heure de fin doit être après l'heure de début."
+    valeurs["start_time"] = start_time
+    valeurs["end_time"] = end_time
+
+    # Jours : liste d'abréviations anglaises ('Mon,Tue,...'). Champ absent ou
+    # vide -> tous les jours, comme le défaut historique du formulaire.
+    days_raw = form.getlist("days_of_week")
+    days = [d.strip() for d in days_raw if d and d.strip()]
+    if days:
+        invalides = [d for d in days if d not in DAY_ABBREVIATIONS]
+        if invalides:
+            return None, "Jour de la semaine invalide."
+        valeurs["days_of_week"] = ",".join(dict.fromkeys(days))
+    else:
+        valeurs["days_of_week"] = ",".join(DAY_ABBREVIATIONS)
+
+    if not Activity.query.get(valeurs["activity_id"]):
+        return None, "Activité introuvable."
+
+    return valeurs, None
 
 # page de base
 @admin_algo_bp.route('/admin/algo')
@@ -24,7 +84,8 @@ def admin_algo():
 def display_algo_table():
     rules = AlgoRule.query.all()
     activities = Activity.query.all()
-    return render_template('admin/algo_htmx_table.html', rules=rules, activities=activities)
+    return render_template('admin/algo_htmx_table.html', rules=rules,
+                           activities=activities, days=DAY_NAMES_FR.items())
 
 # affiche le formulaire activer ou desactiver l'algorithme
 @admin_algo_bp.route('/admin/button_des_activate_algo')
@@ -44,6 +105,7 @@ def toggle_activation():
     algo_activated = ConfigOption.query.filter_by(config_key="algo_activate").first()
     algo_activated.value_bool = is_activated
     db.session.commit()
+    bump_queue_revision()  # l'activation change l'ordre affiché : invalide le cache
     record_audit(ACTION_UPDATE, "config", target_id="algo_activate",
                  outcome=OUTCOME_SUCCESS, details=f"value={is_activated}")
 
@@ -81,7 +143,8 @@ def change_overtaken_limit():
 @require_permission('algo')
 def add_rule_form():
     activities = Activity.query.all()
-    return render_template('/admin/algo_add_rule_form.html', activities=activities)
+    return render_template('/admin/algo_add_rule_form.html', activities=activities,
+                           days=DAY_NAMES_FR.items())
 
 
 # enregistre la regledans la Bdd
@@ -89,36 +152,20 @@ def add_rule_form():
 @require_permission('algo')
 def add_new_rule():
     try:
-        name = request.form.get('name')
-        activity = Activity.query.get(request.form.get('activity_id'))
-        priority_level = request.form.get('priority_level')
-        min_patients = request.form.get('min_patients')
-        max_patients = request.form.get('max_patients')
-        max_overtaken = request.form.get('max_overtaken')
-        start_time_str = request.form.get('start_time')            
-        start_time = datetime.strptime(start_time_str, "%H:%M").time()
-        end_time_str = request.form.get('end_time')
-        end_time = datetime.strptime(end_time_str, "%H:%M").time()
-
-        if not name:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Nom obligatoire")
+        valeurs, erreur = valider_regle_algo(request.form)
+        if erreur:
+            display_toast(success=False, message=erreur)
             return display_algo_table()
 
-        new_rule = AlgoRule(
-            name=name,
-            activity = activity,
-            priority_level = priority_level,
-            min_patients = min_patients,
-            max_patients = max_patients,
-            max_overtaken = max_overtaken,
-            start_time = start_time,
-            end_time = end_time
-        )
+        new_rule = AlgoRule(**valeurs)
         db.session.add(new_rule)
         db.session.commit()
+        # L'ordre affiché dépend des règles : invalide le cache « prochains
+        # patients » immédiatement plutôt que d'attendre la prochaine mutation.
+        bump_queue_revision()
 
         record_audit(ACTION_CREATE, "algo_rule", target_id=new_rule.id,
-                     outcome=OUTCOME_SUCCESS, details=f"name={name}")
+                     outcome=OUTCOME_SUCCESS, details=f"name={new_rule.name}")
         display_toast(success=True, message="Règle ajoutée avec succès")
 
         # Effacer le formulaire via swap-oob
@@ -155,6 +202,7 @@ def delete_algo(algo_id):
 
         db.session.delete(rule)
         db.session.commit()
+        bump_queue_revision()  # invalide le cache « prochains patients »
 
         record_audit(ACTION_DELETE, "algo_rule", target_id=algo_id,
                      outcome=OUTCOME_SUCCESS)
@@ -175,26 +223,24 @@ def update_algo_rule(rule_id):
     try:
         rule = AlgoRule.query.get(rule_id)
         if rule:
-            if request.form.get('name') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return ""
-            elif request.form.get('min_patients') > request.form.get('max_patients'):
-                display_toast(success=False, message="Le nombre de patients maximum doit être superieur au nombre de patients minimum")
+            valeurs, erreur = valider_regle_algo(request.form)
+            if erreur:
+                display_toast(success=False, message=erreur)
                 return ""
 
-            rule.name = request.form.get('name', rule.name)
-            activity = Activity.query.get(request.form.get('activity_id', rule.activity_id))
-            rule.activity = activity
-            rule.priority_level = request.form.get('priority_level', rule.priority_level)
-            rule.min_patients = request.form.get('min_patients', rule.min_patients)
-            rule.max_patients = request.form.get('max_patients', rule.max_patients)
-            rule.max_overtaken = request.form.get('max_overtaken', rule.max_overtaken)
-            start_time_str = request.form.get('start_time', rule.start_time.strftime("%H:%M"))            
-            rule.start_time = datetime.strptime(start_time_str, "%H:%M").time()
-            end_time_str = request.form.get('end_time', rule.end_time.strftime("%H:%M"))
-            rule.end_time = datetime.strptime(end_time_str, "%H:%M").time()
+            rule.name = valeurs["name"]
+            rule.activity_id = valeurs["activity_id"]
+            rule.priority_level = valeurs["priority_level"]
+            rule.min_patients = valeurs["min_patients"]
+            rule.max_patients = valeurs["max_patients"]
+            rule.max_overtaken = valeurs["max_overtaken"]
+            rule.start_time = valeurs["start_time"]
+            rule.end_time = valeurs["end_time"]
+            rule.days_of_week = valeurs["days_of_week"]
 
             db.session.commit()
+            # Les règles modifiées changent l'ordre affiché : invalide le cache.
+            bump_queue_revision()
             record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
                          outcome=OUTCOME_SUCCESS, details=f"name={rule.name}")
 

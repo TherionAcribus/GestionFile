@@ -4,13 +4,13 @@ import json
 import qrcode
 from flask import Blueprint, url_for, request, session, current_app as app, jsonify
 from datetime import datetime, date, timedelta
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from cryptography.fernet import Fernet, InvalidToken
 from google.cloud import texttospeech
 from google.oauth2 import service_account
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
-from models import Patient, Counter, AlgoRule, ConfigOption, Language, db, get_queue_revision
+from models import Patient, Counter, AlgoRule, ConfigOption, Language, db, get_queue_revision, DAY_ABBREVIATIONS
 from communication import communikation, notify_patient_phone
 from config import time_tz
 from auth_utils import require_app_token_or_login
@@ -123,6 +123,11 @@ def call_next(counter_id, attempts=0):
         app.logger.info(f"Patient {next_patient.id} already claimed by another counter, retrying. Attempt {attempts + 1}")
         return call_next(counter_id, attempts=attempts+1)
 
+    # Comptabilise les patients réellement dépassés — SEULEMENT après une
+    # réclamation réussie : un comptoir perdant d'une course ne doit pas
+    # gonfler les compteurs alors qu'il n'a finalement appelé personne.
+    mark_overtaken_patients(next_patient, counter_id)
+
     # Après le commit, next_patient est expiré : le prochain accès recharge l'état
     # committé (status='calling', counter_id renseigné).
     app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
@@ -152,6 +157,79 @@ def trigger_async_audio_calling(counter_id, patient_id, language_code):
     announcement_dispatcher.submit(flask_app, _job)
 
 
+def get_applicable_algo_rules(number_of_patients, now=None):
+    """Règles RÉELLEMENT applicables à l'instant donné, évaluées en liste.
+
+    Applicable = créneau horaire + plage d'effectif de la file + jour de la
+    semaine. Le jour est testé en Python : ``days_of_week`` est une chaîne CSV
+    d'abréviations qu'un LIKE SQL ne peut pas tester proprement.
+
+    L'instant est pris dans le fuseau de l'application (``config.time_tz``) :
+    les créneaux horaires ne doivent pas dépendre du fuseau de la machine ou
+    du conteneur. ``now.time()`` renvoie une heure naïve, comparable aux
+    colonnes ``db.Time``.
+
+    ``now`` est injectable pour les tests.
+    """
+    now = now or datetime.now(time_tz)
+    current_time = now.time()
+    day_abbr = DAY_ABBREVIATIONS[now.weekday()]
+    app.logger.debug('algo rules: %s %s, %s patients en attente',
+                     day_abbr, current_time, number_of_patients)
+
+    rules = AlgoRule.query.filter(
+        AlgoRule.start_time <= current_time,
+        AlgoRule.end_time >= current_time,
+        AlgoRule.min_patients <= number_of_patients,
+        AlgoRule.max_patients >= number_of_patients,
+    ).all()
+
+    applicable = [
+        rule for rule in rules
+        if day_abbr in (day.strip() for day in rule.days_of_week.split(','))
+    ]
+    app.logger.debug('applicable_rules %s', applicable)
+    return applicable
+
+
+def pick_priority_patient(candidates, applicable_rules):
+    """Premier patient prioritaire parmi ``candidates``, déjà triés
+    ``(timestamp, id)``. Renvoie ``None`` si aucun ne satisfait sa règle —
+    l'appelant retombe alors sur le premier de la liste (FIFO).
+
+    Niveau 1 = priorité la plus haute : les niveaux sont examinés de 1 à 5 et
+    le premier niveau produisant un candidat gagne. Dans un niveau, on prend
+    le plus ancien patient dont le saut respecte ``max_overtaken`` (borne
+    INCLUSIVE) de sa règle — calculée sur les seules règles applicables du
+    niveau pour cette activité : une règle hors créneau ou hors seuil ne peut
+    plus annuler une règle active.
+    """
+    for level in range(1, 6):
+        max_overtaken_by_activity = {}
+        for rule in applicable_rules:
+            if rule.priority_level != level:
+                continue
+            current = max_overtaken_by_activity.get(rule.activity_id)
+            if current is None or rule.max_overtaken < current:
+                max_overtaken_by_activity[rule.activity_id] = rule.max_overtaken
+        if not max_overtaken_by_activity:
+            continue
+
+        app.logger.debug('level %s -> %s', level, max_overtaken_by_activity)
+        # enumerate(candidates) = nombre de patients en avance dans la file
+        # fournie (déjà triée) : c'est exactement ce que le saut ferait passer
+        # derrière le candidat.
+        for patients_ahead, patient in enumerate(candidates):
+            limit = max_overtaken_by_activity.get(patient.activity_id)
+            if limit is None:
+                continue
+            app.logger.debug('patient %s : %s devant, max %s',
+                             patient, patients_ahead, limit)
+            if patients_ahead <= limit:
+                return patient
+    return None
+
+
 def algo_choice_next_patient(counter_id):
 
     counter = Counter.query.get(counter_id)
@@ -159,82 +237,39 @@ def algo_choice_next_patient(counter_id):
     # activités possible par ce pharmacien
     staff_activities = set(activity.id for activity in counter.staff.activities)
 
-    # choix parmi les patients qui attendent 
-    next_possible_patient = Patient.query.filter_by(status='standing')
+    # patients en attente que CE comptoir sait servir, en ordre FIFO
+    # ((timestamp, id) : déterministe même à timestamps égaux)
+    candidates = (Patient.query
+                  .filter(Patient.status == 'standing',
+                          Patient.activity_id.in_(staff_activities))
+                  .order_by(Patient.timestamp, Patient.id)
+                  .all())
 
-    # choix parmi les patient qui correspondent aux activités du pharmacien
-    next_possible_patient = next_possible_patient.filter(
-        Patient.activity_id.in_(staff_activities)
-    )
-
-    app.logger.debug('next_possible_patient %s', next_possible_patient)
-    if next_possible_patient.count() == 0:
+    app.logger.debug('next_possible_patient %s', candidates)
+    if not candidates:
         return None
 
     # permet de voir si un patient s'est fait doubler plus que le nombre prévu
-    # Si oui on bloque l'algo le temps de rétablir l'équilibre
+    # Si oui on bloque l'algo le temps de rétablir l'équilibre (frein global :
+    # le seuil est lu sur TOUTE la file, pas seulement les activités servies
+    # par ce comptoir).
     is_patient_waiting_too_long = Patient.query.filter(
         and_(Patient.status == 'standing',
                 Patient.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"])).first()
     app.logger.debug('is_patient_waiting_too_long %s', is_patient_waiting_too_long)
 
-    applicable_rules = None
+    # priorité à un type d'activité si un patient répond aux critères
     if app.config['ALGO_IS_ACTIVATED'] and not is_patient_waiting_too_long:
-    # priorité à un type d'activité si un patient répond aux critère
-    # Récupération des règles applicables
-        current_day = datetime.now().weekday()
-        current_time = datetime.now().time()
-        app.logger.debug('current_time %s', current_time)
-        app.logger.debug('current_day %s', current_day)
         number_of_patients = Patient.query.filter_by(status='standing').count()
-        app.logger.debug('number_of_patients %s', number_of_patients)
-
-        # cherche des regles applicables
-        applicable_rules = AlgoRule.query.filter(
-            AlgoRule.start_time <= current_time,  # L'heure actuelle doit être après l'heure de début
-            AlgoRule.end_time >= current_time,    # et avant l'heure de fin
-            AlgoRule.min_patients <= number_of_patients,  # Le nombre de patients doit être dans l'intervalle
-            AlgoRule.max_patients >= number_of_patients,
-            #AlgoRule.days_of_week.contains(current_day)  # Le jour actuel doit être inclus dans les jours valides
-        )
-        app.logger.debug('applicable_rules %s', applicable_rules)
-
-        # S'il y a des regles applicables, regarde niveau par niveau les activités correspondantes
+        applicable_rules = get_applicable_algo_rules(number_of_patients)
         if applicable_rules:
-            for level in range(1, 6):
-                rules_at_level = applicable_rules.filter(AlgoRule.priority_level == level)
-                if rules_at_level:
-                    app.logger.debug('level %s', level)
-                    activity_ids_from_rules  = [rule.activity_id for rule in rules_at_level]
-                    next_possible_patient_via_rules = next_possible_patient.filter(
-                        Patient.activity_id.in_(activity_ids_from_rules)
-                    )
+            priority_patient = pick_priority_patient(candidates, applicable_rules)
+            if priority_patient is not None:
+                app.logger.debug('next_patient (prioritaire) %s', priority_patient)
+                return priority_patient
 
-                    app.logger.debug('next_possible_patient %s', next_possible_patient_via_rules.all())
-                    # pour les patients qui rentrent dans les priorité on va regarder si on ne dépasse pas le nombre de patients à dépasser de la régle
-                    if next_possible_patient_via_rules.all():
-                        for patient in next_possible_patient_via_rules.all():
-                            app.logger.debug('patient %s', patient)
-                            patients_ahead_count = next_possible_patient.filter(
-                                                                                        Patient.timestamp < patient.timestamp
-                                                                                    ).count()
-                            max_overtaken = min(rule.max_overtaken for rule in patient.activity.priority_rules)
-                            app.logger.debug('max_overtaken %s %s', max_overtaken, patients_ahead_count)
-                            if patients_ahead_count < max_overtaken:
-                                next_possible_patient = next_possible_patient_via_rules
-                                break
-
-    app.logger.debug('next_possible_patient %s', next_possible_patient)
-    
-    # tri par date (id en départage déterministe si timestamps égaux, pour que
-    # l'ordre d'appel corresponde exactement à l'ordre affiché de la file)
-    next_patient = next_possible_patient.order_by(Patient.timestamp, Patient.id).first()
-
-    if applicable_rules:
-        patient_overtaken(next_patient)
-
+    next_patient = candidates[0]
     app.logger.debug('next_patient %s', next_patient)
-
     return next_patient
 
 def get_global_patient_queue(limit=None):
@@ -256,26 +291,19 @@ def get_global_patient_queue(limit=None):
     égaux — posé en SQL à la récupération (index ix_patient_status_timestamp)
     puis préservé : la liste de travail ne subit que des retraits, aucun
     re-tri n'est nécessaire dans la boucle.
+
+    Le choix prioritaire passe par les MÊMES helpers que l'appel réel
+    (``get_applicable_algo_rules`` / ``pick_priority_patient``) : l'ordre
+    affiché ne diverge plus du moteur sur les créneaux, les jours ou la
+    borne de dépassement.
     """
     # 1. Fetch all standing patients, already in (timestamp, id) order
     waiting_patients = Patient.query.filter_by(status='standing').order_by(
         Patient.timestamp, Patient.id).all()
     ordered_queue = []
-    
-    # Get current context for rules
+
     if app.config['ALGO_IS_ACTIVATED']:
-        current_time = datetime.now().time()
-        number_of_patients = len(waiting_patients)
-        
-        # Find applicable rules based on current time and total number of patients
-        # Note: We don't filter by days_of_week here as it's commented out in original algo, 
-        # and we check rules against the global state
-        applicable_rules = AlgoRule.query.filter(
-            AlgoRule.start_time <= current_time,
-            AlgoRule.end_time >= current_time,
-            AlgoRule.min_patients <= number_of_patients,
-            AlgoRule.max_patients >= number_of_patients
-        ).all()
+        applicable_rules = get_applicable_algo_rules(len(waiting_patients))
     else:
         applicable_rules = []
 
@@ -283,9 +311,7 @@ def get_global_patient_queue(limit=None):
     while waiting_patients and (limit is None or len(ordered_queue) < limit):
         selected_patient = None
 
-        # If algorithm is active and we have rules, try to find a priority patient
-        if app.config['ALGO_IS_ACTIVATED'] and applicable_rules:
-
+        if applicable_rules:
             # Check if any patient has waited too long (overtaken limit)
             # In the simulation, we use the current 'overtaken' value from DB.
             # Ideally, the simulation should track 'overtaken' dynamically as we build the queue,
@@ -295,47 +321,9 @@ def get_global_patient_queue(limit=None):
             )
 
             if not is_patient_waiting_too_long:
-                # Iterate through priority levels
-                for level in range(1, 6):
-                    rules_at_level = [r for r in applicable_rules if r.priority_level == level]
-                    if not rules_at_level:
-                        continue
+                selected_patient = pick_priority_patient(
+                    waiting_patients, applicable_rules)
 
-                    activity_ids_from_rules = [rule.activity_id for rule in rules_at_level]
-
-                    # Candidates matching this priority level — waiting_patients
-                    # est déjà triée (timestamp, id), la compréhension conserve
-                    # cet ordre : pas de re-tri.
-                    priority_candidates = [
-                        p for p in waiting_patients
-                        if p.activity_id in activity_ids_from_rules
-                    ]
-                    
-                    for candidate in priority_candidates:
-                        # Count how many people would be overtaken
-                        # (People in waiting_patients with older timestamp than candidate)
-                        patients_ahead_count = sum(
-                            1 for p in waiting_patients 
-                            if p.timestamp < candidate.timestamp
-                        )
-                        
-                        # Get max_overtaken from the rules applicable to this patient's activity
-                        # We take the minimum of max_overtaken from all matching rules for this activity
-                        # (mimicking the logic: max_overtaken = min(rule.max_overtaken for rule in patient.activity.priority_rules))
-                        # We use the rules_at_level we already fetched which match the activity
-                        relevant_rules = [r for r in rules_at_level if r.activity_id == candidate.activity_id]
-                        if not relevant_rules:
-                            continue # Should not happen given logic above
-                            
-                        max_overtaken_limit = min(r.max_overtaken for r in relevant_rules)
-                        
-                        if patients_ahead_count < max_overtaken_limit:
-                            selected_patient = candidate
-                            break
-                    
-                    if selected_patient:
-                        break
-        
         # Fallback: if no patient selected by rules (or algo disabled), pick
         # the oldest — waiting_patients reste triée (timestamp, id), retraits
         # uniquement.
@@ -382,19 +370,40 @@ def get_next_patients_call_numbers(limit=NEXT_PATIENTS_DISPLAY_LIMIT):
     cache['next_patients'] = numbers
     return numbers
 
-def patient_overtaken(next_patient):
-    """ Met a jour le nombre de fois que le patient a été doublé"""
-    patients_overtaken = Patient.query.filter(
-        and_(
-            Patient.status == 'standing',
-            Patient.timestamp < next_patient.timestamp 
-        )
-    ).all() 
+def mark_overtaken_patients(next_patient, counter_id):
+    """Incrémente ``overtaken`` des patients réellement dépassés par cet appel.
 
-    for patient in patients_overtaken:
-        patient.overtaken = patient.overtaken + 1
-        app.logger.debug('patient overtaken %s', patient)
-        db.session.commit()
+    « Réellement dépassés » = encore ``standing``, plus anciens que le patient
+    appelé (ordre ``(timestamp, id)``) ET d'une activité que CE comptoir sait
+    servir : un patient d'une activité incompatible n'a pas été doublé — le
+    comptoir ne pouvait de toute façon pas le prendre.
+
+    Un seul UPDATE, un seul commit (l'ancienne version committait par patient
+    et comptait TOUTE la file, y compris sans règle applicable et avant même
+    la réclamation).
+    """
+    counter = db.session.get(Counter, counter_id)
+    if counter is None or counter.staff is None:
+        return
+    staff_activities = [a.id for a in counter.staff.activities]
+    if not staff_activities:
+        return
+
+    ahead = or_(
+        Patient.timestamp < next_patient.timestamp,
+        and_(Patient.timestamp == next_patient.timestamp,
+             Patient.id < next_patient.id),
+    )
+    updated = (db.session.query(Patient)
+               .filter(Patient.status == 'standing',
+                       Patient.activity_id.in_(staff_activities),
+                       ahead)
+               .update({Patient.overtaken: Patient.overtaken + 1},
+                       synchronize_session=False))
+    db.session.commit()
+    if updated:
+        app.logger.debug('%s patient(s) dépassé(s) par l\'appel de %s (comptoir %s)',
+                         updated, next_patient.id, counter_id)
 
 
 def add_patient(call_number, activity, status='standing', print_job_id=None):

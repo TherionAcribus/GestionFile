@@ -392,9 +392,16 @@ def init_default_algo_rules_db_from_json():
     if not current_version or current_version.version != data['version']:
         current_app.logger.info(f"Mise à jour de la table ALGO_RULES : {current_version} vers {data['version']}")
 
+        # La restauration précède l'enregistrement de la version : si le
+        # chargement échoue (clé JSON incorrecte, format d'heure, ...), aucune
+        # version n'est consignée et le prochain démarrage retentera —
+        # l'ancien ordre figeait l'échec en consignant la version d'abord.
         if not current_version:
-            create_version_number(ConfigVersion, data, db, key="algo_rules_version")
             algo_rule_restore_init(AlgoRule, db, restore=False, file_path=json_file)
+            create_version_number(ConfigVersion, data, db, key="algo_rules_version")
+        else:
+            current_version.version = data['version']
+            db.session.commit()
 def algo_rule_restore_init(AlgoRule, db, restore, file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         backup_data = json.load(file)

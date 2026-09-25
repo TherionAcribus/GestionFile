@@ -1,7 +1,10 @@
 // Configuration pour chaque type de table
 const TABLE_CONFIGS = {
     'algo_table': {
-        buttonClass: 'btn-save-rule',
+        // Le gabarit utilise 'btnSaveLine' (comme les autres tables) —
+        // 'btn-save-rule' ne correspondait à rien : la détection de
+        // changement ne tournait jamais sur cette table.
+        buttonClass: 'btnSaveLine',
         getFields: (id) => [
             document.getElementById(`name-${id}`),
             document.getElementById(`activity-${id}`),
@@ -11,7 +14,12 @@ const TABLE_CONFIGS = {
             document.getElementById(`max_overtaken-${id}`),
             document.getElementById(`start_time-${id}`),
             document.getElementById(`end_time-${id}`)
-        ]
+        ],
+        getSelect2: (id) => document.getElementById(`days-${id}`),
+        getSelect2Value: (select) => {
+            if (!select) return null;
+            return Array.from(select.selectedOptions).map(option => option.value).sort().join(',');
+        }
     },
     'queue_table': {
         buttonClass: 'btnSaveLine',

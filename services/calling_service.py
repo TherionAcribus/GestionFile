@@ -36,6 +36,7 @@ from python.engine import (
     claim_patient,
     counter_become_active,
     counter_become_inactive,
+    mark_overtaken_patients,
     trigger_async_audio_calling,
 )
 from utils import replace_balise_announces
@@ -124,6 +125,10 @@ def call_specific(counter_id, patient_id):
             origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient}
         )
         return False, {"error": "already_called"}, 423
+
+    # L'appel ciblé double réellement les patients plus anciens : ils sont
+    # comptabilisés comme l'appel du suivant, après réclamation réussie.
+    mark_overtaken_patients(next_patient, counter_id)
 
     announce_call(counter_id, next_patient)
     trigger_async_audio_calling(counter_id, next_patient.id, next_patient.language.code)

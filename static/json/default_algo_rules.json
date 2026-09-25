@@ -1,31 +1,45 @@
 {
     "name": "gf_algorythm_rules",
     "type": "default",
-    "version": "0.1",
-    "timestamp": "2024-08-12 14:35:26",
-    "comments": "Version de test",
-    "rules": [
+    "version": "0.2",
+    "timestamp": "2026-09-25 00:00:00",
+    "comments": "Règles par défaut : le bouton Prioritaire (activité 6) a la priorité la plus haute.",
+    "algo_rules": [
     {
-        "name": "priorité retraits",
-        "activity_id": 5,
+        "id": 1,
+        "name": "personne prioritaire",
+        "activity_id": 6,
         "priority_level": 1,
         "min_patients": 0,
         "max_patients": 999,
         "max_overtaken": 999,
-        "start_time": "00:00",
-        "end_time": "23:59",
-        "days_of_the_week": "Mon,Tue,Wed,Thu,Fri"            
+        "start_time": "00:00:00",
+        "end_time": "23:59:59",
+        "days_of_week": "Mon,Tue,Wed,Thu,Fri,Sat,Sun"
     },
-    {   
-        "name": "priorité rendez-vous",
-        "activity_id": 1,
+    {
+        "id": 2,
+        "name": "priorité retraits",
+        "activity_id": 5,
         "priority_level": 2,
         "min_patients": 0,
         "max_patients": 999,
         "max_overtaken": 999,
-        "start_time": "00:00",
-        "end_time": "23:59",
-        "days_of_the_week": "Mon,Tue,Wed,Thu,Fri"            
+        "start_time": "00:00:00",
+        "end_time": "23:59:59",
+        "days_of_week": "Mon,Tue,Wed,Thu,Fri"
+    },
+    {
+        "id": 3,
+        "name": "priorité rendez-vous",
+        "activity_id": 1,
+        "priority_level": 3,
+        "min_patients": 0,
+        "max_patients": 999,
+        "max_overtaken": 999,
+        "start_time": "00:00:00",
+        "end_time": "23:59:59",
+        "days_of_week": "Mon,Tue,Wed,Thu,Fri"
     }
     ]
 }
