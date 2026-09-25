@@ -305,7 +305,7 @@ def test_init_charge_les_regles_par_defaut(application):
         init_default_algo_rules_db_from_json()
 
         rules = AlgoRule.query.all()
-        assert len(rules) == 3, "les règles par défaut doivent être chargées"
+        assert len(rules) == 2, "les règles par défaut doivent être chargées"
 
         par_activite = {r.activity_id: r for r in rules}
         assert 6 in par_activite, "l'activité du bouton Prioritaire doit en avoir une"
@@ -316,7 +316,7 @@ def test_init_charge_les_regles_par_defaut(application):
 
         # Second passage : aucune duplication.
         init_default_algo_rules_db_from_json()
-        assert AlgoRule.query.count() == 3
+        assert AlgoRule.query.count() == 2
 
 
 # --- Validation serveur de l'administration --------------------------------------

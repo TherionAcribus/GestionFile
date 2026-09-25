@@ -28,18 +28,6 @@
         "start_time": "00:00:00",
         "end_time": "23:59:59",
         "days_of_week": "Mon,Tue,Wed,Thu,Fri"
-    },
-    {
-        "id": 3,
-        "name": "priorité rendez-vous",
-        "activity_id": 1,
-        "priority_level": 3,
-        "min_patients": 0,
-        "max_patients": 999,
-        "max_overtaken": 999,
-        "start_time": "00:00:00",
-        "end_time": "23:59:59",
-        "days_of_week": "Mon,Tue,Wed,Thu,Fri"
     }
     ]
 }
