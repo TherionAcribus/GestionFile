@@ -25,13 +25,10 @@
                     <button class="nav-link {% if active_tab == 'visual' %}active{% endif %}" id="visual-tab" data-bs-toggle="tab" data-bs-target="#tab_visual" type="button" role="tab" aria-controls="tab_visual" aria-selected="{{ 'true' if active_tab == 'visual' else 'false' }}">Visuel</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if active_tab == 'audio' %}active{% endif %}" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="{{ 'true' if active_tab == 'audio' else 'false' }}">Audio</button>
+                    <button class="nav-link {% if active_tab == 'audio' %}active{% endif %}" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="{{ 'true' if active_tab == 'audio' else 'false' }}">Son et voix</button>
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link {% if active_tab == 'gallery' %}active{% endif %}" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#tab_gallery" type="button" role="tab" aria-controls="tab_gallery" aria-selected="{{ 'true' if active_tab == 'gallery' else 'false' }}">Galerie</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if active_tab == 'googleVoice' %}active{% endif %}" id="googleVoice-tab" data-bs-toggle="tab" data-bs-target="#tab_googleVoice" type="button" role="tab" aria-controls="tab_googleVoice" aria-selected="{{ 'true' if active_tab == 'googleVoice' else 'false' }}">Google Voice</button>
                 </li>
             </ul>
 
@@ -45,9 +42,6 @@
                 </div>
                 <div class="tab-pane fade {% if active_tab == 'gallery' %}show active{% endif %}" id="tab_gallery" role="tabpanel" aria-labelledby="gallery-tab">
                     {% include 'admin/announce_gallery.html' %}
-                </div>
-                <div class="tab-pane fade {% if active_tab == 'googleVoice' %}show active{% endif %}" id="tab_googleVoice" role="tabpanel" aria-labelledby="googleVoice-tab">
-                    {% include 'admin/announce_google_voice.html' %}
                 </div>
             </div>
         </div>

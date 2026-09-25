@@ -588,10 +588,18 @@ def choose_voice_model(next_patient, text, language_code):
         else:
             voice_model = next_patient.language.voice_model
 
-    if voice_model == "gtts":
-        return create_tts_sound(next_patient, text, language_code)
-    elif voice_model == "google":
-        return create_google_tts_sound(next_patient, text, language_code)
+    if voice_model == "google":
+        try:
+            return create_google_tts_sound(next_patient, text, language_code)
+        except Exception as exc:
+            # Clé absente/refusée, voix non choisie, réseau coupé… : l'annonce
+            # ne doit pas devenir muette pour autant — repli sur gTTS, promis
+            # dans l'onglet Audio.
+            app.logger.warning(
+                "Synthèse Google impossible (%s) : repli sur gTTS.", exc)
+    # gTTS : choix explicite, repli, ou modèle jamais réglé (langue ajoutée
+    # après coup, voice_model NULL) — auparavant aucune annonce n'était jouée.
+    return create_tts_sound(next_patient, text, language_code)
 
 def create_tts_sound(next_patient, text, language_code):
     app.logger.debug('create_tts_sound %s %s', text, app.config["VOICE_GTTS_NAME"])
@@ -603,6 +611,9 @@ def create_tts_sound(next_patient, text, language_code):
             voice_gtts_name = app.config["VOICE_GTTS_NAME"]
         else:
             voice_gtts_name = next_patient.language.voice_gtts_name
+    # Voix gTTS jamais choisie : le code langue est un code gTTS valide dans
+    # la plupart des cas (fr, en, de, ar…).
+    voice_gtts_name = voice_gtts_name or language_code or "fr"
 
     def _write_audio(path):
         gTTS(text, lang=voice_gtts_name, timeout=TTS_TIMEOUT_SECONDS).save(path)
@@ -629,6 +640,11 @@ def create_google_tts_sound(next_patient, text, language_code):
         else:
             voice_google_name = next_patient.language.voice_google_name
             voice_google_region = next_patient.language.voice_google_region
+
+    if not voice_google_name:
+        # Évite un appel réseau voué à l'échec : choose_voice_model repasse
+        # alors sur gTTS.
+        raise RuntimeError("Aucune voix Google choisie pour cette langue.")
 
     def _write_audio(path):
         credentials_json = get_google_credentials()

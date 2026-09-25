@@ -753,3 +753,34 @@ font-size: 0.85rem;
     font-size: .875rem;
     margin-top: .5rem;
 }
+
+/* --- Page Annonce, onglet « Son et voix » ------------------------------- */
+.announce-audio-section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.announce-audio-section > h5 {
+    align-items: center;
+    display: flex;
+    gap: .5rem;
+}
+
+.step-badge {
+    align-items: center;
+    background: var(--bs-primary);
+    border-radius: 50%;
+    color: var(--bs-white);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: .85rem;
+    height: 1.6rem;
+    justify-content: center;
+    width: 1.6rem;
+}
+
+/* Panneau d'une langue : seul le sélecteur du moteur coché est affiché. */
+.voice-panel:has(#voice_model_gtts:checked) .voice-picker-google,
+.voice-panel:has(#voice_model_google:checked) .voice-picker-gtts {
+    display: none;
+}

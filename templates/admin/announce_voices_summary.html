@@ -1,0 +1,78 @@
+{# Récapitulatif « Voix de chaque langue » : ce qui sera réellement entendu
+   pour un patient de chaque langue, selon la logique de python/engine.py
+   (generate_audio_calling / choose_voice_model) :
+   - « Toujours en français » ou langue désactivée → voix du français ;
+   - moteur Google sans clé ou sans voix choisie → repli gTTS. #}
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0">
+    <thead>
+        <tr>
+            <th scope="col">Langue</th>
+            <th scope="col">Annonce</th>
+            <th scope="col">Moteur</th>
+            <th scope="col">Voix</th>
+            <th scope="col"><span class="visually-hidden">Action</span></th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for language in languages %}
+        {% set is_fr = language.code == 'fr' %}
+        {% set follows_fr = not is_fr and (announce_call_translation == 'fr' or not language.voice_is_active) %}
+        {% set wants_google = language.voice_model == 'google' %}
+        {% set google_ok = wants_google and voice_google_key and language.voice_google_name %}
+        <tr>
+            <th scope="row" class="fw-normal">
+                {% if language.flag_url %}<img src="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}" alt="" width="22" class="me-1">{% endif %}
+                {{ language.name }}
+                {% if is_fr %}<span class="badge text-bg-light border ms-1">par défaut</span>{% endif %}
+            </th>
+            <td>
+                {% if is_fr %}
+                    En français
+                {% elif announce_call_translation == 'fr' %}
+                    <span class="text-muted">En français</span>
+                    <i class="bi bi-info-circle text-muted" title="« Langue de l'annonce » est réglée sur « Toujours en français »" aria-label="« Langue de l'annonce » est réglée sur « Toujours en français »"></i>
+                {% elif not language.voice_is_active %}
+                    <span class="text-muted">En français (langue désactivée)</span>
+                {% else %}
+                    Dans sa langue
+                {% endif %}
+            </td>
+            {% if follows_fr %}
+                <td colspan="2" class="text-muted small">Voix du français</td>
+            {% else %}
+                <td>
+                    {% if google_ok %}
+                        <span class="badge text-bg-primary">Google</span>
+                    {% elif wants_google %}
+                        <span class="badge text-bg-warning">gTTS (repli)</span>
+                        <i class="bi bi-exclamation-triangle text-warning"
+                           title="{{ 'Aucune clé Google enregistrée' if not voice_google_key else 'Aucune voix Google choisie' }}"
+                           aria-label="{{ 'Aucune clé Google enregistrée' if not voice_google_key else 'Aucune voix Google choisie' }}"></i>
+                    {% else %}
+                        <span class="badge text-bg-secondary">gTTS</span>
+                    {% endif %}
+                </td>
+                <td class="small">
+                    {% if google_ok %}
+                        {{ language.voice_google_name }}
+                    {% else %}
+                        {{ language.voice_gtts_name or language.code }}
+                    {% endif %}
+                </td>
+            {% endif %}
+            <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        hx-post="/admin/announce/select_language_voice"
+                        hx-vals='{"language_code": "{{ language.code }}"}'
+                        hx-target="#div_select_voice"
+                        hx-swap="innerHTML show:#div_select_voice:top"
+                        aria-label="Régler la voix : {{ language.name }}">
+                    <i class="bi bi-sliders" aria-hidden="true"></i> Régler
+                </button>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>

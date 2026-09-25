@@ -1,5 +1,11 @@
+{% set gender_labels = {'FEMALE': 'féminine', 'MALE': 'masculine', 'NEUTRAL': 'neutre'} %}
+{% if not google_voices %}
+    <option value="" disabled selected>Aucune voix pour ces filtres</option>
+{% elif voice_google_name not in google_voices | map(attribute='name') | list %}
+    <option value="" disabled selected>— Choisir une voix —</option>
+{% endif %}
 {% for voice in google_voices %}
     <option value="{{ voice.name }}|{{ voice.full_language_code }}" {% if voice_google_name == voice.name %}selected{% endif %}>
-        {{ voice.name }} - {{ voice.full_language_code }} ({{ voice.ssml_gender }})
+        {{ voice.name }} — {{ gender_labels.get(voice.ssml_gender, voice.ssml_gender | lower) }}{% if voice.type %}, {{ voice.type }}{% endif %} ({{ voice.full_language_code }})
     </option>
 {% endfor %}

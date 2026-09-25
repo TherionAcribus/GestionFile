@@ -1,0 +1,81 @@
+{# Panneau « Régler la voix » d'une langue (onglet Audio, étape 4).
+   Remplace les anciens onglets imbriqués gTTS/Google, dont l'onglet affiché
+   ne correspondait pas au moteur réellement utilisé (réglé plus bas, dans un
+   menu séparé). Ici : un choix de moteur par boutons radio, et seul le
+   sélecteur de voix du moteur coché est affiché (CSS :has, cf. admin.css). #}
+{% set current_model = 'google' if language.voice_model == 'google' else 'gtts' %}
+<div class="card voice-panel">
+    <div class="card-header d-flex align-items-center gap-2">
+        {% if language.flag_url %}<img src="{{ url_for('static', filename='images/flags/' ~ language.flag_url) }}" alt="" width="22">{% endif %}
+        <strong>Voix : {{ language.name }}</strong>
+        {% if language.code == 'fr' %}<span class="text-muted small">— utilisée aussi pour toute annonce faite en français</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <input type="hidden" id="language_id" name="language_id" value="{{ language.id }}">
+
+        {% if language.code != 'fr' %}
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox"
+                id="voice_is_active"
+                aria-describedby="voice_is_active_help"
+                {% if language.voice_is_active %} checked {% endif %}
+                hx-post="/admin/announce/save_voice_is_active"
+                hx-target="#invisible"
+                hx-vals='{"language_id": {{ language.id }}}'
+                data-param-voice_is_active="#voice_is_active@checked">
+            <label class="form-check-label" for="voice_is_active">Annoncer les patients de cette langue dans leur langue</label>
+            <div class="form-text" id="voice_is_active_help">Désactivé : ils sont annoncés en français, avec la voix du français.</div>
+        </div>
+        {% endif %}
+
+        <fieldset class="mb-3">
+            <legend class="form-label fs-6 fw-semibold">Moteur</legend>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="voice_model_{{ language.id }}"
+                       id="voice_model_google" value="google"
+                       {% if current_model == 'google' %}checked{% endif %}
+                       {% if not voice_google_key %}disabled{% endif %}
+                       hx-post="/admin/announce/save_voice_model"
+                       hx-target="#invisible"
+                       hx-trigger="change"
+                       hx-vals='{"language_id": {{ language.id }}, "voice_model": "google"}'>
+                <label class="form-check-label" for="voice_model_google">
+                    Google Cloud <span class="badge text-bg-primary">Recommandé</span>
+                    {% if not voice_google_key %}<span class="d-block form-text">Enregistrez d'abord une clé Google Cloud (étape 3).</span>{% endif %}
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="voice_model_{{ language.id }}"
+                       id="voice_model_gtts" value="gtts"
+                       {% if current_model == 'gtts' %}checked{% endif %}
+                       hx-post="/admin/announce/save_voice_model"
+                       hx-target="#invisible"
+                       hx-trigger="change"
+                       hx-vals='{"language_id": {{ language.id }}, "voice_model": "gtts"}'>
+                <label class="form-check-label" for="voice_model_gtts">gTTS (sans clé)</label>
+            </div>
+        </fieldset>
+
+        {% if voice_google_key %}
+        <div class="voice-picker voice-picker-google">
+            {% if current_model == 'google' and not language.voice_google_name %}
+            <div class="alert alert-warning small py-2" role="status">
+                Aucune voix Google choisie pour cette langue : gTTS est utilisé en attendant.
+            </div>
+            {% endif %}
+            {% include 'admin/announce_voices_google.html' %}
+        </div>
+        {% endif %}
+
+        <div class="voice-picker voice-picker-gtts">
+            {% include 'admin/announce_voices_gtts.html' %}
+        </div>
+
+        <div class="mt-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    data-test-audio="test" data-test-language="{{ language.code }}">
+                <i class="bi bi-play-fill" aria-hidden="true"></i> Écouter un exemple en {{ language.name | lower }}
+            </button>
+        </div>
+    </div>
+</div>

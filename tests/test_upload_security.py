@@ -9,6 +9,7 @@ schéma « compte de service ».
 
 import io
 import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -27,6 +28,9 @@ from upload_security import (
     sniff_audio_extension,
     validate_service_account_json,
 )
+
+
+_TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
 
 
 def _file_storage(data: bytes, filename: str) -> FileStorage:
@@ -167,7 +171,9 @@ def test_validate_service_account_json_rejects(payload):
 
 @pytest.fixture()
 def app(tmp_path):
-    app = Flask(__name__, template_folder="templates")
+    # Gabarits réels : l'envoi de clé renvoie le partial d'état
+    # announce_google_key_status.html en OOB.
+    app = Flask(__name__, template_folder=_TEMPLATES_DIR)
     app.config.update(
         SECRET_KEY="test",
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",

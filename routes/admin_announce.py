@@ -26,6 +26,7 @@ from upload_security import (
     validate_service_account_json,
 )
 from audit_service import record_audit
+from tts_voice_defaults import pick_default_google_voice, voice_type as google_voice_type
 from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
@@ -38,13 +39,30 @@ def allowed_json_file(filename):
 def _signals_dir() -> Path:
     return to_abs_base_dir(Path("static") / "audio" / "signals", root_dir=app.root_path)
 
+
+# Toute modification d'une voix rafraîchit le tableau récapitulatif « Voix par
+# langue » de l'onglet Audio (hx-trigger « voicesChanged from:body »). Fusionné
+# avec l'en-tête adminFeedback par app._attach_admin_feedback.
+_VOICES_CHANGED = {"HX-Trigger": json.dumps({"voicesChanged": True})}
+
+
+def _voice_languages():
+    """Langues proposées dans l'onglet Audio : le français (voix par défaut,
+    toujours présente) et les langues actives, dans l'ordre d'affichage."""
+    languages = Language.query.order_by(Language.sort_order, Language.id).all()
+    return [lang for lang in languages if lang.code == "fr" or lang.is_active]
+
 admin_announce_bp = Blueprint('admin_announce', __name__)
 
 @admin_announce_bp.route('/admin/announce')
 @admin_announce_bp.route('/admin/announce/<tab>')
 @require_permission('announce')
 def announce_page(tab=None):
-    valid_tabs = ['visual', 'audio', 'gallery', 'googleVoice']
+    # L'ancien onglet « Google Voice » est fusionné dans « Audio » : les liens
+    # existants vers /admin/announce/googleVoice y mènent toujours.
+    if tab == 'googleVoice':
+        tab = 'audio'
+    valid_tabs = ['visual', 'audio', 'gallery']
     if tab not in valid_tabs:
         tab = 'visual'
 
@@ -427,11 +445,10 @@ def upload_google_key():
         # fréquents). L'appel pré-remplit aussi le cache des voix — la clé
         # déchiffrée retournée par get_google_credentials a la même empreinte
         # que le JSON normalisé.
-        status_text = "Une clé Google Cloud est enregistrée."
+        verified = False
         try:
             voice_count = len(list_google_voices(normalized))
-            status_text = ("Une clé Google Cloud est enregistrée et "
-                           "acceptée par Google.")
+            verified = True
             result = ('<div class="alert alert-success" role="alert">Clé Google Cloud '
                       f'enregistrée et vérifiée ({voice_count} voix disponibles).</div>')
         except (gapi_exceptions.PermissionDenied, gapi_exceptions.Forbidden):
@@ -451,8 +468,9 @@ def upload_google_key():
 
         # Swap OOB : met à jour la bannière d'état en haut de l'onglet, figée
         # depuis le rendu initial — sinon elle contredirait le résultat.
-        status_oob = (f'<div id="google-key-status" hx-swap-oob="true">'
-                      f'<div class="alert alert-success" role="alert">{status_text}</div></div>')
+        status_oob = render_template('/admin/announce_google_key_status.html',
+                                     voice_google_key=True, key_verified=verified,
+                                     oob=True)
         return status_oob + result
     else:
         return '<div class="alert alert-danger">Format de fichier non autorisé. Veuillez télécharger un fichier JSON.</div>'
@@ -474,6 +492,14 @@ def filter_voices():
     selected_language = request.form.get('voice_google_language', '')
     selected_gender = request.form.get('voice_google_gender', '')
     selected_type = request.form.get('voice_google_type', '')
+    # Voix déjà choisie pour la langue éditée — auparavant toujours celle du
+    # français, si bien qu'une autre langue n'affichait jamais son réglage.
+    language = None
+    language_id = request.form.get('language_id', '')
+    if language_id.isdigit():
+        language = db.session.get(Language, int(language_id))
+    current_voice = (language.voice_google_name if language is not None
+                     else app.config['VOICE_GOOGLE_NAME'])
 
     credentials_json = get_google_credentials()
 
@@ -489,7 +515,7 @@ def filter_voices():
     # Renvoyer la liste filtrée dans le select
     return render_template('/admin/announce_google_voice_list.html',
                             google_voices=google_voices,
-                            voice_google_name=app.config['VOICE_GOOGLE_NAME'],
+                            voice_google_name=current_voice,
                             credentials_json=credentials_json)
 
 
@@ -557,6 +583,7 @@ def list_google_voices(credentials_json, language=None, gender=None, voice_type=
 
         voice_list.append({
             "name": voice["name"],
+            "type": google_voice_type(voice["name"]),
             "language_codes": voice["language_codes"],
             "full_language_code": full_language_code,
             "ssml_gender": voice["ssml_gender"],
@@ -603,7 +630,7 @@ def announce_save_google_voice():
 
         display_toast(success=True, message="Voix sauvegardée")
 
-        return "", 200
+        return "", 200, _VOICES_CHANGED
 
     except Exception as e:
         db.session.rollback()
@@ -624,13 +651,79 @@ def announce_select_language_voice():
     if language is None:
         return display_toast(success=False, message="Langue inconnue.")
     languages = Language.query.all()
-    return render_template('/admin/announce_tabs_choice_voices.html',
+    return render_template('/admin/announce_language_voice.html',
                         gtts_languages = gtts.lang.tts_langs(),
-                        announce_voice = app.config['VOICE_GTTS_NAME'],
                         voice_google_key=get_google_credentials(),
                         language=language,
                         languages=languages
                         )
+
+
+@admin_announce_bp.route('/admin/announce/voices_summary')
+@require_permission('announce')
+def announce_voices_summary():
+    """Tableau récapitulatif « Voix par langue » (rechargé à chaque réglage)."""
+    return render_template('/admin/announce_voices_summary.html',
+                           languages=_voice_languages(),
+                           voice_google_key=bool(get_google_credentials()),
+                           announce_call_translation=app.config['ANNOUNCE_CALL_TRANSLATION'])
+
+
+@admin_announce_bp.route('/admin/announce/google/use_for_all', methods=['POST'])
+@require_permission('announce')
+def announce_use_google_for_all():
+    """Bascule toutes les langues sur Google Cloud en un clic.
+
+    Une langue sans voix Google reçoit la voix conseillée
+    (tts_voice_defaults) ; une langue pour laquelle Google n'a aucune voix
+    reste sur gTTS et est signalée.
+    """
+    credentials_json = get_google_credentials()
+    if not credentials_json:
+        return display_toast(success=False,
+                             message="Enregistrez d'abord une clé Google Cloud.")
+    try:
+        voices = list_google_voices(credentials_json)
+    except Exception as exc:
+        app.logger.warning("Impossible de lister les voix Google Cloud : %s", exc)
+        return display_toast(success=False,
+                             message="Google ne répond pas ou refuse la clé : aucune langue modifiée.")
+
+    switched, skipped = [], []
+    try:
+        for language in _voice_languages():
+            if not language.voice_google_name:
+                picked = pick_default_google_voice(voices, language.code)
+                if picked is None:
+                    skipped.append(language.name)
+                    continue
+                language.voice_google_name, language.voice_google_region = picked
+            language.voice_model = "google"
+            switched.append(language)
+        config_sync.bump_generation()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id="*",
+                     outcome=OUTCOME_FAILURE, details="voice_model=google (toutes)")
+        app.logger.exception("Échec du passage de toutes les langues sur Google")
+        return display_toast(success=False, message="L'enregistrement a échoué.")
+
+    record_audit(ACTION_UPDATE, "language", target_id="*",
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"voice_model=google ({len(switched)} langues)")
+    for language in switched:
+        if language.code == "fr":
+            app.config["VOICE_MODEL"] = "google"
+            app.config["VOICE_GOOGLE_NAME"] = language.voice_google_name
+            app.config["VOICE_GOOGLE_REGION"] = language.voice_google_region
+
+    message = f"Google Cloud activé pour {len(switched)} langue(s)."
+    if skipped:
+        message += (" Aucune voix Google pour : " + ", ".join(skipped)
+                    + " (restent sur gTTS).")
+    display_toast(success=True, message=message)
+    return "", 200, _VOICES_CHANGED
 
 @admin_announce_bp.route('/admin/announce/save_voice_model', methods=['POST'])
 @require_permission('announce')
@@ -660,9 +753,9 @@ def announce_save_voice_model():
         if language.code == "fr":
             app.config["VOICE_MODEL"] = voice_model
 
-        display_toast(success=True, message="Modele de voix sauvegardé")
+        display_toast(success=True, message="Moteur de voix enregistré")
 
-        return "", 200
+        return "", 200, _VOICES_CHANGED
 
     except Exception as e:
         db.session.rollback()
@@ -702,7 +795,7 @@ def announce_save_gtts_voice():
 
         display_toast(success=True, message="Voix sauvegardée")
 
-        return "", 200
+        return "", 200, _VOICES_CHANGED
 
     except Exception as e:
         db.session.rollback()
@@ -732,7 +825,7 @@ def announce_save_voice_is_active():
 
         display_toast(success=True, message="Option sauvée")
 
-        return "", 200
+        return "", 200, _VOICES_CHANGED
 
     except Exception as e:
         db.session.rollback()

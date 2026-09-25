@@ -1,0 +1,29 @@
+{# État de la clé Google Cloud + raccourci « tout passer sur Google ».
+   Rendu dans l'onglet Audio, puis renvoyé en OOB (oob=True) par
+   /admin/announce/google/add_key : sans cela, l'état figé du rendu initial
+   contredirait le résultat du téléversement.
+   voice_google_key signifie « clé présente et déchiffrable » — Google peut
+   encore la refuser à l'usage : ne jamais prétendre qu'elle fonctionne sans
+   key_verified. #}
+<div id="google-key-status"{% if oob %} hx-swap-oob="true"{% endif %}>
+    {% if voice_google_key %}
+        <div class="alert alert-success d-flex flex-wrap align-items-center gap-2 mb-2" role="status">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span class="me-auto">
+                {% if key_verified %}Clé Google Cloud enregistrée et vérifiée auprès de Google.{% else %}Une clé Google Cloud est enregistrée.{% endif %}
+            </span>
+            <button type="button" class="btn btn-sm btn-primary"
+                    hx-post="/admin/announce/google/use_for_all"
+                    hx-target="#invisible"
+                    hx-confirm="Utiliser Google Cloud pour toutes les langues ? Une voix conseillée sera choisie pour les langues qui n'en ont pas encore.">
+                <i class="bi bi-stars" aria-hidden="true"></i> Utiliser Google pour toutes les langues
+            </button>
+        </div>
+    {% else %}
+        <div class="alert alert-warning mb-2" role="status">
+            <i class="bi bi-key" aria-hidden="true"></i>
+            Aucune clé enregistrée (ou elle est illisible) : les annonces utilisent gTTS.
+            Suivez les étapes ci-dessous pour activer Google (environ 10 minutes, une seule fois).
+        </div>
+    {% endif %}
+</div>

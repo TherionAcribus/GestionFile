@@ -8,44 +8,57 @@
 // seraient bloques par la CSP (script-src 'self').
 
 // --- extrait de templates/admin/announce_audio.html ---
+function showTestStatus(message, isError) {
+    const timeElement = document.getElementById('generation-time');
+    const infoElement = document.getElementById('generation-time-info');
+    if (!timeElement) { return; }
+    if (infoElement) { infoElement.style.display = 'none'; }
+    timeElement.style.display = 'block';
+    timeElement.classList.toggle('text-danger', !!isError);
+    timeElement.textContent = message;
+}
+
 function updateGenerationTime(time, scope) {
     const timeElement = document.getElementById('generation-time');
     const infoElement = document.getElementById('generation-time-info');
-    
+
     if (scope === 'announce') {
         timeElement.style.display = 'none';
         infoElement.style.display = 'block';
     } else {
-        timeElement.style.display = 'block';
-        infoElement.style.display = 'none';
-        timeElement.textContent = `Generation time: ${time.toFixed(3)} seconds`;
+        // Un fichier déjà en cache se rejoue quasi instantanément : le dire
+        // rassure sur le fait que Google n'est pas rappelé à chaque annonce.
+        const cached = time < 0.3;
+        showTestStatus('Annonce prête en ' + time.toFixed(2).replace('.', ',') + ' s'
+            + (cached ? ' (fichier déjà généré, réutilisé).' : ' (nouvelle génération).'), false);
     }
 }
 
-function testAudio(scope) {
-    let language_code = document.getElementById('language_code').value;
+// `language` : fourni par le bouton « Écouter un exemple » d'un panneau de
+// langue (data-test-language) ; sinon la langue choisie dans « Tester ».
+function testAudio(scope, language) {
+    let language_code = language || document.getElementById('language_code').value;
     let call_number = document.getElementById('call_number').value;
 
     // Anti double-clic : la génération TTS est synchrone côté serveur et peut
     // appeler un service externe — on bloque les boutons le temps de la requête.
     const buttons = document.querySelectorAll('[data-test-audio]');
     buttons.forEach(function (btn) { btn.disabled = true; });
+    showTestStatus("Génération de l'annonce…", false);
 
     const params = new URLSearchParams({ language_code: language_code, call_number: call_number });
     fetch(`/admin/announce/audio/test/${scope}?${params}`, { method: 'POST' })
         .then(response => response.json().then(data => ({ ok: response.ok, data: data })))
         .then(result => {
             if (!result.ok) {
-                document.getElementById('generation-time').textContent = result.data.error || 'Test refusé';
-                document.getElementById('generation-time-info').style.display = 'none';
+                showTestStatus(result.data.error || 'Test refusé.', true);
                 return;
             }
             updateGenerationTime(result.data.generation_time, scope);
         })
         .catch(error => {
             console.error('Error:', error);
-            document.getElementById('generation-time').textContent = 'Error measuring generation time';
-            document.getElementById('generation-time-info').style.display = 'none';
+            showTestStatus('Le test a échoué (voir le journal du serveur).', true);
         })
         .finally(() => {
             buttons.forEach(function (btn) { btn.disabled = false; });
@@ -110,7 +123,7 @@ function selectImage(imageName) {
 // Boutons « Tester l'annonce » de announce_audio.html : data-test-audio="scope".
 document.addEventListener('click', function (evt) {
     var btn = evt.target.closest ? evt.target.closest('[data-test-audio]') : null;
-    if (btn) { testAudio(btn.getAttribute('data-test-audio')); }
+    if (btn) { testAudio(btn.getAttribute('data-test-audio'), btn.getAttribute('data-test-language')); }
 });
 
 // Boutons « Sélectionner » de announce_audio_gallery_list.html : la liste est

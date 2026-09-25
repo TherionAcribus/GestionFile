@@ -1,128 +1,198 @@
-<!-- Switch -->
+{# Onglet « Audio » de la page Annonce.
+   Organisé dans l'ordre où l'annonce se déroule : interrupteur général →
+   ① signal → ② texte → ③ moteur de voix (fusion de l'ancien onglet
+   « Google Voice ») → ④ voix de chaque langue → ⑤ test.
+   Chargements différés : accès direct à /admin/announce/audio → l'onglet est
+   déjà actif, aucun shown.bs.tab ne sera émis, on charge au rendu ; sinon on
+   attend la première ouverture de l'onglet (pas d'appel réseau pour un onglet
+   caché). #}
+{% set audio_reveal = 'load' if active_tab == 'audio' else 'shown.bs.tab once from:#audio-tab' %}
 
-<h5>Options générales</h5>
+<div class="announce-audio">
 
-{{ macros.switch("announce_sound", 
-            announce_sound, 
-            "Activer le son pour les annonces")
-}}
+<p class="text-muted">
+    À chaque appel, l'écran d'annonce joue un <strong>signal sonore</strong> (facultatif),
+    puis une <strong>voix de synthèse</strong> lit le numéro du patient et son comptoir.
+</p>
 
-<div class="input-field col s12">
-    <select
-        class="form-select"
-        id="announce_player"
-        hx-post="/admin/update_select"
-        hx-target="#invisible"
-        hx-vals='{"key": "announce_player"}'
-        data-param-value="#announce_player">
-        <option value="" disabled>Lecteur audio</option>
-        <option value="web" {% if announce_player == "web" %}selected{% endif %}>Page web</option>
-    </select>
-    <label>Choix du lecteur audio</label>
-</div>
+{# ---------------------------------------------------------------- #}
+<section class="admin-setting-card announce-audio-section" aria-labelledby="audio_general_title">
+    <h5 id="audio_general_title">Annonces sonores</h5>
+    {{ macros.switch("announce_sound", announce_sound, "Activer le son sur l'écran d'annonce") }}
+    <p class="form-text mb-0">Désactivé : l'écran d'annonce reste muet, quels que soient les réglages ci-dessous.</p>
+</section>
 
-<h5>Alerte sonore avant l'appel</h5>
+{# ---------------------------------------------------------------- #}
+<section class="admin-setting-card announce-audio-section" aria-labelledby="audio_signal_title">
+    <h5 id="audio_signal_title"><span class="step-badge" aria-hidden="true">1</span> Signal avant l'annonce</h5>
+    {{ macros.switch("announce_alert", announce_alert, "Jouer un signal sonore avant la voix") }}
+    <p class="form-text">Un « ding » qui attire l'attention avant la lecture du numéro.</p>
 
-{{ macros.switch("announce_alert", 
-announce_alert, 
-            "Activer une alerte avant de lancer l'appel")
-}}
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <div>
+            <span class="form-label d-block mb-1">Son actuel</span>
+            <div id="announce_current_signal"
+                 hx-get="/admin/announce/audio/current_signal"
+                 hx-target="#announce_current_signal"
+                 hx-trigger="{{ audio_reveal }}, refresh_sound"
+                 hx-swap="innerHTML">
+            </div>
+        </div>
+        <button type="button"
+            class="btn btn-outline-primary"
+            hx-get="/admin/announce/gallery_audio"
+            hx-target="#modal_display_gallery .modal-content"
+            hx-trigger="click"
+            data-bs-toggle="modal"
+            data-bs-target="#modal_display_gallery">
+            <i class="bi bi-music-note-list" aria-hidden="true"></i> Changer de son…
+        </button>
+    </div>
+</section>
 
-Son actuel :
+{# ---------------------------------------------------------------- #}
+<section class="admin-setting-card announce-audio-section" aria-labelledby="audio_text_title">
+    <h5 id="audio_text_title"><span class="step-badge" aria-hidden="true">2</span> Texte lu à voix haute</h5>
 
-{# Accès direct à /admin/announce/audio : l'onglet est déjà actif, aucun
-   shown.bs.tab ne sera émis — on charge alors au rendu. Sinon on attend la
-   première ouverture de l'onglet (pas d'appel réseau pour un onglet caché). #}
-<div id="announce_current_signal"
-        hx-get="/admin/announce/audio/current_signal"
-        hx-target="#announce_current_signal"
-        hx-trigger="{% if active_tab == 'audio' %}load{% else %}shown.bs.tab once from:#audio-tab{% endif %}, refresh_sound"
-        hx-swap="innerHTML">    
-</div>
+    {{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Phrase annoncée lors de l'appel d'un patient") }}
 
-    <!-- Bouton pour ouvrir la modal -->
-    <button 
-        class="btn btn-primary"
-        hx-get="/admin/announce/gallery_audio"
-        hx-target="#modal_display_gallery .modal-content"
-        hx-trigger="click"
-        data-bs-toggle="modal"
-        data-bs-target="#modal_display_gallery">
-    Librairie sonore
-    </button>
-
-<h5>Texte pour appeler le patient</h5>
-
-{{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Appel audio pour annoncer le tour d'un patient") }}
-
-<h5>Choix de la voix</h5>
-
-<p>Choisissez la voix qui sera utilisée pour annoncer le patient</p>
-<div class="input-field col s12">
+    <label for="announce_call_translation" class="form-label">Langue de l'annonce</label>
     <select
         class="form-select"
         id="announce_call_translation"
+        aria-describedby="announce_call_translation_help"
         hx-post="/admin/update_select"
         hx-target="#invisible"
         hx-vals='{"key": "announce_call_translation"}'
         data-param-value="#announce_call_translation">
-        <option value="fr" {% if announce_call_translation == "fr" %}selected{% endif %}>Uniquement en français</option>
-        <option value="vo" {% if announce_call_translation == "vo" %}selected{% endif %}>Uniquement dans la langue du patient</option>
+        <option value="fr" {% if announce_call_translation == "fr" %}selected{% endif %}>Toujours en français</option>
+        <option value="vo" {% if announce_call_translation == "vo" %}selected{% endif %}>Dans la langue choisie par le patient</option>
         {# Non implémenté : le moteur traite « both » comme la langue du
            patient. Désactivé pour empêcher un enregistrement trompeur —
            reste affiché si une valeur existante est « both ». #}
-        <option value="both" disabled {% if announce_call_translation == "both" %}selected{% endif %}>Dans les deux langues (A venir)</option>
+        <option value="both" disabled {% if announce_call_translation == "both" %}selected{% endif %}>Dans les deux langues (à venir)</option>
     </select>
-</div>
+    <p class="form-text mb-0" id="announce_call_translation_help">
+        « Dans la langue du patient » utilise la traduction de la phrase (menu Traductions)
+        et la voix de sa langue (étape 4). Sans traduction, ou si l'annonce est désactivée
+        pour sa langue, le français est utilisé.
+    </p>
+</section>
 
-<div class="input-field col s12">
-    <select
-        class="form-select"
-        id="language_choice"
-        hx-post="/admin/announce/select_language_voice"
-        hx-target="#div_select_voice"
-        hx-trigger="change, {% if active_tab == 'audio' %}load{% else %}shown.bs.tab once from:#audio-tab{% endif %}"
-        data-param-language_code="#language_choice">
-        {% for language in languages %}
-            <option value="{{ language.code }}">{{ language.name }}</option>
-        {% endfor %}
-    </select>
-</div>
+{# ---------------------------------------------------------------- #}
+<section class="admin-setting-card announce-audio-section" aria-labelledby="audio_engine_title">
+    <h5 id="audio_engine_title"><span class="step-badge" aria-hidden="true">3</span> Moteur de voix</h5>
+    <p class="text-muted">Deux services peuvent fabriquer la voix. Le moteur se règle ensuite langue par langue (étape 4).</p>
 
-<div id="div_select_voice"></div>
+    <div class="row g-3">
+        <div class="col-xl-7">
+            <div class="card h-100 border-primary">
+                <div class="card-body">
+                    <h6 class="card-title d-flex flex-wrap align-items-center gap-2">
+                        <i class="bi bi-google" aria-hidden="true"></i> Google Cloud Text-to-Speech
+                        <span class="badge text-bg-primary">Recommandé</span>
+                    </h6>
+                    <ul class="small mb-3">
+                        <li>Voix naturelles, proches d'une voix humaine (familles Neural2 et WaveNet).</li>
+                        <li>Choix de la voix (féminine/masculine) pour chaque langue.</li>
+                        <li>Service officiel et stable. Si Google ne répond pas, l'annonce est générée avec gTTS : jamais d'appel muet.</li>
+                    </ul>
 
-<h5>Test de l'annonce</h5>
+                    <div class="alert alert-info small" role="note">
+                        <p class="fw-semibold mb-1"><i class="bi bi-piggy-bank" aria-hidden="true"></i> Et le coût ? En pratique, rien.</p>
+                        <ul class="mb-2 ps-3">
+                            <li>Google offre un <strong>quota gratuit chaque mois</strong> : de l'ordre de 1 million de caractères pour les voix Neural2/WaveNet, et 4 millions pour les voix Standard.</li>
+                            <li>Une annonce compte environ 50 caractères, et <strong>chaque annonce n'est générée qu'une seule fois</strong> : le fichier audio est conservé sur ce serveur et rejoué ensuite sans rien demander à Google (il n'est effacé qu'après 31 jours sans servir).</li>
+                            <li>Exemple : 300 numéros × 5 comptoirs = 1 500 annonces différentes ≈ 75 000 caractères, <strong>une seule fois</strong> — moins de 10 % du quota gratuit d'un seul mois.</li>
+                        </ul>
+                        <p class="mb-0">
+                            Pour être totalement tranquille, fixez une
+                            <a href="https://console.cloud.google.com/billing/budgets" target="_blank" rel="noopener noreferrer">alerte de budget</a>
+                            (par exemple 1 €) dans Google Cloud.
+                            <a href="https://cloud.google.com/text-to-speech/pricing" target="_blank" rel="noopener noreferrer">Tarifs officiels</a>
+                            (susceptibles d'évoluer).
+                        </p>
+                    </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card mb-3">
-            <div class="card-body">
-                <h3 class="card-title">Test des annonces vocales</h3>
-                <div id="generation-time" class="mb-3">Generation time: -- seconds</div>
-                <div id="generation-time-info" class="mb-3 text-muted" style="display: none;">
-                    La mesure du temps n'est possible que si la lecture se fait sur cette page
+                    {% include 'admin/announce_google_voice.html' %}
                 </div>
-                <div class="mb-3">
-                    <label for="call_number" class="form-label">Numéro d'appel</label>
-                    <input type="text" class="form-control" id="call_number" value="A-1">
-                </div>
-                <div class="mb-3">
-                    <label for="language_code" class="form-label">Code langue</label>
-                    <select class="form-select" id="language_code">
-                        {% for language in languages %}
-                        <option value="{{ language.code }}">{{ language.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="btn-group">
-                    <button class="btn btn-primary" data-test-audio="test">Tester l'annonce</button>
-                    <button class="btn btn-success" data-test-audio="announce">Tester sur l'écran d'annonce</button>
+            </div>
+        </div>
+
+        <div class="col-xl-5">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h6 class="card-title d-flex flex-wrap align-items-center gap-2">
+                        <i class="bi bi-soundwave" aria-hidden="true"></i> gTTS
+                        <span class="badge text-bg-secondary">Par défaut, sans configuration</span>
+                    </h6>
+                    <ul class="small mb-2">
+                        <li><i class="bi bi-plus-circle text-success" aria-hidden="true"></i> Gratuit, aucune clé ni compte à créer : fonctionne immédiatement.</li>
+                        <li><i class="bi bi-dash-circle text-danger" aria-hidden="true"></i> Voix plus robotique, une seule voix par langue.</li>
+                        <li><i class="bi bi-dash-circle text-danger" aria-hidden="true"></i> Service non officiel : Google peut le ralentir ou le bloquer sans prévenir.</li>
+                    </ul>
+                    <p class="small text-muted mb-0">Idéal pour démarrer ; passez à Google Cloud dès que possible.</p>
                 </div>
             </div>
         </div>
     </div>
-</div>
+</section>
 
+{# ---------------------------------------------------------------- #}
+<section class="admin-setting-card announce-audio-section" aria-labelledby="audio_voices_title">
+    <h5 id="audio_voices_title"><span class="step-badge" aria-hidden="true">4</span> Voix de chaque langue</h5>
+    <p class="text-muted">Le français sert de voix par défaut. Cliquez sur « Régler » pour changer le moteur ou la voix d'une langue.</p>
+
+    {# Rechargé après chaque réglage (événement voicesChanged renvoyé par les
+       routes de sauvegarde) et après un changement de « Langue de l'annonce »
+       (délai : laisser la sauvegarde se terminer avant de relire). #}
+    <div id="announce_voices_summary"
+         hx-get="/admin/announce/voices_summary"
+         hx-trigger="{{ audio_reveal }}, voicesChanged from:body, change delay:600ms from:#announce_call_translation"
+         hx-swap="innerHTML">
+        <p class="text-muted small">Chargement…</p>
+    </div>
+
+    <div id="div_select_voice"
+         class="mt-3"
+         hx-post="/admin/announce/select_language_voice"
+         hx-vals='{"language_code": "fr"}'
+         hx-trigger="{{ audio_reveal }}"
+         hx-swap="innerHTML"
+         aria-live="polite"></div>
+</section>
+
+{# ---------------------------------------------------------------- #}
+<section class="admin-setting-card announce-audio-section" aria-labelledby="audio_test_title">
+    <h5 id="audio_test_title"><span class="step-badge" aria-hidden="true">5</span> Tester</h5>
+    <p class="text-muted">Génère l'annonce avec les réglages enregistrés. La première génération d'une annonce prend un peu de temps ; les suivantes sont instantanées (fichier réutilisé).</p>
+    <div class="row g-2 align-items-end">
+        <div class="col-sm-4 col-lg-3">
+            <label for="call_number" class="form-label">Numéro d'appel</label>
+            <input type="text" class="form-control" id="call_number" value="A-1" maxlength="10">
+        </div>
+        <div class="col-sm-8 col-lg-4">
+            <label for="language_code" class="form-label">Langue du patient</label>
+            <select class="form-select" id="language_code">
+                {% for language in languages %}
+                <option value="{{ language.code }}">{{ language.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 col-lg-5">
+            <div class="btn-group flex-wrap">
+                <button type="button" class="btn btn-primary" data-test-audio="test"><i class="bi bi-play-fill" aria-hidden="true"></i> Écouter ici</button>
+                <button type="button" class="btn btn-outline-primary" data-test-audio="announce"><i class="bi bi-display" aria-hidden="true"></i> Jouer sur l'écran d'annonce</button>
+            </div>
+        </div>
+    </div>
+    <div id="generation-time" class="mt-3 small text-muted" aria-live="polite"></div>
+    <div id="generation-time-info" class="mt-3 small text-muted" style="display: none;">
+        Annonce envoyée à l'écran d'annonce (la durée de génération n'est mesurée que pour « Écouter ici »).
+    </div>
+</section>
+
+</div>
 
 <!-- Modal Structure Galerie audio -->
 <div class="modal fade" id="modal_display_gallery" tabindex="-1" aria-labelledby="modalAudioGalleryLabel" aria-hidden="true">
