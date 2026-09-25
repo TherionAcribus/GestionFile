@@ -316,12 +316,63 @@ _BUILTIN_THEMES = (
      ("#F3F6FA", "#FFFFFF", "#172B4D", "#245EA8", "#E7EFFA", "#FFFFFF")),
     ("ardoise", "Ardoise", "Variante sombre — à tester sur place selon l’éclairage et les reflets.",
      ("#17212B", "#243342", "#F3F6FA", "#7EDDB5", "#243342", "#17212B")),
+    ("classique", "Classique", "Reprend les réglages actuels de l’installation — grands textes blancs sur bandeaux vert canard.",
+     ("#B6F5F5", "#008B8B", "#FFFFFF", "#006666", "#5FB4B4", "#FFFFFF")),
 )
+
+#: Surcharges exactes du thème « Classique », page par page : il reproduit la
+#: configuration réellement en service, contrairement aux autres thèmes dont
+#: les valeurs sont dérivées de leur palette.
+_BUILTIN_CSS_OVERRIDES = {
+    "classique": {
+        "announce": {
+            "announce_secondary_color": "#B6F5F5",
+            "title_font_color": "#FFFFFF",
+            "title_font_size": "90px",
+            "title_font_border_size": "2px",
+            "title_font_border_color": "#000000",
+            "title_background_color": "#006666",
+            "title_background_height": "200px",
+            "subtitle_font_color": "#FFFFFF",
+            "subtitle_font_size": "75px",
+            "subtitle_font_border_size": "0px",
+            "subtitle_font_border_color": "#000000",
+            "text_up_background_color": "#008B8B",
+            "text_up_font_color": "#FFFFFF",
+            "text_up_font_size": "75px",
+            "text_up_font_border_size": "0px",
+            "text_up_font_border_color": "#000000",
+            "calling_font_size": "140px",
+            "calling_font_color": "#FFFFFF",
+            "calling_font_border_size": "2px",
+            "calling_font_border_color": "#000000",
+            "calling_background_color": "#008B8B",
+            "text_down_background_color": "#5FB4B4",
+            "text_down_font_color": "#FFFFFF",
+            "text_down_font_size": "150px",
+            "text_down_font_border_size": "2px",
+            "text_down_font_border_color": "#000000",
+            "ongoing_background_color": "#008B8B",
+            "ongoing_font_color": "#FFFFFF",
+            "ongoing_font_size": "75px",
+            "ongoing_font_border_size": "0px",
+            "ongoing_font_border_color": "#000000",
+            "next_patients_font_color": "#FFFFFF",
+            "next_patients_font_size": "90px",
+            "next_patients_font_border_size": "2px",
+            "next_patients_font_border_color": "#000000",
+            "next_patients_background_color": "#006666",
+        },
+    },
+}
 
 
 def builtin_themes(page):
     themes = []
     for slug, name, description, colors in _BUILTIN_THEMES:
+        overrides = _BUILTIN_CSS_OVERRIDES.get(slug, {})
+        if slug in _BUILTIN_CSS_OVERRIDES and page not in overrides:
+            continue
         background, surface, text, primary, soft, on_primary = colors
         large = slug == "lisibilite"
         css = {}
@@ -339,15 +390,15 @@ def builtin_themes(page):
 
         css[f"{page}_secondary_color"] = background
         if page == "announce":
-            block("title", on_primary, primary, "96px" if large else "72px")
-            css.update(title_background_height="170px" if large else "150px",
+            block("title", on_primary, primary, "100px" if large else "90px")
+            css.update(title_background_height="220px" if large else "200px",
                        subtitle_font_color=on_primary,
-                       subtitle_font_size="48px" if large else "36px")
-            block("calling", on_primary, primary, "120px" if large else "96px")
-            block("text_up", text, surface, "48px" if large else "38px")
-            block("text_down", text, surface, "72px" if large else "56px")
-            block("ongoing", text, soft, "56px" if large else "44px")
-            block("next_patients", text, soft, "48px" if large else "38px")
+                       subtitle_font_size="85px" if large else "75px")
+            block("calling", on_primary, primary, "160px" if large else "140px")
+            block("text_up", text, surface, "90px" if large else "75px")
+            block("text_down", text, surface, "170px" if large else "150px")
+            block("ongoing", text, soft, "90px" if large else "75px")
+            block("next_patients", text, soft, "100px" if large else "90px")
         elif page == "patient":
             block("patient_title", on_primary, primary, "64px" if large else "52px")
             block("subtitle", text, soft, "40px" if large else "34px")
@@ -382,6 +433,8 @@ def builtin_themes(page):
             css["phone_your_turn_line1_font_weight"] = "700"
             block("phone_specific_message", text, soft, "26px" if large else "22px")
             css["phone_specific_message_background_height"] = "auto"
+
+        css.update(overrides.get(page, {}))
 
         layout = default_layout(page)
         for item in layout.values():
