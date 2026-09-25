@@ -4,11 +4,11 @@
     "texts": [
         {
             "key": "patient_page_title",
-            "value": "Bienvenue à la {P}"
+            "value": "Bienvenue à la pharmacie {P}"
         },
         {
             "key": "patient_page_subtitle",
-            "value": "Afin d'améliorer votre prise en charge, saisissez le motif de votre visite. Nous vous appelerons à votre tour."
+            "value": "Afin de faciliter votre prise en charge, merci de vous enregistrer sur cette borne."
         },
         {
             "key": "patient_page_right_page",
