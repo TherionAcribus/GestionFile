@@ -798,7 +798,25 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                 page.locator("#editor-theme-save").click()
                 playwright.expect(page.locator(".page-editor-theme-item")).to_have_count(6)
                 playwright.expect(page.locator(".page-editor-theme-item .btn-outline-danger")).to_have_count(1)
+                page.locator(".page-editor-dialog-footer .btn").click()
+
+                # Aperçu épinglé : il reste visible quand l'inspecteur défile.
+                page.set_viewport_size({"width": 1280, "height": 620})
+                page.locator("[data-component-id]").first.click()
+                rects = page.evaluate("""() => {
+                    window.scrollTo({top: 800, behavior: 'instant'});
+                    return {
+                        canvas: document.querySelector('.page-editor-canvas').getBoundingClientRect(),
+                        toolbar: document.querySelector('.page-editor-toolbar').getBoundingClientRect(),
+                        preview: document.querySelector('#editor-preview').getBoundingClientRect(),
+                    };
+                }""")
+                assert rects["canvas"]["y"] <= rects["toolbar"]["y"] + rects["toolbar"]["height"] + 8
+                assert rects["preview"]["y"] < rects["canvas"]["y"] + rects["canvas"]["height"]
+                page.evaluate("window.scrollTo(0, 0)")
+
                 page.set_viewport_size({"width": 390, "height": 844})
+                page.locator("#editor-themes").click()
                 assert page.locator(".page-editor-dialog-body").evaluate("el => el.scrollWidth <= el.clientWidth")
                 assert not errors
                 assert client.get(f"/admin/page-editor/{page_key}/state").get_json() == before

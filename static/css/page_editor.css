@@ -19,6 +19,21 @@
     align-items: start;
 }
 
+/* Aperçu épinglé : la colonne centrale reste sous la barre d'outils pendant
+   que l'inspecteur défile — fini les allers-retours pour voir l'effet d'un
+   réglage situé bas de page. L'offset est mesuré en JS
+   (--page-editor-toolbar-height) car la barre s'étale sur plusieurs lignes
+   selon la largeur. Désactivé en empilement (< 768px). */
+@media (min-width: 768px) {
+    .page-editor-canvas {
+        max-height: calc(100vh - var(--page-editor-toolbar-height, 6rem) - .5rem);
+        overflow-y: auto;
+        position: sticky;
+        top: var(--page-editor-toolbar-height, 6rem);
+        z-index: 10;
+    }
+}
+
 .page-editor-panel,
 .page-editor-canvas {
     background: var(--bs-body-bg);

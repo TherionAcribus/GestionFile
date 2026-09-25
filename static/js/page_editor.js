@@ -25,6 +25,20 @@
     const historyPanel = document.getElementById('editor-history');
     const revisionsContainer = document.getElementById('editor-revisions');
     const realSizeToggle = document.getElementById('editor-real-size');
+    const topToolbar = document.querySelector('.page-editor-toolbar');
+
+    // L'aperçu est épinglé sous la barre d'outils : l'offset suit sa hauteur
+    // réelle (les boutons peuvent s'étaler sur plusieurs lignes selon la
+    // largeur), sinon l'aperçu passerait dessous et serait masqué.
+    function syncStickyOffset() {
+        if (!topToolbar) return;
+        root.style.setProperty('--page-editor-toolbar-height', (topToolbar.offsetHeight + 8) + 'px');
+    }
+    syncStickyOffset();
+    window.addEventListener('resize', syncStickyOffset);
+    if (window.ResizeObserver && topToolbar) {
+        new ResizeObserver(syncStickyOffset).observe(topToolbar);
+    }
 
     let adapter;
     let payload;
