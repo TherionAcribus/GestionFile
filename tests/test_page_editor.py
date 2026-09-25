@@ -45,7 +45,14 @@ def make_payload(page):
     for component in adapter["components"].values():
         for field in component["config"]:
             spec = get_spec(field["key"])
-            config[field["key"]] = False if spec.value_type == "value_bool" else "Texte de démonstration"
+            if spec.value_type == "value_bool":
+                config[field["key"]] = False
+            elif spec.value_type == "value_int":
+                config[field["key"]] = 5
+            elif spec.allowed_values:
+                config[field["key"]] = sorted(spec.allowed_values)[0]
+            else:
+                config[field["key"]] = "Texte de démonstration"
         for field in component["css"]:
             css[field["key"]] = (
                 "#008B8B" if field["type"] == "color"
@@ -926,6 +933,152 @@ def test_publish_is_atomic_and_detects_advanced_mode_conflict(editor_app):
         assert ConfigOption.query.filter_by(config_key="announce_title").first() is None
         state = PageEditorState.query.filter_by(page_key="announce").one()
         assert state.draft_json is not None
+
+
+def _preview_ready_app(app):
+    """Environnement Jinja minimal pour rendre le gabarit d'aperçu hors du
+    serveur complet (mêmes globals que le parcours navigateur e2e)."""
+    from jinja2 import FileSystemLoader
+
+    from page_editor import preview_vars_style
+
+    root = Path(__file__).resolve().parents[1]
+    app.jinja_loader = FileSystemLoader(root / "templates")
+    app.jinja_env.globals.update(
+        csrf_token=lambda: "test",
+        get_css_url=lambda mode=None: "/static/css/test.css",
+        page_layout_style=layout_style,
+        preview_vars_style=preview_vars_style,
+    )
+
+
+def test_announce_display_flag_editable_despite_advanced_disabled(editor_app):
+    """« Prochains patients » reste sélectionnable et affichable depuis
+    l'éditeur même lorsque le réglage du mode avancé est désactivé :
+    le flag est exposé dans l'inspecteur, l'aperçu suit le brouillon et la
+    publication écrit la valeur choisie."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["ANNOUNCE_NEXT_PATIENTS_DISPLAY"] = False
+        published_base = payload_hash(current_payload("announce"))
+
+    document = client.get("/admin/page-editor/announce/state").get_json()
+    next_fields = {
+        field["key"] for field in document["adapter"]["components"]["next"]["config"]
+    }
+    assert "announce_next_patients_display" in next_fields
+    assert document["adapter"]["components"]["next"]["managed_bool"] == \
+        "announce_next_patients_display"
+
+    # L'aperçu du composant publié masqué porte l'attribut qui permet au
+    # brouillon de le réafficher en direct (pas de blocage figé).
+    preview = client.get("/admin/page-editor/announce/preview").get_data(as_text=True)
+    assert 'id="div_next_patients" data-page-editor-component="next" ' \
+           'data-config-bool="announce_next_patients_display" data-config-hidden' in preview
+
+    # L'utilisateur coche « Afficher la liste des prochains patients ».
+    payload = make_payload("announce")
+    payload["config"]["announce_next_patients_display"] = True
+    payload["base_hash"] = published_base
+    saved = client.put(
+        "/admin/page-editor/announce/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert saved.status_code == 200
+
+    preview = client.get("/admin/page-editor/announce/preview").get_data(as_text=True)
+    assert 'id="div_next_patients" data-page-editor-component="next" ' \
+           'data-config-bool="announce_next_patients_display" >' in preview
+
+    published = client.post(
+        "/admin/page-editor/announce/publish",
+        json={"draft_version": saved.get_json()["draft_version"]},
+    )
+    assert published.status_code == 200
+    with app.app_context():
+        option = ConfigOption.query.filter_by(
+            config_key="announce_next_patients_display").one()
+        assert option.value_bool is True
+        assert app.config["ANNOUNCE_NEXT_PATIENTS_DISPLAY"] is True
+
+
+def test_announce_display_mode_select_hides_component_in_preview(editor_app):
+    """Le mode d'affichage « Jamais affiché » est un réglage de l'éditeur et
+    masque le composant dans l'aperçu piloté par le brouillon."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    payload = make_payload("announce")
+    payload["config"]["announce_text_up_patients_display"] = "never"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = client.put(
+        "/admin/page-editor/announce/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert saved.status_code == 200
+
+    preview = client.get("/admin/page-editor/announce/preview").get_data(as_text=True)
+    assert 'data-config-hide-values=\'["never"]\' data-config-hidden' in preview
+
+
+def test_state_completes_legacy_draft_with_published_config(editor_app):
+    """Un brouillon enregistré avant l'exposition d'un réglage reçoit la
+    valeur publiée de la clé manquante : l'inspecteur ne présente pas une
+    case décochée trompeuse."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    draft = make_payload("announce")
+    del draft["config"]["announce_next_patients_display"]
+    del draft["config"]["announce_next_patients_alignment"]
+    draft["base_hash"] = payload_hash(draft)
+    with app.app_context():
+        state = PageEditorState(
+            page_key="announce", draft_json=draft,
+            draft_base_hash=draft["base_hash"], draft_version=7,
+        )
+        db.session.add(state)
+        app.config["ANNOUNCE_NEXT_PATIENTS_DISPLAY"] = True
+        db.session.commit()
+
+    document = client.get("/admin/page-editor/announce/state").get_json()
+    assert document["draft"]["config"]["announce_next_patients_display"] is True
+    assert document["draft"]["config"]["announce_next_patients_alignment"] == "center"
+
+
+def test_publish_accepts_legacy_draft_missing_managed_keys(editor_app):
+    """La comparaison d'empreinte se limite aux clés connues du brouillon :
+    les réglages ajoutés depuis ne bloquent pas la publication et sont
+    publiés avec la valeur actuelle."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    # Empreinte de base = publié au moment de la création du brouillon,
+    # calculée sur le même jeu de clés que le brouillon.
+    base = make_payload("announce")
+    del base["config"]["announce_next_patients_display"]
+    draft = make_payload("announce")
+    del draft["config"]["announce_next_patients_display"]
+    draft["config"]["announce_title"] = "Titre issu d'un ancien brouillon"
+    draft["base_hash"] = payload_hash(base)
+    with app.app_context():
+        state = PageEditorState(
+            page_key="announce", draft_json=draft,
+            draft_base_hash=draft["base_hash"], draft_version=4,
+        )
+        db.session.add(state)
+        app.config["ANNOUNCE_NEXT_PATIENTS_DISPLAY"] = True
+        db.session.commit()
+
+    response = client.post(
+        "/admin/page-editor/announce/publish", json={"draft_version": 4})
+    assert response.status_code == 200
+    with app.app_context():
+        assert ConfigOption.query.filter_by(
+            config_key="announce_next_patients_display").one().value_bool is True
+        assert ConfigOption.query.filter_by(
+            config_key="announce_title").one().value_str == \
+            "Titre issu d'un ancien brouillon"
 
 
 def test_publish_rolls_back_every_database_change_on_failure(editor_app, monkeypatch):

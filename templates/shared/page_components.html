@@ -19,13 +19,13 @@
 </div>
 {%- endmacro %}
 
-{% macro phone_lines(lines, your_turn=false, specific_message='', show_specific=true, preview=false) -%}
+{% macro phone_lines(lines, your_turn=false, specific_message='', show_specific=true, preview=false, your_turn_enabled=true) -%}
 {% for phone_line in lines %}
     {% set key = ('phone_your_turn_line' if your_turn else 'phone_line') ~ loop.index %}
     {% set component = ('your_turn_line' if your_turn else 'line') ~ loop.index %}
-    <div id="{{ key }}" class="phone_line" data-page-editor-component="{{ component }}"{% if preview %} data-config-key="{{ key }}"{% endif %}>{{ phone_line | safe }}</div>
+    <div id="{{ key }}" class="phone_line" data-page-editor-component="{{ component }}"{% if preview %} data-config-key="{{ key }}"{% if your_turn %} data-config-bool="phone_display_your_turn"{% if not your_turn_enabled %} data-config-hidden{% endif %}{% endif %}{% endif %}>{{ phone_line | safe }}</div>
 {% endfor %}
-{% if show_specific %}
-    <div id="specific_message" data-page-editor-component="specific">{{ specific_message | safe }}</div>
+{% if show_specific or preview %}
+    <div id="specific_message" data-page-editor-component="specific"{% if preview %} data-config-bool="phone_display_specific_message"{% if not show_specific %} data-config-hidden{% endif %}{% endif %}>{{ specific_message | safe }}</div>
 {% endif %}
 {%- endmacro %}

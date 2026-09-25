@@ -252,9 +252,7 @@
             });
             componentIds.forEach(function (componentId) {
                 const component = adapter.components[componentId];
-                const disabledReason = disabledComponents[componentId]
-                    || (component.managed_bool && !payload.config[component.managed_bool]
-                        ? 'Désactivé : la case « Afficher » de ce composant est décochée.' : null);
+                const disabledReason = managedDisabledReason(componentId, component);
                 const inScenario = !component.scenarios || component.scenarios.includes(scenarioSelect.value);
                 const button = document.createElement('button');
                 button.type = 'button';
@@ -313,6 +311,24 @@
                 }
             }));
         });
+    }
+
+    // État « désactivé » piloté par le brouillon : les réglages du mode
+    // avancé qui conditionnent un composant sont exposés dans l'inspecteur
+    // (case « Afficher » ou mode d'affichage), donc c'est la valeur du
+    // brouillon qui décide — jamais la configuration actuellement publiée.
+    function managedDisabledReason(componentId, component) {
+        if (component.managed_bool || component.hidden_when) {
+            if (component.managed_bool && !payload.config[component.managed_bool]) {
+                return 'Désactivé : la case « Afficher » de ce composant est décochée.';
+            }
+            const rule = component.hidden_when;
+            if (rule && (rule.values || []).includes(payload.config[rule.key])) {
+                return 'Désactivé : son mode d\'affichage est réglé sur « Jamais ».';
+            }
+            return null;
+        }
+        return disabledComponents[componentId] || null;
     }
 
     function formGroup(labelText, control) {
@@ -723,6 +739,26 @@
                     control.className = 'form-check-input ms-2';
                     control.checked = Boolean(payload.config[field.key]);
                     bindValue(control, function (element) { payload.config[field.key] = element.checked; });
+                } else if (field.type === 'select') {
+                    control = document.createElement('select');
+                    control.className = 'form-select';
+                    (field.choices || []).forEach(function (choice) {
+                        const option = document.createElement('option');
+                        option.value = choice[0];
+                        option.textContent = choice[1];
+                        control.appendChild(option);
+                    });
+                    control.value = payload.config[field.key] == null ? '' : payload.config[field.key];
+                    bindValue(control, function (element) { payload.config[field.key] = element.value; });
+                } else if (field.type === 'int') {
+                    control = document.createElement('input');
+                    control.type = 'number';
+                    control.className = 'form-control';
+                    control.step = '1';
+                    control.value = payload.config[field.key] == null ? 0 : payload.config[field.key];
+                    bindValue(control, function (element) {
+                        payload.config[field.key] = Number.parseInt(element.value, 10) || 0;
+                    });
                 } else {
                     control = document.createElement('textarea');
                     control.className = 'form-control';
@@ -991,6 +1027,15 @@
         }
         if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
         if (value === null || value === undefined || value === '') return '∅';
+        if (change.section === 'config') {
+            const field = Object.values(adapter.components)
+                .flatMap(function (component) { return component.config || []; })
+                .find(function (item) { return item.key === change.key && item.choices; });
+            if (field) {
+                const choice = field.choices.find(function (entry) { return entry[0] === value; });
+                if (choice) return choice[1];
+            }
+        }
         const text = String(value);
         return text.length > 60 ? text.slice(0, 57) + '…' : text;
     }
@@ -1047,13 +1092,11 @@
                 findings.push({level: 'warning', message: '« ' + label + ' » sera masqué.'});
             }
         });
-        Object.keys(disabledComponents).forEach(function (componentId) {
-            findings.push({level: 'info', message: disabledComponents[componentId]});
-        });
         Object.keys(adapter.components).forEach(function (componentId) {
             const definition = adapter.components[componentId];
-            if (definition.managed_bool && !payload.config[definition.managed_bool]) {
-                findings.push({level: 'info', message: '« ' + definition.label + ' » est désactivé (case « Afficher » décochée).'});
+            const reason = managedDisabledReason(componentId, definition);
+            if (reason) {
+                findings.push({level: 'info', message: '« ' + definition.label + ' » : ' + reason});
             }
         });
         Object.keys(adapter.components).forEach(function (componentId) {

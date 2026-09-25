@@ -26,6 +26,7 @@ from page_editor import (
     ADAPTERS,
     advanced_disabled_components,
     builtin_themes,
+    complete_config,
     current_payload,
     enabled_pages,
     get_adapter,
@@ -209,6 +210,11 @@ def _state_document(page, adapter):
     state = PageEditorState.query.filter_by(page_key=page).first()
     published = current_payload(page)
     draft = deepcopy(state.draft_json) if state and state.draft_json else None
+    if draft is not None:
+        # Complète les réglages ajoutés depuis la création du brouillon pour
+        # que l'inspecteur affiche leurs valeurs réelles et non des cases
+        # décochées par défaut.
+        draft["config"] = complete_config(page, draft.get("config"))
     revisions = (
         PageEditorRevision.query.filter_by(page_key=page)
         .order_by(PageEditorRevision.revision.desc())
@@ -250,10 +256,28 @@ def _stage_config(key, value):
         setattr(option, column, column_value)
 
 
+def _draft_base_reference(current, draft):
+    """Empreinte de référence limitée aux clés de contenu/apparence déjà
+    présentes dans ``draft``. Les réglages ajoutés après la création du
+    brouillon sont ignorés : ils ne pouvaient pas être modifiés en dehors
+    de l'éditeur entre-temps puisqu'ils n'existaient pas encore dans le
+    modèle."""
+    reference = deepcopy(current)
+    if isinstance(draft, dict):
+        for section in ("config", "css"):
+            values = draft.get(section)
+            if isinstance(values, dict):
+                reference[section] = {
+                    key: value for key, value in reference[section].items() if key in values
+                }
+    return reference
+
+
 def _publish(page, adapter, state, payload, *, require_base_match):
     normalized = validate_payload(page, payload)
     current = current_payload(page)
-    if require_base_match and state.draft_base_hash != payload_hash(current):
+    if require_base_match and state.draft_base_hash != payload_hash(
+            _draft_base_reference(current, payload)):
         return None, "La configuration avancée a changé depuis la création du brouillon."
 
     for key, value in normalized["config"].items():
@@ -422,6 +446,9 @@ def preview(page):
         deepcopy(state_row.draft_json)
         if state_row and state_row.draft_json else current_payload(page)
     )
+    # Les brouillons antérieurs à l'exposition d'un réglage dans l'éditeur ne
+    # contiennent pas sa clé : on les complète avec la configuration publiée.
+    payload["config"] = complete_config(page, payload.get("config"))
     tokens = _preview_tokens()
     preview_config = {
         key: _demo_text(value, tokens) if isinstance(value, str) else value
@@ -440,15 +467,13 @@ def preview(page):
     preview_button = _first_preview_button()
     announce_flags = {}
     if page == "announce":
+        # L'aperçu reflète le brouillon, pas la configuration publiée : les
+        # options d'affichage se pilotent désormais depuis l'éditeur.
         announce_flags = {
-            "ongoing": bool(current_app.config.get(
-                get_spec("announce_ongoing_display").config_name, True)),
-            "next": bool(current_app.config.get(
-                get_spec("announce_next_patients_display").config_name, True)),
-            "text_up": current_app.config.get(
-                get_spec("announce_text_up_patients_display").config_name) != "never",
-            "text_down": current_app.config.get(
-                get_spec("announce_text_down_patients_display").config_name) != "never",
+            "ongoing": bool(payload["config"].get("announce_ongoing_display", True)),
+            "next": bool(payload["config"].get("announce_next_patients_display", True)),
+            "text_up": payload["config"].get("announce_text_up_patients_display") != "never",
+            "text_down": payload["config"].get("announce_text_down_patients_display") != "never",
         }
     hidden_components = [
         component_id
@@ -463,16 +488,16 @@ def preview(page):
         preview_config=preview_config,
         preview_announce_flags=announce_flags,
         preview_hidden_components=hidden_components,
-        preview_phone_center=bool(current_app.config.get("PHONE_CENTER", False)),
+        preview_phone_center=bool(payload["config"].get("phone_center", False)),
         preview_tokens=tokens,
         preview_call_texts=preview_call_texts,
         preview_phone_specific_message=(
             preview_button.activity.specific_message
             if preview_button and preview_button.activity else ""
         ),
-        preview_phone_display_specific_message=current_app.config.get(
-            "PHONE_DISPLAY_SPECIFIC_MESSAGE", True
-        ),
+        preview_phone_display_specific_message=bool(payload["config"].get(
+            "phone_display_specific_message", True
+        )),
         adapter=public_adapter_data(page),
         phone_confirmation_lines=[phone_html.get(f"phone_line{index}", "") for index in range(1, 7)],
         phone_your_turn_lines=[phone_html.get(f"phone_your_turn_line{index}", "") for index in range(1, 7)],

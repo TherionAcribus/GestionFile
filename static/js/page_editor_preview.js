@@ -29,13 +29,31 @@
                 element.textContent = demoText(entry[1], element);
             });
         });
-        if (document.body.dataset.page === 'phone') renderPhoneMarkdown(payload);
+        if (document.body.dataset.page === 'phone') {
+            renderPhoneMarkdown(payload);
+            const infos = document.getElementById('div_infos');
+            if (infos) infos.classList.toggle('text-center', Boolean(payload.config.phone_center));
+        }
+        // Les règles de masquage liées à la configuration se cumulent :
+        // l'élément reste masqué dès qu'une règle l'exige.
+        const hiddenByConfig = new Map();
+        const markHidden = function (element, hidden) {
+            hiddenByConfig.set(element, Boolean(hiddenByConfig.get(element)) || hidden);
+        };
         document.querySelectorAll('[data-config-bool]').forEach(function (element) {
-            element.toggleAttribute('data-config-hidden', !payload.config[element.dataset.configBool]);
+            markHidden(element, !payload.config[element.dataset.configBool]);
+        });
+        document.querySelectorAll('[data-config-hide-values]').forEach(function (element) {
+            let values = [];
+            try { values = JSON.parse(element.dataset.configHideValues); } catch (error) { values = []; }
+            markHidden(element, values.includes(payload.config[element.dataset.configDisplayKey]));
         });
         document.querySelectorAll('[data-hide-empty]').forEach(function (element) {
             const value = payload.config[element.dataset.configKey];
-            element.toggleAttribute('data-config-hidden', !String(value == null ? '' : value).trim());
+            markHidden(element, !String(value == null ? '' : value).trim());
+        });
+        hiddenByConfig.forEach(function (hidden, element) {
+            element.toggleAttribute('data-config-hidden', hidden);
         });
         if (document.body.dataset.page === 'announce') {
             const center = document.getElementById('pe_center');
@@ -44,6 +62,11 @@
                     && payload.layout?.gallery?.visible !== false && center.dataset.scenario === 'gallery';
                 center.classList.toggle('pe-grid-2', divided);
                 center.classList.toggle('pe-grid-1', !divided);
+            }
+            const nextWrapper = document.querySelector('.next_patients_wrapper');
+            if (nextWrapper && payload.config.announce_next_patients_alignment) {
+                nextWrapper.classList.toggle('align-center', payload.config.announce_next_patients_alignment === 'center');
+                nextWrapper.classList.toggle('align-right', payload.config.announce_next_patients_alignment === 'right');
             }
         }
         Object.entries(payload.layout || {}).forEach(function (entry) {

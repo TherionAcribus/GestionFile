@@ -41,7 +41,7 @@
         {{ page_components.announce_header(preview_config.announce_title, preview_config.announce_subtitle, true) }}
         <div class="div_center {{ 'pe-grid-2' if scenario == 'gallery' and payload.config.announce_infos_display else 'pe-grid-1' }}" id="pe_center" data-scenario="{{ scenario }}">
             <div id="left_side">
-                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients" data-hide-empty="1" {% if not preview_announce_flags.text_up %}data-adv-hidden{% endif %}>{{ preview_config.announce_text_up_patients }}</div>
+                <div id="div_display_text_up" data-page-editor-component="top_message" data-config-key="announce_text_up_patients" data-hide-empty="1" data-config-display-key="announce_text_up_patients_display" data-config-hide-values='["never"]' {% if not preview_announce_flags.text_up %}data-config-hidden{% endif %}>{{ preview_config.announce_text_up_patients }}</div>
                 <div id="div_calling" data-page-editor-component="calls">
                     <ul id="patient_list">
                     {% if scenario != 'empty' %}
@@ -50,15 +50,15 @@
                     {% endif %}
                     </ul>
                 </div>
-                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" data-hide-empty="1" {% if not preview_announce_flags.text_down %}data-adv-hidden{% endif %} {% if scenario != 'empty' %}hidden{% endif %}>{{ preview_config.announce_text_down_patients }}</div>
-                <div id="div_ongoing" data-page-editor-component="ongoing" {% if not preview_announce_flags.ongoing %}data-adv-hidden{% endif %}><p class="text_patient_ongoing" data-config-key="announce_ongoing_text" data-preview-number="042">{{ preview_config.announce_ongoing_text }}</p></div>
+                <div id="div_display_text_down" data-page-editor-component="empty_message" data-config-key="announce_text_down_patients" data-hide-empty="1" data-config-display-key="announce_text_down_patients_display" data-config-hide-values='["never"]' {% if not preview_announce_flags.text_down %}data-config-hidden{% endif %} {% if scenario != 'empty' %}hidden{% endif %}>{{ preview_config.announce_text_down_patients }}</div>
+                <div id="div_ongoing" data-page-editor-component="ongoing" data-config-bool="announce_ongoing_display" {% if not preview_announce_flags.ongoing %}data-config-hidden{% endif %}><p class="text_patient_ongoing" data-config-key="announce_ongoing_text" data-preview-number="042">{{ preview_config.announce_ongoing_text }}</p></div>
             </div>
             <div id="div_pub" data-page-editor-component="gallery" data-config-bool="announce_infos_display" {% if not payload.config.announce_infos_display %}data-config-hidden{% endif %} {% if scenario != 'gallery' %}hidden{% endif %}><div class="page-editor-gallery-placeholder">Galerie de démonstration</div></div>
         </div>
         <div id="div_footer">
-            <div id="div_next_patients" data-page-editor-component="next" {% if not preview_announce_flags.next %}data-adv-hidden{% endif %}>
+            <div id="div_next_patients" data-page-editor-component="next" data-config-bool="announce_next_patients_display" {% if not preview_announce_flags.next %}data-config-hidden{% endif %}>
                 <div id="div_next_patients_content">
-                    <div class="next_patients_wrapper">
+                    <div class="next_patients_wrapper {% if payload.config.announce_next_patients_alignment == 'center' %}align-center{% elif payload.config.announce_next_patients_alignment == 'right' %}align-right{% endif %}">
                         <span class="next_patients_label" data-config-key="announce_next_patients_text">{{ preview_config.announce_next_patients_text }}</span>
                         <span class="next_patients_list">061, 064, 072</span>
                         <span class="next_patients_hint">(ordre indicatif)</span>
@@ -95,7 +95,7 @@
                 </div>
             {% endif %}
         </div>
-        {% set show_specific = scenario in ('validation', 'conclusion') and preview_specific_message %}
+        {% set show_specific = scenario in ('validation', 'conclusion') and preview_specific_message and payload.config.page_patient_display_specific_message %}
         <div id="div_buttons_children" class="{{ 'buttons_children_specific_message' if show_specific else 'buttons_children_active' }}" data-page-editor-component="subtitle">
             <div class="{{ 'div_text_explanation_specific_message' if show_specific else 'div_text_explanation' }}" data-config-key="page_patient_subtitle">{{ preview_specific_message if show_specific else preview_config.page_patient_subtitle }}</div>
         </div>
@@ -123,7 +123,8 @@
                     scenario == 'your-turn',
                     preview_phone_specific_message,
                     preview_phone_display_specific_message,
-                    true
+                    true,
+                    payload.config.phone_display_your_turn
                 ) }}
             {% endif %}
         </div>

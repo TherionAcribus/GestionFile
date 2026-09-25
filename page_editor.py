@@ -47,7 +47,7 @@ _MARKER_LABELS = {
 
 
 def _component(label, zone, selector, *, config=None, css=None, span=12,
-               scenarios=None, managed_bool=None):
+               scenarios=None, managed_bool=None, hidden_when=None):
     return {
         "label": label,
         "zone": zone,
@@ -56,6 +56,7 @@ def _component(label, zone, selector, *, config=None, css=None, span=12,
         "span": span,
         "scenarios": scenarios,
         "managed_bool": managed_bool,
+        "hidden_when": hidden_when,
         "config": config or [],
         "css": css or [],
     }
@@ -95,7 +96,13 @@ ADAPTERS = {
                      {"key": "subtitle_font_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "subtitle_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "top_message": _component("Message supérieur", "main", "#div_display_text_up",
-                config=[{"key": "announce_text_up_patients", "label": "Texte", "type": "text"}],
+                hidden_when={"key": "announce_text_up_patients_display", "values": ["never"]},
+                config=[{"key": "announce_text_up_patients", "label": "Texte", "type": "text"},
+                        {"key": "announce_text_up_patients_display", "label": "Mode d'affichage", "type": "select",
+                         "choices": [["always", "Toujours affiché"],
+                                     ["empty", "Affiché si liste vide"],
+                                     ["full", "Affiché si patient(s)"],
+                                     ["never", "Jamais affiché"]]}],
                 css=[{"key": "text_up_font_size", "label": "Taille", "type": "size"},
                      {"key": "text_up_font_color", "label": "Couleur", "type": "color"},
                      {"key": "text_up_background_color", "label": "Fond", "type": "color"},
@@ -111,14 +118,20 @@ ADAPTERS = {
                      {"key": "calling_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "empty_message": _component("Message file vide", "main", "#div_display_text_down",
                 scenarios=["empty"],
-                config=[{"key": "announce_text_down_patients", "label": "Texte", "type": "text"}],
+                hidden_when={"key": "announce_text_down_patients_display", "values": ["never"]},
+                config=[{"key": "announce_text_down_patients", "label": "Texte", "type": "text"},
+                        {"key": "announce_text_down_patients_display", "label": "Mode d'affichage", "type": "select",
+                         "choices": [["empty", "Affiché si liste vide"],
+                                     ["never", "Jamais affiché"]]}],
                 css=[{"key": "text_down_font_size", "label": "Taille", "type": "size"},
                      {"key": "text_down_font_color", "label": "Couleur", "type": "color"},
                      {"key": "text_down_background_color", "label": "Fond", "type": "color"},
                      {"key": "text_down_font_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "text_down_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "ongoing": _component("Patients au comptoir", "main", "#div_ongoing",
-                config=[{"key": "announce_ongoing_text", "label": "Format", "type": "text"}],
+                managed_bool="announce_ongoing_display",
+                config=[{"key": "announce_ongoing_display", "label": "Afficher les patients au comptoir", "type": "bool"},
+                        {"key": "announce_ongoing_text", "label": "Format", "type": "text"}],
                 css=[{"key": "ongoing_font_size", "label": "Taille", "type": "size"},
                      {"key": "ongoing_font_color", "label": "Couleur", "type": "color"},
                      {"key": "ongoing_background_color", "label": "Fond", "type": "color"},
@@ -128,7 +141,11 @@ ADAPTERS = {
                 scenarios=["gallery"], managed_bool="announce_infos_display",
                 config=[{"key": "announce_infos_display", "label": "Afficher", "type": "bool"}]),
             "next": _component("Prochains patients", "footer", "#div_next_patients",
-                config=[{"key": "announce_next_patients_text", "label": "Texte", "type": "text"}],
+                managed_bool="announce_next_patients_display",
+                config=[{"key": "announce_next_patients_display", "label": "Afficher la liste des prochains patients", "type": "bool"},
+                        {"key": "announce_next_patients_text", "label": "Texte", "type": "text"},
+                        {"key": "announce_next_patients_alignment", "label": "Alignement du texte", "type": "select",
+                         "choices": [["center", "Centré"], ["left", "Gauche"]]}],
                 css=[{"key": "next_patients_font_size", "label": "Taille", "type": "size"},
                      {"key": "next_patients_font_color", "label": "Couleur", "type": "color"},
                      {"key": "next_patients_background_color", "label": "Fond", "type": "color"},
@@ -160,6 +177,13 @@ ADAPTERS = {
                      {"key": "patient_title_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "patient_title_border_color", "label": "Couleur contour", "type": "color"}]),
             "buttons": _component("Boutons d'activité", "main", "#div_buttons_parents",
+                config=[{"key": "page_patient_disable_button", "label": "Griser les boutons si l'activité n'est pas en cours", "type": "bool"},
+                        {"key": "page_patient_direct_print", "label": "Imprimer directement le ticket (sans écran de validation)", "type": "bool"},
+                        {"key": "page_patient_display_button_scan", "label": "Afficher le bouton « Scanner et valider »", "type": "bool"},
+                        {"key": "page_patient_display_scan_explanation", "label": "Afficher les explications pour scanner le QR-Code", "type": "bool"},
+                        {"key": "page_patient_print_after_scan", "label": "Page de réimpression après « Scan »", "type": "bool"},
+                        {"key": "page_patient_print_after_print", "label": "Page de réimpression après « Print »", "type": "bool"},
+                        {"key": "page_patient_end_timer", "label": "Délai avant retour à l'accueil (s)", "type": "int"}],
                 css=[{"key": "circle_button_size", "label": "Bouton rond", "type": "size"},
                      {"key": "square_button_width", "label": "Largeur bouton", "type": "size"},
                      {"key": "square_button_height", "label": "Hauteur bouton", "type": "size"},
@@ -167,7 +191,10 @@ ADAPTERS = {
                      {"key": "square_button_border_size", "label": "Épaisseur bordure", "type": "size"},
                      {"key": "square_button_border_color", "label": "Couleur bordure", "type": "color"}]),
             "subtitle": _component("Sous-titre / état", "footer", "#div_buttons_children",
-                config=[{"key": "page_patient_subtitle", "label": "Texte", "type": "text"}],
+                config=[{"key": "page_patient_subtitle", "label": "Texte", "type": "text"},
+                        {"key": "page_patient_disable_default_message", "label": "Texte si l'activité n'est pas en cours", "type": "text"},
+                        {"key": "page_patient_display_specific_message", "label": "Message spécifique d'activité dans le pied de page", "type": "bool"},
+                        {"key": "page_patient_timer_activity_inactive", "label": "Durée du message « indisponible » (s)", "type": "int"}],
                 css=[{"key": "subtitle_font_size", "label": "Taille", "type": "size"},
                      {"key": "subtitle_font_color", "label": "Couleur", "type": "color"},
                      {"key": "subtitle_background_color", "label": "Fond", "type": "color"},
@@ -216,7 +243,11 @@ for index in range(1, 7):
     ADAPTERS["phone"]["components"][f"your_turn_line{index}"] = _component(
         f"Appel — ligne {index}", "main", f"#phone_your_turn_line{index}",
         scenarios=["your-turn"],
-        config=[{"key": f"phone_your_turn_line{index}", "label": "Texte Markdown", "type": "text"}],
+        managed_bool="phone_display_your_turn",
+        config=(
+            [{"key": "phone_display_your_turn", "label": "Afficher l'écran « Votre tour »", "type": "bool"}]
+            if index == 1 else []
+        ) + [{"key": f"phone_your_turn_line{index}", "label": "Texte Markdown", "type": "text"}],
         css=[{"key": f"phone_your_turn_line{index}_font_size", "label": "Taille", "type": "size"},
              {"key": f"phone_your_turn_line{index}_font_color", "label": "Couleur", "type": "color"},
              {"key": f"phone_your_turn_line{index}_font_weight", "label": "Graisse", "type": "number"},
@@ -228,7 +259,8 @@ for index in range(1, 7):
 
 ADAPTERS["phone"]["components"]["title"] = _component(
     "Titre", "header", "#div_title_area",
-    config=[{"key": "phone_title", "label": "Texte", "type": "text"}],
+    config=[{"key": "phone_title", "label": "Texte", "type": "text"},
+            {"key": "phone_center", "label": "Centrer le contenu", "type": "bool"}],
     css=[{"key": "phone_title_font_size", "label": "Taille", "type": "size"},
          {"key": "phone_title_font_color", "label": "Couleur", "type": "color"},
          {"key": "phone_title_font_weight", "label": "Graisse", "type": "number"},
@@ -239,6 +271,8 @@ ADAPTERS["phone"]["components"]["title"] = _component(
 )
 ADAPTERS["phone"]["components"]["specific"] = _component(
     "Message spécifique", "footer", "#specific_message",
+    managed_bool="phone_display_specific_message",
+    config=[{"key": "phone_display_specific_message", "label": "Afficher le message spécifique", "type": "bool"}],
     css=[{"key": "phone_specific_message_font_size", "label": "Taille", "type": "size"},
          {"key": "phone_specific_message_font_color", "label": "Couleur", "type": "color"},
          {"key": "phone_specific_message_background_color", "label": "Fond", "type": "color"},
@@ -933,6 +967,17 @@ def payload_hash(payload):
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def complete_config(page, config):
+    """Ajoute à ``config`` les clés de contenu gérées qui y manquent, avec la
+    valeur actuellement publiée. Les brouillons enregistrés avant l'ajout
+    d'un réglage dans l'éditeur ne contiennent pas encore la clé."""
+    completed = dict(config) if isinstance(config, dict) else {}
+    for key in _managed_keys(ADAPTERS[page], "config") - set(completed):
+        spec = get_spec(key)
+        completed[key] = current_app.config.get(spec.config_name) if spec else None
+    return completed
+
+
 def validate_payload(page, payload):
     adapter = ADAPTERS[page]
     if not isinstance(payload, dict):
@@ -946,7 +991,9 @@ def validate_payload(page, payload):
 
     allowed_config = _managed_keys(adapter, "config")
     config_values = payload.get("config")
-    if not isinstance(config_values, dict) or set(config_values) != allowed_config:
+    # Sous-ensemble accepté : les clés ajoutées après coup (anciens
+    # brouillons) sont complétées avec la configuration publiée.
+    if not isinstance(config_values, dict) or not set(config_values) <= allowed_config:
         raise ValueError("Paramètre de contenu inconnu.")
     normalized_config = {}
     for key, value in config_values.items():
@@ -971,6 +1018,9 @@ def validate_payload(page, payload):
         if spec.allowed_values is not None and value not in spec.allowed_values:
             raise ValueError(f"Valeur non autorisée pour {key}.")
         normalized_config[key] = value
+    for key in allowed_config - set(normalized_config):
+        spec = get_spec(key)
+        normalized_config[key] = current_app.config.get(spec.config_name) if spec else None
 
     allowed_css = _managed_keys(adapter, "css")
     css_types = _css_field_types(adapter)
