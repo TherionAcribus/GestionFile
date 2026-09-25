@@ -50,6 +50,7 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "network_adress": ("NETWORK_ADRESS", "value_str"),
     "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
     "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
+    "app_messaging_enabled": ("APP_MESSAGING_ENABLED", "value_bool"),
     "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
     "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
     "printer": ("PRINTER", "value_bool"),

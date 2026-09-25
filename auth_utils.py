@@ -245,6 +245,22 @@ def require_app_token_or_login(func):
     return wrapper
 
 
+def require_app_token(func):
+    """Réserve une route aux clients machine munis du JWT applicatif.
+
+    Contrairement à ``require_app_token_or_login``, une session web
+    d'administration ne suffit pas. Ce garde convient notamment aux données
+    de messagerie, qui ne doivent pas former une console de lecture admin.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if verify_app_token(request.headers.get("X-App-Token")):
+            return func(*args, **kwargs)
+        return jsonify({"error": "Unauthorized"}), 401
+
+    return wrapper
+
+
 def require_counter_access(func):
     """Garde unique des routes comptoir a double usage (navigateur + machine).
 

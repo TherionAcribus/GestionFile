@@ -9,6 +9,15 @@
     start_rabbitmq,
             "Activer le relais RabbitMQ entre processus (RABBITMQ_URL doit être configurée)")
 }}
+
+{{ macros.switch("app_messaging_enabled",
+    app_messaging_enabled,
+    "Activer la messagerie instantanée dans l’App Comptoir")
+}}
+<p class="form-text">
+    Lorsqu’elle est désactivée, la messagerie disparaît immédiatement des App
+    Comptoir et aucun nouveau message ne peut être envoyé.
+</p>
 <div class="alert alert-warning" role="alert">
     <strong>Redémarrage requis :</strong> ce paramètre n'est pris en compte qu'à
     l'initialisation du serveur. Il est enregistré immédiatement, mais ne

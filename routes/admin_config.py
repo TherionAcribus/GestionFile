@@ -648,6 +648,12 @@ def call_function_with_switch(key, value):
             scheduler_clear_announce_calls()
         else:
             remove_scheduler_clear_announce_calls()
+    elif key == "app_messaging_enabled":
+        from services import messaging_service
+        if value == "true":
+            messaging_service.announce_enabled()
+        else:
+            messaging_service.disable_and_clear_presence()
 
 
 

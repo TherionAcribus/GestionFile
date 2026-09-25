@@ -37,6 +37,7 @@ def admin_app(tab=None):
     return render_template('/admin/app.html',
                             active_tab=tab,
                             start_rabbitmq= app.config["START_RABBITMQ"],
+                            app_messaging_enabled=app.config.get("APP_MESSAGING_ENABLED", False),
                             network_adress = app.config["NETWORK_ADRESS"],
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],

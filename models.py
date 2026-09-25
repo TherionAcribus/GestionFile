@@ -1,6 +1,6 @@
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import current_app as app
 from sqlalchemy import Sequence, UniqueConstraint, CheckConstraint
 from flask_sqlalchemy import SQLAlchemy
@@ -352,6 +352,100 @@ class Pharmacist(db.Model):
             "is_active": self.is_active,
             "activities": [activity.id for activity in self.activities]
         }
+
+
+class AppMessage(db.Model):
+    """Message professionnel échangé entre les App Comptoir.
+
+    Les libellés sont figés au moment de l'envoi afin qu'un renommage ultérieur
+    d'un membre ou d'un comptoir ne réécrive pas l'historique.
+    """
+
+    __tablename__ = "app_message"
+
+    id = db.Column(db.Integer, primary_key=True)
+    client_message_id = db.Column(db.String(36), nullable=False, unique=True)
+    kind = db.Column(db.String(16), nullable=False)
+    sender_staff_id = db.Column(
+        db.Integer, db.ForeignKey("pharmacist.id", ondelete="SET NULL"), nullable=True,
+    )
+    sender_counter_id = db.Column(
+        db.Integer, db.ForeignKey("counter.id", ondelete="SET NULL"), nullable=True,
+    )
+    sender_name = db.Column(db.String(50), nullable=False)
+    sender_counter_name = db.Column(db.String(20), nullable=False)
+    body = db.Column(db.String(1000), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        index=True,
+    )
+
+    recipients = db.relationship(
+        "AppMessageRecipient",
+        back_populates="message",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('direct', 'broadcast')", name="ck_app_message_kind"),
+    )
+
+
+class AppMessageRecipient(db.Model):
+    """Destinataire figé d'un message et état de lecture associé."""
+
+    __tablename__ = "app_message_recipient"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(
+        db.Integer, db.ForeignKey("app_message.id", ondelete="CASCADE"), nullable=False,
+        index=True,
+    )
+    recipient_staff_id = db.Column(
+        db.Integer, db.ForeignKey("pharmacist.id", ondelete="SET NULL"), nullable=True,
+        index=True,
+    )
+    recipient_counter_id = db.Column(
+        db.Integer, db.ForeignKey("counter.id", ondelete="SET NULL"), nullable=True,
+    )
+    recipient_name = db.Column(db.String(50), nullable=False)
+    recipient_counter_name = db.Column(db.String(20), nullable=False)
+    read_at = db.Column(db.DateTime, nullable=True)
+
+    message = db.relationship("AppMessage", back_populates="recipients")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "message_id", "recipient_staff_id", name="uq_app_message_recipient_staff",
+        ),
+    )
+
+
+class AppMessagingPresence(db.Model):
+    """Heartbeat d'une installation App actuellement associée à un comptoir."""
+
+    __tablename__ = "app_messaging_presence"
+
+    client_instance_id = db.Column(db.String(36), primary_key=True)
+    staff_id = db.Column(
+        db.Integer, db.ForeignKey("pharmacist.id", ondelete="CASCADE"), nullable=False,
+        index=True,
+    )
+    counter_id = db.Column(
+        db.Integer, db.ForeignKey("counter.id", ondelete="CASCADE"), nullable=False,
+    )
+    connected_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(time_tz),
+    )
+    last_seen_at = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(time_tz), index=True,
+    )
+
+    staff = db.relationship("Pharmacist")
+    counter = db.relationship("Counter")
 
 
 activity_schedule_weekday = db.Table('activity_schedule_weekday',

@@ -18,6 +18,8 @@ import config_sync
 from ui_feedback import display_toast
 from extensions import scheduler
 
+MESSAGING_CLEANUP_JOB_ID = "Purge App Messaging"
+
 
 def _refresh_config(app):
     """Point 11 — recharge app.config si un autre processus l'a modifiée.
@@ -395,6 +397,35 @@ def reconcile_auto_archive_job():
         return 'removed'
 
     return 'unchanged'
+
+
+def ensure_messaging_cleanup_job():
+    """Garantit une purge quotidienne unique de la messagerie éphémère."""
+    if scheduler.get_job(MESSAGING_CLEANUP_JOB_ID):
+        return "unchanged"
+    scheduler.add_job(
+        id=MESSAGING_CLEANUP_JOB_ID,
+        func=messaging_cleanup_job,
+        trigger="cron",
+        hour=3,
+        minute=10,
+        misfire_grace_time=3600,
+        coalesce=True,
+        max_instances=1,
+    )
+    return "added"
+
+
+def messaging_cleanup_job():
+    app = AppHolder.get_app()
+    with app.app_context():
+        from services.messaging_service import purge_expired
+        try:
+            deleted = purge_expired()
+            app.logger.info("Purge messagerie terminée (%s message(s))", deleted)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Échec de la purge de la messagerie")
 
 
 def auto_archive_job():

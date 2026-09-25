@@ -67,6 +67,12 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `update_auto_calling` | `{counter_id, patient: {...}}` | — | Patient servi en appel automatique |
 | `refresh_after_clear_patient_list` | `null` | — | Resync après purge de la file |
 
+#### Messagerie App Comptoir
+
+`messaging_changed`, `messaging_presence_changed` et
+`messaging_config_changed` ne transportent jamais le texte privé. Ils demandent
+à l'App de relire l'état autoritatif par l'API REST.
+
 ### `/socket_counter` (comptoir web)
 
 | Évènement | `data` | Effet |

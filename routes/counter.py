@@ -249,6 +249,7 @@ def api_counter_state(counter_id):
         "standing_list": standing_list,
         "autocalling": counter.auto_calling,
         "add_paper": app.config["ADD_PAPER"],
+        "messaging_enabled": bool(app.config.get("APP_MESSAGING_ENABLED", False)),
         "activities_staff": [activity.to_dict_for_app() for activity in activity_staff],
         "staff": counter.staff.to_dict() if counter.staff else None,
     }), 200

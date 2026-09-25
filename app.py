@@ -45,7 +45,10 @@ from routes.api_system import api_system_bp
 from routes.calling import calling_bp
 from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
-from scheduler_functions import clear_old_patients_table, reconcile_auto_archive_job
+from scheduler_functions import (
+    clear_old_patients_table, ensure_messaging_cleanup_job,
+    reconcile_auto_archive_job,
+)
 from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
@@ -55,6 +58,7 @@ from page_editor import enabled_pages, layout_style, preview_vars_style
 from app_holder import AppHolder
 
 from routes.counter import counter_bp
+from routes.messaging import messaging_bp
 from routes.admin_announce import admin_announce_bp
 from routes.admin_counter import admin_counter_bp
 from routes.admin_activity import admin_activity_bp
@@ -105,6 +109,7 @@ def load_configuration(app):
 
     # Valeur par défaut pour le thème de couleurs
     app.config.setdefault("ADMIN_COLORS", "lumen")
+    app.config.setdefault("APP_MESSAGING_ENABLED", False)
 
     # Comportement patient en cas d'échec d'impression (paramétrable en Admin,
     # onglet Page Patient). Défauts appliqués si aucune ligne ConfigOption
@@ -323,6 +328,7 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_translation_bp, url_prefix='')
     app.register_blueprint(admin_options_bp, url_prefix='')
     app.register_blueprint(counter_bp, url_prefix='')
+    app.register_blueprint(messaging_bp, url_prefix='')
     app.register_blueprint(admin_schedule_bp, url_prefix='')
     app.register_blueprint(admin_security_bp, url_prefix='')
     app.register_blueprint(announce_bp, url_prefix='')
@@ -801,6 +807,9 @@ def _reconcile_scheduler_jobs():
     try:
         with app.app_context():
             action = reconcile_auto_archive_job()
+            messaging_action = ensure_messaging_cleanup_job()
+        if messaging_action != "unchanged":
+            app.logger.info("Job de purge de la messagerie planifie")
         if action != 'unchanged':
             app.logger.info(
                 "Job d'archivage réconcilié avec la configuration : %s", action)
