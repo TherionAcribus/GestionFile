@@ -339,41 +339,48 @@ def builtin_themes(page):
 
         css[f"{page}_secondary_color"] = background
         if page == "announce":
-            block("title", on_primary, primary, "64px" if large else "52px")
-            css.update(title_background_height="120px", subtitle_font_color=on_primary,
-                       subtitle_font_size="36px" if large else "28px")
-            block("calling", on_primary, primary, "80px" if large else "64px")
-            block("text_up", text, surface, "36px" if large else "28px")
-            block("text_down", text, surface, "48px" if large else "40px")
-            block("ongoing", text, soft, "40px" if large else "32px")
-            block("next_patients", text, soft, "36px" if large else "28px")
+            block("title", on_primary, primary, "96px" if large else "72px")
+            css.update(title_background_height="170px" if large else "150px",
+                       subtitle_font_color=on_primary,
+                       subtitle_font_size="48px" if large else "36px")
+            block("calling", on_primary, primary, "120px" if large else "96px")
+            block("text_up", text, surface, "48px" if large else "38px")
+            block("text_down", text, surface, "72px" if large else "56px")
+            block("ongoing", text, soft, "56px" if large else "44px")
+            block("next_patients", text, soft, "48px" if large else "38px")
         elif page == "patient":
-            block("patient_title", on_primary, primary, "48px" if large else "40px")
-            block("subtitle", text, soft, "32px" if large else "28px")
-            css.update(patient_title_background_height="96px", subtitle_background_height="80px",
-                       circle_button_size="160px", circle_button_color=primary,
-                       circle_button_text_color=text, circle_button_text_size="32px" if large else "28px",
-                       square_button_width="380px" if large else "340px",
-                       square_button_height="120px" if large else "104px", square_button_color=primary,
-                       square_button_text_color=on_primary, square_button_text_size="32px" if large else "28px",
+            block("patient_title", on_primary, primary, "64px" if large else "52px")
+            block("subtitle", text, soft, "40px" if large else "34px")
+            css.update(patient_title_background_height="140px" if large else "120px",
+                       subtitle_background_height="110px" if large else "96px",
+                       circle_button_size="200px" if large else "180px", circle_button_color=primary,
+                       circle_button_text_color=text,
+                       circle_button_text_size="40px" if large else "34px",
+                       square_button_width="420px" if large else "380px",
+                       square_button_height="150px" if large else "128px", square_button_color=primary,
+                       square_button_text_color=on_primary,
+                       square_button_text_size="38px" if large else "32px",
                        square_cancel_button_color=primary, square_cancel_button_text_color=on_primary,
-                       square_cancel_button_text_size="28px", validation_button_color=primary,
-                       validation_button_text_color=on_primary, validation_button_text_size="28px",
-                       validation_button_height="96px", validation_text_font_size="40px" if large else "32px",
-                       confirmation_text_font_size="36px" if large else "32px", scan_explanation_font_size="28px",
+                       square_cancel_button_text_size="30px", validation_button_color=primary,
+                       validation_button_text_color=on_primary, validation_button_text_size="32px",
+                       validation_button_height="120px" if large else "104px",
+                       validation_text_font_size="48px" if large else "38px",
+                       confirmation_text_font_size="42px" if large else "36px",
+                       scan_explanation_font_size="32px" if large else "28px",
                        subtitle_no_activity_background_color=soft, subtitle_specific_message_background_color=soft,
-                       flag_size="72px")
+                       flag_size="80px")
         else:
-            block("phone_title", on_primary, primary, "28px" if large else "24px")
-            css.update(phone_title_font_weight="700", phone_title_background_height="16px")
+            block("phone_title", on_primary, primary, "36px" if large else "30px")
+            css.update(phone_title_font_weight="700",
+                       phone_title_background_height="22px" if large else "18px")
             for prefix in ("phone_line", "phone_your_turn_line"):
                 for index in range(1, 7):
-                    block(f"{prefix}{index}", text, surface, "24px" if large else "20px")
-                    css[f"{prefix}{index}_background_height"] = "12px" if large else "8px"
+                    block(f"{prefix}{index}", text, surface, "30px" if large else "26px")
+                    css[f"{prefix}{index}_background_height"] = "14px" if large else "10px"
                     css[f"{prefix}{index}_font_weight"] = "500"
-            block("phone_your_turn_line1", on_primary, primary, "32px" if large else "28px")
+            block("phone_your_turn_line1", on_primary, primary, "48px" if large else "40px")
             css["phone_your_turn_line1_font_weight"] = "700"
-            block("phone_specific_message", text, soft, "22px" if large else "18px")
+            block("phone_specific_message", text, soft, "26px" if large else "22px")
             css["phone_specific_message_background_height"] = "auto"
 
         layout = default_layout(page)
