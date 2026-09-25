@@ -640,6 +640,17 @@
         heading.textContent = definition.label;
         inspector.appendChild(heading);
 
+        const disabledReason = managedDisabledReason(selectedComponent, definition);
+        if (disabledReason) {
+            // Un composant désactivé par sa configuration est invisible dans
+            // l'aperçu : sans ce repère, on ne sait pas où le réactiver.
+            const hint = document.createElement('p');
+            hint.className = 'alert alert-info py-2 small mb-3';
+            hint.textContent = disabledReason
+                + ' Le réglage est disponible dans la section « Contenu » ci-dessous.';
+            inspector.appendChild(hint);
+        }
+
         const layoutFields = addFieldset('Disposition');
         const visibility = document.createElement('input');
         visibility.type = 'checkbox';
@@ -730,6 +741,17 @@
         layoutFields.appendChild(resetButton);
 
         if (definition.config.length) {
+            // Réglages qui conditionnent l'affichage d'un composant : leur
+            // modification rafraîchit aussi les badges de la liste.
+            const gatedKeys = new Set();
+            Object.values(adapter.components).forEach(function (item) {
+                if (item.managed_bool) gatedKeys.add(item.managed_bool);
+                if (item.hidden_when) gatedKeys.add(item.hidden_when.key);
+            });
+            const setConfigValue = function (key, value) {
+                payload.config[key] = value;
+                if (gatedKeys.has(key)) renderPalette();
+            };
             const contentFields = addFieldset('Contenu');
             definition.config.forEach(function (field) {
                 let control;
@@ -738,7 +760,7 @@
                     control.type = 'checkbox';
                     control.className = 'form-check-input ms-2';
                     control.checked = Boolean(payload.config[field.key]);
-                    bindValue(control, function (element) { payload.config[field.key] = element.checked; });
+                    bindValue(control, function (element) { setConfigValue(field.key, element.checked); });
                 } else if (field.type === 'select') {
                     control = document.createElement('select');
                     control.className = 'form-select';
@@ -749,7 +771,7 @@
                         control.appendChild(option);
                     });
                     control.value = payload.config[field.key] == null ? '' : payload.config[field.key];
-                    bindValue(control, function (element) { payload.config[field.key] = element.value; });
+                    bindValue(control, function (element) { setConfigValue(field.key, element.value); });
                 } else if (field.type === 'int') {
                     control = document.createElement('input');
                     control.type = 'number';
@@ -757,14 +779,14 @@
                     control.step = '1';
                     control.value = payload.config[field.key] == null ? 0 : payload.config[field.key];
                     bindValue(control, function (element) {
-                        payload.config[field.key] = Number.parseInt(element.value, 10) || 0;
+                        setConfigValue(field.key, Number.parseInt(element.value, 10) || 0);
                     });
                 } else {
                     control = document.createElement('textarea');
                     control.className = 'form-control';
                     control.rows = 3;
                     control.value = payload.config[field.key] == null ? '' : payload.config[field.key];
-                    bindValue(control, function (element) { payload.config[field.key] = element.value; });
+                    bindValue(control, function (element) { setConfigValue(field.key, element.value); });
                 }
                 control.id = 'editor-config-' + field.key;
                 const group = formGroup(field.label, control);

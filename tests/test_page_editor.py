@@ -843,6 +843,59 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
         server.server_close()
 
 
+@pytest.mark.e2e
+def test_editor_enables_advanced_disabled_next_patients(editor_app):
+    """Parcours réel : « Prochains patients » désactivé dans la configuration
+    reste sélectionnable, sa case « Afficher » apparaît dans l'inspecteur et
+    la cocher le réaffiche dans l'aperçu."""
+    from threading import Thread
+
+    from werkzeug.serving import make_server
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["ANNOUNCE_NEXT_PATIENTS_DISPLAY"] = False
+    client = authenticated_client(editor_app)
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with playwright.sync_playwright() as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1280, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.goto(f"{url}/admin/page-editor/announce")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+
+                next_button = page.locator("[data-component-id='next']")
+                assert "is-disabled" in (next_button.get_attribute("class") or "")
+                next_button.click()
+
+                toggle = page.locator("#editor-config-announce_next_patients_display")
+                playwright.expect(toggle).to_be_visible()
+                assert not toggle.is_checked()
+                preview = page.frame_locator("#editor-preview").locator("#div_next_patients")
+                assert not preview.is_visible()
+
+                toggle.check()
+                playwright.expect(preview).to_be_visible()
+                assert "is-disabled" not in (next_button.get_attribute("class") or "")
+                assert not errors
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
 def test_builtin_theme_snapshots_are_independent():
     from page_editor import builtin_themes
 
@@ -943,12 +996,15 @@ def _preview_ready_app(app):
     from page_editor import preview_vars_style
 
     root = Path(__file__).resolve().parents[1]
+    app.static_folder = str(root / "static")
     app.jinja_loader = FileSystemLoader(root / "templates")
     app.jinja_env.globals.update(
         csrf_token=lambda: "test",
         get_css_url=lambda mode=None: "/static/css/test.css",
         page_layout_style=layout_style,
         preview_vars_style=preview_vars_style,
+        user_has_permission=lambda *args, **kwargs: True,
+        page_editor_enabled=lambda page: True,
     )
 
 
