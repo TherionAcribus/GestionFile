@@ -46,12 +46,12 @@ def patients_front_page():
 
     languages = db.session.query(Language).filter_by(is_active = True).order_by(Language.sort_order).all()
 
-    # définition de la langue
-    if language_code is None or language_code == "fr":
-        session['language_code'] = "fr"
+    # définition de la langue — un code absent/inconnu retombe sur la
+    # référence française au lieu d'être stocké tel quel en session
+    active_codes = {language.code for language in languages}
+    if language_code not in active_codes:
         language_code = "fr"
-    else:
-        session['language_code'] = language_code
+    session['language_code'] = language_code
 
     return render_template('patient/patient_front_page.html',
                             languages=languages,
@@ -623,6 +623,11 @@ def phone_patient(language_code, patient_id, activity_id):
     On regarde s'il y a un cookie déja placé (par ping). Si c'est le cas et que le numéro est différent c'est qu'il y a un nouvel enregistrement
     Dans ce cas on efface le cookie, sinon c'est un rafraichissement de la page et donc on le laisse.
     """
+    # Le code vient de l'URL du QR : une langue inconnue ou désactivée
+    # retombe sur la référence française.
+    if language_code != "fr" and not Language.query.filter_by(
+            code=language_code, is_active=True).first():
+        language_code = "fr"
     session["language_code"] = language_code
     if language_code != "fr":
         phone_title = get_text_translation("phone_title", language_code)["translation"]

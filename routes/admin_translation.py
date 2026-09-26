@@ -1,6 +1,7 @@
 import os
+import re
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
-from models import ConfigOption, Button, Activity, Language, Translation, db
+from models import ConfigOption, Button, Activity, Language, Patient, Translation, db
 from communication import communikation
 from routes.admin_security import require_permission, require_permission_api
 from pagination import parse_page_params, paginate_query
@@ -18,6 +19,19 @@ from params_registry import get_spec, TRANSLATABLE_CONFIG_KEYS
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
 REFERENCE_LANGUAGE_CODE = 'fr'
+
+# ISO 639-1, éventuellement régionalisé ('fr', 'en', 'pt-br'…) — 5 caractères
+# max, aligné sur Language.code (String(5)) et Translation.language_code.
+_LANGUAGE_CODE_RE = re.compile(r'[a-z]{2}(-[a-z]{2})?')
+
+
+def normalize_language_code(raw):
+    """Normalise un code saisi (' EN ' -> 'en'). Renvoie None si le format
+    est invalide — un code rejeté ici ne peut pas créer de traductions
+    orphelines (hors langue connue) ni de code introuvable."""
+    code = (raw or '').strip().lower()
+    return code if _LANGUAGE_CODE_RE.fullmatch(code) else None
+
 
 # Colonnes de tri autorisées (liste blanche) — cf. pagination.parse_page_params.
 LANGUAGE_SORT_COLUMNS = {
@@ -66,13 +80,19 @@ def update_language(language_id):
         app.logger.debug('language %s', language)
         app.logger.debug('request.form %s', request.form)
         if language:
-            code =  request.form.get('code', language.code)
+            code = normalize_language_code(request.form.get('code', language.code))
             name = request.form.get('name', language.name)
             translation = request.form.get('translation', language.translation)
             is_active = True if request.form.get('is_active', language.is_active) == "true" else False
             voice_is_active = True if request.form.get('voice_is_active', language.voice_is_active) == "true" else False
-            if code == '':
-                display_toast(success=False, message="Le code est obligatoire")
+            if code is None:
+                display_toast(success=False, message="Code de langue invalide")
+                return "", 204
+            if language.code == REFERENCE_LANGUAGE_CODE and code != language.code:
+                display_toast(success=False, message="Le code de la langue de référence ne peut pas être modifié")
+                return "", 204
+            if language.code == REFERENCE_LANGUAGE_CODE and not is_active:
+                display_toast(success=False, message="La langue de référence doit rester active")
                 return "", 204
             if name == '':
                 display_toast(success=False, message="Le nom est obligatoire")
@@ -91,6 +111,7 @@ def update_language(language_id):
                 display_toast(success=False, message="Le code est déjà utilisé par une autre langue")
                 return "", 204
 
+            old_code = language.code
             language.code = code
             language.name = name
             language.translation = translation
@@ -107,9 +128,19 @@ def update_language(language_id):
                 if extracted and extracted != 'None':
                     language.flag_url = extracted
 
+            # Renommage : rebasculer les traductions sous le nouveau code dans
+            # la même transaction — sinon elles restent attachées à l'ancien
+            # code et deviennent introuvables.
+            if code != old_code:
+                Translation.query.filter(
+                    Translation.language_code == old_code
+                ).update({Translation.language_code: code},
+                         synchronize_session=False)
+
             db.session.commit()
             record_audit(ACTION_UPDATE, "language", target_id=language_id,
-                         outcome=OUTCOME_SUCCESS, details=f"code={code}")
+                         outcome=OUTCOME_SUCCESS,
+                         details=f"code={old_code}->{code}")
             display_toast(success=True, message="Mise à jour réussie")
             return ""
         else:
@@ -143,10 +174,29 @@ def delete_language(language_id):
             display_toast(success=False, message="Langue non trouvée")
             return display_languages_table()
 
+        if language.code == REFERENCE_LANGUAGE_CODE:
+            display_toast(success=False, message="La langue de référence ne peut pas être supprimée")
+            return display_languages_table()
+
+        # Un patient en file référence la langue par FK : supprimer ici
+        # planterait le moteur d'annonce (patient.language = None) ou
+        # violerait la contrainte MySQL.
+        if Patient.query.filter_by(language_id=language.id).first():
+            display_toast(success=False, message="Cette langue est utilisée par des patients en attente")
+            return display_languages_table()
+
+        # Purge des traductions de ce code : sans lien FK vers language,
+        # elles resteraient orphelines en base.
+        deleted_code = language.code
+        deleted_translations = Translation.query.filter(
+            Translation.language_code == deleted_code
+        ).delete(synchronize_session=False)
+
         db.session.delete(language)
         db.session.commit()
         record_audit(ACTION_DELETE, "language", target_id=language_id,
-                     outcome=OUTCOME_SUCCESS)
+                     outcome=OUTCOME_SUCCESS,
+                     details=f"code={deleted_code}, traductions={deleted_translations}")
         display_toast(success=True, message="Suppression réussie")
 
         communikation("admin", event="refresh_languages_order")
@@ -173,7 +223,7 @@ def add_language_form():
 @require_permission('translation')
 def add_new_language():
     try:
-        code = request.form.get('code')
+        code = normalize_language_code(request.form.get('code'))
         name = request.form.get('name')
         translation = request.form.get('translation')
         is_active = True if request.form.get('is_active') == "true" else False
@@ -185,12 +235,13 @@ def add_new_language():
         else:
             flag_url = None
 
-        # Trouve l'ordre le plus élevé et ajoute 1, sinon commence à 0 si aucun bouton n'existe
-        max_order = Language.query.order_by(Language.sort_order.desc()).first()
-        sort_order = max_order.sort_order + 1 if max_order else 0
+        # Trouve l'ordre le plus élevé et ajoute 1 ; sort_order NULL
+        # (langues créées hors administration) ou table vide -> 0.
+        max_sort = db.session.query(db.func.max(Language.sort_order)).scalar()
+        sort_order = (max_sort + 1) if max_sort is not None else 0
 
-        if not code:  # Vérifiez que les champs obligatoires sont remplis
-            display_toast(success=False, message="Code obligatoire")
+        if code is None:  # Vérifiez que les champs obligatoires sont remplis
+            display_toast(success=False, message="Code de langue invalide")
             return display_languages_table()
         if code in [code[0] for code in db.session.query(Language.code).all()]:
             display_toast(success=False, message="Le code est déjà utilisées")

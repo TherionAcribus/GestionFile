@@ -764,7 +764,7 @@ class Button(db.Model):
 class Language(db.Model):
     __tablename__ = 'language'
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(2), nullable=False, unique=True)
+    code = db.Column(db.String(5), nullable=False, unique=True)
     name = db.Column(db.String(50), nullable=False)
     translation = db.Column(db.String(50), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
