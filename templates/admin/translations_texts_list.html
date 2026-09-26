@@ -1,4 +1,33 @@
-{{translations_dict}}
+{# Fragment reinjecté par HTMX (choix de langue / collecte) : les filtres
+   vivent dans ce fragment ; leur logique est déléguée dans
+   static/js/admin_translations.js. #}
+<div class="row g-2 align-items-center mb-3">
+    <div class="col-md-7">
+        <input type="search" id="translation_filter" class="form-control"
+               placeholder="Filtrer les textes…" autocomplete="off">
+    </div>
+    <div class="col-md-5 form-check">
+        <input class="form-check-input" type="checkbox" id="translation_only_missing">
+        <label class="form-check-label" for="translation_only_missing">
+            N'afficher que les traductions manquantes
+        </label>
+    </div>
+</div>
+
+{% macro field(prefix, index, key, texts) %}
+{% set missing = not texts['target'] %}
+<div class="translation-item mb-3"{% if missing %} data-missing{% endif %}>
+    <label class="form-label" for="{{ prefix }}{{ index }}">
+        <strong>{{ texts['label'] }}</strong> — {{ texts['fr'] if texts['fr'] else '(source vide)' }}
+    </label>
+    {% if texts['hint'] %}
+        <div class="form-text">Balises autorisées : {{ texts['hint'] }}</div>
+    {% endif %}
+    <textarea class="form-control{% if missing %} border-warning{% endif %}"
+              id="{{ prefix }}{{ index }}" rows="2"
+              name="translation|{{ key[0] }}|{{ key[1] }}|{{ key[2] }}|{{ key[3] or '' }}">{{ texts['target'] or '' }}</textarea>
+</div>
+{% endmacro %}
 
 <!-- Section pour les textes liés aux boutons -->
 <h2>Traductions des Boutons</h2>
@@ -6,11 +35,7 @@
     <input type="hidden" name="language_code" value="{{ language_code }}">
     <div id="button_translations">
         {% for key, texts in button_translations.items() %}
-            <div>
-                {{ texts['fr'] }}
-                <input type="text" name="translation|{{ key[0] }}|{{ key[1] }}|{{ key[2] }}|{{ key[3] }}" 
-                        value="{{ texts['target'] or '' }}" />
-            </div>
+            {{ field('btn-', loop.index, key, texts) }}
         {% endfor %}
     </div>
     <button type="submit">Enregistrer les traductions des boutons</button>
@@ -23,11 +48,7 @@
     <input type="hidden" name="language_code" value="{{ language_code }}">
     <div id="activity_translations">
         {% for key, texts in activity_translations.items() %}
-            <div>
-                {{ texts['fr'] }}
-                <input type="text" name="translation|{{ key[0] }}|{{ key[1] }}|{{ key[2] }}|{{ key[3] }}" 
-                        value="{{ texts['target'] or '' }}" />
-            </div>
+            {{ field('act-', loop.index, key, texts) }}
         {% endfor %}
     </div>
     <button type="submit">Enregistrer les traductions des activités</button>
@@ -39,11 +60,7 @@
     <input type="hidden" name="language_code" value="{{ language_code }}">
     <div id="config_option_translations">
         {% for key, texts in config_option_translations.items() %}
-            <div>
-                {{ texts['fr'] }}
-                <input type="text" name="translation|{{ key[0] }}|{{ key[1] }}|{{ key[2] }}|{{ key[3] }}" 
-                        value="{{ texts['target'] or '' }}" />
-            </div>
+            {{ field('cfg-', loop.index, key, texts) }}
         {% endfor %}
     </div>
     <button type="submit">Enregistrer les traductions des ConfigOption</button>

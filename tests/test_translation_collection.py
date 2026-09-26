@@ -160,7 +160,7 @@ def test_collecte_met_a_jour_la_reference_sans_ecraser_la_cible(
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert 'hx-swap-oob="innerHTML"' in html
-    assert 'value="Existing English label"' in html
+    assert '>Existing English label</textarea>' in html
     with app.app_context():
         assert _translation(
             table_name="Button", column_name="label", key_name="",

@@ -14,7 +14,7 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
-from params_registry import get_spec, TRANSLATABLE_CONFIG_KEYS
+from params_registry import BALISE_LETTERS, get_spec, TRANSLATABLE_CONFIG_KEYS
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -478,43 +478,81 @@ def load_config_keys_to_translate():
     return sorted(TRANSLATABLE_CONFIG_KEYS)
     
 
+def _markers_hint(key_name):
+    """Balises autorisées pour une clé de configuration, affichées sous le
+    champ de saisie — une traduction qui s'en écarte serait rejetée par
+    ``validate_config_text`` à la sauvegarde."""
+    spec = get_spec(key_name)
+    letters = BALISE_LETTERS.get(spec.validator, "") if spec else ""
+    hint = " ".join(f"{{{letter}}}" for letter in letters)
+    if spec and spec.validator == "ticket":
+        hint += (" + balisage d'impression : [center] [double] [separator] "
+                 "**gras** __souligné__" if hint else
+                 "[center] [double] [separator] **gras** __souligné__")
+    return hint
+
+
+def _entry_meta(table_name, column_name, row_id, key_name, activity_names):
+    """Libellé métier + aide de saisie d'une entrée du catalogue."""
+    if table_name == 'Activity':
+        column_label = ("message d'inactivité"
+                        if column_name == 'inactivity_message'
+                        else "message spécifique")
+        name = activity_names.get(row_id)
+        label = (f"Activité « {name} » — {column_label}" if name
+                 else f"Activité supprimée — {column_label}")
+        return label, ""
+    if table_name == 'ConfigOption':
+        return key_name or "Clé inconnue", _markers_hint(key_name)
+    return "Bouton", ""
+
+
 def _render_translations_list(language_code):
     references = db.session.query(Translation).filter(
         Translation.language_code == REFERENCE_LANGUAGE_CODE
     ).all()
     translations = db.session.query(Translation).filter(
         Translation.language_code == language_code).all()
+    activity_names = dict(
+        db.session.query(Activity.id, Activity.name).all())
 
     button_translations = {}
     activity_translations = {}
     config_option_translations = {}
 
+    def _entry(trans, fr_text, target_text):
+        key = (trans.table_name, trans.column_name, trans.row_id,
+               trans.key_name)
+        label, hint = _entry_meta(
+            trans.table_name, trans.column_name, trans.row_id,
+            trans.key_name, activity_names)
+        return key, {'fr': fr_text, 'target': target_text,
+                     'label': label, 'hint': hint}
+
     for ref in references:
-        key = (ref.table_name, ref.column_name, ref.row_id, ref.key_name)
+        key, entry = _entry(ref, ref.translated_text, None)
         if ref.table_name == 'Button':
-            button_translations[key] = {'fr': ref.translated_text, 'target': None}
+            button_translations[key] = entry
         elif ref.table_name == 'Activity':
-            activity_translations[key] = {'fr': ref.translated_text, 'target': None}
+            activity_translations[key] = entry
         elif ref.table_name == 'ConfigOption':
-            config_option_translations[key] = {'fr': ref.translated_text, 'target': None}
+            config_option_translations[key] = entry
 
     for trans in translations:
         key = (trans.table_name, trans.column_name, trans.row_id, trans.key_name)
-        if trans.table_name == 'Button':
-            if key in button_translations:
-                button_translations[key]['target'] = trans.translated_text
-            else:
-                button_translations[key] = {'fr': None, 'target': trans.translated_text}
-        elif trans.table_name == 'Activity':
-            if key in activity_translations:
-                activity_translations[key]['target'] = trans.translated_text
-            else:
-                activity_translations[key] = {'fr': None, 'target': trans.translated_text}
-        elif trans.table_name == 'ConfigOption':
-            if key in config_option_translations:
-                config_option_translations[key]['target'] = trans.translated_text
-            else:
-                config_option_translations[key] = {'fr': None, 'target': trans.translated_text}
+        for group in (button_translations, activity_translations,
+                      config_option_translations):
+            if key in group:
+                group[key]['target'] = trans.translated_text
+                break
+        else:
+            key, entry = _entry(trans, None, trans.translated_text)
+            if trans.table_name == 'Button':
+                button_translations[key] = entry
+            elif trans.table_name == 'Activity':
+                activity_translations[key] = entry
+            elif trans.table_name == 'ConfigOption':
+                config_option_translations[key] = entry
 
     return render_template("admin/translations_texts_list.html",
                            language_code=language_code,

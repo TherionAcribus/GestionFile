@@ -38,4 +38,5 @@
    s'execute apres admin.js et admin_macros.js, declares par admin/base.html. #}
 {% block scripts_end %}
 <script defer src="{{ url_for('static', filename='js/admin_flag_upload.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/admin_translations.js') }}"></script>
 {% endblock %}
