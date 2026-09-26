@@ -1,0 +1,82 @@
+{# Formulaire d'un membre de l'équipe — commun création/édition.
+   Vrai <form> à champs nommés (cases « activities » multiples, jeton CSRF
+   ajouté par csrf.js). Erreur de validation = 204 : la saisie reste. #}
+{% macro staff_form(p, member, activities, nominative, url, submit_label, cancel_target=None, language='') %}
+{% set selected = member.activities | map(attribute='id') | list if member else activities | map(attribute='id') | list %}
+<form class="staff-form" hx-post="{{ url }}" hx-target="#div_staff_table" hx-swap="innerHTML">
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label" for="{{ p }}_name">Nom</label>
+            <input type="text" class="form-control" id="{{ p }}_name" name="name" maxlength="50" required
+                   value="{{ member.name if member else '' }}" placeholder="Ex. : Marie Dupont">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="{{ p }}_initials">Initiales</label>
+            <input type="text" class="form-control text-uppercase" id="{{ p }}_initials" name="initials"
+                   maxlength="10" required aria-describedby="{{ p }}_initials_help"
+                   value="{{ member.initials if member else '' }}" placeholder="Ex. : MD">
+            <div class="form-text" id="{{ p }}_initials_help">Code saisi au comptoir pour se connecter. Unique.</div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="{{ p }}_language">Langues parlées <span class="text-muted fw-normal">(info)</span></label>
+            <input type="text" class="form-control" id="{{ p }}_language" name="language" maxlength="20"
+                   value="{{ language }}" placeholder="Ex. : anglais, arabe">
+        </div>
+
+        <div class="col-12">
+            <fieldset>
+                <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+                    <legend class="form-label fs-6 mb-0 w-auto">Compétences : patients que cette personne peut appeler</legend>
+                    <button type="button" class="btn btn-link btn-sm p-0" data-check-all="#{{ p }}_competences">Tout cocher</button>
+                    <button type="button" class="btn btn-link btn-sm p-0" data-uncheck-all="#{{ p }}_competences">Tout décocher</button>
+                </div>
+                <div class="staff-competences" id="{{ p }}_competences">
+                    {% for activity in activities %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="activities" value="{{ activity.id }}"
+                               id="{{ p }}_act_{{ activity.id }}" {% if activity.id in selected %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ p }}_act_{{ activity.id }}">
+                            <span class="badge text-bg-primary">{{ activity.letter }}</span> {{ activity.name }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if not activities %}
+                <p class="small text-muted mb-0">Aucune activité : créez-en dans <a href="/admin/activity">Activités</a>.</p>
+                {% endif %}
+                <div class="form-text">Aucune case cochée : cette personne ne peut appeler aucun patient.</div>
+            </fieldset>
+        </div>
+
+        {% if nominative %}
+        <div class="col-12">
+            <fieldset>
+                <legend class="form-label fs-6 mb-1">Demandes nominatives que cette personne peut appeler</legend>
+                <div class="staff-competences">
+                    {% for activity in nominative %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="activities" value="{{ activity.id }}"
+                               id="{{ p }}_act_{{ activity.id }}"
+                               {% if member and activity.id in selected %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ p }}_act_{{ activity.id }}">
+                            {{ activity.name }}
+                            <span class="text-muted small">— pour {{ activity.staff.name if activity.staff else 'personne' }}</span>
+                            {% if member and activity.staff_id == member.id %}<span class="badge text-bg-info">la sienne</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="form-text">Une demande nominative ne peut être appelée que par quelqu'un qui l'a cochée ici — en principe la personne demandée.</div>
+            </fieldset>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> {{ submit_label }}</button>
+        {% if cancel_target %}
+        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="{{ cancel_target }}">Annuler</button>
+        {% endif %}
+    </div>
+</form>
+{% endmacro %}

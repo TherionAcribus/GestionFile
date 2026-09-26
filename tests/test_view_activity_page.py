@@ -290,6 +290,17 @@ def test_creation_planifie_comme_la_modification(app, client, fake_scheduler):
     assert _get(app, Activity, name="Vaccin").letter == "V"
 
 
+def test_demande_nominative_ajoutee_aux_competences(app, client):
+    marie = _get(app, Pharmacist, name="Marie")
+    response = client.post("/admin/activity/add_new_activity",
+                           data=_form(name="Voir Marie bis", letter="n",
+                                      staff_id=str(marie.id), availability="always"))
+    assert response.status_code == 200
+    with app.app_context():
+        member = db.session.get(Pharmacist, marie.id)
+        assert "Voir Marie bis" in [a.name for a in member.activities]
+
+
 def test_creation_invalide_conserve_le_formulaire(client):
     response = client.post("/admin/activity/add_new_activity", data=_form(name="X", letter=""))
     assert response.status_code == 204

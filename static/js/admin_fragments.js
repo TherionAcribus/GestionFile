@@ -142,3 +142,14 @@ document.addEventListener('click', function (evt) {
     var target = document.querySelector(btn.getAttribute('data-clear-target'));
     if (target) { target.innerHTML = ''; }
 });
+
+// « Tout cocher / Tout décocher » d'un groupe de cases (compétences de la page
+// Équipe) : data-check-all / data-uncheck-all="#conteneur".
+document.addEventListener('click', function (evt) {
+    var btn = evt.target.closest ? evt.target.closest('[data-check-all], [data-uncheck-all]') : null;
+    if (!btn) { return; }
+    var check = btn.hasAttribute('data-check-all');
+    var container = document.querySelector(btn.getAttribute(check ? 'data-check-all' : 'data-uncheck-all'));
+    if (!container) { return; }
+    container.querySelectorAll('input[type="checkbox"]').forEach(function (box) { box.checked = check; });
+});

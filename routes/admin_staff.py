@@ -1,86 +1,125 @@
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app as app
+from flask import Blueprint, render_template, request, redirect, url_for, current_app as app
 from models import Pharmacist, Activity, Counter, DashboardCard, db
 from routes.admin_security import require_permission, require_permission_dashboard
 from form_validation import Champ, LISTE_ENTIERS, extraire, valider
 from transactions import atomic
 from ui_feedback import display_toast
+from communication import communikation
 from audit_service import record_audit
 from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
+from staff_explain import (
+    clean_language, competences, initials_taken, nominative_for,
+    nominative_missing, normalize_initials,
+)
 
 admin_staff_bp = Blueprint('admin_staff', __name__)
+
+
+def _activities_split():
+    """``(ordinaires, nominatives)`` triées par lettre puis nom."""
+    activities = Activity.query.order_by(Activity.letter, Activity.name).all()
+    return ([a for a in activities if not a.is_staff],
+            [a for a in activities if a.is_staff])
+
 
 # base
 @admin_staff_bp.route('/admin/staff')
 @require_permission('staff')
-def admin_staff():    
-    return render_template('/admin/staff.html',
-                            activities = Activity.query.all())
+def admin_staff():
+    return render_template('/admin/staff.html')
 
-# affiche la table de l'équipe
+# affiche la liste de l'équipe (cartes)
 @admin_staff_bp.route('/admin/staff/table')
 @require_permission('staff')
 def display_staff_table():
-    staff = Pharmacist.query.all()
-    activities = Activity.query.all()
-    return render_template('admin/staff_htmx_table.html', staff=staff, activities=activities)
+    staff = Pharmacist.query.order_by(Pharmacist.name).all()
+    ordinary, nominative = _activities_split()
+    counters_by_staff = {}
+    for counter in Counter.query.filter(Counter.staff_id.isnot(None)).order_by(Counter.sort_order).all():
+        counters_by_staff.setdefault(counter.staff_id, []).append(counter)
+
+    items = []
+    for member in staff:
+        ids = [a.id for a in member.activities]
+        code, names = competences(ids, ordinary)
+        items.append({
+            "member": member,
+            "counters": counters_by_staff.get(member.id, []),
+            "competences": code,
+            "competence_names": names,
+            "language": clean_language(member.language),
+            "nominative": [a.name for a in nominative_for(member.id, nominative)],
+            "nominative_missing": nominative_missing(member.id, ids, nominative),
+        })
+    return render_template('admin/staff_htmx_table.html', items=items,
+                           activities=ordinary, nominative=nominative,
+                           connected=sum(1 for i in items if i["counters"]))
+
+
+#: Formulaire d'un membre d'équipe — création ET modification (point 5).
+SCHEMA_MEMBRE = (
+    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=50),
+    Champ("initials", obligatoire=True, libelle="Les initiales", longueur_max=10),
+    Champ("language", libelle="La langue", longueur_max=20),
+    Champ("activities", type=LISTE_ENTIERS, libelle="Les activités"),
+)
+
+
+def _valider_membre(form, member_id=None):
+    """``(valeurs, erreur)`` : schéma + initiales normalisées et uniques
+    SANS tenir compte de la casse (la connexion au comptoir l'ignore)."""
+    valeurs, erreurs = valider(
+        extraire(SCHEMA_MEMBRE, form.get, form.getlist), SCHEMA_MEMBRE)
+    if erreurs:
+        return None, erreurs[0]
+    valeurs["initials"] = normalize_initials(valeurs["initials"])
+    others = Pharmacist.query.filter(Pharmacist.id != member_id).all() \
+        if member_id is not None else Pharmacist.query.all()
+    if initials_taken(valeurs["initials"], others):
+        return None, "Ces initiales sont déjà utilisées par un autre membre."
+    valeurs["language"] = clean_language(valeurs["language"])
+    return valeurs, None
+
 
 # mise à jour des informations d'un membre
 @admin_staff_bp.route('/admin/staff/member_update/<int:member_id>', methods=['POST'])
 @require_permission('staff')
 def update_member(member_id):
+    member = db.session.get(Pharmacist, member_id)
+    if member is None:
+        return display_toast(success=False, message="Membre de l'équipe introuvable")
+
+    valeurs, erreur = _valider_membre(request.form, member_id)
+    if erreur:
+        # 204 : la liste n'est pas remplacée, la saisie reste dans le formulaire.
+        return display_toast(success=False, message=erreur)
+
     try:
-        member = Pharmacist.query.get(member_id)
-        if member:
-            if request.form.get('name') == '':
-                display_toast(success=False, message="Le nom est obligatoire")
-                return "", 204
-            if request.form.get('initials') == '':
-                display_toast(success=False, message="Les initiales sont obligatoires")
-                return "", 204
-
-            # Vérifie que les initiales ne sont pas déjà enregistrées par une autre personne
-            initials = request.form.get("initials")
-            existing_member = db.session.query(Pharmacist).filter(
-                Pharmacist.initials == initials,
-                Pharmacist.id != member_id  # Exclure le membre actuel
-            ).first()
-
-            if existing_member:
-                display_toast(success=False, message="Les initiales sont déjà utilisées par un autre membre")
-                return "", 204
-
-            member.name = request.form.get('name', member.name)
-            member.initials = initials
-            member.language = request.form.get('language', member.language)
-
-            # Suppression des activités ajoutées pour éviter les erreurs de duplication
-            activities_ids = request.form.getlist('activities')
-            new_activities = Activity.query.filter(Activity.id.in_(activities_ids)).all()
-
-            # Clear existing activities and add the new ones
-            member.activities = new_activities
-
-            db.session.commit()
-            record_audit(ACTION_UPDATE, "staff", target_id=member_id,
-                         outcome=OUTCOME_SUCCESS,
-                         details=f"name={member.name}")
-            display_toast(success=True, message="Mise à jour réussie")
-            return ""
-        else:
-            display_toast(success=False, message="Membre de l'équipe introuvable")
-            return ""
-
-    except Exception as e:
+        member.name = valeurs["name"]
+        member.initials = valeurs["initials"]
+        member.language = valeurs["language"]
+        member.activities = Activity.query.filter(
+            Activity.id.in_(valeurs["activities"])).all()
+        db.session.commit()
+    except Exception:
         # Rollback avant l'audit : le commit interne de record_audit ne doit
         # pas persister de mutations métier restées en attente.
         db.session.rollback()
         record_audit(ACTION_UPDATE, "staff", target_id=member_id,
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="La mise à jour a échoué.")
-        return jsonify(status="error", message="La mise à jour a échoué."), 500
+        app.logger.exception("Echec de la mise a jour d'un membre")
+        return display_toast(success=False, message="La mise à jour a échoué.")
+
+    record_audit(ACTION_UPDATE, "staff", target_id=member_id,
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"name={member.name}")
+    # Compétences modifiées : les comptoirs rechargent leurs boutons.
+    communikation("counter", event="update buttons")
+    display_toast(success=True, message="Membre enregistré")
+    return display_staff_table()
 
 
 # affiche la modale pour confirmer la suppression d'un membre
@@ -88,7 +127,9 @@ def update_member(member_id):
 @require_permission('staff')
 def confirm_delete(member_id):
     staff = Pharmacist.query.get(member_id)
-    return render_template('/admin/staff_modal_confirm_delete.html', staff=staff)
+    return render_template('/admin/staff_modal_confirm_delete.html', staff=staff,
+                           counters=Counter.query.filter_by(staff_id=member_id).all(),
+                           nominative=Activity.query.filter_by(staff_id=member_id).all())
 
 
 # supprime un membre de l'equipe
@@ -101,11 +142,17 @@ def delete_staff(member_id):
             display_toast(success=False, message="Membre de l'équipe non trouvé")
             return display_staff_table()
 
+        was_connected = Counter.query.filter_by(staff_id=member_id).count() > 0
+        # Les relations ORM (Counter.staff, Activity.staff) remettent à vide
+        # le comptoir et les demandes nominatives de ce membre.
         db.session.delete(member)
         db.session.commit()
         record_audit(ACTION_DELETE, "staff", target_id=member_id,
                      outcome=OUTCOME_SUCCESS)
-        display_toast(success=True, message="Suppression réussie")
+        if was_connected:
+            # Le comptoir qu'il occupait se retrouve sans personne.
+            communikation("counter", event="update buttons")
+        display_toast(success=True, message="Membre supprimé")
         return display_staff_table()
 
     except Exception as e:
@@ -115,23 +162,15 @@ def delete_staff(member_id):
         display_toast(success=False, message="La suppression a échoué.")
         app.logger.exception("Echec de la suppression d'un membre")
         return display_staff_table()
-    
+
 
 # affiche le formulaire pour ajouter un membre
 @admin_staff_bp.route('/admin/staff/add_form')
 @require_permission('staff')
 def add_staff_form():
-    activities = Activity.query.all()
-    return render_template('/admin/staff_add_form.html', activities=activities)
-
-
-#: Formulaire de création d'un membre d'équipe (point 5 : schéma déclaratif).
-SCHEMA_MEMBRE = (
-    Champ("name", obligatoire=True, libelle="Le nom", longueur_max=50),
-    Champ("initials", obligatoire=True, libelle="Les initiales", longueur_max=10),
-    Champ("language", libelle="La langue", longueur_max=50),
-    Champ("activities", type=LISTE_ENTIERS, libelle="Les activités"),
-)
+    ordinary, nominative = _activities_split()
+    return render_template('/admin/staff_add_form.html', activities=ordinary,
+                           nominative=nominative)
 
 
 # enregistre le membre dans la Bdd
@@ -139,38 +178,27 @@ SCHEMA_MEMBRE = (
 @require_permission('staff')
 def add_new_staff():
     try:
-        valeurs, erreurs = valider(
-            extraire(SCHEMA_MEMBRE, request.form.get, request.form.getlist),
-            SCHEMA_MEMBRE,
-        )
-        if erreurs:
-            display_toast(success=False, message=erreurs[0])
-            return display_staff_table()
-
-        initials = valeurs["initials"]
-        activities_ids = valeurs["activities"]
-
-        # Unicité : contrôle métier, il reste ici (il interroge la base).
-        if initials in [initial[0] for initial in db.session.query(Pharmacist.initials).all()]:
-            display_toast(success=False, message="Les initiales sont déjà utilisées")
-            return "", 204
+        valeurs, erreur = _valider_membre(request.form)
+        if erreur:
+            # 204 : rien n'est remplacé, la saisie reste dans le formulaire.
+            return display_toast(success=False, message=erreur)
 
         # Point 6 : création + rattachement des activités dans UNE transaction.
         with atomic():
             new_staff = Pharmacist(
                 name=valeurs["name"],
-                initials=initials,
+                initials=valeurs["initials"],
                 language=valeurs["language"],
             )
             db.session.add(new_staff)
             db.session.flush()
 
-            for activity_id in activities_ids:
+            for activity_id in valeurs["activities"]:
                 activity = Activity.query.get(activity_id)
                 if activity:
                     new_staff.activities.append(activity)
 
-        display_toast(success=True, message="Membre ajouté avec succès")
+        display_toast(success=True, message="Membre ajouté")
         record_audit(ACTION_CREATE, "staff", target_id=new_staff.id,
                      outcome=OUTCOME_SUCCESS,
                      details=f"name={new_staff.name}")
@@ -184,10 +212,9 @@ def add_new_staff():
         db.session.rollback()
         record_audit(ACTION_CREATE, "staff", target_id=request.form.get('name'),
                      outcome=OUTCOME_FAILURE)
-        display_toast(success=False, message="L'ajout a échoué.")
         app.logger.exception("Echec de l'ajout d'un membre")
-        return display_staff_table()
-    
+        return display_toast(success=False, message="L'ajout a échoué.")
+
 
 @admin_staff_bp.route('/admin/staff/dashboard')
 @require_permission_dashboard('staff')

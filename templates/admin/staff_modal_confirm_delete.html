@@ -1,4 +1,18 @@
-<p>Vous vous appretez à supprimer {{staff.name}} définitivement. Confirmez-vous la suppression ? {{staff.id}}</p>
+<p>Vous vous apprêtez à supprimer définitivement « {{ staff.name }} ». Confirmez-vous la suppression ?</p>
+{% if counters or nominative %}
+<div class="alert alert-warning small" role="note">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    {% if counters %}
+        Actuellement au comptoir <strong>{{ counters | map(attribute='name') | join(', ') }}</strong> : ce comptoir se retrouvera sans personne connectée.
+    {% endif %}
+    {% if nominative %}
+        {% if counters %}<br>{% endif %}
+        Demande{{ 's' if nominative | length > 1 }} nominative{{ 's' if nominative | length > 1 }}
+        « {{ nominative | map(attribute='name') | join(' », « ') }} » n'aura plus de destinataire :
+        supprimez-la ou réaffectez-la dans <a href="/admin/activity?tab=staff">Activités</a>.
+    {% endif %}
+</div>
+{% endif %}
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>

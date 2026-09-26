@@ -152,6 +152,10 @@ def update_activity(activity_id):
                 db.session.rollback()
                 return display_toast(success=False, message="Choisissez le membre de l'équipe.")
             activity.staff = staff
+            # Même règle qu'à la création : la personne demandée doit avoir
+            # cette demande dans ses compétences pour pouvoir l'appeler.
+            if activity not in staff.activities:
+                staff.activities.append(activity)
 
         db.session.commit()
     except Exception:
@@ -301,6 +305,10 @@ def add_new_activity():
             if staff_id:
                 new_activity.is_staff = True
                 new_activity.staff = Pharmacist.query.get(staff_id)
+                # La personne demandée doit pouvoir appeler ces patients : un
+                # comptoir n'appelle que les activités de ses compétences.
+                if new_activity.staff and new_activity not in new_activity.staff.activities:
+                    new_activity.staff.activities.append(new_activity)
 
             db.session.add(new_activity)
             db.session.flush()

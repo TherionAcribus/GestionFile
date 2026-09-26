@@ -1,38 +1,13 @@
-<table id="new_staff_form">
-    <thead>
-        <tr>
-            <th>Nom</th>
-            <th>Initiales</th>
-            <th>Langues</th>
-            <th>Activité</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><input type="text" class="form-control" name="name" value="" id="name"></td>
-            <td><input type="text" class="form-control" name="initials" value="" id="initials"></td>
-            <td><input type="text" class="form-control" name="language" value="" id="language"></td>
-            <td>
-                <!-- Affichage des checkboxes pour chaque activité -->
-                {% for activity in activities %}
-                <label>
-                    <input class="activities form-check-input" type="checkbox" name="activities" checked="checked"  value="{{ activity.id }}" />
-                    <span class="form-check-label">{{ activity.name }}</span>
-                </label>
-                {% endfor %}
-            </td>
-            <td>
-                <button class="btn btn-primary"
-                    hx-target="#div_staff_table"
-                    hx-post="/admin/staff/add_new_staff"
-                    hx-include=".activities"
-                    data-param-name="#name"
-                    data-param-initials="#initials"
-                    data-param-language="#language">
-                    Enregistrer
-                </button>
-            </td>
-        </tr>
-    </tbody>
-</table>
+{% from 'admin/staff_form_macro.html' import staff_form %}
+<div class="card border-primary mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Nouveau membre</strong>
+        {# Vide le conteneur sans requête serveur (admin_fragments.js). #}
+        <button type="button" class="btn-close" aria-label="Fermer le formulaire"
+                data-clear-target="#div_add_staff_form"></button>
+    </div>
+    <div class="card-body">
+        {# Nouveau membre : toutes les activités ordinaires cochées par défaut. #}
+        {{ staff_form('new_staff', None, activities, nominative, '/admin/staff/add_new_staff', 'Ajouter') }}
+    </div>
+</div>

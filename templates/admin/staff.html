@@ -1,32 +1,39 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Equipe{% endblock %}
+{% block title %}Équipe{% endblock %}
 
 {% block content %}
-    <h3>Equipe</h3>
+<div class="staff-page">
+    <h2 class="mb-1">Équipe</h2>
+    <p class="text-muted">
+        Chaque membre se connecte à un comptoir en saisissant <strong>ses initiales</strong>.
+        Ses <strong>compétences</strong> déterminent les patients qu'il peut appeler : un comptoir
+        n'appelle que les patients des <a href="/admin/activity">activités</a> que la personne connectée sait traiter.
+    </p>
 
-    <input type="search" class="form-control table-filter mb-2"
-           placeholder="Rechercher un membre…"
-           aria-label="Filtrer la liste de l'équipe"
-           data-filter-target="#div_staff_table">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <input type="search" class="form-control table-filter staff-filter"
+               placeholder="Rechercher un membre…"
+               aria-label="Filtrer la liste de l'équipe"
+               data-filter-target="#div_staff_table">
+        <button type="button" class="btn btn-primary"
+                hx-get="/admin/staff/add_form"
+                hx-target="#div_add_staff_form"
+                hx-swap="innerHTML show:#div_add_staff_form:top">
+            <i class="bi bi-person-plus" aria-hidden="true"></i> Nouveau membre
+        </button>
+    </div>
+
+    <div id="div_add_staff_form"></div>
 
     <div id="div_staff_table"
         hx-get="/admin/staff/table"
         hx-trigger="load"
         hx-target="#div_staff_table"
-        hx-swap="innerHTML">        
+        hx-swap="innerHTML">
+        <p class="text-muted small">Chargement…</p>
     </div>
 
-    <!-- Ajout nouveau membre -->
-    <a class="btn btn-primary"
-        hx-get="/admin/staff/add_form"
-        hx-target="#div_add_staff_form"
-        hx-swap="innerHTML">
-    Ajouter un membre à l'équipe
-    </a>    
-    <div id="div_add_staff_form"></div>
-
     {{ macros.backup_buttons("staff", "Équipe") }}
-
-    
+</div>
 {% endblock %}
