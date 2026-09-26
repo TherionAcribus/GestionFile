@@ -32,6 +32,7 @@ _FICHIERS_ADMIN = [
     "admin_fragments.js", "admin_backups.js", "admin_dashboard_select.js",
     "admin_data.js", "admin_home.js", "admin_stats.js", "admin_unsaved_changes.js",
     "admin_gallery.js", "admin_button_gallery.js", "admin_flag_upload.js",
+    "admin_translations.js",
 ]
 
 # Blocs extraits de admin.js -> (fichier, pages qui doivent le charger).
@@ -42,6 +43,7 @@ BLOCS_EXTRAITS = [
     ("admin_gallery.js", ["gallery.html"]),
     ("admin_button_gallery.js", ["patient_page.html"]),
     ("admin_flag_upload.js", ["translations.html"]),
+    ("admin_translations.js", ["translations.html"]),
 ]
 
 # Pages incluant les fragments qui appellent les macros de couleur / d'entier.

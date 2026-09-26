@@ -157,6 +157,18 @@ function refresh_title(){
     htmx.trigger('#div_title_area', 'refresh_title', {target: "#div_title_area"});
 }
 
+// Sélecteur de langue : le swap HTMX ne touche pas <html> — on met à jour
+// l'attribut lang du document pour que les lecteurs d'écran annoncent la
+// bonne langue. Délégation sur document : #main est remplacé à chaque
+// changement, un écouteur direct serait perdu.
+document.addEventListener('click', function (evt) {
+    var button = evt.target && evt.target.closest
+        ? evt.target.closest('.flag-button[data-lang-code]') : null;
+    if (button) {
+        document.documentElement.lang = button.getAttribute('data-lang-code');
+    }
+});
+
 
 // Point d'entrée UNIQUE pour l'impression, partagé entre la première
 // impression (htmx:afterSwap ci-dessous) et la réimpression

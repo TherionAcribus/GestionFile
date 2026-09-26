@@ -507,10 +507,24 @@ html, body {
     transform: translateY(-50%);
 }
 
+.language-selector .flag-button {
+    display: flex;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+/* Repère clavier : les boutons-drapeaux doivent montrer leur focus. */
+.language-selector .flag-button:focus-visible {
+    outline: 3px solid var(--flag_border_color);
+    outline-offset: 2px;
+    border-radius: 50%;
+}
+
 .language-selector img {
     display: flex;
     flex-direction: column;
-    cursor: pointer;
     width: var(--flag_size);
     margin: 10px;
     border-width: var(--flag_border_size);
@@ -520,9 +534,21 @@ html, body {
     transition: scale 0.2s ease;
 }
 
-.language-selector img:hover {
+.language-selector .flag-button:hover img {
     box-shadow: 0px 0px 0px #888888;
     scale: 0.95;
+}
+
+/* Langue sans drapeau : le bouton affiche son nom. */
+.language-selector .flag-name {
+    display: inline-block;
+    margin: 10px;
+    padding: 8px 12px;
+    border-width: var(--flag_border_size);
+    border-style: solid;
+    border-color: var(--flag_border_color);
+    border-radius: 8px;
+    background: #ffffff;
 }
 
 .div_explanation {

@@ -1,6 +1,6 @@
 {% import 'shared/page_components.html' as page_components %}
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ session.get('language_code', 'fr') }}">
 <head>
     <meta charset="UTF-8">
     {# Révision de l'éditeur visuel affichée : renvoyée au serveur dans
@@ -53,11 +53,28 @@
         {# Le sélecteur n'a de sens qu'à partir de deux langues actives : avec une
            seule langue, on n'affiche pas un drapeau unique cliquable pour rien. #}
         {% if page_patient_display_translations and languages|length > 1 %}
-            <div class="language-selector" data-page-editor-component="languages">
+            <div class="language-selector" role="group" aria-label="Choisir la langue"
+                 data-page-editor-component="languages">
                 {% for language in languages %}
-                    {% if language.flag_url and language.flag_url != 'None' %}
-                        <img class="flag" src="/static/images/flags/{{language.flag_url}}" alt="{{language.translation}}" hx-get="/patient/change_language/{{language.code}}" hx-trigger="click" hx-target="#main" hx-swap="innerHTML">
-                    {% endif %}
+                    {# Bouton réel : focus clavier et activation Entrée/Espace,
+                       contrairement à l'image seule. `lang` indique au lecteur
+                       d'écran la langue du nom annoncé. hx-select + outerHTML
+                       remplacent #main par le #main de la réponse — auparavant,
+                       la page complète était injectée DANS #main.
+                       data-lang-code : patients.js met à jour l'attribut lang
+                       du document au clic (le swap ne touche pas <html>). #}
+                    <button type="button" class="flag-button"
+                            aria-label="{{ language.translation }}" lang="{{ language.code }}"
+                            data-lang-code="{{ language.code }}"
+                            hx-get="/patient/change_language/{{ language.code }}"
+                            hx-trigger="click" hx-target="#main"
+                            hx-select="#main" hx-swap="outerHTML">
+                        {% if language.flag_url and language.flag_url != 'None' %}
+                            <img src="/static/images/flags/{{ language.flag_url }}" alt="">
+                        {% else %}
+                            <span class="flag-name">{{ language.name }}</span>
+                        {% endif %}
+                    </button>
                 {% endfor %}
             </div>
         {% endif %}
