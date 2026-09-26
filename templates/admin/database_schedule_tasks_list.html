@@ -1,54 +1,78 @@
-{% macro job_card(job, css_class) %}
-    <li class="mb-4 p-4 border rounded-lg {{ css_class }}">
-        <div>
-            <strong>{{ job.label }}</strong>
-            <small class="text-muted ms-1">{{ job.id }}</small>
-        </div>
-        <div class="ml-4">
-            <div>Planification : {{ job.schedule }}</div>
-            <div>Prochaine exécution :
-                {% if job.next_run_time %}
-                    {{ job.next_run_time.strftime('%Y-%m-%d %H:%M %Z') }}
+{# Liste des tâches planifiées, regroupées : file de patients, maintenance,
+   ouvertures/fermetures d'activités (repliées). Champs lisibles fournis par
+   scheduler_dashboard.build_jobs_info(detailed=True) : job.label,
+   job.schedule, job.category, job.settings, exec.status_label/status_class. #}
+{% macro job_row(job) %}
+    <li class="list-group-item">
+        <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div>
+                <strong>{{ job.label }}</strong>
+                <div class="small text-muted">{{ job.schedule | capitalize }}</div>
+            </div>
+            <div class="text-sm-end small">
+                <div>Prochaine exécution :
+                    {% if job.next_run_time %}
+                        <strong>{{ job.next_run_time.strftime('%d/%m/%Y %H:%M %Z') }}</strong>
+                    {% else %}
+                        <span class="text-warning-emphasis">non planifiée</span>
+                    {% endif %}
+                </div>
+                {% if job.last_executions %}
+                    {% set exec = job.last_executions[0] %}
+                    <div>Dernière : <span class="{{ exec.status_class }} fw-semibold">{{ exec.status_label }}</span>
+                        le {{ exec.time.strftime('%d/%m à %H:%M') }}</div>
                 {% else %}
-                    Non planifiée
+                    <div class="text-muted">Jamais exécutée</div>
+                {% endif %}
+                {% if job.settings %}
+                    <a href="{{ job.settings[0] }}" class="small">Régler : {{ job.settings[1] }}</a>
                 {% endif %}
             </div>
-            {% if job.last_executions %}
-                <div class="mt-2 font-semibold">Dernières exécutions :</div>
-                <ul class="ml-4">
-                {% for exec in job.last_executions %}
-                    <li>
-                        <span class="{{ exec.status_class }}">{{ exec.status_label }}</span>
-                        — {{ exec.time.strftime('%Y-%m-%d %H:%M') }}
-                        {% if exec.error %}
-                            <div class="text-sm">Détail : {{ exec.error }}</div>
-                        {% endif %}
-                    </li>
-                {% endfor %}
-                </ul>
-            {% endif %}
         </div>
+        {% if job.last_executions | length > 1 or (job.last_executions and job.last_executions[0].error) %}
+        <details class="mt-1 small">
+            <summary>Historique récent</summary>
+            <ul class="mb-0">
+            {% for exec in job.last_executions %}
+                <li>
+                    <span class="{{ exec.status_class }}">{{ exec.status_label }}</span>
+                    — {{ exec.time.strftime('%d/%m/%Y %H:%M') }}
+                    {% if exec.error %}<span class="text-muted">— {{ exec.error }}</span>{% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
     </li>
 {% endmacro %}
 
-{% if not main_jobs and not other_jobs %}
-    Aucune tâche planifiée
+{% set all_jobs = main_jobs + other_jobs %}
+{% if not all_jobs %}
+    <p class="text-muted mb-0">Aucune tâche planifiée : le planificateur ne tourne peut-être pas.</p>
 {% else %}
-    {% if main_jobs %}
-        <h3 class="text-xl font-bold mb-4">Tâches principales :</h3>
-        <ol class="mb-8">
-        {% for job in main_jobs %}
-            {{ job_card(job, 'bg-blue-50') }}
-        {% endfor %}
-        </ol>
+    {% set patient_jobs = all_jobs | selectattr('category', 'equalto', 'patients') | list %}
+    {% set maintenance_jobs = all_jobs | selectattr('category', 'equalto', 'maintenance') | list %}
+    {% set activity_jobs = all_jobs | selectattr('category', 'equalto', 'activities') | list %}
+
+    {% if patient_jobs or maintenance_jobs %}
+    <h6 class="mt-2">File et maintenance</h6>
+    <ul class="list-group mb-3">
+        {% for job in patient_jobs + maintenance_jobs %}{{ job_row(job) }}{% endfor %}
+    </ul>
     {% endif %}
 
-    {% if other_jobs %}
-        <h3 class="text-xl font-bold mb-4">Autres tâches :</h3>
-        <ol>
-        {% for job in other_jobs %}
-            {{ job_card(job, '') }}
-        {% endfor %}
-        </ol>
-    {% endif %}
+    <details class="activity-jobs">
+        <summary class="fw-semibold">
+            Ouvertures et fermetures d'activités ({{ activity_jobs | length }})
+        </summary>
+        <p class="small text-muted mt-2 mb-2">
+            Créées automatiquement à partir des plages horaires des <a href="/admin/activity">activités</a>.
+            Une activité proposée en continu n'en a aucune.
+        </p>
+        {% if activity_jobs %}
+        <ul class="list-group">
+            {% for job in activity_jobs %}{{ job_row(job) }}{% endfor %}
+        </ul>
+        {% endif %}
+    </details>
 {% endif %}

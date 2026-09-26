@@ -37,6 +37,21 @@ _JOB_LABELS = {
     'Scheduler Heartbeat': "Synchronisation du planificateur",
 }
 
+# Regroupement de la page « Planification » : la file de patients, la
+# maintenance automatique, puis les ouvertures/fermetures d'activités (souvent
+# nombreuses, repliées).
+JOB_CATEGORY_PATIENTS = 'patients'
+JOB_CATEGORY_MAINTENANCE = 'maintenance'
+JOB_CATEGORY_ACTIVITIES = 'activities'
+
+# Où se règle chaque tâche système (lien affiché à côté de la tâche).
+_JOB_SETTINGS = {
+    'Clear Patient Table': ('#purge-settings', "Réglages ci-dessus"),
+    'Clear Announce Calls': ('#div_announce_cache', "Cache des annonces"),
+    'Auto Archive Data': ('/admin/data', "Données"),
+    'Purge App Messaging': ('/admin/app', "Application comptoir"),
+}
+
 _WEEKDAYS_FR = {
     'mon': 'lundi', 'tue': 'mardi', 'wed': 'mercredi', 'thu': 'jeudi',
     'fri': 'vendredi', 'sat': 'samedi', 'sun': 'dimanche',
@@ -78,6 +93,20 @@ def describe_job(job_id, activity_names=None):
         return (f"{verb} de « {name} » "
                 f"({day} à {match.group(4)}:{match.group(5)})")
     return job_id
+
+
+def job_category(job_id):
+    """Catégorie d'affichage d'une tâche (voir JOB_CATEGORY_*)."""
+    if job_id == 'Clear Patient Table':
+        return JOB_CATEGORY_PATIENTS
+    if _ACTIVITY_JOB_RE.match(job_id or ''):
+        return JOB_CATEGORY_ACTIVITIES
+    return JOB_CATEGORY_MAINTENANCE
+
+
+def job_settings(job_id):
+    """``(url, libellé)`` de la page où se règle la tâche, ou ``None``."""
+    return _JOB_SETTINGS.get(job_id)
 
 
 def describe_trigger(trigger):
@@ -264,6 +293,8 @@ def build_jobs_info(jobs, per_job=1, detailed=False):
                 getattr(job, 'trigger', None))
             job_info['last_executions'] = [
                 _execution_entry(log, detailed=True) for log in logs]
+            job_info['category'] = job_category(job.id)
+            job_info['settings'] = job_settings(job.id)
         if job.id in MAIN_JOBS:
             main_jobs_info.append(job_info)
         else:

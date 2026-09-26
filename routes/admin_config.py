@@ -27,9 +27,10 @@ from routes.admin_security import (
     require_permission,
     require_permission_dashboard,
 )
-from scheduler_dashboard import build_jobs_info
+from scheduler_dashboard import build_jobs_info, latest_execution_by_job, execution_status_display
 from scheduler_functions import (
     ANNOUNCE_CACHE_DEFAULT_RETENTION_DAYS,
+    CLEAR_PATIENT_TABLE_JOB_ID,
     announce_cache_stats,
     format_size,
     purge_announce_cache,
@@ -670,8 +671,16 @@ def call_function_with_switch(key, value):
     attendue a échoué (point f : plus de succès silencieux)."""
     warning = None
     if key == "cron_delete_patient_table_activated":
-        if value == "true" and reconcile_clear_patient_table_job() != "added":
+        # Réconciliation dans les DEUX sens : à l'extinction, la tâche est
+        # retirée tout de suite (auparavant elle restait planifiée et ne se
+        # retirait qu'à sa prochaine exécution).
+        result = reconcile_clear_patient_table_job()
+        if value == "true" and result != "added":
             warning = _SCHEDULE_RECONCILE_WARNING
+        communikation("admin", event="refresh_schedule_tasks_list")
+    elif key == "cron_transfer_patient_to_history":
+        # L'état affiché du vidage quotidien mentionne la copie historique.
+        communikation("admin", event="refresh_schedule_tasks_list")
     elif key == "app_messaging_enabled":
         from services import messaging_service
         if value == "true":
@@ -699,6 +708,25 @@ def admin_database():
                         cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
                         cron_transfer_patient_to_history = app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"],
                         cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"])
+
+
+@admin_config_bp.route("/admin/database/patient_purge_status")
+@require_permission('schedule')
+def patient_purge_status():
+    """État du vidage quotidien de la file : ce qui se passera, quand, et
+    comment s'est passée la dernière exécution. Rechargé avec la liste des
+    tâches (événement refresh_schedule_tasks_list)."""
+    job = scheduler.get_job(CLEAR_PATIENT_TABLE_JOB_ID)
+    last = latest_execution_by_job([CLEAR_PATIENT_TABLE_JOB_ID]).get(CLEAR_PATIENT_TABLE_JOB_ID)
+    last_label, last_class = execution_status_display(last.status) if last else (None, None)
+    return render_template(
+        '/admin/database_patient_purge_status.html',
+        activated=app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False),
+        archive=app.config.get("CRON_TRANSFER_PATIENT_TO_HISTORY", False),
+        hour=app.config.get("CRON_DELETE_PATIENT_TABLE_HOUR", ""),
+        next_run=job.next_run_time if job else None,
+        job_missing=job is None,
+        last=last, last_label=last_label, last_class=last_class)
 
 
 @admin_config_bp.route("/admin/database/announce_cache")

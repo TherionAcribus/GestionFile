@@ -893,3 +893,14 @@ font-size: 0.85rem;
 .counter-page:has(#counter_order_mode option[value="random"]:checked) .counter-order-block {
     display: none;
 }
+
+/* --- Page Planification --------------------------------------------------- */
+/* Options du vidage quotidien grisées tant que l'interrupteur principal est
+   éteint (elles restent modifiables : elles s'appliqueront à l'activation). */
+.database-page:has(#cron_delete_patient_table_activated:not(:checked)) .purge-dependent {
+    opacity: .55;
+}
+
+.activity-jobs > summary {
+    cursor: pointer;
+}

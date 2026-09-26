@@ -1,43 +1,73 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Admin - Planifications{% endblock %}
+{% block title %}Planification{% endblock %}
 
 {% block content %}
-    <h3>Planifications</h3>
+<div class="database-page">
+    <h2 class="mb-1">Planification</h2>
+    <p class="text-muted">
+        Les tâches que le serveur exécute tout seul : remise à zéro quotidienne de la file,
+        nettoyage des fichiers, ouverture et fermeture des activités selon leurs horaires.
+    </p>
 
-    <h5>Liste des patients</h5>
+    <section class="admin-setting-card algo-section" id="purge-settings" aria-labelledby="purge_title">
+        <h5 id="purge_title"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Remise à zéro quotidienne de la file</h5>
+        <p class="text-muted small">
+            Chaque jour à l'heure choisie, tous les patients sont retirés de la file et la numérotation repart de 1.
+            Le même nettoyage est appliqué au redémarrage du serveur pour les patients des jours précédents.
+        </p>
 
-    {{ macros.switch("cron_delete_patient_table_activated", 
-            cron_delete_patient_table_activated, 
-            "Vider automatiquement la table des patients une fois par jour")
-    }}
+        {# État en direct : rechargé avec la liste des tâches (WebSocket
+           refresh_schedule_tasks_list, émis après chaque réglage). #}
+        <div id="div_patient_purge_status" class="mb-3"
+             hx-get="/admin/database/patient_purge_status"
+             hx-trigger="load, refresh_schedule_tasks_list from:body"
+             hx-swap="innerHTML"></div>
 
-    {{ macros.switch("cron_transfer_patient_to_history", 
-        cron_transfer_patient_to_history, 
-        "Copier les patients du jour dans l'historique (visée statistique)")
-    }}
+        {{ macros.switch("cron_delete_patient_table_activated",
+                cron_delete_patient_table_activated,
+                "Vider automatiquement la file chaque jour") }}
 
-    {{ macros.textbloc_hour("cron_delete_patient_table_hour", 
-            cron_delete_patient_table_hour, 
-            "Heure de la suppression")
-    }}
+        <div class="purge-dependent mt-2">
+            {{ macros.switch("cron_transfer_patient_to_history",
+                cron_transfer_patient_to_history,
+                "Copier d'abord les patients dans l'historique (recommandé : alimente les statistiques)") }}
 
+            <div class="purge-hour mt-3">
+                {{ macros.textbloc_hour("cron_delete_patient_table_hour",
+                        cron_delete_patient_table_hour,
+                        "Heure de la remise à zéro (en dehors des heures d'ouverture)") }}
+            </div>
+        </div>
+    </section>
 
     {# Section « Cache des annonces vocales » — fragment rechargé après un
        vidage ou un changement de durée de conservation. #}
-    <div id="div_announce_cache"
-        hx-get="/admin/database/announce_cache"
-        hx-trigger="load, refresh_announce_cache"
-        hx-target="#div_announce_cache"
-        hx-swap="innerHTML">
-    </div>
+    <section class="admin-setting-card algo-section" aria-labelledby="announce_cache_title">
+        <div id="div_announce_cache"
+            hx-get="/admin/database/announce_cache"
+            hx-trigger="load, refresh_announce_cache"
+            hx-target="#div_announce_cache"
+            hx-swap="innerHTML">
+        </div>
+    </section>
 
-    <div id="div_schedule_tasks_list"
-        hx-get="/admin/database/schedule_tasks_list"
-        hx-trigger="load, refresh_schedule_tasks_list"
-        hx-target="#div_schedule_tasks_list"
-        hx-swap="innerHTML">
-    </div>
-
-
+    <section class="admin-setting-card algo-section" aria-labelledby="tasks_title">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h5 id="tasks_title" class="mb-0"><i class="bi bi-list-check" aria-hidden="true"></i> Toutes les tâches planifiées</h5>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    hx-get="/admin/database/schedule_tasks_list"
+                    hx-target="#div_schedule_tasks_list" hx-swap="innerHTML">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Actualiser
+            </button>
+        </div>
+        <div id="div_schedule_tasks_list"
+            hx-get="/admin/database/schedule_tasks_list"
+            hx-trigger="load, refresh_schedule_tasks_list"
+            hx-target="#div_schedule_tasks_list"
+            hx-swap="innerHTML">
+            <p class="text-muted small">Chargement…</p>
+        </div>
+    </section>
+</div>
 {% endblock %}

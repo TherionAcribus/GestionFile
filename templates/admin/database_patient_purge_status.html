@@ -1,0 +1,32 @@
+{# État du vidage quotidien de la file (routes/admin_config.patient_purge_status). #}
+{% if not activated %}
+    <div class="alert alert-secondary small mb-0" role="status">
+        <i class="bi bi-pause-circle" aria-hidden="true"></i>
+        <strong>Désactivée</strong> : la file n'est jamais vidée automatiquement. Les patients des jours
+        précédents restent affichés jusqu'à un vidage manuel (page <a href="/admin/queue">File d'attente</a>).
+    </div>
+{% elif job_missing %}
+    <div class="alert alert-danger small mb-0" role="status">
+        <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+        <strong>Activée mais non planifiée</strong> : la tâche n'a pas pu être créée. Réenregistrez l'heure
+        ci-dessous ou redémarrez le serveur.
+    </div>
+{% else %}
+    <div class="alert {{ 'alert-success' if archive else 'alert-warning' }} small mb-0" role="status">
+        <i class="bi bi-calendar-check" aria-hidden="true"></i>
+        <strong>Active</strong> : prochaine remise à zéro
+        {% if next_run %}le <strong>{{ next_run.strftime('%d/%m à %H:%M') }}</strong>{% else %}à {{ hour }}{% endif %},
+        {% if archive %}
+            avec copie dans l'historique (statistiques conservées).
+        {% else %}
+            <strong>sans copie dans l'historique</strong> : ces patients n'apparaîtront pas dans les statistiques.
+        {% endif %}
+        {% if last %}
+            <span class="d-block mt-1">
+                Dernière exécution : <span class="{{ last_class }} fw-semibold">{{ last_label }}</span>
+                le {{ last.local_time.strftime('%d/%m à %H:%M') }}
+                {% if last.error_message %}<span class="text-muted">— {{ last.error_message }}</span>{% endif %}
+            </span>
+        {% endif %}
+    </div>
+{% endif %}
