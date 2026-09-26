@@ -149,8 +149,9 @@ def display_activity_inactive(request):
         # ``message`` doit être résolu dans cette branche aussi : il n'était
         # défini qu'en français -> NameError (500) pour tout patient en
         # langue étrangère sur une activité inactive.
+        # Le helper replie déjà sur le texte d'activité français quand la
+        # traduction manque ; reste le repli sur le message par défaut.
         message = (get_activity_inactivity_message_translation(activity, language_code)
-                   or activity.inactivity_message
                    or get_text_translation("page_patient_disable_default_message", language_code)["translation"])
     else:
         default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
@@ -241,10 +242,10 @@ def left_page_validate_patient(activity):
     page_patient_validation_message = replace_balise_phone(page_patient_validation_message, futur_patient)
     app.logger.debug("%s", page_patient_validation_message)
 
-    if session.get('language_code', 'fr') == "fr":
-        page_patient_subtitle=activity.specific_message
-    else:
-        page_patient_subtitle=get_activity_message_translation(activity, session.get('language_code', 'fr'))
+    # Traduction si disponible, texte source sinon — le repli fr/étranger
+    # est géré par le helper, les deux branches deviennent identiques.
+    page_patient_subtitle = get_activity_message_translation(
+        activity, session.get('language_code', 'fr'))
 
     main_content = render_template('patient/patient_qr_right_page.html', 
                             qr_data_uri=qr_data_uri,
@@ -720,17 +721,14 @@ def phone_patient_ping():
 
     phone_lines = []
 
-    if language_code != "fr":
-        for line in range(1, 7):
-            phone_line = get_text_translation(f'phone_line{line}', language_code)['translation']
-            phone_lines.append(replace_balise_phone(phone_line, patient))
-        activity = Activity.query.get(activity_id)
-        specific_message = get_activity_message_translation(activity, session.get('language_code', 'fr'))
-    else:
-        for line in range(1, 7):
-            phone_line = app.config[f'PHONE_LINE{line}']
-            phone_lines.append(replace_balise_phone(phone_line, patient))
-        specific_message= Activity.query.get(activity_id).specific_message
+    for line in range(1, 7):
+        phone_line = (app.config[f'PHONE_LINE{line}'] if language_code == "fr"
+                      else get_text_translation(f'phone_line{line}', language_code)['translation'])
+        phone_lines.append(replace_balise_phone(phone_line, patient))
+    activity = Activity.query.get(activity_id)
+    # Langue du formulaire, comme les lignes ci-dessus — session.get() et le
+    # paramètre pouvaient diverger ; le helper gère le repli fr/étranger.
+    specific_message = get_activity_message_translation(activity, language_code)
 
     # Convertir le texte des phone_lines de markdown en HTML
     phone_lines = [markdown2.markdown(line) for line in phone_lines]
@@ -770,17 +768,12 @@ def phone_patient_your_turn():
 
     phone_lines = []
 
-    if language_code != "fr":
-        for line in range(1, 7):
-            phone_line = get_text_translation(f'phone_your_turn_line{line}', language_code)['translation']
-            phone_lines.append(replace_balise_phone(phone_line, patient))
-        activity = Activity.query.get(activity_id)
-        specific_message = get_activity_message_translation(activity, session.get('language_code', 'fr'))
-    else:
-        for line in range(1, 7):
-            phone_line = app.config[f'PHONE_YOUR_TURN_LINE{line}']
-            phone_lines.append(replace_balise_phone(phone_line, patient))
-        specific_message= Activity.query.get(activity_id).specific_message
+    for line in range(1, 7):
+        phone_line = (app.config[f'PHONE_YOUR_TURN_LINE{line}'] if language_code == "fr"
+                      else get_text_translation(f'phone_your_turn_line{line}', language_code)['translation'])
+        phone_lines.append(replace_balise_phone(phone_line, patient))
+    activity = Activity.query.get(activity_id)
+    specific_message = get_activity_message_translation(activity, language_code)
 
     # Convertir le texte des phone_lines de markdown en HTML
     phone_lines = [markdown2.markdown(line) for line in phone_lines]

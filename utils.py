@@ -383,33 +383,43 @@ def get_button_translations(buttons, language_code):
     }
 
 
-def get_activity_message_translation(activity, language_code):
-    translation = Translation.query.filter_by(
-        table_name='Activity',
-        column_name='specific_message',
-        row_id=activity.id,
-        language_code=language_code
-    ).first()
+def _activity_column_translation(activity, column_name, source_text, language_code):
+    """Traduction d'un texte d'activité, avec repli sur le texte source.
 
-    if translation:    
-        return translation.translated_text
-    else:
-        return ""
-
-
-def get_activity_inactivity_message_translation(activity, language_code):
-    """Traduction du message d'inactivité de l'activité.
+    Règle commune « traduction non vide -> texte source » : une traduction
+    absente ou vide ne doit pas masquer un message qui existe en français —
+    auparavant ``specific_message`` rendait ``""`` aux patients en langue
+    étrangère alors que le texte français existait (borne, téléphone,
+    ticket, QR), contrairement à ``inactivity_message`` dont l'appelant
+    compensait déjà.
 
     ``column_name`` est filtré explicitement : ``inactivity_message`` et
     ``specific_message`` partagent les mêmes table_name/row_id — un
-    ``.first()`` non filtré pourrait renvoyer l'autre texte."""
+    ``.first()`` non filtré pourrait renvoyer l'autre texte.
+    """
+    if not activity or language_code == "fr":
+        return source_text
     translation = Translation.query.filter_by(
         table_name='Activity',
-        column_name='inactivity_message',
+        column_name=column_name,
         row_id=activity.id,
         language_code=language_code
     ).first()
-    return translation.translated_text if translation else ""
+    if translation and translation.translated_text:
+        return translation.translated_text
+    return source_text
+
+
+def get_activity_message_translation(activity, language_code):
+    return _activity_column_translation(
+        activity, 'specific_message',
+        activity.specific_message if activity else "", language_code)
+
+
+def get_activity_inactivity_message_translation(activity, language_code):
+    return _activity_column_translation(
+        activity, 'inactivity_message',
+        activity.inactivity_message if activity else "", language_code)
 
 
 def get_text_translation(key_name, language_code):
