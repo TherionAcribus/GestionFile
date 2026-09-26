@@ -15,7 +15,7 @@ from app_holder import AppHolder
 from config import time_tz
 from communication import communikation
 import config_sync
-from ui_feedback import display_toast
+
 from extensions import scheduler
 
 MESSAGING_CLEANUP_JOB_ID = "Purge App Messaging"
@@ -168,15 +168,15 @@ def add_scheduler_clear_all_patients():
             max_instances=1          # Empêche les exécutions parallèles
         )
 
-        # Vérification que le job a bien été créé
+        # Vérification que le job a bien été créé. Pas de display_toast : le
+        # résultat remonte à l'appelant (réponse de la route, avertissement
+        # point f) — un toast diffusé à TOUS les admins au démarrage ou à la
+        # réconciliation serait du bruit, pas un retour ciblé.
         if not scheduler.get_job(job_id):
             current_app.logger.error(f"Job '{job_id}' was not properly scheduled")
-            display_toast(success=False, message=f"La tâche '{job_id}' n'a pas été planifiée correctement")
-            
             return False
-            
+
         current_app.logger.info(f"Job '{job_id}' scheduled for {hour:02d}:{minute:02d}")
-        display_toast(success=True, message=f"La tâche '{job_id}' à {hour:02d}:{minute:02d} a bien été planifiée")
         return True
     
 
@@ -397,14 +397,18 @@ def clear_announces_call():
     passage. Les MP3 modernes, identifies par contenu, sont conserves 31 jours
     apres leur derniere utilisation afin que la numerotation quotidienne puisse
     etre rejouee sans appel TTS distant.
+
+    Fonction de fond uniquement (appelée par ``clear_announce_calls_job``) :
+    ni ``display_toast`` — qui diffusait un toast à tous les administrateurs
+    en pleine nuit — ni réponse HTTP — ce n'est pas une route.
     """
     announce_folder = os.path.join(current_app.static_folder, 'audio', 'annonces')
     files_count = 0  # Compteur de fichiers supprimés
-    
+
     try:
         if not os.path.exists(announce_folder):
             raise FileNotFoundError("Le répertoire d'annonces n'existe pas")
-            
+
         cutoff = time.time() - (ANNOUNCEMENT_CACHE_RETENTION_DAYS * 24 * 60 * 60)
         for fichier in os.listdir(announce_folder):
             fichier_complet = os.path.join(announce_folder, fichier)
@@ -416,16 +420,11 @@ def clear_announces_call():
             if os.path.isfile(fichier_complet) and (is_legacy or is_expired_cache):
                 os.remove(fichier_complet)
                 files_count += 1
-                
-        message = f"{files_count} fichiers audio ont été supprimés"
-        display_toast(success=True, message=message)
-        current_app.logger.info(message)
-        return "", 200
-        
+
+        current_app.logger.info(f"{files_count} fichiers audio ont été supprimés")
+
     except Exception as e:
-        error_message = f"Erreur lors du nettoyage des annonces: {str(e)}"
-        display_toast(success=False, message=error_message)
-        current_app.logger.error(error_message)
+        current_app.logger.error(f"Erreur lors du nettoyage des annonces: {str(e)}")
         raise  # Relance l'exception pour le logging dans clear_announce_calls_job
 
 AUTO_ARCHIVE_JOB_ID = 'Auto Archive Data'

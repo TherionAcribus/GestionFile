@@ -822,6 +822,42 @@ def test_update_config_no_warning_when_scheduler_ok(app, client):
     mock_reconcile.assert_called_once_with()
 
 
+def test_clear_announces_call_purge_sans_notification(app, tmp_path):
+    """Régression : la purge des annonces renvoyait (« », 200) comme une vue
+    alors que ce n'est pas une route, et diffusait un toast à TOUS les
+    administrateurs en pleine nuit — fonction de fond : retour ``None``,
+    aucune notification."""
+    app.static_folder = str(tmp_path / "static")
+    folder = tmp_path / "static" / "audio" / "annonces"
+    folder.mkdir(parents=True)
+    (folder / "patient_42.mp3").write_bytes(b"legacy")       # purgé
+    cached = folder / ("a" * 64 + ".mp3")
+    cached.write_bytes(b"cache")                           # conservé (récent)
+
+    with app.app_context(), patch.object(
+            scheduler_functions, "communikation") as mock_comm:
+        result = scheduler_functions.clear_announces_call()
+
+    assert result is None                      # pas une route : pas de réponse
+    assert not (folder / "patient_42.mp3").exists()
+    assert cached.exists()
+    mock_comm.assert_not_called()              # aucune notification nocturne
+
+
+def test_night_jobs_never_notify_admins():
+    """Régression statique : aucune tâche planifiée ne diffuse de toast —
+    ``display_toast`` émet vers TOUS les admins via ``communikation('admin',
+    ...)`` : du bruit à 3 h du matin, plus des échecs masqués. Le retour se
+    fait par JobExecutionLog + journaux + avertissement de route (point f)."""
+    source = _read("scheduler_functions.py")
+    assert "display_toast(" not in source
+    assert "from ui_feedback import" not in source
+    body = _func_body(source, "clear_announces_call")
+    assert 'return ""' not in body
+    assert "communikation" not in body
+    assert "raise" in body                     # l'échec remonte au job englobant
+
+
 # ---------------------------------------------------------------------------
 # Gardes statiques : la séparation ne doit pas régresser
 # ---------------------------------------------------------------------------
