@@ -51,6 +51,9 @@ def app(tmp_path):
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         TESTING=True,
         CRON_TRANSFER_PATIENT_TO_HISTORY=False,
+        # Le job de purge ne s'exécute que si l'interrupteur est actif
+        # (garde-fou « la base fait foi ») — les tests du job l'activent donc.
+        CRON_DELETE_PATIENT_TABLE_ACTIVATED=True,
     )
     db.init_app(app)
     login_manager = LoginManager(app)
@@ -320,6 +323,34 @@ def test_scheduler_job_archives_before_purging(app):
         scheduler_functions.clear_all_patients_job()
         mock_archive.assert_not_called()
         mock_purge.assert_called_once_with()
+
+
+def test_scheduler_job_skips_and_self_removes_when_disabled(app):
+    """Garde-fou : un job restant dans le jobstore persistant alors que
+    l'interrupteur est éteint ne purge pas — il se retire lui-même et
+    consigne 'skipped' (la base fait foi, pas le jobstore)."""
+    app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"] = False
+    fake_scheduler = MagicMock()
+    with patch.object(AppHolder, "get_app", return_value=app), patch(
+        "scheduler_functions._refresh_config"
+    ), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ), patch(
+        "scheduler_functions.archive_and_purge_all_patients"
+    ) as mock_archive, patch(
+        "scheduler_functions.purge_all_patients"
+    ) as mock_purge:
+        scheduler_functions.clear_all_patients_job()
+        mock_archive.assert_not_called()
+        mock_purge.assert_not_called()
+        fake_scheduler.remove_job.assert_called_once_with(
+            scheduler_functions.CLEAR_PATIENT_TABLE_JOB_ID)
+
+    with app.app_context():
+        log = JobExecutionLog.query.filter_by(
+            job_id="Clear Patient Table").one()
+        assert log.status == "skipped"
+        assert Patient.query.count() == 1  # file intacte
 
 
 def test_scheduler_job_fails_when_archive_fails(app):

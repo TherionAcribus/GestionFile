@@ -29,10 +29,8 @@ from routes.admin_security import (
 )
 from scheduler_dashboard import build_jobs_info
 from scheduler_functions import (
-    add_scheduler_clear_all_patients,
-    remove_scheduler_clear_all_patients,
-    remove_scheduler_clear_announce_calls,
-    scheduler_clear_announce_calls,
+    reconcile_clear_announce_calls_job,
+    reconcile_clear_patient_table_job,
 )
 from ui_feedback import display_toast
 from utils import validate_config_text
@@ -568,13 +566,14 @@ def update_input():
 
 
 def special_functions_with_input(key):
+    # Le changement d'horaire passe par les réconciliations : un interrupteur
+    # éteint ne doit PAS créer la tâche (la base fait foi, pas le jobstore —
+    # un éventuel job persistant resté d'une activation passée est retiré).
     if key == "cron_delete_patient_table_hour":
-        remove_scheduler_clear_all_patients()
-        add_scheduler_clear_all_patients()
+        reconcile_clear_patient_table_job()
         communikation("admin", event="refresh_schedule_tasks_list")
     if key == "cron_delete_announce_calls_hour":
-        remove_scheduler_clear_announce_calls()
-        scheduler_clear_announce_calls()
+        reconcile_clear_announce_calls_job()
         communikation("admin", event="refresh_schedule_tasks_list")
 
 
@@ -639,15 +638,9 @@ def call_function_with_select(key, value):
 def call_function_with_switch(key, value):
     """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde"""
     if key == "cron_delete_patient_table_activated":
-        if value == "true":
-            add_scheduler_clear_all_patients()
-        else:
-            remove_scheduler_clear_all_patients()
+        reconcile_clear_patient_table_job()
     elif key == "cron_delete_announce_calls_activated":
-        if value == "true":
-            scheduler_clear_announce_calls()
-        else:
-            remove_scheduler_clear_announce_calls()
+        reconcile_clear_announce_calls_job()
     elif key == "app_messaging_enabled":
         from services import messaging_service
         if value == "true":

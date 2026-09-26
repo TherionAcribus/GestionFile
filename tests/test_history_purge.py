@@ -689,6 +689,91 @@ def test_startup_reconcile_includes_heartbeat():
     assert "ensure_scheduler_heartbeat_job" in body
 
 
+def test_reconcile_clear_patient_table_job(app):
+    """La réconciliation aligne « Clear Patient Table » sur l'interrupteur :
+    un job restant d'une activation passée est retiré ; active, la tâche est
+    (re)créée — horaire et fuseau courants inclus."""
+    # Activé -> (re)création systématique.
+    app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"] = True
+    with app.app_context(), patch(
+        "scheduler_functions.add_scheduler_clear_all_patients",
+        return_value=True) as mock_add:
+        assert (
+            scheduler_functions.reconcile_clear_patient_table_job()
+            == "added")
+        mock_add.assert_called_once_with()
+
+    fake_scheduler = MagicMock()
+
+    # Désactivé + job présent -> retrait.
+    app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"] = False
+    fake_scheduler.get_job.return_value = MagicMock()
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        assert (
+            scheduler_functions.reconcile_clear_patient_table_job()
+            == "removed")
+        fake_scheduler.remove_job.assert_called_once_with(
+            scheduler_functions.CLEAR_PATIENT_TABLE_JOB_ID)
+
+    # Désactivé + job absent -> inchangé.
+    fake_scheduler.get_job.return_value = None
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        assert (
+            scheduler_functions.reconcile_clear_patient_table_job()
+            == "unchanged")
+        fake_scheduler.add_job.assert_not_called()
+
+
+def test_reconcile_clear_announce_calls_job(app):
+    """Même réconciliation pour « Clear Announce Calls »."""
+    app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"] = True
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler_clear_announce_calls",
+        return_value=True) as mock_add:
+        assert (
+            scheduler_functions.reconcile_clear_announce_calls_job()
+            == "added")
+        mock_add.assert_called_once_with()
+
+    app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"] = False
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = MagicMock()
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        assert (
+            scheduler_functions.reconcile_clear_announce_calls_job()
+            == "removed")
+        fake_scheduler.remove_job.assert_called_once_with(
+            scheduler_functions.CLEAR_ANNOUNCE_CALLS_JOB_ID)
+
+
+def test_config_change_delegates_to_reconcile():
+    """Régression : changer l'horaire recréait la tâche même interrupteur
+    éteint — les chemins input/switch délèguent aux réconciliations."""
+    source = _read("routes/admin_config.py")
+    for func in ("special_functions_with_input", "call_function_with_switch"):
+        body = _func_body(source, func)
+        assert "reconcile_clear_patient_table_job" in body
+        assert "reconcile_clear_announce_calls_job" in body
+
+
+def test_cron_jobs_check_enabled_flag_at_runtime():
+    """Régression : les jobs purgent même si l'interrupteur a été éteint —
+    garde-fou à l'exécution, même motif que auto_archive_job."""
+    source = _read("scheduler_functions.py")
+    body = _func_body(source, "clear_all_patients_job")
+    assert "CRON_DELETE_PATIENT_TABLE_ACTIVATED" in body
+    assert "'skipped'" in body
+    body = _func_body(source, "clear_announce_calls_job")
+    assert "CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED" in body
+    assert "'skipped'" in body
+
+
 def test_update_config_warns_when_scheduler_fails(app, client):
     """Régression : un échec du scheduler ne doit plus être masqué par un
     succès — la réponse porte un avertissement explicite."""

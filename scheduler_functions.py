@@ -20,6 +20,8 @@ from extensions import scheduler
 
 MESSAGING_CLEANUP_JOB_ID = "Purge App Messaging"
 HEARTBEAT_JOB_ID = "Scheduler Heartbeat"
+CLEAR_PATIENT_TABLE_JOB_ID = "Clear Patient Table"
+CLEAR_ANNOUNCE_CALLS_JOB_ID = "Clear Announce Calls"
 
 
 def _refresh_config(app):
@@ -135,7 +137,7 @@ def enable_buttons_for_activity(app, activity_id):
         app.logger.info(f"Enabled {buttons_count} buttons for activity: {activity.name}")
 
 def add_scheduler_clear_all_patients():
-    job_id = 'Clear Patient Table'
+    job_id = CLEAR_PATIENT_TABLE_JOB_ID
 
     # Vérifier si le job existe avant de tenter de le supprimer
     if scheduler.get_job(job_id):
@@ -204,7 +206,7 @@ def clear_old_patients_table(app):
 def remove_scheduler_clear_all_patients():
     try:
         # Supprime le job à l'aide de son id
-        scheduler.remove_job('Clear Patient Table')
+        scheduler.remove_job(CLEAR_PATIENT_TABLE_JOB_ID)
         current_app.logger.info("Job 'Clear Patient Table' successfully removed.")
         return True
     except Exception as e:
@@ -213,12 +215,17 @@ def remove_scheduler_clear_all_patients():
     
 
 def scheduler_clear_announce_calls():
-    job_id = 'Clear Announce Calls'
+    job_id = CLEAR_ANNOUNCE_CALLS_JOB_ID
 
-    # Vérifier si le job existe déjà
+    # Recréation systématique (comme add_scheduler_clear_all_patients) : un
+    # éventuel job existant — horaire ou fuseau devenu obsolète — est d'abord
+    # retiré, puis la tâche est reposée d'après la configuration courante.
     if scheduler.get_job(job_id):
-        current_app.logger.info(f"Job '{job_id}' already exists. No new job added.")
-        return False
+        try:
+            scheduler.remove_job(job_id)
+            current_app.logger.info(f"Existing job '{job_id}' removed.")
+        except Exception as e:
+            current_app.logger.error(f"Failed to remove job '{job_id}': {e}")
 
     try:
         hour = int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
@@ -250,12 +257,46 @@ def scheduler_clear_announce_calls():
 def remove_scheduler_clear_announce_calls():
     try:
         # Supprime le job à l'aide de son id
-        scheduler.remove_job('Clear Announce Calls')
+        scheduler.remove_job(CLEAR_ANNOUNCE_CALLS_JOB_ID)
         current_app.logger.info("Job 'Clear Announce Calls' successfully removed.")
         return True
     except Exception as e:
         current_app.logger.error(f"Failed to remove job 'Clear Announce Calls': {e}")
         return False
+
+
+def reconcile_clear_patient_table_job():
+    """Aligne « Clear Patient Table » sur CRON_DELETE_PATIENT_TABLE_ACTIVATED.
+
+    Même logique que ``reconcile_auto_archive_job`` : la base fait foi, pas le
+    jobstore persistant — sinon un job restant d'une activation passée tourne
+    alors que l'interface affiche « désactivé » (et inversement). Quand
+    l'option est active, la tâche est recréée systématiquement : l'horaire
+    configuré et le fuseau épinglé s'appliquent aussi aux jobs persistés plus
+    anciens. Appelée au démarrage et après chaque changement de configuration
+    (interrupteur ou horaire).
+
+    Retourne ``'added'``, ``'removed'`` ou ``'unchanged'``.
+    """
+    if current_app.config.get('CRON_DELETE_PATIENT_TABLE_ACTIVATED', False):
+        return 'added' if add_scheduler_clear_all_patients() else 'unchanged'
+    if scheduler.get_job(CLEAR_PATIENT_TABLE_JOB_ID):
+        scheduler.remove_job(CLEAR_PATIENT_TABLE_JOB_ID)
+        return 'removed'
+    return 'unchanged'
+
+
+def reconcile_clear_announce_calls_job():
+    """Aligne « Clear Announce Calls » sur CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED.
+
+    Voir ``reconcile_clear_patient_table_job``.
+    """
+    if current_app.config.get('CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED', False):
+        return 'added' if scheduler_clear_announce_calls() else 'unchanged'
+    if scheduler.get_job(CLEAR_ANNOUNCE_CALLS_JOB_ID):
+        scheduler.remove_job(CLEAR_ANNOUNCE_CALLS_JOB_ID)
+        return 'removed'
+    return 'unchanged'
 
 
 def clear_all_patients_job():
@@ -269,6 +310,26 @@ def clear_all_patients_job():
     with app.app_context():
         _refresh_config(app)
         try:
+            # Garde-fou (cf. auto_archive_job) : un job peut subsister dans le
+            # jobstore persistant alors que l'option est désactivée — le
+            # processus web a longtemps recréé la tâche au changement
+            # d'horaire sans regarder l'interrupteur. La base fait foi ; on
+            # se retire soi-même pour ne plus être relancé.
+            if not app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED", False):
+                app.logger.warning(
+                    "Clear patients job skipped: "
+                    "CRON_DELETE_PATIENT_TABLE_ACTIVATED is off")
+                try:
+                    scheduler.remove_job(CLEAR_PATIENT_TABLE_JOB_ID)
+                except Exception as e:
+                    app.logger.error(
+                        "Retrait du job '%s' impossible : %s",
+                        CLEAR_PATIENT_TABLE_JOB_ID, e)
+                _record_job_execution(
+                    CLEAR_PATIENT_TABLE_JOB_ID, 'skipped',
+                    'CRON_DELETE_PATIENT_TABLE_ACTIVATED désactivé')
+                return
+
             # Services métier sans décorateur (point audit) : l'ancienne
             # version appelait la VUE clear_all_patients_from_db, décorée
             # par @require_permission — hors requête HTTP, current_user
@@ -281,11 +342,11 @@ def clear_all_patients_job():
             else:
                 purge_all_patients()
 
-            _record_job_execution('Clear Patient Table', 'success')
+            _record_job_execution(CLEAR_PATIENT_TABLE_JOB_ID, 'success')
             app.logger.info("Clear patients job completed successfully")
 
         except Exception as e:
-            _record_job_execution('Clear Patient Table', 'failed', str(e))
+            _record_job_execution(CLEAR_PATIENT_TABLE_JOB_ID, 'failed', str(e))
             app.logger.error(f"Clear patients job failed with error: {str(e)}")
 
 def clear_announce_calls_job():
@@ -295,12 +356,29 @@ def clear_announce_calls_job():
     with app.app_context():
         _refresh_config(app)
         try:
+            # Garde-fou identique à clear_all_patients_job : la base fait foi,
+            # pas le jobstore persistant.
+            if not app.config.get("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", False):
+                app.logger.warning(
+                    "Clear announce calls job skipped: "
+                    "CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED is off")
+                try:
+                    scheduler.remove_job(CLEAR_ANNOUNCE_CALLS_JOB_ID)
+                except Exception as e:
+                    app.logger.error(
+                        "Retrait du job '%s' impossible : %s",
+                        CLEAR_ANNOUNCE_CALLS_JOB_ID, e)
+                _record_job_execution(
+                    CLEAR_ANNOUNCE_CALLS_JOB_ID, 'skipped',
+                    'CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED désactivé')
+                return
+
             clear_announces_call()
-            _record_job_execution('Clear Announce Calls', 'success')
+            _record_job_execution(CLEAR_ANNOUNCE_CALLS_JOB_ID, 'success')
             app.logger.info("Clear announce calls job completed successfully")
 
         except Exception as e:
-            _record_job_execution('Clear Announce Calls', 'failed', str(e))
+            _record_job_execution(CLEAR_ANNOUNCE_CALLS_JOB_ID, 'failed', str(e))
             app.logger.error(f"Clear announce calls job failed with error: {str(e)}")
 
 ANNOUNCEMENT_CACHE_RETENTION_DAYS = 31

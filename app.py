@@ -48,6 +48,7 @@ from routes.admin_page_editor import admin_page_editor_bp
 from scheduler_functions import (
     clear_old_patients_table, ensure_messaging_cleanup_job,
     ensure_scheduler_heartbeat_job, reconcile_auto_archive_job,
+    reconcile_clear_announce_calls_job, reconcile_clear_patient_table_job,
 )
 from bdd import init_database
 from config import Config
@@ -811,6 +812,10 @@ def _reconcile_scheduler_jobs():
             heartbeat_action = ensure_scheduler_heartbeat_job()
             action = reconcile_auto_archive_job()
             messaging_action = ensure_messaging_cleanup_job()
+            cron_actions = {
+                'Clear Patient Table': reconcile_clear_patient_table_job(),
+                'Clear Announce Calls': reconcile_clear_announce_calls_job(),
+            }
         if heartbeat_action != "unchanged":
             app.logger.info("Job de battement du scheduler planifié")
         if messaging_action != "unchanged":
@@ -818,6 +823,11 @@ def _reconcile_scheduler_jobs():
         if action != 'unchanged':
             app.logger.info(
                 "Job d'archivage réconcilié avec la configuration : %s", action)
+        for job_id, cron_action in cron_actions.items():
+            if cron_action != 'unchanged':
+                app.logger.info(
+                    "Job '%s' réconcilié avec la configuration : %s",
+                    job_id, cron_action)
     except Exception as e:
         # Jobstore indisponible au démarrage : on journalise sans bloquer le
         # lancement — la garde dans auto_archive_job reste en place.
