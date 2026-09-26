@@ -424,20 +424,24 @@ def update_scheduler_for_activity(activity):
         for weekday in schedule.weekdays:
             day = weekday.abbreviation.strip().lower()
 
+            # Le 2e argument journalise l'exécution sous l'identifiant réel du
+            # job — la liste des tâches peut ainsi rattacher l'historique.
+            enable_id = f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}"
             add_job(
-                job_id=f"{job_id_enable_prefix}{day}_{schedule.start_time.strftime('%H%M')}",
+                job_id=enable_id,
                 func='scheduler_functions:enable_buttons_for_activity_job',
-                args=[activity.id],
+                args=[activity.id, enable_id],
                 trigger_args={
                     'day_of_week': day,
                     'hour': schedule.start_time.hour,
                     'minute': schedule.start_time.minute
                 }
             )
+            disable_id = f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}"
             add_job(
-                job_id=f"{job_id_disable_prefix}{day}_{schedule.end_time.strftime('%H%M')}",
+                job_id=disable_id,
                 func='scheduler_functions:disable_buttons_for_activity_job',
-                args=[activity.id],
+                args=[activity.id, disable_id],
                 trigger_args={
                     'day_of_week': day,
                     'hour': schedule.end_time.hour,

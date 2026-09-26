@@ -1145,4 +1145,11 @@ class JobExecutionLog(db.Model):
 
     @property
     def local_time(self):
-        return self.execution_time.astimezone(time_tz)
+        """Heure d'exécution convertie en ``time_tz`` (Europe/Paris).
+
+        ``execution_time`` est stocké naïf en UTC (``default=datetime.utcnow``) :
+        on le marque UTC avant conversion — un ``astimezone`` direct
+        supposerait l'heure locale de l'hôte et se tromperait hors conteneur
+        UTC.
+        """
+        return self.execution_time.replace(tzinfo=timezone.utc).astimezone(time_tz)

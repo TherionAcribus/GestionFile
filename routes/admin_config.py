@@ -19,7 +19,7 @@ import config_sync
 from communication import communikation
 from extensions import scheduler
 from flask_security import current_user
-from models import db, ConfigOption, DashboardCard, JobExecutionLog
+from models import db, ConfigOption, DashboardCard
 from params_registry import get_spec, column_values_for
 from routes.admin_security import (
     permission_error_response,
@@ -709,47 +709,12 @@ def admin_database():
 @admin_config_bp.route("/admin/database/schedule_tasks_list")
 @require_permission('schedule')
 def display_schedule_tasks_list():
-    jobs = scheduler.get_jobs()
-    main_jobs = []
-    other_jobs = []
-    
-    MAIN_JOBS = ['Clear Patient Table', 'Clear Announce Calls']
-    
-    for job in jobs:
-        # Préparer les informations du job
-        job_info = {
-            'id': job.id,
-            'next_run_time': str(job.next_run_time),
-            'function_name': job.func.__name__,
-            'trigger': str(job.trigger),
-            'misfire_grace_time': job.misfire_grace_time,
-            'coalesce': job.coalesce,
-            'max_instances': job.max_instances,
-            'cron_details': {
-                'hour': job.trigger.fields[5] if hasattr(job.trigger, 'fields') else None,
-                'minute': job.trigger.fields[4] if hasattr(job.trigger, 'fields') else None,
-            }
-        }
-        
-        # Récupérer les 5 dernières exécutions
-        last_executions = JobExecutionLog.query.filter_by(
-            job_id=job.id
-        ).order_by(
-            JobExecutionLog.execution_time.desc()
-        ).limit(5).all()
-        
-        job_info['last_executions'] = [{
-            'time': log.execution_time,
-            'status': log.status,
-            'error': log.error_message
-        } for log in last_executions]
-        
-        # Séparer les jobs en deux groupes
-        if job.id in MAIN_JOBS:
-            main_jobs.append(job_info)
-        else:
-            other_jobs.append(job_info)
-    
+    # Même assembleur que le tableau de bord : UNE requête groupée pour les 5
+    # dernières exécutions de toutes les tâches (au lieu d'une par tâche — N+1),
+    # plus les champs lisibles détaillés (libellé, planification, statuts).
+    main_jobs, other_jobs = build_jobs_info(
+        scheduler.get_jobs(), per_job=5, detailed=True)
+
     return render_template('/admin/database_schedule_tasks_list.html',
                         main_jobs=main_jobs,
                         other_jobs=other_jobs)

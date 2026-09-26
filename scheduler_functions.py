@@ -60,9 +60,16 @@ def with_app_context(f):
             return f(app, *args, **kwargs)
     return decorated_function
 
-def disable_buttons_for_activity_job(activity_id):
-    """Désactive les boutons pour une activité"""
+def disable_buttons_for_activity_job(activity_id, log_job_id=None):
+    """Désactive les boutons pour une activité.
+
+    ``log_job_id`` : identifiant APScheduler du job appelant — les exécutions
+    sont journalisées sous CE nom afin que la liste des tâches les rattache au
+    job réel (``disable_{id}_{jour}_{HHMM}``). Les jobs persistés plus anciens
+    n'ont qu'un argument et retombent sur l'ancien identifiant agrégé.
+    """
     app = AppHolder.get_app()
+    log_id = log_job_id or f'Disable_Buttons_Activity_{activity_id}'
 
     with app.app_context():
         _refresh_config(app)
@@ -72,13 +79,11 @@ def disable_buttons_for_activity_job(activity_id):
                 raise ValueError(f"Activity with id {activity_id} not found")
 
             disable_buttons_for_activity(app, activity_id)
-            _record_job_execution(
-                f'Disable_Buttons_Activity_{activity_id}', 'success')
+            _record_job_execution(log_id, 'success')
             app.logger.info(f"Successfully disabled buttons for activity: {activity.name}")
 
         except Exception as e:
-            _record_job_execution(
-                f'Disable_Buttons_Activity_{activity_id}', 'failed', str(e))
+            _record_job_execution(log_id, 'failed', str(e))
             app.logger.error(f"Failed to disable buttons for activity {activity_id}: {str(e)}")
 
 @with_app_context
@@ -99,9 +104,11 @@ def disable_buttons_for_activity(app, activity_id):
         communikation("patient", event="refresh_buttons")
         app.logger.info(f"Disabled {buttons_count} buttons for activity: {activity.name}")
 
-def enable_buttons_for_activity_job(activity_id):
-    """Active les boutons pour une activité"""
+def enable_buttons_for_activity_job(activity_id, log_job_id=None):
+    """Active les boutons pour une activité (voir
+    ``disable_buttons_for_activity_job`` pour ``log_job_id``)."""
     app = AppHolder.get_app()
+    log_id = log_job_id or f'Enable_Buttons_Activity_{activity_id}'
 
     with app.app_context():
         _refresh_config(app)
@@ -111,13 +118,11 @@ def enable_buttons_for_activity_job(activity_id):
                 raise ValueError(f"Activity with id {activity_id} not found")
 
             enable_buttons_for_activity(app, activity_id)
-            _record_job_execution(
-                f'Enable_Buttons_Activity_{activity_id}', 'success')
+            _record_job_execution(log_id, 'success')
             app.logger.info(f"Successfully enabled buttons for activity: {activity.name}")
 
         except Exception as e:
-            _record_job_execution(
-                f'Enable_Buttons_Activity_{activity_id}', 'failed', str(e))
+            _record_job_execution(log_id, 'failed', str(e))
             app.logger.error(f"Failed to enable buttons for activity {activity_id}: {str(e)}")
 
 @with_app_context
