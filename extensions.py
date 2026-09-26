@@ -17,6 +17,7 @@ from flask_migrate import Migrate
 from flask_socketio import SocketIO
 from flask_wtf.csrf import CSRFProtect
 
+from config import time_tz
 from models import db  # noqa: F401  (ré-export volontaire)
 
 mail = Mail()
@@ -34,10 +35,16 @@ csrf = CSRFProtect()
 # dans sockets.py par décorateur, et l'application est liée par init_socketio().
 socketio = SocketIO()
 
-# Ordonnanceur de tâches. Le magasin de tâches dépend d'une URL de base de
-# données qui n'est connue qu'après le chargement de la configuration : il est
-# donc posé par configure_scheduler(), pas ici.
-scheduler = BackgroundScheduler()
+# Ordonnanceur de tâches. Le fuseau est épinglé explicitement : sans lui,
+# APScheduler prend celui du système — l'image Docker tourne en UTC (ni le
+# Dockerfile ni le compose ne définissent TZ) et les cron partent avec 1-2 h
+# de décalage. Les déclencheurs des tâches nouvellement planifiées héritent
+# de ce fuseau ; celles déjà persistées dans le jobstore gardent le leur
+# (picklé à la création) et doivent être recréées pour en bénéficier.
+# Le magasin de tâches dépend d'une URL de base de données qui n'est connue
+# qu'après le chargement de la configuration : il est donc posé par
+# configure_scheduler(), pas ici.
+scheduler = BackgroundScheduler(timezone=time_tz)
 
 
 def init_socketio(app):
