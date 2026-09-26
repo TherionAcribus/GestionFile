@@ -7,7 +7,7 @@ from datetime import datetime, time
 from flask import current_app
 from io import BytesIO
 
-from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Text, TextTranslation, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
+from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
 from params_registry import column_values_for
 from page_editor import ADAPTERS, builtin_themes, default_layout
 
@@ -709,40 +709,6 @@ def _split_sql_statements(sql_text):
 # A TRIER 
 
 
-def init_update_default_translations_db_from_json():
-    json_file = 'static/json/default_translations.json'
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    current_version = ConfigVersion.query.filter_by(config_key="translations_version").first()
-    if not current_version or current_version.version != data['version']:
-        if current_version:
-            current_version.version = data['version']
-        else:
-            create_version_number(ConfigVersion, data, db, key="translations_version")
-        
-        texts_data = data["texts"]
-        for key, translations in texts_data.items():
-            text = Text.query.filter_by(text_key=key).first()
-            if text:
-                for lang_code, translation in translations.items():
-                    language = Language.query.filter_by(code=lang_code).first()
-                    if language:
-                        text_trans = TextTranslation.query.filter_by(text_id=text.id, language_id=language.id).first()
-                        if text_trans:
-                            text_trans.translation = translation
-                        else:
-                            new_text_trans = TextTranslation(
-                                text_id=text.id,
-                                language_id=language.id,
-                                translation=translation
-                            )
-                            db.session.add(new_text_trans)
-        
-        db.session.commit()
-        current_app.logger.debug('Database updated to version: %s', data['version'])
-
-
 def init_default_languages_db_from_json():
     """ Remplit la BDD des langues par defaut. Uniquement au 1er lancement.
     Permet de ne pas avoir à créer les langues de base : FR, EN """
@@ -801,40 +767,6 @@ def _fix_missing_flag_urls(json_file):
 
     if updated:
         db.session.commit()
-
-
-def init_or_update_default_texts_db_from_json():
-    json_file = 'static/json/default_texts.json'
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    current_app.logger.debug('DATA VERSION %s', data['version'])
-
-    current_version = ConfigVersion.query.filter_by(config_key="texts_version").first()
-    current_app.logger.debug('Data version: %s', data['version'])
-    if not current_version or current_version.version != data['version']:
-        # Mise à jour de la version
-        if current_version:
-            current_version.version = data['version']
-        else:
-            create_version_number(ConfigVersion, data, db, key="texts_version")
-
-        # Mise à jour ou ajout de textes
-        for text_data in data['texts']:
-            text = Text.query.filter_by(text_key=text_data['key']).first()
-            if not text:
-                # Créer avec key ET value
-                new_text = Text(
-                    text_key=text_data['key'],
-                    text_value=text_data['value']  # Ajout de la valeur lors de la création
-                )
-                db.session.add(new_text)
-            else:
-                # Mettre à jour avec le bon nom de champ
-                text.text_value = text_data['value']  # Utilisation de text_value au lieu de text
-
-        db.session.commit()
-        current_app.logger.debug('Database updated to version: %s', data['version'])
 
 
 def init_default_dashboard_db_from_json():

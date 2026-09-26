@@ -780,28 +780,6 @@ class Language(db.Model):
         db.UniqueConstraint('code', name='uq_language_code'),
     )
 
-class Text(db.Model):
-    __tablename__ = 'text'
-    id = db.Column(db.Integer, primary_key=True)
-    text_key = db.Column(db.String(100), nullable=False, unique=True)
-    text_value = db.Column(db.Text, nullable=False)
-
-    __table_args__ = (
-        db.UniqueConstraint('text_key', name='uq_text_key'),
-    )
-
-class TextTranslation(db.Model):
-    __tablename__ = 'text_translation'
-    id = db.Column(db.Integer, primary_key=True)
-    text_id = db.Column(db.Integer, db.ForeignKey('text.id', ondelete='CASCADE'), nullable=False)
-    language_id = db.Column(db.Integer, db.ForeignKey('language.id', ondelete='CASCADE'), nullable=False)
-    translation = db.Column(db.Text, nullable=False)
-
-    __table_args__ = (
-        db.ForeignKeyConstraint(['text_id'], ['text.id'], name='fk_text_translation_text_id', ondelete='CASCADE'),
-        db.ForeignKeyConstraint(['language_id'], ['language.id'], name='fk_text_translation_language_id', ondelete='CASCADE'),
-    )
-
 class Translation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     table_name = db.Column(db.String(50), nullable=False)  # Le nom de la table d'origine
@@ -817,12 +795,6 @@ class Translation(db.Model):
 
     def __repr__(self):
         return f"<Translation {self.language_code}: {self.translated_text[:20]}>"
-
-class TextInterface(db.Model):
-    __tablename__ = 'text_interface'
-    id = db.Column(db.Integer, primary_key=True)
-    text_id = db.Column(db.String(50), nullable=False)
-    value = db.Column(db.Text, nullable=False)
 
 class PatientCssVariable(db.Model):
     __tablename__ = 'patient_css_variable'

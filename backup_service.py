@@ -11,7 +11,7 @@ import config_sync
 from models import (
     db, Pharmacist, Counter, Activity, ActivitySchedule, Weekday,
     AlgoRule, Button, ConfigOption, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable,
-    Language, Text, TextTranslation, TextInterface, Translation,
+    Language, Translation,
     DashboardCard,
     counters_activities, pharmacists_activities,
     activity_schedule_link, activity_schedule_weekday,
@@ -686,82 +686,6 @@ class LanguageSection(BackupSection):
 
 
 # ---------------------------------------------------------------------------
-# Texts + TextTranslation
-# ---------------------------------------------------------------------------
-
-class TextSection(BackupSection):
-    key = "texts"
-    label = "Textes"
-
-    def export_data(self):
-        texts = Text.query.all()
-        result = []
-        for t in texts:
-            translations = TextTranslation.query.filter_by(text_id=t.id).all()
-            result.append({
-                "id": t.id,
-                "text_key": t.text_key,
-                "text_value": t.text_value,
-                "translations": [
-                    {
-                        "language_id": tr.language_id,
-                        "translation": tr.translation,
-                    }
-                    for tr in translations
-                ],
-            })
-        return result
-
-    def restore_data(self, data):
-        for item in data:
-            text = Text.query.filter_by(text_key=item["text_key"]).first()
-            if text:
-                text.text_value = item["text_value"]
-            else:
-                text = Text(text_key=item["text_key"], text_value=item["text_value"])
-                db.session.add(text)
-                db.session.flush()
-
-            for tr_data in item.get("translations", []):
-                tr = TextTranslation.query.filter_by(
-                    text_id=text.id, language_id=tr_data["language_id"]
-                ).first()
-                if tr:
-                    tr.translation = tr_data["translation"]
-                else:
-                    tr = TextTranslation(
-                        text_id=text.id,
-                        language_id=tr_data["language_id"],
-                        translation=tr_data["translation"],
-                    )
-                    db.session.add(tr)
-        db.session.commit()
-
-
-# ---------------------------------------------------------------------------
-# TextInterface
-# ---------------------------------------------------------------------------
-
-class TextInterfaceSection(BackupSection):
-    key = "text_interface"
-    label = "Textes interface"
-
-    def export_data(self):
-        items = TextInterface.query.all()
-        return [{"id": t.id, "text_id": t.text_id, "value": t.value} for t in items]
-
-    def restore_data(self, data):
-        for item in data:
-            ti = TextInterface.query.filter_by(text_id=item["text_id"]).first()
-            if ti:
-                ti.value = item["value"]
-            else:
-                ti = TextInterface(text_id=item["text_id"], value=item["value"])
-                db.session.add(ti)
-        db.session.commit()
-
-
-# ---------------------------------------------------------------------------
 # Translations (table Translation — dynamic translations)
 # ---------------------------------------------------------------------------
 
@@ -1064,8 +988,6 @@ SECTION_CLASSES = [
     CssAnnounceSection,
     CssPhoneSection,
     LanguageSection,
-    TextSection,
-    TextInterfaceSection,
     TranslationSection,
     DashboardSection,
     ImagesButtonsSection,
@@ -1079,7 +1001,7 @@ SECTION_GROUPS = {
     "Structure": ["staff", "counters", "activities", "schedules", "algorules", "buttons"],
     "Configuration": ["config", "dashboard"],
     "Pages": ["config_patient", "css_patient", "config_announce", "css_announce", "config_phone", "css_phone"],
-    "Textes & Traductions": ["languages", "texts", "text_interface", "translations"],
+    "Textes & Traductions": ["languages", "translations"],
     "Images": ["images_buttons", "images_gallery"],
 }
 
@@ -1089,6 +1011,12 @@ SECTION_GROUPS = {
 BINARY_SECTION_KEYS = {
     key for key, cls in BACKUP_SECTIONS.items() if getattr(cls, "is_binary", False)
 }
+
+# Sections présentes dans les anciennes sauvegardes mais supprimées du modèle
+# (tables write-only Text/TextTranslation/TextInterface, jamais lues au
+# rendu) : ignorées sans erreur — sinon toute restauration complète d'une
+# sauvegarde antérieure signalerait « Section 'texts' inconnue ».
+IGNORED_SECTION_KEYS = {"texts", "text_interface"}
 
 
 # ---------------------------------------------------------------------------
@@ -1357,9 +1285,12 @@ def restore_sections(
     if section_keys is None:
         section_keys = available
 
-    report = {"success": True, "restored": [], "errors": []}
+    report = {"success": True, "restored": [], "errors": [], "ignored": []}
 
     for key in section_keys:
+        if key in IGNORED_SECTION_KEYS and key in available:
+            report["ignored"].append(key)
+            continue
         if key not in available:
             report["errors"].append(f"Section '{key}' absente du fichier.")
             continue

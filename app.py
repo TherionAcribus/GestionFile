@@ -38,7 +38,7 @@ from auth_utils import is_valid_app_secret_config, wants_json_response, verify_a
 from models import db, Patient, Language, ConfigOption, User, Role
 from extensions import csrf, mail, migrate, scheduler, socketio, configure_scheduler, init_socketio, start_scheduler
 import sockets
-from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_or_update_default_texts_db_from_json, init_update_default_translations_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
+from init_restore import init_default_buttons_db_from_json, init_default_options_db_from_json, init_default_languages_db_from_json, init_default_algo_rules_db_from_json, init_days_of_week_db_from_json, init_activity_schedules_db_from_json, clear_counter_table, init_counters_data_from_json, init_default_activities_db_from_json, restore_databases, init_default_dashboard_db_from_json, init_default_patient_css_variables_db_from_json, init_default_announce_css_variables_db_from_json, init_default_phone_css_variables_db_from_json
 from backup import backup_databases
 from routes.admin_backup import admin_backup_bp
 from routes.api_system import api_system_bp
@@ -212,8 +212,6 @@ def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_
         init_default_options_db_from_json()
         init_default_buttons_db_from_json()
         init_default_languages_db_from_json()
-        init_or_update_default_texts_db_from_json()
-        init_update_default_translations_db_from_json()
         init_default_algo_rules_db_from_json()
         init_default_dashboard_db_from_json()
         init_default_patient_css_variables_db_from_json()
