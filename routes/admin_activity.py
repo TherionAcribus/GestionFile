@@ -134,7 +134,6 @@ def update_activity(activity_id):
         # 204 : la liste n'est pas remplacée, la saisie reste dans le formulaire.
         return display_toast(success=False, message=erreur)
 
-    previous_name = activity.name
     previous_schedule_ids = {s.id for s in activity.schedules}
     try:
         activity.name = valeurs["name"]
@@ -165,9 +164,9 @@ def update_activity(activity_id):
         app.logger.exception("Echec de la mise a jour d'une activite")
         return display_toast(success=False, message="La mise à jour a échoué.")
 
-    # Tâches planifiées : les identifiants contiennent le nom — un
-    # renommage laissait les anciennes tâches actives.
-    update_scheduler_for_activity(activity, previous_name=previous_name)
+    # Tâches planifiées : identifiants indexés sur activity.id — un
+    # renommage ne laisse plus de tâches orphelines.
+    update_scheduler_for_activity(activity)
     if {s.id for s in activity.schedules} != previous_schedule_ids:
         update_bouton_after_scheduler_changed(activity)
 
@@ -235,12 +234,11 @@ def delete_activity(activity_id, staff=None):
             display_toast(success=False, message="Activité non trouvée")
             return return_good_display_activity(staff)
 
-        name = activity.name
         db.session.delete(activity)
         db.session.commit()
         # Sans cela, les tâches d'ouverture/fermeture continuaient de tourner
         # (en échec) pour une activité qui n'existe plus.
-        remove_activity_jobs(name)
+        remove_activity_jobs(activity_id)
         record_audit(ACTION_DELETE, "activity", target_id=activity_id,
                      outcome=OUTCOME_SUCCESS)
         display_toast(success=True, message="Activité supprimée avec succès")
@@ -351,13 +349,19 @@ def return_good_display_activity(staff):
         return display_activity_table()
 
 
-def _job_prefixes(name):
-    return (f"disable_{name}_", f"enable_{name}_")
+def _job_prefixes(activity_id):
+    """Préfixes des identifiants de tâches d'une activité, indexés sur son id.
+
+    Le nom était ambigu : « disable_Test_ » correspondait aussi aux tâches de
+    l'activité « Test_2 ». L'id est unique et stable au renommage — plus de
+    collision, plus de cas particulier.
+    """
+    return (f"disable_{activity_id}_", f"enable_{activity_id}_")
 
 
-def remove_activity_jobs(*names):
-    """Supprime les tâches d'ouverture/fermeture planifiées pour ces noms."""
-    prefixes = tuple(p for name in names if name for p in _job_prefixes(name))
+def remove_activity_jobs(*activity_ids):
+    """Supprime les tâches d'ouverture/fermeture planifiées pour ces activités."""
+    prefixes = tuple(p for aid in activity_ids if aid for p in _job_prefixes(aid))
     if not prefixes:
         return
     try:
@@ -366,26 +370,30 @@ def remove_activity_jobs(*names):
                 scheduler.remove_job(job.id)
                 app.logger.info(f"Removed existing job: {job.id}")
     except Exception as e:
-        app.logger.error(f"Error removing existing jobs for {names}: {str(e)}")
+        app.logger.error(f"Error removing existing jobs for {activity_ids}: {str(e)}")
 
 
-def update_scheduler_for_activity(activity, previous_name=None):
+def update_scheduler_for_activity(activity):
     """(Re)planifie l'ouverture/fermeture des boutons de l'activité.
 
-    ``previous_name`` : nom avant un renommage — ses tâches sont aussi
-    retirées (les identifiants de tâche contiennent le nom).
+    Pour chaque jour coché de chaque plage, une tâche d'activation à
+    l'horaire de début et une de désactivation à l'horaire de fin — journée
+    entière incluse (00:00/23:59 par jour : l'ancienne variante « activer le
+    premier jour, désactiver le dernier » laissait l'activité ouverte les
+    jours intermédiaires non cochés, ex. lundi+mercredi+vendredi ouvrait
+    aussi mardi et jeudi).
     """
     # Constantes pour la configuration
     MISFIRE_GRACE_TIME = 300  # 5 minutes de délai de grâce
 
-    job_id_disable_prefix, job_id_enable_prefix = _job_prefixes(activity.name)
+    job_id_disable_prefix, job_id_enable_prefix = _job_prefixes(activity.id)
 
     # Nettoyage des jobs existants
-    remove_activity_jobs(activity.name, previous_name)
+    remove_activity_jobs(activity.id)
 
     def is_full_day(start_time, end_time):
         return start_time == time(0, 0) and end_time == time(23, 59)
-    
+
     def is_full_week(weekdays):
         all_days = {'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'}
         active_days = {day.abbreviation.strip().lower() for day in weekdays}
@@ -408,40 +416,11 @@ def update_scheduler_for_activity(activity, previous_name=None):
             app.logger.error(f"Failed to add job {job_id}: {str(e)}")
 
     for schedule in activity.schedules:
-        full_day = is_full_day(schedule.start_time, schedule.end_time)
-        full_week = is_full_week(schedule.weekdays)
-
-        if full_day and full_week:
+        if is_full_day(schedule.start_time, schedule.end_time) \
+                and is_full_week(schedule.weekdays):
             app.logger.info(f"Full day and full week: No jobs created for {activity.name}")
             continue
-        
-        if full_day:
-            start_day = min(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
-            end_day = max(schedule.weekdays, key=lambda x: x.id).abbreviation.strip().lower()
 
-            add_job(
-                job_id=f"{job_id_enable_prefix}{start_day}",
-                func='scheduler_functions:enable_buttons_for_activity_job',
-                args=[activity.id],
-                trigger_args={
-                    'day_of_week': start_day,
-                    'hour': 0,
-                    'minute': 0
-                }
-            )
-            add_job(
-                job_id=f"{job_id_disable_prefix}{end_day}",
-                func='scheduler_functions:disable_buttons_for_activity_job',
-                args=[activity.id],
-                trigger_args={
-                    'day_of_week': end_day,
-                    'hour': 23,
-                    'minute': 59
-                }
-            )
-            app.logger.info(f"Scheduled full-day jobs for activity {activity.name} from {start_day} to {end_day}")
-            continue
-        
         for weekday in schedule.weekdays:
             day = weekday.abbreviation.strip().lower()
 
@@ -496,7 +475,7 @@ def reconcile_activity_jobs():
     prefixes = tuple(
         prefix
         for activity in activities
-        for prefix in _job_prefixes(activity.name)
+        for prefix in _job_prefixes(activity.id)
     )
     orphans = 0
     for job in scheduler.get_jobs():

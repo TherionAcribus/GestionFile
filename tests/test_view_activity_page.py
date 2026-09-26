@@ -101,7 +101,10 @@ class _FakeScheduler:
 
 @pytest.fixture()
 def fake_scheduler():
-    fake = _FakeScheduler(["enable_Ordonnance_mon_0900", "disable_Ordonnance_mon_1200",
+    # Jobs persistés simulés : deux à l'identifiant indexé sur activity.id
+    # (nouvelle convention — Ordonnance a l'id 1) et un orphelin à l'ancienne
+    # convention par nom, qui doit être retiré par reconcile_activity_jobs.
+    fake = _FakeScheduler(["enable_1_mon_0900", "disable_1_mon_1200",
                            "enable_Autre_mon_0900"])
     with patch.object(admin_activity, "scheduler", fake):
         yield fake
@@ -213,7 +216,11 @@ def test_page_ouvre_l_onglet_demande(client):
         assert captured["active_tab"] == "activity"
 
 
-def test_modification_renomme_et_retire_les_anciennes_taches(app, client, fake_scheduler):
+def test_modification_renomme_et_replanifie(app, client, fake_scheduler):
+    """Les ids de tâches sont indexés sur activity.id : le renommage ne
+    nécessite plus de cas particulier — les tâches sont recréées sous le
+    même préfixe, et l'orphelin à l'ancienne convention n'est pas touché
+    (c'est reconcile_activity_jobs qui le retirera au démarrage)."""
     act = _get(app, Activity, name="Ordonnance")
     matin = _get(app, ActivitySchedule, name="Matin")
     response = client.post(f"/admin/activity/activity_update/{act.id}",
@@ -223,10 +230,7 @@ def test_modification_renomme_et_retire_les_anciennes_taches(app, client, fake_s
     assert "Ordonnances" in response.get_data(as_text=True)
     updated = _get(app, Activity, id=act.id)
     assert (updated.name, updated.letter, updated.notification) == ("Ordonnances", "O", True)
-    # Anciennes tâches (ancien nom) retirées, nouvelles créées, autres intactes.
-    assert not any(j.startswith(("enable_Ordonnance_", "disable_Ordonnance_"))
-                   for j in fake_scheduler.jobs)
-    assert "enable_Ordonnances_mon_0900" in fake_scheduler.jobs
+    assert f"enable_{act.id}_mon_0900" in fake_scheduler.jobs
     assert "enable_Autre_mon_0900" in fake_scheduler.jobs
 
 
@@ -285,9 +289,11 @@ def test_creation_planifie_comme_la_modification(app, client, fake_scheduler):
     assert response.status_code == 200
     body = response.get_data(as_text=True)
     assert "Vaccin" in body and "div_add_activity_form" in body
-    created = [j for j in fake_scheduler.added if j.id.startswith("enable_Vaccin_")]
+    vaccin = _get(app, Activity, name="Vaccin")
+    created = [j for j in fake_scheduler.added
+               if j.id.startswith(f"enable_{vaccin.id}_")]
     assert created and created[0].func == "scheduler_functions:enable_buttons_for_activity_job"
-    assert _get(app, Activity, name="Vaccin").letter == "V"
+    assert vaccin.letter == "V"
 
 
 def test_demande_nominative_ajoutee_aux_competences(app, client):
@@ -310,25 +316,68 @@ def test_suppression_retire_les_taches(app, client, fake_scheduler):
     act = _get(app, Activity, name="Ordonnance")
     response = client.delete(f"/admin/activity/delete/{act.id}")
     assert response.status_code == 200
-    assert not any("Ordonnance" in j for j in fake_scheduler.jobs)
+    assert not any(j.startswith((f"enable_{act.id}_", f"disable_{act.id}_"))
+                   for j in fake_scheduler.jobs)
+
+
+def test_update_par_id_pas_de_collision_de_prefixe(app, fake_scheduler):
+    """Régression collision de préfixes : « Test » (enable_1_) ne doit pas
+    correspondre aux tâches de « Test_2 » (enable_2_) — le préfixe indexé
+    sur activity.id rend le chevauchement impossible."""
+    with app.app_context():
+        ordonnance = Activity.query.filter_by(name="Ordonnance").one()
+        conseil = Activity.query.filter_by(name="Conseil").one()
+        fake_scheduler.jobs[f"enable_{conseil.id}_sat_0900"] = SimpleNamespace(
+            id=f"enable_{conseil.id}_sat_0900")
+        admin_activity.update_scheduler_for_activity(ordonnance)
+    assert f"enable_{conseil.id}_sat_0900" in fake_scheduler.jobs
+    assert f"enable_{ordonnance.id}_mon_0900" in fake_scheduler.jobs
+
+
+def test_full_day_plage_jours_non_consecutifs(app, fake_scheduler):
+    """Régression : une plage « journée entière » sur jours non consécutifs
+    ouvrait l'activité en continu du premier au dernier jour coché (lundi +
+    mercredi + vendredi => aussi mardi et jeudi). Une paire de tâches est
+    désormais planifiée PAR jour : enable 00:00 / disable 23:59."""
+    with app.app_context():
+        days = {d.english_name: d for d in Weekday.query.all()}
+        plein = ActivitySchedule(
+            name="Journée", start_time=time(0), end_time=time(23, 59),
+            weekdays=[days["monday"], days["wednesday"], days["friday"]])
+        act = Activity(name="Jour plein", letter="J", schedules=[plein])
+        db.session.add_all([plein, act])
+        db.session.commit()
+        aid = act.id
+        admin_activity.update_scheduler_for_activity(act)
+    jobs = fake_scheduler.jobs
+    for day in ("mon", "wed", "fri"):
+        assert f"enable_{aid}_{day}_0000" in jobs
+        assert f"disable_{aid}_{day}_2359" in jobs
+    assert not any(f"enable_{aid}_tue" in j or f"enable_{aid}_thu" in j
+                   for j in jobs)
 
 
 def test_reconcile_activity_jobs_realigne_tout(app, fake_scheduler):
     """Réconciliation de démarrage : toutes les activités sont replanifiées
     (horaire et fuseau courants repris) et les jobs enable_/disable_ sans
-    activité correspondante sont retirés — ici « Autre », absent de la base,
-    comme après une restauration ou un jobstore partiellement recréé."""
+    activité correspondante sont retirés — ici « Autre », tâche à l'ancienne
+    convention par nom, comme après une restauration ou une migration."""
     with app.app_context():
         rescheduled, orphans = admin_activity.reconcile_activity_jobs()
     assert (rescheduled, orphans) == (4, 1)
+    oid = _get(app, Activity, name="Ordonnance").id
+    cid = _get(app, Activity, name="Conseil").id
+    vid = _get(app, Activity, name="Voir Marie").id
+    sid = _get(app, Activity, name="Sans horaire").id
     jobs = fake_scheduler.jobs
-    assert "enable_Autre_mon_0900" not in jobs          # orphelin retiré
-    assert "enable_Ordonnance_mon_0900" in jobs
-    assert "enable_Ordonnance_fri_0900" in jobs
-    assert "disable_Ordonnance_fri_1200" in jobs
-    assert "enable_Conseil_sat_0900" in jobs
-    assert "enable_Voir Marie_mon_0900" in jobs
-    assert not any("Sans horaire" in j for j in jobs)   # continu : pas de job
+    assert "enable_Autre_mon_0900" not in jobs          # orphelin legacy retiré
+    assert f"enable_{oid}_mon_0900" in jobs
+    assert f"enable_{oid}_fri_0900" in jobs
+    assert f"disable_{oid}_fri_1200" in jobs
+    assert f"enable_{cid}_sat_0900" in jobs
+    assert f"enable_{vid}_mon_0900" in jobs
+    assert not any(j.startswith((f"enable_{sid}_", f"disable_{sid}_"))
+                   for j in jobs)                        # continu : pas de job
 
 
 def test_plages_en_cartes(client):
@@ -358,14 +407,15 @@ def test_plage_invalide_refusee(app, client, over, raison):
 def test_plage_modifiee_replanifie_les_activites(app, client, fake_scheduler):
     matin = _get(app, ActivitySchedule, name="Matin")
     lundi = _get(app, Weekday, english_name="monday")
+    ordonnance = _get(app, Activity, name="Ordonnance")
     response = client.post(f"/admin/schedule/schedule_update/{matin.id}",
                            data={"name_schedule": "Matin", "start_time": "08:30",
                                  "end_time": "12:00", "weekdays": [str(lundi.id)]})
     assert response.status_code == 200
     assert _get(app, ActivitySchedule, id=matin.id).start_time == time(8, 30)
     # Tâches de l'activité recréées à la nouvelle heure (auparavant : jamais).
-    assert "enable_Ordonnance_mon_0830" in fake_scheduler.jobs
-    assert "enable_Ordonnance_mon_0900" not in fake_scheduler.jobs
+    assert f"enable_{ordonnance.id}_mon_0830" in fake_scheduler.jobs
+    assert f"enable_{ordonnance.id}_mon_0900" not in fake_scheduler.jobs
 
 
 def test_creation_de_plage(client):
