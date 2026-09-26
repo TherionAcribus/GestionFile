@@ -277,50 +277,55 @@ def get_global_patient_queue(limit=None):
     Simulates the patient selection algorithm to determine the order of waiting patients.
     Returns an ordered list of patients.
 
-    Ordre INDICATIF : contrairement à ``algo_choice_next_patient``, la
-    simulation ne filtre pas par les activités du membre d'équipe de chaque
-    comptoir — le prochain patient réellement appelé peut différer du premier
-    numéro affiché.
+    Approximation connue : la simulation ne modélise pas les compétences des
+    comptoirs (le filtre activités/membre de ``algo_choice_next_patient``) —
+    le prochain patient réellement appelé peut donc différer du premier
+    numéro affiché quand des activités ne sont pas servies. En revanche
+    règles, seuils d'effectif, jours, créneaux et frein famine suivent
+    exactement le moteur réel.
 
     ``limit`` borne le calcul : l'écran n'affiche que quelques numéros,
-    ordonner toute la file (jusqu'à ~O(n³) selon les règles et le nombre de
-    patients) pour n'en montrer que 5 est un gaspillage. ``None`` = file
-    complète.
+    ordonner toute la file pour n'en montrer que 5 est un gaspillage.
+    ``None`` = file complète.
 
     Le tri de base est ``(timestamp, id)`` — déterministe même à timestamps
     égaux — posé en SQL à la récupération (index ix_patient_status_timestamp)
     puis préservé : la liste de travail ne subit que des retraits, aucun
     re-tri n'est nécessaire dans la boucle.
-
-    Le choix prioritaire passe par les MÊMES helpers que l'appel réel
-    (``get_applicable_algo_rules`` / ``pick_priority_patient``) : l'ordre
-    affiché ne diverge plus du moteur sur les créneaux, les jours ou la
-    borne de dépassement.
     """
     # 1. Fetch all standing patients, already in (timestamp, id) order
     waiting_patients = Patient.query.filter_by(status='standing').order_by(
         Patient.timestamp, Patient.id).all()
     ordered_queue = []
 
-    if app.config['ALGO_IS_ACTIVATED']:
-        applicable_rules = get_applicable_algo_rules(len(waiting_patients))
-    else:
-        applicable_rules = []
+    algo_on = app.config['ALGO_IS_ACTIVATED']
+    # Même instant pour toute la simulation : la file ne « traverse » pas
+    # les créneaux horaires pendant le calcul.
+    now = datetime.now(time_tz)
+    overtaken_limit = app.config["ALGO_OVERTAKEN_LIMIT"]
+    # Compteurs de dépassements simulés : chaque appel fictif doit faire
+    # évoluer « overtaken » comme mark_overtaken_patients, sinon le frein
+    # famine ne peut jamais se déclencher dans la prédiction alors qu'il le
+    # ferait dans la file réelle.
+    simulated_overtaken = {p.id: p.overtaken for p in waiting_patients}
 
     # Loop until all patients are ordered (or the display limit is reached)
     while waiting_patients and (limit is None or len(ordered_queue) < limit):
         selected_patient = None
 
-        if applicable_rules:
-            # Check if any patient has waited too long (overtaken limit)
-            # In the simulation, we use the current 'overtaken' value from DB.
-            # Ideally, the simulation should track 'overtaken' dynamically as we build the queue,
-            # but for a display estimation, using the snapshot is acceptable and safer/simpler.
+        if algo_on:
+            # Règles recalculées à chaque retrait : la plage
+            # min_patients/max_patients porte sur l'effectif RESTANT —
+            # une règle active à 4 patients s'éteint dès qu'il n'en reste
+            # que 3 (ancien défaut : les règles étaient figées à l'effectif
+            # initial, l'affichage divergeait après le premier appel).
+            applicable_rules = get_applicable_algo_rules(len(waiting_patients), now)
             is_patient_waiting_too_long = any(
-                p.overtaken >= app.config["ALGO_OVERTAKEN_LIMIT"] for p in waiting_patients
+                simulated_overtaken[p.id] >= overtaken_limit
+                for p in waiting_patients
             )
 
-            if not is_patient_waiting_too_long:
+            if applicable_rules and not is_patient_waiting_too_long:
                 selected_patient = pick_priority_patient(
                     waiting_patients, applicable_rules)
 
@@ -332,19 +337,24 @@ def get_global_patient_queue(limit=None):
 
         # Add to ordered list and remove from working set
         ordered_queue.append(selected_patient)
-        waiting_patients.remove(selected_patient)
+        index = waiting_patients.index(selected_patient)
+        # Tous les patients plus anciens que cet appel fictif seraient
+        # dépassés : +1 sur leurs compteurs simulés (borne globale — les
+        # compétences des comptoirs ne sont pas modélisées).
+        for skipped in waiting_patients[:index]:
+            simulated_overtaken[skipped.id] += 1
+        waiting_patients.pop(index)
 
     return ordered_queue
 
 
-# Nombre de numéros « prochains patients » affichés à l'écran : l'ordre est
-# indicatif (compétences des comptoirs non simulées), 5 bornent le calcul et
-# suffisent à informer le public.
+# Nombre de numéros « prochains patients » affichés à l'écran : 5 bornent le
+# calcul et suffisent à informer le public.
 NEXT_PATIENTS_DISPLAY_LIMIT = 5
 
 
 def get_next_patients_call_numbers(limit=NEXT_PATIENTS_DISPLAY_LIMIT):
-    """Numéros d'appel des prochains patients pour l'écran — ordre INDICATIF.
+    """Numéros d'appel des prochains patients pour l'écran.
 
     Le résultat est mémorisé par révision de file : chaque mutation de la
     file incrémente le compteur ``QueueRevision`` (``communikation

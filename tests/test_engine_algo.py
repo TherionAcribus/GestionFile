@@ -409,3 +409,59 @@ def test_simulation_et_moteur_d_accord_sur_la_regle_active(application, fige_lun
 
     choisi = engine.algo_choice_next_patient(comptoir.id)
     assert choisi.call_number == "P1", "appel réel identique à l'affichage"
+
+
+def _appels_successifs(comptoir):
+    """Enchaîne les vrais ``call_next`` jusqu'à épuisement de la file."""
+    appels = []
+    while True:
+        ok, appele = engine.call_next(comptoir.id)
+        if not ok:
+            break
+        appels.append(appele.call_number)
+    return appels
+
+
+def test_simulation_recalcule_les_regles_a_chaque_retrait(application, fige_lundi):
+    """P2 : la simulation figeait les règles à l'effectif INITIAL — une règle
+    « min_patients=4 » continuait de s'appliquer dans la prédiction après le
+    retrait qui la désactivait réellement. Scénario du rapport :
+    affichage P1, P2, N1, N2 alors que les appels réels donnaient P1, N1."""
+    comptoir, acts, langue = _activites_et_comptoir("Normale", "Prio")
+    _regle(acts["Prio"], min_p=4)  # active seulement à partir de 4 patients
+
+    _patient("P1", acts["Prio"], _LUNDI, langue)
+    _patient("N1", acts["Normale"], _LUNDI + timedelta(minutes=1), langue)
+    _patient("P2", acts["Prio"], _LUNDI + timedelta(minutes=2), langue)
+    _patient("N2", acts["Normale"], _LUNDI + timedelta(minutes=3), langue)
+
+    with application.app_context():
+        affichage = [p.call_number for p in engine.get_global_patient_queue()]
+
+    appels = _appels_successifs(comptoir)
+
+    assert appels == ["P1", "N1", "P2", "N2"], \
+        "après P1 il reste 3 patients : la règle s'éteint, retour au FIFO"
+    assert affichage == appels, "l'affichage doit suivre la même évolution"
+
+
+def test_simulation_fait_eviter_le_frein_famine(application, fige_lundi):
+    """Les dépassements sont simulés : après l'appel fictif de P1, N1 a un
+    dépassement simulé qui atteint la limite globale — le frein famine
+    suspend l'algo pour la suite, comme dans la file réelle."""
+    application.config["ALGO_OVERTAKEN_LIMIT"] = 1
+    comptoir, acts, langue = _activites_et_comptoir("Normale", "Prio")
+    _regle(acts["Prio"])
+
+    _patient("N1", acts["Normale"], _LUNDI, langue)
+    _patient("P1", acts["Prio"], _LUNDI + timedelta(minutes=1), langue)
+    _patient("P2", acts["Prio"], _LUNDI + timedelta(minutes=2), langue)
+
+    with application.app_context():
+        affichage = [p.call_number for p in engine.get_global_patient_queue()]
+
+    appels = _appels_successifs(comptoir)
+
+    # P1 double N1 -> N1 atteint la limite -> frein -> FIFO pour la suite.
+    assert appels == ["P1", "N1", "P2"]
+    assert affichage == appels

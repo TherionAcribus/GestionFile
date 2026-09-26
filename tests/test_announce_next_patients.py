@@ -12,8 +12,9 @@ Verrouillé ici (audit « liste coûteuse et indicative ») :
    deux requêtes à révision égale = un seul calcul ; une mutation
    (``bump_queue_revision``) le relance. Portée application : pas de fuite
    entre les apps des tests.
-4. L'écran présente la liste comme un « ordre indicatif » : la simulation
-   ignore les compétences propres à chaque comptoir.
+4. L'écran n'affiche plus la mention « ordre indicatif » : la simulation
+   suit le moteur (règles recalculées à chaque retrait, dépassements
+   simulés) ; seules les compétences des comptoirs ne sont pas modélisées.
 5. Côté client, un appel ne déclenche plus deux rafraîchissements : le
    handler ``add_calling`` ne re-déclenche pas ``refresh_next_patients``
    (l'évènement ``update`` du namespace général couvre déjà ce cas).
@@ -166,12 +167,12 @@ def test_cache_porte_par_application(client, application):
     assert "gestionfile_announce" not in autre.extensions
 
 
-# --- 4. Ordre indicatif ---------------------------------------------------------
+# --- 4. Plus de mention « ordre indicatif » --------------------------------------
 
-def test_gabarit_presente_l_ordre_comme_indicatif(client, application):
+def test_gabarit_n_affiche_plus_ordre_indicatif(client, application):
     _file(application, ["901"])
     corps = client.get("/announce/patients_next").get_data(as_text=True)
-    assert "ordre indicatif" in corps
+    assert "ordre indicatif" not in corps
 
 
 # --- 5. Pas de double rafraîchissement par appel ---------------------------------

@@ -167,9 +167,10 @@ def patients_next():
     announce_next_patients_alignment = app.config.get('ANNOUNCE_NEXT_PATIENTS_ALIGNMENT', 'center')
     
     # Liste bornée (5 numéros) et mémorisée par révision de file — la file
-    # globale complète n'est plus ordonnée à chaque requête. Ordre indicatif
-    # seulement : les compétences propres à chaque comptoir ne sont pas
-    # simulées (voir get_global_patient_queue).
+    # globale complète n'est plus ordonnée à chaque requête. La simulation
+    # reproduit le moteur (règles, seuils, frein famine) ; seules les
+    # compétences propres à chaque comptoir ne sont pas modélisées
+    # (voir get_global_patient_queue).
     next_patients = get_next_patients_call_numbers()
     return render_template('announce/patients_next.html',
                            announce_next_patients_text=announce_next_patients_text,
