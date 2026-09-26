@@ -106,6 +106,29 @@ def check_patient_phone_token(token, patient_id, call_number) -> bool:
         f"{patient_id}:{call_number}")
 
 
+def patient_ticket_patient_id(ticket) -> int | None:
+    """Résout un lien de consultation de passage (paramètre ``ticket`` du QR
+    de conclusion) vers l'id du patient concerné.
+
+    Même format signé que ``patient_token``, mais vérifié SANS ``max_age`` :
+    un patient peut légitimement scanner le QR de son ticket des heures après
+    son inscription. Si le passage a été purgé, la vue affiche un état
+    terminé plutôt que de créer une nouvelle inscription — c'est l'objet du
+    lien, qui ne doit jamais être une porte d'entrée à la création.
+    """
+    if not ticket:
+        return None
+    try:
+        data = URLSafeTimedSerializer(current_app.config["SECRET_KEY"]).loads(
+            ticket, salt="patient-phone")
+    except (BadSignature, SignatureExpired):
+        return None
+    try:
+        return int(data.get("pid"))
+    except (TypeError, ValueError):
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Session « borne » (kiosque patient)
 #

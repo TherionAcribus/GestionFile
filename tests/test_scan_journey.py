@@ -56,6 +56,7 @@ def application(tmp_path):
         PAGE_PATIENT_QRCODE_WEB_PAGE=True,
         SERVER_URL="http://borne.test/",
         # Clés lues par /patient/phone/ping pour le gabarit de confirmation.
+        PHONE_TITLE="Suivi",
         PHONE_LINE1="{N}",
         PHONE_LINE2="",
         PHONE_LINE3="",
@@ -91,6 +92,12 @@ def application(tmp_path):
     db.init_app(app)
     from routes.patient import patient_bp
     app.register_blueprint(patient_bp)
+    # Gabarits rendus hors de app.py : les helpers de layout/css y sont
+    # injectés par des context processors — on les neutralise pour le test.
+    @app.context_processor
+    def _layout_helpers():
+        return dict(get_css_url=lambda mode=None: "",
+                    page_layout_style=lambda *a, **k: "")
     with app.app_context():
         db.create_all()
         yield app
@@ -344,7 +351,17 @@ def test_conclusion_qr_encode_le_patient_reel(client, application, monkeypatch):
 
     client.get(f"/patient/conclusion_page/{nouveau_id}")
 
-    assert captured == [f"http://borne.test//patient/phone/fr/A5/{activite_id}"]
+    # Le QR de conclusion porte désormais un lien de suivi signé (?ticket=)
+    # vers le passage existant — le scanner ne doit pas créer d'inscription.
+    assert len(captured) == 1
+    url, _, ticket = captured[0].partition("?ticket=")
+    assert url == f"http://borne.test//patient/phone/fr/A5/{activite_id}"
+    assert ticket
+
+    # Le jeton encodé se résout bien vers le patient réel.
+    from auth_utils import patient_ticket_patient_id
+    with application.app_context():
+        assert patient_ticket_patient_id(ticket) == nouveau_id
 
 
 def test_conclusion_impression_directe_a_un_qr(client, application):
@@ -395,6 +412,171 @@ def test_conclusion_par_patient_id_rend_le_bon_patient(client, application):
     assert reponse.status_code == 200
     assert "NOUVELLE" in html
     assert "ANCIENNE" not in html
+
+
+# --- 6. Un parcours = une inscription (déduplication serveur) -----------------
+
+def test_ping_meme_journey_ne_cree_pas_de_doublon(client, application):
+    """Deux téléphones sans cookie scannent le MÊME QR : une seule
+    inscription, et le second ping retrouve le patient du parcours."""
+    activite_id = _activite(application)
+
+    for telephone in (client, application.test_client()):
+        reponse = telephone.post("/patient/phone/ping", data={
+            "activity_id": str(activite_id),
+            "language_code": "fr",
+            "journey": "j-dedup",
+        })
+        assert reponse.status_code == 200
+
+    with application.app_context():
+        patients = Patient.query.filter_by(journey_id="j-dedup").all()
+        assert len(patients) == 1
+
+
+def test_ping_rejoue_remet_le_meme_patient_aux_cookies(client, application):
+    """Rejeu du ping (même journey, cookies expirés) : pas de nouvelle
+    inscription, les cookies sont re-posés sur le patient du parcours."""
+    activite_id = _activite(application)
+    client.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-rejeu"})
+    with application.app_context():
+        patient_id = Patient.query.filter_by(journey_id="j-rejeu").one().id
+
+    autre = application.test_client()
+    reponse = autre.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-rejeu"})
+
+    assert reponse.status_code == 200
+    assert f"patient_id={patient_id}" in str(reponse.headers.getlist("Set-Cookie"))
+    with application.app_context():
+        assert Patient.query.count() == 1
+
+
+def test_bouton_scan_reutilise_le_patient_du_parcours(client, application):
+    """Scan du QR par téléphone PUIS clic « scan » sur la borne (même
+    journey) : aucun second patient n'est créé."""
+    activite_id = _activite(application)
+    client.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-scan-btn"})
+
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+    client.post("/patient/scan_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-scan-btn"})
+
+    with application.app_context():
+        assert Patient.query.filter_by(journey_id="j-scan-btn").count() == 1
+
+
+def test_impression_recliquee_reutilise_l_inscription_pending(client, application):
+    """Deux clics « Imprimer » sur le même parcours : un seul patient
+    pending, et le même print_job_id (confirm_print reste idempotent)."""
+    activite_id = _activite(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    for _ in range(2):
+        reponse = client.post("/patient/print_and_validate", data={
+            "activity_id": str(activite_id), "journey": "j-print"},
+            headers={"HX-Request": "true"})
+        assert reponse.status_code == 200
+
+    with application.app_context():
+        patients = Patient.query.filter_by(journey_id="j-print").all()
+        assert len(patients) == 1
+        assert patients[0].status == "pending"
+        assert patients[0].print_job_id
+
+
+def test_scan_apres_impression_active_le_pending(client, application):
+    """Impression initiée puis choix « scan » sur le même parcours : le
+    pending entre en file (sans ticket), sans doublon."""
+    activite_id = _activite(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    client.post("/patient/print_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-mix"},
+        headers={"HX-Request": "true"})
+    client.post("/patient/scan_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-mix"},
+        headers={"HX-Request": "true"})
+
+    with application.app_context():
+        patients = Patient.query.filter_by(journey_id="j-mix").all()
+        assert len(patients) == 1
+        assert patients[0].status == "standing"
+
+
+def test_ping_sur_pending_du_parcours_l_active(client, application):
+    """QR scanné APRÈS un clic « Imprimer » (pending existant, même
+    journey) : le pending est activé, aucun doublon."""
+    activite_id = _activite(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+    client.post("/patient/print_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-pending"},
+        headers={"HX-Request": "true"})
+
+    telephone = application.test_client()
+    telephone.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-pending"})
+
+    with application.app_context():
+        patients = Patient.query.filter_by(journey_id="j-pending").all()
+        assert len(patients) == 1
+        assert patients[0].status == "standing"
+
+
+# --- 7. QR de conclusion : lien de suivi, pas d'inscription ------------------
+
+def test_ticket_de_conclusion_suit_le_passage_sans_reinscrire(client, application):
+    """Ping avec le ticket signé du QR de conclusion : affiche le passage
+    existant (cookies posés) sans créer de patient."""
+    from auth_utils import make_patient_phone_token
+
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+    with application.app_context():
+        patient = Patient.query.get(nouveau_id)
+        ticket = make_patient_phone_token(patient.id, patient.call_number)
+        activite_id = patient.activity_id
+
+    telephone = application.test_client()
+    reponse = telephone.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "ticket": ticket})
+
+    assert reponse.status_code == 200
+    assert f"patient_id={nouveau_id}" in str(reponse.headers.getlist("Set-Cookie"))
+    with application.app_context():
+        assert Patient.query.count() == 2  # inchangé : pas de nouvelle ligne
+
+
+def test_ticket_invalide_ne_cree_aucune_inscription(client, application):
+    """Ticket falsifié ou dont le passage a été purgé : message d'erreur,
+    jamais d'inscription."""
+    activite_id = _activite(application)
+
+    reponse = client.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "ticket": "ticket.falsifie"})
+    assert "invalide" in reponse.get_data(as_text=True)
+
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_page_telephone_avec_ticket_invalide_affiche_une_erreur(client, application):
+    """GET /patient/phone avec un ticket ne menant à aucun patient : page
+    d'erreur au lieu d'un écran d'attente qui ne réussira jamais."""
+    reponse = client.get("/patient/phone/fr/A1/1?ticket=ticket.falsifie")
+    assert reponse.status_code == 200
+    assert "invalide" in reponse.get_data(as_text=True)
 
 
 def test_conclusion_repli_call_number_prend_le_plus_recent(client, application):

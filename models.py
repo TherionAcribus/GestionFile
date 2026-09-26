@@ -160,6 +160,11 @@ class Patient(db.Model):
     # /patient/confirm_print. NULL pour les patients créés hors flux impression
     # (scan, création manuelle). Unique pour servir de clé d'idempotence.
     print_job_id = db.Column(db.String(64), nullable=True, unique=True, index=True)
+    # Parcours borne (UUID généré à l'affichage des boutons, propagé par les
+    # formulaires et encodé dans le QR) : clé d'unicité de l'inscription.
+    # Rejeu réseau, second téléphone ou bascule impression <-> scan sur le
+    # MÊME parcours retrouvent ce patient au lieu d'en créer un second.
+    journey_id = db.Column(db.String(64), nullable=True, unique=True, index=True)
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'

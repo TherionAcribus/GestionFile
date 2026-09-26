@@ -5,6 +5,7 @@ import qrcode
 from flask import Blueprint, url_for, request, session, current_app as app, jsonify
 from datetime import datetime, date, timedelta
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import IntegrityError
 from cryptography.fernet import Fernet, InvalidToken
 from google.cloud import texttospeech
 from google.oauth2 import service_account
@@ -13,7 +14,7 @@ from gtts import gTTS
 from models import Patient, Counter, AlgoRule, ConfigOption, Language, db, get_queue_revision, DAY_ABBREVIATIONS
 from communication import communikation, notify_patient_phone
 from config import time_tz
-from auth_utils import require_app_token_or_login
+from auth_utils import require_app_token_or_login, make_patient_phone_token
 from call_numbering import next_category_call_number, next_simple_call_number
 from announcement_audio import cached_announcement_url
 from announcement_dispatcher import announcement_dispatcher
@@ -416,12 +417,15 @@ def mark_overtaken_patients(next_patient, counter_id):
                          updated, next_patient.id, counter_id)
 
 
-def add_patient(call_number, activity, status='standing', print_job_id=None):
+def add_patient(call_number, activity, status='standing', print_job_id=None,
+                journey_id=None):
     """ CRéation d'un nouveau patient et ajout à la BDD.
 
     status='standing' : patient immédiatement dans la file (scan, création
     directe). status='pending' : inscription en attente de confirmation
-    d'impression (voir register_pending_patient / activate_patient)."""
+    d'impression (voir register_pending_patient / activate_patient).
+
+    journey_id : UUID du parcours borne — clé d'unicité de l'inscription."""
     language_code = session.get('language_code', 'fr')
     language = Language.query.filter_by(code=language_code).first()
     # Vérifier que la langue existe, sinon utiliser une langue par défaut
@@ -435,7 +439,8 @@ def add_patient(call_number, activity, status='standing', print_job_id=None):
         timestamp=datetime.now(time_tz),
         status=status,
         language_id=language.id,
-        print_job_id=print_job_id
+        print_job_id=print_job_id,
+        journey_id=journey_id
     )
     # Ajout à la base de données
     db.session.add(new_patient)
@@ -471,7 +476,7 @@ def expire_stale_pending_patients(ttl_seconds=None):
     return len(stale)
 
 
-def register_pending_patient(activity, print_job_id):
+def register_pending_patient(activity, print_job_id, journey_id=None):
     """ Crée une inscription EN ATTENTE (hors file) avant impression locale.
 
     Contrairement à register_patient, on n'appelle NI auto_calling NI
@@ -480,7 +485,8 @@ def register_pending_patient(activity, print_job_id):
     recevra jamais de ticket."""
     expire_stale_pending_patients()
     call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity, status='pending', print_job_id=print_job_id)
+    new_patient = add_patient(call_number, activity, status='pending',
+                              print_job_id=print_job_id, journey_id=journey_id)
     return new_patient
 
 
@@ -556,15 +562,44 @@ def get_futur_patient(call_number, activity):
     return new_patient
 
 
-def register_patient(activity):
+def register_patient(activity, journey_id=None):
     call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity)
-    
+    new_patient = add_patient(call_number, activity, journey_id=journey_id)
+
     from services.calling_service import run_auto_calling
     run_auto_calling()
 
     communikation("update_patient")
     return new_patient
+
+
+def find_patient_by_journey(journey_id):
+    """Patient déjà créé pour ce parcours borne (None si aucun / pas de
+    journey). ``Patient.journey_id`` est unique : la lecture suffit."""
+    if not journey_id:
+        return None
+    return Patient.query.filter_by(journey_id=journey_id).first()
+
+
+def register_journey_patient(activity, journey_id):
+    """Crée le patient du parcours ``journey_id``, ou retrouve l'existant.
+
+    Retourne ``(patient, created)``. Déduplication en deux niveaux : la
+    lecture préalable évite l'insertion quand le parcours existe déjà, et la
+    contrainte unique ``Patient.journey_id`` tranche si deux requêtes
+    concurrentes passent la lecture en même temps (la perdante relit après
+    IntegrityError au lieu de créer un doublon)."""
+    patient = find_patient_by_journey(journey_id)
+    if patient is not None:
+        return patient, False
+    try:
+        return register_patient(activity, journey_id=journey_id), True
+    except IntegrityError:
+        db.session.rollback()
+        patient = find_patient_by_journey(journey_id)
+        if patient is None:
+            raise
+        return patient, False
 
 
 def generate_audio_calling(counter_number, next_patient, language_code="fr"):
@@ -718,10 +753,16 @@ def qr_code_data_uri(patient, journey_id=None):
         if "SERVER_URL" not in app.config:
             set_server_url(app, request)
         data = f"{app.config['SERVER_URL']}/patient/phone/{language_code}/{patient.call_number}/{patient.activity.id}"
-        # L'UUID du parcours voyage dans l'URL scannée : le téléphone le
-        # renvoie dans /patient/phone/ping, qui émet update_scan_phone dans la
-        # salle scan_<uuid> de la SEULE borne affichant ce QR.
-        if journey_id:
+        if patient.id:
+            # QR de CONCLUSION (patient déjà enregistré) : lien de suivi signé
+            # vers CE passage — le scanner ne doit pas créer d'inscription.
+            data += f"?ticket={make_patient_phone_token(patient.id, patient.call_number)}"
+            if journey_id:
+                data += f"&journey={journey_id}"
+        elif journey_id:
+            # QR de validation (futur patient) : l'UUID du parcours voyage dans
+            # l'URL scannée ; /patient/phone/ping le renvoie et émet
+            # update_scan_phone dans la salle scan_<uuid> de la borne.
             data += f"?journey={journey_id}"
     else :
         if session.get('language_code') != "fr":

@@ -9,7 +9,8 @@
                 hx-vals='{"activity_id": "{{ button.activity.id }}",
                         "is_parent": "{{ button.is_parent }}",
                         "is_active": "{{ button.is_active }}",
-                        "button_id": "{{ button.id }}"
+                        "button_id": "{{ button.id }}",
+                        "journey": "{{ journey_id or '' }}"
                         }'
                 {% if button.is_active %}
                         hx-target="#div_buttons_parents"

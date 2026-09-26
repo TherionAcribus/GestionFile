@@ -1,0 +1,22 @@
+{% import 'shared/page_components.html' as page_components %}
+<!doctype html>
+<html lang="{{ language_code or 'fr' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Information</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}">
+    <link rel="stylesheet" href="{{ get_css_url(mode='phone') }}">
+    {{ page_layout_style('phone') }}
+</head>
+<body>
+    <div class="container">
+        {{ page_components.phone_title(phone_title) }}
+        <div id="div_infos" class="text-center">
+            <p>Ce lien de suivi est invalide ou le passage est terminé.</p>
+            <p>Veuillez vous adresser à l'accueil ou reprendre un ticket.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -3,9 +3,9 @@ import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
-from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, qr_code_data_uri
+from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
-from auth_utils import make_patient_phone_token, check_patient_phone_token, check_kiosk_login_ticket, KIOSK_SESSION_KEY
+from auth_utils import make_patient_phone_token, check_patient_phone_token, patient_ticket_patient_id, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
 patient_bp = Blueprint('patient', __name__)
 
@@ -109,10 +109,17 @@ def patient_right_page():
         if b.is_parent and not any(child.is_present for child in b.dependent_buttons)
     }
 
+    # UUID d'intention du parcours : il voyage dans les hx-vals des boutons
+    # puis devient le journey_id du patient créé. Clé d'unicité serveur —
+    # rejeu, second téléphone ou bascule impression/scan ne créent pas de
+    # doublon (cf. register_journey_patient).
+    journey_id = str(uuid.uuid4())
+
     buttons_content = render_template('patient/patient_buttons_left.html',
                             buttons=buttons,
                             button_translations=button_translations,
                             max_length=max_length,
+                            journey_id=journey_id,
                             empty_parent_ids=empty_parent_ids,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel)
     
@@ -195,6 +202,10 @@ def display_children_buttons_for_right_page(request):
                             button_translations=button_translations,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             max_length=max_length,
+                            # L'intention de parcours suit la navigation dans
+                            # les sous-boutons : l'inscription finale reste
+                            # dédupliquée sur la même clé.
+                            journey_id=request.form.get('journey'),
                             children=True)
 
 # affiche la page de validation pour page gauche et droite
@@ -221,10 +232,12 @@ def left_page_validate_patient(activity):
     futur_patient = get_futur_patient(call_number, activity)
     app.logger.debug('futur_patient %s', futur_patient.id)
     # Chaque parcours QR est identifié par un UUID : encodé dans l'URL du QR,
-    # rendu dans le fragment (data-journey-id) et utilisé comme salle
+    # rendu dans le fragment (data-journey-id), utilisé comme salle
     # Socket.IO dédiée — seule la borne affichant CE QR reçoit alors
-    # update_scan_phone (plusieurs bornes/parcours simultanés).
-    journey_id = str(uuid.uuid4())
+    # update_scan_phone — ET stocké sur le patient créé (clé d'unicité de
+    # l'inscription). Le même UUID circule depuis la page des boutons, donc
+    # impression et scan partagent la même clé de parcours.
+    journey_id = request.form.get('journey') or str(uuid.uuid4())
     # QR généré en mémoire (data URI) : l'image affichée correspond toujours
     # au parcours courant — un fichier statique réutilisé par un jour, une
     # langue ou une activité différente pourrait servir un QR périmé depuis
@@ -307,25 +320,53 @@ def patient_return_validation_page_and_print_data(print_ticket):
     # Récupération et traitement des données comme avant
     activity_id = request.form.get('activity_id')
     activity = Activity.query.get(activity_id)
+    journey_id = request.form.get('journey') or None
 
-    if print_ticket:
-        # Inscription en attente : elle sera activée à la confirmation d'impression.
-        print_job_id = str(uuid.uuid4())
-        new_patient = register_pending_patient(activity, print_job_id)
+    # Un parcours = une inscription : on retrouve le patient du parcours
+    # (clé unique Patient.journey_id) avant de créer quoi que ce soit.
+    existing = find_patient_by_journey(journey_id)
+    if existing is None:
+        if print_ticket:
+            # Inscription en attente : elle sera activée à la confirmation d'impression.
+            print_job_id = str(uuid.uuid4())
+            new_patient = register_pending_patient(activity, print_job_id,
+                                                   journey_id=journey_id)
+        else:
+            # Scan : aucune impression, on active immédiatement (inchangé).
+            print_job_id = None
+            new_patient = register_patient(activity, journey_id=journey_id)
+
+            # Notification "nouveau patient" : uniquement quand il rejoint
+            # réellement la file (en mode impression, différée à confirm_print).
+            if activity.notification:
+                send_app_notification(origin="activity", data={"patient": new_patient, "activity": activity})
+    elif existing.status == 'pending':
+        if print_ticket:
+            # Re-clic « Imprimer » sur le même parcours : on conserve le même
+            # print_job_id — confirm_print reste idempotent, aucune nouvelle
+            # inscription n'est créée.
+            print_job_id = existing.print_job_id
+            if not print_job_id:
+                print_job_id = str(uuid.uuid4())
+                existing.print_job_id = print_job_id
+                db.session.commit()
+            new_patient = existing
+        else:
+            # Bascule impression -> scan sur le même parcours : l'inscription
+            # en attente entre en file sans ticket (activation notifie).
+            _activate_and_notify(existing)
+            new_patient = existing
+            print_job_id = None
     else:
-        # Scan : aucune impression, on active immédiatement (inchangé).
+        # Parcours déjà conclu (standing/appelé/servi) : on réaffiche la
+        # conclusion sans créer de doublon ni relancer l'impression auto.
+        new_patient = existing
+        print_ticket = False
         print_job_id = None
-        new_patient = register_patient(activity)
 
     print_data = format_ticket_text(new_patient, activity)
     # On ne journalise PAS le contenu du ticket, seulement sa taille encodée.
     app.logger.debug(f"print_data généré ({len(print_data)} caractères base64)")
-
-    # Notification "nouveau patient" : uniquement quand il rejoint réellement la
-    # file. En mode impression, elle est différée jusqu'à l'activation (cf.
-    # confirm_print) pour ne pas annoncer un patient qui pourrait être annulé.
-    if activity.notification and not print_ticket:
-        send_app_notification(origin="activity", data={"patient": new_patient, "activity": activity})
 
     if 'HX-Request' in request.headers:
         # Requête provenant de HTMX
@@ -424,8 +465,11 @@ def confirm_print():
         }), 200
 
     if behavior == "cancel":
-        # On annule l'inscription : pas de ticket => pas de patient dans la file.
+        # On annule l'inscription : pas de ticket => pas de patient dans la
+        # file. journey_id est libéré : un nouveau scan du même QR crée alors
+        # une inscription neuve au lieu de retrouver ce parcours annulé.
         patient.status = 'print_failed'
+        patient.journey_id = None
         db.session.commit()
         return jsonify({
             'status': 'cancelled',
@@ -500,17 +544,29 @@ def print_abandon():
         return jsonify({'status': 'expired'}), 410
 
     if patient.status == 'pending':
+        # Même libération de journey_id que la branche 'cancel' de
+        # confirm_print : le parcours annulé ne doit pas bloquer un nouveau
+        # scan du même QR.
         patient.status = 'print_failed'
+        patient.journey_id = None
         db.session.commit()
     return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
 
 
 
-def patient_validate_scan(activity_id):
-    """ Fct appelée lors du scan du QRCode (validation) """
+def patient_validate_scan(activity_id, journey_id=None):
+    """ Fct appelée lors du scan du QRCode (validation).
+
+    Avec un journey_id, l'inscription est dédupliquée sur le parcours :
+    un rejeu ou un second téléphone retrouve le patient existant sans
+    recréer de ligne ni renvoyer la notification « nouveau patient »."""
     activity = Activity.query.get(activity_id)
-    new_patient = register_patient(activity)
-    if activity.notification:
+    if journey_id:
+        new_patient, created = register_journey_patient(activity, journey_id)
+    else:
+        new_patient = register_patient(activity)
+        created = True
+    if created and activity.notification:
         send_app_notification(origin="activity", data={"patient":new_patient, "activity": activity})
     return new_patient
 
@@ -638,6 +694,25 @@ def phone_patient(language_code, patient_id, activity_id):
     # ping via le gabarit pour que update_scan_phone cible la salle de la
     # borne affichant CE QR.
     journey_id = request.args.get('journey', '')
+    # Lien de suivi signé (QR de conclusion) : suivre le passage existant —
+    # sans cookies et SANS inscription au ping.
+    ticket = request.args.get('ticket', '')
+
+    if ticket:
+        pid = patient_ticket_patient_id(ticket)
+        patient = Patient.query.get(pid) if pid is not None else None
+        if patient is None:
+            return render_template('patient/phone_link_invalid.html',
+                                   phone_title=phone_title,
+                                   language_code=language_code)
+        return render_template('/patient/phone.html',
+                                phone_title=phone_title,
+                                patient_id=patient.call_number,
+                                activity_id=patient.activity_id,
+                                journey_id='',
+                                ticket=ticket,
+                                language_code=language_code,
+                                page_revision=page_editor_published_revision("phone"))
 
     if request.cookies.get('patient_call_number') != patient_id:
         if request.cookies.get('patient_id') != patient_id:
@@ -646,6 +721,7 @@ def phone_patient(language_code, patient_id, activity_id):
                                                     activity_id=activity_id,
                                                     phone_title=phone_title,
                                                     journey_id=journey_id,
+                                                    ticket='',
                                                     language_code=language_code,
                                                     page_revision=page_editor_published_revision("phone")))
             response.set_cookie('patient_id', "", expires=0)
@@ -657,6 +733,7 @@ def phone_patient(language_code, patient_id, activity_id):
                             patient_id=patient_id,
                             activity_id=activity_id,
                             journey_id=journey_id,
+                            ticket='',
                             language_code=language_code,
                             # Révision publiée : renvoyée dans l'accusé socket
                             # de (re)connexion (accusés « écran » de l'éditeur).
@@ -699,30 +776,47 @@ def phone_patient_ping():
     activity_id = request.form.get('activity_id')
     language_code = request.form.get('language_code')
     journey_id = request.form.get('journey')
+    ticket = request.form.get('ticket')
+
+    if ticket:
+        # Lien de suivi signé (QR de conclusion) : on SUIT le passage existant
+        # — jamais d'inscription, même sans cookie ni après leur expiration.
+        pid = patient_ticket_patient_id(ticket)
+        patient = Patient.query.get(pid) if pid is not None else None
+        if patient is None:
+            return render_template('patient/phone_link_invalid_fragment.html')
+    elif journey_id:
+        # Le parcours QR est la clé d'unicité de l'inscription : un rejeu ou
+        # un second téléphone retrouve le MÊME patient — plus de doublon.
+        patient = find_patient_by_journey(journey_id)
+        if patient is None:
+            patient = patient_validate_scan(activity_id, journey_id=journey_id)
+        elif patient.status == 'pending':
+            # Inscription en attente d'impression finalement validée par le
+            # scan : elle entre en file sans ticket.
+            _activate_and_notify(patient)
+        # Émission ciblée dans la salle du parcours (création comme rejeu) :
+        # seule la borne affichant CE QR reçoit update_scan_phone, avec le
+        # numéro RÉELLEMENT attribué ET l'id du patient — la conclusion se
+        # fait par id, le call_number étant réutilisé d'un jour à l'autre.
+        # Sans journey (QR généré avant cette version) on ne diffuse plus à
+        # toutes les bornes : une confirmation ne doit pas atterrir sur le
+        # mauvais écran.
+        from sockets import scan_journey_room
+        communikation("patient", event="update_scan_phone",
+                      data={"call_number": patient.call_number,
+                            "patient_id": patient.id},
+                      room=scan_journey_room(journey_id))
     # si déja inscrit — le cookie patient_id seul est falsifiable : exiger le
     # jeton signé. Sans lui (ou s'il est périmé), on retombe sur une nouvelle
-    # inscription, comme pour un client sans cookie.
-    if check_patient_phone_token(request.cookies.get('patient_token'),
+    # inscription, comme pour un client sans cookie (QR sans journey).
+    elif check_patient_phone_token(request.cookies.get('patient_token'),
                                  request.cookies.get('patient_id'),
                                  request.cookies.get('patient_call_number')):
         patient = Patient.query.get(request.cookies.get('patient_id'))
     # si pas encore inscrit
     else:
         patient = patient_validate_scan(activity_id)
-        # Émission ciblée dans la salle du parcours : seule la borne affichant
-        # CE QR reçoit update_scan_phone, avec le numéro RÉELLEMENT attribué
-        # (le numéro « futur » affiché peut différer si deux parcours se
-        # concluent en même temps) ET l'id du patient — la conclusion se fait
-        # par id, le call_number étant réutilisé d'un jour à l'autre. Sans
-        # journey (QR généré avant cette version) on ne diffuse plus à toutes
-        # les bornes : une confirmation ne doit jamais atterrir sur le mauvais
-        # écran.
-        if journey_id:
-            from sockets import scan_journey_room
-            communikation("patient", event="update_scan_phone",
-                          data={"call_number": patient.call_number,
-                                "patient_id": patient.id},
-                          room=scan_journey_room(journey_id))
 
     phone_lines = []
 
