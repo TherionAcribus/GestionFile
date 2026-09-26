@@ -300,6 +300,21 @@ def test_update_routes_bump_generation_before_commit():
             f"{route} doit incrémenter la génération AVANT le commit")
 
 
+def test_toggle_activation_bump_generation_avant_commit():
+    """L'interrupteur de l'algorithme persiste ALGO_IS_ACTIVATED : sans bump
+    de génération, les autres processus conserveraient l'ancien état."""
+    source = _read("routes/admin_algo.py")
+    assert "import config_sync" in source
+    body = _route_body(source, "toggle_activation")
+    bump_idx = body.find("config_sync.bump_generation()")
+    commit_idx = body.find("db.session.commit()")
+    config_idx = body.find("app.config['ALGO_IS_ACTIVATED']")
+    assert bump_idx != -1, "toggle_activation doit appeler bump_generation()"
+    assert bump_idx < commit_idx, "le bump doit être DANS la transaction"
+    assert config_idx > commit_idx, (
+        "app.config ne doit être muté qu'après le commit réussi")
+
+
 def test_update_routes_guard_restart_required():
     """Les routes update_* ne doivent pas prétendre appliquer un paramètre
     nécessitant un redémarrage : message dédié + pas de bump pour ces clés."""

@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 
+import config_sync
 from flask import Blueprint, render_template, request, current_app as app
 from models import AlgoRule, Activity, ConfigOption, Patient, db, bump_queue_revision, DAY_ABBREVIATIONS, DAY_NAMES_FR
 from algo_explain import STATE_ACTIVE, rule_state, summarize_rule
@@ -167,11 +168,29 @@ def button_des_activate_algo():
 def toggle_activation():
     action = request.args.get('action', 'activate')
     is_activated = action == 'activate'
-    
+
+    try:
+        # Écriture en base + incrément de génération DANS la même
+        # transaction : les autres processus (répliques web, scheduler)
+        # rechargent leur app.config via maybe_reload_configuration.
+        # app.config n'est muté qu'APRÈS un commit réussi : en cas d'échec,
+        # la mémoire ne doit pas diverger de la base.
+        algo_activated = ConfigOption.query.filter_by(config_key="algo_activate").first()
+        if algo_activated:
+            algo_activated.value_bool = is_activated
+        else:
+            db.session.add(ConfigOption(
+                config_key="algo_activate", value_bool=is_activated))
+        config_sync.bump_generation()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "config", target_id="algo_activate",
+                     outcome=OUTCOME_FAILURE)
+        app.logger.exception("Echec de la bascule de l'algorithme")
+        return display_toast(success=False, message="La mise à jour a échoué.")
+
     app.config['ALGO_IS_ACTIVATED'] = is_activated
-    algo_activated = ConfigOption.query.filter_by(config_key="algo_activate").first()
-    algo_activated.value_bool = is_activated
-    db.session.commit()
     bump_queue_revision()  # l'activation change l'ordre affiché : invalide le cache
     record_audit(ACTION_UPDATE, "config", target_id="algo_activate",
                  outcome=OUTCOME_SUCCESS, details=f"value={is_activated}")
