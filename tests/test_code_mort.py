@@ -247,8 +247,6 @@ ROUTES_DESACTIVEES = [
     # le journal d'audit (pt 7), mais sans bouton dans l'interface. Ressemble à
     # un filet de secours volontaire — à confirmer avant suppression.
     ("routes/admin_security.py", "/admin/reset_admin"),
-    # Collecte des clés à traduire (outil de maintenance des traductions).
-    ("routes/admin_translation.py", "/admin/translations/collect"),
     # Sondes de diagnostic protégées par jeton : émission Socket.IO de test et
     # ping RabbitMQ. Jamais appelées par le code, utilisables à la main.
     ("routes/api_system.py", "/send_message"),

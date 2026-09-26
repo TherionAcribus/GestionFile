@@ -14,8 +14,11 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
+from params_registry import get_spec
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
+
+REFERENCE_LANGUAGE_CODE = 'fr'
 
 # Colonnes de tri autorisées (liste blanche) — cf. pagination.parse_page_params.
 LANGUAGE_SORT_COLUMNS = {
@@ -283,9 +286,11 @@ def update_languages_order():
         app.logger.exception("Echec du reordonnancement des langues")
 
 
-def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, language_code, text):
-    """Insert a translation if it doesn't already exist in the Translation table."""
-    existing_translation = Translation.query.filter_by(
+def sync_reference_translation(
+    table_name, column_name, key_name, row_id, language_code, text
+):
+    """Synchronise le texte de référence et indique l'action effectuée."""
+    translation = Translation.query.filter_by(
         table_name=table_name,
         column_name=column_name,
         key_name=key_name,
@@ -293,134 +298,143 @@ def insert_translation_if_not_exists(table_name, column_name, key_name, row_id, 
         language_code=language_code
     ).first()
 
-    if not existing_translation:
-        translation = Translation(
+    if not translation:
+        db.session.add(Translation(
             table_name=table_name,
             column_name=column_name,
             key_name=key_name,
             row_id=row_id,
             language_code=language_code,
             translated_text=text
-        )
-        db.session.add(translation)
-        return True  # Indique qu'une nouvelle traduction a été insérée
+        ))
+        return "created"
 
-    return False  # Aucune nouvelle traduction insérée
+    if translation.translated_text != text:
+        translation.translated_text = text
+        return "updated"
 
-# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
-# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
-# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
-# tests/test_code_mort.py.
-# @admin_translation_bp.route('/admin/translations/collect', methods=['GET'])
-@require_permission('translation')
-def translations_collect():
-    # Définir la langue par défaut (vous pouvez adapter selon vos besoins)
-    default_language_code = 'fr'
+    return "unchanged"
 
-    # Charger les clés de configuration à traduire depuis le fichier JSON
-    config_keys_to_translate = load_config_keys_to_translate()
-    app.logger.debug("%s", config_keys_to_translate)
 
-    # Compteur pour le nombre de nouvelles traductions
-    new_translations_count = 0
-
-    # Extraire les textes de ConfigOption seulement pour les clés spécifiées
+def collect_translation_sources(config_keys_to_translate):
+    """Énumère les textes sources actuellement traduisibles."""
     if config_keys_to_translate:
-        config_texts = db.session.query(ConfigOption.id, ConfigOption.config_key, ConfigOption.value_str, ConfigOption.value_text).filter(ConfigOption.config_key.in_(config_keys_to_translate)).all()
+        config_texts = db.session.query(
+            ConfigOption.id,
+            ConfigOption.config_key,
+            ConfigOption.value_str,
+            ConfigOption.value_text,
+        ).filter(ConfigOption.config_key.in_(config_keys_to_translate)).all()
         for row in config_texts:
-            if row.value_str:
-                if insert_translation_if_not_exists(
-                    table_name='ConfigOption',
-                    column_name='value_str',
-                    key_name=row.config_key,
-                    row_id=row.id,
-                    language_code=default_language_code,
-                    text=row.value_str
-                ):
-                    new_translations_count += 1
+            spec = get_spec(row.config_key)
+            if spec is None or spec.value_type not in ("value_str", "value_text"):
+                app.logger.warning(
+                    "Clé à traduire ignorée ou non textuelle : %s",
+                    row.config_key,
+                )
+                continue
+            text = getattr(row, spec.value_type) or ""
+            yield ('ConfigOption', spec.value_type, row.config_key, row.id, text)
 
-            if row.value_text:
-                if insert_translation_if_not_exists(
-                    table_name='ConfigOption',
-                    column_name='value_text',
-                    key_name=row.config_key,
-                    row_id=row.id,
-                    language_code=default_language_code,
-                    text=row.value_text
-                ):
-                    new_translations_count += 1
-
-    # Extraire les textes de Button
     button_texts = db.session.query(Button.id, Button.label).all()
     for row in button_texts:
-        if insert_translation_if_not_exists(
-            table_name='Button',
-            column_name='label',
-            key_name="",
-            row_id=row.id,
-            language_code=default_language_code,
-            text=row.label
-        ):
-            new_translations_count += 1
+        yield ('Button', 'label', '', row.id, row.label or "")
 
-    # Extraire les textes d'Activity
-    activity_texts = db.session.query(Activity.id, Activity.inactivity_message, Activity.specific_message).all()
+    activity_texts = db.session.query(
+        Activity.id,
+        Activity.inactivity_message,
+        Activity.specific_message,
+    ).all()
     for row in activity_texts:
-        if row.inactivity_message:
-            if insert_translation_if_not_exists(
-                table_name='Activity',
-                column_name='inactivity_message',
-                row_id=row.id,
-                key_name="",
-                language_code=default_language_code,
-                text=row.inactivity_message
-            ):
-                new_translations_count += 1
+        yield (
+            'Activity', 'inactivity_message', '', row.id,
+            row.inactivity_message or "")
+        yield (
+            'Activity', 'specific_message', '', row.id,
+            row.specific_message or "")
 
-        if row.specific_message:
-            if insert_translation_if_not_exists(
-                table_name='Activity',
-                column_name='specific_message',
-                key_name="",
-                row_id=row.id,
-                language_code=default_language_code,
-                text=row.specific_message
-            ):
-                new_translations_count += 1
 
-    # Confirmer les changements dans la base de données
-    db.session.commit()
-    record_audit(ACTION_UPDATE, "translation", outcome=OUTCOME_SUCCESS,
-                 details=f"collecte : {new_translations_count} nouveau(x)")
+@admin_translation_bp.route('/admin/translations/collect', methods=['POST'])
+@require_permission('translation')
+def translations_collect():
+    try:
+        config_keys_to_translate = load_config_keys_to_translate()
+        app.logger.debug("%s", config_keys_to_translate)
+        counters = {"created": 0, "updated": 0, "unchanged": 0}
 
-    # Afficher le nombre de nouveaux textes mis à jour dans display_toast
-    display_toast(success=True, message=f"{new_translations_count} nouveaux textes mis à jour")
+        for table_name, column_name, key_name, row_id, text in collect_translation_sources(
+            config_keys_to_translate
+        ):
+            result = sync_reference_translation(
+                table_name,
+                column_name,
+                key_name,
+                row_id,
+                REFERENCE_LANGUAGE_CODE,
+                text,
+            )
+            counters[result] += 1
 
-    return "", 200
+        db.session.commit()
+        record_audit(
+            ACTION_UPDATE,
+            "translation",
+            outcome=OUTCOME_SUCCESS,
+            details=(
+                f"collecte : {counters['created']} nouveau(x), "
+                f"{counters['updated']} référence(s) actualisée(s)"
+            ),
+        )
+        display_toast(
+            success=True,
+            message=(
+                f"{counters['created']} nouveau(x) texte(s), "
+                f"{counters['updated']} référence(s) française(s) actualisée(s)"
+            ),
+        )
+        language_code = request.form.get("language_code")
+        if language_code and language_code != REFERENCE_LANGUAGE_CODE:
+            language_exists = Language.query.filter_by(code=language_code).first()
+            if language_exists:
+                try:
+                    content = _render_translations_list(language_code)
+                except Exception:
+                    app.logger.exception(
+                        "Echec du rafraichissement de la liste des traductions")
+                else:
+                    return (
+                        f'<div id="translations_list" hx-swap-oob="innerHTML">'
+                        f'{content}</div>'
+                    ), 200
+        return "", 200
+
+    except Exception:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "translation", outcome=OUTCOME_FAILURE,
+                     details="collecte des textes")
+        display_toast(success=False, message="La synchronisation des textes a échoué.")
+        app.logger.exception("Echec de la collecte des textes à traduire")
+        return "", 200
 
 def load_config_keys_to_translate():
-    json_file = 'static/json/config_keys_to_translate.json'
+    json_file = os.path.join(
+        app.static_folder, 'json', 'config_keys_to_translate.json')
     with open(json_file, 'r', encoding='utf-8') as file:
         data = json.load(file)
         return data.get('config_keys_to_translate', [])
     
 
-@admin_translation_bp.route('/admin/translations/change_language_target', methods=['POST'])
-@require_permission('translation')
-def change_language_target():
-    language_code = request.form.get("language_code")
-    
-    # Récupérer les textes en français
-    references = db.session.query(Translation).filter(Translation.language_code == "fr").all()
-    # Récupérer les textes dans la langue cible
-    translations = db.session.query(Translation).filter(Translation.language_code == language_code).all()
+def _render_translations_list(language_code):
+    references = db.session.query(Translation).filter(
+        Translation.language_code == REFERENCE_LANGUAGE_CODE
+    ).all()
+    translations = db.session.query(Translation).filter(
+        Translation.language_code == language_code).all()
 
-    # Dictionnaires pour stocker les traductions associées par clé unique
     button_translations = {}
     activity_translations = {}
     config_option_translations = {}
 
-    # Créer des dictionnaires séparés avec les textes en français
     for ref in references:
         key = (ref.table_name, ref.column_name, ref.row_id, ref.key_name)
         if ref.table_name == 'Button':
@@ -430,7 +444,6 @@ def change_language_target():
         elif ref.table_name == 'ConfigOption':
             config_option_translations[key] = {'fr': ref.translated_text, 'target': None}
 
-    # Ajouter les traductions de la langue cible
     for trans in translations:
         key = (trans.table_name, trans.column_name, trans.row_id, trans.key_name)
         if trans.table_name == 'Button':
@@ -450,10 +463,22 @@ def change_language_target():
                 config_option_translations[key] = {'fr': None, 'target': trans.translated_text}
 
     return render_template("admin/translations_texts_list.html",
-                            language_code=language_code,
-                            button_translations=button_translations,
-                            activity_translations=activity_translations,
-                            config_option_translations=config_option_translations)
+                           language_code=language_code,
+                           button_translations=button_translations,
+                           activity_translations=activity_translations,
+                           config_option_translations=config_option_translations)
+
+
+@admin_translation_bp.route('/admin/translations/change_language_target', methods=['POST'])
+@require_permission('translation')
+def change_language_target():
+    language_code = request.form.get("language_code")
+
+    if language_code == REFERENCE_LANGUAGE_CODE:
+        display_toast(success=False, message="Le français est la langue de référence.")
+        return "", 200
+
+    return _render_translations_list(language_code)
 
 
 @admin_translation_bp.route('/admin/translations/save_translations', methods=['POST'])

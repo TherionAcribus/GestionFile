@@ -57,6 +57,7 @@ _MUTATIONS = [
     ("routes/admin_schedule.py", "/admin/schedule/delete/<int:schedule_id>", "DELETE"),
     ("routes/admin_counter.py", "/admin/counter/delete/<int:counter_id>", "DELETE"),
     ("routes/admin_translation.py", "/admin/languages/delete/<int:language_id>", "DELETE"),
+    ("routes/admin_translation.py", "/admin/translations/collect", "POST"),
     ("routes/admin_queue.py", "/admin/queue/delete_patient/<int:patient_id>", "DELETE"),
     ("routes/admin_queue.py", "/admin/database/clear_all_patients", "POST"),
     ("routes/admin_queue.py", "/admin/database/clear_all_patients_with_saving", "POST"),
