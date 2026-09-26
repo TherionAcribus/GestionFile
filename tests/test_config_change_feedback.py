@@ -66,8 +66,26 @@ def test_update_input_failures_return_failure_status():
     body = _route_body(_read("routes/admin_config.py"), "update_input")
     # Les cas d'échec de validation renvoient bien success=False (→ HTTP 400).
     assert "config_change_response(success=False" in body
-    # Et le cas nominal renvoie un succès.
-    assert "config_change_response(success=True, message=\"Option mise à jour.\")" in body
+    # Et le cas nominal renvoie un succès « Option mise à jour. »
+    assert "\"Option mise à jour.\"" in body
+    # Point f : un effet de bord en échec (replanification impossible) est
+    # joint comme avertissement — jamais un succès silencieux.
+    assert "warning = special_functions_with_input(key)" in body
+    assert "warning" in body
+
+
+def test_scheduling_side_effects_propagate_warning():
+    """Les deux points d'entrée de replanification (interrupteur, horaire)
+    retournent un avertissement quand la réconciliation n'a pas abouti."""
+    source = _read("routes/admin_config.py")
+    for func in ("special_functions_with_input", "call_function_with_switch"):
+        body = _func_body(source, func)
+        assert "_SCHEDULE_RECONCILE_WARNING" in body, (
+            f"{func} doit signaler un échec de planification")
+        assert "return warning" in body, (
+            f"{func} doit retourner l'avertissement à la réponse")
+    switch_body = _route_body(source, "update_switch")
+    assert "warning = call_function_with_switch(key, value)" in switch_body
 
 
 def test_update_input_still_guards_restart_required():

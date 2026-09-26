@@ -244,8 +244,11 @@ def update_switch():
 
     # Commit réussi : refléter en mémoire, puis déclencher les effets de bord.
     app.config[spec.config_name] = bool_value
-    call_function_with_switch(key, value)
-    return display_toast(success=True, message="Option mise à jour.")
+    warning = call_function_with_switch(key, value)
+    # Un effet de bord en échec (replanification impossible) devient un
+    # avertissement explicite plutôt qu'un succès silencieux (point f).
+    return display_toast(success=True,
+                         message="Option mise à jour." + (f" {warning}" if warning else ""))
     
 
 
@@ -558,23 +561,46 @@ def update_input():
 
     # Commit réussi : refléter en mémoire (app.config) puis effets de bord.
     app.config[spec.config_name] = value
-    special_functions_with_input(key)
+    warning = special_functions_with_input(key)
     # Réponse directe à l'auteur de la requête (pas de diffusion WebSocket à
     # tous les administrateurs pour une sauvegarde de champ individuelle).
-    return config_change_response(success=True, message="Option mise à jour.")
+    # Un échec de replanification devient un avertissement explicite plutôt
+    # qu'un « Option mise à jour » tronqué de son échec (point f).
+    return config_change_response(
+        success=True,
+        message="Option mise à jour." + (f" {warning}" if warning else ""))
 
+
+
+_SCHEDULE_RECONCILE_WARNING = (
+    "Attention : la planification de la tâche associée a échoué ; "
+    "elle sera recréée au prochain démarrage (voir les journaux).")
 
 
 def special_functions_with_input(key):
-    # Le changement d'horaire passe par les réconciliations : un interrupteur
-    # éteint ne doit PAS créer la tâche (la base fait foi, pas le jobstore —
-    # un éventuel job persistant resté d'une activation passée est retiré).
+    """Effets de bord des champs de saisie après sauvegarde.
+
+    Le changement d'horaire passe par les réconciliations : un interrupteur
+    éteint ne doit PAS créer la tâche (la base fait foi, pas le jobstore —
+    un éventuel job persistant resté d'une activation passée est retiré).
+
+    Retourne un avertissement à joindre à la réponse quand la
+    replanification attendue a échoué : la valeur reste enregistrée mais
+    l'échec n'est plus silencieux (point f) — le job sera recréé au
+    prochain démarrage par ``_reconcile_scheduler_jobs``.
+    """
+    warning = None
     if key == "cron_delete_patient_table_hour":
-        reconcile_clear_patient_table_job()
+        if (app.config.get("CRON_DELETE_PATIENT_TABLE_ACTIVATED")
+                and reconcile_clear_patient_table_job() != "added"):
+            warning = _SCHEDULE_RECONCILE_WARNING
         communikation("admin", event="refresh_schedule_tasks_list")
     if key == "cron_delete_announce_calls_hour":
-        reconcile_clear_announce_calls_job()
+        if (app.config.get("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED")
+                and reconcile_clear_announce_calls_job() != "added"):
+            warning = _SCHEDULE_RECONCILE_WARNING
         communikation("admin", event="refresh_schedule_tasks_list")
+    return warning
 
 
 
@@ -636,17 +662,24 @@ def call_function_with_select(key, value):
 
 
 def call_function_with_switch(key, value):
-    """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde"""
+    """ Permet d'effectuer une action lors de l'activation d'un switch en plus de la sauvegarde.
+
+    Retourne un avertissement à joindre à la réponse quand la planification
+    attendue a échoué (point f : plus de succès silencieux)."""
+    warning = None
     if key == "cron_delete_patient_table_activated":
-        reconcile_clear_patient_table_job()
+        if value == "true" and reconcile_clear_patient_table_job() != "added":
+            warning = _SCHEDULE_RECONCILE_WARNING
     elif key == "cron_delete_announce_calls_activated":
-        reconcile_clear_announce_calls_job()
+        if value == "true" and reconcile_clear_announce_calls_job() != "added":
+            warning = _SCHEDULE_RECONCILE_WARNING
     elif key == "app_messaging_enabled":
         from services import messaging_service
         if value == "true":
             messaging_service.announce_enabled()
         else:
             messaging_service.disable_and_clear_presence()
+    return warning
 
 
 

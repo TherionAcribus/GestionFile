@@ -58,7 +58,17 @@ def test_value_type_matches_validator():
         else:
             assert spec.validator in ("text", "welcome", "before_call",
                                       "after_call", "ticket", "theme",
-                                      "sound_file")
+                                      "sound_file", "hour")
+
+
+def test_hour_keys_use_hour_validator():
+    """Les champs de planification ``*_hour`` exigent le validateur « hour » :
+    le validateur générique « text » laissait passer « 25:99 » ou « abc »
+    (point f) — la création de la tâche échouait ensuite silencieusement."""
+    for key in ("cron_delete_patient_table_hour",
+                "cron_delete_announce_calls_hour"):
+        assert reg.get_spec(key).validator == "hour", (
+            f"{key} doit porter le validateur 'hour'")
 
 
 @pytest.mark.parametrize("key,permission", [

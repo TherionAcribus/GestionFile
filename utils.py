@@ -52,6 +52,28 @@ def validate_ticket_text(value):
     return {"success": True, "value": text}
 
 
+_HOUR_PATTERN = re.compile(r"([01]?\d|2[0-3]):([0-5]?\d)")
+
+
+def validate_hour(value):
+    """Valide un horaire « HH:MM » (00:00–23:59) pour une tâche planifiée.
+
+    Renvoie ``{"success": bool, "value": ...}`` — même contrat que
+    ``validate_and_transform_text``. La valeur acceptée est normalisée
+    (« 9:5 » → « 09:05 ») afin que la chaîne persistée alimente
+    directement un ``<input type="time">`` et le découpage heure/minute
+    des jobs cron. Tout le reste (« abc », « 25:99 », « 9h30 »…)
+    est rejeté AVANT écriture : une tâche créée à partir d'une chaîne
+    non analysable échouait silencieusement après enregistrement.
+    """
+    match = _HOUR_PATTERN.fullmatch(str(value or "").strip())
+    if not match:
+        return {"success": False,
+                "value": "Format d'heure attendu : HH:MM (ex. 09:30)."}
+    return {"success": True,
+            "value": "{:02d}:{:02d}".format(int(match.group(1)), int(match.group(2)))}
+
+
 def validate_config_text(key, value):
     """Valide ``value`` pour la clé de configuration ``key`` selon le
     validateur déclaré dans le registre.
@@ -68,6 +90,8 @@ def validate_config_text(key, value):
         return {"success": True, "value": value}
     if spec.validator == "ticket":
         return validate_ticket_text(value)
+    if spec.validator == "hour":
+        return validate_hour(value)
     if spec.validator in BALISE_LETTERS:
         return validate_and_transform_text(value, BALISE_LETTERS[spec.validator])
     return {"success": True, "value": value}

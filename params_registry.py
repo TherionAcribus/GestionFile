@@ -15,9 +15,9 @@ Pour chaque clé autorisée, on déclare :
 - ``kind``             : widget d'origine (``switch`` / ``input`` / ``select``),
                          indicatif ;
 - ``validator``        : type de validation appliqué **côté serveur** —
-                         ``bool`` / ``int`` / ``text`` / ``welcome`` /
-                         ``before_call`` / ``after_call`` / ``ticket`` /
-                         ``theme`` / ``sound_file`` ;
+                         ``bool`` / ``int`` / ``text`` / ``hour`` /
+                         ``welcome`` / ``before_call`` / ``after_call`` /
+                         ``ticket`` / ``theme`` / ``sound_file`` ;
 - ``restart_required`` : ``True`` si le paramètre ne prend effet qu'après
                          redémarrage du serveur.
 
@@ -300,6 +300,14 @@ _TICKET_TEXT_KEYS = {
     "ticket_header", "ticket_message", "ticket_footer",
 }
 
+# Champs d'horaire de planification « HH:MM » : sans validateur dédié,
+# « 25:99 » ou « abc » étaient persistés — la création de la tâche échouait
+# ensuite silencieusement (erreur journalisée, écran « Option mise à jour »).
+_HOUR_KEYS = {
+    "cron_delete_patient_table_hour",
+    "cron_delete_announce_calls_hour",
+}
+
 
 # ---------------------------------------------------------------------------
 # Valeurs autorisées pour les clés à choix fermé (listes déroulantes).
@@ -387,6 +395,8 @@ def _validator_for(key: str, value_type: str) -> str:
     # dans select_signal, sinon update_select contournerait le contrôle.
     if key == "announce_alert_filename":
         return "sound_file"
+    if key in _HOUR_KEYS:
+        return "hour"
     return "text"
 
 
@@ -403,7 +413,7 @@ class ParamSpec:
     config_name: str
     value_type: str          # value_str | value_int | value_bool | value_text
     permission: str
-    validator: str           # bool | int | text | welcome | before_call | after_call | ticket | theme | sound_file
+    validator: str           # bool | int | text | hour | welcome | before_call | after_call | ticket | theme | sound_file
     kind: str                # switch | input | select
     restart_required: bool = False
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)

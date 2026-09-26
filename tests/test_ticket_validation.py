@@ -124,6 +124,24 @@ def test_config_text_cles_sans_regle_inchangees():
     assert validate_config_text("cle_inconnue", "n'importe quoi")["success"]
 
 
+def test_config_text_validate_hour_dispatch():
+    """Point f : les clés ``*_hour`` passent par ``validate_hour`` — un format
+    invalide ou hors plage est refusé AVANT persistance, sinon la création de
+    la tâche échouait silencieusement après « Option mise à jour »."""
+    key = "cron_delete_patient_table_hour"
+    for bad in ("25:99", "abc", "24:00", "12:60", "9h30", "", "12:345"):
+        assert not validate_config_text(key, bad)["success"], (
+            f"{bad!r} aurait dû être refusé")
+    for good in ("00:00", "09:05", "23:59"):
+        assert validate_config_text(key, good)["success"], (
+            f"{good!r} aurait dû être accepté")
+    # Normalisation vers « HH:MM » (alimente <input type="time"> et le
+    # découpage heure/minute du job cron).
+    assert validate_config_text(key, "9:5")["value"] == "09:05"
+    # Même contrat sur la seconde clé horaire.
+    assert not validate_config_text("cron_delete_announce_calls_hour", "25:99")["success"]
+
+
 # ---------------------------------------------------------------------------
 # 4. Régressions statiques : la validation est branchée sur les deux routes
 # ---------------------------------------------------------------------------
