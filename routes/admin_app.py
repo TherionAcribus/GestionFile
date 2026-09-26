@@ -25,12 +25,27 @@ _EMAIL_TEST_COOLDOWN = 60.0  # secondes
 # caractères de contrôle.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Libellés lisibles des canaux temps réel (sockets.NAMESPACES) pour l'onglet
+# « Connexions en direct » : l'administrateur voit « Bornes patient », pas
+# « /socket_patient ».
+NAMESPACE_LABELS = {
+    "/socket_admin": "Administration",
+    "/socket_patient": "Bornes patient",
+    "/socket_update_screen": "Écrans d'annonce",
+    "/socket_app_screen": "Écrans (application)",
+    "/socket_app_counter": "Application comptoir",
+    "/socket_counter": "Comptoirs (version web)",
+    "/socket_update_patient": "Suivi de la file (pages admin et comptoirs)",
+    "/socket_phone": "Téléphones des patients",
+}
+
 @admin_app_bp.route('/admin/app')
 @admin_app_bp.route('/admin/app/<tab>')
 @require_permission('app')
 def admin_app(tab=None):
     valid_tabs = ['general', 'backups', 'mail', 'connexion']
-    tab = request.args.get('tab', 'general')
+    # /admin/app/<tab> était déclaré mais ignoré (seul ?tab= était lu).
+    tab = tab or request.args.get('tab', 'general')
     if tab not in valid_tabs:
         tab = 'general'
         
@@ -51,7 +66,8 @@ def admin_app(tab=None):
                             mail_default_sender=app.config["MAIL_DEFAULT_SENDER"],
                             mail_use_tls=app.config["MAIL_USE_TLS"],
                             mail_use_ssl=app.config["MAIL_USE_SSL"],
-                            namespaces = list(active_connections.keys())
+                            namespaces=[(ns, NAMESPACE_LABELS.get(ns, ns))
+                                        for ns in active_connections.keys()]
     )
 
 @admin_app_bp.route('/admin/app/mail/test', methods=['POST'])
@@ -121,14 +137,19 @@ def get_connections():
     if len(selected_namespaces) == 0:
         selected_namespaces = list(active_connections.keys())
 
-    connections = {}
-    for namespace in selected_namespaces:
-        # Obtenez la liste des clients connectés pour chaque namespace sélectionné
-        connected_clients = get_connected_clients(namespace)
-        connections[namespace] = connected_clients
+    # Seuls les canaux connus sont interrogés (valeurs issues du formulaire).
+    selected_namespaces = [ns for ns in selected_namespaces if ns in active_connections]
 
-    # Renvoyer le template avec les connexions mises à jour
-    return render_template('admin/app_connexion_list.html', connections=connections)
+    connections = []
+    for namespace in selected_namespaces:
+        connections.append({
+            "namespace": namespace,
+            "label": NAMESPACE_LABELS.get(namespace, namespace),
+            "clients": get_connected_clients(namespace),
+        })
+
+    return render_template('admin/app_connexion_list.html', connections=connections,
+                           total=sum(len(c["clients"]) for c in connections))
 
 
 def get_connected_clients(namespace):

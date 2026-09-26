@@ -39,7 +39,7 @@
                     <li><i class="bi bi-ticket-perforated" aria-hidden="true"></i> Numéros {{ activity.letter }}-1, {{ activity.letter }}-2…
                         {% if item.shared_letter %}
                             <span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-                            même lettre que {{ item.shared_letter | join(', ') }} : les numéros se ressembleront.</span>
+                            même lettre que {{ item.shared_letter | join(', ') }} : une seule série est partagée (numéros par activité), impossible de les distinguer au numéro.</span>
                         {% endif %}
                     </li>
                     <li><i class="bi bi-clock" aria-hidden="true"></i>

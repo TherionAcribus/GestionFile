@@ -1,28 +1,61 @@
-{{ macros.textarea_full("mail_server", mail_server, "Serveur mail") }}
+{# Onglet « E-mails ». Honnêteté sur l'usage : aucune fonction n'envoie
+   encore d'e-mail automatiquement — la configuration sert à préparer et à
+   vérifier l'envoi (e-mail de test). #}
+<div class="alert alert-light border small">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    Paramètres du serveur d'envoi (SMTP) de votre messagerie. Pour l'instant, seul l'<strong>e-mail de test</strong>
+    ci-dessous les utilise : aucune fonction n'envoie encore d'e-mail automatiquement.
+</div>
 
-{{ macros.textarea_full("mail_username", mail_username, "Nom d'utilisateur") }}
+<section class="admin-setting-card algo-section app-mail-settings" aria-labelledby="mail_server_title">
+    <h5 id="mail_server_title">Serveur d'envoi</h5>
+    <details class="small mb-3">
+        <summary>Valeurs courantes (Gmail, Outlook, OVH…)</summary>
+        <table class="table table-sm mt-2 mb-0">
+            <thead><tr><th>Fournisseur</th><th>Serveur</th><th>Port</th><th>Sécurité</th></tr></thead>
+            <tbody>
+                <tr><td>Gmail</td><td><code>smtp.gmail.com</code></td><td>587</td><td>TLS <span class="text-muted">(mot de passe d'application requis)</span></td></tr>
+                <tr><td>Outlook / Office 365</td><td><code>smtp.office365.com</code></td><td>587</td><td>TLS</td></tr>
+                <tr><td>OVH</td><td><code>ssl0.ovh.net</code></td><td>465</td><td>SSL</td></tr>
+            </tbody>
+        </table>
+    </details>
 
-{{ macros.secret_full("mail_password", mail_password_set, "Mot de passe") }}
+    {{ macros.textarea_full("mail_server", mail_server, "Serveur SMTP") }}
+    {{ macros.textbloc_int("mail_port", mail_port, "Port (587 pour TLS, 465 pour SSL)") }}
 
-{{ macros.textarea_full("mail_default_sender", mail_default_sender, "Expediteur") }}
+    <fieldset class="mb-3">
+        <legend class="form-label fs-6 mb-1">Sécurité de la connexion — une seule des deux</legend>
+        {{ macros.switch("mail_use_tls", mail_use_tls, "TLS (STARTTLS, port 587 en général)") }}
+        {{ macros.switch("mail_use_ssl", mail_use_ssl, "SSL (port 465 en général)") }}
+        <div class="alert alert-danger small mt-2 mb-0 mail-tls-ssl-conflict" role="alert">
+            <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+            TLS et SSL sont activés en même temps : l'envoi échouera. Gardez-en un seul.
+        </div>
+    </fieldset>
 
-{{ macros.textbloc_int("mail_port", mail_port, "Port") }}
+    {{ macros.textarea_full("mail_username", mail_username, "Identifiant (souvent l'adresse e-mail)") }}
+    {{ macros.secret_full("mail_password", mail_password_set, "Mot de passe") }}
+    {{ macros.textarea_full("mail_default_sender", mail_default_sender, "Adresse d'expéditeur affichée") }}
+</section>
 
-{{ macros.switch("mail_use_tls", mail_use_tls, "Utiliser TLS") }}
-
-{{ macros.switch("mail_use_ssl", mail_use_ssl, "Utiliser SSL") }}
-
-<form id="audio-announce-form" class="row g-3 align-items-end">
-    <div class="col-auto">
-        <label for="mail_adress" class="form-label">Adresse email</label>
-        <input type="text" class="form-control" id="mail_adress" name="mail_adress" value="">
-    </div>
-    
-    <div class="col-auto">
-        <button type="button" class="btn btn-success"
-                hx-post="/admin/app/mail/test"
-                hx-target="#invisible"
-                hx-include="closest form"
-                >Envoyer un mail de test</button>
-    </div>
-</form>
+<section class="admin-setting-card algo-section" aria-labelledby="mail_test_title">
+    <h5 id="mail_test_title"><i class="bi bi-send" aria-hidden="true"></i> Vérifier l'envoi</h5>
+    <p class="text-muted small">Envoie un e-mail de test avec les réglages enregistrés (un envoi par minute au maximum).</p>
+    <form id="mail-test-form" class="row g-2 align-items-end">
+        <div class="col-sm-auto">
+            <label for="mail_adress" class="form-label">Envoyer à</label>
+            <input type="email" class="form-control" id="mail_adress" name="mail_adress" value=""
+                   placeholder="vous@exemple.fr" autocomplete="email">
+        </div>
+        <div class="col-sm-auto">
+            <button type="button" class="btn btn-success"
+                    hx-post="/admin/app/mail/test"
+                    hx-target="#invisible"
+                    hx-include="closest form"
+                    hx-disabled-elt="this">
+                <i class="bi bi-send" aria-hidden="true"></i> Envoyer un e-mail de test
+            </button>
+        </div>
+    </form>
+</section>

@@ -14,7 +14,7 @@ from models import Patient, Counter, AlgoRule, ConfigOption, Language, db, get_q
 from communication import communikation, notify_patient_phone
 from config import time_tz
 from auth_utils import require_app_token_or_login
-from call_numbering import next_simple_call_number
+from call_numbering import next_category_call_number, next_simple_call_number
 from announcement_audio import cached_announcement_url
 from announcement_dispatcher import announcement_dispatcher
 
@@ -528,16 +528,13 @@ def get_next_category_number(activity):
     letter_prefix = activity.letter
     today = date.today()
 
-    # Compter combien de patients sont déjà enregistrés aujourd'hui avec le même préfixe de lettre
-    today_count = Patient.query.filter(
+    # Numéros du jour portant cette lettre ; le cœur pur prend le plus grand
+    # (et non leur nombre, qui redonnait un numéro après un retrait).
+    todays = [row[0] for row in db.session.query(Patient.call_number).filter(
         db.func.date(Patient.timestamp) == today,
         db.func.substr(Patient.call_number, 1, 1) == letter_prefix
-    ).count()
-
-    # Le prochain numéro sera le nombre actuel + 1
-    next_number = today_count + 1
-
-    return f"{letter_prefix}-{next_number}"
+    ).all()]
+    return next_category_call_number(letter_prefix, todays)
 
 def get_futur_patient(call_number, activity):
     """ CRéation d'un nouveau patient SANS ajout à la BDD

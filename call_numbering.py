@@ -36,3 +36,26 @@ def next_simple_call_number(last_call_number):
         return "1"
 
     return str(int(text) + 1)
+
+
+def next_category_call_number(letter, todays_call_numbers):
+    """Numéro suivant en numérotation par activité (``"A-4"``).
+
+    ``todays_call_numbers`` : numéros d'appel déjà attribués aujourd'hui (tous
+    préfixes confondus, chaînes). On prend le PLUS GRAND numéro de la lettre,
+    et non leur nombre : l'ancien calcul (``count() + 1``) redonnait un numéro
+    déjà distribué dès qu'un patient était retiré de la file (A-1, A-2, A-3,
+    retrait de A-2 → nouveau patient « A-3 », en double).
+
+    Les activités qui partagent une lettre partagent la même série.
+    """
+    prefix = f"{letter}-"
+    highest = 0
+    for number in todays_call_numbers or ():
+        text = str(number or "").strip()
+        if not text.startswith(prefix):
+            continue
+        tail = text[len(prefix):]
+        if tail.isascii() and tail.isdigit():
+            highest = max(highest, int(tail))
+    return f"{letter}-{highest + 1}"

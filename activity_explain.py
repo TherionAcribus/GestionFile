@@ -97,8 +97,9 @@ def is_open_at(schedules, weekday_english: str, current_time) -> bool:
 def shared_letters(activities) -> dict:
     """``{id: [noms des autres activités ayant la même lettre]}``.
 
-    Deux activités de même lettre produisent des numéros identiques (A-1 pour
-    l'une comme pour l'autre) : la page le signale.
+    En numérotation par activité, deux activités de même lettre partagent une
+    seule série (A-1 pour l'une, A-2 pour l'autre) : on ne peut plus les
+    distinguer au numéro. La page le signale.
     """
     by_letter: dict[str, list] = {}
     for activity in activities or ():

@@ -904,3 +904,20 @@ font-size: 0.85rem;
 .activity-jobs > summary {
     cursor: pointer;
 }
+
+/* --- Page Application ----------------------------------------------------- */
+/* Alerte affichée seulement si TLS ET SSL sont cochés en même temps. */
+.mail-tls-ssl-conflict {
+    display: none;
+}
+
+.app-mail-settings:has(#mail_use_tls:checked):has(#mail_use_ssl:checked) .mail-tls-ssl-conflict {
+    display: block;
+}
+
+/* Numérotation : le mode actif est mis en avant. */
+.app-page:has(#numbering_by_activity:checked) .numbering-on,
+.app-page:has(#numbering_by_activity:not(:checked)) .numbering-off {
+    border-color: var(--bs-primary) !important;
+    background: var(--bs-primary-bg-subtle);
+}

@@ -802,40 +802,6 @@ function refresh_announce_cache(data) {
 // du gabarit : une page de 30 lignes renvoyait 30 blocs identiques. Ici, une
 // seule passe, rejouee apres chaque echange HTMX (voir htmx:afterSettle plus bas).
 // `data-placeholder` est lu nativement par select2.
-// --- Page « Connexions » de l'App -----------------------------------------
-//
-// Ce code vivait dans le fragment app_connexion.html, sous un
-// `$(document).ready(...)` rejoue a chaque injection HTMX. Delegue ici : pose
-// une seule fois, il vaut pour toute injection ulterieure du fragment.
-//
-// Delegation jQuery et non addEventListener : select2 emet `change` via le
-// systeme d'evenements de jQuery, qu'un ecouteur natif ne capte pas de maniere
-// fiable.
-function afficherListeConnexions() {
-    var namespaces = $('#namespaceSelect').val() || [];
-    htmx.ajax('POST', '/admin/app/get_connections', {
-        target: '#connectionList',
-        swap: 'innerHTML',
-        values: { 'namespaces[]': namespaces }
-    });
-}
-
-$(document).on('change', '#namespaceSelect', afficherListeConnexions);
-$(document).on('click', '#refreshButton', afficherListeConnexions);
-
-// A l'arrivee du fragment : initialisation de select2 puis premier chargement.
-document.addEventListener('htmx:afterSettle', function (evt) {
-    var cible = evt.detail && evt.detail.target;
-    if (!cible) { return; }
-    var select = cible.id === 'namespaceSelect'
-        ? cible
-        : cible.querySelector('#namespaceSelect');
-    if (!select) { return; }
-    if (!$(select).data('select2')) { $(select).select2(); }
-    afficherListeConnexions();
-});
-
-
 function initSelect2Multiples() {
     $('select.js-select2-multiple').each(function () {
         var $select = $(this);

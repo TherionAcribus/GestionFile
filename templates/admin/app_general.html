@@ -1,30 +1,69 @@
-<h3>Application</h3>
-    
-{{ macros.switch("numbering_by_activity", 
-            numbering_by_activity, 
-            "Numérotation par activité")
-}}
+{# Onglet « Général » : chaque réglage dans sa carte, avec ce qu'il change
+   concrètement. Le relais RabbitMQ (technique, redémarrage requis) est
+   isolé dans « Avancé » — son avertissement était auparavant affiché sous
+   la messagerie, qu'il ne concerne pas. #}
 
-{{ macros.switch("start_rabbitmq",
-    start_rabbitmq,
-            "Activer le relais RabbitMQ entre processus (RABBITMQ_URL doit être configurée)")
-}}
+<section class="admin-setting-card algo-section" aria-labelledby="app_identity_title">
+    <h5 id="app_identity_title"><i class="bi bi-shop" aria-hidden="true"></i> Nom de la pharmacie</h5>
+    <p class="text-muted small mb-2">Utilisé dans les textes grâce à la balise <code>{P}</code> (tickets, écrans, annonces).</p>
+    {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom affiché") }}
+</section>
 
-{{ macros.switch("app_messaging_enabled",
-    app_messaging_enabled,
-    "Activer la messagerie instantanée dans l’App Comptoir")
-}}
-<p class="form-text">
-    Lorsqu’elle est désactivée, la messagerie disparaît immédiatement des App
-    Comptoir et aucun nouveau message ne peut être envoyé.
-</p>
-<div class="alert alert-warning" role="alert">
-    <strong>Redémarrage requis :</strong> ce paramètre n'est pris en compte qu'à
-    l'initialisation du serveur. Il est enregistré immédiatement, mais ne
-    s'applique (relais inter-processus) qu'après un redémarrage du serveur.
-</div>
+<section class="admin-setting-card algo-section" aria-labelledby="app_numbering_title">
+    <h5 id="app_numbering_title"><i class="bi bi-123" aria-hidden="true"></i> Numérotation des tickets</h5>
+    {{ macros.switch("numbering_by_activity",
+            numbering_by_activity,
+            "Une série de numéros par activité") }}
+    <div class="row g-2 mt-1 small">
+        <div class="col-md-6">
+            <div class="border rounded p-2 h-100 numbering-on">
+                <strong>Activé :</strong> A-1, A-2… pour « Ordonnance », C-1, C-2… pour « Conseil ».
+                La lettre vient de chaque <a href="/admin/activity">activité</a>.
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="border rounded p-2 h-100 numbering-off">
+                <strong>Désactivé :</strong> 1, 2, 3… une seule série pour tous les patients.
+            </div>
+        </div>
+    </div>
+    <p class="form-text mb-0">La numérotation repart de 1 chaque jour. Évitez de changer ce réglage en pleine journée : la série recommencerait à 1.</p>
+</section>
 
-{{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom de la pharmacie") }}
+<section class="admin-setting-card algo-section" aria-labelledby="app_messaging_title">
+    <h5 id="app_messaging_title"><i class="bi bi-chat-dots" aria-hidden="true"></i> Messagerie entre comptoirs</h5>
+    {{ macros.switch("app_messaging_enabled",
+        app_messaging_enabled,
+        "Activer la messagerie instantanée dans l'application comptoir") }}
+    <p class="form-text mb-0">
+        Permet aux membres de l'équipe de s'envoyer des messages d'un comptoir à l'autre. Désactivée, elle disparaît
+        immédiatement des applications comptoir et aucun nouveau message ne peut être envoyé.
+    </p>
+</section>
 
-{{ macros.textarea_full("network_adress", network_adress, "Adresse du serveur sur le réseau (si fonctionnement en local)") }}
+<section class="admin-setting-card algo-section" aria-labelledby="app_network_title">
+    <h5 id="app_network_title"><i class="bi bi-qr-code" aria-hidden="true"></i> Adresse du serveur sur le réseau</h5>
+    <p class="text-muted small mb-2">
+        Sert à fabriquer les <strong>QR codes</strong> que les patients scannent avec leur téléphone. Nécessaire
+        seulement si la borne ouvre le serveur par <code>127.0.0.1</code> (même machine) : un téléphone ne peut pas
+        joindre cette adresse. Indiquez l'adresse du serveur vue depuis le réseau Wi-Fi, par exemple
+        <code>http://192.168.1.20:5000/</code>.
+    </p>
+    {{ macros.textarea_full("network_adress", network_adress, "Adresse réseau (avec http:// et le port)") }}
+</section>
 
+<details class="admin-setting-card algo-section">
+    <summary class="fw-semibold"><i class="bi bi-gear-wide-connected" aria-hidden="true"></i> Avancé : relais entre processus (RabbitMQ)</summary>
+    <p class="text-muted small mt-2">
+        Uniquement pour une installation répartie sur plusieurs processus ou conteneurs : les messages temps réel
+        transitent alors par RabbitMQ. La variable d'environnement <code>RABBITMQ_URL</code> doit être configurée.
+        Laissez désactivé sur une installation simple.
+    </p>
+    {{ macros.switch("start_rabbitmq",
+        start_rabbitmq,
+        "Activer le relais RabbitMQ") }}
+    <div class="alert alert-warning small mt-2 mb-0" role="note">
+        <strong>Redémarrage requis :</strong> ce réglage est enregistré immédiatement mais ne s'applique
+        qu'au prochain démarrage du serveur.
+    </div>
+</details>
