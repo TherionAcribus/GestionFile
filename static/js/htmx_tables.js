@@ -9,27 +9,6 @@ const TABLE_CONFIGS = {
             document.getElementById(`counter-${id}`)
         ]
     },
-    'counter_table': {
-        buttonClass: 'btnSaveLine',
-        getFields: (id) => [
-            document.getElementById(`name-${id}`)
-        ],
-        getCheckboxGroup: (id) => document.querySelectorAll(`.activities-${id}`),
-        getCheckboxGroupState: (checkboxes) => {
-            if (!checkboxes) return null;
-            return Array.from(checkboxes).map(cb => ({
-                value: cb.value,
-                checked: cb.checked
-            }));
-        },
-        checkboxGroupStatesDiffer: (state1, state2) => {
-            if (!state1 || !state2 || state1.length !== state2.length) return true;
-            return state1.some((s1, index) => {
-                const s2 = state2[index];
-                return s1.value !== s2.value || s1.checked !== s2.checked;
-            });
-        }
-    },
     'translation_table': {
         buttonClass: 'btnSaveLine',
         getFields: (id) => [

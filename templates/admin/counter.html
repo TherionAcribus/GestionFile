@@ -3,51 +3,78 @@
 {% block title %}Comptoirs{% endblock %}
 
 {% block content %}
-    <h3>Comptoirs</h3>
+<div class="counter-page">
+    <h2 class="mb-1">Comptoirs</h2>
+    <p class="text-muted">
+        Un comptoir est un poste de service. Un membre de l'<a href="/admin/staff">équipe</a> s'y connecte
+        avec ses initiales ; ce sont <strong>ses compétences</strong> qui décident des patients que le comptoir
+        peut appeler.
+    </p>
 
-    <input type="search" class="form-control table-filter mb-2"
-           placeholder="Rechercher un comptoir…"
-           aria-label="Filtrer la liste des comptoirs"
-           data-filter-target="#div_counter_table">
+    <section class="admin-setting-card algo-section" aria-labelledby="counter_list_title">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h5 id="counter_list_title" class="mb-0">Comptoirs et état en direct</h5>
+            <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-get="/admin/counter/table" hx-target="#div_counter_table" hx-swap="innerHTML">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Actualiser
+            </button>
+            <button type="button" class="btn btn-primary"
+                    hx-get="/admin/counter/add_form"
+                    hx-target="#div_add_counter_form"
+                    hx-swap="innerHTML show:#div_add_counter_form:top">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Nouveau comptoir
+            </button>
+            </div>
+        </div>
 
-    <div id="div_counter_table"
-        hx-get="/admin/counter/table"
-        hx-trigger="load"
-        hx-target="#div_counter_table"
-        hx-swap="innerHTML">        
-    </div>
+        <div id="div_add_counter_form"></div>
 
-    <!-- Ajout nouveau comptoir-->
-    <a class="btn btn-primary"
-        hx-get="/admin/counter/add_form"
-        hx-target="#div_add_counter_form"
-        hx-swap="innerHTML">
-    Ajouter un comptoir
-    </a>    
-    <div id="div_add_counter_form"></div>
+        <input type="search" class="form-control table-filter mb-2"
+               placeholder="Rechercher un comptoir…"
+               aria-label="Filtrer la liste des comptoirs"
+               data-filter-target="#div_counter_table">
 
-    <div class="input-field col s12">
+        {# Rechargé après un changement d'ordre (refresh_counter_table) ou via
+           « Actualiser » — pas de rafraîchissement périodique, qui refermerait
+           un formulaire « Renommer » en cours de saisie. #}
+        <div id="div_counter_table"
+            hx-get="/admin/counter/table"
+            hx-trigger="load, refresh_counter_table from:body"
+            hx-target="#div_counter_table"
+            hx-swap="innerHTML">
+            <p class="text-muted small">Chargement…</p>
+        </div>
+    </section>
+
+    <section class="admin-setting-card algo-section" aria-labelledby="counter_auto_title">
+        <h5 id="counter_auto_title"><i class="bi bi-lightning-charge" aria-hidden="true"></i> Appel automatique</h5>
+        <p class="text-muted small">
+            Un comptoir en <strong>appel automatique</strong> (activé depuis l'application comptoir) reçoit
+            directement le prochain patient dès qu'il est libre. Si plusieurs comptoirs sont libres en même temps,
+            ce réglage décide lequel est servi en premier. Il n'a aucun effet sur les appels manuels.
+        </p>
+        <label for="counter_order_mode" class="form-label">Priorité entre comptoirs libres</label>
         <select
           id="counter_order_mode"
+          class="form-select counter-order-select"
           hx-post="/admin/update_select"
           hx-target="#invisible"
           hx-vals='{"key": "counter_order"}'
           data-param-value="#counter_order_mode">
-          <option value="" disabled selected>Choix de l'ordre pour les appels automatiques</option>
-          <option value="order" {% if counter_order == "order" %}selected{% endif %}>Ordre ci-dessous</option>
-          <option value="random" {% if counter_order == "random" %}selected{% endif %}>Aléatoire</option>
+          <option value="order" {% if counter_order == "order" %}selected{% endif %}>Dans l'ordre ci-dessous</option>
+          <option value="random" {% if counter_order == "random" %}selected{% endif %}>Au hasard (répartit la charge)</option>
         </select>
-        <label>Ordre</label>
-      </div>
 
-    <div id="order_counters"
-        hx-get="/admin/counter/order_counter"
-        hx-target="#order_counters"
-        hx-trigger="load, refresh_counter_order"
-        hx-swap="innerHTML">
-    </div>
+        {# Ordre masqué en mode « au hasard » (CSS :has, cf. admin.css). #}
+        <div id="order_counters" class="mt-3"
+            hx-get="/admin/counter/order_counter"
+            hx-target="#order_counters"
+            hx-trigger="load, refresh_counter_order"
+            hx-swap="innerHTML">
+        </div>
+    </section>
 
     {{ macros.backup_buttons("counters", "Comptoirs") }}
-
-    
+</div>
 {% endblock %}

@@ -1,30 +1,24 @@
-<table id="new_counter_form">
-    <thead>
-        <tr>
-            <th>Nom</th>
-            <th>Acte réalisés</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><input type="text" name="name" class="form-control" value="" id="name"></td>
-            <td>
-                {% for activity in activities %}
-                <label>
-                    <input class="activities form-check-input" type="checkbox" name="activities" checked="checked"  value="{{ activity.id }}" />
-                    <span class="form-check-label">{{ activity.name }}</span>
-                </label>
-                {% endfor %}
-            </td>
-            <td>
-                <button class="btn btn-primary" 
-                    hx-target="#div_counter_table"
-                    hx-post="/admin/counter/add_new_counter"
-                    hx-include=".activities"
-                    data-param-name="#name">
-                    Enregistrer
-                </button>
-            </td>
-        </tr>
-    </tbody>
-</table>
+<div class="card border-primary mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <strong>Nouveau comptoir</strong>
+        {# Vide le conteneur sans requête serveur (admin_fragments.js). #}
+        <button type="button" class="btn-close" aria-label="Fermer le formulaire"
+                data-clear-target="#div_add_counter_form"></button>
+    </div>
+    <div class="card-body">
+        <form class="d-flex flex-wrap align-items-end gap-2"
+              hx-post="/admin/counter/add_new_counter"
+              hx-target="#div_counter_table" hx-swap="innerHTML">
+            <div>
+                <label class="form-label" for="new_counter_name">Nom affiché</label>
+                <input type="text" class="form-control" id="new_counter_name" name="name"
+                       maxlength="20" required placeholder="Ex. : 3 ou Comptoir 3">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Créer</button>
+        </form>
+        <p class="form-text mb-0">
+            Aucun autre réglage : les patients appelés dépendent de la personne qui se connecte au comptoir
+            (ses compétences, page <a href="/admin/staff">Équipe</a>).
+        </p>
+    </div>
+</div>

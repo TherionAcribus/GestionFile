@@ -875,3 +875,21 @@ font-size: 0.85rem;
     gap: .25rem 1.5rem;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
 }
+
+/* --- Page Comptoirs ------------------------------------------------------ */
+.counter-card.is-occupied {
+    border-left: 4px solid var(--bs-success);
+}
+
+.counter-order-select {
+    max-width: 28rem;
+}
+
+.counter-order-list {
+    max-width: 28rem;
+}
+
+/* L'ordre de priorité n'a de sens qu'en mode « Dans l'ordre ci-dessous ». */
+.counter-page:has(#counter_order_mode option[value="random"]:checked) .counter-order-block {
+    display: none;
+}

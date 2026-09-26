@@ -1,16 +1,21 @@
-<h3>Choix des comptoirs</h3>
-<p>Glissez-déposez les comptoirs dans l'ordre souhaite, ou utilisez les flèches haut/bas et les boutons « Monter »/« Descendre ».</p>
-<ul id="list_order_buttons" class="list-group" role="list">
-    {% for counter in counters %}
-    <li class="button-order-item list-group-item" data-id="{{ counter.id }}" role="listitem" tabindex="0">
-        {{ counter.name }}
-    </li>
-    {% endfor %}
-</ul>
-<button id="saveOrderCounterButton"
-        class="btn btn-primary"
-        hx-post="/admin/counter/update_counter_order"
-        hx-target="#invisible"
-        data-param-order[]=".button-order-item@order"
-        >Sauvegarder l'ordre</button>
-
+{# Ordre de priorité de l'appel automatique (mode « Dans l'ordre ci-dessous »).
+   Masqué en mode « au hasard » (admin.css, :has sur #counter_order_mode). #}
+<div class="counter-order-block">
+    <p class="small mb-2">
+        <strong>Ordre de priorité</strong> — le premier comptoir libre de la liste est servi en premier.
+        Glissez-déposez, ou utilisez les flèches haut/bas et les boutons « Monter » / « Descendre ».
+    </p>
+    <ol id="list_order_buttons" class="list-group list-group-numbered counter-order-list" role="list">
+        {% for counter in counters %}
+        <li class="button-order-item list-group-item" data-id="{{ counter.id }}" role="listitem" tabindex="0">
+            {{ counter.name }}
+        </li>
+        {% endfor %}
+    </ol>
+    <button id="saveOrderCounterButton"
+            class="btn btn-primary mt-2"
+            hx-post="/admin/counter/update_counter_order"
+            hx-target="#invisible"
+            data-param-order[]=".button-order-item@order"
+            ><i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer l'ordre</button>
+</div>

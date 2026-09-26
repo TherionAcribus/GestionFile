@@ -1,5 +1,16 @@
-<p>Vous vous appretez à supprimer le comptoir {{counter.name}} définitivement. 
-<br> Confirmez-vous la suppression ? </p>
+<p>Vous vous apprêtez à supprimer définitivement le comptoir « {{ counter.name }} ». Confirmez-vous la suppression ?</p>
+{% if patient %}
+<div class="alert alert-danger small" role="note">
+    <i class="bi bi-x-octagon" aria-hidden="true"></i>
+    Le patient <strong>{{ patient.call_number }}</strong> est en cours à ce comptoir :
+    la suppression sera refusée tant qu'il n'est pas terminé.
+</div>
+{% elif counter.staff %}
+<div class="alert alert-warning small" role="note">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    La session de {{ counter.staff.name }} sur ce comptoir sera fermée.
+</div>
+{% endif %}
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -9,4 +20,3 @@
     data-bs-dismiss="modal"
     >Supprimer</button>
 </div>
-

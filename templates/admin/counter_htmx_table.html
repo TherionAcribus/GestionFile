@@ -1,38 +1,72 @@
-<div class="table-responsive">
-<table id="counter_table" class="table table-striped table-hover align-middle">
-    <thead>
-        <tr>
-            <th>Nom</th>
-            <th>Actes réalisés</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for counter in counters %}
-        <tr>
-            <td><input type="text" name="name" class="form-control" value="{{ counter.name }}" id="name-{{ counter.id }}" aria-label="Nom du comptoir"></td>
-                            <!-- Affichage des checkboxes pour chaque activité -->
-            <td>
-                <!-- Affichage des checkboxes pour chaque activité -->
-                {% for activity in activities %}
-                    <span>
-                        <input class="activities-{{ counter.id }} form-check-input" type="checkbox" name="activities" value="{{ activity.id }}"
-                                aria-label="Activité {{ activity.name }}"
-                                {% if activity in counter.activities %} checked {% endif %} />
-                        <span class="form-check-label">{{ activity.name }}</span>
-                    </span>
-                {% endfor %}
-            </td>
-            <td>
-                <button class="btn btn-primary btnSaveLine" 
-                    hx-target="#invisible"
-                    hx-include=".activities-{{ counter.id }}"
-                    hx-post="/admin/counter/counter_update/{{ counter.id }}"
-                    data-param-name="#name-{{ counter.id }}">
-                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
+{# Comptoirs en cartes, avec l'état en direct : personne connectée (et ses
+   compétences), patient appelé / en cours, appel automatique. Les anciens
+   « actes réalisés » ne sont plus affichés : ils n'ont jamais servi à
+   choisir les patients (ce sont les compétences de la personne connectée). #}
+{% if items %}
+<p class="small text-muted mb-2">
+    {{ items | length }} comptoir{{ 's' if items | length > 1 }} ·
+    {{ connected }} occupé{{ 's' if connected > 1 }} ·
+    {{ auto }} en appel automatique
+</p>
+{% else %}
+<div class="text-center text-muted py-4">
+    <i class="bi bi-window-stack fs-3 d-block mb-2" aria-hidden="true"></i>
+    Aucun comptoir : personne ne peut appeler de patient.
+</div>
+{% endif %}
+{% for item in items %}
+    {% set counter = item.counter %}
+    {% set patient = item.patient %}
+    <article class="card counter-card mb-2{% if counter.staff %} is-occupied{% endif %}" data-filter-item>
+        <div class="card-body d-flex flex-wrap gap-3 align-items-start">
+            <div class="flex-grow-1 activity-card-text">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <h6 class="mb-0">{{ counter.name }}</h6>
+                    {% if counter.staff %}
+                        <span class="badge text-bg-success"><i class="bi bi-person-fill" aria-hidden="true"></i> {{ counter.staff.name }} ({{ counter.staff.initials }})</span>
+                    {% else %}
+                        <span class="badge text-bg-light border">Personne</span>
+                    {% endif %}
+                    {% if counter.auto_calling %}
+                        <span class="badge text-bg-info" title="Reçoit le prochain patient dès qu'il est libre"><i class="bi bi-lightning-charge" aria-hidden="true"></i> Appel automatique</span>
+                    {% endif %}
+                    {% if patient %}
+                        <span class="badge text-bg-warning">
+                            {{ 'Appelle' if patient.status == 'calling' else 'Avec' }} {{ patient.call_number }}
+                        </span>
+                    {% endif %}
+                </div>
+                <p class="small mb-0 {{ '' if counter.staff else 'text-muted' }}">
+                    {% if counter.staff %}
+                        {% set names = counter.staff.activities | rejectattr('is_staff') | map(attribute='name') | list %}
+                        {% if names %}
+                            Peut appeler : {{ names | join(', ') }}
+                            <span class="text-muted">(compétences de {{ counter.staff.name }})</span>
+                        {% else %}
+                            <span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                            {{ counter.staff.name }} n'a aucune compétence : ce comptoir ne peut appeler personne.</span>
+                        {% endif %}
+                    {% else %}
+                        Libre : en attente de connexion depuis l'application comptoir.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="collapse" data-bs-target="#edit_counter_{{ counter.id }}"
+                        aria-expanded="false" aria-controls="edit_counter_{{ counter.id }}">
+                    <i class="bi bi-pencil" aria-hidden="true"></i> Renommer
                 </button>
-
-                <button class="btn btn-danger"
-                        title="Supprimer ce comptoir"
+                {% if counter.staff %}
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        hx-post="/admin/counter/disconnect/{{ counter.id }}"
+                        hx-target="#div_counter_table"
+                        hx-confirm="Déconnecter {{ counter.staff.name }} du comptoir {{ counter.name }} ? (utile en cas d'oubli de déconnexion)">
+                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Déconnecter
+                </button>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        aria-label="Supprimer le comptoir {{ counter.name }}"
                         hx-get="/admin/counter/confirm_delete/{{ counter.id }}"
                         hx-target="#modal-htmx"
                         hx-trigger="click"
@@ -40,9 +74,23 @@
                         data-bs-toggle="modal">
                     <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
                 </button>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-</div>
+            </div>
+        </div>
+        <div class="collapse" id="edit_counter_{{ counter.id }}">
+            <div class="card-body border-top">
+                <form class="d-flex flex-wrap align-items-end gap-2"
+                      hx-post="/admin/counter/counter_update/{{ counter.id }}"
+                      hx-target="#div_counter_table" hx-swap="innerHTML">
+                    <div>
+                        <label class="form-label" for="counter_name_{{ counter.id }}">Nom affiché</label>
+                        <input type="text" class="form-control" id="counter_name_{{ counter.id }}" name="name"
+                               maxlength="20" required value="{{ counter.name }}">
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit_counter_{{ counter.id }}">Annuler</button>
+                </form>
+                <p class="form-text mb-0">Ce nom est affiché et annoncé aux patients (balise {C} des textes d'appel) : 20 caractères maximum.</p>
+            </div>
+        </div>
+    </article>
+{% endfor %}

@@ -106,7 +106,9 @@ def _first_counter_id(app):
         return Counter.query.first().id
 
 
-def test_update_counter_writes_success_audit(app, auth_client):
+def test_update_counter_writes_success_audit(app, auth_client, monkeypatch):
+    # Succès : la route renvoie la liste re-rendue, gabarit hors périmètre.
+    monkeypatch.setattr(admin_counter, "display_counter_table", lambda: "")
     cid = _first_counter_id(app)
 
     resp = auth_client.post(
@@ -147,7 +149,8 @@ def test_update_counter_failure_writes_failure_audit_and_rolls_back(
         data={"name": "Jamais persisté"},
     )
 
-    assert resp.status_code == 200  # la route rend un toast d'erreur, pas 500
+    # Toast d'erreur en 204 (rien n'est remplacé côté page), jamais un 500.
+    assert resp.status_code == 204
     # Le détail technique reste dans les journaux : jamais dans la réponse
     # (toast inclus — transporté via l'en-tête HX-Trigger).
     leak = "commit explosé"
