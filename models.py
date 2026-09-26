@@ -168,7 +168,7 @@ class Patient(db.Model):
 
     def __repr__(self):
         return f'<Patient {self.call_number}> ({self.id})'
-    
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -181,6 +181,34 @@ class Patient(db.Model):
             "language_id": self.language_id,
             "language_code": self.language.code
         }
+
+
+class CallNumberSequence(db.Model):
+    """Compteur persistant des numéros d'appel, par journée et par série.
+
+    Remplace l'ancienne lecture « dernier numéro + 1 » sur la table patient,
+    qui n'était pas atomique (deux inscriptions concurrentes lisaient le même
+    état) et réattribuait un numéro après suppression du dernier patient.
+
+    ``scope`` identifie la série : ``simple`` en numérotation globale, la
+    lettre de l'activité en numérotation par activité (les activités
+    partageant une lettre partagent la série, comme avant). La ligne survit
+    aux suppressions de patients : un numéro consommé n'est jamais réémis
+    dans la journée. La contrainte unique (day, scope) tranche la création
+    concurrente de la ligne ; l'incrément se fait ensuite sous verrou de
+    ligne (SELECT ... FOR UPDATE sur MySQL, écritures sérialisées sur
+    SQLite)."""
+    __tablename__ = 'call_number_sequence'
+    __table_args__ = (
+        db.UniqueConstraint('day', 'scope', name='uq_call_number_sequence_day_scope'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    day = db.Column(db.Date, nullable=False)
+    scope = db.Column(db.String(16), nullable=False)
+    value = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<CallNumberSequence {self.day} {self.scope}={self.value}>'
 
 
 counters_activities = db.Table('counters_activities',

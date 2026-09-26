@@ -3,7 +3,7 @@ import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
-from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, activate_patient, qr_code_data_uri
+from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, patient_ticket_patient_id, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
@@ -227,7 +227,10 @@ def display_validation_after_choice(request):
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
     app.logger.debug('CONFIG QRCODE: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
-    call_number = get_next_call_number(activity)
+    # Numéro PRÉVISIONNEL seulement : peek ne consomme pas le compteur —
+    # afficher la page ne doit pas brûler un numéro. Le vrai numéro est
+    # attribué à l'inscription (print_and_validate / scan_and_validate).
+    call_number = peek_next_call_number(activity)
     #new_patient = add_patient(call_number, activity)
     futur_patient = get_futur_patient(call_number, activity)
     app.logger.debug('futur_patient %s', futur_patient.id)

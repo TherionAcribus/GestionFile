@@ -124,3 +124,106 @@ def test_dernier_numero_par_activite_repart_a_1(ctx):
 
     _ajouter_patient(db, Patient, activity, "A-3")
     assert get_next_call_number_simple() == "1"
+
+
+# --- compteur persistant (attribution atomique, pas de réattribution) ------
+
+def test_suppression_ne_reattribue_pas_le_numero(ctx):
+    """Le compteur survit aux suppressions : retirer le dernier patient de
+    la file ne remet plus son numéro en circulation (avant : « 3 » supprimé
+    -> prochain patient « 3 » en double)."""
+    app, db, activity, Patient = ctx
+    from python.engine import get_next_call_number_simple
+
+    # Flux réel : chaque numéro attribué est consommé par le compteur.
+    for _ in range(3):
+        _ajouter_patient(db, Patient, activity, get_next_call_number_simple())
+    db.session.delete(Patient.query.filter_by(call_number="3").one())
+    db.session.commit()
+
+    # L'ancien calcul (« dernier patient + 1 ») rendait « 3 » à nouveau.
+    assert get_next_call_number_simple() == "4"
+
+
+def test_amorçage_inclut_les_numeros_archives(ctx):
+    """Bootstrap : un numéro déjà purgé dans l'historique a quand même été
+    consommé — l'amorçage du compteur le prend en compte."""
+    app, db, activity, Patient = ctx
+    from models import PatientHistory
+    from python.engine import get_next_call_number_simple
+
+    db.session.add(PatientHistory(
+        call_number="9", activity_id=activity.id,
+        timestamp=datetime.now(), day_of_week="Mon", status="done"))
+    db.session.commit()
+
+    assert get_next_call_number_simple() == "10"
+
+
+def test_amorçage_sur_les_numeros_existants(ctx):
+    """Journée déjà entamée avant la ligne de compteur : le premier tirage
+    s'amorce sur le plus grand numéro attribué, pas sur 1."""
+    app, db, activity, Patient = ctx
+    from python.engine import get_next_call_number_simple
+
+    _ajouter_patient(db, Patient, activity, "5")
+    _ajouter_patient(db, Patient, activity, "7")
+    assert get_next_call_number_simple() == "8"
+
+
+def test_peek_ne_consomme_pas(ctx):
+    """L'aperçu « futur patient » n'attribue rien : deux affichages donnent
+    la même prévision et l'attribution suivante rend ce numéro."""
+    app, db, activity, Patient = ctx
+    from python.engine import peek_next_call_number, get_next_call_number_simple
+
+    assert peek_next_call_number(activity) == "1"
+    assert peek_next_call_number(activity) == "1"
+    assert get_next_call_number_simple() == "1"
+
+
+def test_mode_categories_series_par_lettre(ctx):
+    """Numérotation par activité : chaque lettre a sa série, indépendante
+    des autres, avec le format 'L-n'."""
+    app, db, activity, Patient = ctx
+    app.config["NUMBERING_BY_ACTIVITY"] = True
+    from models import Activity as _Activity
+    from python.engine import get_next_category_number
+
+    autre = _Activity(name="Certificat", letter="B")
+    db.session.add(autre)
+    db.session.commit()
+
+    assert get_next_category_number(activity) == "A-1"
+    assert get_next_category_number(activity) == "A-2"
+    assert get_next_category_number(autre) == "B-1"
+
+
+def test_categories_ne_reattribue_pas_apres_suppression(ctx):
+    """Suppression du plus grand numéro de la lettre : le compteur ne
+    redescend pas."""
+    app, db, activity, Patient = ctx
+    app.config["NUMBERING_BY_ACTIVITY"] = True
+    from python.engine import get_next_category_number
+
+    assert get_next_category_number(activity) == "A-1"
+    assert get_next_category_number(activity) == "A-2"
+    patient = _ajouter_patient(db, Patient, activity, "A-2")
+    db.session.delete(patient)
+    db.session.commit()
+
+    assert get_next_category_number(activity) == "A-3"
+
+
+def test_retour_en_simple_continue_la_serie(ctx):
+    """simple -> par activité -> simple dans la journée : le compteur
+    « simple » survit au passage, au lieu de repartir à 1 (ancienne
+    limitation connue)."""
+    app, db, activity, Patient = ctx
+    from python.engine import get_next_call_number_simple, get_next_category_number
+
+    assert get_next_call_number_simple() == "1"
+    app.config["NUMBERING_BY_ACTIVITY"] = True
+    assert get_next_category_number(activity) == "A-1"
+    app.config["NUMBERING_BY_ACTIVITY"] = False
+    assert get_next_call_number_simple() == "2"

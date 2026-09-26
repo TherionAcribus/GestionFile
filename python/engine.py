@@ -11,7 +11,7 @@ from google.cloud import texttospeech
 from google.oauth2 import service_account
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
-from models import Patient, Counter, AlgoRule, ConfigOption, Language, db, get_queue_revision, DAY_ABBREVIATIONS
+from models import Patient, PatientHistory, Counter, AlgoRule, ConfigOption, Language, CallNumberSequence, db, get_queue_revision, DAY_ABBREVIATIONS
 from communication import communikation, notify_patient_phone
 from config import time_tz
 from auth_utils import require_app_token_or_login, make_patient_phone_token
@@ -504,8 +504,109 @@ def activate_patient(patient):
     communikation("update_patient")
     return patient
 
+_SIMPLE_NUMBERING_SCOPE = "simple"
+
+
+def _business_day():
+    """Journée métier dans le fuseau de l'application — le même que celui
+    des timestamps patients (``datetime.now(time_tz)``), donc cohérent avec
+    les filtres ``db.func.date(Patient.timestamp)`` de l'amorçage."""
+    return datetime.now(time_tz).date()
+
+
+def _call_number_scope(activity):
+    """Série du compteur : ``simple`` en numérotation globale, lettre de
+    l'activité en numérotation par activité (les activités partageant une
+    lettre partagent la même série — comportement inchangé)."""
+    if app.config.get('NUMBERING_BY_ACTIVITY', False):
+        return activity.letter
+    return _SIMPLE_NUMBERING_SCOPE
+
+
+def _format_call_number(scope, value):
+    if scope == _SIMPLE_NUMBERING_SCOPE:
+        return str(value)
+    return f"{scope}-{value}"
+
+
+def _seed_for_scope(scope, today):
+    """Valeur d'amorçage du compteur du jour : plus grand numéro déjà
+    attribué aujourd'hui dans cette série — la journée peut avoir commencé
+    avant l'existence de la ligne de compteur (ou avant son introduction).
+    On lit patient ET patient_history : un passage déjà archivé/purgé a
+    quand même consommé son numéro."""
+    todays = [row[0] for row in db.session.query(Patient.call_number).filter(
+        db.func.date(Patient.timestamp) == today).all()]
+    todays += [row[0] for row in db.session.query(PatientHistory.call_number).filter(
+        db.func.date(PatientHistory.timestamp) == today).all()]
+    if scope == _SIMPLE_NUMBERING_SCOPE:
+        highest = 0
+        for number in todays:
+            text = str(number or "").strip()
+            if text.isascii() and text.isdigit():
+                highest = max(highest, int(text))
+        return highest
+    # Réutilise le cœur pur : "A-7" déjà attribué -> amorce à 7.
+    allocated = next_category_call_number(scope, todays)
+    return int(allocated.rsplit("-", 1)[1]) - 1
+
+
+def _sequence_row(scope, today):
+    # with_for_update : verrou de ligne InnoDB jusqu'au commit — deux
+    # attributions concurrentes se sérialisent sur la ligne du compteur.
+    # Sans effet sur SQLite (verrou posé à l'écriture), où les tests restent
+    # séquentiels.
+    return CallNumberSequence.query.filter_by(
+        day=today, scope=scope).with_for_update().first()
+
+
+def _allocate_sequence_value(scope, today):
+    """Incrémente le compteur du jour et renvoie la valeur attribuée.
+
+    La ligne est créée si besoin : la contrainte unique (day, scope)
+    départage deux créations concurrentes — le perdant relit sous verrou au
+    lieu d'écraser. Le verrou est tenu jusqu'au commit de la transaction
+    appelante : compteur et patient sont validés ensemble, donc une
+    inscription qui échoue ne consomme pas de numéro."""
+    seq = _sequence_row(scope, today)
+    if seq is None:
+        seq = CallNumberSequence(day=today, scope=scope,
+                                 value=_seed_for_scope(scope, today))
+        try:
+            with db.session.begin_nested():
+                db.session.add(seq)
+                db.session.flush()
+        except IntegrityError:
+            # Créée entre-temps par une requête concurrente : on la relit.
+            seq = _sequence_row(scope, today)
+            if seq is None:
+                raise
+    seq.value += 1
+    db.session.flush()
+    return seq.value
+
+
+def peek_next_call_number(activity):
+    """Numéro PRÉVISIONNEL pour le futur patient affiché : ce que la
+    prochaine attribution rendrait, SANS consommer le compteur.
+
+    Il peut différer du numéro réellement attribué si un autre parcours
+    conclut entre-temps — seul le numéro du ticket / de l'inscription fait
+    foi. Ne pas utiliser pour inscrire un patient."""
+    scope = _call_number_scope(activity)
+    today = _business_day()
+    seq = CallNumberSequence.query.filter_by(day=today, scope=scope).first()
+    value = seq.value if seq is not None else _seed_for_scope(scope, today)
+    return _format_call_number(scope, value + 1)
+
+
 def get_next_call_number(activity):
-    """ Récupérer le numéro d'appel en fonction de la méthode choisie"""
+    """Attribue le numéro d'appel suivant — via le compteur persistant.
+
+    Garanties par rapport à l'ancienne lecture « dernier patient + 1 » :
+    pas de doublon entre inscriptions concurrentes (verrou de ligne) et pas
+    de réattribution après suppression d'un patient (le compteur ne
+    redescend jamais dans la journée)."""
     numbering_by_activity = app.config.get('NUMBERING_BY_ACTIVITY', False)
     if numbering_by_activity:
         call_number = get_next_category_number(activity)
@@ -514,33 +615,17 @@ def get_next_call_number(activity):
     app.logger.debug('call_number %s', call_number)
     return call_number
 
+
 def get_next_call_number_simple():
-    # Obtenir le numéro du dernier patient enregistré aujourd'hui.
-    # `call_number` est une colonne texte (String(10)) : on ne l'incrémente
-    # jamais directement, l'arithmétique est faite par le cœur pur
-    # `next_simple_call_number`, qui renvoie une chaîne.
-    # BUG Connu : Si on passe de simple à par activité puis retour à simple -> repart à 1
-    last_call_number = db.session.query(Patient.call_number).filter(
-        db.func.date(Patient.timestamp) == date.today()
-    ).order_by(Patient.id.desc()).limit(1).scalar()
-    return next_simple_call_number(last_call_number)
-
-
+    scope = _SIMPLE_NUMBERING_SCOPE
+    return _format_call_number(scope, _allocate_sequence_value(scope, _business_day()))
 
 
 # Générer le numéro d'appel en fonction de l'activité
 def get_next_category_number(activity):
     # on utilise le code prévu de l'activité. Plusieurs activités peuvent avoir la même lettre
-    letter_prefix = activity.letter
-    today = date.today()
-
-    # Numéros du jour portant cette lettre ; le cœur pur prend le plus grand
-    # (et non leur nombre, qui redonnait un numéro après un retrait).
-    todays = [row[0] for row in db.session.query(Patient.call_number).filter(
-        db.func.date(Patient.timestamp) == today,
-        db.func.substr(Patient.call_number, 1, 1) == letter_prefix
-    ).all()]
-    return next_category_call_number(letter_prefix, todays)
+    scope = activity.letter
+    return _format_call_number(scope, _allocate_sequence_value(scope, _business_day()))
 
 def get_futur_patient(call_number, activity):
     """ CRéation d'un nouveau patient SANS ajout à la BDD
