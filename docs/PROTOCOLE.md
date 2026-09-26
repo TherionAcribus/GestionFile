@@ -131,6 +131,7 @@ Tous ces évènements déclenchent un rafraîchissement HTMX ciblé ; `data` est
 `display_new_gallery` (`string` — nom), `refresh_sound`,
 `audio_test` (`string` — URL), `refresh_printer_dashboard`,
 `refresh_counter_dashboard`, `refresh_schedule_tasks_list`,
+`refresh_announce_cache`,
 `print_test_result` (`{job_id, success, code, message, borne_id}` — acquittement
 d'un tirage de test, relais de l'évènement émis par la borne).
 

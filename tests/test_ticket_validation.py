@@ -138,8 +138,13 @@ def test_config_text_validate_hour_dispatch():
     # Normalisation vers « HH:MM » (alimente <input type="time"> et le
     # découpage heure/minute du job cron).
     assert validate_config_text(key, "9:5")["value"] == "09:05"
-    # Même contrat sur la seconde clé horaire.
-    assert not validate_config_text("cron_delete_announce_calls_hour", "25:99")["success"]
+    # La durée de conservation du cache des annonces est un entier
+    # strictement positif (« 0 »/-1 videraient le cache chaque nuit).
+    for bad in ("abc", "0", "-5", "3.5"):
+        assert not validate_config_text(
+            "cron_announce_cache_retention_days", bad)["success"], bad
+    assert validate_config_text(
+        "cron_announce_cache_retention_days", "31")["success"]
 
 
 # ---------------------------------------------------------------------------

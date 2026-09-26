@@ -31,7 +31,7 @@ MAIN_JOBS = ('Clear Patient Table', 'Clear Announce Calls')
 # de fonction Python ni d'identifiant technique seul).
 _JOB_LABELS = {
     'Clear Patient Table': "Vidage quotidien de la file de patients",
-    'Clear Announce Calls': "Purge quotidienne des appels annoncés",
+    'Clear Announce Calls': "Nettoyage quotidien du cache des annonces",
     'Auto Archive Data': "Archivage automatique de l'historique",
     'Purge App Messaging': "Nettoyage quotidien de la messagerie interne",
     'Scheduler Heartbeat': "Synchronisation du planificateur",

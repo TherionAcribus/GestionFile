@@ -23,17 +23,14 @@
     }}
 
 
-    <h5>Répertoire des sons</h5>
-
-    {{ macros.switch("cron_delete_announce_calls_activated", 
-        cron_delete_announce_calls_activated, 
-        "Vider automatiquement le répertoire contenant les sons une fois par jour")
-    }}
-
-    {{ macros.textbloc_hour("cron_delete_announce_calls_hour", 
-        cron_delete_announce_calls_hour, 
-        "Heure de la suppression")
-    }}
+    {# Section « Cache des annonces vocales » — fragment rechargé après un
+       vidage ou un changement de durée de conservation. #}
+    <div id="div_announce_cache"
+        hx-get="/admin/database/announce_cache"
+        hx-trigger="load, refresh_announce_cache"
+        hx-target="#div_announce_cache"
+        hx-swap="innerHTML">
+    </div>
 
     <div id="div_schedule_tasks_list"
         hx-get="/admin/database/schedule_tasks_list"

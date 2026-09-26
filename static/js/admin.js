@@ -143,11 +143,14 @@ document.addEventListener('DOMContentLoaded', function () {
     AdminRealtime.on(NS_ADMIN, 'refresh_counter_dashboard', function (msg) { refresh_counter_dashboard(msg); }, '#sortable-dashboard');
     // Liste des tâches planifiées (page Planification).
     AdminRealtime.on(NS_ADMIN, 'refresh_schedule_tasks_list', function (msg) { refresh_schedule_tasks_list(msg); }, '#div_schedule_tasks_list');
+    // Section « Cache des annonces vocales » (même page).
+    AdminRealtime.on(NS_ADMIN, 'refresh_announce_cache', function (msg) { refresh_announce_cache(msg); }, '#div_announce_cache');
 
     // Rattrapage à la reconnexion pour l'état "glanceable" affiché sans action
     // de l'admin, uniquement pour ce qui est réellement présent sur la page.
     AdminRealtime.onReconnect(NS_ADMIN, function () {
         if (document.querySelector('#div_schedule_tasks_list')) { refresh_schedule_tasks_list(); }
+        if (document.querySelector('#div_announce_cache')) { refresh_announce_cache(); }
         if (document.querySelector('#sortable-dashboard')) {
             refresh_counter_dashboard();
             refresh_printer_dashboard();
@@ -777,6 +780,10 @@ function playAudio(audioUrl) {
 
 function refresh_schedule_tasks_list(data) {
     htmx.trigger('#div_schedule_tasks_list', 'refresh_schedule_tasks_list', {target: "#div_schedule_tasks_list"});
+}
+
+function refresh_announce_cache(data) {
+    htmx.trigger('#div_announce_cache', 'refresh_announce_cache', {target: "#div_announce_cache"});
 }
 
 

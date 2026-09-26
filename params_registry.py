@@ -170,8 +170,11 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "cron_delete_patient_table_activated": ("CRON_DELETE_PATIENT_TABLE_ACTIVATED", "value_bool"),
     "cron_transfer_patient_to_history": ("CRON_TRANSFER_PATIENT_TO_HISTORY", "value_bool"),
     "cron_delete_patient_table_hour": ("CRON_DELETE_PATIENT_TABLE_HOUR", "value_str"),
-    "cron_delete_announce_calls_activated": ("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", "value_bool"),
-    "cron_delete_announce_calls_hour": ("CRON_DELETE_ANNOUNCE_CALLS_HOUR", "value_str"),
+    # Nettoyage du cache des annonces : maintenance AUTOMATIQUE toujours
+    # active (03:20 fixe, comme la purge messagerie) — plus d'interrupteur ni
+    # d'horaire exposés ; seule la durée de conservation reste réglable et le
+    # vidage immédiat passe par le bouton dédié de la page Planifications.
+    "cron_announce_cache_retention_days": ("ANNOUNCE_CACHE_RETENTION_DAYS", "value_int"),
     # DÉPRÉCIÉ (point 1.2) : conservé pour compatibilité ascendante (la clé peut
     # exister en base et rester modifiable dans l'UI), mais IGNORÉ pour la garde
     # d'administration. L'accès à /admin exige désormais TOUJOURS une session
@@ -305,7 +308,13 @@ _TICKET_TEXT_KEYS = {
 # ensuite silencieusement (erreur journalisée, écran « Option mise à jour »).
 _HOUR_KEYS = {
     "cron_delete_patient_table_hour",
-    "cron_delete_announce_calls_hour",
+}
+
+# Clés entières devant être strictement positives (durées en jours…) : « 0 »
+# ou un négatif rendrait la maintenance destructrice (rétention nulle = tout
+# supprimer chaque nuit).
+_POSITIVE_INT_KEYS = {
+    "cron_announce_cache_retention_days",
 }
 
 
@@ -376,6 +385,8 @@ def _validator_for(key: str, value_type: str) -> str:
     if value_type == "value_bool":
         return "bool"
     if value_type == "value_int":
+        if key in _POSITIVE_INT_KEYS:
+            return "positive_int"
         return "int"
     if key in _WELCOME_KEYS:
         return "welcome"

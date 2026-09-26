@@ -74,6 +74,29 @@ def validate_hour(value):
             "value": "{:02d}:{:02d}".format(int(match.group(1)), int(match.group(2)))}
 
 
+def validate_int(value, positive=False):
+    """Valide un entier pour une clé ``value_int``.
+
+    Ces clés passaient auparavant par le cas implicite « texte inchangé » :
+    « abc » était persisté dans une colonne INT puis rejeté à la lecture
+    (``int(...)`` levait ``ValueError`` dans la tâche planifiée). La chaîne
+    vide signifie « non renseigné » — ``column_values_for`` la traduit en
+    ``NULL`` — et reste acceptée. ``positive=True`` exige >= 1 (durées de
+    conservation : 0 rendrait la purge quotidienne destructrice).
+    """
+    value = str(value or "").strip()
+    if value == "":
+        return {"success": True, "value": ""}
+    try:
+        number = int(value, 10)
+    except ValueError:
+        return {"success": False, "value": "Un nombre entier est attendu."}
+    if positive and number < 1:
+        return {"success": False,
+                "value": "Un entier strictement positif est attendu."}
+    return {"success": True, "value": str(number)}
+
+
 def validate_config_text(key, value):
     """Valide ``value`` pour la clé de configuration ``key`` selon le
     validateur déclaré dans le registre.
@@ -92,6 +115,10 @@ def validate_config_text(key, value):
         return validate_ticket_text(value)
     if spec.validator == "hour":
         return validate_hour(value)
+    if spec.validator == "int":
+        return validate_int(value)
+    if spec.validator == "positive_int":
+        return validate_int(value, positive=True)
     if spec.validator in BALISE_LETTERS:
         return validate_and_transform_text(value, BALISE_LETTERS[spec.validator])
     return {"success": True, "value": value}

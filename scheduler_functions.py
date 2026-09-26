@@ -219,12 +219,20 @@ def remove_scheduler_clear_all_patients():
         return False
     
 
+# Maintenance du cache des annonces vocales : heure FIXE (comme la purge
+# messagerie à 03:10) — plus d'interrupteur ni d'horaire configurable : le
+# nettoyage est une maintenance toujours active ; seule la durée de
+# conservation reste réglable (ANNOUNCE_CACHE_RETENTION_DAYS).
+ANNOUNCE_CACHE_CLEANUP_HOUR = 3
+ANNOUNCE_CACHE_CLEANUP_MINUTE = 20
+
+
 def scheduler_clear_announce_calls():
     job_id = CLEAR_ANNOUNCE_CALLS_JOB_ID
 
     # Recréation systématique (comme add_scheduler_clear_all_patients) : un
     # éventuel job existant — horaire ou fuseau devenu obsolète — est d'abord
-    # retiré, puis la tâche est reposée d'après la configuration courante.
+    # retiré, puis la tâche est reposée à l'heure fixe de maintenance.
     if scheduler.get_job(job_id):
         try:
             scheduler.remove_job(job_id)
@@ -233,40 +241,28 @@ def scheduler_clear_announce_calls():
             current_app.logger.error(f"Failed to remove job '{job_id}': {e}")
 
     try:
-        hour = int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[0])
-        minute = int(current_app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"].split(":")[1])
-        
         scheduler.add_job(
-            id=job_id, 
-            func=clear_announce_calls_job, 
-            trigger='cron', 
-            hour=hour, 
-            minute=minute,
+            id=job_id,
+            func=clear_announce_calls_job,
+            trigger='cron',
+            hour=ANNOUNCE_CACHE_CLEANUP_HOUR,
+            minute=ANNOUNCE_CACHE_CLEANUP_MINUTE,
             misfire_grace_time=300,
             coalesce=True,
             max_instances=1
         )
-        
+
         # Vérification que le job a bien été créé
         if not scheduler.get_job(job_id):
             current_app.logger.error(f"Job '{job_id}' was not properly scheduled")
             return False
-            
-        current_app.logger.info(f"Job '{job_id}' scheduled for {hour:02d}:{minute:02d}")
+
+        current_app.logger.info(
+            f"Job '{job_id}' scheduled for "
+            f"{ANNOUNCE_CACHE_CLEANUP_HOUR:02d}:{ANNOUNCE_CACHE_CLEANUP_MINUTE:02d}")
         return True
     except Exception as e:
         current_app.logger.error(f"Failed to add job '{job_id}': {e}")
-        return False
-
-
-def remove_scheduler_clear_announce_calls():
-    try:
-        # Supprime le job à l'aide de son id
-        scheduler.remove_job(CLEAR_ANNOUNCE_CALLS_JOB_ID)
-        current_app.logger.info("Job 'Clear Announce Calls' successfully removed.")
-        return True
-    except Exception as e:
-        current_app.logger.error(f"Failed to remove job 'Clear Announce Calls': {e}")
         return False
 
 
@@ -292,16 +288,14 @@ def reconcile_clear_patient_table_job():
 
 
 def reconcile_clear_announce_calls_job():
-    """Aligne « Clear Announce Calls » sur CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED.
+    """Garantit le nettoyage quotidien du cache des annonces (03:20 fixe).
 
-    Voir ``reconcile_clear_patient_table_job``.
+    Maintenance toujours active, comme la purge messagerie : plus
+    d'interrupteur — la tâche est recréée systématiquement, ce qui reprend
+    aussi l'horaire (autrefois configurable) et le fuseau épinglé des jobs
+    persistés. Retourne ``'added'`` ou ``'unchanged'``.
     """
-    if current_app.config.get('CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED', False):
-        return 'added' if scheduler_clear_announce_calls() else 'unchanged'
-    if scheduler.get_job(CLEAR_ANNOUNCE_CALLS_JOB_ID):
-        scheduler.remove_job(CLEAR_ANNOUNCE_CALLS_JOB_ID)
-        return 'removed'
-    return 'unchanged'
+    return 'added' if scheduler_clear_announce_calls() else 'unchanged'
 
 
 def clear_all_patients_job():
@@ -355,29 +349,16 @@ def clear_all_patients_job():
             app.logger.error(f"Clear patients job failed with error: {str(e)}")
 
 def clear_announce_calls_job():
-    """Wrapper pour le nettoyage des annonces"""
+    """Wrapper pour le nettoyage quotidien du cache des annonces.
+
+    Maintenance toujours active : pas de garde d'interrupteur (contrairement
+    aux purges de patients/d'appels, ce nettoyage est inconditionnel).
+    """
     app = AppHolder.get_app()  # Récupérer l'instance de l'application
 
     with app.app_context():
         _refresh_config(app)
         try:
-            # Garde-fou identique à clear_all_patients_job : la base fait foi,
-            # pas le jobstore persistant.
-            if not app.config.get("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED", False):
-                app.logger.warning(
-                    "Clear announce calls job skipped: "
-                    "CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED is off")
-                try:
-                    scheduler.remove_job(CLEAR_ANNOUNCE_CALLS_JOB_ID)
-                except Exception as e:
-                    app.logger.error(
-                        "Retrait du job '%s' impossible : %s",
-                        CLEAR_ANNOUNCE_CALLS_JOB_ID, e)
-                _record_job_execution(
-                    CLEAR_ANNOUNCE_CALLS_JOB_ID, 'skipped',
-                    'CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED désactivé')
-                return
-
             clear_announces_call()
             _record_job_execution(CLEAR_ANNOUNCE_CALLS_JOB_ID, 'success')
             app.logger.info("Clear announce calls job completed successfully")
@@ -386,46 +367,140 @@ def clear_announce_calls_job():
             _record_job_execution(CLEAR_ANNOUNCE_CALLS_JOB_ID, 'failed', str(e))
             app.logger.error(f"Clear announce calls job failed with error: {str(e)}")
 
-ANNOUNCEMENT_CACHE_RETENTION_DAYS = 31
+ANNOUNCE_CACHE_DEFAULT_RETENTION_DAYS = 31
+# Résidus de synthèse interrompue (announcement_audio écrit .tmp.mp3 puis
+# renomme atomiquement) : un plantage entre les deux les abandonne — purgés
+# après une heure.
+TMP_ANNOUNCEMENT_MAX_AGE_SECONDS = 3600
+
 _CACHED_ANNOUNCEMENT_NAME = re.compile(r"^[0-9a-f]{64}\.mp3$")
+_TMP_ANNOUNCEMENT_SUFFIX = ".tmp.mp3"
+
+
+def _announce_cache_dir():
+    return os.path.join(current_app.static_folder, 'audio', 'annonces')
+
+
+def _is_cache_file(fichier):
+    """``True`` pour toutes les familles de fichiers gérées du cache
+    (annonces mises en cache, temporaires de synthèse, ``patient_*`` de
+    transition)."""
+    return (fichier.endswith(_TMP_ANNOUNCEMENT_SUFFIX)
+            or _CACHED_ANNOUNCEMENT_NAME.fullmatch(fichier) is not None
+            or (fichier.startswith("patient_") and fichier.endswith(".mp3")))
+
+
+def format_size(size_bytes):
+    """Taille lisible (« 12,4 Mo » / « 512 Ko » / « 128 o »)."""
+    if size_bytes >= 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} Mo".replace('.', ',')
+    if size_bytes >= 1024:
+        return f"{round(size_bytes / 1024)} Ko"
+    return f"{size_bytes} o"
+
+
+def announce_cache_stats():
+    """``{"count": n, "size_bytes": n, "size_label": str}`` des fichiers gérés
+    du cache d'annonces — affiché par la section « Cache des annonces
+    vocales » de la page Planifications."""
+    count = 0
+    size = 0
+    folder = _announce_cache_dir()
+    if os.path.isdir(folder):
+        for fichier in os.listdir(folder):
+            fichier_complet = os.path.join(folder, fichier)
+            if os.path.isfile(fichier_complet) and _is_cache_file(fichier):
+                count += 1
+                size += os.path.getsize(fichier_complet)
+    return {"count": count, "size_bytes": size, "size_label": format_size(size)}
 
 
 def clear_announces_call():
-    """Purge les annonces obsoletes sans invalider le cache utile.
+    """Maintenance quotidienne du cache des annonces vocales.
 
-    Les anciens fichiers ``patient_<numero>.mp3`` sont supprimes au prochain
-    passage. Les MP3 modernes, identifies par contenu, sont conserves 31 jours
-    apres leur derniere utilisation afin que la numerotation quotidienne puisse
-    etre rejouee sans appel TTS distant.
+    Supprime, dans ``static/audio/annonces`` :
+
+    - les anciens ``patient_<numero>.mp3`` (purge transitionnelle, appelée à
+      disparaître une fois les installations migrées) ;
+    - les temporaires ``.tmp.mp3`` abandonnés depuis plus d'une heure
+      (résidus d'une synthèse interrompue — le motif cache les ignorait) ;
+    - les annonces mises en cache non utilisées depuis
+      ``ANNOUNCE_CACHE_RETENTION_DAYS`` jours (31 par défaut) — la date du
+      fichier est rafraîchie à chaque lecture par announcement_audio.
 
     Fonction de fond uniquement (appelée par ``clear_announce_calls_job``) :
     ni ``display_toast`` — qui diffusait un toast à tous les administrateurs
-    en pleine nuit — ni réponse HTTP — ce n'est pas une route.
+    en pleine nuit — ni réponse HTTP — ce n'est pas une route. La date est
+    RELUE juste avant la suppression : un son relu entre-temps (mtime
+    rafraîchie) ne doit pas être effacé.
     """
-    announce_folder = os.path.join(current_app.static_folder, 'audio', 'annonces')
+    announce_folder = _announce_cache_dir()
     files_count = 0  # Compteur de fichiers supprimés
 
     try:
         if not os.path.exists(announce_folder):
             raise FileNotFoundError("Le répertoire d'annonces n'existe pas")
 
-        cutoff = time.time() - (ANNOUNCEMENT_CACHE_RETENTION_DAYS * 24 * 60 * 60)
+        retention_days = int(current_app.config.get(
+            "ANNOUNCE_CACHE_RETENTION_DAYS",
+            ANNOUNCE_CACHE_DEFAULT_RETENTION_DAYS))
+        cache_cutoff = time.time() - retention_days * 24 * 60 * 60
+        tmp_cutoff = time.time() - TMP_ANNOUNCEMENT_MAX_AGE_SECONDS
+
         for fichier in os.listdir(announce_folder):
             fichier_complet = os.path.join(announce_folder, fichier)
-            is_legacy = fichier.startswith("patient_") and fichier.endswith(".mp3")
-            is_expired_cache = (
-                _CACHED_ANNOUNCEMENT_NAME.fullmatch(fichier)
-                and os.path.getmtime(fichier_complet) < cutoff
-            )
-            if os.path.isfile(fichier_complet) and (is_legacy or is_expired_cache):
+            if not os.path.isfile(fichier_complet):
+                continue
+            if fichier.startswith("patient_") and fichier.endswith(".mp3"):
+                cutoff = None       # transition : purge inconditionnelle
+            elif fichier.endswith(_TMP_ANNOUNCEMENT_SUFFIX):
+                cutoff = tmp_cutoff
+            elif _CACHED_ANNOUNCEMENT_NAME.fullmatch(fichier):
+                cutoff = cache_cutoff
+            else:
+                continue
+            try:
+                if (cutoff is not None
+                        and os.path.getmtime(fichier_complet) >= cutoff):
+                    continue
                 os.remove(fichier_complet)
                 files_count += 1
+            except OSError as e:
+                current_app.logger.warning(
+                    "Suppression impossible de %s : %s", fichier_complet, e)
 
         current_app.logger.info(f"{files_count} fichiers audio ont été supprimés")
 
     except Exception as e:
         current_app.logger.error(f"Erreur lors du nettoyage des annonces: {str(e)}")
         raise  # Relance l'exception pour le logging dans clear_announce_calls_job
+
+
+def purge_announce_cache():
+    """Vide immédiatement le cache des annonces (bouton « Vider le cache »).
+
+    Toutes les familles gérées sont supprimées sans condition de date —
+    utile après un changement de voix, de modèle de texte ou de comptoir,
+    qui rend les fichiers existants définitivement inutiles ; ils seront
+    resynthétisés à la demande. Retourne ``(nb_fichiers, octets_libérés)``.
+    """
+    announce_folder = _announce_cache_dir()
+    count = 0
+    freed = 0
+    if os.path.isdir(announce_folder):
+        for fichier in os.listdir(announce_folder):
+            fichier_complet = os.path.join(announce_folder, fichier)
+            if not (os.path.isfile(fichier_complet) and _is_cache_file(fichier)):
+                continue
+            try:
+                freed += os.path.getsize(fichier_complet)
+                os.remove(fichier_complet)
+                count += 1
+            except OSError as e:
+                current_app.logger.warning(
+                    "Suppression impossible de %s : %s", fichier_complet, e)
+    current_app.logger.info(f"Cache des annonces vidé : {count} fichier(s)")
+    return count, freed
 
 AUTO_ARCHIVE_JOB_ID = 'Auto Archive Data'
 

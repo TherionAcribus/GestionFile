@@ -25,6 +25,7 @@ n'est donc vérifiée que statiquement, comme le reste de la suite.
 import csv
 import os
 import re
+import time
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -743,8 +744,9 @@ def test_reconcile_clear_patient_table_job(app):
 
 
 def test_reconcile_clear_announce_calls_job(app):
-    """Même réconciliation pour « Clear Announce Calls »."""
-    app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"] = True
+    """« Clear Announce Calls » est une maintenance TOUJOURS active (comme la
+    purge messagerie) : plus d'interrupteur — la réconciliation (re)crée la
+    tâche sans condition et ne la retire jamais."""
     with app.app_context(), patch(
         "scheduler_functions.scheduler_clear_announce_calls",
         return_value=True) as mock_add:
@@ -753,39 +755,54 @@ def test_reconcile_clear_announce_calls_job(app):
             == "added")
         mock_add.assert_called_once_with()
 
-    app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"] = False
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler_clear_announce_calls",
+        return_value=False):
+        assert (
+            scheduler_functions.reconcile_clear_announce_calls_job()
+            == "unchanged")
+
+
+def test_scheduler_clear_announce_calls_fixed_time(app):
+    """Régression : l'horaire n'est plus configurable — la maintenance passe
+    à l'heure fixe 03:20 (fuseau épinglé du scheduler), indépendamment de
+    l'ancienne configuration persistée."""
     fake_scheduler = MagicMock()
-    fake_scheduler.get_job.return_value = MagicMock()
+    # get_job : absent avant add_job, présent à la vérification post-création.
+    fake_scheduler.get_job.side_effect = [None, MagicMock()]
     with app.app_context(), patch(
         "scheduler_functions.scheduler", fake_scheduler
     ):
-        assert (
-            scheduler_functions.reconcile_clear_announce_calls_job()
-            == "removed")
-        fake_scheduler.remove_job.assert_called_once_with(
-            scheduler_functions.CLEAR_ANNOUNCE_CALLS_JOB_ID)
+        assert scheduler_functions.scheduler_clear_announce_calls() is True
+        kwargs = fake_scheduler.add_job.call_args.kwargs
+        assert kwargs["id"] == scheduler_functions.CLEAR_ANNOUNCE_CALLS_JOB_ID
+        assert kwargs["trigger"] == "cron"
+        assert kwargs["hour"] == 3 and kwargs["minute"] == 20
+        assert kwargs["func"] is scheduler_functions.clear_announce_calls_job
 
 
 def test_config_change_delegates_to_reconcile():
     """Régression : changer l'horaire recréait la tâche même interrupteur
-    éteint — les chemins input/switch délèguent aux réconciliations."""
+    éteint — le chemin input/switch délègue à la réconciliation (les options
+    du cache d'annonces n'ont plus ni horaire ni interrupteur)."""
     source = _read("routes/admin_config.py")
     for func in ("special_functions_with_input", "call_function_with_switch"):
         body = _func_body(source, func)
         assert "reconcile_clear_patient_table_job" in body
-        assert "reconcile_clear_announce_calls_job" in body
+    assert "cron_delete_announce_calls" not in source
 
 
 def test_cron_jobs_check_enabled_flag_at_runtime():
-    """Régression : les jobs purgent même si l'interrupteur a été éteint —
-    garde-fou à l'exécution, même motif que auto_archive_job."""
+    """Régression : le job patients purge même si l'interrupteur a été éteint
+    — garde-fou à l'exécution, même motif que auto_archive_job. Le cache des
+    annonces, lui, est une maintenance inconditionnelle : aucun garde-fou."""
     source = _read("scheduler_functions.py")
     body = _func_body(source, "clear_all_patients_job")
     assert "CRON_DELETE_PATIENT_TABLE_ACTIVATED" in body
     assert "'skipped'" in body
     body = _func_body(source, "clear_announce_calls_job")
-    assert "CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED" in body
-    assert "'skipped'" in body
+    assert "ACTIVATED" not in body
+    assert "'skipped'" not in body
 
 
 def test_update_config_warns_when_scheduler_fails(app, client):
@@ -842,6 +859,108 @@ def test_clear_announces_call_purge_sans_notification(app, tmp_path):
     assert not (folder / "patient_42.mp3").exists()
     assert cached.exists()
     mock_comm.assert_not_called()              # aucune notification nocturne
+
+
+def _setup_announce_cache(app, tmp_path):
+    """Pointe le répertoire statique vers tmp_path et crée le dossier cache."""
+    app.static_folder = str(tmp_path / "static")
+    folder = tmp_path / "static" / "audio" / "annonces"
+    folder.mkdir(parents=True)
+    return folder
+
+
+def _touch(path, age_seconds):
+    """Écrit le fichier et fixe son mtime à ``age_seconds`` dans le passé."""
+    path.write_bytes(b"x" * 200)
+    old = os.path.getmtime(path) - age_seconds
+    os.utime(path, (old, old))
+
+
+def test_clear_announces_call_full_cleanup(app, tmp_path):
+    """La maintenance supprime : cache expiré (> rétention), temporaire
+    abandonné (> 1 h), legacy ``patient_*`` — et conserve le reste."""
+    folder = _setup_announce_cache(app, tmp_path)
+    day = 24 * 60 * 60
+    _touch(folder / ("a" * 64 + ".mp3"), 40 * day)   # cache expiré -> purgé
+    _touch(folder / ("b" * 64 + ".mp3"), 2 * day)    # cache récent -> conservé
+    _touch(folder / ".abc.tmp.mp3", 2 * 3600)        # tmp abandonné -> purgé
+    _touch(folder / ".def.tmp.mp3", 60)              # tmp récent -> conservé
+    (folder / "patient_42.mp3").write_bytes(b"legacy")  # legacy -> purgé
+    (folder / "notice.txt").write_text("autre")      # non géré -> conservé
+
+    with app.app_context():
+        scheduler_functions.clear_announces_call()
+
+    assert not (folder / ("a" * 64 + ".mp3")).exists()
+    assert (folder / ("b" * 64 + ".mp3")).exists()
+    assert not (folder / ".abc.tmp.mp3").exists()
+    assert (folder / ".def.tmp.mp3").exists()
+    assert not (folder / "patient_42.mp3").exists()
+    assert (folder / "notice.txt").exists()
+
+
+def test_clear_announces_call_retention_from_config(app, tmp_path):
+    """La durée de conservation vient de ANNOUNCE_CACHE_RETENTION_DAYS
+    (31 jours par défaut)."""
+    folder = _setup_announce_cache(app, tmp_path)
+    cached = folder / ("c" * 64 + ".mp3")
+    _touch(cached, 10 * 24 * 60 * 60)                # 10 jours
+
+    with app.app_context():
+        scheduler_functions.clear_announces_call()   # défaut 31 j -> conservé
+    assert cached.exists()
+
+    app.config["ANNOUNCE_CACHE_RETENTION_DAYS"] = 5
+    with app.app_context():
+        scheduler_functions.clear_announces_call()   # 5 j -> purgé
+    assert not cached.exists()
+
+
+def test_clear_announces_call_restats_before_delete(app, tmp_path):
+    """La date est RELUE juste avant la suppression : un son relu entre le
+    listage et le unlink (mtime rafraîchie par le cache) n'est pas effacé."""
+    folder = _setup_announce_cache(app, tmp_path)
+    stale = folder / ("d" * 64 + ".mp3")
+    _touch(stale, 40 * 24 * 60 * 60)                 # expiré au listage
+
+    with app.app_context(), patch(
+        "os.path.getmtime", return_value=time.time()
+    ):
+        # getmtime relu « frais » : le fichier a été relu entre-temps.
+        scheduler_functions.clear_announces_call()
+    assert stale.exists()
+
+
+def test_announce_cache_stats(app, tmp_path):
+    """Statistiques de la section admin : familles gérées comptées, taille."""
+    folder = _setup_announce_cache(app, tmp_path)
+    (folder / ("e" * 64 + ".mp3")).write_bytes(b"x" * 2048)
+    (folder / ".f.tmp.mp3").write_bytes(b"y" * 1024)
+    (folder / "notice.txt").write_text("non géré")
+
+    with app.app_context():
+        stats = scheduler_functions.announce_cache_stats()
+
+    assert stats["count"] == 2
+    assert stats["size_bytes"] == 3072
+    assert stats["size_label"] == "3 Ko"
+
+
+def test_purge_announce_cache_empties_everything(app, tmp_path):
+    """« Vider le cache maintenant » : toutes les familles, sans condition de
+    date ; retourne le décompte et les octets libérés."""
+    folder = _setup_announce_cache(app, tmp_path)
+    (folder / ("a" * 64 + ".mp3")).write_bytes(b"x" * 100)
+    (folder / ".b.tmp.mp3").write_bytes(b"y" * 50)
+    (folder / "patient_1.mp3").write_bytes(b"z" * 25)
+    (folder / "notice.txt").write_text("conservé")
+
+    with app.app_context():
+        deleted, freed = scheduler_functions.purge_announce_cache()
+
+    assert deleted == 3 and freed == 175
+    assert (folder / "notice.txt").exists()
+    assert list(folder.iterdir()) == [folder / "notice.txt"]
 
 
 def test_night_jobs_never_notify_admins():

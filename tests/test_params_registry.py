@@ -54,21 +54,36 @@ def test_value_type_matches_validator():
         if spec.value_type == "value_bool":
             assert spec.validator == "bool"
         elif spec.value_type == "value_int":
-            assert spec.validator == "int"
+            # « positive_int » = entier + contrainte ≥ 1 (durées de
+            # conservation) — toujours une validation entière.
+            assert spec.validator in ("int", "positive_int")
         else:
             assert spec.validator in ("text", "welcome", "before_call",
                                       "after_call", "ticket", "theme",
-                                      "sound_file", "hour")
+                                      "sound_file", "hour", "positive_int")
 
 
 def test_hour_keys_use_hour_validator():
     """Les champs de planification ``*_hour`` exigent le validateur « hour » :
     le validateur générique « text » laissait passer « 25:99 » ou « abc »
     (point f) — la création de la tâche échouait ensuite silencieusement."""
-    for key in ("cron_delete_patient_table_hour",
-                "cron_delete_announce_calls_hour"):
+    for key in ("cron_delete_patient_table_hour",):
         assert reg.get_spec(key).validator == "hour", (
             f"{key} doit porter le validateur 'hour'")
+
+
+def test_announce_cache_retention_is_int_schedule():
+    """Le cache des annonces n'a plus ni interrupteur ni horaire
+    configurables : seule la durée de conservation reste réglable, en entier,
+    sous la permission « schedule »."""
+    assert reg.get_spec("cron_delete_announce_calls_activated") is None
+    assert reg.get_spec("cron_delete_announce_calls_hour") is None
+    spec = reg.get_spec("cron_announce_cache_retention_days")
+    assert spec is not None
+    # Strictement positive : 0 ou un négatif viderait le cache chaque nuit.
+    assert spec.validator == "positive_int"
+    assert spec.value_type == "value_int"
+    assert spec.permission == "schedule"
 
 
 @pytest.mark.parametrize("key,permission", [

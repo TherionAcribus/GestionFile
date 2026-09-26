@@ -1,0 +1,27 @@
+{% import '/admin/macros.html' as macros %}
+
+<h5>Cache des annonces vocales</h5>
+
+<p class="text-muted mb-2">
+    Chaque annonce synthétisée est conservée pour être rejouée sans appel au
+    service vocal. Un nettoyage automatique quotidien (03:20) supprime les
+    fichiers non utilisés depuis la durée de conservation ci-dessous, ainsi
+    que les fichiers temporaires abandonnés.
+</p>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <strong>{{ stats.count }}</strong> fichier(s) en cache
+        — <strong>{{ stats.size_label }}</strong>
+    </div>
+    <button type="button" class="btn btn-outline-danger btn-sm"
+        hx-post="/admin/database/clear_announce_cache"
+        hx-confirm="Vider tout le cache des annonces vocales ? Les annonces seront resynthétisées à la demande."
+        hx-swap="none">
+        Vider le cache maintenant
+    </button>
+</div>
+
+{{ macros.textbloc_int("cron_announce_cache_retention_days",
+    cron_announce_cache_retention_days,
+    "Durée de conservation (jours)") }}

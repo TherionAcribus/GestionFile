@@ -29,7 +29,10 @@ from routes.admin_security import (
 )
 from scheduler_dashboard import build_jobs_info
 from scheduler_functions import (
-    reconcile_clear_announce_calls_job,
+    ANNOUNCE_CACHE_DEFAULT_RETENTION_DAYS,
+    announce_cache_stats,
+    format_size,
+    purge_announce_cache,
     reconcile_clear_patient_table_job,
 )
 from ui_feedback import display_toast
@@ -38,7 +41,7 @@ from variables import is_safe_css_value, is_valid_css_variable_name
 from path_security import UnsafePathError, safe_path_under, to_abs_base_dir, validate_path_segment
 from upload_security import ALLOWED_AUDIO_EXTENSIONS
 from audit_service import record_audit
-from audit_log import ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS
+from audit_log import ACTION_DELETE, ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS
 
 admin_config_bp = Blueprint('admin_config', __name__)
 
@@ -595,11 +598,10 @@ def special_functions_with_input(key):
                 and reconcile_clear_patient_table_job() != "added"):
             warning = _SCHEDULE_RECONCILE_WARNING
         communikation("admin", event="refresh_schedule_tasks_list")
-    if key == "cron_delete_announce_calls_hour":
-        if (app.config.get("CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED")
-                and reconcile_clear_announce_calls_job() != "added"):
-            warning = _SCHEDULE_RECONCILE_WARNING
-        communikation("admin", event="refresh_schedule_tasks_list")
+    if key == "cron_announce_cache_retention_days":
+        # Prise en compte au prochain passage (le job recharge la config via
+        # _refresh_config) ; on rafraîchit juste la section affichée.
+        communikation("admin", event="refresh_announce_cache")
     return warning
 
 
@@ -670,9 +672,6 @@ def call_function_with_switch(key, value):
     if key == "cron_delete_patient_table_activated":
         if value == "true" and reconcile_clear_patient_table_job() != "added":
             warning = _SCHEDULE_RECONCILE_WARNING
-    elif key == "cron_delete_announce_calls_activated":
-        if value == "true" and reconcile_clear_announce_calls_job() != "added":
-            warning = _SCHEDULE_RECONCILE_WARNING
     elif key == "app_messaging_enabled":
         from services import messaging_service
         if value == "true":
@@ -699,9 +698,39 @@ def admin_database():
     return render_template('/admin/database.html',
                         cron_delete_patient_table_activated = app.config["CRON_DELETE_PATIENT_TABLE_ACTIVATED"],
                         cron_transfer_patient_to_history = app.config["CRON_TRANSFER_PATIENT_TO_HISTORY"],
-                        cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"],
-                        cron_delete_announce_calls_activated=app.config["CRON_DELETE_ANNOUNCE_CALLS_ACTIVATED"],
-                        cron_delete_announce_calls_hour=app.config["CRON_DELETE_ANNOUNCE_CALLS_HOUR"])
+                        cron_delete_patient_table_hour=app.config["CRON_DELETE_PATIENT_TABLE_HOUR"])
+
+
+@admin_config_bp.route("/admin/database/announce_cache")
+@require_permission('schedule')
+def announce_cache_section():
+    """Section « Cache des annonces vocales » (fragment htmx rechargé après
+    un vidage ou un changement de durée de conservation)."""
+    return render_template(
+        '/admin/database_announce_cache.html',
+        stats=announce_cache_stats(),
+        cron_announce_cache_retention_days=app.config.get(
+            "ANNOUNCE_CACHE_RETENTION_DAYS",
+            ANNOUNCE_CACHE_DEFAULT_RETENTION_DAYS))
+
+
+@admin_config_bp.route("/admin/database/clear_announce_cache", methods=['POST'])
+@require_permission('schedule')
+def clear_announce_cache():
+    """Vide immédiatement le cache des annonces vocales."""
+    try:
+        deleted, freed = purge_announce_cache()
+    except Exception as e:
+        app.logger.error("Échec du vidage du cache des annonces : %s", e)
+        return display_toast(
+            success=False, message="Le vidage du cache a échoué.")
+    record_audit(ACTION_DELETE, "announce_cache",
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"{deleted} fichiers ({format_size(freed)})")
+    communikation("admin", event="refresh_announce_cache")
+    return display_toast(success=True, message=(
+        f"Cache des annonces vidé : {deleted} fichier(s), "
+        f"{format_size(freed)} libérés."))
 
 
 
