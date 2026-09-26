@@ -1,14 +1,5 @@
 // Configuration pour chaque type de table
 const TABLE_CONFIGS = {
-    'queue_table': {
-        buttonClass: 'btnSaveLine',
-        getFields: (id) => [
-            document.getElementById(`call_number-${id}`),
-            document.getElementById(`activity-${id}`),
-            document.getElementById(`status-${id}`),
-            document.getElementById(`counter-${id}`)
-        ]
-    },
     'translation_table': {
         buttonClass: 'btnSaveLine',
         getFields: (id) => [

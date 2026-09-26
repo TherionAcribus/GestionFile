@@ -1,4 +1,12 @@
-<p>Vous vous appretez à supprimer le patient {{patient.call_number}} définitivement. Confirmez-vous la suppression ? </p>
+<p>
+    Retirer définitivement le patient <strong>{{ patient.call_number }}</strong>
+    ({{ patient.activity.name if patient.activity else '—' }},
+    {{ (status_labels | default({})).get(patient.status, patient.status) | lower }}) de la file ?
+</p>
+<p class="small text-muted mb-0">
+    Il disparaît des écrans et n'apparaîtra pas dans l'historique. Pour un patient déjà reçu,
+    préférez « Corriger » → statut « Servi ».
+</p>
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
@@ -6,5 +14,5 @@
     hx-delete="/admin/queue/delete_patient/{{patient.id}}"
     hx-target="#invisible"
     data-bs-dismiss="modal"
-    >Supprimer</button>
+    >Retirer</button>
 </div>

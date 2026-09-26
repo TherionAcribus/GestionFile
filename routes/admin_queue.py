@@ -1,4 +1,8 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+import json
+from datetime import datetime
+
+from flask import Blueprint, render_template, request, current_app
+from sqlalchemy import func
 from sqlalchemy.orm import contains_eager, joinedload
 from models import Patient, Activity, Counter, DashboardCard, db
 from init_restore import clear_counter_table
@@ -9,12 +13,24 @@ from services.queue_service import archive_and_purge_all_patients, purge_all_pat
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
 from audit_service import record_audit
-from audit_log import ACTION_DELETE, OUTCOME_SUCCESS, OUTCOME_FAILURE
+from audit_log import (
+    ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE, OUTCOME_SUCCESS, OUTCOME_FAILURE,
+)
+from config import time_tz
+from queue_explain import (
+    EDITABLE_STATUSES, STATUS_BADGES, STATUS_LABELS, describe_minutes,
+    minutes_between, validate_edit,
+)
 from ui_feedback import display_toast
 
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
-status_list = ['ongoing', 'standing', 'done', 'calling']
+# Statuts filtrables (cases de la barre d'outils), dans l'ordre du parcours.
+status_list = ['pending', 'standing', 'calling', 'ongoing', 'done']
+
+# Toute modification de la file recharge la liste (hx-trigger
+# « refresh_queue_patient from:body ») sans attendre le WebSocket.
+_QUEUE_CHANGED = {"HX-Trigger": json.dumps({"refresh_queue_patient": True})}
 
 # Colonnes de tri autorisées (liste blanche) pour la table des patients :
 # clé exposée au client -> colonne SQLAlchemy. Voir pagination.parse_page_params.
@@ -25,10 +41,15 @@ QUEUE_SORT_COLUMNS = {
     'activity': Activity.name,
 }
 
+
+def _now():
+    return datetime.now(time_tz)
+
+
 @admin_queue_bp.route('/admin/queue')
 @require_permission('queue')
 def admin_queue():
-    activities = Activity.query.all()
+    activities = Activity.query.order_by(Activity.is_staff, Activity.letter, Activity.name).all()
     return render_template('admin/queue.html', activities=activities)
 
 # affiche le tableau des patients
@@ -68,13 +89,27 @@ def display_queue_table():
         search_columns=[Patient.call_number, Patient.status, Activity.name],
     )
 
+    # Compteurs par statut (toute la file, indépendamment des filtres) et
+    # attente la plus longue parmi les patients encore en attente.
+    counts = dict(db.session.query(Patient.status, func.count(Patient.id))
+                  .group_by(Patient.status).all())
+    oldest = (Patient.query.filter_by(status='standing')
+              .order_by(Patient.timestamp).first())
+    now = _now()
+
     return render_template('admin/queue_htmx_table.html',
                             patients=pager.items,
                             pager=pager,
                             params=params,
-                            activities=Activity.query.all(),
-                            status_list=status_list,
-                            counters=Counter.query.all())
+                            activities=Activity.query.order_by(Activity.letter, Activity.name).all(),
+                            status_list=list(EDITABLE_STATUSES),
+                            counters=Counter.query.order_by(Counter.sort_order).all(),
+                            counts=counts,
+                            longest_wait=describe_minutes(minutes_between(oldest.timestamp, now)) if oldest else None,
+                            # Horodatages enregistrés en heure locale naïve.
+                            now=now.replace(tzinfo=None),
+                            status_labels=STATUS_LABELS,
+                            status_badges=STATUS_BADGES)
 
 
 # affiche la modale pour confirmer la suppression de toute la table patient
@@ -82,14 +117,14 @@ def display_queue_table():
 @require_permission('queue')
 def confirm_delete_patient_table_without_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
-                            saving=False)
+                            saving=False, total=Patient.query.count())
 
 # affiche la modale pour confirmer la suppression de toute la table patient
 @admin_queue_bp.route('/admin/database/confirm_delete_patient_table_with_saving')
 @require_permission('queue')
 def confirm_delete_patient_table_with_saving():
     return render_template('/admin/queue_modal_confirm_delete.html',
-                            saving=True)
+                            saving=True, total=Patient.query.count())
 
 def _purge_patients_response(archive=False):
     """Traduit la purge de la file en réponse de vue (toast + statut).
@@ -108,7 +143,8 @@ def _purge_patients_response(archive=False):
         current_app.logger.error("Échec de la purge de la file : %s", e)
         display_toast(success=False, message="La purge de la file a échoué.")
         return "", 200
-    return display_toast(message="La table Patient a été vidée")
+    body, status = display_toast(message="La file a été vidée")
+    return body, status, _QUEUE_CHANGED
 
 
 @admin_queue_bp.route('/admin/database/clear_all_patients_with_saving', methods=['POST'])
@@ -132,39 +168,55 @@ def clear_all_patients_from_db():
     return _purge_patients_response()
 
 
-# mise à jour des informations d'un patient
+def _after_queue_change():
+    """Propagation commune après une correction manuelle de la file."""
+    clear_counter_table()
+    communikation("update_patient")
+    refresh_announce_screens()
+
+
+# correction manuelle d'un patient
 @admin_queue_bp.route('/admin/queue/patient_update/<int:patient_id>', methods=['POST'])
 @require_permission('queue')
 def update_patient(patient_id):
+    patient = db.session.get(Patient, patient_id)
+    if patient is None:
+        return display_toast(success=False, message="Patient introuvable")
+
+    call_number = (request.form.get('call_number') or '').strip()
+    status = request.form.get('status', patient.status)
+    counter_raw = request.form.get('counter_id') or ''
+    counter = db.session.get(Counter, int(counter_raw)) if counter_raw.isdigit() else None
+    activity_raw = request.form.get('activity_id') or ''
+    activity = db.session.get(Activity, int(activity_raw)) if activity_raw.isdigit() else None
+
+    # Erreurs = 204 : rien n'est remplacé, la saisie reste dans le formulaire.
+    if not call_number or len(call_number) > 10:
+        return display_toast(success=False, message="Numéro d'appel obligatoire (10 caractères maximum).")
+    if activity is None:
+        return display_toast(success=False, message="Motif inconnu.")
+    erreur = validate_edit(status, counter.id if counter else None)
+    if erreur:
+        return display_toast(success=False, message=erreur)
+
     try:
-        patient = Patient.query.get(patient_id)
-        if patient:
-            if request.form.get('call_number') == '':
-                display_toast(success = False, message="Un numéro d'appel est obligatoire")
-                return ""
-            patient.call_number = request.form.get('call_number', patient.call_number)
-            patient.status = request.form.get('status', patient.status)
-            activity_id = request.form.get('activity_id', patient.activity)
-            patient.activity = Activity.query.get(activity_id)
-            counter_id = request.form.get('counter_id', patient.counter)
-            patient.counter = Counter.query.get(counter_id)
+        patient.call_number = call_number
+        patient.status = status
+        patient.activity = activity
+        # Un patient en attente n'occupe aucun comptoir.
+        patient.counter = counter if status != 'standing' else None
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "patient", target_id=patient_id, outcome=OUTCOME_FAILURE)
+        current_app.logger.exception("Echec de la mise a jour d'un patient")
+        return display_toast(success=False, message="La mise à jour a échoué.")
 
-            db.session.commit()
-
-            clear_counter_table()
-
-            refresh_announce_screens()
-
-            display_toast(success=True, message="Mise à jour effectuée")
-            return ""
-        else:
-            display_toast(success = False, message="Patient introuvable")
-            return ""
-
-    except Exception as e:
-            display_toast(success=False, message="La mise à jour a échoué.")
-            current_app.logger.exception("Echec de la mise a jour d'un patient")
-            return jsonify(status="error", message="La mise à jour a échoué."), 500
+    record_audit(ACTION_UPDATE, "patient", target_id=patient_id, outcome=OUTCOME_SUCCESS,
+                 details=f"call_number={call_number} status={status}")
+    _after_queue_change()
+    display_toast(success=True, message=f"Patient {call_number} corrigé")
+    return "", 200, _QUEUE_CHANGED
 
 
 # affiche la modale pour confirmer la suppression d'un patient particulier
@@ -172,7 +224,8 @@ def update_patient(patient_id):
 @require_permission('queue')
 def confirm_delete_patient(patient_id):
     patient = Patient.query.get(patient_id)
-    return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient)
+    return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient,
+                           status_labels=STATUS_LABELS)
 
 
 # supprime un patient
@@ -182,18 +235,17 @@ def delete_patient(patient_id):
     try:
         patient = Patient.query.get(patient_id)
         if not patient:
-            display_toast(success=False, message="Patient introuvable")
-            return 200, ""
+            # Auparavant `return 200, ""` : tuple inversé, erreur 500.
+            return display_toast(success=False, message="Patient introuvable")
 
+        call_number = patient.call_number
         db.session.delete(patient)
         db.session.commit()
 
         record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_SUCCESS)
-        communikation("update_patient")
-        refresh_announce_screens()
-        clear_counter_table()
-        display_toast()
-        return "", 200
+        _after_queue_change()
+        display_toast(success=True, message=f"Patient {call_number} retiré de la file")
+        return "", 200, _QUEUE_CHANGED
 
     except Exception as e:
         db.session.rollback()
@@ -206,18 +258,19 @@ def delete_patient(patient_id):
 @admin_queue_bp.route('/admin/queue/create_new_patient_auto', methods=['POST'])
 @require_permission('queue')
 def create_new_patient_auto():
-    if request.form.get('activity_id') == "":
-        display_toast(success=False, message="Veuillez choisir un motif")
-        return "", 204
-    
-    activity = Activity.query.get(request.form.get('activity_id'))
+    activity_raw = request.form.get('activity_id') or ''
+    activity = db.session.get(Activity, int(activity_raw)) if activity_raw.isdigit() else None
+    if activity is None:
+        return display_toast(success=False, message="Veuillez choisir un motif")
+
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity)
+    record_audit(ACTION_CREATE, "patient", target_id=new_patient.id, outcome=OUTCOME_SUCCESS,
+                 details=f"call_number={call_number} (ajout manuel)")
 
-    current_app.logger.debug('new_patient %s', activity)
     communikation("update_patient")
-
-    return "", 204
+    display_toast(success=True, message=f"Patient {call_number} ajouté à la file ({activity.name})")
+    return "", 204, _QUEUE_CHANGED
 
 
 @admin_queue_bp.route('/admin/queue/dashboard')

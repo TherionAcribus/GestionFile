@@ -1,20 +1,28 @@
-<p>Vous vous appretez à supprimer la table définitivement. La numérotation recommencera au début.</p>
+<p>
+    Vous vous apprêtez à <strong>vider toute la file</strong>
+    ({{ total }} patient{{ 's' if total > 1 }}). La numérotation recommencera à 1.
+</p>
 {% if saving %}
-    <p>La liste des patients sera sauvegardée dans l'historique pour afficher les statistiques.</p>
+    <p class="mb-2"><i class="bi bi-archive" aria-hidden="true"></i> Les patients seront d'abord copiés dans l'historique : les statistiques sont conservées.</p>
 {% else %}
-    <p>La liste des patients ne sera pas sauvegardée dans l'historique. TOUTES LES DONNEES SERONT DEFINITIVEMENT SUPPRIMÉES</p>
+    <div class="alert alert-danger small" role="note">
+        <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
+        Rien ne sera copié dans l'historique : ces patients disparaîtront aussi des statistiques. Suppression définitive.
+    </div>
 {% endif %}
-<p>Confirmez-vous la suppression ? </p>
+<p>Confirmez-vous ?</p>
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+    {# hx-swap="none" : en cas d'échec, la réponse vide ne doit pas effacer
+       la liste ; en cas de succès, elle est rechargée (refresh_queue_patient). #}
     <button type="button" class="btn btn-danger"
     {% if saving %}
         hx-post="/admin/database/clear_all_patients_with_saving"
     {% else %}
         hx-post="/admin/database/clear_all_patients"
     {% endif %}
-    hx-target="#div_queue_table"
+    hx-swap="none"
     data-bs-dismiss="modal"
-    >Supprimer</button>
+    >Vider la file</button>
 </div>

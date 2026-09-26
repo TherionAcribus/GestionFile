@@ -1,80 +1,117 @@
 {% import '/admin/pagination.html' as pg %}
-{% import '/admin/macros.html' as macros %}
+{# Liste des patients : lecture d'abord (badges de statut, attente), la
+   correction se déplie sous la ligne. Libellés/couleurs : queue_explain. #}
 {%- set status_vals -%}
-data-param-ongoing="#ongoing@selected" data-param-standing="#standing@selected" data-param-calling="#calling@selected" data-param-done="#done@selected"
+data-param-pending="#qf-pending@checked" data-param-standing="#qf-standing@checked" data-param-calling="#qf-calling@checked" data-param-ongoing="#qf-ongoing@checked" data-param-done="#qf-done@checked"
 {%- endset -%}
 {% set url = '/admin/queue/table' %}
 {% set target = '#div_queue_table' %}
+{% set labels = status_labels | default({}) %}
+{% set badges = status_badges | default({}) %}
+{% set counts = counts | default({}) %}
+
+<div class="d-flex flex-wrap gap-3 mb-2 queue-summary" aria-label="Résumé de la file">
+    <span><span class="badge text-bg-primary">{{ counts.get('standing', 0) }}</span> en attente</span>
+    <span><span class="badge text-bg-warning">{{ counts.get('calling', 0) }}</span> appelé{{ 's' if counts.get('calling', 0) > 1 }}</span>
+    <span><span class="badge text-bg-success">{{ counts.get('ongoing', 0) }}</span> au comptoir</span>
+    <span><span class="badge text-bg-secondary">{{ counts.get('done', 0) }}</span> servi{{ 's' if counts.get('done', 0) > 1 }}</span>
+    {% if counts.get('pending', 0) %}<span><span class="badge text-bg-light border">{{ counts.get('pending') }}</span> ticket en impression</span>{% endif %}
+    {% if longest_wait %}<span class="text-muted"><i class="bi bi-hourglass-split" aria-hidden="true"></i> attente la plus longue : <strong>{{ longest_wait }}</strong></span>{% endif %}
+</div>
+
 <div class="table-responsive table-scroll">
-<table id="queue_table" class="table table-striped table-hover align-middle">
+<table id="queue_table" class="table table-hover align-middle">
     <thead>
     <tr>
-        {{ pg.sort_th("Numéro d'Appel", 'call_number', 'queue', params, url, 'post', target, status_vals) }}
-        {{ pg.sort_th("Motif de Visite", 'activity', 'queue', params, url, 'post', target, status_vals) }}
-        {{ pg.sort_th("Heure d'Enregistrement", 'timestamp', 'queue', params, url, 'post', target, status_vals) }}
+        {{ pg.sort_th("N°", 'call_number', 'queue', params, url, 'post', target, status_vals) }}
+        {{ pg.sort_th("Motif", 'activity', 'queue', params, url, 'post', target, status_vals) }}
+        {{ pg.sort_th("Arrivée", 'timestamp', 'queue', params, url, 'post', target, status_vals) }}
         {{ pg.sort_th("Statut", 'status', 'queue', params, url, 'post', target, status_vals) }}
         <th>Comptoir</th>
-        <th>Actions</th>
+        <th><span class="visually-hidden">Actions</span></th>
     </tr>
     </thead>
     <tbody>
         {% for patient in patients %}
         <tr>
+            <td class="fw-bold fs-5">{{ patient.call_number }}</td>
+            <td>{{ patient.activity.name if patient.activity else '—' }}</td>
             <td>
-                <input type="text" class="form-control" name="call_number" value="{{ patient.call_number }}" id="call_number-{{ patient.id }}" aria-label="Numéro d'appel">
+                {{ patient.timestamp.strftime('%H:%M') }}
+                {% if now and patient.status in ('standing', 'pending') %}
+                    {% set mins = ((now - patient.timestamp).total_seconds() // 60) | int %}
+                    <span class="small text-muted d-block">
+                        {% if mins < 1 %}à l'instant{% elif mins < 60 %}attend depuis {{ mins }} min{% else %}attend depuis {{ mins // 60 }} h {{ '%02d' | format(mins % 60) }}{% endif %}
+                    </span>
+                {% endif %}
             </td>
-            <td>
-                <div class="input-field">
-                    <select class="form-select" id="activity-{{ patient.id }}" aria-label="Motif de visite">
-                        {% for activity in activities %}
-                        <option value="{{ activity.id }}" {{ 'selected' if activity.id == patient.activity.id else '' }}>{{ activity.name }} </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-            <td>{{ patient.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-            <td>
-                <div class="input-field">
-                    <select class="form-select" id="status-{{ patient.id }}" aria-label="Statut du patient">
-                        {% for status in status_list %}
-                            <option value="{{ status }}" {{ 'selected' if status == patient.status else '' }}>{{ macros.status_label(status) }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-            <td>
-                <div class="input-field">
-                    <select class="form-select" id="counter-{{ patient.id }}" aria-label="Comptoir">
-                        <option value="None">None</option>
-                        {% for counter in counters %}
-                            <option value="{{ counter.id }}" {{ 'selected' if counter.id == patient.counter.id else '' }}>{{ counter.name }} </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </td>
-            <td>
-                <button class="btn btn-primary btnSaveLine"
-                    hx-target="#invisible"
-                    hx-post="/admin/queue/patient_update/{{ patient.id }}"
-                    data-param-call_number="#call_number-{{ patient.id }}"
-                    data-param-activity_id="#activity-{{ patient.id }}"
-                    data-param-status="#status-{{ patient.id }}"
-                    data-param-counter_id="#counter-{{ patient.id }}">
-                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
+            <td><span class="badge {{ badges.get(patient.status, 'text-bg-light border') }}">{{ labels.get(patient.status, patient.status) }}</span></td>
+            <td>{{ patient.counter.name if patient.counter else '—' }}</td>
+            <td class="text-end text-nowrap">
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="collapse" data-bs-target="#edit_patient_{{ patient.id }}"
+                        aria-expanded="false" aria-controls="edit_patient_{{ patient.id }}">
+                    <i class="bi bi-pencil" aria-hidden="true"></i> Corriger
                 </button>
-                <button class="btn btn-danger"
-                    title="Supprimer ce patient"
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                    aria-label="Retirer le patient {{ patient.call_number }}"
                     hx-get="/admin/queue/confirm_delete_patient/{{ patient.id }}"
                     hx-target="#modal-htmx"
                     hx-trigger="click"
                     data-bs-target="#modal_delete"
                     data-bs-toggle="modal">
-                    <i class="bi bi-trash" aria-hidden="true"></i> Supprimer
+                    <i class="bi bi-trash" aria-hidden="true"></i> Retirer
                 </button>
             </td>
         </tr>
+        <tr class="collapse queue-edit-row" id="edit_patient_{{ patient.id }}">
+            <td colspan="6" class="bg-body-tertiary">
+                <form class="row g-2 align-items-end"
+                      hx-post="/admin/queue/patient_update/{{ patient.id }}"
+                      hx-target="#invisible" hx-swap="innerHTML">
+                    <div class="col-sm-6 col-lg-2">
+                        <label class="form-label small" for="call_number-{{ patient.id }}">N° d'appel</label>
+                        <input type="text" class="form-control form-control-sm" name="call_number" maxlength="10" required
+                               value="{{ patient.call_number }}" id="call_number-{{ patient.id }}">
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label small" for="activity-{{ patient.id }}">Motif</label>
+                        <select class="form-select form-select-sm" name="activity_id" id="activity-{{ patient.id }}">
+                            {% for activity in activities %}
+                            <option value="{{ activity.id }}" {{ 'selected' if patient.activity and activity.id == patient.activity.id else '' }}>{{ activity.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-sm-6 col-lg-2">
+                        <label class="form-label small" for="status-{{ patient.id }}">Statut</label>
+                        <select class="form-select form-select-sm" name="status" id="status-{{ patient.id }}">
+                            {% for status in status_list %}
+                                <option value="{{ status }}" {{ 'selected' if status == patient.status else '' }}>{{ labels.get(status, status) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-sm-6 col-lg-2">
+                        <label class="form-label small" for="counter-{{ patient.id }}">Comptoir</label>
+                        <select class="form-select form-select-sm" name="counter_id" id="counter-{{ patient.id }}">
+                            <option value="">— Aucun —</option>
+                            {% for counter in counters %}
+                                <option value="{{ counter.id }}" {{ 'selected' if patient.counter and counter.id == patient.counter.id else '' }}>{{ counter.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#edit_patient_{{ patient.id }}">Annuler</button>
+                    </div>
+                    <div class="col-12 form-text mt-0">
+                        Correction manuelle : aucune annonce n'est déclenchée. « Appelé » et « Au comptoir » exigent un comptoir ;
+                        « En attente » libère le comptoir.
+                    </div>
+                </form>
+            </td>
+        </tr>
         {% else %}
-        <tr><td colspan="6" class="text-center text-muted">Aucun patient</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4">Aucun patient pour ces filtres.</td></tr>
         {% endfor %}
     </tbody>
 </table>
