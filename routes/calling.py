@@ -5,15 +5,11 @@ métier vit dans ``services/calling_service.py`` (point 9.4). Elles ne font que
 lire la requête, déléguer, et traduire le retour du service en réponse HTTP.
 """
 
-from datetime import datetime
-
 from flask import Blueprint, current_app as app, jsonify, render_template, session
 
 from auth_utils import require_app_token_or_login
-from config import time_tz
 from idempotency import idempotent
-from models import db, Activity, Counter, Patient
-from communication import communikation
+from models import Activity, Counter, Patient
 from services import calling_service
 
 calling_bp = Blueprint('calling', __name__)
@@ -47,25 +43,13 @@ def call_specific_patient(counter_id, patient_id):
 @calling_bp.route('/validate_patient/<int:counter_id>/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login
 def validate_patient(counter_id, patient_id):
-    # Valide le patient actuel au comptoir sans appeler le prochain
+    # Valide l'arrivée du patient appelé à CE comptoir (calling -> ongoing).
+    # La transition est vérifiée par le service : état de départ autorisé et
+    # rattachement au comptoir — plus de 'done' ressuscité ni de validation
+    # depuis le mauvais comptoir.
     app.logger.debug('validation %s', patient_id)
-
-    if patient_id:
-        current_patient = Patient.query.get(patient_id)
-        if current_patient:
-            current_patient.status = 'ongoing'
-            current_patient.timestamp_counter = datetime.now(time_tz)
-            db.session.commit()
-    else:
-        current_patient = None
-
-    communikation("update_patient")
-    communikation("update_screen", event="remove_calling", data={"id": patient_id})
-
-    current_patient_pyside = current_patient.to_dict() if isinstance(current_patient, Patient) else {"id": None, "counter_id": counter_id}
-
-    #return redirect(url_for('counter', counter_number=counter_number, current_patient_id=current_patient.id))
-    return jsonify(current_patient_pyside), 200  
+    ok, payload, status_code = calling_service.arrive_at_counter(counter_id, patient_id)
+    return jsonify(payload), status_code
 
 
 

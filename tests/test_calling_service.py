@@ -168,6 +168,73 @@ def test_appel_cible_patient_inexistant(application, messages):
     assert charge["error"] == "not_found"
 
 
+# --- 1b. « Terminer puis appeler » atomique ---------------------------------
+
+def test_appel_cible_inexistant_ne_cloture_pas_le_courant(application, messages):
+    """Régression : l'appel ciblé validait d'abord le patient en cours, PUIS
+    vérifiait la cible — un 404 clôturait quand même la prise en charge."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=1, nb_comptoirs=1)
+    comptoir = comptoirs[0]
+
+    calling_service.call_next_for_counter(comptoir.id)
+    courant = patients[0]
+    courant.status = "ongoing"
+    db.session.commit()
+
+    ok, _, statut = calling_service.call_specific(comptoir.id, 99999)
+
+    assert (ok, statut) == (False, 404)
+    rafraichi = db.session.get(Patient, courant.id)
+    assert rafraichi.status == "ongoing", "le patient courant a été clôturé par un appel qui a échoué"
+    assert rafraichi.timestamp_end is None
+
+
+def test_appel_cible_deja_pris_ne_cloture_pas_le_courant(application, messages):
+    """Cible déjà réclamée ailleurs -> 423, et le patient du comptoir reste
+    en cours (l'échec ne doit clôturer aucune donnée)."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=2, nb_comptoirs=2)
+    c1, c2 = comptoirs
+    courant, cible = patients
+
+    # c1 a un patient en cours ; c2 a déjà réclamé la cible.
+    courant.status, courant.counter_id = "ongoing", c1.id
+    cible.status, cible.counter_id = "calling", c2.id
+    db.session.commit()
+
+    ok, charge, statut = calling_service.call_specific(c1.id, cible.id)
+
+    assert (ok, statut) == (False, 423)
+    assert charge["error"] == "already_called"
+    rafraichi = db.session.get(Patient, courant.id)
+    assert rafraichi.status == "ongoing"
+    assert rafraichi.timestamp_end is None
+
+
+def test_appel_cible_cloture_et_reclame_en_une_transition(application, messages):
+    """Cas nominal : le patient en cours est clôturé et la cible appelée —
+    dans le même commit."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=2, nb_comptoirs=1)
+    comptoir = comptoirs[0]
+    courant, cible = patients
+    courant.status, courant.counter_id = "ongoing", comptoir.id
+    db.session.commit()
+
+    ok, charge, statut = calling_service.call_specific(comptoir.id, cible.id)
+
+    assert (ok, statut) == (True, 200)
+    assert db.session.get(Patient, courant.id).status == "done"
+    assert db.session.get(Patient, courant.id).timestamp_end is not None
+    rafraichi = db.session.get(Patient, cible.id)
+    assert rafraichi.status == "calling"
+    assert rafraichi.counter_id == comptoir.id
+
+
 # --- 2. announce_call : le bloc jadis recopié trois fois ---------------------
 
 def test_announce_call_emet_les_messages_attendus(application, messages):
@@ -316,6 +383,88 @@ def test_validate_current_ne_touche_pas_les_patients_deja_termines(application, 
 
     assert premier.id not in [p.id for p in touches]
     assert db.session.get(Patient, patients[0].id).timestamp_end == horodatage
+
+
+# --- 5. Arrivée au comptoir (calling -> ongoing) -----------------------------
+
+def test_arrivee_valide_le_patient_appele(application, messages):
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=1, nb_comptoirs=1)
+    calling_service.call_next_for_counter(comptoirs[0].id)
+
+    ok, charge, statut = calling_service.arrive_at_counter(comptoirs[0].id, patients[0].id)
+
+    assert (ok, statut) == (True, 200)
+    rafraichi = db.session.get(Patient, patients[0].id)
+    assert rafraichi.status == "ongoing"
+    assert rafraichi.timestamp_counter is not None
+
+
+def test_arrivee_refuse_un_patient_termine(application, messages):
+    """Un patient 'done' ne doit pas revenir en 'ongoing' — l'ancienne route
+    réécrivait status et timestamp_counter sans aucun contrôle."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=1, nb_comptoirs=1)
+    patients[0].status = "done"
+    db.session.commit()
+
+    ok, _, statut = calling_service.arrive_at_counter(comptoirs[0].id, patients[0].id)
+
+    assert (ok, statut) == (False, 409)
+    rafraichi = db.session.get(Patient, patients[0].id)
+    assert rafraichi.status == "done"
+    assert rafraichi.timestamp_counter is None
+
+
+def test_arrivee_refuse_le_mauvais_comptoir(application, messages):
+    """Le patient appelé par le comptoir 2 ne peut pas être validé depuis le
+    comptoir 1."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=1, nb_comptoirs=2)
+    patients[0].status, patients[0].counter_id = "calling", comptoirs[1].id
+    db.session.commit()
+
+    ok, _, statut = calling_service.arrive_at_counter(comptoirs[0].id, patients[0].id)
+
+    assert (ok, statut) == (False, 409)
+    rafraichi = db.session.get(Patient, patients[0].id)
+    assert rafraichi.status == "calling"
+    assert rafraichi.counter_id == comptoirs[1].id
+
+
+def test_arrivee_rejouee_ne_reecrit_pas_lhorodatage(application, messages):
+    """Double validation (rejeu réseau, double-clic) : succès sans écraser
+    timestamp_counter — sinon la durée d'attente réelle était faussée."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=1, nb_comptoirs=1)
+    calling_service.call_next_for_counter(comptoirs[0].id)
+
+    ok1, _, _ = calling_service.arrive_at_counter(comptoirs[0].id, patients[0].id)
+    horodatage = db.session.get(Patient, patients[0].id).timestamp_counter
+    ok2, _, statut2 = calling_service.arrive_at_counter(comptoirs[0].id, patients[0].id)
+
+    assert (ok1, ok2, statut2) == (True, True, 200)
+    assert db.session.get(Patient, patients[0].id).timestamp_counter == horodatage
+
+
+def test_pause_ne_cloture_pas_le_patient_dun_autre_comptoir(application, messages):
+    """pause(comptoir, patient_id) clôturait n'importe quel patient —
+    y compris celui d'un autre comptoir ou déjà terminé."""
+    from services import calling_service
+
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=1, nb_comptoirs=2)
+    patients[0].status, patients[0].counter_id = "ongoing", comptoirs[1].id
+    db.session.commit()
+
+    calling_service.pause(comptoirs[0].id, patients[0].id)
+
+    rafraichi = db.session.get(Patient, patients[0].id)
+    assert rafraichi.status == "ongoing"
+    assert rafraichi.timestamp_end is None
 
 
 def test_pause_sort_le_comptoir_de_lappel_automatique(application, messages):

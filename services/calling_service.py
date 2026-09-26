@@ -33,7 +33,6 @@ from config import time_tz
 from models import Counter, Patient, db
 from python.engine import (
     call_next,
-    claim_patient,
     counter_become_active,
     counter_become_inactive,
     mark_overtaken_patients,
@@ -105,32 +104,67 @@ def call_next_for_counter(counter_id):
 def call_specific(counter_id, patient_id):
     """Appelle un patient désigné. Renvoie ``(ok, charge_utile, code_statut)``.
 
-    Utilise la **même** réclamation atomique que ``call_next`` (``claim_patient``)
-    au lieu de la réimplémenter : deux comptoirs qui cliquent le même patient ne
-    peuvent pas le décrocher tous les deux, le perdant reçoit un 423.
+    « Terminer puis appeler » est une opération ATOMIQUE : la réclamation
+    conditionnelle de la cible et la clôture des patients actifs du comptoir
+    sont validées dans la même transaction. Auparavant ``validate_current``
+    tournait AVANT de vérifier la cible : un appel ciblé sur un patient
+    inexistant (404) ou déjà pris (423) clôturait quand même le patient en
+    cours — sa prise en charge disparaissait sans avoir été appelée.
     """
-    validate_current(counter_id)
-
     next_patient = Patient.query.get(patient_id)
     if not next_patient:
         return False, {"error": "not_found"}, 404
 
     try:
-        claimed = claim_patient(patient_id, counter_id)
+        # Même réclamation conditionnelle que claim_patient (standing ->
+        # calling + counter_id), mais sans commit : elle doit partager la
+        # transaction avec la clôture du patient courant.
+        claimed = (
+            db.session.query(Patient)
+            .filter(Patient.id == patient_id, Patient.status == "standing")
+            .update(
+                {"status": "calling", "counter_id": counter_id},
+                synchronize_session=False,
+            )
+        )
+        if not claimed:
+            db.session.rollback()
+            current_app.logger.info(
+                "Patient %s deja appele par un autre comptoir", patient_id
+            )
+            send_app_notification(
+                origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient}
+            )
+            return False, {"error": "already_called"}, 423
+
+        # La cible est réservée : on peut clôturer les patients actifs du
+        # comptoir — la cible vient de passer en 'calling' à CE comptoir,
+        # elle est donc exclue explicitement de la clôture.
+        now = datetime.now(time_tz)
+        active_patients = Patient.query.filter(
+            Patient.counter_id == counter_id,
+            Patient.status.in_(("calling", "ongoing")),
+            Patient.id != patient_id,
+        ).all()
+        calling_ids = [p.id for p in active_patients if p.status == "calling"]
+        for patient in active_patients:
+            patient.status = "done"
+            patient.timestamp_end = now
+
+        db.session.query(Counter).filter(Counter.id == counter_id).update(
+            {"is_active": True}, synchronize_session=False
+        )
+        db.session.commit()
     except Exception:
+        db.session.rollback()
         current_app.logger.exception(
             "Reclamation du patient %s par le comptoir %s impossible", patient_id, counter_id
         )
         return False, {"error": "claim_failed"}, 500
 
-    if not claimed:
-        current_app.logger.info(
-            "Patient %s deja appele par un autre comptoir", patient_id
-        )
-        send_app_notification(
-            origin="patient_taken", data={"counter_id": counter_id, "patient": next_patient}
-        )
-        return False, {"error": "already_called"}, 423
+    # Emissions APRÈS le commit, comme validate_current.
+    for closed_id in calling_ids:
+        communikation("update_screen", event="remove_calling", data={"id": closed_id})
 
     # L'appel ciblé double réellement les patients plus anciens : ils sont
     # comptabilisés comme l'appel du suivant, après réclamation réussie.
@@ -203,6 +237,33 @@ def validate_and_call_next(counter_id):
     return ok, resultat
 
 
+def arrive_at_counter(counter_id, patient_id):
+    """Le patient appelé arrive au comptoir : ``calling`` -> ``ongoing``.
+
+    Transition validée : refuse si le patient n'est pas en ``calling``
+    attribué à CE comptoir (mauvais comptoir, patient jamais appelé ou déjà
+    terminé) — aucune donnée n'est modifiée en cas de refus. Un rejeu de la
+    validation (double-clic, réseau) renvoie le succès SANS réécrire
+    ``timestamp_counter`` — sinon la durée d'attente réelle au comptoir
+    était écrasée à chaque renvoi.
+    """
+    patient = Patient.query.get(patient_id)
+    if patient is None:
+        return False, {"error": "not_found"}, 404
+
+    already = patient.status == "ongoing" and patient.counter_id == counter_id
+    if not already:
+        if patient.status != "calling" or patient.counter_id != counter_id:
+            return False, {"error": "invalid_state"}, 409
+        patient.status = "ongoing"
+        patient.timestamp_counter = datetime.now(time_tz)
+        db.session.commit()
+
+    communikation("update_patient")
+    communikation("update_screen", event="remove_calling", data={"id": patient_id})
+    return True, patient.to_dict(), 200
+
+
 def pause(counter_id, patient_id):
     """Clôt le patient en cours et met le comptoir en pause (inactif).
 
@@ -211,7 +272,12 @@ def pause(counter_id, patient_id):
     patient.
     """
     current_patient = Patient.query.get(patient_id)
-    if current_patient:
+    # Ne clôturer qu'un patient réellement actif de CE comptoir : un rejeu
+    # réécrivait timestamp_end d'un patient déjà terminé, et un patient_id
+    # d'un autre comptoir pouvait être clôturé à distance.
+    if (current_patient is not None
+            and current_patient.counter_id == counter_id
+            and current_patient.status in ("calling", "ongoing")):
         was_calling = current_patient.status == "calling"
         current_patient.status = "done"
         current_patient.timestamp_end = datetime.now(time_tz)
