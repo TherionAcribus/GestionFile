@@ -19,6 +19,7 @@ from ui_feedback import display_toast
 from extensions import scheduler
 
 MESSAGING_CLEANUP_JOB_ID = "Purge App Messaging"
+HEARTBEAT_JOB_ID = "Scheduler Heartbeat"
 
 
 def _refresh_config(app):
@@ -426,6 +427,36 @@ def messaging_cleanup_job():
         except Exception:
             db.session.rollback()
             app.logger.exception("Échec de la purge de la messagerie")
+
+
+def ensure_scheduler_heartbeat_job():
+    """Garantit le battement minuté du processus scheduler.
+
+    En déploiement « web + scheduler » séparés, c'est le processus web qui
+    écrit les tâches dans le jobstore partagé — or ``scheduler.wakeup()``
+    est **local** à chaque processus : sans battement, le scheduler ne
+    relirait la base qu'à son prochain réveil déjà connu (ex. la purge de
+    03:10), découvrant trop tard une tâche ajoutée entre-temps, qui serait
+    alors sautée (misfire). Chaque exécution force ``_process_jobs`` à
+    reinterroger le jobstore : les tâches créées par le web sont découvertes
+    en moins d'une minute — très en deçà du délai de grâce de 5 min.
+    """
+    if scheduler.get_job(HEARTBEAT_JOB_ID):
+        return "unchanged"
+    scheduler.add_job(
+        id=HEARTBEAT_JOB_ID,
+        func=scheduler_heartbeat_job,
+        trigger="interval",
+        seconds=60,
+        misfire_grace_time=300,
+        coalesce=True,
+        max_instances=1,
+    )
+    return "added"
+
+
+def scheduler_heartbeat_job():
+    """No-op volontaire : cf. ``ensure_scheduler_heartbeat_job``."""
 
 
 def auto_archive_job():

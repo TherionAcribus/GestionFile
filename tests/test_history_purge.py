@@ -647,6 +647,48 @@ def test_reconcile_raises_when_add_does_not_take(app):
             scheduler_functions.reconcile_auto_archive_job()
 
 
+def test_ensure_heartbeat_adds_job_when_absent(app):
+    """Sans battement, le processus scheduler ne relirait le jobstore
+    partagé qu'à son prochain réveil connu — une tâche ajoutée par le web
+    entre-temps serait découverte trop tard et sautée (misfire)."""
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = None  # absent du jobstore
+
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        action = scheduler_functions.ensure_scheduler_heartbeat_job()
+        assert action == "added"
+        fake_scheduler.add_job.assert_called_once()
+        kwargs = fake_scheduler.add_job.call_args.kwargs
+        assert kwargs["id"] == scheduler_functions.HEARTBEAT_JOB_ID
+        assert kwargs["func"] is scheduler_functions.scheduler_heartbeat_job
+        assert kwargs["trigger"] == "interval"
+        assert kwargs["seconds"] == 60
+
+
+def test_ensure_heartbeat_unchanged_when_present(app):
+    fake_scheduler = MagicMock()
+    fake_scheduler.get_job.return_value = MagicMock()  # présent
+
+    with app.app_context(), patch(
+        "scheduler_functions.scheduler", fake_scheduler
+    ):
+        assert (
+            scheduler_functions.ensure_scheduler_heartbeat_job()
+            == "unchanged"
+        )
+        fake_scheduler.add_job.assert_not_called()
+
+
+def test_startup_reconcile_includes_heartbeat():
+    """Le battement est assuré au démarrage des rôles qui exécutent des
+    tâches (scheduler / all), via _reconcile_scheduler_jobs."""
+    source = _read("app.py")
+    body = _func_body(source, "_reconcile_scheduler_jobs")
+    assert "ensure_scheduler_heartbeat_job" in body
+
+
 def test_update_config_warns_when_scheduler_fails(app, client):
     """Régression : un échec du scheduler ne doit plus être masqué par un
     succès — la réponse porte un avertissement explicite."""

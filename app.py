@@ -47,7 +47,7 @@ from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
 from scheduler_functions import (
     clear_old_patients_table, ensure_messaging_cleanup_job,
-    reconcile_auto_archive_job,
+    ensure_scheduler_heartbeat_job, reconcile_auto_archive_job,
 )
 from bdd import init_database
 from config import Config
@@ -806,8 +806,13 @@ def _reconcile_scheduler_jobs():
     """
     try:
         with app.app_context():
+            # Le battement en premier : en déploiement web+scheduler séparés,
+            # c'est lui qui fait relire le jobstore partagé chaque minute.
+            heartbeat_action = ensure_scheduler_heartbeat_job()
             action = reconcile_auto_archive_job()
             messaging_action = ensure_messaging_cleanup_job()
+        if heartbeat_action != "unchanged":
+            app.logger.info("Job de battement du scheduler planifié")
         if messaging_action != "unchanged":
             app.logger.info("Job de purge de la messagerie planifie")
         if action != 'unchanged':
