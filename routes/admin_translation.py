@@ -412,9 +412,31 @@ def translations_collect():
         app.logger.debug("%s", config_keys_to_translate)
         counters = {"created": 0, "updated": 0, "unchanged": 0}
 
-        for table_name, column_name, key_name, row_id, text in collect_translation_sources(
-            config_keys_to_translate
-        ):
+        sources = list(collect_translation_sources(config_keys_to_translate))
+        live_keys = {
+            (table_name, column_name, row_id, key_name or "")
+            for table_name, column_name, key_name, row_id, _ in sources
+        }
+
+        # Purge AVANT la synchro : la contrainte d'unicité ignore key_name,
+        # donc une ligne orpheline (source supprimée, clé retirée du
+        # registre) ou restaurée avec key_name=NULL occuperait le slot
+        # (table, colonne, row_id, langue) et bloquerait l'insertion de la
+        # référence canonique. Les NULL restants sont normalisés à '' —
+        # aucun doublon '' ne peut coexister avec une NULL.
+        purged = 0
+        for row in Translation.query.all():
+            if row.key_name is None:
+                row.key_name = ""
+            source_key = (row.table_name, row.column_name, row.row_id,
+                          row.key_name)
+            if source_key not in live_keys:
+                db.session.delete(row)
+                purged += 1
+
+        counters = {"created": 0, "updated": 0, "unchanged": 0,
+                    "purged": purged}
+        for table_name, column_name, key_name, row_id, text in sources:
             result = sync_reference_translation(
                 table_name,
                 column_name,
@@ -432,14 +454,16 @@ def translations_collect():
             outcome=OUTCOME_SUCCESS,
             details=(
                 f"collecte : {counters['created']} nouveau(x), "
-                f"{counters['updated']} référence(s) actualisée(s)"
+                f"{counters['updated']} référence(s) actualisée(s), "
+                f"{purged} orpheline(s) purgée(s)"
             ),
         )
         display_toast(
             success=True,
             message=(
                 f"{counters['created']} nouveau(x) texte(s), "
-                f"{counters['updated']} référence(s) française(s) actualisée(s)"
+                f"{counters['updated']} référence(s) française(s) actualisée(s), "
+                f"{purged} référence(s) orpheline(s) supprimée(s)"
             ),
         )
         language_code = request.form.get("language_code")

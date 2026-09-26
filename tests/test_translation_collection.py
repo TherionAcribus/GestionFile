@@ -189,3 +189,134 @@ def test_collecte_met_a_jour_la_reference_sans_ecraser_la_cible(
             key_name="page_patient_title", row_id=config_id,
             language_code="fr",
         ).translated_text == "Nouveau titre patient"
+
+
+# --- Purge des références orphelines ------------------------------------------
+
+def test_collecte_purge_les_sources_supprimees(authenticated_client, application):
+    """Régression : un bouton/une activité supprimé(e) laissait sa référence
+    'fr' ET ses traductions au catalogue — éditables mais jamais affichées.
+    La collecte supprime désormais toutes les lignes de la source morte."""
+    app, _ = application
+    with app.app_context():
+        language = Language(code="en", name="Anglais", translation="English")
+        button = Button(label="Libellé vivant")
+        db.session.add_all([language, button])
+        db.session.commit()
+        button_id = button.id
+        # Orphelin : row_id sans bouton correspondant ; vivant : le bouton.
+        db.session.add_all([
+            Translation(table_name="Button", column_name="label",
+                        key_name="", row_id=9999, language_code="fr",
+                        translated_text="Source disparue"),
+            Translation(table_name="Button", column_name="label",
+                        key_name="", row_id=9999, language_code="en",
+                        translated_text="Gone source"),
+            Translation(table_name="Button", column_name="label",
+                        key_name="", row_id=button_id, language_code="en",
+                        translated_text="Living label"),
+        ])
+        db.session.commit()
+
+    response = authenticated_client.post("/admin/translations/collect")
+    assert response.status_code == 200
+    with app.app_context():
+        assert Translation.query.filter_by(row_id=9999).count() == 0
+        # La source vivante garde sa traduction et sa référence 'fr'.
+        assert _translation(
+            table_name="Button", column_name="label", row_id=button_id,
+            language_code="en").translated_text == "Living label"
+        assert _translation(
+            table_name="Button", column_name="label", row_id=button_id,
+            language_code="fr").translated_text == "Libellé vivant"
+
+
+def test_collecte_purge_la_cle_retiree_du_registre(
+    authenticated_client, application, monkeypatch,
+):
+    """Une clé retirée du registre traduisible (ou une ligne de config dont
+    le row_id ne correspond plus) n'a plus de source : référence et
+    traductions sont purgées."""
+    app, _ = application
+    monkeypatch.setattr(
+        "routes.admin_translation.load_config_keys_to_translate",
+        lambda: ["page_patient_title"],
+    )
+    with app.app_context():
+        language = Language(code="en", name="Anglais", translation="English")
+        config = ConfigOption(
+            config_key="page_patient_title", value_str="Titre")
+        db.session.add_all([language, config])
+        db.session.commit()
+        config_id = config.id
+        # Orpheline : même table/colonne mais une clé qui n'est plus
+        # traduisible — key_name fait partie de l'identité de la source.
+        db.session.add_all([
+            Translation(table_name="ConfigOption", column_name="value_str",
+                        key_name="ancienne_cle", row_id=config_id,
+                        language_code="fr", translated_text="Ancien"),
+            Translation(table_name="ConfigOption", column_name="value_str",
+                        key_name="ancienne_cle", row_id=config_id,
+                        language_code="en", translated_text="Old"),
+        ])
+        db.session.commit()
+
+    authenticated_client.post("/admin/translations/collect")
+    with app.app_context():
+        assert Translation.query.filter_by(
+            key_name="ancienne_cle").count() == 0
+        assert _translation(
+            table_name="ConfigOption", column_name="value_str",
+            key_name="page_patient_title", row_id=config_id,
+            language_code="fr").translated_text == "Titre"
+
+
+def test_collecte_purge_les_tables_inconnues(authenticated_client, application):
+    """Une ligne forgée ou issue d'un ancien schéma (table non traduisible)
+    n'a pas de source vivante : elle est purgée aussi."""
+    app, _ = application
+    with app.app_context():
+        db.session.add(Translation(
+            table_name="Patient", column_name="name", key_name="",
+            row_id=1, language_code="fr", translated_text="Fantôme"))
+        db.session.commit()
+    authenticated_client.post("/admin/translations/collect")
+    with app.app_context():
+        assert Translation.query.count() == 0
+
+
+def test_collecte_purge_key_name_null(authenticated_client, application):
+    """Une restauration peut créer key_name=NULL là où la collecte écrit ''.
+    La contrainte d'unicité ignore key_name : insérer la canonique ''
+    violerait (table, colonne, row_id, langue) — la synchro normalise donc
+    la NULL en place, et la purge fait de même pour les autres langues."""
+    app, _ = application
+    with app.app_context():
+        language = Language(code="en", name="Anglais", translation="English")
+        button = Button(label="Libellé")
+        db.session.add_all([language, button])
+        db.session.commit()
+        button_id = button.id
+        db.session.add_all([
+            Translation(table_name="Button", column_name="label",
+                        key_name=None, row_id=button_id,
+                        language_code="fr", translated_text="Ancien"),
+            Translation(table_name="Button", column_name="label",
+                        key_name=None, row_id=button_id,
+                        language_code="en", translated_text="Restored EN"),
+        ])
+        db.session.commit()
+
+    authenticated_client.post("/admin/translations/collect")
+    with app.app_context():
+        fr = Translation.query.filter_by(
+            table_name="Button", row_id=button_id,
+            language_code="fr").all()
+        assert len(fr) == 1
+        assert fr[0].key_name == ""
+        assert fr[0].translated_text == "Libellé"
+        en = _translation(
+            table_name="Button", column_name="label", row_id=button_id,
+            language_code="en")
+        assert en.key_name == ""
+        assert en.translated_text == "Restored EN"
