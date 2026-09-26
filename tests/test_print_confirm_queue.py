@@ -198,3 +198,124 @@ def test_confirm_print_job_inconnu_ou_purge(client, application):
                     json={"print_job_id": "inconnu", "success": True})
     assert r.status_code == 410
     assert r.get_json()["status"] == "expired"
+
+
+# ---------------------------------------------------------------------------
+# 3. Inscriptions expirées : réconciliation des confirmations tardives
+# ---------------------------------------------------------------------------
+
+from datetime import datetime, timedelta
+
+
+def _patient_expire(application, print_job_id="job-x", jours=0, journey="j-x"):
+    """Inscription passée en 'expired' (résultat d'impression inconnu), dont
+    l'acquittement arrive tardivement."""
+    from config import time_tz
+    with application.app_context():
+        langue = Language(code="fr", name="Français", translation="Français")
+        activite = Activity(name="Ordonnance", letter="O",
+                            notification=False, specific_message="")
+        patient = Patient(
+            call_number="A9", status="expired",
+            activity=activite, language=langue,
+            print_job_id=print_job_id, journey_id=journey,
+            timestamp=datetime.now(time_tz) - timedelta(days=jours))
+        db.session.add_all([langue, activite, patient])
+        db.session.commit()
+        return patient.id
+
+
+def test_expiration_marque_au_lieu_de_supprimer(application):
+    """Le TTL ne supprime plus la ligne : 'expired' garde la trace du travail
+    d'impression pour la réconciliation, et libère le parcours."""
+    from python.engine import expire_stale_pending_patients
+    from config import time_tz
+
+    pid = _pending_patient(application)
+    with application.app_context():
+        patient = Patient.query.get(pid)
+        patient.journey_id = "j-ttl"
+        patient.timestamp = datetime.now(time_tz) - timedelta(seconds=9999)
+        db.session.commit()
+
+        assert expire_stale_pending_patients() == 1
+        patient = Patient.query.get(pid)
+        assert patient.status == "expired", "l'inscription était supprimée au lieu d'expirer"
+        assert patient.journey_id is None
+
+
+def test_confirmation_tardive_jour_meme_reconcilie(client, application):
+    """Ticket imprimé puis coupure > TTL : l'acquittement tardif remet le
+    patient en file (même journée) — avant : 410 et patient perdu avec son
+    ticket."""
+    _patient_expire(application)
+
+    r = client.post("/patient/confirm_print",
+                    json={"print_job_id": "job-x", "success": True})
+
+    donnees = r.get_json()
+    assert r.status_code == 200
+    assert donnees["status"] == "activated"
+    assert donnees["reconciled"] is True
+    with application.app_context():
+        patient = Patient.query.filter_by(print_job_id="job-x").one()
+        assert patient.status == "standing"
+
+
+def test_confirmation_tardive_sur_jour_passe_reste_expiree(client, application):
+    """Un acquittement arrivant le lendemain (ou après purge) ne fait pas
+    entrer en file une inscription d'hier."""
+    _patient_expire(application, jours=1)
+
+    r = client.post("/patient/confirm_print",
+                    json={"print_job_id": "job-x", "success": True})
+
+    assert r.status_code == 410
+    assert r.get_json()["status"] == "expired"
+
+
+def test_echec_tardif_sur_expiree_reste_expiree(client, application):
+    """Résultat enfin connu = échec : la demande reste expirée, jamais
+    entrée en file."""
+    _patient_expire(application)
+
+    r = client.post("/patient/confirm_print",
+                    json={"print_job_id": "job-x", "success": False})
+
+    assert r.status_code == 410
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-x").one().status == "expired"
+
+
+def test_abandon_puis_succes_tardif_ne_ressuscite_pas(client, application):
+    """Abandon tranché d'abord, succès tardif ensuite : 'cancelled', pas
+    de résurrection — un seul des deux peut gagner."""
+    _pending_patient(application)
+
+    client.post("/patient/print_abandon", json={"print_job_id": "job-1"})
+    r = client.post("/patient/confirm_print",
+                    json={"print_job_id": "job-1", "success": True})
+
+    assert r.get_json()["status"] == "cancelled"
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-1").one().status == "print_failed"
+
+
+# ---------------------------------------------------------------------------
+# 4. JS : pas d'annonce de succès non confirmée
+# ---------------------------------------------------------------------------
+
+def test_call_staff_n_annonce_pas_un_succes_non_confirme():
+    """En cas d'erreur réseau ou de réponse sans 'staff_called', la borne
+    doit proposer Réessayer/Retour — jamais « personnel prévenu »."""
+    corps = _corps_fonction(_lire("static/js/patients.js"), "callStaffFlow")
+
+    # Le succès n'est affiché que sur staff_called explicite du serveur.
+    assert "staff_called" in corps
+    # Les deux voies d'échec passent par callStaffFailed.
+    assert corps.count("callStaffFailed") >= 2
+
+    echec = _corps_fonction(_lire("static/js/patients.js"), "callStaffFailed")
+    assert "print_failed_staff" in echec
+    assert "retry" in echec
+    assert "staff_called" not in echec

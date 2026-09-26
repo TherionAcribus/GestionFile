@@ -3,7 +3,7 @@ import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
-from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, activate_patient, qr_code_data_uri
+from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, qr_code_data_uri, _business_day
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, patient_ticket_patient_id, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
@@ -439,20 +439,40 @@ def confirm_print():
 
     patient = Patient.query.filter_by(print_job_id=print_job_id).first()
     if patient is None:
-        # Inconnu ou déjà purgé (inscription pending expirée).
+        # Inconnu ou déjà purgé (purge de fin de journée).
+        return jsonify({'status': 'expired'}), 410
+
+    if patient.status == 'expired':
+        # Confirmation TARDIVE : l'écran a expiré (TTL) mais l'acquittement
+        # de la borne arrive quand même. Si la borne confirme le succès le
+        # jour même de l'inscription, le ticket est très probablement entre
+        # les mains du patient : on réconcilie — il entre en file malgré le
+        # délai (réponse 'activated', la borne vide sa file locale).
+        # Au-delà (jour suivant) ou en cas d'échec : la demande reste
+        # expirée — réponse définitive pour que la borne vide sa file.
+        if success and patient.timestamp and patient.timestamp.date() == _business_day():
+            if _try_transition(patient, 'expired', {'status': 'standing'}):
+                app.logger.info(
+                    "Réconciliation impression tardive : le patient %s entre en file",
+                    patient.id)
+                _after_activation(patient)
+            if patient.status == 'standing':
+                return jsonify({
+                    'status': 'activated',
+                    'call_number': patient.call_number,
+                    'reconciled': True
+                }), 200
         return jsonify({'status': 'expired'}), 410
 
     # Déjà confirmé : idempotence (renvoi réseau, réessai de la file locale
     # de la borne...). Tout statut hors 'print_failed' signifie que le
     # patient a rejoint (ou dépassé) la file.
     if patient.status != 'pending':
-        if patient.status == 'print_failed':
-            return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
-        return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200
+        return _confirm_print_resolved_response(patient)
 
     if success:
         _activate_and_notify(patient)
-        return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200
+        return _confirm_print_resolved_response(patient)
 
     # Échec d'impression : comportement piloté par la configuration Admin
     # (onglet Page Patient). 'cancel' | 'keep' | 'ask'.
@@ -461,23 +481,19 @@ def confirm_print():
 
     if behavior == "keep":
         # On conserve le patient dans la file malgré l'absence de ticket.
-        _activate_and_notify(patient)
-        return jsonify({
-            'status': 'activated_no_ticket',
-            'call_number': patient.call_number
-        }), 200
+        if _activate_and_notify(patient):
+            return jsonify({
+                'status': 'activated_no_ticket',
+                'call_number': patient.call_number
+            }), 200
+        return _confirm_print_resolved_response(patient)
 
     if behavior == "cancel":
         # On annule l'inscription : pas de ticket => pas de patient dans la
         # file. journey_id est libéré : un nouveau scan du même QR crée alors
         # une inscription neuve au lieu de retrouver ce parcours annulé.
-        patient.status = 'print_failed'
-        patient.journey_id = None
-        db.session.commit()
-        return jsonify({
-            'status': 'cancelled',
-            'call_number': patient.call_number
-        }), 200
+        _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None})
+        return _confirm_print_resolved_response(patient)
 
     # behavior == "ask" (défaut) : on laisse l'inscription EN ATTENTE et on
     # renvoie au patient les options à afficher (Réessayer / Appeler le
@@ -495,13 +511,63 @@ def confirm_print():
     }), 200
 
 
-def _activate_and_notify(patient):
-    """ Active un patient pending (entrée en file) et émet la notification
-    'nouveau patient' si l'activité le demande (différée jusqu'à l'entrée réelle
-    en file, pour ne pas annoncer un patient qui aurait pu être annulé)."""
-    activate_patient(patient)
+def _try_transition(patient, from_status, updates):
+    """Transition CONDITIONNELLE from_status -> updates (UPDATE ... WHERE
+    status=from_status). Renvoie True si CETTE requête a effectué la
+    transition ; False si un traitement concurrent l'a déjà faite.
+
+    C'est ce qui rend activation et annulation mutuellement exclusives : un
+    confirm_print « succès » et un abandon/expiry qui se croisent ne peuvent
+    pas écrire tous les deux — le perdant relit l'état résultant et renvoie
+    la réponse idempotente correspondante."""
+    claimed = db.session.query(Patient).filter(
+        Patient.id == patient.id, Patient.status == from_status
+    ).update(updates, synchronize_session=False)
+    if claimed:
+        db.session.commit()
+        db.session.refresh(patient)
+        return True
+    db.session.rollback()
+    db.session.refresh(patient)
+    return False
+
+
+def _try_transition_pending(patient, updates):
+    return _try_transition(patient, 'pending', updates)
+
+
+def _confirm_print_resolved_response(patient):
+    """Réponse MÉTIER pour un print_job déjà tranché (idempotence) : jamais
+    le statut interne brut — 'standing' serait lu comme un échec par la
+    borne alors que l'inscription a réussi."""
+    if patient.status == 'print_failed':
+        return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
+    if patient.status == 'expired':
+        return jsonify({'status': 'expired'}), 410
+    return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200
+
+
+def _after_activation(patient):
+    """Effets de l'entrée réelle en file, APRÈS le commit de la transition :
+    appel automatique, diffusion temps réel et notification 'nouveau
+    patient' (différée jusqu'ici pour ne pas annoncer un patient qui aurait
+    pu être annulé)."""
+    from services.calling_service import run_auto_calling
+    run_auto_calling()
+    communikation("update_patient")
     if patient.activity and patient.activity.notification:
         send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})
+
+
+def _activate_and_notify(patient):
+    """Fait entrer en file une inscription 'pending' (transition
+    conditionnelle, exclusive avec annulation) puis déclenche les effets
+    d'activation. Renvoie True si CETTE requête a fait entrer le patient
+    en file."""
+    if not _try_transition_pending(patient, {'status': 'standing'}):
+        return False
+    _after_activation(patient)
+    return True
 
 
 @patient_bp.route('/patient/print_call_staff', methods=['POST'])
@@ -524,12 +590,13 @@ def print_call_staff():
         return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
 
     _alert_staff_print_failure(patient, 'call_staff', "Le patient demande de l'aide (ticket non imprimé)")
-    _activate_and_notify(patient)
-    return jsonify({
-        'status': 'activated_no_ticket',
-        'call_number': patient.call_number,
-        'staff_called': True
-    }), 200
+    if _activate_and_notify(patient):
+        return jsonify({
+            'status': 'activated_no_ticket',
+            'call_number': patient.call_number,
+            'staff_called': True
+        }), 200
+    return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
 
 
 @patient_bp.route('/patient/print_abandon', methods=['POST'])
@@ -546,13 +613,10 @@ def print_abandon():
     if patient is None:
         return jsonify({'status': 'expired'}), 410
 
-    if patient.status == 'pending':
-        # Même libération de journey_id que la branche 'cancel' de
-        # confirm_print : le parcours annulé ne doit pas bloquer un nouveau
-        # scan du même QR.
-        patient.status = 'print_failed'
-        patient.journey_id = None
-        db.session.commit()
+    # Même libération de journey_id que la branche 'cancel' de confirm_print
+    # : le parcours annulé ne doit pas bloquer un nouveau scan du même QR.
+    # Transition conditionnelle : exclusive avec un confirm_print concurrent.
+    _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None})
     return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
 
 

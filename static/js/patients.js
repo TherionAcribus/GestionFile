@@ -594,15 +594,29 @@ function callStaffFlow(printJobId) {
     renderPrintOverlay(messageHtml(L.call_staff + '…'), []);
     postPrintCallStaff(printJobId)
         .then(function(data) {
-            renderPrintOverlay(bigNumberHtml(L.staff_called, data.call_number), []);
-            conclusionTimer().start();
+            if (data && data.staff_called) {
+                renderPrintOverlay(bigNumberHtml(L.staff_called, data.call_number), []);
+                conclusionTimer().start();
+            } else {
+                // Réponse sans confirmation (expired, état déjà tranché…) :
+                // on n'annonce PAS un appel qui n'a pas eu lieu.
+                callStaffFailed(printJobId);
+            }
         })
         .catch(function(err) {
+            // Réseau/serveur injoignable : pareil — jamais « personnel
+            // prévenu » sans réponse du serveur.
             console.error('Appel personnel: erreur', err);
-            renderPrintOverlay(bigNumberHtml(L.staff_called), [
-                { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
-            ]);
+            callStaffFailed(printJobId);
         });
+}
+
+function callStaffFailed(printJobId) {
+    var L = printLabels();
+    renderPrintOverlay(messageHtml(L.print_failed_staff), [
+        { label: L.retry, onClick: function() { callStaffFlow(printJobId); } },
+        { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
+    ]);
 }
 
 

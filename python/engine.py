@@ -423,7 +423,7 @@ def add_patient(call_number, activity, status='standing', print_job_id=None,
 
     status='standing' : patient immédiatement dans la file (scan, création
     directe). status='pending' : inscription en attente de confirmation
-    d'impression (voir register_pending_patient / activate_patient).
+    d'impression (voir register_pending_patient / confirm_print).
 
     journey_id : UUID du parcours borne — clé d'unicité de l'inscription."""
     language_code = session.get('language_code', 'fr')
@@ -457,7 +457,18 @@ PENDING_PATIENT_TTL_SECONDS = 180
 
 
 def expire_stale_pending_patients(ttl_seconds=None):
-    """ Purge les inscriptions 'pending' jamais confirmées et trop anciennes.
+    """Expire les inscriptions 'pending' jamais confirmées et trop anciennes.
+
+    Elles passent en statut 'expired' au lieu d'être supprimées : la borne
+    conserve les acquittements en file locale et les retente — un résultat
+    d'impression tardif (coupure réseau longue) doit pouvoir retrouver son
+    inscription pour la réconcilier (voir /patient/confirm_print), au lieu
+    d'un 410 qui laissait un patient avec ticket hors de la file.
+
+    'expired' = résultat d'impression INCONNU (distinct de 'print_failed' :
+    échec ou annulation explicite). La ligne reste consultable jusqu'à la
+    purge de fin de journée. ``journey_id`` est libéré : le parcours
+    abandonné ne doit pas retenir l'inscription d'un nouveau scan.
 
     Appelée paresseusement à chaque nouvelle inscription : robuste sans
     dépendre d'un ordonnanceur (fonctionne quel que soit le rôle du process)."""
@@ -469,10 +480,11 @@ def expire_stale_pending_patients(ttl_seconds=None):
         Patient.timestamp < cutoff
     ).all()
     for patient in stale:
-        db.session.delete(patient)
+        patient.status = 'expired'
+        patient.journey_id = None
     if stale:
         db.session.commit()
-        app.logger.debug(f"{len(stale)} inscription(s) pending expirée(s) purgée(s)")
+        app.logger.debug(f"{len(stale)} inscription(s) pending expirée(s)")
     return len(stale)
 
 
@@ -481,28 +493,14 @@ def register_pending_patient(activity, print_job_id, journey_id=None):
 
     Contrairement à register_patient, on n'appelle NI auto_calling NI
     communikation : le patient n'entre dans la file qu'après confirmation de
-    l'impression (activate_patient). Cela évite d'ajouter un patient qui ne
-    recevra jamais de ticket."""
+    l'impression (transition conditionnelle dans /patient/confirm_print).
+    Cela évite d'ajouter un patient qui ne recevra jamais de ticket."""
     expire_stale_pending_patients()
     call_number = get_next_call_number(activity)
     new_patient = add_patient(call_number, activity, status='pending',
                               print_job_id=print_job_id, journey_id=journey_id)
     return new_patient
 
-
-def activate_patient(patient):
-    """ Fait passer une inscription 'pending' dans la file (status='standing')
-    puis déclenche l'appel automatique et la diffusion temps réel. À appeler une
-    fois l'impression confirmée réussie (ou conservée malgré l'échec)."""
-    patient.status = 'standing'
-    db.session.commit()
-    # Import différé : le service d'appel importe ce module (engine), on ne peut
-    # donc pas l'importer en tête sans créer un cycle. Remplace l'ancien
-    # `app.auto_calling()`, qui passait par un attribut greffé sur l'objet app.
-    from services.calling_service import run_auto_calling
-    run_auto_calling()
-    communikation("update_patient")
-    return patient
 
 _SIMPLE_NUMBERING_SCOPE = "simple"
 
