@@ -1476,8 +1476,8 @@ def test_layout_style_positions_print_error_without_forcing_display():
 def test_print_error_labels_registered_for_translation():
     """Les textes de l'écran d'impression rejoignent la liste des clés
     traduisibles."""
-    keys_file = Path(__file__).resolve().parents[1] / "static" / "json" / "config_keys_to_translate.json"
-    keys = set(json.loads(keys_file.read_text(encoding="utf-8"))["config_keys_to_translate"])
+    from params_registry import TRANSLATABLE_CONFIG_KEYS
+    keys = TRANSLATABLE_CONFIG_KEYS
     assert {
         "page_patient_interface_printing",
         "page_patient_interface_print_failed",

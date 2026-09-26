@@ -1,4 +1,3 @@
-import json
 import os
 from flask import Blueprint, render_template, request, jsonify, url_for, current_app as app
 from models import ConfigOption, Button, Activity, Language, Translation, db
@@ -14,7 +13,7 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
-from params_registry import get_spec
+from params_registry import get_spec, TRANSLATABLE_CONFIG_KEYS
 
 admin_translation_bp = Blueprint('admin_translation', __name__)
 
@@ -417,11 +416,15 @@ def translations_collect():
         return "", 200
 
 def load_config_keys_to_translate():
-    json_file = os.path.join(
-        app.static_folder, 'json', 'config_keys_to_translate.json')
-    with open(json_file, 'r', encoding='utf-8') as file:
-        data = json.load(file)
-        return data.get('config_keys_to_translate', [])
+    """Clés de configuration traduisibles — source unique : params_registry.
+
+    Avant, la liste venait de static/json/config_keys_to_translate.json et
+    dérivait : des clés réellement traduites (explications du scan, lignes
+    « votre tour » du téléphone) n'y figuraient pas, et des clés jamais lues
+    avec une langue y étaient proposées. Le fichier JSON subsiste à titre
+    documentaire ; un test le garde aligné sur le registre.
+    """
+    return sorted(TRANSLATABLE_CONFIG_KEYS)
     
 
 def _render_translations_list(language_code):

@@ -155,9 +155,11 @@ def test_announce_lists_eager_load_balise_relations(marker):
 
 
 def test_announce_listes_ne_relisent_pas_configoption():
-    """Le texte d'appel vient d'app.config (chargé en une requête groupée au
-    démarrage) — plus de relecture ConfigOption par requête, qui levait en
-    outre un AttributeError quand la ligne manquait en base."""
+    """Le texte d'appel vient de ``get_announce_templates`` : gabarit français
+    depuis app.config (chargé en une requête groupée au démarrage) ou
+    traduction de la langue du patient — plus de relecture ConfigOption par
+    requête, qui levait en outre un AttributeError quand la ligne manquait en
+    base."""
     body = _body("routes/announce.py", "def _calling_patients_list")
     assert "ConfigOption.query" not in body
-    assert "ANNOUNCE_CALL_TEXT" in body
+    assert "get_announce_templates" in body

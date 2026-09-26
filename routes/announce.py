@@ -4,7 +4,7 @@ import random
 from flask import Blueprint, render_template, url_for, current_app as app, jsonify, request, redirect
 from sqlalchemy.orm import joinedload
 from models import Patient, Counter, ConfigOption, get_queue_revision, page_editor_published_revision
-from utils import replace_balise_announces, replace_balise_welcome
+from utils import replace_balise_announces, replace_balise_welcome, get_announce_templates
 from communication import communikation
 from python.engine import get_next_patients_call_numbers
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
@@ -104,13 +104,16 @@ def _calling_patients_list():
     # chargement (config_loader). Relecture directe de ConfigOption ici =
     # une requête à chaque appel, et AttributeError si la ligne manquait en
     # base. Repli : le texte par défaut de default_config.json.
-    announce_call_text = app.config.get(
-        'ANNOUNCE_CALL_TEXT', "Le patient {N} est invité au comptoir {C}")
+    # Le gabarit est résolu dans la langue de CHAQUE patient (repli FR) :
+    # comme le TTS, la bannière parle la langue choisie à la borne.
+    call_templates = get_announce_templates(
+        'announce_call_text', patients,
+        "Le patient {N} est invité au comptoir {C}")
     return [
         {
             'id': patient.id,
             'counter_id': patient.counter_id,
-            'text': replace_balise_announces(announce_call_text, patient),
+            'text': replace_balise_announces(call_templates[patient.id], patient),
         }
         for patient in patients
     ]
@@ -139,9 +142,8 @@ def announce_state():
 
 @announce_bp.route('/announce/patients_ongoing')
 def patients_ongoing():
-    # Mêmes chargement anticipé et repli que _calling_patients_list.
-    announce_ongoing_text = app.config.get(
-        'ANNOUNCE_ONGOING_TEXT', "Comptoir {C} : Patient {N}")
+    # Mêmes chargement anticipé, repli et résolution par langue du patient
+    # que _calling_patients_list.
     patients = (
         Patient.query.filter_by(status='ongoing')
         .options(
@@ -152,9 +154,12 @@ def patients_ongoing():
         .order_by(Patient.counter_id)
         .all()
     )
+    ongoing_templates = get_announce_templates(
+        'announce_ongoing_text', patients, "Comptoir {C} : Patient {N}")
     ongoing_patients = []
     for patient in patients:
-        ongoing_patients.append(replace_balise_announces(announce_ongoing_text, patient))
+        ongoing_patients.append(
+            replace_balise_announces(ongoing_templates[patient.id], patient))
         app.logger.debug('ONGOINT %s', ongoing_patients)
         app.logger.debug("%s", patient)
     return render_template('announce/patients_ongoing.html', ongoing_patients=ongoing_patients)

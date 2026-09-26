@@ -2,7 +2,7 @@ import re
 import base64
 from datetime import datetime, date
 from flask import session, has_request_context, current_app as app
-from models import Button, Translation, db
+from models import Button, Language, Translation, db
 from communication import send_app_notification
 from params_registry import BALISE_LETTERS, get_spec
 
@@ -430,6 +430,43 @@ def choose_text_translation(key):
     else:
         text = get_text_translation(key, language_code)["translation"]
     return text
+
+
+def get_announce_templates(key_name, patients, default):
+    """``{patient.id: gabarit}`` résolu dans la langue de chaque patient.
+
+    Utilisé pour les textes de l'écran d'annonce attachés à un patient
+    (``announce_call_text``, ``announce_ongoing_text``) : comme le TTS, la
+    bannière suit ``patient.language`` — repli sur la valeur française de
+    configuration quand la langue est 'fr', absente, ou sans traduction
+    (même règle que ``get_text_translation``).
+
+    Deux requêtes groupées (codes de langue puis traductions) quel que soit
+    le nombre de bannières : passer par la relation ``patient.language``
+    déclencherait un chargement paresseux par patient quand l'appelant n'a
+    pas anticipé la relation.
+    """
+    french = app.config.get(key_name.upper(), default)
+    language_ids = {p.language_id for p in patients if p.language_id}
+    codes_by_id = (
+        dict(db.session.query(Language.id, Language.code)
+             .filter(Language.id.in_(language_ids)).all())
+        if language_ids else {})
+    wanted = {code for code in codes_by_id.values() if code != "fr"}
+    translations = {}
+    if wanted:
+        rows = db.session.query(
+            Translation.language_code, Translation.translated_text
+        ).filter(
+            Translation.key_name == key_name,
+            Translation.language_code.in_(wanted),
+            Translation.translated_text != "",
+        ).all()
+        translations = dict(rows)
+    return {
+        patient.id: translations.get(codes_by_id.get(patient.language_id)) or french
+        for patient in patients
+    }
 
 
 def render_ticket_escpos(text_list, new_patient, line_width, language_code=None):

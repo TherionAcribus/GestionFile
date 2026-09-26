@@ -319,6 +319,63 @@ _POSITIVE_INT_KEYS = {
 
 
 # ---------------------------------------------------------------------------
+# Clés traduisibles (point 3 — catalogue unique)
+# ---------------------------------------------------------------------------
+# SOURCE DE VÉRITÉ des textes de configuration proposés à la traduction dans
+# l'administration (remplace static/json/config_keys_to_translate.json, qui
+# dérivait : des clés utilisées n'y figuraient pas — explications du scan,
+# lignes « votre tour » du téléphone — et des clés jamais lues avec une langue
+# y étaient proposées — announce_text_down_patients).
+#
+# Une clé n'entre ici que si le code la résout réellement via
+# ``get_text_translation`` / ``choose_text_translation`` /
+# ``get_announce_templates`` avec un ``language_code`` — un test statique
+# (tests/test_translation_catalogue.py) vérifie cette consommation pour
+# chaque clé. Les textes purement français de l'écran d'annonce (titre,
+# sous-titre, bandeaux « welcome ») n'ont pas de contexte de langue : ils ne
+# sont pas traduisibles.
+_TRANSLATABLE_KEYS = {
+    # Borne patient (routes/patient.py).
+    "page_patient_disable_default_message",
+    "page_patient_title",
+    "page_patient_subtitle",
+    "page_patient_qrcode_data",
+    "page_patient_validation_message",
+    "page_patient_confirmation_message",
+    "page_patient_interface_validate_print",
+    "page_patient_interface_validate_scan",
+    "page_patient_interface_scan_explanation",
+    "page_patient_interface_validate_cancel",
+    "page_patient_interface_done_print",
+    "page_patient_interface_done_extend",
+    "page_patient_interface_done_back",
+    "page_patient_interface_printing",
+    "page_patient_interface_print_failed",
+    "page_patient_interface_retry",
+    "page_patient_interface_call_staff",
+    "page_patient_interface_staff_called",
+    "page_patient_interface_no_ticket",
+    "page_patient_interface_print_failed_staff",
+    # Ticket (utils.render_ticket_escpos, routes/admin_patient.py).
+    "ticket_header",
+    "ticket_message",
+    "ticket_footer",
+    # Page téléphone du patient (routes/patient.py).
+    "phone_title",
+    "phone_line1", "phone_line2", "phone_line3",
+    "phone_line4", "phone_line5", "phone_line6",
+    "phone_your_turn_line1", "phone_your_turn_line2", "phone_your_turn_line3",
+    "phone_your_turn_line4", "phone_your_turn_line5", "phone_your_turn_line6",
+    # Écran d'annonce : gabarits résolus dans la langue de chaque patient
+    # (routes/announce.py, services/calling_service.py) comme le TTS
+    # (python/engine.py, announce_call_sound).
+    "announce_call_text",
+    "announce_ongoing_text",
+    "announce_call_sound",
+}
+
+
+# ---------------------------------------------------------------------------
 # Valeurs autorisées pour les clés à choix fermé (listes déroulantes).
 # ``update_select`` n'appliquait AUCUNE validation de domaine : n'importe
 # quelle chaîne forgée côté client était persistée. Chaque ensemble reflète
@@ -429,6 +486,7 @@ class ParamSpec:
     restart_required: bool = False
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)
     allowed_values: frozenset | None = None  # choix fermé (listes déroulantes)
+    translatable: bool = False  # texte proposé à la traduction (référence « fr »)
 
 
 def _build_registry() -> dict[str, ParamSpec]:
@@ -444,6 +502,7 @@ def _build_registry() -> dict[str, ParamSpec]:
             restart_required=key in _RESTART_REQUIRED,
             secret=key in SECRET_CONFIG_KEYS,
             allowed_values=_ENUM_VALUES.get(key),
+            translatable=key in _TRANSLATABLE_KEYS,
         )
     return registry
 
@@ -454,6 +513,17 @@ PARAM_REGISTRY: dict[str, ParamSpec] = _build_registry()
 
 #: Table {clé: (config_name, value_type)} pour ``app.load_configuration``.
 CONFIG_MAPPINGS: dict[str, tuple[str, str]] = dict(_CONFIG_TYPES)
+
+
+#: Clés de configuration proposées à la traduction — source de vérité unique
+#: pour l'administration (voir ``_TRANSLATABLE_KEYS``).
+TRANSLATABLE_CONFIG_KEYS: frozenset[str] = frozenset(_TRANSLATABLE_KEYS)
+
+
+def is_translatable_key(key) -> bool:
+    """``True`` si ``key`` est un texte de configuration traduisible."""
+    spec = get_spec(key)
+    return bool(spec and spec.translatable)
 
 
 def get_spec(key):

@@ -39,7 +39,7 @@ from python.engine import (
     mark_overtaken_patients,
     trigger_async_audio_calling,
 )
-from utils import replace_balise_announces
+from utils import replace_balise_announces, get_announce_templates
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,13 @@ def announce_call(counter_id, patient):
     counter_become_active(counter_id)
     communikation("update_patient")
 
-    text = replace_balise_announces(current_app.config["ANNOUNCE_CALL_TEXT"], patient)
+    # Gabarit dans la langue du patient (repli FR), comme le TTS et le
+    # snapshot /announce/state : la bannière parle la même langue que
+    # l'annonce vocale.
+    template = get_announce_templates(
+        "announce_call_text", [patient],
+        "Le patient {N} est invité au comptoir {C}")[patient.id]
+    text = replace_balise_announces(template, patient)
     communikation(
         "update_screen",
         event="add_calling",
