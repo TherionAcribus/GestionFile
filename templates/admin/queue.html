@@ -35,7 +35,8 @@
             ('standing', 'En attente', True),
             ('calling', 'Appelés', True),
             ('ongoing', 'Au comptoir', True),
-            ('done', 'Servis', False)] %}
+            ('done', 'Servis', False),
+            ('cancelled', 'Retirés', False)] %}
             <input type="checkbox" class="btn-check" id="qf-{{ key }}" autocomplete="off" {% if checked %}checked{% endif %}>
             <label class="btn btn-sm btn-outline-primary" for="qf-{{ key }}">{{ label }}</label>
         {% endfor %}

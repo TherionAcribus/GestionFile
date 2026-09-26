@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, render_template, request, jsonify, current_app as app
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -5,7 +7,10 @@ from sqlalchemy.orm import joinedload
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get_queue_revision
 from python.engine import trigger_async_audio_calling
 from communication import communikation, send_app_notification
+from config import time_tz
+from queue_explain import TERMINAL_STATUSES
 from services import calling_service
+from services.queue_service import record_patient_step
 from transactions import atomic
 from auth_utils import require_app_token_or_login, require_counter_access
 
@@ -433,47 +438,97 @@ def validate_patient_from_app(patient_id):
 def delete_patient_from_app(patient_id):
     return handle_patient_from_app(patient_id, action="delete")
 
-def handle_patient_from_app(patient_id, action, activity_id=None):    
+def handle_patient_from_app(patient_id, action, activity_id=None):
+    """Actions du comptoir/App sur un patient : validate / delete / standing.
+
+    Issues métier explicites (point audit « clôtures ») :
+
+    - ``validate`` -> ``done`` : servi. ``timestamp_end`` est posé (les stats
+      de durée l'exigeaient — avant, les clôtures App en étaient dépourvues)
+      et ``counter_id`` est CONSERVÉ : les stats du jour regroupent les
+      patients servis par comptoir (même règle que ``validate_current``).
+    - ``delete`` -> ``cancelled`` : retiré par le personnel — distinct de
+      ``done`` dans les stats et l'historique (le patient n'a pas été servi).
+      L'étape au comptoir est consignée dans ``patient_step`` avant que le
+      rattachement ne soit effacé.
+    - ``standing`` -> renvoi en file, avec transfert éventuel vers une autre
+      activité : l'étape close est consignée (``requeued``/``transferred``),
+      sinon la redirection perdait toute trace du passage précédent.
+
+    Rejeux et transitions : un patient déjà en état terminal (done/cancelled/
+    expired/print_failed) renvoie un succès idempotent SANS rien réécrire —
+    la première issue enregistrée fait foi.
+    """
     patient = Patient.query.get(patient_id)
-    app.logger.debug('STANDING %s', patient)
+    app.logger.debug('APP %s %s', action, patient)
 
-    if action == "delete":
-        status = "done"  # en cas de suppression de la part du comptoir, on marque le patient comme terminé
-    elif action == "standing":
-        status = "standing"
-    elif action == "validate":
-        status = "done"
+    if patient is None:
+        return 'Patient not found', 404
 
-    if patient:
-        # on change les infos du patient
-        patient.status = status
-        patient.counter = None
+    if patient.status in TERMINAL_STATUSES:
+        # Action déjà conclue (renvoi réseau, double appui) : succès
+        # idempotent, aucune donnée n'est réécrite.
+        return "", 201
 
-        # Si une nouvelle activité est spécifiée, on met à jour l'activité du patient
+    now = datetime.now(time_tz)
+
+    if action == "standing":
+        new_activity = None
         if activity_id is not None:
             new_activity = Activity.query.get(activity_id)
-            if new_activity:
-                patient.activity_id = activity_id
-                patient.activity = new_activity
-                app.logger.debug(f"Activity changed to: {new_activity.name}")
-        
-        db.session.commit()
+            if new_activity is None:
+                return 'Activity not found', 404
+            app.logger.debug("Activity changed to: %s", new_activity.name)
 
-        # rafraichissement de la page
-        communikation("update_screen", event="remove_calling", data={"id": patient_id})
+        if patient.status == 'standing' and (
+                activity_id is None or new_activity.id == patient.activity_id):
+            # Rejeu d'un renvoi en file déjà effectué : rien à changer.
+            return "", 201
 
-        # rafraichissement des infos
-        communikation("update_patient")
+        # L'étape en cours (comptoir, activité) est consignée AVANT la
+        # réécriture : la redirection conservait le patient mais perdait
+        # l'historique de l'étape qu'elle clôturait.
+        record_patient_step(
+            patient,
+            outcome='transferred' if new_activity else 'requeued',
+            new_activity_id=new_activity.id if new_activity else None,
+            now=now)
+        patient.status = "standing"
+        patient.counter = None
+        if new_activity is not None:
+            patient.activity = new_activity
 
-        # notification au staff concerné si connecté
-        if activity_id is not None:
-            counters = get_all_counter_ids_from_activity(activity_id)
-            if counters:
-                send_app_notification(origin="patient_for_staff_from_app", data={"patient":patient, "counters": counters})
-
-        return "", 201
     else:
-        return 'Patient not found', 404
+        if action == "validate":
+            patient.status = "done"
+            # counter_id conservé : les statistiques regroupent les « done »
+            # par comptoir.
+        else:  # "delete"
+            # « cancelled » : retiré sans avoir été servi — le retrait est
+            # consigné dans l'étape (comptoir, activité de l'étape).
+            record_patient_step(patient, outcome='cancelled', now=now)
+            patient.status = "cancelled"
+            patient.counter = None
+            # Libère le parcours borne (même motif que l'abandon d'impression)
+            # : un nouveau scan du même QR repart sur une inscription neuve.
+            patient.journey_id = None
+        patient.timestamp_end = now
+
+    db.session.commit()
+
+    # rafraichissement de la page
+    communikation("update_screen", event="remove_calling", data={"id": patient_id})
+
+    # rafraichissement des infos
+    communikation("update_patient")
+
+    # notification au staff concerné si connecté
+    if action == "standing" and activity_id is not None:
+        counters = get_all_counter_ids_from_activity(activity_id)
+        if counters:
+            send_app_notification(origin="patient_for_staff_from_app", data={"patient":patient, "counters": counters})
+
+    return "", 201
     
 
 def get_all_counter_ids_from_activity(activity_id):

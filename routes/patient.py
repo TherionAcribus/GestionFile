@@ -555,6 +555,10 @@ def _confirm_print_resolved_response(patient):
     borne alors que l'inscription a réussi."""
     if patient.status == 'print_failed':
         return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
+    if patient.status == 'cancelled':
+        # Inscription retirée par le personnel entre-temps : réponse
+        # définitive pour que la borne vide sa file locale.
+        return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
     if patient.status == 'expired':
         return jsonify({'status': 'expired'}), 410
     return jsonify({'status': 'activated', 'call_number': patient.call_number}), 200

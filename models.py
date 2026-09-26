@@ -183,6 +183,35 @@ class Patient(db.Model):
         }
 
 
+class PatientStep(db.Model):
+    """Étape terminée du parcours d'un patient.
+
+    La ligne ``Patient`` est réécrite à chaque étape : sans ce journal, une
+    redirection (renvoi en file, transfert vers une autre activité) ou un
+    retrait effaçait le passage par l'activité et le comptoir précédents.
+    Chaque clôture intermédiaire y laisse une trace : issue (``outcome``),
+    activité servie, comptoir concerné et horodatages de l'étape.
+
+    ``patient_id`` n'est volontairement PAS une clé étrangère : la ligne
+    ``Patient`` est purgée en fin de journée alors que les étapes doivent
+    survivre (retrouvables via ``patient_history.patient_source_id``).
+    """
+    __tablename__ = 'patient_step'
+    id = db.Column(db.Integer, Sequence('patient_step_id_seq'), primary_key=True)
+    patient_id = db.Column(db.Integer, nullable=False, index=True)
+    # Issue de l'étape : 'requeued' (renvoyé en file), 'transferred'
+    # (redirigé vers une autre activité), 'cancelled' (retiré par le personnel).
+    outcome = db.Column(db.String(20), nullable=False)
+    activity_id = db.Column(db.Integer, nullable=True)     # activité de l'étape close
+    new_activity_id = db.Column(db.Integer, nullable=True)  # cible si transfert
+    counter_id = db.Column(db.Integer, nullable=True)      # comptoir de l'étape close
+    timestamp = db.Column(db.DateTime, nullable=False)      # fin de l'étape
+    timestamp_counter = db.Column(db.DateTime, nullable=True)  # arrivée au comptoir
+
+    def __repr__(self):
+        return f'<PatientStep {self.patient_id} {self.outcome}>'
+
+
 class CallNumberSequence(db.Model):
     """Compteur persistant des numéros d'appel, par journée et par série.
 

@@ -29,14 +29,38 @@ le même cœur transactionnel : le chemin de démarrage respecte désormais
 ``CRON_TRANSFER_PATIENT_TO_HISTORY`` comme le job nocturne.
 """
 
+from datetime import datetime
+
 from flask import current_app
+
+from config import time_tz
 
 from audit_log import ACTION_CLEAR, OUTCOME_FAILURE, OUTCOME_SUCCESS
 from audit_service import record_audit
 from communication import communikation
 from init_restore import clear_counter_table
-from models import Patient, PatientHistory, db
+from models import Patient, PatientHistory, PatientStep, db
 from routes.announce import refresh_announce_screens
+
+
+def record_patient_step(patient, outcome, new_activity_id=None, now=None):
+    """Consigne la clôture de l'étape courante du parcours patient.
+
+    À appeler AVANT de réécrire ``activity_id``/``counter_id`` sur la ligne
+    ``Patient`` : c'est elle qui préserve le passage par l'activité et le
+    comptoir précédents quand le patient est renvoyé en file, transféré ou
+    retiré. La ligne est flushée avec la transaction de l'appelant (pas de
+    commit ici : l'étape et la mutation du patient sont atomiques).
+    """
+    db.session.add(PatientStep(
+        patient_id=patient.id,
+        outcome=outcome,
+        activity_id=patient.activity_id,
+        new_activity_id=new_activity_id,
+        counter_id=patient.counter_id,
+        timestamp=now or datetime.now(time_tz),
+        timestamp_counter=patient.timestamp_counter,
+    ))
 
 
 def _history_row_for(patient):

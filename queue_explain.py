@@ -19,12 +19,21 @@ EDITABLE_STATUSES = ("standing", "calling", "ongoing", "done")
 # Statuts qui supposent un comptoir.
 STATUSES_WITH_COUNTER = ("calling", "ongoing")
 
+# Statuts TERMINAUX : le parcours est clos, plus aucune action ne doit le
+# faire reculer. ``done`` = servi ; ``cancelled`` = retiré par le personnel
+# (le patient n'a pas été pris en charge) ; ``print_failed``/``expired`` =
+# l'inscription n'a jamais rejoint la file (flux d'impression de la borne).
+TERMINAL_STATUSES = ("done", "cancelled", "expired", "print_failed")
+
 STATUS_LABELS = {
     "pending": "Ticket en impression",
     "standing": "En attente",
     "calling": "Appelé",
     "ongoing": "Au comptoir",
     "done": "Servi",
+    "cancelled": "Retiré",
+    "expired": "Expiré",
+    "print_failed": "Impression échouée",
 }
 
 STATUS_BADGES = {
@@ -33,6 +42,9 @@ STATUS_BADGES = {
     "calling": "text-bg-warning",
     "ongoing": "text-bg-success",
     "done": "text-bg-secondary",
+    "cancelled": "text-bg-danger",
+    "expired": "text-bg-light border",
+    "print_failed": "text-bg-danger",
 }
 
 

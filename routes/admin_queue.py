@@ -26,7 +26,7 @@ from ui_feedback import display_toast
 admin_queue_bp = Blueprint('admin_queue', __name__)
 
 # Statuts filtrables (cases de la barre d'outils), dans l'ordre du parcours.
-status_list = ['pending', 'standing', 'calling', 'ongoing', 'done']
+status_list = ['pending', 'standing', 'calling', 'ongoing', 'done', 'cancelled']
 
 # Toute modification de la file recharge la liste (hx-trigger
 # « refresh_queue_patient from:body ») sans attendre le WebSocket.
@@ -201,6 +201,13 @@ def update_patient(patient_id):
 
     try:
         patient.call_number = call_number
+        # Clôture cohérente : un passage à 'done' sans fin horodatée ne
+        # participait à aucune statistique de durée ; une réouverture efface
+        # la fin pour ne pas fausser les mesures si le patient repart.
+        if status == 'done' and patient.timestamp_end is None:
+            patient.timestamp_end = _now()
+        elif status != 'done' and patient.timestamp_end is not None:
+            patient.timestamp_end = None
         patient.status = status
         patient.activity = activity
         # Un patient en attente n'occupe aucun comptoir.

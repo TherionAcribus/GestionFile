@@ -96,6 +96,9 @@ def call_next(counter_id, attempts=0):
         previous_patients = Patient.query.filter_by(status='calling', counter_id=counter_id).all()
         for patient in previous_patients:
             patient.status = 'done'
+            # Fin horodatée : sans timestamp_end, ces clôtures ne participaient
+            # à aucune statistique de durée. Le comptoir reste rattaché.
+            patient.timestamp_end = datetime.now(time_tz)
             app.logger.info(f"Patient {patient.id} status updated to 'done' for counter {counter_id} (fallback)")
         db.session.commit()
 

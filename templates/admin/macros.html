@@ -82,7 +82,7 @@
    La valeur technique (standing/calling/ongoing/done) reste utilisée côté
    serveur et dans les `value=""` ; seul l'affichage est traduit. #}
 {% macro status_label(status) -%}
-{{ {'pending': 'Ticket en impression', 'standing': 'En attente', 'calling': 'Appelé', 'ongoing': 'Au comptoir', 'done': 'Servi'}.get(status, status) }}
+{{ {'pending': 'Ticket en impression', 'standing': 'En attente', 'calling': 'Appelé', 'ongoing': 'Au comptoir', 'done': 'Servi', 'cancelled': 'Retiré', 'expired': 'Expiré', 'print_failed': 'Impression échouée'}.get(status, status) }}
 {%- endmacro %}
 
 
