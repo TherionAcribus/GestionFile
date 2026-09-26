@@ -111,9 +111,9 @@ def test_button_grouping_uses_in_memory_index(rel):
 # Point 9.6 — deux derniers N+1
 # --------------------------------------------------------------------------
 
-def test_buttons_translation_uses_single_query():
-    """``get_buttons_translation`` faisait une requête Translation PAR bouton."""
-    body = _body("utils.py", "def get_buttons_translation")
+def test_button_translations_uses_single_query_without_mutation():
+    """Les libellés sont chargés en une requête, sans modifier les modèles."""
+    body = _body("utils.py", "def get_button_translations")
     assert "Translation.row_id.in_(" in body, (
         "les traductions doivent être chargées en une seule requête (IN), "
         "pas une par bouton"
@@ -121,14 +121,10 @@ def test_buttons_translation_uses_single_query():
     assert "filter_by(" not in body or "row_id=button.id" not in body, (
         "la requête par bouton subsiste"
     )
-    # La boucle d'application ne doit plus contenir d'accès à la base.
-    # `rindex` : la liste en compréhension qui collecte les identifiants contient
-    # la même sous-chaîne plus haut dans la fonction.
-    marqueur = "for bouton in buttons:"
-    assert marqueur in body, "la boucle d'application des libellés a disparu"
-    boucle = body[body.rindex(marqueur):]
-    assert "Translation.query" not in boucle, (
-        "aucune requête ne doit rester dans la boucle sur les boutons"
+    assert "Translation.column_name == 'label'" in body
+    assert ".label =" not in body, (
+        "la traduction doit être renvoyée en mappage, jamais écrite dans "
+        "Button.label"
     )
 
 

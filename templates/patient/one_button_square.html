@@ -27,7 +27,7 @@
                                                 src='/static/images/buttons/{{ button.image_url }}'>
                                 {% endif %}
                                 <div class="div_text_button {% if button.is_active %} div_text_button_square_active {% else %} div_text_button_inactive {% endif %}">
-                                        <p>{{ button.label }}</p>
+                                        <p>{{ button_translations.get(button.id) or button.label }}</p>
                                 </div>
                         </div>
 

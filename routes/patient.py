@@ -2,7 +2,7 @@ import uuid
 import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
-from utils import choose_text_translation, get_buttons_translation, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
+from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
 from python.engine import get_next_call_number, get_futur_patient, register_patient, register_pending_patient, activate_patient, qr_code_data_uri
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, check_kiosk_login_ticket, KIOSK_SESSION_KEY
@@ -90,8 +90,9 @@ def patient_right_page():
         return render_template('patient/no_buttons.html')
 
     language_code = session.get('language_code', 'fr')
+    button_translations = {}
     if language_code != "fr":
-        buttons = get_buttons_translation(buttons, language_code)
+        button_translations = get_button_translations(buttons, language_code)
         page_patient_subtitle = get_text_translation("page_patient_subtitle", language_code)["translation"]
         page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)["translation"]
     else:
@@ -110,6 +111,7 @@ def patient_right_page():
 
     buttons_content = render_template('patient/patient_buttons_left.html',
                             buttons=buttons,
+                            button_translations=button_translations,
                             max_length=max_length,
                             empty_parent_ids=empty_parent_ids,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel)
@@ -176,8 +178,9 @@ def display_children_buttons_for_right_page(request):
     children_buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
     
     language_code = session.get('language_code', 'fr')
+    button_translations = {}
     if language_code != "fr":
-        children_buttons = get_buttons_translation(children_buttons, language_code)
+        button_translations = get_button_translations(children_buttons, language_code)
         page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)["translation"]
     else:
         page_patient_interface_validate_cancel = app.config["PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL"]
@@ -188,6 +191,7 @@ def display_children_buttons_for_right_page(request):
     max_length = 2 if children_buttons and children_buttons[0].shape == "square" else 4
     return render_template('patient/patient_buttons_left.html',
                             buttons=children_buttons,
+                            button_translations=button_translations,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             max_length=max_length,
                             children=True)

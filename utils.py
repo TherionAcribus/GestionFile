@@ -283,7 +283,7 @@ def _activity_label(patient, language_code=None):
         button = Button.query.filter_by(activity_id=patient.activity_id).first()
         if button is not None:
             if language_code and language_code != "fr":
-                label = get_buttons_translation([button], language_code)[0].label
+                label = get_button_translations([button], language_code).get(button.id) or button.label
             else:
                 label = button.label
     except Exception as e:
@@ -360,31 +360,27 @@ def replace_balise_welcome(template):
     return replace_balises(template)
 
 
-def get_buttons_translation(buttons, language_code):
-    """Applique aux boutons leur libellé traduit, en UNE seule requête.
+def get_button_translations(buttons, language_code):
+    """Renvoie ``{button.id: libellé traduit}``, en UNE seule requête.
 
-    Auparavant : une requête ``Translation`` **par bouton** (N+1). Sur la page
-    patient, qui affiche l'ensemble des boutons d'activité, le coût était donc
-    proportionnel au nombre de boutons à chaque affichage.
+    Le modèle ``Button`` n'est pas modifié : écrire la traduction dans
+    ``button.label`` marquait l'instance comme modifiée et un commit ultérieur
+    pouvait remplacer le libellé source français par sa traduction.
     """
     if not buttons:
-        return buttons
+        return {}
 
     ids = [bouton.id for bouton in buttons]
-    traductions = {
+    return {
         traduction.row_id: traduction.translated_text
         for traduction in Translation.query.filter(
             Translation.table_name == 'Button',
+            Translation.column_name == 'label',
             Translation.language_code == language_code,
             Translation.row_id.in_(ids),
+            Translation.translated_text != '',
         ).all()
     }
-
-    for bouton in buttons:
-        traduit = traductions.get(bouton.id)
-        if traduit:
-            bouton.label = traduit
-    return buttons
 
 
 def get_activity_message_translation(activity, language_code):
