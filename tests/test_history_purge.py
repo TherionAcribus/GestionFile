@@ -681,12 +681,26 @@ def test_ensure_heartbeat_unchanged_when_present(app):
         fake_scheduler.add_job.assert_not_called()
 
 
-def test_startup_reconcile_includes_heartbeat():
-    """Le battement est assuré au démarrage des rôles qui exécutent des
-    tâches (scheduler / all), via _reconcile_scheduler_jobs."""
+def test_startup_reconcile_covers_all_jobs():
+    """Au démarrage des rôles qui exécutent des tâches (scheduler / all),
+    _reconcile_scheduler_jobs couvre TOUT : les tâches de scheduler_functions
+    via reconcile_scheduled_jobs et celles des activités via
+    reconcile_activity_jobs — plus seulement l'archivage."""
     source = _read("app.py")
     body = _func_body(source, "_reconcile_scheduler_jobs")
-    assert "ensure_scheduler_heartbeat_job" in body
+    assert "reconcile_scheduled_jobs" in body
+    assert "reconcile_activity_jobs" in body
+
+
+def test_reconcile_scheduled_jobs_covers_every_task():
+    """Le point de convergence doit couvrir toutes les tâches du module —
+    y compris le battement et les deux purges alignées sur l'interrupteur."""
+    source = _read("scheduler_functions.py")
+    body = _func_body(source, "reconcile_scheduled_jobs")
+    for fn in ("ensure_scheduler_heartbeat_job", "reconcile_auto_archive_job",
+               "ensure_messaging_cleanup_job", "reconcile_clear_patient_table_job",
+               "reconcile_clear_announce_calls_job"):
+        assert f"{fn}()" in body, f"{fn} absent de reconcile_scheduled_jobs"
 
 
 def test_reconcile_clear_patient_table_job(app):
@@ -896,11 +910,13 @@ def test_auto_archive_job_checks_enabled_flag():
 
 def test_startup_reconciles_jobs():
     """Le démarrage des rôles qui exécutent des tâches (scheduler / all)
-    réconcilie le jobstore persistant avec la configuration."""
+    réconcilie le jobstore persistant avec la configuration — via le point
+    de convergence qui inclut l'archivage (cf. test_reconcile_scheduled_jobs_*
+    et test_startup_reconcile_covers_all_jobs)."""
     source = _read("app.py")
     assert "_reconcile_scheduler_jobs()" in source
     body = _func_body(source, "_reconcile_scheduler_jobs")
-    assert "reconcile_auto_archive_job" in body
+    assert "reconcile_scheduled_jobs" in body
 
 
 def test_update_config_returns_warning_on_scheduler_failure():

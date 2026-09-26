@@ -471,3 +471,43 @@ def update_scheduler_for_activity(activity, previous_name=None):
                 f"disable at {schedule.end_time.strftime('%H:%M')}"
             )
 
+
+def reconcile_activity_jobs():
+    """Réaligne les tâches planifiées de TOUTES les activités sur la base.
+
+    Complète ``reconcile_scheduled_jobs`` (scheduler_functions) : après une
+    restauration de sauvegarde, un jobstore recréé ou un ajout en échec, les
+    jobs persistés et les activités divergent. Chaque activité est
+    replanifiée — ``update_scheduler_for_activity`` retire puis repose, donc
+    l'horaire ET le fuseau épinglé sont repris — puis les tâches
+    ``enable_*``/``disable_*`` ne correspondant à aucune activité existante
+    (renommage hors interface, suppression directe en base, restauration)
+    sont retirées comme orphelines.
+
+    Retourne ``(nombre d'activités replanifiées, nombre d'orphelins retirés)``.
+    """
+    activities = Activity.query.options(
+        selectinload(Activity.schedules).selectinload(ActivitySchedule.weekdays)
+    ).all()
+
+    for activity in activities:
+        update_scheduler_for_activity(activity)
+
+    prefixes = tuple(
+        prefix
+        for activity in activities
+        for prefix in _job_prefixes(activity.name)
+    )
+    orphans = 0
+    for job in scheduler.get_jobs():
+        if job.id.startswith(("enable_", "disable_")) \
+                and not job.id.startswith(prefixes):
+            try:
+                scheduler.remove_job(job.id)
+                orphans += 1
+                app.logger.info(f"Removed orphan job: {job.id}")
+            except Exception as e:
+                app.logger.error(f"Failed to remove orphan job {job.id}: {e}")
+
+    return len(activities), orphans
+

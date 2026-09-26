@@ -537,6 +537,29 @@ def scheduler_heartbeat_job():
     """No-op volontaire : cf. ``ensure_scheduler_heartbeat_job``."""
 
 
+def reconcile_scheduled_jobs():
+    """Réaligne TOUTES les tâches planifiées gérées par ce module.
+
+    Point de convergence unique, appelé au démarrage des rôles qui exécutent
+    des tâches : après une restauration de sauvegarde, un jobstore recréé ou
+    un ajout en échec, le jobstore persistant et la base divergent — chaque
+    réconciliation laisse le jobstore conforme à la configuration (la base
+    fait foi). Les tâches d'activités sont couvertes séparément par
+    ``routes.admin_activity.reconcile_activity_jobs`` (domaine activités) ;
+    les changements de configuration à chaud passent par les mêmes
+    réconciliations unitaires (admin_config).
+
+    Retourne ``{job_id: 'added' | 'removed' | 'unchanged'}``.
+    """
+    return {
+        HEARTBEAT_JOB_ID: ensure_scheduler_heartbeat_job(),
+        AUTO_ARCHIVE_JOB_ID: reconcile_auto_archive_job(),
+        MESSAGING_CLEANUP_JOB_ID: ensure_messaging_cleanup_job(),
+        CLEAR_PATIENT_TABLE_JOB_ID: reconcile_clear_patient_table_job(),
+        CLEAR_ANNOUNCE_CALLS_JOB_ID: reconcile_clear_announce_calls_job(),
+    }
+
+
 def auto_archive_job():
     """Tâche planifiée pour l'archivage automatique"""
     app = AppHolder.get_app()

@@ -313,6 +313,24 @@ def test_suppression_retire_les_taches(app, client, fake_scheduler):
     assert not any("Ordonnance" in j for j in fake_scheduler.jobs)
 
 
+def test_reconcile_activity_jobs_realigne_tout(app, fake_scheduler):
+    """Réconciliation de démarrage : toutes les activités sont replanifiées
+    (horaire et fuseau courants repris) et les jobs enable_/disable_ sans
+    activité correspondante sont retirés — ici « Autre », absent de la base,
+    comme après une restauration ou un jobstore partiellement recréé."""
+    with app.app_context():
+        rescheduled, orphans = admin_activity.reconcile_activity_jobs()
+    assert (rescheduled, orphans) == (4, 1)
+    jobs = fake_scheduler.jobs
+    assert "enable_Autre_mon_0900" not in jobs          # orphelin retiré
+    assert "enable_Ordonnance_mon_0900" in jobs
+    assert "enable_Ordonnance_fri_0900" in jobs
+    assert "disable_Ordonnance_fri_1200" in jobs
+    assert "enable_Conseil_sat_0900" in jobs
+    assert "enable_Voir Marie_mon_0900" in jobs
+    assert not any("Sans horaire" in j for j in jobs)   # continu : pas de job
+
+
 def test_plages_en_cartes(client):
     html = client.get("/admin/schedule/table").get_data(as_text=True)
     assert "Du lundi au vendredi, 09:00–12:00" in html

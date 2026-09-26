@@ -45,11 +45,7 @@ from routes.api_system import api_system_bp
 from routes.calling import calling_bp
 from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
-from scheduler_functions import (
-    clear_old_patients_table, ensure_messaging_cleanup_job,
-    ensure_scheduler_heartbeat_job, reconcile_auto_archive_job,
-    reconcile_clear_announce_calls_job, reconcile_clear_patient_table_job,
-)
+from scheduler_functions import clear_old_patients_table, reconcile_scheduled_jobs
 from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
@@ -62,7 +58,7 @@ from routes.counter import counter_bp
 from routes.messaging import messaging_bp
 from routes.admin_announce import admin_announce_bp
 from routes.admin_counter import admin_counter_bp
-from routes.admin_activity import admin_activity_bp
+from routes.admin_activity import admin_activity_bp, reconcile_activity_jobs
 from routes.admin_algo import admin_algo_bp
 from routes.admin_gallery import admin_gallery_bp
 from routes.admin_phone import admin_phone_bp
@@ -797,40 +793,33 @@ app.load_configuration = load_configuration
 
 
 def _reconcile_scheduler_jobs():
-    """Aligne les jobs persistants sur la configuration, au démarrage.
+    """Aligne les jobs persistants sur la configuration et la base, au démarrage.
 
     Le jobstore SQLAlchemy survit aux redémarrages et est partagé entre
-    processus : sans réconciliation, un job « Auto Archive Data » restant
-    d'une activation passée continuerait à s'exécuter alors que l'option a
-    été désactivée — et réciproquement, une option activée dont l'ajout avait
-    échoué resterait sans effet.
+    processus : sans réconciliation, les tâches planifiées et la base
+    divergent — job restant d'une activation passée (archivage, purges),
+    tâches manquantes après un ajout en échec, jobs d'activités orphelins
+    après une restauration de sauvegarde ou un jobstore recréé, déclencheurs
+    créés avec un ancien fuseau. ``reconcile_scheduled_jobs`` couvre les
+    tâches gérées par scheduler_functions ; ``reconcile_activity_jobs``
+    replanifie les activités et retire leurs orphelins.
     """
     try:
         with app.app_context():
-            # Le battement en premier : en déploiement web+scheduler séparés,
-            # c'est lui qui fait relire le jobstore partagé chaque minute.
-            heartbeat_action = ensure_scheduler_heartbeat_job()
-            action = reconcile_auto_archive_job()
-            messaging_action = ensure_messaging_cleanup_job()
-            cron_actions = {
-                'Clear Patient Table': reconcile_clear_patient_table_job(),
-                'Clear Announce Calls': reconcile_clear_announce_calls_job(),
-            }
-        if heartbeat_action != "unchanged":
-            app.logger.info("Job de battement du scheduler planifié")
-        if messaging_action != "unchanged":
-            app.logger.info("Job de purge de la messagerie planifie")
-        if action != 'unchanged':
-            app.logger.info(
-                "Job d'archivage réconcilié avec la configuration : %s", action)
-        for job_id, cron_action in cron_actions.items():
-            if cron_action != 'unchanged':
+            actions = reconcile_scheduled_jobs()
+            rescheduled, orphans = reconcile_activity_jobs()
+        for job_id, action in actions.items():
+            if action != 'unchanged':
                 app.logger.info(
                     "Job '%s' réconcilié avec la configuration : %s",
-                    job_id, cron_action)
+                    job_id, action)
+        if rescheduled or orphans:
+            app.logger.info(
+                "Jobs d'activités réconciliés : %s replanifiée(s), "
+                "%s orphelin(s) retiré(s)", rescheduled, orphans)
     except Exception as e:
         # Jobstore indisponible au démarrage : on journalise sans bloquer le
-        # lancement — la garde dans auto_archive_job reste en place.
+        # lancement — les gardes à l'exécution des jobs restent en place.
         app.logger.error("Réconciliation des jobs planifiés impossible : %s", e)
 
 
