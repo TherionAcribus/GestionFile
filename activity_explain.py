@@ -26,6 +26,10 @@ _ENGLISH_TO_ABBR = {
     "friday": "Fri", "saturday": "Sat", "sunday": "Sun",
 }
 
+# Nom anglais du jour indexé par datetime.weekday() (0 = lundi). À préférer à
+# strftime('%A'), dont le résultat dépend de la locale de la machine.
+ENGLISH_DAY_NAMES = tuple(_ENGLISH_TO_ABBR)
+
 
 def weekday_codes(weekdays) -> str:
     """CSV d'abréviations (« Mon,Tue ») pour les jours d'une plage."""

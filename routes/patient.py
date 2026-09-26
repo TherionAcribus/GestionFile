@@ -3,7 +3,7 @@ import markdown2
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
-from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, qr_code_data_uri, _business_day
+from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, qr_code_data_uri, _business_day, activity_accepting_registrations
 from communication import communikation, send_app_notification
 from auth_utils import make_patient_phone_token, check_patient_phone_token, patient_ticket_patient_id, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
@@ -149,7 +149,10 @@ def patients_submit():
 
 def display_activity_inactive(request):
     activity = Activity.query.get(request.form.get('activity_id'))
-    
+    # ``activity`` peut être None (activity_id périmé/supprimé sur un écran
+    # resté ouvert) : le message par défaut s'affiche quand même.
+    inactivity_message = activity.inactivity_message if activity else None
+
     language_code = session.get('language_code', 'fr')
     if language_code != "fr":
         default_subtitle = get_text_translation("page_patient_subtitle", language_code)["translation"]
@@ -158,11 +161,12 @@ def display_activity_inactive(request):
         # langue étrangère sur une activité inactive.
         # Le helper replie déjà sur le texte d'activité français quand la
         # traduction manque ; reste le repli sur le message par défaut.
-        message = (get_activity_inactivity_message_translation(activity, language_code)
+        message = ((get_activity_inactivity_message_translation(activity, language_code)
+                    if activity else None)
                    or get_text_translation("page_patient_disable_default_message", language_code)["translation"])
     else:
         default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
-        message = activity.inactivity_message or app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
+        message = inactivity_message or app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
 
     return render_template('patient/activity_inactive.html',
                             page_patient_disable_default_message=message,
@@ -218,7 +222,11 @@ def display_validation_after_choice(request):
         if app.config.get("PAGE_PATIENT_DIRECT_PRINT", False):
              return patient_return_validation_page_and_print_data(print_ticket=True)
         activity = Activity.query.get(activity_id)
-        #socketio.emit('trigger_valide_activity', {'activity': activity.id})
+        # Le flag ``is_active`` du formulaire date du rendu de la page : sur un
+        # écran resté ouvert, l'activité a pu fermer (horaires, désactivation)
+        # depuis. La disponibilité est revérifiée côté serveur au clic.
+        if activity is None or not activity_accepting_registrations(activity):
+            return display_activity_inactive(request)
         return left_page_validate_patient(activity)
     
     app.logger.error("Le bouton ne possède pas d'activité")
@@ -328,6 +336,11 @@ def patient_return_validation_page_and_print_data(print_ticket):
     # Un parcours = une inscription : on retrouve le patient du parcours
     # (clé unique Patient.journey_id) avant de créer quoi que ce soit.
     existing = find_patient_by_journey(journey_id)
+    if existing is None and not activity_accepting_registrations(activity):
+        # Écran de validation périmé : l'activité a fermé entre l'affichage
+        # de la page et le clic « Imprimer »/« Scan ». Aucune inscription —
+        # le patient voit la page « activité fermée » (avec message dédié).
+        return display_activity_inactive(request)
     if existing is None:
         if print_ticket:
             # Inscription en attente : elle sera activée à la confirmation d'impression.
@@ -621,6 +634,20 @@ def print_abandon():
 
 
 
+def _phone_activity_closed(activity, language_code):
+    """Fragment « activité fermée » pour la page téléphone — même message que
+    la borne (texte d'indisponibilité de l'activité ou défaut configuré)."""
+    if language_code == "fr" or language_code is None:
+        message = ((activity.inactivity_message if activity else None)
+                   or app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'])
+    else:
+        message = ((get_activity_inactivity_message_translation(activity, language_code)
+                    if activity else None)
+                   or get_text_translation("page_patient_disable_default_message", language_code)["translation"])
+    return render_template('patient/phone_activity_closed_fragment.html',
+                           closed_message=message)
+
+
 def patient_validate_scan(activity_id, journey_id=None):
     """ Fct appelée lors du scan du QRCode (validation).
 
@@ -857,6 +884,11 @@ def phone_patient_ping():
         # un second téléphone retrouve le MÊME patient — plus de doublon.
         patient = find_patient_by_journey(journey_id)
         if patient is None:
+            # QR périmé : l'activité a pu fermer depuis l'affichage — on
+            # revérifie la disponibilité AVANT d'inscrire.
+            activity = Activity.query.get(activity_id)
+            if not activity_accepting_registrations(activity):
+                return _phone_activity_closed(activity, language_code)
             patient = patient_validate_scan(activity_id, journey_id=journey_id)
         elif patient.status == 'pending':
             # Inscription en attente d'impression finalement validée par le
@@ -883,6 +915,11 @@ def phone_patient_ping():
         patient = Patient.query.get(request.cookies.get('patient_id'))
     # si pas encore inscrit
     else:
+        # Même garde que la branche journey : un ancien QR (sans parcours)
+        # scanné après la fermeture ne doit plus inscrire.
+        activity = Activity.query.get(activity_id)
+        if not activity_accepting_registrations(activity):
+            return _phone_activity_closed(activity, language_code)
         patient = patient_validate_scan(activity_id)
 
     phone_lines = []

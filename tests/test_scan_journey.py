@@ -34,7 +34,7 @@ os.environ.setdefault("SKIP_STARTUP_HOOKS", "1")
 import pytest
 from flask import Flask
 
-from models import db, Activity, Language, Patient
+from models import db, Activity, ActivitySchedule, Button, Language, Patient, Weekday
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
@@ -88,6 +88,10 @@ def application(tmp_path):
         TICKET_MESSAGE="{N}",
         TICKET_FOOTER="",
         PRINTER_WIDTH=48,
+        # Clés lues par display_activity_inactive (activité fermée).
+        PAGE_PATIENT_SUBTITLE="Sous-titre",
+        PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE="Activité indisponible",
+        PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE=10,
     )
     db.init_app(app)
     from routes.patient import patient_bp
@@ -629,3 +633,189 @@ def test_conclusion_print_labels_gardent_n_resolvent_les_autres_balises(
     labels = json.loads(match.group(1))
     assert labels["print_failed"] == \
         "Impression impossible à Pharmacie Test. Votre numéro est le {N}."
+
+
+# --- 8. Activité fermée : écran/QR périmés ne peuvent plus inscrire ----------
+
+def _activite_fermee(application):
+    """Activité dont la seule plage horaire couvre un AUTRE jour qu'aujourd'hui
+    — fermée quelle que soit l'heure d'exécution du test."""
+    from datetime import datetime, time
+    from activity_explain import ENGLISH_DAY_NAMES
+    from config import time_tz
+
+    autre_jour = ENGLISH_DAY_NAMES[(datetime.now(time_tz).weekday() + 1) % 7]
+    with application.app_context():
+        jour = Weekday(name="autre", english_name=autre_jour,
+                       abbreviation="AUT")
+        plage = ActivitySchedule(name="autre jour",
+                                 start_time=time(0, 0), end_time=time(23, 59))
+        plage.weekdays.append(jour)
+        activite = Activity(name="Fermée", letter="F", notification=False,
+                            specific_message="",
+                            inactivity_message="Réouverture demain")
+        activite.schedules.append(plage)
+        db.session.add(Language(code="fr", name="Français", translation="Français"))
+        db.session.add_all([jour, plage, activite])
+        db.session.commit()
+        return activite.id
+
+
+def test_ecran_perime_is_active_true_mais_activite_fermee(client, application):
+    """Régression P1-5 : une page de boutons affichée AVANT la fermeture
+    envoie encore ``is_active=True`` — la disponibilité est revérifiée
+    serveur au clic, jamais lue du formulaire."""
+    activite_id = _activite_fermee(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    reponse = client.post("/patients_submit", data={
+        "activity_id": str(activite_id),
+        "is_active": "True",
+        "is_parent": "False",
+    })
+
+    html = reponse.get_data(as_text=True)
+    assert "Réouverture demain" in html
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_print_and_validate_refuse_sur_activite_fermee(client, application):
+    """Page de validation restée ouverte après la fermeture : le clic
+    « Imprimer » n'inscrit pas — le patient voit la page « activité fermée »."""
+    activite_id = _activite_fermee(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    reponse = client.post("/patient/print_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-closed-print"},
+        headers={"HX-Request": "true"})
+
+    assert "Réouverture demain" in reponse.get_data(as_text=True)
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_scan_and_validate_refuse_sur_activite_fermee(client, application):
+    activite_id = _activite_fermee(application)
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    reponse = client.post("/patient/scan_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-closed-scan"},
+        headers={"HX-Request": "true"})
+
+    assert "Réouverture demain" in reponse.get_data(as_text=True)
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_ping_activite_fermee_n_inscrit_ni_notifie(client, application, monkeypatch):
+    """QR scanné après la fermeture : aucun patient créé, et aucun
+    update_scan_phone émis dans la salle du parcours (la borne ne doit pas
+    afficher de conclusion pour une inscription refusée)."""
+    import routes.patient as patient_module
+
+    appels = []
+    monkeypatch.setattr(
+        patient_module, "communikation",
+        lambda *args, **kwargs: appels.append(kwargs))
+
+    activite_id = _activite_fermee(application)
+    reponse = client.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-closed-phone"})
+
+    assert reponse.status_code == 200
+    assert "Réouverture demain" in reponse.get_data(as_text=True)
+    assert not any(kw.get("event") == "update_scan_phone" for kw in appels)
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_ping_sans_journey_activite_fermee(client, application):
+    """Ancien QR sans parcours, scanné après la fermeture : même refus."""
+    activite_id = _activite_fermee(application)
+
+    reponse = client.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr"})
+
+    assert "Réouverture demain" in reponse.get_data(as_text=True)
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_ping_journey_existant_suivi_meme_apres_fermeture(client, application):
+    """Le parcours a déjà produit un patient : le ping le réaffiche même si
+    l'activité a fermé entre-temps (suivi, pas nouvelle inscription)."""
+    from datetime import datetime, time
+    from activity_explain import ENGLISH_DAY_NAMES
+    from config import time_tz
+
+    activite_id = _activite(application)
+    client.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-suivi-closed"})
+
+    # L'activité ferme entre l'inscription et le re-ping.
+    autre_jour = ENGLISH_DAY_NAMES[(datetime.now(time_tz).weekday() + 1) % 7]
+    with application.app_context():
+        jour = Weekday(name="autre2", english_name=autre_jour,
+                       abbreviation="AU2")
+        plage = ActivitySchedule(name="fermé", start_time=time(0, 0),
+                                 end_time=time(23, 59))
+        plage.weekdays.append(jour)
+        activite = Activity.query.get(activite_id)
+        activite.schedules.append(plage)
+        db.session.commit()
+
+    telephone = application.test_client()
+    reponse = telephone.post("/patient/phone/ping", data={
+        "activity_id": str(activite_id), "language_code": "fr",
+        "journey": "j-suivi-closed"})
+
+    assert reponse.status_code == 200
+    assert "Réouverture demain" not in reponse.get_data(as_text=True)
+    with application.app_context():
+        assert Patient.query.filter_by(journey_id="j-suivi-closed").count() == 1
+
+
+def test_tous_les_boutons_desactives_bloquent_l_inscription(client, application):
+    """Désactivation manuelle/scheduler : activité dans ses horaires mais
+    aucun bouton actif+présent -> la borne ne doit plus pouvoir inscrire."""
+    activite_id = _activite(application)
+    with application.app_context():
+        db.session.add(Button(label="Guichet", activity_id=activite_id,
+                              is_active=False, is_present=True, sort_order=1))
+        db.session.commit()
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    reponse = client.post("/patient/print_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-btn-off"},
+        headers={"HX-Request": "true"})
+
+    assert "Réouverture demain" not in reponse.get_data(as_text=True)
+    assert "Activité indisponible" in reponse.get_data(as_text=True)
+    with application.app_context():
+        assert Patient.query.count() == 0
+
+
+def test_bouton_actif_permets_l_inscription(client, application):
+    """Un bouton encore actif+présent laisse l'inscription passer."""
+    activite_id = _activite(application)
+    with application.app_context():
+        db.session.add(Button(label="Guichet", activity_id=activite_id,
+                              is_active=True, is_present=True, sort_order=1))
+        db.session.commit()
+    with client.session_transaction() as sess:
+        sess["language_code"] = "fr"
+
+    reponse = client.post("/patient/scan_and_validate", data={
+        "activity_id": str(activite_id), "journey": "j-btn-on"},
+        headers={"HX-Request": "true"})
+
+    assert reponse.status_code == 200
+    with application.app_context():
+        assert Patient.query.count() == 1

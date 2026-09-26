@@ -11,7 +11,7 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
-from activity_explain import describe_schedule, is_continuous, is_open_at, shared_letters
+from activity_explain import ENGLISH_DAY_NAMES, describe_schedule, is_continuous, is_open_at, shared_letters
 from extensions import scheduler
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
@@ -55,7 +55,7 @@ def _render_activity_list(is_staff):
     # Doublons de lettre cherchés sur TOUTES les activités (équipier compris).
     shared = shared_letters(Activity.query.all())
     now = _now()
-    weekday = now.strftime('%A')
+    weekday = ENGLISH_DAY_NAMES[now.weekday()]
     items = [
         {
             "activity": activity,
@@ -192,7 +192,7 @@ def update_bouton_after_scheduler_changed(activity):
         return
 
     # Même règle que l'affichage « Dans ses horaires » de la page admin.
-    is_activity_active = is_open_at(activity.schedules, now.strftime('%A'), now.time())
+    is_activity_active = is_open_at(activity.schedules, ENGLISH_DAY_NAMES[now.weekday()], now.time())
 
     # Mettre à jour les boutons associés à l'activité
     for button in activity.buttons:

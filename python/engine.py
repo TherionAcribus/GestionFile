@@ -18,6 +18,7 @@ from auth_utils import require_app_token_or_login, make_patient_phone_token
 from call_numbering import next_category_call_number, next_simple_call_number
 from announcement_audio import cached_announcement_url
 from announcement_dispatcher import announcement_dispatcher
+from activity_explain import is_open_at, ENGLISH_DAY_NAMES
 
 engine_bp = Blueprint('engine', __name__)
 
@@ -662,6 +663,37 @@ def find_patient_by_journey(journey_id):
     if not journey_id:
         return None
     return Patient.query.filter_by(journey_id=journey_id).first()
+
+
+def activity_accepting_registrations(activity, now=None):
+    """L'activité accepte-t-elle une inscription À CET INSTANT ?
+
+    Garde serveur contre les écrans et QR périmés : une page borne affichée
+    avant la fermeture envoie encore ``is_active=True``, et un QR imprimé ou
+    affiché peut être scanné après la fin des horaires. La disponibilité est
+    donc recalculée au moment de l'inscription, jamais lue du formulaire.
+
+    Deux conditions :
+
+    - dans ses horaires (``is_open_at`` — la même règle que la page admin et
+      le scheduler, mais recalculée en direct : un job de bascule raté ou un
+      redémarrage ne laisse pas la porte ouverte) ;
+    - et, si l'activité possède des boutons, au moins l'un encore proposé
+      (``is_active`` ET ``is_present`` — couvre la désactivation manuelle
+      admin comme le masquage « hors horaires » quand
+      PAGE_PATIENT_DISABLE_BUTTON est off). Une activité sans aucun bouton
+      (nominative/personnel, jamais offerte sur la borne) n'a pas d'état
+      « fermé » à opposer : seul le planning la borne.
+    """
+    if activity is None:
+        return False
+    now = now or datetime.now(time_tz)
+    if not is_open_at(activity.schedules,
+                      ENGLISH_DAY_NAMES[now.weekday()], now.time()):
+        return False
+    buttons = activity.buttons
+    return not buttons or any(
+        button.is_active and button.is_present for button in buttons)
 
 
 def register_journey_patient(activity, journey_id):
