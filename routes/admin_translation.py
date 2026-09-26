@@ -484,61 +484,127 @@ def change_language_target():
     return _render_translations_list(language_code)
 
 
+#: Colonnes traduisibles par table attachée à une ligne réelle.
+_TRANSLATABLE_COLUMNS = {
+    "Button": {"label"},
+    "Activity": {"inactivity_message", "specific_message"},
+}
+
+
+def _translation_source_error(table_name, column_name, row_id, key_name):
+    """``None`` si le champ désigne une source réellement traduisible.
+
+    Les identifiants du formulaire (table, colonne, ligne, clé) étaient pris
+    tels quels : une source forgée créait des traductions orphelines, jamais
+    affichées, avec une réponse 200.
+    """
+    if table_name in _TRANSLATABLE_COLUMNS:
+        if column_name not in _TRANSLATABLE_COLUMNS[table_name] or key_name:
+            return f"{table_name} : colonne ou clé invalide"
+        model = Button if table_name == "Button" else Activity
+        if db.session.get(model, row_id) is None:
+            return f"{table_name} #{row_id} inexistant"
+        return None
+    if table_name == "ConfigOption":
+        spec = get_spec(key_name)
+        if spec is None or not spec.translatable:
+            return f"{key_name} : clé non traduisible"
+        if spec.value_type != column_name:
+            return f"{key_name} : colonne attendue {spec.value_type}"
+        option = db.session.get(ConfigOption, row_id)
+        if option is None or option.config_key != key_name:
+            return f"{key_name} : source inexistante"
+        return None
+    return f"{table_name} : table non traduisible"
+
+
+def _reject_translation_save(language_code, detail, toast_message):
+    """Abandon atomique d'une sauvegarde : rollback, audit d'échec, toast —
+    aucune ligne n'est persistée si un champ est invalide."""
+    db.session.rollback()
+    record_audit(ACTION_UPDATE, "translation", outcome=OUTCOME_FAILURE,
+                 details=f"langue={language_code}, {detail}")
+    display_toast(success=False, message=toast_message)
+    return "", 200
+
+
 @admin_translation_bp.route('/admin/translations/save_translations', methods=['POST'])
 @require_permission('translation')
 def save_translations():
-    app.logger.debug("%s", request.form.get("language_code"))
-    app.logger.debug('items %s', request.form.items())
     language_code = request.form.get("language_code")
+
+    # La langue cible doit exister et ne pas être la référence : un code forgé
+    # créait des traductions orphelines, et 'fr' contournerait le sélecteur
+    # pour écrire des références divergentes du texte source réel.
+    if (language_code == REFERENCE_LANGUAGE_CODE
+            or Language.query.filter_by(code=language_code).first() is None):
+        return _reject_translation_save(
+            language_code, "langue cible invalide",
+            "Langue cible invalide.")
+
     updated_count = 0
 
     for key, value in request.form.items():
         app.logger.debug('key %s', key)
-        if key.startswith("translation|"):
-            _, table_name, column_name, row_id, key_name = key.split('|')
+        if not key.startswith("translation|"):
+            continue
+        parts = key.split('|')
+        if len(parts) != 5:
+            return _reject_translation_save(
+                language_code, f"champ mal formé : {key}",
+                "Un champ de traduction est mal formé.")
+        _, table_name, column_name, row_id, key_name = parts
+        try:
             row_id = int(row_id)
+        except ValueError:
+            return _reject_translation_save(
+                language_code, f"row_id invalide : {key}",
+                "Un identifiant de traduction est invalide.")
 
-            # Même validation que le champ d'administration source : un texte
-            # de ConfigOption traduit avec une balise inconnue ou un balisage
-            # non fermé s'afficherait / s'imprimerait littéralement. Échec =>
-            # tout est annulé (le commit est unique, en fin de route).
-            if table_name == "ConfigOption":
-                text_check = validate_config_text(key_name, value)
-                if not text_check["success"]:
-                    db.session.rollback()
-                    record_audit(ACTION_UPDATE, "translation",
-                                 outcome=OUTCOME_FAILURE,
-                                 details=f"langue={language_code}, clé={key_name}")
-                    display_toast(success=False,
-                                  message=f"{key_name} : {text_check['value']}")
-                    return "", 200
-                value = text_check["value"]
+        source_error = _translation_source_error(
+            table_name, column_name, row_id, key_name)
+        if source_error:
+            return _reject_translation_save(
+                language_code, source_error,
+                f"Traduction refusée : {source_error}")
 
-            # Rechercher la traduction existante ou en créer une nouvelle
-            translation = Translation.query.filter_by(
+        # Même validation que le champ d'administration source : un texte
+        # de ConfigOption traduit avec une balise inconnue ou un balisage
+        # non fermé s'afficherait / s'imprimerait littéralement. Échec =>
+        # tout est annulé (le commit est unique, en fin de route).
+        if table_name == "ConfigOption":
+            text_check = validate_config_text(key_name, value)
+            if not text_check["success"]:
+                return _reject_translation_save(
+                    language_code, f"clé={key_name}",
+                    f"{key_name} : {text_check['value']}")
+            value = text_check["value"]
+
+        # Rechercher la traduction existante ou en créer une nouvelle
+        translation = Translation.query.filter_by(
+            table_name=table_name,
+            column_name=column_name,
+            row_id=row_id,
+            key_name=key_name,
+            language_code=language_code
+        ).first()
+
+        if translation:
+            # Mise à jour de la traduction existante
+            translation.translated_text = value
+        else:
+            # Création d'une nouvelle traduction
+            translation = Translation(
                 table_name=table_name,
                 column_name=column_name,
                 row_id=row_id,
                 key_name=key_name,
-                language_code=language_code
-            ).first()
+                language_code=language_code,
+                translated_text=value
+            )
+            db.session.add(translation)
 
-            if translation:
-                # Mise à jour de la traduction existante
-                translation.translated_text = value
-            else:
-                # Création d'une nouvelle traduction
-                translation = Translation(
-                    table_name=table_name,
-                    column_name=column_name,
-                    row_id=row_id,
-                    key_name=key_name,
-                    language_code=language_code,
-                    translated_text=value
-                )
-                db.session.add(translation)
-
-            updated_count += 1
+        updated_count += 1
 
     db.session.commit()
     record_audit(ACTION_UPDATE, "translation", outcome=OUTCOME_SUCCESS,
