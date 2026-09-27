@@ -69,7 +69,7 @@ def _make_app(*, patient_security=True):
 
     @app.route("/_login_test/<int:uid>")
     def _login_test(uid):
-        login_user(User.query.get(uid))
+        login_user(db.session.get(User, uid))
         return "ok", 200
 
     from routes.patient import patient_bp

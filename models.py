@@ -370,7 +370,7 @@ class Counter(db.Model):
             if field != 'activities':
                 setattr(self, field, data[field])
         if 'activities' in data:
-            self.activities = [Activity.query.get(id) for id in data['activities']]
+            self.activities = [db.session.get(Activity, id) for id in data['activities']]
 
 
 pharmacists_activities = db.Table('pharmacists_activities',
@@ -402,7 +402,7 @@ class Pharmacist(db.Model):
             if field != 'activities':
                 setattr(self, field, data[field])
         if 'activities' in data:
-            self.activities = [Activity.query.get(id) for id in data['activities']]
+            self.activities = [db.session.get(Activity, id) for id in data['activities']]
 
     def to_dict(self):
         """ Convertit l'objet en dictionnaire pour faciliter la sauvegarde en JSON """
@@ -547,7 +547,7 @@ class Activity(db.Model):
     def from_dict(self, data):
         for field in data:
             if field == 'schedules':
-                self.schedules = [ActivitySchedule.query.get(schedule_id) for schedule_id in data[field]]
+                self.schedules = [db.session.get(ActivitySchedule, schedule_id) for schedule_id in data[field]]
             elif field == 'staff_id':
                 self.staff_id = data[field] if data[field] else None
             else:
@@ -595,9 +595,9 @@ class ActivitySchedule(db.Model):
             elif field not in ['weekdays', 'activities']:
                 setattr(self, field, data[field])
         if 'weekdays' in data:
-            self.weekdays = [Weekday.query.get(id) for id in data['weekdays']]
+            self.weekdays = [db.session.get(Weekday, id) for id in data['weekdays']]
         if 'activities' in data:
-            self.activities = [Activity.query.get(id) for id in data['activities']]
+            self.activities = [db.session.get(Activity, id) for id in data['activities']]
 
     def __repr__(self):
         return f'<ActivitySchedule from {self.start_time} to {self.end_time}>'
@@ -1172,7 +1172,10 @@ class AuditLog(db.Model):
 class JobExecutionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.String(50))
-    execution_time = db.Column(db.DateTime, default=datetime.utcnow)
+    # datetime.utcnow est déprécié : même résultat (naïf, UTC) sans warning.
+    execution_time = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     status = db.Column(db.String(20))  # 'success' ou 'failed'
     error_message = db.Column(db.Text, nullable=True)
 
@@ -1181,7 +1184,7 @@ class JobExecutionLog(db.Model):
     def local_time(self):
         """Heure d'exécution convertie en ``time_tz`` (Europe/Paris).
 
-        ``execution_time`` est stocké naïf en UTC (``default=datetime.utcnow``) :
+        ``execution_time`` est stocké naïf en UTC (défaut UTC sans tzinfo) :
         on le marque UTC avant conversion — un ``astimezone`` direct
         supposerait l'heure locale de l'hôte et se tromperait hors conteneur
         UTC.

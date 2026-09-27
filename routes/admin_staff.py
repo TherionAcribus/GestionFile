@@ -126,7 +126,7 @@ def update_member(member_id):
 @admin_staff_bp.route('/admin/staff/confirm_delete/<int:member_id>', methods=['GET'])
 @require_permission('staff')
 def confirm_delete(member_id):
-    staff = Pharmacist.query.get(member_id)
+    staff = db.session.get(Pharmacist, member_id)
     return render_template('/admin/staff_modal_confirm_delete.html', staff=staff,
                            counters=Counter.query.filter_by(staff_id=member_id).all(),
                            nominative=Activity.query.filter_by(staff_id=member_id).all())
@@ -137,7 +137,7 @@ def confirm_delete(member_id):
 @require_permission('staff')
 def delete_staff(member_id):
     try:
-        member = Pharmacist.query.get(member_id)
+        member = db.session.get(Pharmacist, member_id)
         if not member:
             display_toast(success=False, message="Membre de l'équipe non trouvé")
             return display_staff_table()
@@ -194,7 +194,7 @@ def add_new_staff():
             db.session.flush()
 
             for activity_id in valeurs["activities"]:
-                activity = Activity.query.get(activity_id)
+                activity = db.session.get(Activity, activity_id)
                 if activity:
                     new_staff.activities.append(activity)
 
@@ -255,7 +255,7 @@ def add_counter():
 # @admin_staff_bp.route('/update_pharmacist/<int:pharmacist_id>', methods=['POST'])
 @require_permission('staff')
 def update_pharmacist(pharmacist_id):
-    pharmacist = Pharmacist.query.get(pharmacist_id)
+    pharmacist = db.session.get(Pharmacist, pharmacist_id)
     if pharmacist:
         pharmacist.name = request.form.get('name', pharmacist.name)
         pharmacist.initials = request.form.get('initials', pharmacist.initials)

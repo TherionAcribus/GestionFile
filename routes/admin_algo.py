@@ -113,7 +113,7 @@ def valider_regle_algo(form):
     else:
         valeurs["days_of_week"] = ",".join(DAY_ABBREVIATIONS)
 
-    if not Activity.query.get(valeurs["activity_id"]):
+    if not db.session.get(Activity, valeurs["activity_id"]):
         return None, "Activité introuvable."
 
     return valeurs, None
@@ -270,7 +270,7 @@ def add_new_rule():
 @admin_algo_bp.route('/admin/algo/confirm_delete_rule/<int:rule_id>', methods=['GET'])
 @require_permission('algo')
 def confirm_delete_rule(rule_id):
-    rule = AlgoRule.query.get(rule_id)
+    rule = db.session.get(AlgoRule, rule_id)
     return render_template('/admin/algo_modal_confirm_delete_rule.html', rule=rule)
 
 
@@ -279,7 +279,7 @@ def confirm_delete_rule(rule_id):
 @require_permission('algo')
 def delete_algo(algo_id):
     try:
-        rule = AlgoRule.query.get(algo_id)
+        rule = db.session.get(AlgoRule, algo_id)
         if not rule:
             display_toast(success=False, message="Règle non trouvée")
             return display_algo_table()
@@ -305,7 +305,7 @@ def delete_algo(algo_id):
 @require_permission('algo')
 def update_algo_rule(rule_id):
     try:
-        rule = AlgoRule.query.get(rule_id)
+        rule = db.session.get(AlgoRule, rule_id)
         if rule:
             valeurs, erreur = valider_regle_algo(request.form)
             if erreur:

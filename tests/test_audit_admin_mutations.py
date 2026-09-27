@@ -157,7 +157,7 @@ def test_update_counter_failure_writes_failure_audit_and_rolls_back(
     assert leak not in resp.get_data(as_text=True)
     assert leak not in (resp.headers.get("HX-Trigger") or "")
     with app.app_context():
-        assert Counter.query.get(cid).name == "Comptoir 1"
+        assert db.session.get(Counter, cid).name == "Comptoir 1"
 
     rows = _audit_rows(app, "counter")
     assert len(rows) == 1
@@ -175,7 +175,7 @@ def test_delete_counter_writes_success_audit(app, auth_client, monkeypatch):
 
     assert resp.status_code == 200
     with app.app_context():
-        assert Counter.query.get(cid) is None
+        assert db.session.get(Counter, cid) is None
     rows = _audit_rows(app, "counter")
     assert len(rows) == 1
     assert rows[0].action == ACTION_DELETE

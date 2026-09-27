@@ -233,13 +233,13 @@ def test_expiration_marque_au_lieu_de_supprimer(application):
 
     pid = _pending_patient(application)
     with application.app_context():
-        patient = Patient.query.get(pid)
+        patient = db.session.get(Patient, pid)
         patient.journey_id = "j-ttl"
         patient.timestamp = datetime.now(time_tz) - timedelta(seconds=9999)
         db.session.commit()
 
         assert expire_stale_pending_patients() == 1
-        patient = Patient.query.get(pid)
+        patient = db.session.get(Patient, pid)
         assert patient.status == "expired", "l'inscription était supprimée au lieu d'expirer"
         assert patient.journey_id is None
 

@@ -365,7 +365,7 @@ def announce_audio_test(scope):
     counter = Counter.query.filter(Counter.staff_id.isnot(None)).first()
 
     if counter is None:
-        counter = Counter.query.get(1)
+        counter = db.session.get(Counter, 1)
     
     patient.counter = counter
 
@@ -608,7 +608,7 @@ def announce_save_google_voice():
     if voice_google_region and not re.fullmatch(r"[a-zA-Z-]{2,20}", voice_google_region):
         return display_toast(success=False, message="Région de voix invalide.")
 
-    language = Language.query.get(language_id)
+    language = db.session.get(Language, language_id)
     if language is None:
         return display_toast(success=False, message="Langue inconnue.")
 
@@ -737,7 +737,7 @@ def announce_save_voice_model():
     if voice_model not in ("gtts", "google"):
         return display_toast(success=False, message="Modèle de voix non autorisé.")
 
-    language = Language.query.get(language_id)
+    language = db.session.get(Language, language_id)
     if language is None:
         return display_toast(success=False, message="Langue inconnue.")
 
@@ -777,7 +777,7 @@ def announce_save_gtts_voice():
     if voice_gtts_name not in gtts.lang.tts_langs():
         return display_toast(success=False, message="Voix gTTS inconnue.")
 
-    language = Language.query.get(language_id)
+    language = db.session.get(Language, language_id)
     if language is None:
         return display_toast(success=False, message="Langue inconnue.")
 
@@ -812,7 +812,7 @@ def announce_save_voice_is_active():
     language_id = request.form.get('language_id')
     voice_is_active = request.form.get('voice_is_active')
 
-    language = Language.query.get(language_id)
+    language = db.session.get(Language, language_id)
     if language is None:
         return display_toast(success=False, message="Langue inconnue.")
 

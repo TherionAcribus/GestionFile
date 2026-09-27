@@ -13,7 +13,7 @@ def _reserve_or_get(key, counter_id):
     exécuter l'action), ou la ligne existante si la clé a déjà été vue (rejeu).
     La réservation repose sur la clé primaire : deux requêtes concurrentes
     portant la même clé ne peuvent pas toutes deux l'insérer. """
-    existing = IdempotencyKey.query.get(key)
+    existing = db.session.get(IdempotencyKey, key)
     if existing is not None:
         return existing
 
@@ -26,7 +26,7 @@ def _reserve_or_get(key, counter_id):
         # premier. On récupère sa ligne pour renvoyer sa réponse (ou signaler
         # qu'elle est encore en cours).
         db.session.rollback()
-        return IdempotencyKey.query.get(key)
+        return db.session.get(IdempotencyKey, key)
 
 
 def idempotent(view):
@@ -68,7 +68,7 @@ def idempotent(view):
         # résultat pour les rejeux éventuels.
         resp = make_response(view(*args, **kwargs))
         try:
-            row = IdempotencyKey.query.get(key)
+            row = db.session.get(IdempotencyKey, key)
             if row is not None:
                 row.response_body = resp.get_data(as_text=True)
                 row.status_code = resp.status_code

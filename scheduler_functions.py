@@ -75,7 +75,7 @@ def disable_buttons_for_activity_job(activity_id, log_job_id=None):
     with app.app_context():
         _refresh_config(app)
         try:
-            activity = Activity.query.get(activity_id)
+            activity = db.session.get(Activity, activity_id)
             if not activity:
                 raise ValueError(f"Activity with id {activity_id} not found")
 
@@ -90,7 +90,7 @@ def disable_buttons_for_activity_job(activity_id, log_job_id=None):
 @with_app_context
 def disable_buttons_for_activity(app, activity_id):
     """Logique de désactivation des boutons"""
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     if activity:
         buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity.id).all()
         buttons_count = len(buttons)
@@ -114,7 +114,7 @@ def enable_buttons_for_activity_job(activity_id, log_job_id=None):
     with app.app_context():
         _refresh_config(app)
         try:
-            activity = Activity.query.get(activity_id)
+            activity = db.session.get(Activity, activity_id)
             if not activity:
                 raise ValueError(f"Activity with id {activity_id} not found")
 
@@ -129,7 +129,7 @@ def enable_buttons_for_activity_job(activity_id, log_job_id=None):
 @with_app_context
 def enable_buttons_for_activity(app, activity_id):
     """Logique d'activation des boutons"""
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     if activity:
         buttons = Button.query.order_by(Button.sort_order).filter_by(activity_id=activity.id).all()
         buttons_count = len(buttons)

@@ -35,7 +35,7 @@ et n'est pas encore applicable ; le test correspondant documente ce comportement
 
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -62,7 +62,7 @@ PROTECTED_ROUTES = [
 
 def _make_token(secret=SECRET_KEY, *, expired=False):
     delta = timedelta(minutes=-5) if expired else timedelta(hours=1)
-    exp = datetime.utcnow() + delta
+    exp = datetime.now(timezone.utc) + delta
     return jwt.encode({"exp": exp}, secret, algorithm="HS256")
 
 

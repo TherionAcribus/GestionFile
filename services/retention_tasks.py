@@ -54,7 +54,7 @@ def _as_aware(dt):
 
 def _acquire_db_lock():
     """Réserve le verrou inter-processus. ``False`` s'il est déjà détenu."""
-    row = IdempotencyKey.query.get(_LOCK_KEY)
+    row = db.session.get(IdempotencyKey, _LOCK_KEY)
     if row is not None:
         age = datetime.now(time_tz) - _as_aware(row.created_at)
         if age < _LOCK_STALE_AFTER:
@@ -72,7 +72,7 @@ def _acquire_db_lock():
 
 
 def _release_db_lock():
-    row = IdempotencyKey.query.get(_LOCK_KEY)
+    row = db.session.get(IdempotencyKey, _LOCK_KEY)
     if row is not None:
         db.session.delete(row)
         db.session.commit()
@@ -106,7 +106,7 @@ def retention_task_state():
     state = dict(_state) if _state else {'status': 'idle'}
     if state.get('status') == 'idle':
         try:
-            if IdempotencyKey.query.get(_LOCK_KEY) is not None:
+            if db.session.get(IdempotencyKey, _LOCK_KEY) is not None:
                 state = {'status': 'running', 'external': True}
         except Exception:
             db.session.rollback()

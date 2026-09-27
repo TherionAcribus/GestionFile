@@ -116,7 +116,7 @@ def call_specific(counter_id, patient_id):
     inexistant (404) ou déjà pris (423) clôturait quand même le patient en
     cours — sa prise en charge disparaissait sans avoir été appelée.
     """
-    next_patient = Patient.query.get(patient_id)
+    next_patient = db.session.get(Patient, patient_id)
     if not next_patient:
         return False, {"error": "not_found"}, 404
 
@@ -261,7 +261,7 @@ def arrive_at_counter(counter_id, patient_id):
     ``timestamp_counter`` — sinon la durée d'attente réelle au comptoir
     était écrasée à chaque renvoi.
     """
-    patient = Patient.query.get(patient_id)
+    patient = db.session.get(Patient, patient_id)
     if patient is None:
         return False, {"error": "not_found"}, 404
 
@@ -285,7 +285,7 @@ def pause(counter_id, patient_id):
     automatique tout en étant « en pause » ferait immédiatement rappeler un
     patient.
     """
-    current_patient = Patient.query.get(patient_id)
+    current_patient = db.session.get(Patient, patient_id)
     # Ne clôturer qu'un patient réellement actif de CE comptoir : un rejeu
     # réécrivait timestamp_end d'un patient déjà terminé, et un patient_id
     # d'un autre comptoir pouvait être clôturé à distance.
@@ -307,7 +307,7 @@ def pause(counter_id, patient_id):
     counter_become_inactive(counter_id)
     communikation("update_patient")
 
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     if counter is not None and counter.auto_calling:
         disable_auto_calling(counter_id)
 
@@ -377,7 +377,7 @@ def set_auto_calling(counter_id, actif):
     Renvoie ``(ok, charge_utile, code_statut)``. Quand on (ré)active un comptoir
     inactif, on lui sert immédiatement un patient.
     """
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     if not counter:
         current_app.logger.error("Comptoir introuvable : %s", counter_id)
         return False, "Counter not found", 404

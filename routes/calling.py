@@ -9,7 +9,7 @@ from flask import Blueprint, current_app as app, jsonify, render_template, sessi
 
 from auth_utils import require_app_token_or_login
 from idempotency import idempotent
-from models import Activity, Counter, Patient
+from models import Activity, Counter, Patient, db
 from services import calling_service
 
 calling_bp = Blueprint('calling', __name__)
@@ -57,7 +57,7 @@ def validate_patient(counter_id, patient_id):
 def counter(counter_id):
 
     app.logger.debug('counter_number %s', counter_id)
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     activities = Activity.query.all()
     # si l'id du comptoir n'existe pas -> page avec liste des comptoirs
 
@@ -101,14 +101,14 @@ def current_patient_for_counter_test(counter_id):
                             patient_id=patient_id, 
                             counter_id=counter_id, 
                             status = patient_status,
-                            current_staff=Counter.query.get(counter_id).staff  # TODO Utiliser une classe pour stocker ces infos
+                            current_staff=db.session.get(Counter, counter_id).staff  # TODO Utiliser une classe pour stocker ces infos
                             )
 
 
 
 @calling_bp.route('/counter/switch_auto_calling/<int:counter_id>')
 def switch_auto_calling(counter_id):
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     return render_template('counter/switch_auto_calling.html',
                             counter=counter,
                             auto_calling=counter.auto_calling)

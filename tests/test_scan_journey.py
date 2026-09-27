@@ -351,7 +351,7 @@ def test_conclusion_qr_encode_le_patient_reel(client, application, monkeypatch):
 
     _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
     with application.app_context():
-        activite_id = Patient.query.get(nouveau_id).activity_id
+        activite_id = db.session.get(Patient, nouveau_id).activity_id
 
     client.get(f"/patient/conclusion_page/{nouveau_id}")
 
@@ -546,7 +546,7 @@ def test_ticket_de_conclusion_suit_le_passage_sans_reinscrire(client, applicatio
 
     _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
     with application.app_context():
-        patient = Patient.query.get(nouveau_id)
+        patient = db.session.get(Patient, nouveau_id)
         ticket = make_patient_phone_token(patient.id, patient.call_number)
         activite_id = patient.activity_id
 
@@ -766,7 +766,7 @@ def test_ping_journey_existant_suivi_meme_apres_fermeture(client, application):
         plage = ActivitySchedule(name="fermé", start_time=time(0, 0),
                                  end_time=time(23, 59))
         plage.weekdays.append(jour)
-        activite = Activity.query.get(activite_id)
+        activite = db.session.get(Activity, activite_id)
         activite.schedules.append(plage)
         db.session.commit()
 

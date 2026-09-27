@@ -77,7 +77,7 @@ def _make_app():
 
     @app.route("/_test_login/<int:uid>")
     def _test_login(uid):
-        login_user(User.query.get(uid),
+        login_user(db.session.get(User, uid),
                    remember=request.args.get("remember") == "1")
         return "ok", 200
 
@@ -124,7 +124,7 @@ def _rejouer_cookie(app, nom, valeur):
 
 def _uniquifier(app, user_id):
     with app.app_context():
-        return User.query.get(user_id).fs_uniquifier
+        return db.session.get(User, user_id).fs_uniquifier
 
 
 # ---------------------------------------------------------------------------

@@ -145,7 +145,7 @@ def add_new_schedule():
             db.session.flush()
 
             for weekdays_id in valeurs["weekdays"]:
-                weekday = Weekday.query.get(weekdays_id)
+                weekday = db.session.get(Weekday, weekdays_id)
                 if weekday:
                     new_schedule.weekdays.append(weekday)
 
@@ -174,7 +174,7 @@ def add_new_schedule():
 @admin_schedule_bp.route('/admin/schedule/confirm_delete/<int:schedule_id>', methods=['GET'])
 @require_permission('schedule')
 def confirm_delete_schedule(schedule_id):
-    schedule = ActivitySchedule.query.get(schedule_id)
+    schedule = db.session.get(ActivitySchedule, schedule_id)
     return render_template('/admin/schedule_modal_confirm_delete.html', schedule=schedule,
                            activities=_activities_using(schedule_id))
 
@@ -183,7 +183,7 @@ def confirm_delete_schedule(schedule_id):
 @require_permission('schedule')
 def delete_schedule(schedule_id):
     try:
-        schedule = ActivitySchedule.query.get(schedule_id)
+        schedule = db.session.get(ActivitySchedule, schedule_id)
         if not schedule:
             display_toast(success=False, message="Plage horaire introuvable")
             return display_schedule_table()

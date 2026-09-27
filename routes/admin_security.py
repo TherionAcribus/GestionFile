@@ -342,7 +342,7 @@ def add_new_user():
             return display_security_table()
 
         # Récupération du rôle
-        role = Role.query.get(role_id)
+        role = db.session.get(Role, role_id)
         if not role:
             app.logger.error(f"Le rôle {role_id} n'existe pas")
             display_toast(success=False, message="Le rôle sélectionné n'existe pas")
@@ -380,7 +380,7 @@ def add_new_user():
 @require_permission('security')
 def security_update_user(user_id):
     try:
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()
@@ -406,7 +406,7 @@ def security_update_user(user_id):
 
         # Vérifier le changement de rôle pour un admin
         if has_admin_role(user):
-            new_role = Role.query.get(role_id)
+            new_role = db.session.get(Role, role_id)
             if not new_role or new_role.name != "admin":
                 # Si c'est le dernier admin, on refuse le changement
                 if count_admin_users() <= 1:
@@ -418,7 +418,7 @@ def security_update_user(user_id):
         user.email = email
 
         # Mettre à jour le rôle
-        role = Role.query.get(role_id)
+        role = db.session.get(Role, role_id)
         if not role:
             display_toast(success=False, message="Rôle invalide")
             return display_security_table()
@@ -454,7 +454,7 @@ def count_admin_users():
 @require_permission('security')
 def delete_user2(user_id):
     try:
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()
@@ -488,14 +488,14 @@ def delete_user2(user_id):
 @admin_security_bp.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
 @require_permission('security')
 def confirm_delete_user(user_id):
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     return render_template('/admin/security_modal_confirm_delete_user.html', user=user)
 
 # affiche la modale pour confirmer la suppression d'un role
 @admin_security_bp.route('/admin/security/confirm_delete_role/<int:role_id>', methods=['GET'])
 @require_permission('security')
 def confirm_delete_role(role_id):
-    role = Role.query.get(role_id)
+    role = db.session.get(Role, role_id)
     return render_template('/admin/security_modal_confirm_delete_role.html', role=role)
 
 
@@ -807,7 +807,7 @@ def security_update_role(role_id):
         app.logger.info(f"Permissions parsed: {permissions}")
 
         # Récupérer le rôle
-        role = Role.query.get(role_id)
+        role = db.session.get(Role, role_id)
         if not role:
             app.logger.error(f"Rôle {role_id} non trouvé")
             return jsonify({'error': 'Role not found'}), 404
@@ -930,7 +930,7 @@ def add_role_form():
 # supprime un rôle
 def delete_role(role_id):
     try:
-        role = Role.query.get(role_id)
+        role = db.session.get(Role, role_id)
         if not role:
             display_toast(success=False, message="Role non trouvé")
             return display_security_role_table()
@@ -955,7 +955,7 @@ def delete_role(role_id):
 @require_permission('security')
 def change_password_form(user_id):
     try:
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
             return ""
@@ -971,7 +971,7 @@ def change_password_form(user_id):
 @require_permission('security')
 def update_password(user_id):
     try:
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()

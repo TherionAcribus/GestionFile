@@ -61,7 +61,7 @@ def _make_app(*, screen_security):
     # forger les cles de session a la main.
     @app.route("/_login_test/<int:uid>")
     def _login_test(uid):
-        login_user(User.query.get(uid))
+        login_user(db.session.get(User, uid))
         return "ok", 200
 
     from routes.announce import announce_bp

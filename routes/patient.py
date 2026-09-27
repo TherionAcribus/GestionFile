@@ -149,7 +149,7 @@ def patients_submit():
 
 
 def display_activity_inactive(request):
-    activity = Activity.query.get(request.form.get('activity_id'))
+    activity = db.session.get(Activity, request.form.get('activity_id'))
     # ``activity`` peut être None (activity_id périmé/supprimé sur un écran
     # resté ouvert) : le message par défaut s'affiche quand même.
     inactivity_message = activity.inactivity_message if activity else None
@@ -222,7 +222,7 @@ def display_validation_after_choice(request):
     if activity_id != "":
         if app.config.get("PAGE_PATIENT_DIRECT_PRINT", False):
              return patient_return_validation_page_and_print_data(print_ticket=True)
-        activity = Activity.query.get(activity_id)
+        activity = db.session.get(Activity, activity_id)
         # Le flag ``is_active`` du formulaire date du rendu de la page : sur un
         # écran resté ouvert, l'activité a pu fermer (horaires, désactivation)
         # depuis. La disponibilité est revérifiée côté serveur au clic.
@@ -331,7 +331,7 @@ def patient_return_validation_page_and_print_data(print_ticket):
 
     # Récupération et traitement des données comme avant
     activity_id = request.form.get('activity_id')
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     journey_id = request.form.get('journey') or None
 
     # Un parcours = une inscription : on retrouve le patient du parcours
@@ -678,7 +678,7 @@ def patient_validate_scan(activity_id, journey_id=None):
     Avec un journey_id, l'inscription est dédupliquée sur le parcours :
     un rejeu ou un second téléphone retrouve le patient existant sans
     recréer de ligne ni renvoyer la notification « nouveau patient »."""
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     if journey_id:
         new_patient, created = register_journey_patient(activity, journey_id)
     else:
@@ -727,7 +727,7 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
     # réutilisé d'un jour à l'autre et une recherche dessus pouvait ressortir
     # un ancien patient (confirmation affichée pour un autre).
     app.logger.debug('CONFIG QRCODE CONCLUSION: %s', app.config.get("PAGE_PATIENT_QRCODE_DISPLAY"))
-    patient = Patient.query.get(patient_id)
+    patient = db.session.get(Patient, patient_id)
     call_number = patient.call_number if patient else ""
     # QR régénéré à la volée pour le patient RÉEL (et non retrouvé sur disque
     # : le numéro « futur » du QR de validation peut différer du numéro
@@ -818,7 +818,7 @@ def phone_patient(language_code, patient_id, activity_id):
 
     if ticket:
         pid = patient_ticket_patient_id(ticket)
-        patient = Patient.query.get(pid) if pid is not None else None
+        patient = db.session.get(Patient, pid) if pid is not None else None
         if patient is None:
             return render_template('patient/phone_link_invalid.html',
                                    phone_title=phone_title,
@@ -874,7 +874,7 @@ def phone_patient_status():
                                      request.cookies.get('patient_call_number')):
         return jsonify({"status": None}), 200
 
-    patient = Patient.query.get(request.cookies.get('patient_id'))
+    patient = db.session.get(Patient, request.cookies.get('patient_id'))
     if not patient:
         return jsonify({"status": None}), 200
 
@@ -900,7 +900,7 @@ def phone_patient_ping():
         # Lien de suivi signé (QR de conclusion) : on SUIT le passage existant
         # — jamais d'inscription, même sans cookie ni après leur expiration.
         pid = patient_ticket_patient_id(ticket)
-        patient = Patient.query.get(pid) if pid is not None else None
+        patient = db.session.get(Patient, pid) if pid is not None else None
         if patient is None:
             return render_template('patient/phone_link_invalid_fragment.html')
     elif journey_id:
@@ -910,7 +910,7 @@ def phone_patient_ping():
         if patient is None:
             # QR périmé : l'activité a pu fermer depuis l'affichage — on
             # revérifie la disponibilité AVANT d'inscrire.
-            activity = Activity.query.get(activity_id)
+            activity = db.session.get(Activity, activity_id)
             if not activity_accepting_registrations(activity):
                 return _phone_activity_closed(activity, language_code)
             patient = patient_validate_scan(activity_id, journey_id=journey_id)
@@ -936,12 +936,12 @@ def phone_patient_ping():
     elif check_patient_phone_token(request.cookies.get('patient_token'),
                                  request.cookies.get('patient_id'),
                                  request.cookies.get('patient_call_number')):
-        patient = Patient.query.get(request.cookies.get('patient_id'))
+        patient = db.session.get(Patient, request.cookies.get('patient_id'))
     # si pas encore inscrit
     else:
         # Même garde que la branche journey : un ancien QR (sans parcours)
         # scanné après la fermeture ne doit plus inscrire.
-        activity = Activity.query.get(activity_id)
+        activity = db.session.get(Activity, activity_id)
         if not activity_accepting_registrations(activity):
             return _phone_activity_closed(activity, language_code)
         patient = patient_validate_scan(activity_id)
@@ -961,7 +961,7 @@ def phone_patient_ping():
         phone_line = (app.config[f'PHONE_LINE{line}'] if language_code == "fr"
                       else get_text_translation(f'phone_line{line}', language_code)['translation'])
         phone_lines.append(replace_balise_phone(phone_line, patient))
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     # Langue du formulaire, comme les lignes ci-dessus — session.get() et le
     # paramètre pouvaient diverger ; le helper gère le repli fr/étranger.
     specific_message = get_activity_message_translation(activity, language_code)
@@ -998,7 +998,7 @@ def phone_patient_your_turn():
     if check_patient_phone_token(request.cookies.get('patient_token'),
                                  request.cookies.get('patient_id'),
                                  request.cookies.get('patient_call_number')):
-        patient = Patient.query.get(request.cookies.get('patient_id'))
+        patient = db.session.get(Patient, request.cookies.get('patient_id'))
     else:
         patient = None
 
@@ -1008,7 +1008,7 @@ def phone_patient_your_turn():
         phone_line = (app.config[f'PHONE_YOUR_TURN_LINE{line}'] if language_code == "fr"
                       else get_text_translation(f'phone_your_turn_line{line}', language_code)['translation'])
         phone_lines.append(replace_balise_phone(phone_line, patient))
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     specific_message = get_activity_message_translation(activity, language_code)
 
     # Convertir le texte des phone_lines de markdown en HTML

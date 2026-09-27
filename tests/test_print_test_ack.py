@@ -19,6 +19,7 @@ Maintenant :
 import json
 import os
 import re
+from types import SimpleNamespace
 
 import pytest
 from flask import Flask
@@ -100,10 +101,11 @@ def test_routes_vraiment_applees(application, monkeypatch):
             data={"call_number": "A-1", "activity": "1",
                   "language": "fr", "job_id": "job-live"}):
         # Les vues lisent session / Activity : on court-circuite les acces
-        # metier pour n'eprouver que la correlation.
-        monkeypatch.setattr(admin_patient, "Activity",
-                            type("A", (), {"query": type(
-                                "Q", (), {"get": staticmethod(lambda i: None)})()}))
+        # metier pour n'eprouver que la correlation. db.session.get est
+        # remplace directement (plus de Activity.query.get a stubber).
+        monkeypatch.setattr(admin_patient, "db",
+                            SimpleNamespace(session=SimpleNamespace(
+                                get=lambda *a, **k: None)))
         monkeypatch.setattr(admin_patient, "get_futur_patient",
                             lambda cn, act: None)
         monkeypatch.setattr(admin_patient, "format_ticket_text",
@@ -126,9 +128,9 @@ def test_langue_session_restauree_apres_essai_etranger(application, monkeypatch)
     from routes import admin_patient
     from flask import session
 
-    monkeypatch.setattr(admin_patient, "Activity",
-                        type("A", (), {"query": type(
-                            "Q", (), {"get": staticmethod(lambda i: None)})()}))
+    monkeypatch.setattr(admin_patient, "db",
+                        SimpleNamespace(session=SimpleNamespace(
+                            get=lambda *a, **k: None)))
     monkeypatch.setattr(admin_patient, "get_futur_patient", lambda c, a: None)
     monkeypatch.setattr(admin_patient, "format_ticket_text", lambda p, a: "WA==")
     monkeypatch.setattr(admin_patient, "communikation", lambda *a, **k: None)
@@ -157,9 +159,9 @@ def test_route_qr_restaure_la_langue(application, monkeypatch):
     from routes import admin_patient
     from flask import session
 
-    monkeypatch.setattr(admin_patient, "Activity",
-                        type("A", (), {"query": type(
-                            "Q", (), {"get": staticmethod(lambda i: None)})()}))
+    monkeypatch.setattr(admin_patient, "db",
+                        SimpleNamespace(session=SimpleNamespace(
+                            get=lambda *a, **k: None)))
     monkeypatch.setattr(admin_patient, "get_futur_patient", lambda c, a: None)
     monkeypatch.setattr(admin_patient, "qr_code_data_uri", lambda p: "data:x")
     monkeypatch.setattr(admin_patient, "render_template",

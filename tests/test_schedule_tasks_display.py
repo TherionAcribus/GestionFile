@@ -18,7 +18,7 @@ le gabarit.
 
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -65,7 +65,7 @@ def app(tmp_path):
 def _log(job_id, status, error=None, when=None):
     return JobExecutionLog(
         job_id=job_id, status=status, error_message=error,
-        execution_time=when or datetime.utcnow())
+        execution_time=when or datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 def _job(job_id, trigger=None, next_run_time=None):

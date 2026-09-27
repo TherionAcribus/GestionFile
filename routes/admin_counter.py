@@ -136,7 +136,7 @@ def disconnect_counter(counter_id):
 @admin_counter_bp.route('/admin/counter/confirm_delete/<int:counter_id>', methods=['GET'])
 @require_permission('counter')
 def confirm_delete_counter(counter_id):
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     return render_template('/admin/counter_modal_confirm_delete.html', counter=counter,
                            patient=_current_patients().get(counter_id))
 
@@ -146,7 +146,7 @@ def confirm_delete_counter(counter_id):
 @require_permission('counter')
 def delete_counter(counter_id):
     try:
-        counter = Counter.query.get(counter_id)
+        counter = db.session.get(Counter, counter_id)
         if not counter:
             display_toast(success=False, message="Comptoir introuvable")
             return display_counter_table()
@@ -216,7 +216,7 @@ def add_new_counter():
             db.session.flush()
 
             for activity_id in activities_ids:
-                activity = Activity.query.get(activity_id)
+                activity = db.session.get(Activity, activity_id)
                 if activity:
                     new_counter.activities.append(activity)
 

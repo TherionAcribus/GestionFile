@@ -315,10 +315,10 @@ def test_call_specific_notifie_les_patients_balayes(application, monkeypatch):
     _, comptoir_id = _base(application)
     with application.app_context():
         membre = Pharmacist(name="Membre", initials="M1")
+        db.session.add(membre)
         membre.activities.append(Activity.query.first())
         comptoir = db.session.get(Counter, comptoir_id)
         comptoir.staff = membre
-        db.session.add(membre)
         db.session.commit()
     _patient(application, call_number="A12", status="ongoing",
              counter_id=comptoir_id)
@@ -341,10 +341,10 @@ def test_call_next_balayage_notifie(application, monkeypatch):
     _, comptoir_id = _base(application)
     with application.app_context():
         membre = Pharmacist(name="Membre", initials="M1")
+        db.session.add(membre)
         membre.activities.append(Activity.query.first())
         comptoir = db.session.get(Counter, comptoir_id)
         comptoir.staff = membre
-        db.session.add(membre)
         db.session.commit()
     _patient(application, call_number="A12", status="calling",
              counter_id=comptoir_id)

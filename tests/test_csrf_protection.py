@@ -25,7 +25,7 @@ Deux niveaux, exécutables **sans MySQL ni serveur** :
 
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -65,7 +65,7 @@ def _verify_app_token(token):
 
 
 def _valid_app_token():
-    exp = datetime.utcnow() + timedelta(days=1)
+    exp = datetime.now(timezone.utc) + timedelta(days=1)
     return jwt.encode({"exp": exp}, _SECRET, algorithm="HS256")
 
 

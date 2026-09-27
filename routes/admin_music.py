@@ -41,7 +41,7 @@ class SpotifyDBCacheHandler(spotipy.CacheHandler):
     """
 
     def get_cached_token(self):
-        row = SpotifyToken.query.get(1)
+        row = db.session.get(SpotifyToken, 1)
         if not row or not row.token_info:
             return None
         try:
@@ -51,7 +51,7 @@ class SpotifyDBCacheHandler(spotipy.CacheHandler):
 
     def save_token_to_cache(self, token_info):
         try:
-            row = SpotifyToken.query.get(1)
+            row = db.session.get(SpotifyToken, 1)
             if row is None:
                 row = SpotifyToken(id=1)
                 db.session.add(row)
@@ -63,7 +63,7 @@ class SpotifyDBCacheHandler(spotipy.CacheHandler):
 
     def delete_token_from_cache(self):
         try:
-            row = SpotifyToken.query.get(1)
+            row = db.session.get(SpotifyToken, 1)
             if row is not None:
                 row.token_info = None
                 db.session.commit()

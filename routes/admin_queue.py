@@ -239,7 +239,7 @@ def update_patient(patient_id):
 @admin_queue_bp.route('/admin/queue/confirm_delete_patient/<int:patient_id>', methods=['GET'])
 @require_permission('queue')
 def confirm_delete_patient(patient_id):
-    patient = Patient.query.get(patient_id)
+    patient = db.session.get(Patient, patient_id)
     return render_template('/admin/queue_modal_confirm_delete_patient.html', patient=patient,
                            status_labels=STATUS_LABELS)
 
@@ -249,7 +249,7 @@ def confirm_delete_patient(patient_id):
 @require_permission('queue')
 def delete_patient(patient_id):
     try:
-        patient = Patient.query.get(patient_id)
+        patient = db.session.get(Patient, patient_id)
         if not patient:
             # Auparavant `return 200, ""` : tuple inversé, erreur 500.
             return display_toast(success=False, message="Patient introuvable")

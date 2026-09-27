@@ -366,7 +366,7 @@ def test_task_lock_released_after_run(app, client):
     with _sync_task():
         client.post("/admin/data/purge", data={"days": "365"})
     with app.app_context():
-        assert IdempotencyKey.query.get("retention_task_lock") is None
+        assert db.session.get(IdempotencyKey, "retention_task_lock") is None
 
 
 def test_task_state_idle_and_external(app, client):
@@ -379,7 +379,7 @@ def test_task_state_idle_and_external(app, client):
         db.session.commit()
         state = retention_tasks.retention_task_state()
         assert state["status"] == "running" and state["external"] is True
-        db.session.delete(IdempotencyKey.query.get("retention_task_lock"))
+        db.session.delete(db.session.get(IdempotencyKey, "retention_task_lock"))
         db.session.commit()
 
 

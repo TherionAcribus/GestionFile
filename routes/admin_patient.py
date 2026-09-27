@@ -223,7 +223,7 @@ def order_button_table():
 @require_permission('patient')
 def display_children_buttons(button_id):
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_parent=True).all()
-    button = Button.query.get(button_id)
+    button = db.session.get(Button, button_id)
     return render_template('admin/patient_page_button_display_children.html', buttons=buttons, button=button)
 
 
@@ -253,7 +253,7 @@ def update_button(button_id):
             else:
                 # Récupérer l'instance de l'activité correspondante
                 if activity_id:
-                    activity = Activity.query.get(activity_id)
+                    activity = db.session.get(Activity, activity_id)
                     if activity:
                         button.activity = activity
                         button.is_parent = False
@@ -266,7 +266,7 @@ def update_button(button_id):
                     button.activity = None            
 
             if parent_btn_id:
-                parent_button = Button.query.get(parent_btn_id)
+                parent_button = db.session.get(Button, parent_btn_id)
                 if parent_button:
                     button.parent_button = parent_button
 
@@ -349,7 +349,7 @@ def add_new_button():
         else:
             is_parent = False
             if activity_id:
-                activity = Activity.query.get(activity_id)
+                activity = db.session.get(Activity, activity_id)
                 if activity:
                     activity = activity
                 else:
@@ -361,7 +361,7 @@ def add_new_button():
                 activity = None
                 
         if parent_btn_id:
-            parent_button = Button.query.get(parent_btn_id)
+            parent_button = db.session.get(Button, parent_btn_id)
         else:
             parent_button = None
 
@@ -412,7 +412,7 @@ def add_new_button():
 @admin_patient_bp.route('/admin/patient/confirm_delete_button/<int:button_id>', methods=['GET'])
 @require_permission('patient')
 def confirm_delete_button(button_id):
-    button = Button.query.get(button_id)
+    button = db.session.get(Button, button_id)
     return render_template('/admin/patient_page_button_modal_confirm_delete.html', button=button)
 
 
@@ -720,7 +720,7 @@ def print_ticket_test_size():
 def print_ticket_test():
     call_number = request.values.get('call_number', 'A-1')
     activity_id = request.values.get('activity', 1)
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     language_code = request.values.get("language", "fr")
     app.logger.debug('language_code %s', language_code)
     # La langue de test est posée en session car format_ticket_text la lit
@@ -755,7 +755,7 @@ def admin_patient_qr_code_modal():
     previous_language = session.get("language_code")
     session["language_code"] = language_code
     try:
-        activity = Activity.query.get(activity_id)
+        activity = db.session.get(Activity, activity_id)
         patient = get_futur_patient(call_number, activity)
         qr_code = qr_code_data_uri(patient)
     finally:
@@ -837,7 +837,7 @@ def dashboard_button():
 @admin_patient_bp.route('/admin/button/deactivate/<int:button_id>', methods=['POST'])
 @require_permission('patient')
 def deactivate_button(button_id):
-    button = Button.query.get(button_id)
+    button = db.session.get(Button, button_id)
     button.is_active = False
     db.session.commit()
     record_audit(ACTION_DEACTIVATE, "button", target_id=button_id,
@@ -848,7 +848,7 @@ def deactivate_button(button_id):
 @admin_patient_bp.route('/admin/button/activate/<int:button_id>', methods=['POST'])
 @require_permission('patient')
 def activate_button(button_id):
-    button = Button.query.get(button_id)
+    button = db.session.get(Button, button_id)
     button.is_active = True
     db.session.commit()
     record_audit(ACTION_ACTIVATE, "button", target_id=button_id,

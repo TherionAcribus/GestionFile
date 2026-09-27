@@ -86,7 +86,7 @@ def app_paper_add():
 @require_counter_access
 def update_counter_staff():
     app.logger.debug('ma_request %s', request.form)
-    counter = Counter.query.get(request.form.get('counter_id'))
+    counter = db.session.get(Counter, request.form.get('counter_id'))
     initials = request.form.get('initials')
     # la demande vient elle de l'App en mode reduit ?
     from_app = request.form.get("app") == "True"
@@ -128,7 +128,7 @@ def update_counter_staff():
 
 @counter_bp.route('/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
 def is_staff_on_counter(counter_id):
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     # emet un signal pour provoquer le réaffichage de la liste des activités
     #socketio.emit("trigger_connect_staff", {})
     return render_template('counter/staff_on_counter.html', staff=counter.staff)
@@ -137,7 +137,7 @@ def is_staff_on_counter(counter_id):
 @counter_bp.route('/api/counter/is_staff_on_counter/<int:counter_id>', methods=['GET'])
 @require_app_token_or_login
 def api_is_staff_on_counter(counter_id):
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     if counter.staff:
         app.logger.debug('counter %s', counter.staff)
         return jsonify({"staff": counter.staff.to_dict()}), 200
@@ -147,7 +147,7 @@ def api_is_staff_on_counter(counter_id):
 
 def remove_counter_staff(origine=None):
     counter_id = request.form.get('counter_id')
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     # Deconnexion + coupure de l'appel automatique dans LA MEME transaction :
     # auparavant deux commits successifs (ici puis dans set_auto_calling)
     # laissaient une fenetre ou un comptoir sans agent continuait a appeler.
@@ -216,7 +216,7 @@ def api_counter_state(counter_id):
     qui pouvaient se chevaucher et laisser l'App dans un état incohérent (course
     de démarrage). Renvoie aussi la révision courante de la file : le client la
     mémorise pour, ensuite, détecter les évènements Socket.IO manqués. """
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     if not counter:
         return jsonify({"error": "counter not found"}), 404
 
@@ -310,7 +310,7 @@ def counter_auto_calling():
 
     # Lecture d'etat (App uniquement : POST sans 'action' ni 'value').
     if action is None and value is None:
-        counter = Counter.query.get(counter_id)
+        counter = db.session.get(Counter, counter_id)
         return jsonify({"status": counter.auto_calling}), 200
 
     auto_calling_value = (action == "activate") if action is not None else (value.lower() == "true")
@@ -340,7 +340,7 @@ def counter_auto_calling():
 def app_init_app():
     """ Fonction d'initialisation de l'application pour récupérer les infos utiles en une seule requete """
     counter_id = request.form.get('counter_id')
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
     activity_staff = Activity.query.filter_by(is_staff=True).all()
     activities_data = [activity.to_dict_for_app() for activity in activity_staff]
     return jsonify({"autocalling": counter.auto_calling,
@@ -377,7 +377,7 @@ def list_of_activities():
         staff_activities_ids = [activity.id for activity in activities]
 
     else:     
-        staff = Pharmacist.query.get(staff_id)
+        staff = db.session.get(Pharmacist, staff_id)
         # on renvoie les activités du membre de l'équipe pour les cocher dans la liste
         staff_activities_ids = [activity.id for activity in staff.activities]
 
@@ -459,7 +459,7 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
     expired/print_failed) renvoie un succès idempotent SANS rien réécrire —
     la première issue enregistrée fait foi.
     """
-    patient = Patient.query.get(patient_id)
+    patient = db.session.get(Patient, patient_id)
     app.logger.debug('APP %s %s', action, patient)
 
     if patient is None:
@@ -475,7 +475,7 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
     if action == "standing":
         new_activity = None
         if activity_id is not None:
-            new_activity = Activity.query.get(activity_id)
+            new_activity = db.session.get(Activity, activity_id)
             if new_activity is None:
                 return 'Activity not found', 404
             app.logger.debug("Activity changed to: %s", new_activity.name)
@@ -548,7 +548,7 @@ def get_all_counter_ids_from_activity(activity_id):
 def get_counters_from_activity(activity_id):
     """ Permet de récuperer tous les comptoirs associés à une activité (staff)"""
     # Récupérer l'activité à partir de l'ID
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     if not activity:
         app.logger.debug(f"Activity with ID {activity_id} not found.")
         return None

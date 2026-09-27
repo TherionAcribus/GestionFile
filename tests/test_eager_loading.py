@@ -5,7 +5,7 @@ vérifie sur le source que les routes rendant une liste chargent en amont les
 relations que le gabarit parcourt ligne par ligne (`joinedload`/`selectinload`),
 au lieu de laisser SQLAlchemy émettre une requête par ligne (N+1). On vérifie
 aussi que les regroupements de boutons parent/enfant ne relancent plus une
-requête `Button.query.get()` par groupe dans une boucle, mais retrouvent le
+requête `db.session.get(Button, )` par groupe dans une boucle, mais retrouvent le
 parent dans un index en mémoire.
 
 Complète `test_pagination_integration.py` (point 5.1) qui, lui, garantit que ces
@@ -102,7 +102,7 @@ def test_button_grouping_uses_in_memory_index(rel):
     assert "buttons_by_id" in src, f"{rel} devrait indexer les boutons en mémoire"
     # …et le parent est retrouvé dedans, pas via une requête dans la boucle.
     assert "buttons_by_id.get(parent_id)" in src
-    assert "Button.query.get(parent_id)" not in src, (
+    assert ".query.get(parent_id)" not in src, (
         f"{rel} relance encore une requête par groupe (N+1)"
     )
 

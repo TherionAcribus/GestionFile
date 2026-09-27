@@ -10,7 +10,7 @@ Importable/exécutable sans MySQL (auth_utils n'importe pas app.py). On utilise 
 contexte de requête Flask minimal pour fournir/omettre l'en-tête X-App-Token.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -31,7 +31,7 @@ def app():
 
 def _token(secret=SECRET_KEY, *, expired=False):
     delta = timedelta(minutes=-5) if expired else timedelta(hours=1)
-    return jwt.encode({"exp": datetime.utcnow() + delta}, secret, algorithm="HS256")
+    return jwt.encode({"exp": datetime.now(timezone.utc) + delta}, secret, algorithm="HS256")
 
 
 def test_allowed_when_security_disabled(app):

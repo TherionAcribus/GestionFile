@@ -254,7 +254,7 @@ def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
 
         for pharmacist_json in pharmacists_json:
             activities_ids = pharmacist_json.pop('activities', [])
-            pharmacist = Pharmacist.query.get(pharmacist_json['id'])
+            pharmacist = db.session.get(Pharmacist, pharmacist_json['id'])
 
             if not pharmacist:
                 pharmacist = Pharmacist(**pharmacist_json)
@@ -266,7 +266,7 @@ def staff_restore_init(Pharmacist, Activity, db, restore, file_path):
             pharmacist.activities = []  # Vider les activités actuelles
 
             for activity_id in activities_ids:
-                activity = Activity.query.get(activity_id)
+                activity = db.session.get(Activity, activity_id)
                 if activity:
                     if activity not in pharmacist.activities:  # Vérifier si la relation existe déjà
                         pharmacist.activities.append(activity)
@@ -302,7 +302,7 @@ def counter_restore_init(Counter, Activity, ConfigVersion, db, restore, file_pat
         with db.session.no_autoflush:  # Empêche l'autoflush pendant que nous travaillons sur les objets
             for counter_json in counters_json:
                 activities_ids = counter_json.pop('activities', [])
-                counter = Counter.query.get(counter_json['id'])
+                counter = db.session.get(Counter, counter_json['id'])
 
                 if not counter:
                     counter = Counter(**counter_json)
@@ -316,7 +316,7 @@ def counter_restore_init(Counter, Activity, ConfigVersion, db, restore, file_pat
 
                 # Ajouter les nouvelles activités, en vérifiant les doublons
                 for activity_id in activities_ids:
-                    activity = Activity.query.get(activity_id)
+                    activity = db.session.get(Activity, activity_id)
                     if activity and activity not in counter.activities:
                         counter.activities.append(activity)
 
@@ -353,7 +353,7 @@ def activity_restore_init(Activity, ActivitySchedule, db, restore, file_path):
         with db.session.no_autoflush:  # Empêche l'autoflush pendant que nous travaillons sur les objets
             for activity_json in activities_json:
                 schedules_ids = activity_json.pop('schedules', [])
-                activity = Activity.query.get(activity_json['id'])
+                activity = db.session.get(Activity, activity_json['id'])
 
                 if not activity:
                     activity = Activity()
@@ -367,7 +367,7 @@ def activity_restore_init(Activity, ActivitySchedule, db, restore, file_path):
 
                 # Ajouter les nouveaux horaires
                 for schedule_id in schedules_ids:
-                    schedule = ActivitySchedule.query.get(schedule_id)
+                    schedule = db.session.get(ActivitySchedule, schedule_id)
                     if schedule and schedule not in activity.schedules:
                         activity.schedules.append(schedule)
 
@@ -413,7 +413,7 @@ def algo_rule_restore_init(AlgoRule, db, restore, file_path):
                 start_time_obj = datetime.strptime(rule_json['start_time'], '%H:%M:%S').time()
                 end_time_obj = datetime.strptime(rule_json['end_time'], '%H:%M:%S').time()
 
-                rule = AlgoRule.query.get(rule_json['id'])
+                rule = db.session.get(AlgoRule, rule_json['id'])
 
                 if not rule:
                     rule = AlgoRule(

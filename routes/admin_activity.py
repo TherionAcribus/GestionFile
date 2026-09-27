@@ -210,7 +210,7 @@ def update_bouton_after_scheduler_changed(activity):
 @admin_activity_bp.route('/admin/activity/confirm_delete/<int:activity_id>', methods=['GET'])
 @require_permission('activity')
 def confirm_delete_activity(activity_id):
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     return render_template('/admin/activity_modal_confirm_delete.html', activity=activity,
                            buttons_count=Button.query.filter_by(activity_id=activity_id).count())
 
@@ -219,7 +219,7 @@ def confirm_delete_activity(activity_id):
 @admin_activity_bp.route('/admin/activity/confirm_delete/staff/<int:activity_id>', methods=['GET'])
 @require_permission('activity')
 def confirm_delete_activity_staff(activity_id):
-    activity = Activity.query.get(activity_id)
+    activity = db.session.get(Activity, activity_id)
     return render_template('/admin/activity_modal_confirm_delete.html', activity=activity, staff=True,
                            buttons_count=Button.query.filter_by(activity_id=activity_id).count())
 
@@ -229,7 +229,7 @@ def confirm_delete_activity_staff(activity_id):
 @require_permission('activity')
 def delete_activity(activity_id, staff=None):
     try:
-        activity = Activity.query.get(activity_id)
+        activity = db.session.get(Activity, activity_id)
         if not activity:
             display_toast(success=False, message="Activité non trouvée")
             return return_good_display_activity(staff)
@@ -302,7 +302,7 @@ def add_new_activity():
             )
             if staff_id:
                 new_activity.is_staff = True
-                new_activity.staff = Pharmacist.query.get(staff_id)
+                new_activity.staff = db.session.get(Pharmacist, staff_id)
                 # La personne demandée doit pouvoir appeler ces patients : un
                 # comptoir n'appelle que les activités de ses compétences.
                 if new_activity.staff and new_activity not in new_activity.staff.activities:
@@ -312,7 +312,7 @@ def add_new_activity():
             db.session.flush()
 
             for schedule_id in schedule_ids:
-                schedule = ActivitySchedule.query.get(schedule_id)
+                schedule = db.session.get(ActivitySchedule, schedule_id)
                 if schedule:
                     new_activity.schedules.append(schedule)
 

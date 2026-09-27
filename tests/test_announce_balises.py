@@ -1,7 +1,7 @@
 """Rendu des balises des annonces et textes configurables.
 
 Régression initiale : ``replace_balise_announces`` lisait le nom de la
-pharmacie via ``ConfigOption.query.get("pharmacy_name")``. La clé primaire de
+pharmacie via ``db.session.get(ConfigOption, "pharmacy_name")``. La clé primaire de
 ``ConfigOption`` est l'``id`` entier (``config_key`` n'est qu'une colonne
 unique), donc la requête renvoyait toujours ``None`` et ``{P}`` était vide
 dans les annonces. Le nom est lu dans ``app.config["PHARMACY_NAME"]``, comme

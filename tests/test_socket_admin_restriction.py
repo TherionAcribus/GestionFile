@@ -106,7 +106,7 @@ pytestmark_unit = pytest.mark.skipif(not _JWT_AVAILABLE, reason="jwt non install
 
 
 if _JWT_AVAILABLE:
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from flask import Flask
     from auth_utils import is_admin_session, is_authenticated_request
 
@@ -120,7 +120,7 @@ if _JWT_AVAILABLE:
 
     def _token(secret=SECRET_KEY, *, expired=False):
         delta = timedelta(minutes=-5) if expired else timedelta(hours=1)
-        return _jwt.encode({"exp": datetime.utcnow() + delta}, secret, algorithm="HS256")
+        return _jwt.encode({"exp": datetime.now(timezone.utc) + delta}, secret, algorithm="HS256")
 
     class TestIsAdminSessionRefusesAppToken:
         """Un jeton applicatif (X-App-Token) ne doit PAS suffire pour /socket_admin."""

@@ -76,7 +76,7 @@ def display_languages_table():
 @require_permission('translation')
 def update_language(language_id):
     try:
-        language = Language.query.get(language_id)
+        language = db.session.get(Language, language_id)
         app.logger.debug('language %s', language)
         app.logger.debug('request.form %s', request.form)
         if language:
@@ -160,7 +160,7 @@ def update_language(language_id):
 @admin_translation_bp.route('/admin/languages/confirm_delete/<int:language_id>', methods=['GET'])
 @require_permission('translation')
 def confirm_delete_language(language_id):
-    language = Language.query.get(language_id)
+    language = db.session.get(Language, language_id)
     return render_template('/admin/translations_languages_modal_confirm_delete.html', language=language)
 
 
@@ -169,7 +169,7 @@ def confirm_delete_language(language_id):
 @require_permission('translation')
 def delete_language(language_id):
     try:
-        language = Language.query.get(language_id)
+        language = db.session.get(Language, language_id)
         if not language:
             display_toast(success=False, message="Langue non trouvée")
             return display_languages_table()

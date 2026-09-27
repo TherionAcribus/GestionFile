@@ -241,7 +241,7 @@ def pick_priority_patient(candidates, applicable_rules):
 
 def algo_choice_next_patient(counter_id):
 
-    counter = Counter.query.get(counter_id)
+    counter = db.session.get(Counter, counter_id)
 
     # activités possible par ce pharmacien
     staff_activities = set(activity.id for activity in counter.staff.activities)
