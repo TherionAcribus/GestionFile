@@ -5,7 +5,7 @@ import time
 from functools import wraps
 from datetime import datetime, timedelta
 from flask import current_app
-from sqlalchemy import bindparam, func, text
+from sqlalchemy import bindparam, case, func, text
 from models import db, Button, Activity, Patient, JobExecutionLog, PatientHistory, AggregatedStats
 from services.queue_service import (
     archive_and_purge_all_patients, archive_and_purge_old_patients,
@@ -14,6 +14,7 @@ from services.queue_service import (
 from app_holder import AppHolder
 from config import time_tz
 from communication import communikation
+from queue_explain import STATS_EXCLUDED_STATUSES
 import config_sync
 
 from extensions import scheduler
@@ -1002,6 +1003,17 @@ def create_daily_stats(date, base_query):
                                  PatientHistory.timestamp_counter, PatientHistory.timestamp_end)
     total = func.timestampdiff(text('SECOND'),
                                PatientHistory.timestamp, PatientHistory.timestamp_end)
+    # « Temps total » = parcours mené à terme : le CASE laisse NULL les
+    # lignes non 'done' (ex. cancelled, dont timestamp_end borne le retrait
+    # et non une visite). AVG/COUNT ignorent les NULL.
+    total_done = case((PatientHistory.status == 'done', total), else_=None)
+
+    # Même population que la vue détaillée (fetch_detailed_data) : les
+    # inscriptions jamais entrées en file ne sont ni des visites ni des
+    # durées. Ne s'applique pas à base_query elle-même, qui sert aussi à la
+    # suppression du jour — les lignes exclues sont purgées comme les autres.
+    stats_query = base_query.filter(
+        PatientHistory.status.notin_(STATS_EXCLUDED_STATUSES))
 
     # COUNT(expr) ne compte que les resultats non NULL : c'est exactement
     # l'effectif ayant participe a la moyenne correspondante, seul poids correct
@@ -1010,10 +1022,10 @@ def create_daily_stats(date, base_query):
         func.count(PatientHistory.id).label('count'),
         func.avg(waiting).label('avg_waiting'),
         func.avg(counter).label('avg_counter'),
-        func.avg(total).label('avg_total'),
+        func.avg(total_done).label('avg_total'),
         func.count(waiting).label('count_waiting'),
         func.count(counter).label('count_counter'),
-        func.count(total).label('count_total'),
+        func.count(total_done).label('count_total'),
     )
 
     def add_row(category_type, category_id, row):
@@ -1033,7 +1045,7 @@ def create_daily_stats(date, base_query):
         ))
 
     # 1. Global
-    add_row('global', None, base_query.with_entities(*metrics).first())
+    add_row('global', None, stats_query.with_entities(*metrics).first())
 
     # 2. Par activite / langue / comptoir : un GROUP BY chacun.
     for category_type, column in (
@@ -1041,7 +1053,7 @@ def create_daily_stats(date, base_query):
         ('language', PatientHistory.language_id),
         ('counter', PatientHistory.counter_id),
     ):
-        rows = (base_query
+        rows = (stats_query
                 .with_entities(column.label('category_id'), *metrics)
                 .filter(column.isnot(None))
                 .group_by(column)

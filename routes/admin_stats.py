@@ -7,6 +7,7 @@ from sqlalchemy import func, text
 
 from models import Activity, AggregatedStats, Counter, Language, Patient, PatientHistory, db
 from pagination import paginate_query, parse_page_params
+from queue_explain import STATS_EXCLUDED_STATUSES
 from routes.admin_security import require_permission, require_permission_api
 from stats_params import (
     CATEGORY_ACTIVITY,
@@ -165,6 +166,10 @@ def fetch_detailed_data(model, req, join_models=False):
     nus et exige une condition explicite.
     """
     query = db.session.query(model).filter(model.timestamp.between(req.start_date, req.end_date))
+    # Seuls les parcours ayant rejoint la file comptent : les inscriptions
+    # jamais activées (impression non confirmée, échouée, expirée) ne sont
+    # ni des visites ni des durées mesurables.
+    query = query.filter(model.status.notin_(STATS_EXCLUDED_STATUSES))
     query = apply_filters(query, model, req)
 
     entities = []
@@ -413,7 +418,10 @@ def filter_complete_timestamps(query, model, metric):
     if metric == 'counter':
         return query.filter(model.timestamp_counter.isnot(None),
                             model.timestamp_end.isnot(None))
-    return query.filter(model.timestamp_end.isnot(None))
+    # « Temps total » = durée d'un parcours mené à terme : seul 'done' a une
+    # fin de parcours. ``cancelled`` pose aussi timestamp_end, mais mesure
+    # l'attente avant retrait — pas une durée de visite.
+    return query.filter(model.timestamp_end.isnot(None), model.status == 'done')
 
 
 def get_date_func(col, granularity):

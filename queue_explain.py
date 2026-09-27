@@ -25,6 +25,11 @@ STATUSES_WITH_COUNTER = ("calling", "ongoing")
 # l'inscription n'a jamais rejoint la file (flux d'impression de la borne).
 TERMINAL_STATUSES = ("done", "cancelled", "expired", "print_failed")
 
+# Statuts exclus des statistiques : le parcours n'a JAMAIS rejoint la file
+# (impression non confirmée, échouée ou expirée). ``cancelled`` compte en
+# revanche : le patient a réellement occupé la file, parfois le comptoir.
+STATS_EXCLUDED_STATUSES = ("pending", "print_failed", "expired")
+
 STATUS_LABELS = {
     "pending": "Ticket en impression",
     "standing": "En attente",
