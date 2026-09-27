@@ -177,7 +177,7 @@ document.addEventListener('click', function (evt) {
 // Le contrat de retour est { success, code, message } (voir printer.py).
 var _printInProgress = false;
 
-function sendPrintTicket(printData) {
+function sendPrintTicket(printData, printJobId) {
     // Protection contre les clics/déclenchements répétés : tant qu'une
     // impression est en cours, toute nouvelle demande est ignorée pour éviter
     // les doubles tickets.
@@ -197,7 +197,23 @@ function sendPrintTicket(printData) {
     }
 
     _printInProgress = true;
-    return window.pywebview.api.printer.print_ticket(printData)
+    var printerApi = window.pywebview.api.printer;
+    // printJobId : identifiant d'inscription côté serveur — même clé que
+    // /patient/confirm_print, pour que les journaux de la borne restent
+    // corrélables avec l'inscription. Une borne plus ancienne (signature à
+    // un seul argument) lève un TypeError AVANT toute impression : repli
+    // sans l'identifiant, sans risque de double ticket.
+    return Promise.resolve()
+        .then(function() {
+            return printerApi.print_ticket(printData, printJobId || null);
+        })
+        .catch(function(error) {
+            if (printJobId && /positional|argument/i.test(String((error && error.message) || error))) {
+                console.warn("Le pont d'impression ignore le print_job_id — nouvel essai sans l'identifiant.");
+                return printerApi.print_ticket(printData);
+            }
+            throw error;
+        })
         .then(function(result) {
             if (result && result.success) {
                 console.log("Impression réussie:", result.message);
@@ -504,7 +520,7 @@ function bigNumberHtml(prefixText, callNumber) {
 function runPrintFlow(printData, printJobId) {
     showPrintBusy();
     clearConfirmFallbackTimer();
-    sendPrintTicket(printData)
+    sendPrintTicket(printData, printJobId)
         .then(function(result) {
             // Enfilé AVANT le premier POST : une coupure (réseau,
             // rechargement, crash) entre l'impression physique et

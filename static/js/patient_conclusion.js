@@ -118,7 +118,9 @@ function handlePrintButtonClick() {
     printBtn.style.pointerEvents = 'none';
     printBtn.style.opacity = '0.6';
 
-    sendPrintTicket(printData).finally(function() {
+    // La réimpression partage le print_job_id de l'inscription : les journaux
+    // de la borne restent corrélés avec elle même pour ce tirage.
+    sendPrintTicket(printData, printDataElement.getAttribute('data-print-job-id')).finally(function() {
         printBtn.dataset.printing = 'false';
         printBtn.style.pointerEvents = '';
         printBtn.style.opacity = '';
