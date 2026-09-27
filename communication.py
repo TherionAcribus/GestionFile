@@ -131,6 +131,27 @@ def send_app_notification(origin, data):
     communikation("app_counter", event="notification", flag=for_counter, data=notification_data)
 
 
+def notify_patient_phone_closed(call_number):
+    """Signale à la salle téléphone du patient que son parcours est clos.
+
+    Servi, retiré, expiré... : l'écran « en file » / « votre tour » est
+    périmé. Le client recharge sa page et ``/patient/phone/ping`` rend
+    l'état réel (fragment « parcours terminé »). Même salle que
+    ``notify_patient_phone`` ; l'évènement ``refresh`` est celui que le
+    client traite déjà comme un rechargement d'état.
+    """
+    if not call_number:
+        return False
+    try:
+        socketio.emit('refresh', {},
+                      namespace='/socket_phone',
+                      room=f"call_{call_number}")
+        return True
+    except Exception as e:
+        logging.error(f"Échec de la notification de clôture du patient {call_number}: {e}")
+        return False
+
+
 def notify_patient_phone(call_number):
     """Notifie un patient sur son téléphone que c'est son tour"""
     if not current_app.config["PHONE_DISPLAY_YOUR_TURN"]:

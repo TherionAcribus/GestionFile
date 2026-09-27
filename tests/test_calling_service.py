@@ -68,8 +68,10 @@ def messages(monkeypatch):
         monkeypatch.setattr(module, "communikation", faux_communikation, raising=False)
     monkeypatch.setattr(communication, "communikation", faux_communikation, raising=False)
     monkeypatch.setattr(service, "notify_patient_phone", lambda *a, **k: None)
+    monkeypatch.setattr(service, "notify_patient_phone_closed", lambda *a, **k: None)
     monkeypatch.setattr(service, "send_app_notification", lambda *a, **k: None)
     monkeypatch.setattr(engine, "notify_patient_phone", lambda *a, **k: None)
+    monkeypatch.setattr(engine, "notify_patient_phone_closed", lambda *a, **k: None)
     # La génération audio part dans un thread et tape un service externe.
     monkeypatch.setattr(service, "trigger_async_audio_calling", lambda *a, **k: None)
     monkeypatch.setattr(engine, "trigger_async_audio_calling", lambda *a, **k: None)

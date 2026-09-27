@@ -12,7 +12,7 @@ from google.oauth2 import service_account
 from utils import replace_balise_announces, replace_balise_phone, get_text_translation, get_activity_message_translation
 from gtts import gTTS
 from models import Patient, PatientHistory, Counter, AlgoRule, ConfigOption, Language, CallNumberSequence, db, get_queue_revision, DAY_ABBREVIATIONS
-from communication import communikation, notify_patient_phone
+from communication import communikation, notify_patient_phone, notify_patient_phone_closed
 from config import time_tz
 from auth_utils import require_app_token_or_login, make_patient_phone_token
 from call_numbering import next_category_call_number, next_simple_call_number
@@ -101,6 +101,10 @@ def call_next(counter_id, attempts=0):
             patient.timestamp_end = datetime.now(time_tz)
             app.logger.info(f"Patient {patient.id} status updated to 'done' for counter {counter_id} (fallback)")
         db.session.commit()
+        # Le téléphone qui suivait un patient balayé recharge : son parcours
+        # est clos, l'écran « en file » / « votre tour » est périmé.
+        for patient in previous_patients:
+            notify_patient_phone_closed(patient.call_number)
 
     if attempts >= max_attempts:
         app.logger.warning(f"Max attempts reached for counter {counter_id}")
@@ -487,8 +491,13 @@ def expire_stale_pending_patients(ttl_seconds=None):
         patient.status = 'expired'
         patient.journey_id = None
     if stale:
+        expired_numbers = [p.call_number for p in stale]
         db.session.commit()
         app.logger.debug(f"{len(stale)} inscription(s) pending expirée(s)")
+        # Un téléphone pouvait suivre une inscription 'pending' (scan pendant
+        # l'attente d'impression) : le parcours est clos sans retour.
+        for number in expired_numbers:
+            notify_patient_phone_closed(number)
     return len(stale)
 
 

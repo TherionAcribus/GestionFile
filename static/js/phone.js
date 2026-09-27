@@ -75,6 +75,18 @@ document.addEventListener('DOMContentLoaded', (event) => {
                     if (data.status === 'calling' && data.call_number === callNumber) {
                         console.log('Statut "calling" détecté au (re)connect');
                         showYourTurn();
+                    } else if (['done', 'cancelled', 'expired', 'print_failed'].indexOf(data.status) !== -1) {
+                        // Parcours clos pendant la coupure (servi, retiré,
+                        // expiré...) : l'écran « en file » / « votre tour » est
+                        // périmé. Le rechargement rejoue /patient/phone/ping
+                        // qui rend le fragment « parcours terminé » —
+                        // identifiable par data-journey-state="closed" pour ne
+                        // pas recharger en boucle une fois affiché.
+                        var infos = document.getElementById('div_infos');
+                        if (infos && infos.getAttribute('data-journey-state') !== 'closed') {
+                            window.onbeforeunload = null;
+                            window.location.reload();
+                        }
                     }
                 })
                 .catch(error => console.error('Erreur lors de la vérification du statut:', error));

@@ -4,7 +4,8 @@ from flask import Blueprint, render_template, make_response, request, session, u
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
 from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, qr_code_data_uri, _business_day, activity_accepting_registrations
-from communication import communikation, send_app_notification
+from communication import communikation, notify_patient_phone_closed, send_app_notification
+from queue_explain import TERMINAL_STATUSES
 from auth_utils import make_patient_phone_token, check_patient_phone_token, patient_ticket_patient_id, check_kiosk_login_ticket, KIOSK_SESSION_KEY
 
 patient_bp = Blueprint('patient', __name__)
@@ -505,7 +506,10 @@ def confirm_print():
         # On annule l'inscription : pas de ticket => pas de patient dans la
         # file. journey_id est libéré : un nouveau scan du même QR crée alors
         # une inscription neuve au lieu de retrouver ce parcours annulé.
-        _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None})
+        if _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None}):
+            # Un téléphone pouvait suivre l'inscription (scan pendant
+            # l'attente d'impression) : le parcours est clos.
+            notify_patient_phone_closed(patient.call_number)
         return _confirm_print_resolved_response(patient)
 
     # behavior == "ask" (défaut) : on laisse l'inscription EN ATTENTE et on
@@ -633,7 +637,8 @@ def print_abandon():
     # Même libération de journey_id que la branche 'cancel' de confirm_print
     # : le parcours annulé ne doit pas bloquer un nouveau scan du même QR.
     # Transition conditionnelle : exclusive avec un confirm_print concurrent.
-    _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None})
+    if _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None}):
+        notify_patient_phone_closed(patient.call_number)
     return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
 
 
@@ -650,6 +655,21 @@ def _phone_activity_closed(activity, language_code):
                    or get_text_translation("page_patient_disable_default_message", language_code)["translation"])
     return render_template('patient/phone_activity_closed_fragment.html',
                            closed_message=message)
+
+
+def _phone_journey_ended(patient, language_code):
+    """Fragment « parcours terminé » pour la page téléphone.
+
+    Servi, retiré, expiré… : l'écran « en file » / « votre tour » ne doit
+    pas rester affiché — ni après un rechargement (ping rejoué via le
+    cookie), ni après le push de clôture ``refresh`` émis par les chemins
+    de fin de parcours, ni à la vérification de statut au reconnect."""
+    if language_code == "fr" or language_code is None:
+        message = app.config['PHONE_JOURNEY_END_MESSAGE']
+    else:
+        message = get_text_translation("phone_journey_end_message", language_code)["translation"]
+    return render_template('patient/phone_journey_ended_fragment.html',
+                           ended_message=replace_balise_phone(message, patient))
 
 
 def patient_validate_scan(activity_id, journey_id=None):
@@ -925,6 +945,15 @@ def phone_patient_ping():
         if not activity_accepting_registrations(activity):
             return _phone_activity_closed(activity, language_code)
         patient = patient_validate_scan(activity_id)
+
+    if patient is None:
+        # Cookie valide mais ligne purgée (fin de journée) : même écran que
+        # le lien de suivi mort — le parcours ne peut plus être suivi.
+        return render_template('patient/phone_link_invalid_fragment.html')
+    if patient.status in TERMINAL_STATUSES:
+        # Parcours clos (servi, retiré, expiré) : rechargement, ping rejoué
+        # ou re-scan du même QR — on ne réaffiche pas « en file ».
+        return _phone_journey_ended(patient, language_code)
 
     phone_lines = []
 

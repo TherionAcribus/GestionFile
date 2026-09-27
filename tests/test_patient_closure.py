@@ -78,8 +78,10 @@ def _silence_temps_reel(monkeypatch):
     monkeypatch.setattr(communication, "communikation", noop, raising=False)
     monkeypatch.setattr(counter_module, "communikation", noop, raising=False)
     monkeypatch.setattr(counter_module, "send_app_notification", noop)
+    monkeypatch.setattr(counter_module, "notify_patient_phone_closed", noop)
     monkeypatch.setattr(engine, "communikation", noop, raising=False)
     monkeypatch.setattr(engine, "notify_patient_phone", noop)
+    monkeypatch.setattr(engine, "notify_patient_phone_closed", noop)
     monkeypatch.setattr(engine, "trigger_async_audio_calling", noop)
 
 

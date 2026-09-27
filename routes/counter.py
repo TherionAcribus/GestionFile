@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import joinedload
 from models import db, ConfigOption, Counter, Pharmacist, Patient, Activity, get_queue_revision
 from python.engine import trigger_async_audio_calling
-from communication import communikation, send_app_notification
+from communication import communikation, notify_patient_phone_closed, send_app_notification
 from config import time_tz
 from queue_explain import TERMINAL_STATUSES
 from services import calling_service
@@ -521,6 +521,11 @@ def handle_patient_from_app(patient_id, action, activity_id=None):
 
     # rafraichissement des infos
     communikation("update_patient")
+
+    # Le téléphone qui suivait ce patient recharge : le parcours est clos
+    # (servi ou retiré), l'écran « en file » / « votre tour » est périmé.
+    if action in ("validate", "delete"):
+        notify_patient_phone_closed(patient.call_number)
 
     # notification au staff concerné si connecté
     if action == "standing" and activity_id is not None:

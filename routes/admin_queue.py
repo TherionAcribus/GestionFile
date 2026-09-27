@@ -8,7 +8,7 @@ from models import Patient, Activity, Counter, DashboardCard, db
 from init_restore import clear_counter_table
 from python.engine import add_patient, get_next_call_number
 from routes.announce import refresh_announce_screens
-from communication import communikation
+from communication import communikation, notify_patient_phone_closed
 from services.queue_service import archive_and_purge_all_patients, purge_all_patients
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
@@ -18,7 +18,8 @@ from audit_log import (
 )
 from config import time_tz
 from queue_explain import (
-    EDITABLE_STATUSES, STATUS_BADGES, STATUS_LABELS, describe_minutes,
+    EDITABLE_STATUSES, STATUS_BADGES, STATUS_LABELS, TERMINAL_STATUSES,
+    describe_minutes,
     minutes_between, validate_edit,
 )
 from ui_feedback import display_toast
@@ -200,6 +201,7 @@ def update_patient(patient_id):
         return display_toast(success=False, message=erreur)
 
     try:
+        previous_call_number = patient.call_number
         patient.call_number = call_number
         # Clôture cohérente : un passage à 'done' sans fin horodatée ne
         # participait à aucune statistique de durée ; une réouverture efface
@@ -221,6 +223,13 @@ def update_patient(patient_id):
 
     record_audit(ACTION_UPDATE, "patient", target_id=patient_id, outcome=OUTCOME_SUCCESS,
                  details=f"call_number={call_number} status={status}")
+    # Passage manuel à un statut terminal : le téléphone qui suivait le
+    # patient recharge — son parcours est clos. La salle dépend du numéro
+    # d'appel : si l'édition l'a changé, on couvre l'ancien ET le nouveau.
+    if status in TERMINAL_STATUSES:
+        notify_patient_phone_closed(previous_call_number)
+        if call_number != previous_call_number:
+            notify_patient_phone_closed(call_number)
     _after_queue_change()
     display_toast(success=True, message=f"Patient {call_number} corrigé")
     return "", 200, _QUEUE_CHANGED
@@ -248,6 +257,10 @@ def delete_patient(patient_id):
         call_number = patient.call_number
         db.session.delete(patient)
         db.session.commit()
+
+        # Le téléphone qui suivait ce patient recharge : la ligne est
+        # supprimée, /patient/phone/ping rendra le fragment « terminé ».
+        notify_patient_phone_closed(call_number)
 
         record_audit(ACTION_DELETE, "patient", target_id=patient_id, outcome=OUTCOME_SUCCESS)
         _after_queue_change()

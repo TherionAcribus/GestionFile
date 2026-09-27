@@ -28,7 +28,12 @@ from datetime import datetime
 
 from flask import current_app
 
-from communication import communikation, notify_patient_phone, send_app_notification
+from communication import (
+    communikation,
+    notify_patient_phone,
+    notify_patient_phone_closed,
+    send_app_notification,
+)
 from config import time_tz
 from models import Counter, Patient, db
 from python.engine import (
@@ -147,6 +152,7 @@ def call_specific(counter_id, patient_id):
             Patient.id != patient_id,
         ).all()
         calling_ids = [p.id for p in active_patients if p.status == "calling"]
+        closed_numbers = [p.call_number for p in active_patients]
         for patient in active_patients:
             patient.status = "done"
             patient.timestamp_end = now
@@ -165,6 +171,8 @@ def call_specific(counter_id, patient_id):
     # Emissions APRÈS le commit, comme validate_current.
     for closed_id in calling_ids:
         communikation("update_screen", event="remove_calling", data={"id": closed_id})
+    for number in closed_numbers:
+        notify_patient_phone_closed(number)
 
     # L'appel ciblé double réellement les patients plus anciens : ils sont
     # comptabilisés comme l'appel du suivant, après réclamation réussie.
@@ -205,9 +213,11 @@ def validate_current(counter_id):
 
     now = datetime.now(time_tz)
     calling_ids = []
+    closed_numbers = []
     for patient in active_patients:
         if patient.status == "calling":
             calling_ids.append(patient.id)
+        closed_numbers.append(patient.call_number)
         patient.status = "done"
         patient.timestamp_end = now
     db.session.commit()
@@ -216,6 +226,10 @@ def validate_current(counter_id):
     # « calling » en base.
     for patient_id in calling_ids:
         communikation("update_screen", event="remove_calling", data={"id": patient_id})
+    # Le téléphone qui suivait un de ces patients recharge : son parcours
+    # est clos, l'écran « en file » / « votre tour » est périmé.
+    for number in closed_numbers:
+        notify_patient_phone_closed(number)
     return active_patients
 
 
@@ -279,6 +293,7 @@ def pause(counter_id, patient_id):
             and current_patient.counter_id == counter_id
             and current_patient.status in ("calling", "ongoing")):
         was_calling = current_patient.status == "calling"
+        closed_number = current_patient.call_number
         current_patient.status = "done"
         current_patient.timestamp_end = datetime.now(time_tz)
         db.session.commit()
@@ -287,6 +302,7 @@ def pause(counter_id, patient_id):
         # apres le commit, comme validate_current.
         if was_calling:
             communikation("update_screen", event="remove_calling", data={"id": current_patient.id})
+        notify_patient_phone_closed(closed_number)
 
     counter_become_inactive(counter_id)
     communikation("update_patient")

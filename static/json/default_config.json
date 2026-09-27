@@ -119,6 +119,7 @@
             "phone_your_turn_line4":"",
             "phone_your_turn_line5":"",
             "phone_your_turn_line6":"",
+            "phone_journey_end_message": "Votre passage est terminé. Vous pouvez vous adresser à l'accueil si besoin.",
             "security_login_admin": true,
             "security_login_counter": true,
             "security_login_screen": true,

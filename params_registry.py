@@ -159,6 +159,9 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "phone_line5": ("PHONE_LINE5", "value_str"),
     "phone_line6": ("PHONE_LINE6", "value_str"),
     "phone_display_your_turn": ("PHONE_DISPLAY_YOUR_TURN", "value_bool"),
+    # Affiché quand le parcours du patient est clos (servi, retiré, expiré) —
+    # remplace l'écran « en file » / « votre tour » devenu périmé.
+    "phone_journey_end_message": ("PHONE_JOURNEY_END_MESSAGE", "value_str"),
     "phone_your_turn_line1": ("PHONE_YOUR_TURN_LINE1", "value_str"),
     "phone_your_turn_line2": ("PHONE_YOUR_TURN_LINE2", "value_str"),
     "phone_your_turn_line3": ("PHONE_YOUR_TURN_LINE3", "value_str"),
@@ -294,6 +297,8 @@ _BEFORE_CALL_KEYS = {
     "phone_line4", "phone_line5", "phone_line6",
     "phone_your_turn_line1", "phone_your_turn_line2", "phone_your_turn_line3",
     "phone_your_turn_line4", "phone_your_turn_line5", "phone_your_turn_line6",
+    # Message « parcours terminé » du téléphone : {N} reste autorisé.
+    "phone_journey_end_message",
 }
 
 # Textes imprimés sur le ticket : balises {X} + balisage [center]/[double]/
@@ -366,6 +371,7 @@ _TRANSLATABLE_KEYS = {
     "phone_line4", "phone_line5", "phone_line6",
     "phone_your_turn_line1", "phone_your_turn_line2", "phone_your_turn_line3",
     "phone_your_turn_line4", "phone_your_turn_line5", "phone_your_turn_line6",
+    "phone_journey_end_message",
     # Écran d'annonce : gabarits résolus dans la langue de chaque patient
     # (routes/announce.py, services/calling_service.py) comme le TTS
     # (python/engine.py, announce_call_sound).
