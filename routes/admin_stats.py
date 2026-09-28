@@ -1,13 +1,24 @@
+import csv
+import io
 import zlib
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 import pytz
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, Response, current_app, jsonify, render_template, request
 from sqlalchemy import func, text
 
 from models import Activity, AggregatedStats, Counter, Language, Patient, PatientHistory, db
 from pagination import paginate_query, parse_page_params
-from queue_explain import STATS_EXCLUDED_STATUSES
+from history_explain import (
+    PRESETS as HISTORY_PRESETS,
+    day_bounds as history_day_bounds,
+    format_minutes,
+    minutes as history_minutes,
+    parse_filters as parse_history_filters,
+    summarize as summarize_history,
+)
+from queue_explain import STATS_EXCLUDED_STATUSES, STATUS_BADGES, STATUS_LABELS
 from routes.admin_security import require_permission, require_permission_api
 from stats_params import (
     CATEGORY_ACTIVITY,
@@ -69,45 +80,143 @@ def admin_stats():
 @admin_stats_bp.route('/admin/stats/history')
 @require_permission('stats')
 def admin_history():
-    """Page de l'historique détaillé (table paginée des patients archivés)."""
-    return render_template('admin/history.html')
+    """Page de l'historique détaillé (filtres + résumé + table paginée)."""
+    present = [s for (s,) in db.session.query(PatientHistory.status).distinct().all() if s]
+    return render_template('admin/history.html',
+                           activities=Activity.query.order_by(Activity.letter, Activity.name).all(),
+                           counters=Counter.query.order_by(Counter.sort_order).all(),
+                           statuses=[(s, STATUS_LABELS.get(s, s)) for s in sorted(
+                               set(present), key=lambda s: list(STATUS_LABELS).index(s)
+                               if s in STATUS_LABELS else 99)],
+                           presets=HISTORY_PRESETS,
+                           archive_enabled=current_app.config.get("CRON_TRANSFER_PATIENT_TO_HISTORY", False),
+                           # Filtres pré-remplis (préréglages = liens ?preset=…).
+                           filters=_history_filters())
+
+
+def _history_query(filters):
+    """Requête PatientHistory restreinte aux filtres (période, motif, comptoir, statuts)."""
+    start, end = history_day_bounds(filters)
+    query = PatientHistory.query.filter(PatientHistory.timestamp >= start,
+                                        PatientHistory.timestamp < end)
+    if filters.activity_id:
+        query = query.filter(PatientHistory.activity_id == filters.activity_id)
+    if filters.counter_id:
+        query = query.filter(PatientHistory.counter_id == filters.counter_id)
+    if filters.statuses:
+        query = query.filter(PatientHistory.status.in_(filters.statuses))
+    return query
+
+
+def _history_filters():
+    return parse_history_filters(request.values.get, datetime.now(time_tz).date(),
+                                 getlist=request.values.getlist,
+                                 known_statuses=tuple(STATUS_LABELS) + tuple(
+                                     s for (s,) in db.session.query(PatientHistory.status).distinct().all()))
+
+
+# Au-delà, le résumé est calculé sur un échantillon (les plus récents) :
+# garde-fou pour une période très longue.
+HISTORY_SUMMARY_MAX_ROWS = 100_000
 
 
 @admin_stats_bp.route('/admin/stats/history/table')
 @require_permission('stats')
 def display_history_table():
-    """Fragment HTMX : table paginée + triée + recherchable de PatientHistory.
+    """Fragment HTMX : résumé + table paginée/triée/recherchable, filtrée.
 
     Les colonnes activité / comptoir / langue de PatientHistory sont des entiers
     (pas de relation ORM) : on les résout en noms via des dictionnaires id→nom
     construits en une requête chacun, plutôt que par jointure, pour garder la
     pagination simple et le comptage exact sur PatientHistory.
     """
+    filters = _history_filters()
     params = parse_page_params(
         request.values,
         allowed_sort=tuple(HISTORY_SORT_COLUMNS),
         default_sort='timestamp',
     )
+    query = _history_query(filters)
     pager = paginate_query(
-        PatientHistory.query,
+        query,
         params,
         sort_columns=HISTORY_SORT_COLUMNS,
-        search_columns=[
-            PatientHistory.call_number,
-            PatientHistory.status,
-            PatientHistory.day_of_week,
-        ],
+        search_columns=[PatientHistory.call_number],
     )
+
+    summary_rows = (query.with_entities(PatientHistory.timestamp, PatientHistory.timestamp_counter,
+                                        PatientHistory.timestamp_end, PatientHistory.status,
+                                        PatientHistory.overtaken)
+                    .order_by(PatientHistory.timestamp.desc())
+                    .limit(HISTORY_SUMMARY_MAX_ROWS + 1).all())
+    truncated = len(summary_rows) > HISTORY_SUMMARY_MAX_ROWS
+    summary = summarize_history(summary_rows[:HISTORY_SUMMARY_MAX_ROWS])
 
     activity_names = dict(db.session.query(Activity.id, Activity.name).all())
     counter_names = dict(db.session.query(Counter.id, Counter.name).all())
-    language_names = dict(db.session.query(Language.id, Language.code).all())
+    language_names = dict(db.session.query(Language.id, Language.name).all())
 
     return render_template('admin/history_htmx_table.html',
                             rows=pager.items, pager=pager, params=params,
                             activity_names=activity_names,
                             counter_names=counter_names,
-                            language_names=language_names)
+                            language_names=language_names,
+                            filters=filters,
+                            summary=summary,
+                            summary_truncated=truncated,
+                            export_query=urlencode(filters.as_query_args()),
+                            status_labels=STATUS_LABELS,
+                            status_badges=STATUS_BADGES,
+                            minutes=history_minutes,
+                            format_minutes=format_minutes)
+
+
+# Borne de l'export CSV (une ligne par patient).
+HISTORY_EXPORT_MAX_ROWS = 200_000
+
+
+@admin_stats_bp.route('/admin/stats/history/export.csv')
+@require_permission('stats')
+def export_history_csv():
+    """Export CSV (séparateur « ; », tableur français) des lignes filtrées."""
+    filters = _history_filters()
+    rows = (_history_query(filters)
+            .order_by(PatientHistory.timestamp)
+            .limit(HISTORY_EXPORT_MAX_ROWS).all())
+    activity_names = dict(db.session.query(Activity.id, Activity.name).all())
+    counter_names = dict(db.session.query(Counter.id, Counter.name).all())
+    language_names = dict(db.session.query(Language.id, Language.name).all())
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter=';')
+    writer.writerow(["Date", "Arrivée", "Au comptoir", "Fin", "N° d'appel", "Motif",
+                     "Comptoir", "Langue", "Statut", "Attente (min)",
+                     "Au comptoir (min)", "Dépassé (fois)"])
+
+    def hhmm(value):
+        return value.strftime('%H:%M:%S') if value else ''
+
+    def num(value):
+        return f"{value:.1f}".replace('.', ',') if value is not None else ''
+
+    for row in rows:
+        writer.writerow([
+            row.timestamp.strftime('%d/%m/%Y') if row.timestamp else '',
+            hhmm(row.timestamp), hhmm(row.timestamp_counter), hhmm(row.timestamp_end),
+            row.call_number,
+            activity_names.get(row.activity_id, row.activity_id),
+            counter_names.get(row.counter_id, '') if row.counter_id else '',
+            language_names.get(row.language_id, '') if row.language_id else '',
+            STATUS_LABELS.get(row.status, row.status),
+            num(history_minutes(row.timestamp, row.timestamp_counter)),
+            num(history_minutes(row.timestamp_counter, row.timestamp_end)),
+            row.overtaken or 0,
+        ])
+
+    filename = f"historique_{filters.date_from.isoformat()}_{filters.date_to.isoformat()}.csv"
+    # BOM UTF-8 : Excel ouvre alors correctement les accents.
+    return Response('﻿' + buffer.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename="{filename}"'})
 
 
 @admin_stats_bp.route('/admin/stats/chart')

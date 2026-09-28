@@ -1,42 +1,94 @@
 {% import '/admin/pagination.html' as pg %}
-{% import '/admin/macros.html' as macros %}
+{# Historique filtré : résumé chiffré de la période, export CSV, puis une
+   ligne par patient avec des durées lisibles (history_explain). Les
+   variables de résumé sont facultatives (rendu minimal dans les tests). #}
 {% set url = '/admin/stats/history/table' %}
 {% set target = '#div_history_table' %}
+{%- set extra -%}hx-include="#history-filters"{%- endset -%}
+{% set labels = status_labels | default({}) %}
+{% set badges = status_badges | default({}) %}
+
+{% if summary is defined and summary %}
+<div class="history-summary row g-2 mb-3">
+    <div class="col-6 col-lg">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Patients</div>
+            <div class="fs-4 fw-bold">{{ summary.count }}</div>
+            {% if summary.served_pct is not none %}<div class="small text-muted">{{ summary.served_pct }} % servis</div>{% endif %}
+        </div></div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Attente moyenne</div>
+            <div class="fs-4 fw-bold">{{ format_minutes(summary.avg_wait) }}</div>
+            <div class="small text-muted">plus longue : {{ format_minutes(summary.max_wait) }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Temps moyen au comptoir</div>
+            <div class="fs-4 fw-bold">{{ format_minutes(summary.avg_counter) }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Dépassements</div>
+            <div class="fs-4 fw-bold">{{ summary.max_overtaken }}</div>
+            <div class="small text-muted">au plus, pour un patient</div>
+        </div></div>
+    </div>
+</div>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <span class="small text-muted">
+        Du {{ filters.date_from.strftime('%d/%m/%Y') }} au {{ filters.date_to.strftime('%d/%m/%Y') }}
+        {% if summary_truncated %}— résumé calculé sur les 100 000 patients les plus récents{% endif %}
+        {% if filters.error %}<span class="text-warning-emphasis"> — {{ filters.error }}</span>{% endif %}
+    </span>
+    <a class="btn btn-sm btn-outline-success" href="/admin/stats/history/export.csv?{{ export_query }}">
+        <i class="bi bi-filetype-csv" aria-hidden="true"></i> Exporter en CSV (tableur)
+    </a>
+</div>
+{% endif %}
+
 <div class="table-responsive table-scroll">
-<table class="table table-striped table-hover align-middle">
+<table class="table table-hover align-middle history-table">
     <thead>
         <tr>
-            {{ pg.sort_th("N° d'appel", 'call_number', 'history', params, url, 'get', target) }}
-            {{ pg.sort_th("Enregistrement", 'timestamp', 'history', params, url, 'get', target) }}
-            <th>Au comptoir</th>
-            <th>Fin</th>
-            {{ pg.sort_th("Statut", 'status', 'history', params, url, 'get', target) }}
-            {{ pg.sort_th("Jour", 'day_of_week', 'history', params, url, 'get', target) }}
-            <th>Activité</th>
+            {{ pg.sort_th("Arrivée", 'timestamp', 'history', params, url, 'get', target, extra) }}
+            {{ pg.sort_th("N°", 'call_number', 'history', params, url, 'get', target, extra) }}
+            <th>Motif</th>
             <th>Comptoir</th>
+            <th>Attente</th>
+            <th>Au comptoir</th>
+            {{ pg.sort_th("Statut", 'status', 'history', params, url, 'get', target, extra) }}
             <th>Langue</th>
-            <th>Dépassé</th>
+            <th title="Nombre de fois où ce patient a été dépassé par un patient prioritaire">Dépassé</th>
         </tr>
     </thead>
     <tbody>
         {% for row in rows %}
         <tr>
-            <td>{{ row.call_number }}</td>
-            <td>{{ row.timestamp.strftime('%Y-%m-%d %H:%M:%S') if row.timestamp else '' }}</td>
-            <td>{{ row.timestamp_counter.strftime('%Y-%m-%d %H:%M:%S') if row.timestamp_counter else '' }}</td>
-            <td>{{ row.timestamp_end.strftime('%Y-%m-%d %H:%M:%S') if row.timestamp_end else '' }}</td>
-            <td>{{ macros.status_label(row.status) }}</td>
-            <td>{{ row.day_of_week }}</td>
+            <td class="text-nowrap">
+                {% if row.timestamp %}{{ row.timestamp.strftime('%d/%m/%Y') }} <span class="text-muted">{{ row.timestamp.strftime('%H:%M') }}</span>{% endif %}
+            </td>
+            <td class="fw-bold">{{ row.call_number }}</td>
             <td>{{ activity_names.get(row.activity_id, row.activity_id) }}</td>
-            <td>{{ counter_names.get(row.counter_id, '') if row.counter_id else '' }}</td>
+            <td>{{ counter_names.get(row.counter_id, '—') if row.counter_id else '—' }}</td>
+            {% if minutes is defined %}
+            <td>{{ format_minutes(minutes(row.timestamp, row.timestamp_counter)) }}</td>
+            <td>{{ format_minutes(minutes(row.timestamp_counter, row.timestamp_end)) }}</td>
+            {% else %}
+            <td>—</td><td>—</td>
+            {% endif %}
+            <td><span class="badge {{ badges.get(row.status, 'text-bg-light border') }}">{{ labels.get(row.status, row.status) }}</span></td>
             <td>{{ language_names.get(row.language_id, '') if row.language_id else '' }}</td>
-            <td>{{ row.overtaken }}</td>
+            <td>{% if row.overtaken %}<span class="badge text-bg-warning">{{ row.overtaken }}</span>{% else %}<span class="text-muted">0</span>{% endif %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="10" class="text-center text-muted">Aucun historique</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-4">Aucun historique pour cette période et ces filtres.</td></tr>
         {% endfor %}
     </tbody>
 </table>
 </div>
 
-{{ pg.pagination_nav(pager, 'history', url, 'get', target) }}
+{{ pg.pagination_nav(pager, 'history', url, 'get', target, extra) }}
