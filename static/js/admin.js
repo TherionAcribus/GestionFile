@@ -156,6 +156,14 @@ document.addEventListener('DOMContentLoaded', function () {
             refresh_printer_dashboard();
         }
     });
+
+    // Une borne injoignable n'émet justement plus de statut : le passage en
+    // « offline » doit donc être recalculé localement, sans attendre un event.
+    setInterval(function () {
+        if (document.querySelector('[data-card-url="/admin/printer/dashboard"]')) {
+            refresh_printer_dashboard();
+        }
+    }, 60000);
 });
 
 

@@ -8,6 +8,7 @@ from flask import Blueprint, request, render_template, redirect, jsonify, sessio
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
     record_printer_status, get_printer_infos, get_printer_error,
+    PRINTER_HEARTBEAT_CODE,
 )
 from diagnostics import collect_patient_page_alerts
 from python.engine import get_futur_patient, qr_code_data_uri
@@ -888,29 +889,37 @@ def admin_printer_status():
 
     # Persistance en base (record_printer_status) : l'état était auparavant
     # tenu dans app.config — par process — donc partiel avec plusieurs workers
-    # et perdu au redémarrage.
-    record_printer_status(
+    # et perdu au redémarrage. Les doublons rafraîchissent seulement le dernier
+    # contact ; ils ne doivent pas rejouer notifications et actions papier.
+    status_changed = record_printer_status(
         printer_error_code,
         error_message,
         borne_id=borne_id,
         generated_at=generated_at,
     )
     printer_error = "error" in printer_error_code
+    is_heartbeat = printer_error_code == PRINTER_HEARTBEAT_CODE
 
-    communikation("admin", event="refresh_printer_dashboard")
+    if status_changed or is_heartbeat:
+        communikation("admin", event="refresh_printer_dashboard")
 
-    # notification à Pyside
-    timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
-    send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp, "borne_id": borne_id})
+    if status_changed and not is_heartbeat:
+        # notification à Pyside
+        timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
+        send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp, "borne_id": borne_id})
 
-    # on met à jour l'icone des Apps Comptoir en fonction du status du papier
-    if printer_error_code in ["no_paper", "low_paper"]:
-        action_add_paper(add_paper=True, from_printer=True)
-    elif printer_error_code == "paper_ok":
-        action_add_paper(add_paper=False, from_printer=True)
+    if not is_heartbeat:
+        # L'icône papier des apps comptoir est idempotente : elle doit rester
+        # synchronisée même si le statut reçu était déjà le dernier connu.
+        if printer_error_code in ["no_paper", "low_paper"]:
+            action_add_paper(add_paper=True, from_printer=True)
+        elif printer_error_code == "paper_ok":
+            action_add_paper(add_paper=False, from_printer=True)
 
     # Afficher les informations pour vérifier la mise à jour
-    app.logger.debug(f"Erreur reçue de l'imprimante : {error_message}, Erreur : {printer_error}, Borne : {borne_id}, Timestamp : {timestamp}")
+    app.logger.debug(
+        "Statut imprimante reçu : %s, Borne : %s, nouvel état : %s",
+        printer_error_code, borne_id, status_changed)
 
     return jsonify({'status': 'success'}), 200
 

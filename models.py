@@ -1008,6 +1008,16 @@ def bump_queue_revision():
         return None
 
 
+PRINTER_HEARTBEAT_CODE = 'heartbeat'
+KIOSK_OFFLINE_CODE = 'kiosk_offline'
+# Une borne envoie un heartbeat environ chaque minute ; trois intervalles
+# manqués permettent d'afficher « injoignable » sans réagir à un simple retard.
+PRINTER_STATUS_STALE_SECONDS = 180
+# Les heartbeats sont dédupliqués par borne : cette limite borne uniquement un
+# client forgé qui inventerait une infinité d'identifiants de borne.
+PRINTER_HEARTBEAT_LIMIT = 20
+
+
 class PrinterStatus(db.Model):
     """Journal des statuts remontés par les bornes d'impression (et par le
     flux d'impression serveur).
@@ -1052,14 +1062,16 @@ def _printer_status_is_error(error_code):
 
 def record_printer_status(error_code, message, borne_id=None, generated_at=None,
                           is_error=None):
-    """ Journalise un statut imprimante en base et renvoie la ligne créée.
+    """ Journalise un statut imprimante en base.
+
+    Renvoie ``True`` si le statut représente un nouvel état et ``False`` quand
+    une ligne identique a seulement été rafraîchie. Cette déduplication garde
+    ``received_at`` à jour pour la détection « borne injoignable » sans empiler
+    une ligne par heartbeat ou par contrôle papier périodique.
 
     Connexion dédiée (comme ``bump_queue_revision``) : la fonction peut être
     appelée au milieu d'un flux d'écriture métier (ex. ``confirm_print``) sans
     committer par surprise les changements en attente de ``db.session``.
-
-    ``generated_at`` : datetime de génération (borne) ; ignoré si non fourni.
-    ``is_error`` : dérivé du code si non fourni (voir _printer_status_is_error).
     """
     table = PrinterStatus.__table__
     is_error = _printer_status_is_error(error_code) if is_error is None else bool(is_error)
@@ -1069,24 +1081,134 @@ def record_printer_status(error_code, message, borne_id=None, generated_at=None,
     borne_id = (str(borne_id) if borne_id is not None else None)
     if borne_id:
         borne_id = borne_id[:80]
+    error_code = str(error_code)[:40]
+    received_at = datetime.now(time_tz)
     values = {
         "borne_id": borne_id,
-        "error_code": str(error_code)[:40],
+        "error_code": error_code,
         "is_error": is_error,
         "message": message,
         "generated_at": generated_at,
-        "received_at": datetime.now(time_tz),
+        "received_at": received_at,
     }
     with db.engine.begin() as conn:
+        dedupe = [
+            table.c.borne_id == borne_id,
+            table.c.error_code == error_code,
+        ]
+        # Pour un heartbeat, seul le dernier contact de cette borne compte ;
+        # pour un statut métier, un même code avec un nouveau message reste un
+        # nouvel état à historiser.
+        if error_code != PRINTER_HEARTBEAT_CODE:
+            dedupe.append(table.c.message == message)
+        duplicate_id = conn.execute(
+            db.select(table.c.id)
+            .where(*dedupe)
+            .order_by(table.c.id.desc())
+            .limit(1)
+        ).scalar()
+        if duplicate_id is not None:
+            conn.execute(
+                table.update()
+                .where(table.c.id == duplicate_id)
+                .values(
+                    is_error=is_error,
+                    message=message,
+                    generated_at=generated_at,
+                    received_at=received_at,
+                )
+            )
+            return False
+
         conn.execute(table.insert().values(**values))
-        # Purge paresseuse : on ne conserve que les N plus récents.
+        # Purge paresseuse : elle ne doit jamais supprimer le heartbeat d'une
+        # borne à cause de statuts métier plus nombreux, sinon la borne serait
+        # faussement marquée injoignable.
         stale_ids = conn.execute(
             db.select(table.c.id)
+            .where(table.c.error_code != PRINTER_HEARTBEAT_CODE)
             .order_by(table.c.id.desc())
             .offset(PRINTER_INFOS_LIMIT)
         ).scalars().all()
+        heartbeat_ids = conn.execute(
+            db.select(table.c.id)
+            .where(table.c.error_code == PRINTER_HEARTBEAT_CODE)
+            .order_by(table.c.id.desc())
+            .offset(PRINTER_HEARTBEAT_LIMIT)
+        ).scalars().all()
+        stale_ids.extend(heartbeat_ids)
         if stale_ids:
             conn.execute(table.delete().where(table.c.id.in_(stale_ids)))
+        return True
+
+
+def _status_received_at(row):
+    """Normalise ``received_at`` en heure locale NAÏVE.
+
+    SQLite renvoie des datetimes sans fuseau alors que ``time_tz`` est un
+    pytz timezone : ``replace(tzinfo=time_tz)`` y attacherait un décalage LMT
+    historique au lieu de l'heure de Paris. On compare donc des heures
+    locales naïves des deux côtés ; un timestamp conscient est converti puis
+    rendu naïf."""
+    received_at = row.received_at
+    if received_at.tzinfo is not None:
+        return received_at.astimezone(time_tz).replace(tzinfo=None)
+    return received_at
+
+
+def _borne_status_snapshots():
+    """Retourne le dernier contact et le dernier statut métier par borne.
+
+    Les heartbeats prouvent que la borne est en ligne mais ne doivent pas
+    remplacer l'état métier de l'imprimante (papier, erreur d'impression…)."""
+    rows = (
+        db.session.query(PrinterStatus)
+        .filter(PrinterStatus.borne_id.isnot(None))
+        .order_by(PrinterStatus.id.asc())
+        .all()
+    )
+    snapshots = {}
+    for row in rows:
+        snapshot = snapshots.setdefault(row.borne_id, {
+            "last_seen": None,
+            "current": None,
+        })
+        if (snapshot["last_seen"] is None
+                or _status_received_at(row)
+                > _status_received_at(snapshot["last_seen"])):
+            snapshot["last_seen"] = row
+        if (row.error_code != PRINTER_HEARTBEAT_CODE
+                and (snapshot["current"] is None
+                     or row.id > snapshot["current"].id)):
+            snapshot["current"] = row
+    return snapshots
+
+
+def _borne_is_stale(last_seen, now=None):
+    if now is None:
+        now = datetime.now(time_tz)
+    if now.tzinfo is not None:
+        now = now.astimezone(time_tz).replace(tzinfo=None)
+    return ((now - _status_received_at(last_seen)).total_seconds()
+            > PRINTER_STATUS_STALE_SECONDS)
+
+
+def _offline_status_infos(snapshots):
+    """Lignes synthétiques (non persistées) pour les bornes sans contact récent."""
+    stale = [
+        snapshot["last_seen"] for snapshot in snapshots.values()
+        if snapshot["last_seen"] is not None
+        and _borne_is_stale(snapshot["last_seen"])
+    ]
+    stale.sort(key=lambda row: _status_received_at(row), reverse=True)
+    return [{
+        "error": True,
+        "message": f"Borne {row.borne_id} injoignable : aucun contact depuis "
+                   f"{_status_received_at(row).strftime('%d/%m %H:%M:%S')}",
+        "timestamp": _status_received_at(row).strftime("%d/%m %H:%M:%S"),
+        "borne_id": row.borne_id,
+        "error_code": KIOSK_OFFLINE_CODE,
+    } for row in stale]
 
 
 def get_printer_infos(limit=PRINTER_INFOS_LIMIT):
@@ -1097,23 +1219,47 @@ def get_printer_infos(limit=PRINTER_INFOS_LIMIT):
     connu (exact malgré les réessais d'envoi), sinon celui de réception. """
     rows = (
         db.session.query(PrinterStatus)
+        .filter(PrinterStatus.error_code != PRINTER_HEARTBEAT_CODE)
         .order_by(PrinterStatus.id.desc())
         .limit(limit)
         .all()
     )
-    rows.reverse()
-    return [{
+    infos = [{
         "error": row.is_error,
         "message": row.message,
         "timestamp": (row.generated_at or row.received_at).strftime("%d/%m-%H:%M"),
         "borne_id": row.borne_id,
         "error_code": row.error_code,
     } for row in rows]
+    infos.reverse()
+
+    # Les lignes « injoignable » représentent l'état courant : elles terminent
+    # l'historique, comme les statuts les plus récents du format existant.
+    offline = _offline_status_infos(_borne_status_snapshots())
+    infos.extend(reversed(offline))
+    return infos[-limit:]
 
 
 def get_printer_error():
-    """ Drapeau d'erreur du statut le plus récent, ou None s'il n'y a encore
-    aucun statut en base (le gabarit affiche alors « Pas d'infos »). """
+    """ Drapeau d'erreur courant.
+
+    Avec plusieurs bornes, l'erreur est globale : une borne en erreur ou sans
+    contact récent suffit à signaler l'attention du personnel. ``None`` reste
+    réservé à l'absence totale de statut (« Pas d'infos »). """
+    snapshots = _borne_status_snapshots()
+    if snapshots:
+        for snapshot in snapshots.values():
+            last_seen = snapshot["last_seen"]
+            current = snapshot["current"]
+            if last_seen is not None and _borne_is_stale(last_seen):
+                return True
+            if current is not None and current.is_error:
+                return True
+        return False
+
+    # Compatibilité avec les statuts serveur (borne_id NULL) enregistrés avant
+    # qu'une borne n'apparaisse : conserver l'ancien comportement « dernier
+    # statut gagne ».
     row = (
         db.session.query(PrinterStatus.is_error)
         .order_by(PrinterStatus.id.desc())
