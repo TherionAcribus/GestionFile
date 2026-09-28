@@ -78,6 +78,9 @@ def application(tmp_path):
         PAGE_PATIENT_INTERFACE_STAFF_CALLED="appele",
         PAGE_PATIENT_INTERFACE_NO_TICKET="pas de ticket",
         PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF="voir personnel",
+        PAGE_PATIENT_INTERFACE_PRINT_UNCERTAIN="résultat incertain",
+        PAGE_PATIENT_INTERFACE_TICKET_RECEIVED="ticket reçu",
+        PAGE_PATIENT_INTERFACE_TICKET_MISSING="pas reçu",
         PAGE_PATIENT_INTERFACE_DONE_BACK="retour",
         PAGE_PATIENT_INTERFACE_DONE_PRINT="imprimer",
         PAGE_PATIENT_INTERFACE_DONE_EXTEND="prolonger",
@@ -397,10 +400,28 @@ def _deux_patients_meme_numero(application):
         vieux = Patient(call_number="A5", status="done",
                         activity=ancienne, language=langue)
         nouveau = Patient(call_number="A5", status="standing",
-                          activity=nouvelle, language=langue)
+                          activity=nouvelle, language=langue,
+                          print_job_id="job-scan")
         db.session.add_all([langue, ancienne, nouvelle, vieux, nouveau])
         db.session.commit()
         return vieux.id, nouveau.id
+
+
+def test_scan_conclusion_fournit_les_donnees_de_reimpression(client, application):
+    """Le bouton « Imprimer » de la conclusion scan n'est pas une impasse :
+    patient_scan_already_validate fournit le payload ESC/POS du patient réel."""
+    application.config["PAGE_PATIENT_PRINT_AFTER_SCAN"] = True
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+
+    reponse = client.post("/patient/scan_already_validate",
+                          data={"patient_id": str(nouveau_id)})
+
+    html = reponse.get_data(as_text=True)
+    assert reponse.status_code == 200
+    assert 'id="print_btn"' in html
+    assert 'data-print="False"' not in html
+    assert 'data-print=""' not in html
+    assert 'data-print-job-id="job-scan"' in html
 
 
 def test_conclusion_par_patient_id_rend_le_bon_patient(client, application):

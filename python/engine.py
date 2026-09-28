@@ -459,7 +459,7 @@ def add_patient(call_number, activity, status='standing', print_job_id=None,
 
 # Durée de vie par défaut (secondes) d'une inscription 'pending' non confirmée.
 # Au-delà, elle est considérée abandonnée (borne fermée, JS en échec, patient
-# parti) et purgée. Elle n'a jamais rejoint la file, donc sa suppression ne
+# parti) et expirée. Elle n'a jamais rejoint la file, donc cette transition ne
 # nécessite aucune diffusion temps réel.
 PENDING_PATIENT_TTL_SECONDS = 180
 
@@ -487,18 +487,27 @@ def expire_stale_pending_patients(ttl_seconds=None):
         Patient.status == 'pending',
         Patient.timestamp < cutoff
     ).all()
+    expired_numbers = []
     for patient in stale:
-        patient.status = 'expired'
-        patient.journey_id = None
-    if stale:
-        expired_numbers = [p.call_number for p in stale]
+        # UPDATE conditionnel : une confirmation d'impression peut activer le
+        # pending entre le SELECT ci-dessus et ce traitement. Sans la clause
+        # status='pending', l'expiration écraserait un patient déjà en file.
+        claimed = db.session.query(Patient).filter(
+            Patient.id == patient.id,
+            Patient.status == 'pending',
+            Patient.timestamp < cutoff
+        ).update({'status': 'expired', 'journey_id': None},
+                 synchronize_session=False)
+        if claimed:
+            expired_numbers.append(patient.call_number)
+    if expired_numbers:
         db.session.commit()
-        app.logger.debug(f"{len(stale)} inscription(s) pending expirée(s)")
+        app.logger.debug(f"{len(expired_numbers)} inscription(s) pending expirée(s)")
         # Un téléphone pouvait suivre une inscription 'pending' (scan pendant
         # l'attente d'impression) : le parcours est clos sans retour.
         for number in expired_numbers:
             notify_patient_phone_closed(number)
-    return len(stale)
+    return len(expired_numbers)
 
 
 def register_pending_patient(activity, print_job_id, journey_id=None):
@@ -510,8 +519,19 @@ def register_pending_patient(activity, print_job_id, journey_id=None):
     Cela évite d'ajouter un patient qui ne recevra jamais de ticket."""
     expire_stale_pending_patients()
     call_number = get_next_call_number(activity)
-    new_patient = add_patient(call_number, activity, status='pending',
-                              print_job_id=print_job_id, journey_id=journey_id)
+    try:
+        new_patient = add_patient(call_number, activity, status='pending',
+                                  print_job_id=print_job_id, journey_id=journey_id)
+    except IntegrityError:
+        # Deux requêtes d'impression du MÊME parcours peuvent arriver en
+        # concurrence (deux boutons, rejeu réseau). La contrainte unique sur
+        # journey_id tranche : la perdante retrouve le pending existant et son
+        # print_job_id au lieu de créer une seconde inscription.
+        db.session.rollback()
+        existing = find_patient_by_journey(journey_id) if journey_id else None
+        if existing is None:
+            raise
+        return existing
     return new_patient
 
 

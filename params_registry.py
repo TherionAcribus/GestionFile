@@ -199,6 +199,9 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_interface_staff_called": ("PAGE_PATIENT_INTERFACE_STAFF_CALLED", "value_str"),
     "page_patient_interface_no_ticket": ("PAGE_PATIENT_INTERFACE_NO_TICKET", "value_str"),
     "page_patient_interface_print_failed_staff": ("PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF", "value_str"),
+    "page_patient_interface_print_uncertain": ("PAGE_PATIENT_INTERFACE_PRINT_UNCERTAIN", "value_str"),
+    "page_patient_interface_ticket_received": ("PAGE_PATIENT_INTERFACE_TICKET_RECEIVED", "value_str"),
+    "page_patient_interface_ticket_missing": ("PAGE_PATIENT_INTERFACE_TICKET_MISSING", "value_str"),
 }
 
 
@@ -292,6 +295,7 @@ _BEFORE_CALL_KEYS = {
     "page_patient_interface_no_ticket",
     "page_patient_interface_staff_called",
     "page_patient_interface_print_failed_staff",
+    "page_patient_interface_print_uncertain",
     "phone_title",
     "phone_line1", "phone_line2", "phone_line3",
     "phone_line4", "phone_line5", "phone_line6",
@@ -361,6 +365,9 @@ _TRANSLATABLE_KEYS = {
     "page_patient_interface_staff_called",
     "page_patient_interface_no_ticket",
     "page_patient_interface_print_failed_staff",
+    "page_patient_interface_print_uncertain",
+    "page_patient_interface_ticket_received",
+    "page_patient_interface_ticket_missing",
     # Ticket (utils.render_ticket_escpos, routes/admin_patient.py).
     "ticket_header",
     "ticket_message",

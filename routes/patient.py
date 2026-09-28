@@ -401,11 +401,13 @@ def patient_return_validation_page_and_print_data(print_ticket):
         return redirect(url_for('patient.patient_conclusion_page', patient_id=new_patient.id))
 
 
-def _alert_staff_print_failure(patient, code, message):
-    """ Signale au personnel qu'un ticket n'a pas pu être imprimé pour un
-    patient donné (notification comptoir + trace dans le tableau de bord
-    imprimante)."""
-    detail = f"Ticket non imprimé pour le patient {patient.call_number} ({code or 'inconnu'})"
+def _alert_staff_print_failure(patient, code, message, maybe_printed=False):
+    """ Signale au personnel un échec ou un résultat d'impression incertain
+    (notification comptoir + trace dans le tableau de bord imprimante)."""
+    if maybe_printed:
+        detail = f"Résultat d'impression incertain pour le patient {patient.call_number} ({code or 'inconnu'})"
+    else:
+        detail = f"Ticket non imprimé pour le patient {patient.call_number} ({code or 'inconnu'})"
     try:
         send_app_notification(origin="printer_error", data={"message": detail})
     except Exception as e:
@@ -447,6 +449,11 @@ def confirm_print():
         success = bool(success)
     code = data.get('code')
     message = data.get('message')
+    maybe_printed = data.get('maybe_printed')
+    if isinstance(maybe_printed, str):
+        maybe_printed = maybe_printed.lower() in ('true', '1', 'yes', 'on')
+    else:
+        maybe_printed = bool(maybe_printed)
 
     if not print_job_id:
         return jsonify({'status': 'error', 'reason': 'missing_print_job_id'}), 400
@@ -476,6 +483,18 @@ def confirm_print():
                     'call_number': patient.call_number,
                     'reconciled': True
                 }), 200
+        if maybe_printed:
+            # Le pending a expiré pendant l'attente d'un résultat ambigu : la
+            # ligne n'est pas annulée. On laisse encore le patient constater
+            # s'il a le ticket ; sa réponse « oui » pourra réconcilier la
+            # même journée, « non » laissera l'inscription expirée.
+            _alert_staff_print_failure(patient, code, message, True)
+            return jsonify({
+                'status': 'uncertain',
+                'call_number': patient.call_number,
+                'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
+                'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))
+            }), 200
         return jsonify({'status': 'expired'}), 410
 
     # Déjà confirmé : idempotence (renvoi réseau, réessai de la file locale
@@ -491,7 +510,22 @@ def confirm_print():
     # Échec d'impression : comportement piloté par la configuration Admin
     # (onglet Page Patient). 'cancel' | 'keep' | 'ask'.
     behavior = app.config.get("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "ask")
-    _alert_staff_print_failure(patient, code, message)
+    # 'busy' signifie « cet appel n'a pas atteint le matériel » — pas un
+    # échec d'impression. Garde-fou pour les clients anciens/incomplets :
+    # même s'il arrive encore ici, il ne doit jamais déclencher 'cancel'.
+    uncertain = bool(maybe_printed or code == 'busy')
+    _alert_staff_print_failure(patient, code, message, uncertain)
+
+    if uncertain:
+        # Résultat matériel ambigu (ex. USB coupé après l'envoi du contenu ou
+        # pendant la coupe) : ne jamais trancher automatiquement. Le patient
+        # indique ce qu'il voit, ou appelle le personnel.
+        return jsonify({
+            'status': 'uncertain',
+            'call_number': patient.call_number,
+            'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
+            'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))
+        }), 200
 
     if behavior == "keep":
         # On conserve le patient dans la file malgré l'absence de ticket.
@@ -607,6 +641,18 @@ def print_call_staff():
         return jsonify({'status': 'expired'}), 410
 
     if patient.status != 'pending':
+        if patient.status == 'expired':
+            # L'inscription ne peut plus être activée automatiquement, mais le
+            # clic « Appeler le personnel » reste une demande réelle : on la
+            # signale et on confirme explicitement l'appel au patient.
+            _alert_staff_print_failure(
+                patient, 'call_staff',
+                "Le patient demande de l'aide (résultat d'impression incertain)")
+            return jsonify({
+                'status': 'expired',
+                'call_number': patient.call_number,
+                'staff_called': True
+            }), 200
         # Déjà traité (idempotence).
         return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
 
@@ -639,7 +685,10 @@ def print_abandon():
     # Transition conditionnelle : exclusive avec un confirm_print concurrent.
     if _try_transition_pending(patient, {'status': 'print_failed', 'journey_id': None}):
         notify_patient_phone_closed(patient.call_number)
-    return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
+        return jsonify({'status': 'cancelled', 'call_number': patient.call_number}), 200
+    # La confirmation a gagné la course : renvoyer l'état réellement tranché,
+    # pas 'cancelled' alors que le patient est déjà entré en file.
+    return _confirm_print_resolved_response(patient)
 
 
 
@@ -695,15 +744,17 @@ def patient_scan_already_validate():
     patient_id = request.form.get('patient_id')
     app.logger.debug('already scanned %s', patient_id)
     if patient_id:
-        return patient_conclusion_page(int(patient_id), print_ticket=False, print_data=False)
-    # Repli compat (client sans patient_id) : le numéro d'appel est réutilisé
-    # d'un jour à l'autre, on prend donc le patient le PLUS RÉCENT portant ce
-    # numéro — pas le premier trouvé, qui pouvait dater d'hier.
-    patient_call_number = request.form.get('patient_call_number')
-    patient = (Patient.query.filter_by(call_number=patient_call_number)
-               .order_by(Patient.id.desc()).first())
+        patient = db.session.get(Patient, int(patient_id))
+    else:
+        # Repli compat (client sans patient_id) : le numéro d'appel est réutilisé
+        # d'un jour à l'autre, on prend donc le patient le PLUS RÉCENT portant ce
+        # numéro — pas le premier trouvé, qui pouvait dater d'hier.
+        patient_call_number = request.form.get('patient_call_number')
+        patient = (Patient.query.filter_by(call_number=patient_call_number)
+                   .order_by(Patient.id.desc()).first())
+    print_data = format_ticket_text(patient, patient.activity) if patient else None
     return patient_conclusion_page(patient.id if patient else 0,
-                                   print_ticket=False, print_data=False)
+                                   print_ticket=False, print_data=print_data)
 
 
 @patient_bp.route('/patient/cancel_patient')
@@ -737,10 +788,16 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
     page_patient_confirmation_message = choose_text_translation("page_patient_confirmation_message")
     page_patient_confirmation_message = replace_balise_phone(page_patient_confirmation_message, patient)
 
+    # Tolérance aux anciens appels qui passaient False comme charge utile :
+    # « False » n'est jamais un ticket base64 et ne doit pas activer le bouton.
+    if print_data is False or print_data == 'False':
+        print_data = None
+
     # print_ticket == False si mode Scan. On défini si on affiche ou non les boutons pour réimprimer et prolonger
     reprint = False
-    if (print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_PRINT"]) or (not print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_SCAN"]):
-        reprint = True
+    if patient is not None and print_data:
+        if (print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_PRINT"]) or (not print_ticket and app.config["PAGE_PATIENT_PRINT_AFTER_SCAN"]):
+            reprint = True
 
     # Libellés du flux d'impression, résolus dans la langue courante du patient
     # (repli FR). Injectés dans la page pour que patients.js (qui construit
@@ -756,6 +813,9 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
         "staff_called": "page_patient_interface_staff_called",
         "no_ticket": "page_patient_interface_no_ticket",
         "print_failed_staff": "page_patient_interface_print_failed_staff",
+        "print_uncertain": "page_patient_interface_print_uncertain",
+        "ticket_received": "page_patient_interface_ticket_received",
+        "ticket_missing": "page_patient_interface_ticket_missing",
         "back": "page_patient_interface_done_back",
     }
     raw_labels = {name: choose_text_translation(key) for name, key in _print_label_keys.items()}
@@ -765,6 +825,11 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
     )
     values.pop("N", None)
     print_ui_labels = {name: render_balises(text, values) for name, text in raw_labels.items()}
+    # Le bouton de réimpression (notamment après scan) conserve la clé
+    # d'inscription dans le pont borne/serveur : logs et résultats restent
+    # corrélés avec le job d'origine au lieu d'apparaître orphelins.
+    if print_job_id is None and patient is not None:
+        print_job_id = patient.print_job_id
 
     return render_template('patient/conclusion_page.html',
                         print_ui_labels=print_ui_labels,

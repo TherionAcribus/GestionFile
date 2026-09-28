@@ -127,6 +127,9 @@ def load_configuration(app):
     app.config.setdefault("PAGE_PATIENT_INTERFACE_STAFF_CALLED", "Le personnel a été prévenu. Veuillez noter votre numéro :")
     app.config.setdefault("PAGE_PATIENT_INTERFACE_NO_TICKET", "Ticket non imprimé. Veuillez noter votre numéro :")
     app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_FAILED_STAFF", "Impression impossible. Veuillez vous adresser au personnel.")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINT_UNCERTAIN", "Impossible de vérifier si le ticket est sorti. Votre numéro est le {N}.")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_TICKET_RECEIVED", "J'ai récupéré mon ticket")
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_TICKET_MISSING", "Je n'ai pas de ticket")
 
     # Table clé -> (nom app.config, colonne ConfigOption) : dérivée du registre
     # centralisé (params_registry) afin que « clés chargées » et « clés

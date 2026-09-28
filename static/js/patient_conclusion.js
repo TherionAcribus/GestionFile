@@ -45,7 +45,17 @@ function resetTimer() {
     updateTimerGauge();
 }
 
+function finishActivePrintFlow() {
+    // Sortie effective de la conclusion (minuteur expiré ou bouton retour) :
+    // sans cela, _activePrintJobId continuerait de différer les refresh alors
+    // que l'écran d'impression n'existe plus.
+    if (typeof finishPrintFlow === 'function') {
+        finishPrintFlow();
+    }
+}
+
 function goToCancelPatient() {
+    finishActivePrintFlow();
     // Effectue la requête HTMX même sans rechargement
     htmx.ajax('GET', '/patient/cancel_patient', {
         target: '#div_buttons_parents'
@@ -67,6 +77,7 @@ printBtn.addEventListener('click', function() {
 
 cancelBtn.addEventListener('click', function() {
     stopTimer();
+    finishActivePrintFlow();
 });
 
 // Contrôles du minuteur exposés à patients.js (flux d'impression). Le retour
@@ -119,10 +130,35 @@ function handlePrintButtonClick() {
     printBtn.style.opacity = '0.6';
 
     // La réimpression partage le print_job_id de l'inscription : les journaux
-    // de la borne restent corrélés avec elle même pour ce tirage.
-    sendPrintTicket(printData, printDataElement.getAttribute('data-print-job-id')).finally(function() {
-        printBtn.dataset.printing = 'false';
-        printBtn.style.pointerEvents = '';
-        printBtn.style.opacity = '';
-    });
+    // de la borne restent corrélés avec elle même pour ce tirage. Le résultat
+    // est affiché : un échec silencieux laisserait le patient sans repère.
+    var reprintJobId = printDataElement.getAttribute('data-print-job-id');
+    if (typeof _activePrintJobId !== 'undefined') {
+        _activePrintJobId = reprintJobId || 'manual-reprint';
+    }
+    showPrintBusy();
+    sendPrintTicket(printData, reprintJobId)
+        .then(function(result) {
+            if (result && result.success) {
+                finishActivePrintFlow();
+                setPrintOverlay(false);
+                resetTimer();
+                return;
+            }
+            var L = printLabels();
+            var message = (result && result.maybe_printed) ? L.print_uncertain : L.print_failed_staff;
+            renderPrintOverlay(messageHtml(message, printCallNumber()), [{
+                label: L.back,
+                onClick: function() {
+                    finishActivePrintFlow();
+                    setPrintOverlay(false);
+                    resetTimer();
+                }
+            }]);
+        })
+        .finally(function() {
+            printBtn.dataset.printing = 'false';
+            printBtn.style.pointerEvents = '';
+            printBtn.style.opacity = '';
+        });
 }

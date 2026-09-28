@@ -145,11 +145,21 @@ function pageEditorRevision() {
 }
 
 function refresh_page() {
+    if (printFlowActive()) {
+        console.log("Refresh différé : flux d'impression en cours.");
+        return;
+    }
     console.log("Refresh page...");
     window.location.reload();
 }
 
 function refresh_buttons(){
+    if (printFlowActive()) {
+        // Le fragment de conclusion porte un print_job_id en cours : un swap
+        // ici détruirait l'écran de décision sans résoudre l'inscription.
+        console.log("Refresh des boutons différé : flux d'impression en cours.");
+        return;
+    }
     htmx.trigger('#div_buttons_parents', 'refresh_buttons', {target: "#div_buttons_parents"});
 }
 
@@ -174,59 +184,111 @@ document.addEventListener('click', function (evt) {
 // impression (htmx:afterSwap ci-dessous) et la réimpression
 // (conclusion_page.html). La Borne expose l'API sous
 // window.pywebview.api.printer.print_ticket — et non window.pywebview.api.print_ticket.
-// Le contrat de retour est { success, code, message } (voir printer.py).
+// Contrat de retour : { success, code, message }, plus maybe_printed quand le
+// résultat matériel est inconnu et attempted=false quand rien n'a été envoyé.
 var _printInProgress = false;
+// Un parcours serveur ne doit déclencher qu'UNE impression automatique par
+// print_job_id : un re-rendu HTMX du fragment de conclusion n'est pas une
+// demande de réimpression. Les réessais volontaires passent options.manual.
+var _automaticPrintJobs = {};
+var _activePrintJobId = null;
+var PRINT_BUSY_RETRY_DELAY_MS = 1000;
+var PRINT_BUSY_MAX_ATTEMPTS = 5;
+var PRINT_BRIDGE_TIMEOUT_MS = 30000;
+var PRINT_REQUEST_TIMEOUT_MS = 15000;
+
+function _printNotAttempted(code, message) {
+    return {
+        success: false,
+        code: code,
+        message: message,
+        attempted: false,
+        maybe_printed: false
+    };
+}
 
 function sendPrintTicket(printData, printJobId) {
     // Protection contre les clics/déclenchements répétés : tant qu'une
     // impression est en cours, toute nouvelle demande est ignorée pour éviter
-    // les doubles tickets.
+    // les doubles tickets. Ce résultat n'est PAS un échec matériel : rien n'a
+    // été envoyé à l'imprimante, il ne doit donc jamais être confirmé tel quel.
     if (_printInProgress) {
         console.warn("Impression déjà en cours, demande ignorée.");
-        return Promise.resolve({ success: false, code: 'busy', message: 'Impression déjà en cours' });
+        return Promise.resolve(_printNotAttempted('busy', 'Impression déjà en cours'));
     }
 
-    if (!printData) {
+    if (!printData || printData === 'False') {
         console.error("Les données d'impression ne sont pas disponibles.");
-        return Promise.resolve({ success: false, code: 'no_data', message: "Données d'impression indisponibles" });
+        return Promise.resolve(_printNotAttempted('no_data', "Données d'impression indisponibles"));
     }
 
-    if (!(window.pywebview && window.pywebview.api && window.pywebview.api.printer)) {
+    if (!(window.pywebview && window.pywebview.api && window.pywebview.api.printer &&
+          typeof window.pywebview.api.printer.print_ticket === 'function')) {
         console.error("L'API PyWebView (printer) n'est pas disponible.");
-        return Promise.resolve({ success: false, code: 'no_api', message: "API d'impression indisponible" });
+        return Promise.resolve(_printNotAttempted('no_api', "API d'impression indisponible"));
     }
 
     _printInProgress = true;
     var printerApi = window.pywebview.api.printer;
-    // printJobId : identifiant d'inscription côté serveur — même clé que
-    // /patient/confirm_print, pour que les journaux de la borne restent
-    // corrélables avec l'inscription. Une borne plus ancienne (signature à
-    // un seul argument) lève un TypeError AVANT toute impression : repli
-    // sans l'identifiant, sans risque de double ticket.
-    return Promise.resolve()
+    // La capacité est déclarée par le pont de la borne. Sans elle, on appelle
+    // l'ancienne signature à un argument : surtout pas de rejeu après erreur,
+    // qui risquerait d'imprimer une seconde fois si l'appel initial était déjà
+    // arrivé jusqu'à l'imprimante.
+    var supportsPrintJobId = printerApi.print_ticket.supportsPrintJobId === true;
+    var printCall = Promise.resolve()
         .then(function() {
-            return printerApi.print_ticket(printData, printJobId || null);
-        })
-        .catch(function(error) {
-            if (printJobId && /positional|argument/i.test(String((error && error.message) || error))) {
-                console.warn("Le pont d'impression ignore le print_job_id — nouvel essai sans l'identifiant.");
-                return printerApi.print_ticket(printData);
+            if (supportsPrintJobId) {
+                return printerApi.print_ticket(printData, printJobId || null);
             }
-            throw error;
-        })
+            return printerApi.print_ticket(printData);
+        });
+    // Le pont JS->Python peut laisser une promesse non résolue si la WebView
+    // ou le callback natif meurt avant le retour. Sans borne de temps, le
+    // verrou JS resterait vrai et bloquerait tout le parcours d'impression.
+    // Le résultat reste incertain : le tirage a pu avoir lieu physiquement.
+    var bridgeTimer = null;
+    var bridgeTimeout = new Promise(function(resolve) {
+        bridgeTimer = setTimeout(function() {
+            resolve({
+                success: false,
+                code: 'bridge_timeout',
+                message: "Pas de réponse du pont d'impression",
+                maybe_printed: true
+            });
+        }, PRINT_BRIDGE_TIMEOUT_MS);
+    });
+    return Promise.race([printCall, bridgeTimeout])
         .then(function(result) {
-            if (result && result.success) {
+            if (!result || typeof result !== 'object') {
+                // La commande a pu atteindre l'imprimante avant de produire un
+                // retour invalide : résultat ambigu, pas « échec certain ».
+                return {
+                    success: false,
+                    code: 'invalid_result',
+                    message: "Résultat d'impression invalide",
+                    maybe_printed: true
+                };
+            }
+            if (result.success) {
                 console.log("Impression réussie:", result.message);
             } else {
-                console.error("Échec de l'impression:", result ? result.message : result);
+                console.error("Échec de l'impression:", result.message);
             }
             return result;
         })
         .catch(function(error) {
             console.error("Erreur lors de l'impression:", error);
-            return { success: false, code: 'exception', message: String(error) };
+            return {
+                success: false,
+                code: 'exception',
+                message: String(error),
+                // Le rejet peut survenir après l'envoi effectif au périphérique
+                // ou pendant le retour du pont : résultat matériel inconnu.
+                maybe_printed: true
+            };
         })
         .finally(function() {
+            if (bridgeTimer) { clearTimeout(bridgeTimer); }
             _printInProgress = false;
         });
 }
@@ -247,22 +309,46 @@ function sendPrintTicket(printData, printJobId) {
 // (window.__conclusionTimer) et n'est (re)lancé qu'après succès ou décision.
 // ---------------------------------------------------------------------------
 
+function fetchJsonWithTimeout(url, options) {
+    var controller = (typeof AbortController === 'function') ? new AbortController() : null;
+    options = options || {};
+    if (controller) { options.signal = controller.signal; }
+    var request = fetch(url, options).then(function(response) {
+        // Le délai couvre aussi la lecture du corps : une réponse HTTP qui
+        // s'ouvre puis se fige ne doit pas laisser l'écran « en cours ».
+        return response.json().then(function(data) {
+            return { status: response.status, data: data };
+        });
+    });
+    var timeout = new Promise(function(resolve, reject) {
+        var timer = setTimeout(function() {
+            if (controller) { controller.abort(); }
+            reject(new Error('Délai dépassé pour ' + url));
+        }, PRINT_REQUEST_TIMEOUT_MS);
+        request.then(
+            function() { clearTimeout(timer); },
+            function() { clearTimeout(timer); });
+    });
+    return Promise.race([request, timeout]);
+}
+
 function postPrintConfirmation(printJobId, result) {
-    return fetch('/patient/confirm_print', {
+    return fetchJsonWithTimeout('/patient/confirm_print', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             print_job_id: printJobId,
             success: !!(result && result.success),
             code: result ? result.code : 'unknown',
-            message: result ? result.message : ''
+            message: result ? result.message : '',
+            maybe_printed: !!(result && result.maybe_printed)
         })
     }).then(function(r) {
         // 5xx = état serveur inconnu (crash possible avant/après écriture) :
         // l'acquittement doit être retenté. 2xx/4xx = réponse définitive
         // (confirm_print est idempotent), le job peut sortir de la file.
         if (r.status >= 500) { throw new Error('confirm_print HTTP ' + r.status); }
-        return r.json();
+        return r.data;
     });
 }
 
@@ -279,18 +365,23 @@ function postPrintConfirmation(printJobId, result) {
 // ---------------------------------------------------------------------------
 
 var PRINT_QUEUE_KEY = 'gf_pending_print_confirmations';
+var PRINT_ATTEMPT_KEY = 'gf_print_attempts';
+var PRINT_ATTEMPT_TTL_MS = 24 * 60 * 60 * 1000;
 var PRINT_DRAIN_DELAY_MS = 5000;       // délai de réessai après un échec réseau
 var PRINT_DRAIN_PERIOD_MS = 15000;     // vidange périodique de sécurité
 var PRINT_CONFIRM_FALLBACK_MS = 45000; // échec affiché si toujours injoignable
 var _memPrintQueue = null;             // repli mémoire (localStorage HS)
+var _memPrintAttempts = null;          // repli mémoire (localStorage HS)
 var _drainingPrintQueue = false;
 var _printDrainTimer = null;
 var _confirmFallbackTimer = null;
+var _printQueueSequence = 0;
 
 function _readPrintQueue() {
     if (_memPrintQueue !== null) { return _memPrintQueue; }
     try {
-        return JSON.parse(localStorage.getItem(PRINT_QUEUE_KEY) || '[]');
+        var jobs = JSON.parse(localStorage.getItem(PRINT_QUEUE_KEY) || '[]');
+        return Array.isArray(jobs) ? jobs : [];
     } catch (e) {
         _memPrintQueue = [];
         return _memPrintQueue;
@@ -308,21 +399,100 @@ function _writePrintQueue(jobs) {
 
 function enqueuePrintConfirmation(printJobId, result, printData) {
     var jobs = _readPrintQueue().filter(function(j) { return j.printJobId !== printJobId; });
-    jobs.push({
+    var entry = {
+        queueId: printJobId + ':' + Date.now() + ':' + (_printQueueSequence++),
         printJobId: printJobId,
         result: {
             success: !!(result && result.success),
             code: result ? result.code : 'unknown',
-            message: result ? result.message : ''
+            message: result ? result.message : '',
+            maybe_printed: !!(result && result.maybe_printed)
         },
         printData: printData || null,
         queuedAt: Date.now()
-    });
+    };
+    jobs.push(entry);
     _writePrintQueue(jobs);
+    return entry;
 }
 
-function dequeuePrintConfirmation(printJobId) {
-    _writePrintQueue(_readPrintQueue().filter(function(j) { return j.printJobId !== printJobId; }));
+function dequeuePrintConfirmation(printJobId, queueId) {
+    _writePrintQueue(_readPrintQueue().filter(function(j) {
+        // Une vieille requête en vol ne doit pas retirer une décision plus
+        // récente réenfilée sous le même print_job_id : on compare la version.
+        return j.printJobId !== printJobId ||
+               (queueId !== undefined && j.queueId !== queueId);
+    }));
+}
+
+function hasNewerQueuedConfirmation(printJobId, queueId) {
+    return _readPrintQueue().some(function(j) {
+        return j.printJobId === printJobId && j.queueId !== queueId;
+    });
+}
+
+// Journal persistant des TENTATIVES automatiques, distinct de la file des
+// acquittements : il est posé AVANT l'appel matériel. Sans lui, un refresh
+// ou une réinjection HTMX pendant le pont JS/Python pouvait lancer un second
+// ticket physique pour la même inscription.
+function _readPrintAttempts() {
+    var attempts = null;
+    if (_memPrintAttempts !== null) {
+        attempts = _memPrintAttempts;
+    } else {
+        try {
+            attempts = JSON.parse(localStorage.getItem(PRINT_ATTEMPT_KEY) || '{}');
+        } catch (e) {
+            _memPrintAttempts = {};
+            attempts = _memPrintAttempts;
+        }
+        if (!attempts || typeof attempts !== 'object' || Array.isArray(attempts)) {
+            attempts = {};
+        }
+    }
+    var now = Date.now();
+    Object.keys(attempts).forEach(function(jobId) {
+        if (!attempts[jobId] || now - (attempts[jobId].at || 0) > PRINT_ATTEMPT_TTL_MS) {
+            delete attempts[jobId];
+        }
+    });
+    return attempts;
+}
+
+function _writePrintAttempts(attempts) {
+    if (_memPrintAttempts !== null) { _memPrintAttempts = attempts; return; }
+    try {
+        localStorage.setItem(PRINT_ATTEMPT_KEY, JSON.stringify(attempts));
+    } catch (e) {
+        _memPrintAttempts = attempts;
+    }
+}
+
+function getPrintAttempt(printJobId) {
+    return printJobId ? _readPrintAttempts()[printJobId] || null : null;
+}
+
+function markPrintAttempt(printJobId) {
+    if (!printJobId) { return; }
+    var attempts = _readPrintAttempts();
+    attempts[printJobId] = { state: 'in_progress', at: Date.now() };
+    _writePrintAttempts(attempts);
+}
+
+function recordPrintAttemptResult(printJobId, result) {
+    if (!printJobId || !result) { return; }
+    var attempts = _readPrintAttempts();
+    attempts[printJobId] = {
+        state: 'result',
+        at: Date.now(),
+        result: {
+            success: !!result.success,
+            code: result.code || 'unknown',
+            message: result.message || '',
+            maybe_printed: !!result.maybe_printed
+        }
+    };
+    _writePrintAttempts(attempts);
 }
 
 // Job actuellement affiché à l'écran (la conclusion n'en présente qu'un).
@@ -370,8 +540,9 @@ function drainPrintConfirmations() {
         var job = jobs[index];
         postPrintConfirmation(job.printJobId, job.result)
             .then(function(data) {
-                dequeuePrintConfirmation(job.printJobId);
-                if (job.printJobId === displayedPrintJobId()) {
+                dequeuePrintConfirmation(job.printJobId, job.queueId);
+                if (job.printJobId === displayedPrintJobId() &&
+                    !hasNewerQueuedConfirmation(job.printJobId, job.queueId)) {
                     clearConfirmFallbackTimer();
                     handlePrintConfirmation(job.printData, job.printJobId, data);
                 }
@@ -387,11 +558,11 @@ function drainPrintConfirmations() {
 }
 
 function postPrintCallStaff(printJobId) {
-    return fetch('/patient/print_call_staff', {
+    return fetchJsonWithTimeout('/patient/print_call_staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ print_job_id: printJobId })
-    }).then(function(r) { return r.json(); });
+    }).then(function(r) { return r.data; });
 }
 
 // Contrôles du minuteur exposés par conclusion_page.html. Fallback no-op si
@@ -411,6 +582,9 @@ function printLabels() {
         staff_called: 'Le personnel a été prévenu. Veuillez noter votre numéro :',
         no_ticket: 'Ticket non imprimé. Veuillez noter votre numéro :',
         print_failed_staff: 'Impression impossible. Veuillez vous adresser au personnel.',
+        print_uncertain: 'Impossible de vérifier si le ticket est sorti. Votre numéro est le {N}.',
+        ticket_received: "J'ai récupéré mon ticket",
+        ticket_missing: "Je n'ai pas de ticket",
         back: 'Retour'
     };
     try {
@@ -438,17 +612,33 @@ function clearAbandonTimer() {
 }
 
 function postPrintAbandon(printJobId) {
-    return fetch('/patient/print_abandon', {
+    return fetchJsonWithTimeout('/patient/print_abandon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ print_job_id: printJobId })
-    }).then(function(r) { return r.json(); });
+    }).then(function(r) { return r.data; });
 }
 
 function abandonFlow(printJobId) {
+    // Neutralise immédiatement les choix « Réessayer »/« Personnel » : sinon un
+    // clic pendant le POST d'abandon pouvait imprimer un ticket pour une
+    // inscription déjà annulée.
+    renderPrintOverlay('', []);
     postPrintAbandon(printJobId)
-        .catch(function(e) { console.error('Abandon: erreur', e); })
-        .then(function() { conclusionTimer().goHome(); });
+        .then(function(data) {
+            if (data && (data.status === 'activated' || data.status === 'standing')) {
+                // La confirmation a gagné la course : l'inscription est en file.
+                handlePrintConfirmation(null, printJobId, data);
+                return;
+            }
+            finishPrintFlow(printJobId);
+            conclusionTimer().goHome();
+        })
+        .catch(function(e) {
+            console.error('Abandon: erreur', e);
+            finishPrintFlow(printJobId);
+            conclusionTimer().goHome();
+        });
 }
 
 // Affiche/masque l'overlay d'état d'impression et, en miroir, la confirmation
@@ -516,23 +706,32 @@ function bigNumberHtml(prefixText, callNumber) {
     return html;
 }
 
-// Lance (ou relance) tout le flux impression -> confirmation.
-function runPrintFlow(printData, printJobId) {
+function finishPrintFlow(printJobId) {
+    if (!printJobId || _activePrintJobId === printJobId) {
+        _activePrintJobId = null;
+    }
+}
+
+function printFlowActive() {
+    return _printInProgress || _activePrintJobId !== null;
+}
+
+// Enfile puis confirme un résultat déjà connu — utilisé après l'appel
+// matériel, mais aussi quand le patient tranche un résultat « incertain ».
+function confirmPrintResult(printJobId, result, printData) {
     showPrintBusy();
     clearConfirmFallbackTimer();
-    sendPrintTicket(printData, printJobId)
-        .then(function(result) {
-            // Enfilé AVANT le premier POST : une coupure (réseau,
-            // rechargement, crash) entre l'impression physique et
-            // l'acquittement ne perd plus l'inscription — la file reprendra
-            // au retour de la connectivité.
-            enqueuePrintConfirmation(printJobId, result, printData);
-            return postPrintConfirmation(printJobId, result);
-        })
+    // Enfilé AVANT le premier POST : une coupure (réseau, rechargement, crash)
+    // entre l'impression physique et l'acquittement ne perd plus l'inscription.
+    recordPrintAttemptResult(printJobId, result);
+    var queued = enqueuePrintConfirmation(printJobId, result, printData);
+    return postPrintConfirmation(printJobId, result)
         .then(function(data) {
-            dequeuePrintConfirmation(printJobId);
+            dequeuePrintConfirmation(printJobId, queued && queued.queueId);
             clearConfirmFallbackTimer();
-            handlePrintConfirmation(printData, printJobId, data);
+            if (!hasNewerQueuedConfirmation(printJobId, queued && queued.queueId)) {
+                handlePrintConfirmation(printData, printJobId, data);
+            }
         })
         .catch(function(err) {
             // Réseau/serveur injoignable : l'acquittement reste en file et
@@ -547,11 +746,81 @@ function runPrintFlow(printData, printJobId) {
                 _confirmFallbackTimer = null;
                 var L = printLabels();
                 renderPrintOverlay(messageHtml(L.print_failed_staff), [
-                    { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
+                    { label: L.back, onClick: function() {
+                        finishPrintFlow(printJobId);
+                        conclusionTimer().goHome();
+                    } }
                 ]);
                 conclusionTimer().start();
             }, PRINT_CONFIRM_FALLBACK_MS);
         });
+}
+
+function _runPrintAttempt(printData, printJobId, busyAttempts) {
+    return sendPrintTicket(printData, printJobId)
+        .then(function(result) {
+            if (result && result.code === 'busy' && result.attempted === false) {
+                // Occupation JS transitoire (ex. tirage de test admin) : rien
+                // n'a été envoyé pour CE job. On attend puis on retente ; on ne
+                // POSTe surtout pas ce « busy » comme un échec d'impression.
+                if (busyAttempts >= PRINT_BUSY_MAX_ATTEMPTS) {
+                    return confirmPrintResult(printJobId, {
+                        success: false,
+                        code: 'busy_timeout',
+                        message: "Imprimante occupée trop longtemps",
+                        attempted: false,
+                        // Après les retenues, l'autre tirage en cours peut
+                        // avoir été celui de ce job : ne jamais annuler
+                        // automatiquement — laisser le patient vérifier.
+                        maybe_printed: true
+                    }, printData);
+                }
+                return new Promise(function(resolve) {
+                    setTimeout(resolve, PRINT_BUSY_RETRY_DELAY_MS);
+                }).then(function() {
+                    return _runPrintAttempt(printData, printJobId, busyAttempts + 1);
+                });
+            }
+            return confirmPrintResult(printJobId, result, printData);
+        });
+}
+
+// Lance le flux impression -> confirmation. options.manual distingue le
+// « Réessayer » choisi par le patient des re-rendus automatiques HTMX.
+function runPrintFlow(printData, printJobId, options) {
+    var manual = !!(options && options.manual);
+    if (!manual && printJobId && _automaticPrintJobs[printJobId]) {
+        // Re-rendu HTMX : l'écran courant (impression, choix, succès) doit
+        // rester tel quel — ne pas l'écraser par « Impression en cours ».
+        console.warn('Impression automatique déjà déclenchée pour ce job — rejeu ignoré.');
+        return Promise.resolve();
+    }
+    _activePrintJobId = printJobId || null;
+    showPrintBusy();
+    if (!manual && printJobId) {
+        var attempt = getPrintAttempt(printJobId);
+        if (attempt) {
+            // Le rejeu automatique ne doit JAMAIS rappeler l'imprimante : il
+            // rejoue seulement l'acquittement du dernier résultat connu. Si la
+            // page a été rechargée avant la réponse du pont, le résultat est
+            // incertain et le patient vérifiera physiquement le ticket.
+            _automaticPrintJobs[printJobId] = true;
+            return confirmPrintResult(printJobId, attempt.result || {
+                success: false,
+                code: 'print_interrupted',
+                message: 'Impression interrompue avant réponse du pont',
+                maybe_printed: true
+            }, printData);
+        }
+        _automaticPrintJobs[printJobId] = true;
+    }
+    if (printJobId) {
+        // Posée avant l'appel matériel : un rechargement pendant l'appel est
+        // alors vu comme une tentative déjà lancée, pas comme une nouvelle
+        // demande d'impression.
+        markPrintAttempt(printJobId);
+    }
+    return _runPrintAttempt(printData, printJobId, 0);
 }
 
 function handlePrintConfirmation(printData, printJobId, data) {
@@ -561,18 +830,63 @@ function handlePrintConfirmation(printData, printJobId, data) {
         case 'activated':
         case 'standing': // réponse perdue puis retentée : déjà en file côté serveur
             // Succès : confirmation normale + (re)démarrage du minuteur.
+            finishPrintFlow(printJobId);
             setPrintOverlay(false);
             conclusionTimer().start();
             break;
         case 'activated_no_ticket':
             // Conservé (mode keep) : numéro en grand + retour auto.
+            finishPrintFlow(printJobId);
             renderPrintOverlay(bigNumberHtml(L.no_ticket, data.call_number), []);
             conclusionTimer().start();
             break;
         case 'cancelled':
             // Annulé (mode cancel) : pas de confirmation normale + retour auto.
+            finishPrintFlow(printJobId);
             renderPrintOverlay(messageHtml(L.print_failed_staff, data.call_number), []);
             conclusionTimer().start();
+            break;
+        case 'uncertain':
+            // La borne ne sait pas si le ticket est sorti : jamais de succès
+            // affiché, jamais d'annulation automatique. Le patient tranche ce
+            // qu'il voit physiquement, ou demande le personnel.
+            var uncertainButtons = [
+                { label: L.ticket_received, onClick: function() {
+                    clearAbandonTimer();
+                    confirmPrintResult(printJobId, {
+                        success: true,
+                        code: 'ticket_received',
+                        message: 'Ticket confirmé par le patient'
+                    }, printData);
+                } },
+                { label: L.ticket_missing, onClick: function() {
+                    clearAbandonTimer();
+                    confirmPrintResult(printJobId, {
+                        success: false,
+                        code: 'not_printed',
+                        message: 'Ticket absent selon le patient',
+                        maybe_printed: false
+                    }, printData);
+                } }
+            ];
+            if (data.show_staff) {
+                uncertainButtons.push({ label: L.call_staff, onClick: function() { clearAbandonTimer(); callStaffFlow(printJobId); } });
+            }
+            renderPrintOverlay(bigNumberHtml(L.print_uncertain, data.call_number), uncertainButtons);
+
+            // Garde-fou d'affichage : sans choix, on revient à l'accueil
+            // SANS appeler print_abandon. Un résultat incertain ne doit jamais
+            // annuler automatiquement l'inscription : le ticket est peut-être
+            // sorti. Le pending sera expiré par son TTL et pourra toujours
+            // être réconcilié si l'acquittement devient explicite.
+            clearAbandonTimer();
+            var uncertainAbandon = parseInt(data.abandon_timer, 10);
+            if (uncertainAbandon > 0) {
+                _askAbandonTimeout = setTimeout(function() {
+                    finishPrintFlow(printJobId);
+                    conclusionTimer().goHome();
+                }, uncertainAbandon * 1000);
+            }
             break;
         case 'ask':
             // Décision au patient : Réessayer / Appeler le personnel. AUCUN
@@ -580,13 +894,20 @@ function handlePrintConfirmation(printData, printJobId, data) {
             // garde-fou d'abandon (délai configurable) qui annule et rentre.
             var buttons = [];
             if (data.show_retry) {
-                buttons.push({ label: L.retry, onClick: function() { clearAbandonTimer(); runPrintFlow(printData, printJobId); } });
+                buttons.push({ label: L.retry, onClick: function() {
+                    clearAbandonTimer();
+                    runPrintFlow(printData, printJobId, { manual: true });
+                } });
             }
             if (data.show_staff) {
                 buttons.push({ label: L.call_staff, onClick: function() { clearAbandonTimer(); callStaffFlow(printJobId); } });
             }
             if (buttons.length === 0) {
-                buttons.push({ label: L.back, onClick: function() { clearAbandonTimer(); conclusionTimer().goHome(); } });
+                buttons.push({ label: L.back, onClick: function() {
+                    clearAbandonTimer();
+                    finishPrintFlow(printJobId);
+                    conclusionTimer().goHome();
+                } });
             }
             renderPrintOverlay(bigNumberHtml(L.print_failed, data.call_number), buttons);
 
@@ -598,6 +919,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
             break;
         default:
             // 'expired' / inattendu : proposer le retour.
+            finishPrintFlow(printJobId);
             renderPrintOverlay(messageHtml(L.print_failed_staff), [
                 { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
             ]);
@@ -611,6 +933,7 @@ function callStaffFlow(printJobId) {
     postPrintCallStaff(printJobId)
         .then(function(data) {
             if (data && data.staff_called) {
+                finishPrintFlow(printJobId);
                 renderPrintOverlay(bigNumberHtml(L.staff_called, data.call_number), []);
                 conclusionTimer().start();
             } else {
@@ -631,7 +954,10 @@ function callStaffFailed(printJobId) {
     var L = printLabels();
     renderPrintOverlay(messageHtml(L.print_failed_staff), [
         { label: L.retry, onClick: function() { callStaffFlow(printJobId); } },
-        { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
+        { label: L.back, onClick: function() {
+            finishPrintFlow(printJobId);
+            conclusionTimer().goHome();
+        } }
     ]);
 }
 
@@ -669,10 +995,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (printJobId) {
                         // Flux complet : impression -> confirmation -> activation
                         // (avec écran "impression en cours" et gestion d'échec).
-                        runPrintFlow(printData, printJobId);
+                        // Le marquage automatique empêche un re-rendu HTMX du
+                        // même fragment de relancer un second ticket.
+                        runPrintFlow(printData, printJobId, { automatic: true });
                     } else {
-                        // Pas de job id (cas inattendu) : impression simple.
-                        sendPrintTicket(printData);
+                        // Sans print_job_id, l'inscription ne peut pas être
+                        // acquittée de façon idempotente. Ne JAMAIS imprimer
+                        // « quand même » : un re-rendu relancerait des tickets
+                        // impossibles à rattacher au patient.
+                        console.error("Impression automatique refusée : print_job_id absent.");
+                        var L = printLabels();
+                        _activePrintJobId = 'missing-print-job';
+                        renderPrintOverlay(messageHtml(L.print_failed_staff), [{
+                            label: L.back,
+                            onClick: function() {
+                                finishPrintFlow(null);
+                                conclusionTimer().goHome();
+                            }
+                        }]);
                     }
                 } else {
                     console.log("Pas d'impression demandée");
