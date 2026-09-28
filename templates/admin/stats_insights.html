@@ -1,0 +1,181 @@
+{# Tableau de bord des statistiques (routes/admin_stats.stats_insights).
+   Les graphiques sont décrits en JSON dans data-chart (attribut entre
+   apostrophes : |tojson échappe « ' ») et dessinés par admin_stats.js après
+   l'échange htmx. data-range transmet la période au graphique personnalisé. #}
+{% macro delta_badge(value, lower_is_better=False) -%}
+    {%- if value is not none and value != 0 -%}
+        {%- set good = (value < 0) if lower_is_better else (value > 0) -%}
+        <span class="badge {{ 'text-bg-success' if good else 'text-bg-danger' }} ms-1"
+              title="Par rapport à la période précédente de même durée">
+            {{ '▲' if value > 0 else '▼' }} {{ value | abs }} %
+        </span>
+    {%- elif value == 0 -%}
+        <span class="badge text-bg-light border ms-1" title="Par rapport à la période précédente">=</span>
+    {%- endif -%}
+{%- endmacro %}
+
+<div id="stats-range" class="d-none"
+     data-period="{{ period.key }}"
+     data-start="{{ period.date_from.isoformat() }}"
+     data-end="{{ period.date_to.isoformat() }}"></div>
+
+<p class="small text-muted mb-2">
+    Période : <strong>{{ period.label() }}</strong>
+    {% if period.days > 1 %}({{ period.days }} jours){% endif %}
+    — comparée aux {{ period.days }} jour{{ 's' if period.days > 1 }} précédent{{ 's' if period.days > 1 }}.
+    {% if period.error %}<span class="text-warning-emphasis">{{ period.error }}</span>{% endif %}
+</p>
+{% if truncated %}
+<div class="alert alert-warning small py-2">Très longue période : les indicateurs portent sur les 300 000 patients les plus récents.</div>
+{% endif %}
+{% if compressed_days %}
+<div class="alert alert-info small py-2">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    {{ compressed_days }} jour{{ 's' if compressed_days > 1 }} de cette période ne sont plus conservés qu'en moyennes
+    journalières (archivage, page <a href="/admin/data">Données</a>) : ils ne figurent pas dans ce tableau de bord,
+    mais sont inclus dans le graphique personnalisé plus bas.
+</div>
+{% endif %}
+
+{% if not kpi.count %}
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-bar-chart fs-2 d-block mb-2" aria-hidden="true"></i>
+        Aucun patient sur cette période avec ces filtres.
+    </div>
+{% else %}
+
+{# ------------------------------------------------------------------ #}
+<div class="row g-2 mb-3 stats-kpis">
+    <div class="col-6 col-lg-3">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Patients</div>
+            <div class="fs-3 fw-bold">{{ kpi.count }}</div>
+            <div class="small text-muted">
+                {% if kpi.days > 1 %}{{ '%.0f' | format(kpi.per_day) }} par jour d'ouverture{{ delta_badge(deltas.count) }}{% else %}{{ delta_badge(deltas.count) }}{% endif %}
+            </div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Attente moyenne</div>
+            <div class="fs-3 fw-bold">{{ fmt(kpi.avg_wait) }}{{ delta_badge(deltas.avg_wait, lower_is_better=True) }}</div>
+            <div class="small text-muted" title="La moitié des patients attend moins que la médiane ; 9 sur 10 attendent moins que le 90e centile">
+                médiane {{ fmt(kpi.median_wait) }} · 9 patients sur 10 : moins de {{ fmt(kpi.p90_wait) }}
+            </div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Attentes de {{ long_wait }} min ou plus</div>
+            <div class="fs-3 fw-bold">{{ kpi.long_wait_pct if kpi.long_wait_pct is not none else '—' }}{% if kpi.long_wait_pct is not none %} %{% endif %}{{ delta_badge(deltas.long_wait_pct, lower_is_better=True) }}</div>
+            <div class="small text-muted">des patients pris en charge</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card h-100"><div class="card-body py-2">
+            <div class="small text-muted">Temps moyen au comptoir</div>
+            <div class="fs-3 fw-bold">{{ fmt(kpi.avg_counter) }}{{ delta_badge(deltas.avg_counter, lower_is_better=True) }}</div>
+            <div class="small text-muted">
+                {{ kpi.served_pct }} % servis
+                {% if kpi.cancelled %}· {{ kpi.cancelled_pct }} % retirés{% endif %}
+                {% if kpi.overtaken_patients %}· {{ kpi.overtaken_patients }} dépassé{{ 's' if kpi.overtaken_patients > 1 }} (priorités){% endif %}
+            </div>
+        </div></div>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+<div class="row g-3 mb-3">
+    <div class="col-lg-6">
+        <div class="card h-100"><div class="card-body">
+            <h6 class="card-title mb-0">Affluence selon l'heure</h6>
+            <p class="small text-muted mb-2">
+                Patients arrivés par heure, en moyenne sur les jours d'ouverture.
+                {% if peak %}Pic : <strong>{{ peak.label }}</strong> ({{ '%.1f' | format(peak.avg_patients) | replace('.', ',') }} patients).{% endif %}
+            </p>
+            <div class="stats-chart-box">
+                <canvas data-chart='{{ {"type": "bar", "unit": "patients",
+                    "labels": hours | map(attribute="label") | list,
+                    "datasets": [{"label": "Patients (moyenne)", "data": hours | map(attribute="avg_patients") | list}]} | tojson }}'
+                    aria-label="Affluence moyenne selon l'heure" role="img"></canvas>
+            </div>
+        </div></div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100"><div class="card-body">
+            <h6 class="card-title mb-0">Attente selon l'heure d'arrivée</h6>
+            <p class="small text-muted mb-2">Attente moyenne des patients arrivés à chaque heure : repère les créneaux où renforcer l'équipe.</p>
+            <div class="stats-chart-box">
+                <canvas data-chart='{{ {"type": "bar", "unit": "min", "color": "warning",
+                    "labels": hours | map(attribute="label") | list,
+                    "datasets": [{"label": "Attente moyenne", "data": hours | map(attribute="avg_wait") | list}]} | tojson }}'
+                    aria-label="Attente moyenne selon l'heure d'arrivée" role="img"></canvas>
+            </div>
+        </div></div>
+    </div>
+    {% if weekdays %}
+    <div class="col-lg-6">
+        <div class="card h-100"><div class="card-body">
+            <h6 class="card-title mb-0">Affluence selon le jour</h6>
+            <p class="small text-muted mb-2">Patients par jour, en moyenne pour chaque jour de la semaine.</p>
+            <div class="stats-chart-box">
+                <canvas data-chart='{{ {"type": "bar", "unit": "patients", "color": "info",
+                    "labels": weekdays | map(attribute="label") | list,
+                    "datasets": [{"label": "Patients (moyenne)", "data": weekdays | map(attribute="avg_patients") | list}]} | tojson }}'
+                    aria-label="Affluence moyenne selon le jour de la semaine" role="img"></canvas>
+            </div>
+        </div></div>
+    </div>
+    {% endif %}
+    <div class="col-lg-6">
+        <div class="card h-100"><div class="card-body">
+            <h6 class="card-title mb-0">Répartition des attentes</h6>
+            <p class="small text-muted mb-2">Nombre de patients pris en charge, par durée d'attente.</p>
+            <div class="stats-chart-box">
+                <canvas data-chart='{{ {"type": "doughnut", "unit": "patients", "palette": "waits",
+                    "labels": waits | map(attribute="label") | list,
+                    "datasets": [{"label": "Patients", "data": waits | map(attribute="count") | list}]} | tojson }}'
+                    aria-label="Répartition des patients par durée d'attente" role="img"></canvas>
+            </div>
+        </div></div>
+    </div>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{% macro breakdown_table(title, items, first_col) %}
+<div class="card h-100"><div class="card-body">
+    <h6 class="card-title">{{ title }}</h6>
+    {% if items %}
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr>
+            <th>{{ first_col }}</th><th class="text-end">Patients</th>
+            <th class="text-end">Attente moy.</th><th class="text-end">Au comptoir</th>
+        </tr></thead>
+        <tbody>
+        {% for item in items %}
+            <tr>
+                <td>
+                    {{ item.name }}
+                    <div class="progress stats-share" role="presentation"><div class="progress-bar" style="width: {{ item.pct or 0 }}%"></div></div>
+                </td>
+                <td class="text-end">{{ item.count }} <span class="text-muted small">({{ item.pct }} %)</span></td>
+                <td class="text-end">{{ fmt(item.avg_wait) }}</td>
+                <td class="text-end">{{ fmt(item.avg_counter) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="small text-muted mb-0">Aucune donnée.</p>
+    {% endif %}
+</div></div>
+{% endmacro %}
+
+<div class="row g-3 mb-3">
+    <div class="col-xl-4 col-lg-6">{{ breakdown_table("Par motif", by_activity, "Motif") }}</div>
+    <div class="col-xl-4 col-lg-6">{{ breakdown_table("Par comptoir", by_counter, "Comptoir") }}</div>
+    <div class="col-xl-4 col-lg-6">{{ breakdown_table("Par langue", by_language, "Langue") }}</div>
+</div>
+{% endif %}

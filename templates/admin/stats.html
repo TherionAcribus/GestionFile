@@ -1,170 +1,127 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Stats{% endblock %}
+{% block title %}Statistiques{% endblock %}
 
 {% block content %}
-<div class="container mx-auto px-4">
-    {# Les donnees du graphique sont chargees en JSON par admin_stats.js, pas par
-       htmx : htmx echangeait la reponse en innerHTML dans une <div>, ce qui
-       cassait JSON.parse des qu'un nom d'activite contenait « < » (et injectait
-       du HTML dans la page), n'echangeait rien sur un statut 4xx -- le message
-       de validation n'atteignait donc jamais l'utilisateur -- et ne protegeait
-       pas contre les reponses arrivant dans le desordre. #}
-    <div id="controls" class="mb-6 space-y-4"
-         data-chart-url="{{ url_for('admin_stats.get_chart_data') }}">
-        
-        <!-- Période -->
-        <div class="row mb-3">
-            <!-- Sélection de la période -->
-            <div class="col-md-3">
-                <div class="form-group">
-                    <label for="date-type">Période</label>
-                    <select id="date-type" name="date_type" class="form-select">
-                        <option value="current">Aujourd'hui</option>
-                        <option value="history">Historique</option>
-                    </select>
-                </div>
-            </div>
+<div class="stats-page">
+    <h2 class="mb-1">Statistiques</h2>
+    <p class="text-muted">
+        Fréquentation, attentes et temps de service, pour ajuster l'équipe et les horaires.
+        Le détail patient par patient est dans l'<a href="/admin/stats/history">historique détaillé</a>.
+    </p>
 
-            <!-- Type de période (visible uniquement si historique) -->
-            <div id="history-options" class="col-md-3 d-none">
-                <div class="form-group">
-                    <label for="period-type">Type de période</label>
-                    <select id="period-type" name="period_type" class="form-select">
-                        <option value="7">7 derniers jours</option>
-                        <option value="28">28 derniers jours</option>
-                        <option value="365">365 derniers jours</option>
-                        <option value="custom">Période personnalisée</option>
-                    </select>
-                </div>
+    {# Une seule barre de filtres pour toute la page : le tableau de bord
+       (htmx, fragment stats_insights) et le graphique personnalisé
+       (admin_stats.js) lisent les mêmes champs. #}
+    <form id="stats-filters" class="admin-setting-card algo-section"
+          hx-get="/admin/stats/insights"
+          hx-target="#stats-insights"
+          hx-swap="innerHTML"
+          hx-trigger="load, change delay:300ms">
+        <div class="d-flex flex-wrap align-items-center gap-1 mb-2" role="radiogroup" aria-label="Période">
+            <span class="small text-muted me-1">Période :</span>
+            {% for key, label in periods %}
+                <input type="radio" class="btn-check" name="period" value="{{ key }}" id="period-{{ key }}"
+                       autocomplete="off" {% if key == default_period %}checked{% endif %}>
+                <label class="btn btn-sm btn-outline-primary" for="period-{{ key }}">{{ label }}</label>
+            {% endfor %}
+        </div>
+        <div class="row g-2 stats-custom-dates mb-2">
+            <div class="col-6 col-md-3">
+                <label class="form-label small" for="start-date">Du</label>
+                <input type="date" id="start-date" name="start_date" class="form-control form-control-sm"
+                       value="{{ (current_date.replace(day=1)).isoformat() }}">
             </div>
-
-            <!-- Dates personnalisées (visible uniquement si période personnalisée) -->
-            <div id="custom-dates" class="col-md-6 d-none">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="start-date">Date de début</label>
-                            <input type="date" id="start-date" name="start_date" class="form-control date-input">
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="end-date">Date de fin</label>
-                            <input type="date" id="end-date" name="end_date" class="form-control date-input">
-                        </div>
-                    </div>
-                </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small" for="end-date">Au</label>
+                <input type="date" id="end-date" name="end_date" class="form-control form-control-sm"
+                       value="{{ current_date.isoformat() }}">
             </div>
         </div>
 
-    <!-- Bouton pour afficher/masquer les filtres -->
-    <button class="btn btn-secondary mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse" aria-expanded="false" aria-controls="filtersCollapse">
-        <i class="bi bi-funnel"></i> Afficher/Masquer les filtres
-    </button>
-
-    <!-- Filtres dans un collapse -->
-    <div class="collapse" id="filtersCollapse">
-        <div class="card mb-3">
-            <div class="card-body">
-                <h3 class="card-title mb-3">Filtres</h3>
-                <div class="row">
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="counter-filter">Comptoir</label>
-                            <select id="counter-filter" name="counter_filter" class="form-select" multiple>
-                                {% for counter in counters %}
-                                <option value="{{ counter.id }}">{{ counter.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="activity-filter">Activité</label>
-                            <select id="activity-filter" name="activity_filter" class="form-select" multiple>
-                                {% for activity in activities %}
-                                <option value="{{ activity.id }}">{{ activity.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="col-md-3">
-                        <div class="form-group">
-                            <label for="language-filter">Langue</label>
-                            <select id="language-filter" name="language_filter" class="form-select" multiple>
-                                {% for language in languages %}
-                                <option value="{{ language.id }}">{{ language.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="day-of-week-filter-container" class="col-md-3 d-none">
-                        <div class="form-group">
-                            <label for="day-of-week-filter">Jour de la semaine</label>
-                            <select id="day-of-week-filter" name="day_of_week_filter" class="form-select" multiple>
-                                <option value="1">Lundi</option>
-                                <option value="2">Mardi</option>
-                                <option value="3">Mercredi</option>
-                                <option value="4">Jeudi</option>
-                                <option value="5">Vendredi</option>
-                                <option value="6">Samedi</option>
-                                <option value="7">Dimanche</option>
-                            </select>
-                        </div>
-                    </div>
+        <details class="stats-filters-more">
+            <summary class="small fw-semibold"><i class="bi bi-funnel" aria-hidden="true"></i> Filtrer (comptoir, motif, langue, jour)</summary>
+            <div class="mt-2">
+                {% for title, name, items in [
+                    ('Comptoir', 'counter_filter', counters),
+                    ('Motif', 'activity_filter', activities),
+                    ('Langue', 'language_filter', languages)] %}
+                <div class="d-flex flex-wrap align-items-center gap-1 mb-2">
+                    <span class="small text-muted stats-filter-title">{{ title }} :</span>
+                    {% for item in items %}
+                        <input type="checkbox" class="btn-check" name="{{ name }}" value="{{ item.id }}"
+                               id="{{ name }}-{{ item.id }}" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="{{ name }}-{{ item.id }}">{{ item.name }}</label>
+                    {% endfor %}
                 </div>
+                {% endfor %}
+                <div class="d-flex flex-wrap align-items-center gap-1">
+                    <span class="small text-muted stats-filter-title">Jour :</span>
+                    {% for number, label in weekdays %}
+                        <input type="checkbox" class="btn-check" name="day_of_week_filter" value="{{ number }}"
+                               id="dow-{{ number }}" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-secondary" for="dow-{{ number }}">{{ label[:3] }}.</label>
+                    {% endfor %}
+                </div>
+                <p class="form-text mb-0">Rien de coché dans une ligne : tous sont pris en compte.</p>
             </div>
-        </div>
+        </details>
+    </form>
+
+    <div id="stats-insights" aria-live="polite">
+        <p class="text-muted small">Chargement…</p>
     </div>
 
-
-        <!-- Type de graphique -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="form-group">
-                <label for="data-selector">Type de données</label>
-                <select id="data-selector" name="chart_type" class="form-select w-full">
-                    <option value="counters">Patients par comptoir</option>
-                    <option value="languages">Patients par langue</option>
-                    <option value="activities">Patients par activité</option>
-                    <option value="waiting_times">Temps d'attente</option>
-                    <option value="counter_times">Temps au comptoir</option>
-                    <option value="total_times">Temps total</option>
-                    <option value="waiting_times_by_activity">Temps d'attente par activité</option>
-                    <option value="counter_times_by_activity">Temps au comptoir par activité</option>
-                    <option value="total_times_by_activity">Temps total par activité</option>
+    {# ------------------------------------------------------------------ #}
+    {# Graphique personnalisé : l'ancien explorateur, pour les analyses
+       non couvertes par le tableau de bord (courbes dans le temps, données
+       archivées compressées incluses). Il reprend la période et les filtres
+       ci-dessus (admin_stats.js). #}
+    <section class="admin-setting-card algo-section mt-3" aria-labelledby="stats_custom_title">
+        <h5 id="stats_custom_title"><i class="bi bi-graph-up" aria-hidden="true"></i> Graphique personnalisé</h5>
+        <p class="text-muted small">Même période et mêmes filtres que ci-dessus. Utile pour suivre une évolution jour par jour.</p>
+        <div id="controls" class="row g-2 mb-3"
+             data-chart-url="{{ url_for('admin_stats.get_chart_data') }}">
+            <div class="col-md-5">
+                <label for="data-selector" class="form-label small">Que mesurer ?</label>
+                <select id="data-selector" name="chart_type" class="form-select form-select-sm">
+                    <optgroup label="Nombre de patients">
+                        <option value="counters">par comptoir</option>
+                        <option value="activities">par motif</option>
+                        <option value="languages">par langue</option>
+                    </optgroup>
+                    <optgroup label="Durées moyennes">
+                        <option value="waiting_times">Temps d'attente</option>
+                        <option value="counter_times">Temps au comptoir</option>
+                        <option value="total_times">Temps total (arrivée → fin)</option>
+                        <option value="waiting_times_by_activity">Temps d'attente par motif</option>
+                        <option value="counter_times_by_activity">Temps au comptoir par motif</option>
+                        <option value="total_times_by_activity">Temps total par motif</option>
+                    </optgroup>
                 </select>
             </div>
-
-            <div class="form-group">
-                <label for="chart-type-selector">Type de graphique</label>
-                <select id="chart-type-selector" name="chart_style" class="form-select w-full">
-                    <option value="pie">Camembert</option>
-                    <option value="bar">Histogramme</option>
-                    <option value="line">Graphique temporel</option>
+            <div class="col-md-4">
+                <label for="chart-type-selector" class="form-label small">Présentation</label>
+                <select id="chart-type-selector" name="chart_style" class="form-select form-select-sm">
+                    <option value="line" selected>Évolution dans le temps (courbe)</option>
+                    <option value="bar">Comparaison (barres)</option>
+                    <option value="pie">Répartition (camembert)</option>
                 </select>
             </div>
-
-            <div class="form-group" id="granularity-container">
-                <label for="time-granularity">Granularité temporelle</label>
-                <select id="time-granularity" name="time_granularity" class="form-select w-full">
+            <div class="col-md-3" id="granularity-container">
+                <label for="time-granularity" class="form-label small">Pas de temps</label>
+                <select id="time-granularity" name="time_granularity" class="form-select form-select-sm">
                     <option value="day">Par jour</option>
-                    <option value="hour">Par heure</option>
+                    <option value="hour">Par heure (8 jours max.)</option>
                 </select>
             </div>
         </div>
-    </div>
-
-    <div class="bg-white rounded-lg shadow p-6">
         <div id="chart-error" class="alert alert-danger d-none" role="alert"></div>
         <div id="chart-warning" class="alert alert-warning d-none" role="alert"></div>
-        <div id="chart-container" class="w-full" style="height: 400px;">
-            <canvas id="statsChart"></canvas>
+        <div id="chart-container" class="stats-chart-large">
+            <canvas id="statsChart" role="img" aria-label="Graphique personnalisé"></canvas>
         </div>
-    </div>
+    </section>
 </div>
 {% endblock %}
 

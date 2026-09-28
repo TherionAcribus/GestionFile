@@ -921,3 +921,37 @@ font-size: 0.85rem;
     border-color: var(--bs-primary) !important;
     background: var(--bs-primary-bg-subtle);
 }
+
+/* --- Page Statistiques ---------------------------------------------------- */
+/* Dates personnalisées visibles seulement si « Personnalisée » est choisie. */
+.stats-custom-dates {
+    display: none;
+}
+
+#stats-filters:has(#period-custom:checked) .stats-custom-dates {
+    display: flex;
+}
+
+.stats-filters-more > summary {
+    cursor: pointer;
+}
+
+.stats-filter-title {
+    min-width: 5.5rem;
+}
+
+.stats-chart-box {
+    height: 240px;
+    position: relative;
+}
+
+.stats-chart-large {
+    height: 400px;
+    position: relative;
+}
+
+.stats-share {
+    height: 4px;
+    margin-top: 2px;
+    max-width: 10rem;
+}

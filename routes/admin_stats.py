@@ -19,6 +19,7 @@ from history_explain import (
     summarize as summarize_history,
 )
 from queue_explain import STATS_EXCLUDED_STATUSES, STATUS_BADGES, STATUS_LABELS
+import stats_insights as insights
 from routes.admin_security import require_permission, require_permission_api
 from stats_params import (
     CATEGORY_ACTIVITY,
@@ -30,6 +31,7 @@ from stats_params import (
     is_time_chart,
     mysql_weekdays,
     parse_chart_request,
+    parse_int_list,
     time_metric,
 )
 
@@ -66,15 +68,106 @@ AGGREGATED_TIME_COLUMNS = {
 @admin_stats_bp.route('/admin/stats')
 @require_permission('stats')
 def admin_stats():
-    counters = Counter.query.all()
-    activities = Activity.query.all()
-    languages = Language.query.all()
+    counters = Counter.query.order_by(Counter.sort_order).all()
+    activities = Activity.query.order_by(Activity.letter, Activity.name).all()
+    languages = Language.query.order_by(Language.sort_order).all()
     today = datetime.now(time_tz).date()
     return render_template('admin/stats.html',
                             current_date=today,
                             counters=counters,
                             activities=activities,
-                            languages=languages)
+                            languages=languages,
+                            periods=insights.PERIODS,
+                            default_period=insights.DEFAULT_PERIOD,
+                            weekdays=list(enumerate(insights.WEEKDAYS_FR, start=1)))
+
+
+# Garde-fou : au-delà, les indicateurs portent sur un échantillon (les plus
+# récents) et la page le signale.
+INSIGHTS_MAX_ROWS = 300_000
+
+_INSIGHT_COLUMNS = ('timestamp', 'timestamp_counter', 'timestamp_end', 'status',
+                    'activity_id', 'counter_id', 'language_id', 'overtaken')
+
+
+def _insight_rows(period, counter_ids, activity_ids, language_ids, weekdays):
+    """Lignes détaillées de la période : patients du jour (Patient) et
+    journées archivées (PatientHistory), statuts hors file exclus."""
+    start, end = period.bounds()
+    rows, truncated = [], False
+    for model in (Patient, PatientHistory):
+        query = (db.session.query(*[getattr(model, c) for c in _INSIGHT_COLUMNS])
+                 .filter(model.timestamp >= start, model.timestamp < end,
+                         model.status.notin_(STATS_EXCLUDED_STATUSES)))
+        if counter_ids:
+            query = query.filter(model.counter_id.in_(counter_ids))
+        if activity_ids:
+            query = query.filter(model.activity_id.in_(activity_ids))
+        if language_ids:
+            query = query.filter(model.language_id.in_(language_ids))
+        found = query.order_by(model.timestamp.desc()).limit(INSIGHTS_MAX_ROWS + 1).all()
+        truncated = truncated or len(found) > INSIGHTS_MAX_ROWS
+        rows.extend(found[:INSIGHTS_MAX_ROWS])
+    if weekdays:
+        # Jour de semaine filtré en Python (1 = lundi) : portable, sans
+        # fonction SQL propre à MySQL.
+        rows = [r for r in rows if r[0] is not None and r[0].isoweekday() in weekdays]
+    return rows, truncated
+
+
+@admin_stats_bp.route('/admin/stats/insights')
+@require_permission('stats')
+def stats_insights():
+    """Fragment « tableau de bord » : indicateurs clés comparés à la période
+    précédente, affluence par heure / jour, attentes, détail par dimension."""
+    today = datetime.now(time_tz).date()
+    period = insights.parse_period(request.values.get, today)
+    counter_ids = parse_int_list(request.values.getlist('counter_filter'))
+    activity_ids = parse_int_list(request.values.getlist('activity_filter'))
+    language_ids = parse_int_list(request.values.getlist('language_filter'))
+    weekdays = parse_int_list(request.values.getlist('day_of_week_filter'), valid=set(range(1, 8)))
+
+    rows, truncated = _insight_rows(period, counter_ids, activity_ids, language_ids, weekdays)
+    previous_rows, _ = _insight_rows(period.previous(), counter_ids, activity_ids,
+                                     language_ids, weekdays)
+    current = insights.kpis(rows)
+    previous = insights.kpis(previous_rows)
+    hours = insights.by_hour(rows)
+
+    # Jours antérieurs déjà compressés en moyennes journalières : absents du
+    # détail, donc de ce tableau de bord (le graphique personnalisé les inclut).
+    compressed_days = (db.session.query(func.count(func.distinct(AggregatedStats.date)))
+                       .filter(AggregatedStats.date >= period.date_from,
+                               AggregatedStats.date <= period.date_to).scalar() or 0)
+
+    names = {
+        'activity': dict(db.session.query(Activity.id, Activity.name).all()),
+        'counter': dict(db.session.query(Counter.id, Counter.name).all()),
+        'language': dict(db.session.query(Language.id, Language.name).all()),
+    }
+    return render_template(
+        'admin/stats_insights.html',
+        period=period,
+        kpi=current,
+        previous=previous,
+        deltas={
+            'count': insights.delta(current['per_day'], previous['per_day']),
+            'avg_wait': insights.delta(current['avg_wait'], previous['avg_wait']),
+            'long_wait_pct': insights.delta(current['long_wait_pct'], previous['long_wait_pct']),
+            'avg_counter': insights.delta(current['avg_counter'], previous['avg_counter']),
+        },
+        hours=hours,
+        peak=insights.peak(hours),
+        weekdays=insights.by_weekday(rows) if period.days >= 7 else [],
+        waits=insights.wait_distribution(rows),
+        by_activity=insights.breakdown(rows, 'activity', names['activity']),
+        by_counter=insights.breakdown(rows, 'counter', names['counter']),
+        by_language=insights.breakdown(rows, 'language', names['language']),
+        truncated=truncated,
+        compressed_days=compressed_days,
+        long_wait=insights.LONG_WAIT_MINUTES,
+        fmt=insights.format_minutes,
+    )
 
 
 @admin_stats_bp.route('/admin/stats/history')
