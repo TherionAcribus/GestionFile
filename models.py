@@ -1348,7 +1348,10 @@ class AdminOnboardingState(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(time_tz),
                            onupdate=lambda: datetime.now(time_tz))
-    user = db.relationship('User', backref=db.backref('onboarding_state', uselist=False))
+    # delete-orphan : supprimer le compte supprime sa progression de parcours —
+    # sinon la FK nullable=False bloque la suppression (admin_security.delete_user2).
+    user = db.relationship('User', backref=db.backref(
+        'onboarding_state', uselist=False, cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<AdminOnboardingState user={self.user_id} {self.status} v{self.version}>'

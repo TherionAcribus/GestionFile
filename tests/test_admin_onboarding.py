@@ -372,3 +372,17 @@ def test_get_rend_sans_csrf_ni_mutation_metier(app, client):
     assert response.status_code == 200
     state = _state(app)
     assert state.status == "active" and state.version == 1
+
+
+def test_suppression_compte_supprime_progression(app, client):
+    """Cascade delete-orphan : la ligne de parcours suit le compte.
+
+    Sans elle, la FK ``user_id`` (nullable=False) bloquait la suppression
+    d'un utilisateur ayant un parcours (admin_security.delete_user2)."""
+    _post(client, action="start")
+    with app.app_context():
+        user = User.query.filter_by(username="alice").one()
+        db.session.delete(user)
+        db.session.commit()
+        assert AdminOnboardingState.query.count() == 0
+        assert User.query.filter_by(username="alice").first() is None
