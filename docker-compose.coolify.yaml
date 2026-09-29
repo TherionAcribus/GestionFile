@@ -1,16 +1,74 @@
+# =============================================================================
+# GestionFile — stack tout-en-un pour Coolify
+# =============================================================================
+# Services lancés : mysql + rabbitmq + init (migrations + bootstrap) + web +
+# scheduler. Aucune ressource externe à créer : la base et le broker sont
+# inclus, en réseau privé, sans exposition publique.
+#
+# Variables à saisir dans Coolify (Environment Variables de la ressource) :
+#   - ADMIN_INITIAL_PASSWORD : OBLIGATOIRE (mot de passe du 1er admin ; le
+#     déploiement est bloqué tant qu'elle est vide).
+#   - DOMAIN : pas une variable ici — le domaine se configure dans le champ
+#     « Domains » du service web, sous la forme https://mon-domaine.fr:5000
+#     (le suffixe indique le port interne du conteneur au proxy Coolify).
+#
+# Les secrets techniques sont auto-générés par Coolify grâce aux variables
+# SERVICE_* ci-dessous (mot de passe MySQL/RabbitMQ, SECRET_KEY, sel, clé
+# Fernet...). Chacun reste surchargeable : saisir la variable correspondante
+# (MYSQL_PASSWORD, SECRET_KEY...) dans l'UI pour imposer sa propre valeur.
+# =============================================================================
+
+# Variables communes aux trois processus applicatifs.
+x-app-env: &app-env
+  DATABASE_TYPE: ${DATABASE_TYPE:-mysql}
+  SITE: ${SITE:-prod}
+  FLASK_DEBUG: ${FLASK_DEBUG:-0}
+  PORT: ${PORT:-5000}
+  PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce}
+  # --- Base de données ---
+  MYSQL_HOST: ${MYSQL_HOST:-mysql}
+  MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
+  MYSQL_USER: ${MYSQL_USER:-gestionfile}
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-${SERVICE_PASSWORD_GFMYSQL:-change-me}}
+  # Base dédiée au jobstore APScheduler (vide = même base que l'app)
+  MYSQL_SCHEDULER_DATABASE: ${MYSQL_SCHEDULER_DATABASE:-}
+  # URLs complètes (prioritaires sur les MYSQL_* si renseignées — mode externe)
+  DATABASE_URL: ${DATABASE_URL:-}
+  DATABASE_URL_SCHEDULER: ${DATABASE_URL_SCHEDULER:-}
+  # --- RabbitMQ (relais Socket.IO web <-> scheduler) ---
+  RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-gestionfile}:${RABBITMQ_PASSWORD:-${SERVICE_PASSWORD_GFRABBIT:-change-me}}@rabbitmq:5672/%2F}
+  # --- Secrets applicatifs (auto-générés par Coolify si non saisis) ---
+  SECRET_KEY: ${SECRET_KEY:-${SERVICE_BASE64_64_GFSECRET:-}}
+  SECURITY_PASSWORD_SALT: ${SECURITY_PASSWORD_SALT:-${SERVICE_BASE64_64_GFSALT:-}}
+  APP_SECRET: ${APP_SECRET:-${SERVICE_BASE64_64_GFAPPSECRET:-}}
+  # Clé Fernet (32 octets en base64) pour chiffrer les clés de service.
+  # SERVICE_REALBASE64_32 = base64 de 32 octets aléatoires : format Fernet.
+  BASE32_KEY: ${BASE32_KEY:-${SERVICE_REALBASE64_32_GFB32:-}}
+  # HTTPS par défaut derrière le proxy Coolify ; mettre 0 en test HTTP local.
+  COOKIE_SECURE: ${COOKIE_SECURE:-1}
+
+# Volumes partagés web/scheduler/init (médias persistants + dossier instance).
+x-app-volumes: &app-volumes
+  - instance_data:/app/instance
+  - galleries_data:/app/static/galleries
+  - buttons_data:/app/static/images/buttons
+  - flags_data:/app/static/images/flags
+  - annonces_data:/app/static/images/annonces
+  - signals_data:/app/static/audio/signals
+  - tts_data:/app/static/audio/annonces
+
 services:
   mysql:
-    profiles: ["bundled"]
     image: mysql:8.0
     restart: unless-stopped
     command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-${SERVICE_PASSWORD_GFROOT:-change-me}}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
       # Utilisateur applicatif (non-root) créé automatiquement par l'image MySQL
       # avec tous les droits sur MYSQL_DATABASE uniquement.
-      MYSQL_USER: ${MYSQL_USER:-pharmaline}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_USER: ${MYSQL_USER:-gestionfile}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-${SERVICE_PASSWORD_GFMYSQL:-change-me}}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -21,12 +79,11 @@ services:
       start_period: 30s
 
   rabbitmq:
-    profiles: ["bundled"]
     image: rabbitmq:3-management
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-gestionfile}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-${SERVICE_PASSWORD_GFRABBIT:-change-me}}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -36,41 +93,50 @@ services:
       retries: 10
       start_period: 20s
 
+  # Conteneur de déploiement : migrations Alembic + bootstrap des données
+  # (rôle APP_ROLE=init : crée les tables, les données par défaut et le
+  # premier admin, puis quitte). web et scheduler n'attendent que sa réussite
+  # — l'initialisation est donc ordonnée et ne dépend pas d'un ordre de
+  # démarrage hasardeux.
+  init:
+    build: .
+    restart: "no"
+    environment:
+      <<: *app-env
+      APP_ROLE: init
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes: *app-volumes
+    command: ["sh", "-c", "python manage.py migrate && python app.py"]
+
   web:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-}
-      DATABASE_URL_SCHEDULER: ${DATABASE_URL_SCHEDULER:-}
-      DATABASE_TYPE: ${DATABASE_TYPE:-mysql}
-      SITE: ${SITE:-prod}
-      FLASK_DEBUG: ${FLASK_DEBUG:-0}
-      PORT: ${PORT:-5000}
-      MYSQL_HOST: ${MYSQL_HOST:-mysql}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
-      MYSQL_USER: ${MYSQL_USER:-pharmaline}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F}
-      PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce}
+      <<: *app-env
       APP_ROLE: web
+      # Requis si jamais ce processus devait amorcer une base vide (filet de
+      # sécurité : le premier admin serait sinon créé avec un mot de passe
+      # généré et non connu de l'opérateur).
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?}
     depends_on:
+      init:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
-        required: false
       rabbitmq:
         condition: service_healthy
-        required: false
-    ports:
-      - "${PORT:-5000}:${PORT:-5000}"
-    volumes:
-      - instance_data:/app/instance
-      - galleries_data:/app/static/galleries
-      - buttons_data:/app/static/images/buttons
-      - flags_data:/app/static/images/flags
-      - annonces_data:/app/static/images/annonces
-      - signals_data:/app/static/audio/signals
-      - tts_data:/app/static/audio/annonces
+    volumes: *app-volumes
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
+    # Pas de `ports:` : Coolify route via son proxy HTTPS vers le port interne
+    # (champ Domains du service : https://mon-domaine.fr:5000). Le port n'est
+    # donc jamais publié en clair sur l'hôte.
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:${PORT:-5000}/healthz"]
       interval: 10s
@@ -78,38 +144,26 @@ services:
       retries: 3
       start_period: 30s
 
+  # Jobs APScheduler (nettoyages, cron métier). Aucune interface HTTP :
+  # un seul replica, toujours. Les mises à jour temps réel vers les clients
+  # passent par le message_queue RabbitMQ (START_RABBITMQ à activer dans
+  # l'administration).
   scheduler:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-}
-      DATABASE_URL_SCHEDULER: ${DATABASE_URL_SCHEDULER:-}
-      DATABASE_TYPE: ${DATABASE_TYPE:-mysql}
-      SITE: ${SITE:-prod}
-      FLASK_DEBUG: ${FLASK_DEBUG:-0}
-      PORT: ${PORT:-5000}
-      MYSQL_HOST: ${MYSQL_HOST:-mysql}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
-      MYSQL_USER: ${MYSQL_USER:-pharmaline}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
-      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/%2F}
-      PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce}
+      <<: *app-env
       APP_ROLE: scheduler
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?}
     depends_on:
+      init:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
-        required: false
       rabbitmq:
         condition: service_healthy
-        required: false
-    volumes:
-      - instance_data:/app/instance
-      - galleries_data:/app/static/galleries
-      - buttons_data:/app/static/images/buttons
-      - flags_data:/app/static/images/flags
-      - annonces_data:/app/static/images/annonces
-      - signals_data:/app/static/audio/signals
-      - tts_data:/app/static/audio/annonces
+    volumes: *app-volumes
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
 
 volumes:

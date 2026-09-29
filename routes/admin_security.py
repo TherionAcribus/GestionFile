@@ -1,3 +1,5 @@
+import os
+import secrets
 import uuid
 import flask_login
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session, current_app as app
@@ -1027,29 +1029,58 @@ def update_password(user_id):
         return display_security_table()
 
 def create_default_user():
-    """Crée l'utilisateur admin par défaut s'il n'existe pas"""
-    try:
-        if User.query.count() == 0:
-            app.logger.info("Creating admin user...")            
-           
-            # Création de l'utilisateur admin
-            admin_user = User(
-                email='admin',
-                username='admin',
-                active=True,
-                confirmed_at=datetime.now()
-            )
-            admin_user.set_password('admin')
+    """Crée l'utilisateur admin initial s'il n'y a aucun utilisateur.
 
-            # Attribution du rôle admin
-            admin_role = Role.query.filter_by(name='admin').first()
-            admin_user.roles.append(admin_role)
-            
-            db.session.add(admin_user)
-            db.session.commit()
-            
-            app.logger.info("Admin user created successfully with admin role")
-            return True
+    Le mot de passe provient de ``ADMIN_INITIAL_PASSWORD`` (variable
+    d'environnement, posée par la personne qui installe). Sans elle, un mot de
+    passe aléatoire est généré et journalisé une seule fois — jamais un mot de
+    passe fixe connu comme ``admin/admin`` en production.
+
+    Un mot de passe fourni mais contraire à la politique fait échouer le
+    bootstrap (RuntimeError) plutôt que de déployer un accès faible : sur
+    Coolify le conteneur ``init`` échoue et le déploiement s'arrête net.
+    """
+    if User.query.count() != 0:
+        return True
+
+    username = (os.getenv("ADMIN_USERNAME") or "admin").strip() or "admin"
+    password = (os.getenv("ADMIN_INITIAL_PASSWORD") or "").strip()
+    generated = False
+    if password:
+        problems = validate_password(password, username=username)
+        if problems:
+            raise RuntimeError(
+                "ADMIN_INITIAL_PASSWORD invalide : " + " ".join(problems))
+    else:
+        password = secrets.token_urlsafe(24)
+        generated = True
+
+    try:
+        app.logger.info("Creating admin user %r...", username)
+
+        # Création de l'utilisateur admin
+        admin_user = User(
+            email=username,
+            username=username,
+            active=True,
+            confirmed_at=datetime.now()
+        )
+        admin_user.set_password(password)
+
+        # Attribution du rôle admin
+        admin_role = Role.query.filter_by(name='admin').first()
+        admin_user.roles.append(admin_role)
+
+        db.session.add(admin_user)
+        db.session.commit()
+
+        if generated:
+            app.logger.warning(
+                "Utilisateur admin %r créé — mot de passe généré : %s "
+                "— connectez-vous et changez-le immédiatement.",
+                username, password)
+        else:
+            app.logger.info("Admin user %r created successfully with admin role", username)
         return True
     except Exception as e:
         app.logger.error(f"Error in create_default_user: {str(e)}")

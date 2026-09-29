@@ -1,0 +1,52 @@
+# Contexte de build Docker — exclusion des données locales et secrets.
+# Tout ce qui n'est pas nécessaire à l'image de production est ignoré afin
+# qu'aucun secret ou base locale n'embarque dans l'image (`COPY . .`).
+
+# VCS et metadata
+.git
+.gitignore
+.gitattributes
+.github
+.gitleaks.toml
+.gitleaksignore
+.pre-commit-config.yaml
+
+# Secrets et configuration locale — JAMAIS dans l'image
+.env
+.env.*
+!.env.example
+
+# Environnements et caches
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.cache
+.mypy_cache
+
+# Données d'instance locales (bases SQLite, exports, secrets persistés)
+instance
+*.db
+*.sqlite
+*.sqlite3
+queuedatabase.db
+nul
+
+# Tests et outils de développement (non nécessaires à l'image de production)
+tests
+conftest.py
+pytest.ini
+requirements-dev.in
+requirements-dev.txt
+test_rabbitmq.sh
+.test-tmp-*
+
+# Documentation et divers
+docs
+*.md
+!README.md
+node_modules
