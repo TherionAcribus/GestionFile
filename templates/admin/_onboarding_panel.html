@@ -1,0 +1,118 @@
+{# Encart contextuel du parcours de configuration guidée.
+
+   Inclus par base.html dans la zone de contenu des pages admin associées à une
+   étape du catalogue (voir onboarding.step_for_path). ``onboarding_panel`` est
+   le dict renvoyé par ``onboarding_panel_context()`` — None hors parcours ou
+   hors page d'étape.
+
+   Le conteneur #onboarding-panel-slot est TOUJOURS rendu (vide sans encart) :
+   c'est la cible stable des fragments renvoyés par /admin/onboarding/action
+   (hx-target + hx-swap="outerHTML").
+
+   Les formulaires sont natifs (POST + redirection 303 calculée serveur) et
+   fonctionnent sans JavaScript ; HTMX les intercepte quand il est chargé.
+   Le jeton CSRF est porté par le champ caché (navigateur sans HTMX) et par
+   l'en-tête X-CSRFToken injecté par csrf.js (HTMX/fetch). #}
+
+<div id="onboarding-panel-slot">
+{% if onboarding_panel and onboarding_panel.status == 'active' %}
+    {% set ob_step = onboarding_panel.step %}
+    <section class="onboarding-panel card mb-3" aria-labelledby="onboarding-panel-title">
+        <div class="card-header d-flex flex-wrap align-items-center gap-2">
+            <strong id="onboarding-panel-title">
+                <i class="bi bi-compass" aria-hidden="true"></i>
+                Étape guidée : {{ ob_step.title }}
+            </strong>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                {% if onboarding_panel.step_status == 'verified' %}
+                    <span class="badge text-bg-success">Vérifié par vous</span>
+                {% elif onboarding_panel.step_status == 'skipped' %}
+                    <span class="badge text-bg-secondary">Passé</span>
+                {% else %}
+                    <span class="badge text-bg-light border">À faire</span>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-secondary d-md-none"
+                        data-bs-toggle="collapse" data-bs-target="#onboarding-panel-body"
+                        aria-expanded="false" aria-controls="onboarding-panel-body">
+                    Détails
+                </button>
+            </div>
+        </div>
+        <div id="onboarding-panel-body" class="card-body collapse d-md-block">
+            <p class="small mb-1">{{ ob_step.description }}</p>
+            {% if ob_step.points %}
+            <ul class="small text-muted ps-3 mb-2">
+                {% for point in ob_step.points %}<li>{{ point }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            <p class="small text-muted mb-2">
+                Les réglages modifiés ici s'appliquent à toute la pharmacie.
+                « Marquer comme vérifié » ne change aucun réglage : c'est votre
+                confirmation que vous avez contrôlé la page.
+            </p>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                {% for link in ob_step.links %}
+                <a class="btn btn-sm btn-outline-primary" href="{{ link.url }}">{{ link.label }}</a>
+                {% endfor %}
+                <form class="d-inline" method="post" action="/admin/onboarding/action"
+                      hx-post="/admin/onboarding/action"
+                      hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="verify">
+                    <input type="hidden" name="step_id" value="{{ ob_step.id }}">
+                    <input type="hidden" name="origin" value="panel">
+                    <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
+                    <button type="submit" class="btn btn-sm btn-success">
+                        Marquer comme vérifié et continuer
+                    </button>
+                </form>
+                <form class="d-inline" method="post" action="/admin/onboarding/action"
+                      hx-post="/admin/onboarding/action"
+                      hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="skip">
+                    <input type="hidden" name="step_id" value="{{ ob_step.id }}">
+                    <input type="hidden" name="origin" value="panel">
+                    <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        Passer cette étape
+                    </button>
+                </form>
+                <form class="d-inline" method="post" action="/admin/onboarding/action"
+                      hx-post="/admin/onboarding/action"
+                      hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="pause">
+                    <input type="hidden" name="origin" value="panel">
+                    <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                        Mettre en pause
+                    </button>
+                </form>
+                <a class="btn btn-sm btn-link" href="/admin/onboarding">Checklist complète</a>
+            </div>
+        </div>
+    </section>
+{% elif onboarding_panel and onboarding_panel.status == 'paused' %}
+    <div class="onboarding-paused alert alert-secondary d-flex flex-wrap align-items-center gap-2 mb-3" role="note">
+        <span class="flex-grow-1">
+            <i class="bi bi-pause-circle" aria-hidden="true"></i>
+            Parcours de configuration en pause
+            {% if onboarding_panel.step %}— dernière étape : {{ onboarding_panel.step.title }}{% endif %}.
+        </span>
+        <form class="d-inline" method="post" action="/admin/onboarding/action"
+              hx-post="/admin/onboarding/action"
+              hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="resume">
+            {% if onboarding_panel.step %}
+            <input type="hidden" name="step_id" value="{{ onboarding_panel.step.id }}">
+            {% endif %}
+            <input type="hidden" name="origin" value="panel">
+            <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
+            <button type="submit" class="btn btn-sm btn-primary">Reprendre</button>
+        </form>
+        <a class="btn btn-sm btn-outline-secondary" href="/admin/onboarding">Checklist</a>
+    </div>
+{% endif %}
+</div>

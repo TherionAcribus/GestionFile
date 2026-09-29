@@ -1315,6 +1315,45 @@ class AuditLog(db.Model):
         }
 
 
+class AdminOnboardingState(db.Model):
+    """Progression du parcours de configuration guidée, par compte administrateur.
+
+    Une ligne par utilisateur (``user_id`` unique) :
+
+    - ``status`` : état global du parcours — ``pending`` (jamais commencé),
+      ``active``, ``paused``, ``dismissed`` (invitation déclinée : ne plus
+      solliciter automatiquement) ou ``completed`` ;
+    - ``current_step`` : identifiant stable de l'étape courante du catalogue
+      (voir ``onboarding.py``), ``None`` avant le premier démarrage ;
+    - ``steps_state`` : états par étape, JSON
+      ``{"security": {"status": "verified", "at": "…"}}`` — une étape absente
+      vaut ``todo`` ; ``skipped`` ne compte jamais comme ``verified`` ;
+    - ``version`` : verrouillage optimiste — ``routes/admin_onboarding.py``
+      refuse (409) une écriture basée sur une version périmée plutôt que de
+      laisser deux onglets s'écraser mutuellement la progression.
+
+    L'absence de ligne signifie « parcours jamais proposé ni accepté » : elle
+    n'est créée que sur une action explicite (start/dismiss), jamais en GET.
+    La progression est personnelle ; les réglages métier restent partagés et
+    ne sont JAMAIS modifiés par le guide.
+    """
+    __tablename__ = 'admin_onboarding_state'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('app_users.id', name='fk_admin_onboarding_user_id'),
+                        nullable=False, unique=True, index=True)
+    status = db.Column(db.String(16), nullable=False, default='pending')
+    current_step = db.Column(db.String(32), nullable=True)
+    steps_state = db.Column(db.JSON, nullable=False, default=dict)
+    version = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(time_tz),
+                           onupdate=lambda: datetime.now(time_tz))
+    user = db.relationship('User', backref=db.backref('onboarding_state', uselist=False))
+
+    def __repr__(self):
+        return f'<AdminOnboardingState user={self.user_id} {self.status} v{self.version}>'
+
+
 class JobExecutionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.String(50))

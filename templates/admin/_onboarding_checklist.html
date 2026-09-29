@@ -1,0 +1,219 @@
+{# Checklist complète du parcours de configuration guidée.
+
+   Inclus par onboarding.html ; re-rendu en fragment par
+   /admin/onboarding/action (origin=checklist). Variables attendues :
+   ``steps`` (vue onboarding.steps_view), ``progress``, ``state_status``,
+   ``current_step``, ``version``, ``verified_steps``, ``skipped_steps``,
+   ``todo_steps``, ``unavailable_steps``, ``show_summary``.
+
+   Le conteneur #onboarding-checklist-slot est la cible stable des échanges
+   HTMX (hx-swap="outerHTML"). Les formulaires sont natifs : POST + redirection
+   303 calculée serveur quand HTMX est absent. #}
+
+<div id="onboarding-checklist-slot">
+
+{% if state_status == 'pending' %}
+    <div class="onboarding-invite admin-setting-card mb-3">
+        <p class="mb-2">
+            Ce parcours n'a pas encore été démarré pour votre compte. Il vous
+            guide dans les pages de configuration existantes, dans l'ordre
+            conseillé, sans rien enregistrer à votre place.
+        </p>
+        <form class="d-inline" method="post" action="/admin/onboarding/action"
+              hx-post="/admin/onboarding/action"
+              hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="start">
+            <input type="hidden" name="origin" value="checklist">
+            <button type="submit" class="btn btn-sm btn-primary">
+                Commencer la configuration guidée
+            </button>
+        </form>
+    </div>
+{% elif state_status in ('active', 'paused', 'completed') %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <p class="small text-muted mb-0">
+            {{ progress.verified }} vérifiée(s) · {{ progress.skipped }} passée(s)
+            · {{ progress.todo }} à faire
+            {% if progress.unavailable %}· {{ progress.unavailable }} hors de vos droits{% endif %}
+        </p>
+        <div class="ms-auto d-flex flex-wrap gap-2">
+            {% if state_status == 'active' %}
+            <form class="d-inline" method="post" action="/admin/onboarding/action"
+                  hx-post="/admin/onboarding/action"
+                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="pause">
+                <input type="hidden" name="origin" value="checklist">
+                <input type="hidden" name="version" value="{{ version }}">
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Mettre en pause</button>
+            </form>
+            {% elif state_status == 'paused' %}
+            <form class="d-inline" method="post" action="/admin/onboarding/action"
+                  hx-post="/admin/onboarding/action"
+                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="resume">
+                <input type="hidden" name="origin" value="checklist">
+                <input type="hidden" name="version" value="{{ version }}">
+                <button type="submit" class="btn btn-sm btn-primary">Reprendre le parcours</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+{% elif state_status == 'dismissed' %}
+    <div class="onboarding-invite admin-setting-card mb-3">
+        <p class="mb-2">
+            Vous aviez décliné le parcours. Vous pouvez le reprendre à tout
+            moment — aucune donnée n'a été perdue.
+        </p>
+        <form class="d-inline" method="post" action="/admin/onboarding/action"
+              hx-post="/admin/onboarding/action"
+              hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="start">
+            <input type="hidden" name="origin" value="checklist">
+            <input type="hidden" name="version" value="{{ version }}">
+            <button type="submit" class="btn btn-sm btn-primary">
+                Démarrer la configuration guidée
+            </button>
+        </form>
+    </div>
+{% endif %}
+
+<ol class="onboarding-step-list">
+    {% for s in steps %}
+    <li class="onboarding-step{% if s.is_current and state_status == 'active' %} onboarding-step-current{% endif %}">
+        <div class="d-flex flex-wrap gap-2 align-items-start">
+            <div class="flex-grow-1">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                    <strong>{{ s.title }}</strong>
+                    {% if not s.permitted %}
+                        <span class="badge text-bg-secondary">Non accessible avec vos droits</span>
+                    {% elif s.is_summary %}
+                        <span class="badge text-bg-info">Bilan</span>
+                    {% elif s.status == 'verified' %}
+                        <span class="badge text-bg-success">Vérifié par vous</span>
+                    {% elif s.status == 'skipped' %}
+                        <span class="badge text-bg-secondary">Passé</span>
+                    {% else %}
+                        <span class="badge text-bg-light border">À faire</span>
+                    {% endif %}
+                    {% if s.is_current and state_status == 'active' %}
+                        <span class="badge text-bg-primary">Étape courante</span>
+                    {% endif %}
+                </div>
+                <p class="small text-muted mb-1">{{ s.description }}</p>
+                {% if s.points %}
+                <ul class="small text-muted ps-3 mb-1">
+                    {% for point in s.points %}<li>{{ point }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                {% if s.links and s.permitted %}
+                <div class="d-flex flex-wrap gap-2">
+                    {% for link in s.links %}
+                    <a class="btn btn-sm btn-outline-primary" href="{{ link.url }}">{{ link.label }}</a>
+                    {% endfor %}
+                </div>
+                {% elif s.is_summary and s.permitted %}
+                    <span class="small text-muted">Affiché sur cette page, ci-dessous.</span>
+                {% endif %}
+            </div>
+            {% if s.permitted and state_status == 'active' and not s.is_summary %}
+            <div class="onboarding-step-actions d-flex flex-wrap gap-1">
+                <form class="d-inline" method="post" action="/admin/onboarding/action"
+                      hx-post="/admin/onboarding/action"
+                      hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="verify">
+                    <input type="hidden" name="step_id" value="{{ s.id }}">
+                    <input type="hidden" name="origin" value="checklist">
+                    <input type="hidden" name="version" value="{{ version }}">
+                    <button type="submit" class="btn btn-sm btn-success">Marquer vérifié</button>
+                </form>
+                <form class="d-inline" method="post" action="/admin/onboarding/action"
+                      hx-post="/admin/onboarding/action"
+                      hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="skip">
+                    <input type="hidden" name="step_id" value="{{ s.id }}">
+                    <input type="hidden" name="origin" value="checklist">
+                    <input type="hidden" name="version" value="{{ version }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">Passer</button>
+                </form>
+                {% if not s.is_current %}
+                <form class="d-inline" method="post" action="/admin/onboarding/action"
+                      hx-post="/admin/onboarding/action"
+                      hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="select">
+                    <input type="hidden" name="step_id" value="{{ s.id }}">
+                    <input type="hidden" name="origin" value="checklist">
+                    <input type="hidden" name="version" value="{{ version }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">En faire l'étape courante</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </li>
+    {% endfor %}
+</ol>
+
+{% if show_summary %}
+<div class="onboarding-summary card mb-3">
+    <div class="card-body">
+        <h3 class="h5 mb-2"><i class="bi bi-clipboard-check" aria-hidden="true"></i> Bilan du parcours</h3>
+        <ul class="small mb-2">
+            <li>
+                <strong>Vérifié par vous :</strong>
+                {% if verified_steps %}{{ verified_steps | map(attribute='title') | join(', ') }}{% else %}aucune étape{% endif %}
+            </li>
+            <li>
+                <strong>Passé :</strong>
+                {% if skipped_steps %}{{ skipped_steps | map(attribute='title') | join(', ') }}{% else %}aucune étape{% endif %}
+            </li>
+            <li>
+                <strong>À faire :</strong>
+                {% if todo_steps %}{{ todo_steps | map(attribute='title') | join(', ') }}{% else %}aucune étape{% endif %}
+            </li>
+            <li>
+                <strong>Indisponible avec vos droits :</strong>
+                {% if unavailable_steps %}{{ unavailable_steps | map(attribute='title') | join(', ') }}{% else %}aucune étape{% endif %}
+            </li>
+        </ul>
+        <p class="small text-muted mb-2">
+            Une étape « passée » ne compte pas comme vérifiée. Ce parcours est
+            une aide à la configuration — pas un audit complet : « vérifié par
+            vous » atteste de votre relecture, pas du bon fonctionnement
+            matériel. Contrôlez manuellement la borne, l'imprimante et les
+            écrans ; le guide ne crée ni patient, ni ticket, ni annonce.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+            {% if state_status in ('active', 'paused') %}
+            <form class="d-inline" method="post" action="/admin/onboarding/action"
+                  hx-post="/admin/onboarding/action"
+                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="finish">
+                <input type="hidden" name="origin" value="checklist">
+                <input type="hidden" name="version" value="{{ version }}">
+                <button type="submit" class="btn btn-sm btn-primary">Terminer le parcours</button>
+            </form>
+            {% elif state_status == 'completed' %}
+            <form class="d-inline" method="post" action="/admin/onboarding/action"
+                  hx-post="/admin/onboarding/action"
+                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="start">
+                <input type="hidden" name="origin" value="checklist">
+                <input type="hidden" name="version" value="{{ version }}">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Refaire le parcours</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+</div>

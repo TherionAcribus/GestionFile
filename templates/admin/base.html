@@ -317,12 +317,36 @@
                             </a>
                         </li>
                         {% endif %}
+
+                        {# --- Aide --- #}
+                        {# Parcours de configuration guidée : accessible à tout
+                           compte admin authentifié (les étapes gardent leur
+                           propre permission côté destination). #}
+                        <li class="nav-item">
+                            <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                                <span>Aide</span>
+                            </h6>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/onboarding') else '' }}"
+                               {{ 'aria-current="page"' if request.path.startswith('/admin/onboarding') else '' }}
+                               href="/admin/onboarding">
+                                <i class="bi bi-compass"></i> Configuration guidée
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
 
             <!-- Main content area -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                {# Encart du parcours de configuration guidée : visible
+                   uniquement quand un parcours actif concerne la page courante
+                   (onboarding_panel_context, fourni par le blueprint
+                   admin_onboarding). Valeur sûre à None pour les gabarits et
+                   fixtures où le blueprint n'est pas enregistré. #}
+                {% set onboarding_panel = onboarding_panel_context() if onboarding_panel_context is defined else none %}
+                {% include 'admin/_onboarding_panel.html' %}
                 {% block content %}
                 <!-- Content specific to each page -->
                 {% endblock %}

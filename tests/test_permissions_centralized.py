@@ -70,6 +70,12 @@ _ALLOWED_WITHOUT_GUARD = {
     # Accueil du tableau de bord : auth-only (garde globale /admin du point 1.2),
     # accessible à tout admin qui n'y voit que ses cartes.
     "admin",
+    # Parcours de configuration guidée : auth-only (garde globale /admin), le
+    # parcours est personnel et ne débloque rien — chaque étape exige sa propre
+    # permission, vérifiée via user_has_permission dans onboarding.apply_action
+    # puis à nouveau par la page de destination.
+    "onboarding_page",
+    "onboarding_action",
 }
 
 

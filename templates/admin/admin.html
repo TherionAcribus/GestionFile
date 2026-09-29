@@ -18,6 +18,13 @@
         {% endif %}
     </div>
 
+    {# Invitation / reprise du parcours de configuration guidée, hors du
+       catalogue de cartes personnalisable pour ne pas être masquée par une
+       préférence globale. Valeur sûre à None quand le blueprint
+       admin_onboarding n'est pas enregistré (fixtures, autres contextes). #}
+    {% set onboarding_home = onboarding_home_context() if onboarding_home_context is defined else none %}
+    {% include 'admin/_onboarding_home.html' %}
+
     {% if can_customize %}
     {# Gestionnaire chargé à la première ouverture seulement. #}
     <div id="card-manager-collapse" class="collapse mb-3">

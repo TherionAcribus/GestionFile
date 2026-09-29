@@ -1026,3 +1026,52 @@ font-size: 0.85rem;
 .announce-advanced > summary {
     cursor: pointer;
 }
+
+/* --- Configuration guidée (parcours d'onboarding admin) -------------------- */
+/* Encart contextuel et checklist : mêmes tokens que .admin-setting-card.     */
+
+.onboarding-panel {
+    border-left: .25rem solid var(--bs-primary);
+}
+
+.onboarding-panel .card-header {
+    background: var(--bs-primary-bg-subtle);
+}
+
+.onboarding-step-list {
+    display: grid;
+    gap: .6rem;
+    list-style: none;
+    margin: 0 0 1rem;
+    padding-left: 0;
+}
+
+.onboarding-step {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    padding: .85rem 1rem;
+}
+
+.onboarding-step-current {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 .15rem color-mix(in srgb, var(--bs-primary) 18%, transparent);
+}
+
+/* Focus visible cohérent sur tout le parcours (clavier / lecteurs d'écran). */
+.onboarding-page :focus-visible,
+.onboarding-panel :focus-visible,
+.onboarding-invite :focus-visible,
+.onboarding-resume :focus-visible,
+.onboarding-paused :focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+    /* En dessous de 768 px : actions des étapes en pleine largeur — le corps
+       de l'encart est repliable via la classe collapse (voir gabarit). */
+    .onboarding-step .onboarding-step-actions {
+        width: 100%;
+    }
+}

@@ -1,0 +1,75 @@
+{# Encart d'accueil du parcours de configuration guidée.
+
+   Inclus par admin.html ; ``onboarding_home`` est le dict renvoyé par
+   ``onboarding_home_context()`` (ou None si anonyme / blueprint absent).
+
+   - ``pending`` (aucune ligne en base ou parcours jamais commencé) :
+     invitation discrète « Commencer » / « Pas maintenant » ;
+   - ``active`` / ``paused`` : carte de reprise avec progression ;
+   - ``dismissed`` / ``completed`` : rien — le lien permanent « Configuration
+     guidée » du menu permet toujours de relancer.
+
+   Le conteneur #onboarding-home-slot est toujours rendu : c'est la cible
+   stable des fragments renvoyés par /admin/onboarding/action. #}
+
+<div id="onboarding-home-slot">
+{% if onboarding_home and onboarding_home.status == 'pending' %}
+    <div class="onboarding-invite alert alert-primary d-flex flex-wrap align-items-center gap-2" role="note">
+        <div class="flex-grow-1">
+            <strong>
+                <i class="bi bi-compass" aria-hidden="true"></i> Configuration guidée
+            </strong>
+            <p class="small mb-0">
+                Un parcours pas à pas vous aide à vérifier les réglages essentiels,
+                dans les pages habituelles. Il n'enregistre rien tout seul.
+            </p>
+        </div>
+        <form class="d-inline" method="post" action="/admin/onboarding/action"
+              hx-post="/admin/onboarding/action"
+              hx-target="#onboarding-home-slot" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="start">
+            <input type="hidden" name="origin" value="home">
+            <input type="hidden" name="version" value="{{ onboarding_home.version }}">
+            <button type="submit" class="btn btn-sm btn-primary">
+                Commencer la configuration guidée
+            </button>
+        </form>
+        <form class="d-inline" method="post" action="/admin/onboarding/action"
+              hx-post="/admin/onboarding/action"
+              hx-target="#onboarding-home-slot" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="dismiss">
+            <input type="hidden" name="origin" value="home">
+            <input type="hidden" name="version" value="{{ onboarding_home.version }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+                Pas maintenant
+            </button>
+        </form>
+    </div>
+{% elif onboarding_home and onboarding_home.status in ('active', 'paused') %}
+    <div class="onboarding-resume alert alert-info d-flex flex-wrap align-items-center gap-2" role="note">
+        <div class="flex-grow-1">
+            <strong>
+                <i class="bi bi-compass" aria-hidden="true"></i>
+                Configuration guidée en cours{% if onboarding_home.status == 'paused' %} (en pause){% endif %}
+            </strong>
+            <p class="small mb-0">
+                {{ onboarding_home.progress.verified }}/{{ onboarding_home.progress.total }}
+                étapes vérifiées
+                {% if onboarding_home.step %}— étape courante : {{ onboarding_home.step.title }}{% endif %}
+            </p>
+        </div>
+        <form class="d-inline" method="post" action="/admin/onboarding/action"
+              hx-post="/admin/onboarding/action"
+              hx-target="#onboarding-home-slot" hx-swap="outerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="resume">
+            <input type="hidden" name="origin" value="home">
+            <input type="hidden" name="version" value="{{ onboarding_home.version }}">
+            <button type="submit" class="btn btn-sm btn-primary">Reprendre</button>
+        </form>
+        <a class="btn btn-sm btn-outline-secondary" href="/admin/onboarding">Checklist</a>
+    </div>
+{% endif %}
+</div>

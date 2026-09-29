@@ -178,3 +178,51 @@ def test_sidebar_renamed_announce_to_ecran():
     """'Page Annonce' devient 'Écran d'annonce'."""
     src = _read("templates/admin/base.html")
     assert "Écran d'annonce" in src
+
+
+# ---------------------------------------------------------------------------
+# 5. Parcours de configuration guidée (onboarding)
+# ---------------------------------------------------------------------------
+
+def test_sidebar_has_onboarding_link():
+    """« Configuration guidée » est un lien vers la page du guide, visible de
+    tout compte admin connecté (les étapes sont filtrées par permission plus
+    loin, dans le guide lui-même)."""
+    src = _read("templates/admin/base.html")
+    m = re.search(r'<li class="nav-item">\s*<a[^>]*href="/admin/onboarding"',
+                  src)
+    assert m, "Lien « Configuration guidée » introuvable dans base.html"
+    assert "Configuration guidée" in src
+    # Regroupé dans la rubrique « Aide » de la sidebar.
+    assert re.search(r">Aide<", src)
+    assert src.index(">Aide<") < m.start()
+    # Pas de garde de permission autour du lien : tout compte admin voit le guide.
+    block = src[m.start():src.index("</li>", m.end())]
+    assert "user_has_permission" not in block
+
+
+def test_base_includes_onboarding_panel():
+    """base.html inclut l'encart contextuel via onboarding_panel_context()."""
+    src = _read("templates/admin/base.html")
+    assert "onboarding_panel_context" in src
+    assert "_onboarding_panel.html" in src
+    # Inclusion après la barre d'admin, avant le contenu.
+    assert src.index("_onboarding_panel.html") < src.index("{% block content %}")
+
+
+def test_onboarding_templates_et_blueprint():
+    """Les gabarits du guide, le blueprint et son enregistrement existent."""
+    panel = _read("templates/admin/_onboarding_panel.html")
+    # HTMX : les actions postent vers l'endpoint, les fragments visent le slot.
+    assert "hx-post" in panel and "/admin/onboarding/action" in panel
+    assert "#onboarding-panel-slot" in panel
+    for label in ("Marquer comme vérifié", "Passer cette étape",
+                  "Mettre en pause"):
+        assert label in panel
+    home = _read("templates/admin/_onboarding_home.html")
+    assert "Commencer la configuration guidée" in home
+    assert "Pas maintenant" in home
+    checklist = _read("templates/admin/_onboarding_checklist.html")
+    assert "onboarding-checklist-slot" in checklist
+    app_src = _read("app.py")
+    assert "admin_onboarding_bp" in app_src
