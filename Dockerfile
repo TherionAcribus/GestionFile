@@ -21,7 +21,8 @@ COPY . .
 # Copier les médias par défaut (images boutons, drapeaux, annonces, sons)
 # vers un dossier hors volume. docker-entrypoint.sh les restaurera dans les
 # volumes persistants au premier démarrage (sans écraser les uploads).
-RUN cp -r static/images /app/default_media/images && \
+RUN mkdir -p /app/default_media && \
+    cp -r static/images /app/default_media/images && \
     cp -r static/audio /app/default_media/audio
 
 # Rendre l'entrypoint exécutable.
