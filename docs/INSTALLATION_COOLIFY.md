@@ -299,6 +299,49 @@ version précédente du code ne ramène **pas** la base à son schéma précéde
 
 ## 10. Dépannage
 
+### Erreur `build-time.env: Invalid template` après une mise à jour
+
+Coolify peut conserver les variables découvertes dans une ancienne version du
+Compose. Une valeur incomplète comme `${SERVICE_PASSWORD_GFROOT:-change-me`
+suffit à faire échouer la lecture du fichier d'environnement, même si le nouveau
+Compose ne référence plus cette variable.
+
+Pour la stack tout-en-un corrigée (commit `d539d73`), procéder ainsi :
+
+1. Vérifier que le Compose chargé utilise directement les variables `SERVICE_*`,
+   par exemple `MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_GFROOT}`.
+2. Dans **Production Environment Variables**, supprimer uniquement les anciennes
+   entrées suivantes, devenues inutilisées comme entrées du Compose :
+   `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `RABBITMQ_USER`,
+   `RABBITMQ_PASSWORD`, `SECRET_KEY`, `SECURITY_PASSWORD_SALT`, `APP_SECRET`
+   et `BASE32_KEY`. Les variables portant ces noms dans les conteneurs restent
+   fournies par le Compose à partir des valeurs `SERVICE_*`.
+3. Pour le broker RabbitMQ inclus, vider la valeur de `RABBITMQ_URL`, puis cliquer
+   sur **Update**. Garder `RABBITMQ_HOST=rabbitmq`. Une ancienne URL non vide
+   prendrait la priorité sur les nouveaux identifiants générés. Ne pas appliquer
+   cette étape à une URL de broker externe volontairement configurée.
+4. Conserver toutes les variables `SERVICE_*`, `ADMIN_INITIAL_PASSWORD` et les
+   autres paramètres utilisés. Ne pas remplacer les expressions cassées par
+   `change-me` et ne pas les masquer avec **Is Literal**.
+5. Appliquer le même nettoyage aux **Preview Deployments Environment Variables**
+   avant toute utilisation des previews, sans copier les secrets de production.
+6. Lancer un nouveau déploiement et ouvrir sa nouvelle entrée dans **Deployments**.
+   Vérifier dans la ligne `Importing` le commit réellement déployé : `d539d73`
+   ou une version ultérieure contenant le correctif, et non `639d2e5`.
+
+Dans cette version, le secret client `APP_SECRET` est fourni par la variable
+Coolify **`SERVICE_BASE64_64_GFAPPSECRET`** : c'est cette valeur qu'il faut
+récupérer pour configurer les clients, et non l'ancienne entrée `APP_SECRET`.
+
+:::warning Secrets et données existantes
+Ne partager que les noms des variables et les messages d'erreur, jamais les
+valeurs des secrets. Un secret partagé en clair doit être remplacé. Si MySQL
+est déjà initialisé, modifier sa variable d'environnement ne change pas le mot
+de passe dans la base : prévoir une rotation coordonnée plutôt que supprimer
+le volume. Le nettoyage des anciennes entrées Coolify ne nécessite aucune
+suppression de volume.
+:::
+
 | Symptôme | Cause probable | Solution |
 |---|---|---|
 | `fatal: Remote branch main not found` au clonage | Coolify clone `main` par défaut ; ce dépôt utilise `master` | **Configuration > Git Source** → Branch = `master` |
@@ -310,6 +353,7 @@ version précédente du code ne ramène **pas** la base à son schéma précéde
 | « Database schema is not initialized » | `web` a démarré sans `init` terminé | Vérifier les logs `init`, Redeploy |
 | Clients refusés (401) | `APP_SECRET` différent côté client | Copier la valeur exacte depuis Environment Variables |
 | Écrans/comptoirs ne se rafraîchissent plus | Relais RabbitMQ inactif | Activer l'option RabbitMQ dans l'admin + Restart |
+| `E: Failed to fetch … deb11u16 … 404 Not Found` pendant le build | Image de base `python:3.10.4` (Debian bullseye) obsolète : paquets retirés des miroirs | Corrigé dans le Dockerfile (`python:3.12-slim-bookworm`) ; utiliser un commit à jour puis Redeploy |
 | Certificat TLS absent | DNS non propagé ou domaine incorrect | Vérifier l'enregistrement A, le champ Domains (`https://...:5000`), attendre la propagation |
 
 :::warning En cas de blocage

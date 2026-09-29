@@ -1,5 +1,8 @@
-# Utilisez une image de base Python
-FROM python:3.10.4
+# Image de base Python. python:3.10.4 (Debian bullseye) n'est plus
+# constructible : les paquets curl de sa branche security ont été retirés
+# des miroirs (404 au build). requirements.txt est résolu pour Python 3.12 ;
+# slim-bookworm fournit une base à jour sans les outils de compilation.
+FROM python:3.12-slim-bookworm
 
 # Définissez le répertoire de travail dans le conteneur
 WORKDIR /app
