@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
+from urllib.parse import urlparse
 
 # mieux que datetime.timezone pour gérer les fuseaux horaires et les changements d'heure.
 # TODO permettre de choisir le fuseau horaire
@@ -135,9 +136,23 @@ class Config:
     database_url = _validate_sqlalchemy_url(os.getenv("DATABASE_URL"), "DATABASE_URL")
     scheduler_database_url = _validate_sqlalchemy_url(os.getenv("DATABASE_URL_SCHEDULER"), "DATABASE_URL_SCHEDULER")
 
+    # Origines acceptées par Socket.IO. Une liste explicite via
+    # SOCKETIO_CORS_ALLOWED_ORIGINS reste prioritaire ; sinon on déduit
+    # l'origine du domaine public injecté par Coolify (COOLIFY_FQDN), sinon
+    # None = contrôle same-origin par défaut d'engineio.
     _socketio_cors_raw = os.getenv("SOCKETIO_CORS_ALLOWED_ORIGINS", "").strip()
     if not _socketio_cors_raw:
-        SOCKETIO_CORS_ALLOWED_ORIGINS = None
+        _fqdn_origins = []
+        for _part in os.getenv("COOLIFY_FQDN", "").split(","):
+            _part = _part.strip()
+            if not _part:
+                continue
+            _parsed = urlparse(_part if "://" in _part else "https://" + _part)
+            if _parsed.hostname:
+                # Le port du FQDN Coolify est le port INTERNE du conteneur
+                # (ex. :5000) — jamais présent dans l'Origin du navigateur.
+                _fqdn_origins.append(f"{_parsed.scheme}://{_parsed.hostname}")
+        SOCKETIO_CORS_ALLOWED_ORIGINS = _fqdn_origins or None
     elif _socketio_cors_raw == "*":
         SOCKETIO_CORS_ALLOWED_ORIGINS = "*" if DEBUG else None
     else:

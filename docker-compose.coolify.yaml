@@ -58,6 +58,10 @@ x-app-env: &app-env
   COOKIE_SECURE: ${COOKIE_SECURE:-1}
   # En-têtes X-Forwarded-* émis par le proxy Coolify (schéma réel, IP client).
   TRUST_PROXY: ${TRUST_PROXY:-1}
+  # Domaine public injecté par Coolify : sert à autoriser l'origine Socket.IO.
+  COOLIFY_FQDN: ${COOLIFY_FQDN:-}
+  # Surcharge manuelle (liste séparée par des virgules) si besoin.
+  SOCKETIO_CORS_ALLOWED_ORIGINS: ${SOCKETIO_CORS_ALLOWED_ORIGINS:-}
 
 # Volumes partagés web/scheduler/init (médias persistants + dossier instance).
 x-app-volumes: &app-volumes

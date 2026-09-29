@@ -126,7 +126,8 @@ def dashboard_communication():
     dashboardcard = DashboardCard.query.filter_by(name="connection").first()
     return render_template('/admin/dashboard_connection.html',
                             dashboardcard=dashboardcard,
-                            namespaces = list(active_connections.keys()))
+                            namespaces=[(ns, NAMESPACE_LABELS.get(ns, ns))
+                                        for ns in active_connections.keys()])
 
 
 @admin_app_bp.route('/admin/app/get_connections', methods=['POST'])
