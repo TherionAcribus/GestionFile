@@ -41,14 +41,20 @@ admin_patient_bp = Blueprint('admin_patient', __name__)
 @require_permission('patient')
 def admin_patient(tab=None):
 
-    valid_tabs = ['text', 'buttons', 'ticket', 'qrcode', 'interface']
-    tab = request.args.get('tab', 'text')
-    if tab not in valid_tabs:
-        tab = 'text'
+    # L'onglet demandé (/admin/patient/<tab> ou ?tab=) était calculé puis
+    # jamais transmis au gabarit : le lien « Configurer les boutons » des
+    # alertes ouvrait l'onglet Textes. « text » et « interface » (onglet
+    # supprimé : ses deux textes n'étaient lus nulle part) mènent à Apparence.
+    tab = tab or request.args.get('tab', 'visual')
+    if tab in ('text', 'interface'):
+        tab = 'visual'
+    if tab not in ('visual', 'buttons', 'ticket', 'qrcode'):
+        tab = 'visual'
 
     buttons = Button.query.all()
 
     return render_template('/admin/patient_page.html', buttons=buttons,
+                            active_tab=tab,
                             page_patient_disable_button = app.config['PAGE_PATIENT_DISABLE_BUTTON'],
                             page_patient_disable_default_message = app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE'],
                             page_patient_title = app.config['PAGE_PATIENT_TITLE'],

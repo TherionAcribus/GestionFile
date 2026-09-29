@@ -182,7 +182,7 @@ Ouvrez la section **Environment Variables** de la ressource.
 | `ADMIN_USERNAME` | `admin` | Choisir un autre identifiant pour le premier admin |
 | `APP_SECRET` | auto-généré | Secret partagé avec les clients (comptoir, borne, imprimante). Laissez Coolify le générer, puis **notez sa valeur** : vous la saisirez dans chaque client |
 | `COOKIE_SECURE` | `1` | Ne mettre `0` que pour un test local sans HTTPS |
-| `PAGE_EDITOR_ENABLED_PAGES` | `announce` | Activer d'autres pages de l'éditeur visuel |
+| `PAGE_EDITOR_ENABLED_PAGES` | `announce,patient` | Pages ouvertes à l'éditeur visuel (ajouter `phone` pour la page téléphone) |
 | `PORT` | `5000` | Ne pas modifier sauf besoin spécifique |
 
 ### Secrets générés automatiquement — ne rien faire

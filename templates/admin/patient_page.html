@@ -3,12 +3,21 @@
 {% block title %}Borne patient{% endblock %}
 
 {% block content %}
+{% set editor_enabled = page_editor_enabled('patient') %}
+{% set tabs = [
+    ('visual', 'tab_visual', 'Apparence et parcours', 'bi-palette'),
+    ('buttons', 'tab_buttons', "Boutons d'activité", 'bi-grid-3x3-gap'),
+    ('ticket', 'tab_ticket', 'Ticket', 'bi-receipt'),
+    ('qrcode', 'tab_qrcode', 'QR code', 'bi-qr-code')] %}
 <div class="advanced-editor-page">
     <div class="advanced-editor-header">
         <div>
             <h2 class="mb-1">Borne patient</h2>
-            <p class="text-muted mb-2">Réglages détaillés des textes, boutons, tickets, QR Code et apparence de la borne.</p>
-            {% if page_editor_enabled('patient') %}
+            <p class="text-muted mb-2">
+                L'écran tactile où le patient choisit son motif et reçoit son numéro (ticket imprimé ou QR code).
+                <a href="/patient" target="_blank" rel="noopener">Voir la borne <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+            </p>
+            {% if editor_enabled %}
             <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
                 <a class="btn btn-outline-primary" href="/admin/page-editor/patient">Éditeur visuel</a>
                 <a class="btn btn-primary active" aria-current="page" href="/admin/patient">Mode avancé</a>
@@ -19,55 +28,85 @@
 
     <div class="row advanced-editor-workspace">
         <div class="col-12">
-            <!-- Nav tabs -->
             <ul class="nav nav-tabs" id="patientTab" role="tablist">
+                {% for key, target, label, icon in tabs %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#visual" type="button" role="tab" aria-controls="visual" aria-selected="true">Textes</button>
+                    <button class="nav-link {% if active_tab == key %}active{% endif %}" id="{{ key }}-tab"
+                            data-bs-toggle="tab" data-bs-target="#{{ target }}" type="button" role="tab"
+                            aria-controls="{{ target }}" aria-selected="{{ 'true' if active_tab == key else 'false' }}">
+                        <i class="bi {{ icon }}" aria-hidden="true"></i> {{ label }}
+                    </button>
                 </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="buttons-tab" data-bs-toggle="tab" data-bs-target="#tab_buttons" type="button" role="tab" aria-controls="tab_buttons" aria-selected="false">Boutons</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="ticket-tab" data-bs-toggle="tab" data-bs-target="#tab_ticket" type="button" role="tab" aria-controls="tab_ticket" aria-selected="false">Ticket</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="qrcode-tab" data-bs-toggle="tab" data-bs-target="#tab_qrcode" type="button" role="tab" aria-controls="tab_qrcode" aria-selected="false">QR Code</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="interface-tab" data-bs-toggle="tab" data-bs-target="#tab_interface" type="button" role="tab" aria-controls="tab_interface" aria-selected="false">Interface</button>
-                </li>
+                {% endfor %}
             </ul>
 
-            <!-- Tab content -->
             <div class="tab-content" id="patientTabContent">
-                <div class="tab-pane fade show active" id="visual" role="tabpanel" aria-labelledby="text-tab">
-                    {% include 'admin/page_patient_page.html' %}
+                <div class="tab-pane fade {% if active_tab == 'visual' %}show active{% endif %}" id="tab_visual" role="tabpanel" aria-labelledby="visual-tab">
+
+                    {% if editor_enabled %}
+                    {# L'éditeur visuel est la voie recommandée : il couvre
+                       l'apparence ET le parcours (validation, erreurs
+                       d'impression, langues). Le mode avancé reste replié. #}
+                    <section class="card border-primary announce-editor-hero my-3" aria-labelledby="editor_hero_title">
+                        <div class="card-body d-flex flex-wrap gap-4 align-items-center">
+                            <div class="announce-editor-hero-icon" aria-hidden="true"><i class="bi bi-tablet"></i></div>
+                            <div class="flex-grow-1">
+                                <h3 id="editor_hero_title" class="h5 mb-1">
+                                    Éditeur visuel <span class="badge text-bg-primary align-middle">Recommandé</span>
+                                </h3>
+                                <p class="text-muted mb-2">Modifiez la borne en voyant le résultat, avant de le publier.</p>
+                                <ul class="small mb-0 announce-editor-benefits">
+                                    <li><i class="bi bi-eye" aria-hidden="true"></i> Aperçu de chaque étape : accueil, sous-activités, validation, conclusion, erreur d'impression.</li>
+                                    <li><i class="bi bi-palette2" aria-hidden="true"></i> Thèmes prêts à l'emploi et palette de couleurs appliquée en un clic.</li>
+                                    <li><i class="bi bi-chat-square-text" aria-hidden="true"></i> Textes, boutons et comportements (impression directe, délais, langues) au même endroit.</li>
+                                    <li><i class="bi bi-shield-check" aria-hidden="true"></i> Brouillon, comparaison et historique : rien ne change sur la borne avant « Publier ».</li>
+                                </ul>
+                            </div>
+                            <a class="btn btn-primary btn-lg" href="/admin/page-editor/patient">
+                                <i class="bi bi-pencil-square" aria-hidden="true"></i> Ouvrir l'éditeur visuel
+                            </a>
+                        </div>
+                    </section>
+                    <p class="small text-muted">
+                        Les boutons d'activité (liste, images, ordre), le ticket et le QR code se règlent dans les onglets ci-dessus.
+                    </p>
+                    {% endif %}
+
+                    <details class="announce-advanced" {% if not editor_enabled %}open{% endif %}>
+                        <summary class="fw-semibold">
+                            <i class="bi bi-sliders" aria-hidden="true"></i> Mode avancé : réglages détaillés
+                            {% if editor_enabled %}<span class="text-muted fw-normal small">— les mêmes réglages, sans aperçu (plus le choix des images des boutons Imprimer / Annuler)</span>{% endif %}
+                        </summary>
+                        <p class="small text-muted mt-2">
+                            Chaque modification est enregistrée et appliquée immédiatement sur la borne.
+                            {% if editor_enabled %}L'éditeur visuel reprend ces valeurs à sa prochaine ouverture.{% endif %}
+                        </p>
+                        {% include 'admin/page_patient_page.html' %}
+                    </details>
                 </div>
-                <div class="tab-pane fade" id="tab_buttons" role="tabpanel" aria-labelledby="buttons-tab">
+                <div class="tab-pane fade {% if active_tab == 'buttons' %}show active{% endif %}" id="tab_buttons" role="tabpanel" aria-labelledby="buttons-tab">
                     {% include 'admin/page_patient_buttons.html' %}
                 </div>
-                <div class="tab-pane fade" id="tab_ticket" role="tabpanel" aria-labelledby="ticket-tab">
+                <div class="tab-pane fade {% if active_tab == 'ticket' %}show active{% endif %}" id="tab_ticket" role="tabpanel" aria-labelledby="ticket-tab">
                     {% include 'admin/page_patient_ticket.html' %}
                 </div>
-                <div class="tab-pane fade" id="tab_qrcode" role="tabpanel" aria-labelledby="qrcode-tab">
+                <div class="tab-pane fade {% if active_tab == 'qrcode' %}show active{% endif %}" id="tab_qrcode" role="tabpanel" aria-labelledby="qrcode-tab">
                     {% include 'admin/page_patient_qrcode.html' %}
-                </div>
-                <div class="tab-pane fade" id="tab_interface" role="tabpanel" aria-labelledby="interface-tab">
-                    {% include 'admin/page_patient_interface.html' %}
                 </div>
             </div>
         </div>
     </div>
 
-    <div>
-        <button class="btn btn-danger"
+    <div class="mt-3">
+        <button class="btn btn-outline-danger btn-sm"
                 hx-get="/patient/refresh"
-                hx-target="#invisible">Relancer la page "Patient"
+                hx-target="#invisible"
+                hx-confirm="Recharger toutes les bornes ? Un patient en train de choisir son motif devra recommencer.">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recharger les bornes
         </button>
-        <p>Assurez-vous que la page ne soit pas en cours d'utilisation !</p>
     </div>
 </div>
-    
+
 {% endblock %}
 
 {# Personnalisation CSS (selecteurs de couleur, copie de palette entre pages,

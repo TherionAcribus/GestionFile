@@ -196,7 +196,20 @@ ADAPTERS = {
                         {"key": "page_patient_display_scan_explanation", "label": "Afficher les explications pour scanner le QR-Code", "type": "bool"},
                         {"key": "page_patient_print_after_scan", "label": "Page de réimpression après « Scan »", "type": "bool"},
                         {"key": "page_patient_print_after_print", "label": "Page de réimpression après « Print »", "type": "bool"},
-                        {"key": "page_patient_end_timer", "label": "Délai avant retour à l'accueil (s)", "type": "int"}],
+                        {"key": "page_patient_end_timer", "label": "Délai avant retour à l'accueil (s)", "type": "int"},
+                        # Écran de validation (après le choix d'une activité) et
+                        # message de confirmation : auparavant réservés au mode
+                        # avancé.
+                        {"key": "page_patient_validation_message", "label": "Écran de validation : message",
+                         "type": "text", "help": "Affiché après le choix d'une activité, avant l'impression ou le scan."},
+                        {"key": "page_patient_interface_validate_print", "label": "Écran de validation : bouton « Imprimer »", "type": "text"},
+                        {"key": "page_patient_button_print_ticket_display_picture", "label": "Image sur le bouton « Imprimer »", "type": "bool",
+                         "help": "L'image se choisit dans le mode avancé."},
+                        {"key": "page_patient_interface_validate_scan", "label": "Écran de validation : bouton « Scanner »", "type": "text"},
+                        {"key": "page_patient_interface_scan_explanation", "label": "Consignes pour scanner le QR code", "type": "text"},
+                        {"key": "page_patient_interface_validate_cancel", "label": "Écran de validation : bouton « Annuler »", "type": "text"},
+                        {"key": "page_patient_button_cancel_display_picture", "label": "Image sur le bouton « Annuler »", "type": "bool"},
+                        {"key": "page_patient_confirmation_message", "label": "Message de confirmation (après inscription)", "type": "text"}],
                 css=[{"key": "circle_button_size", "label": "Bouton rond", "type": "size"},
                      {"key": "square_button_width", "label": "Largeur bouton", "type": "size"},
                      {"key": "square_button_height", "label": "Hauteur bouton", "type": "size"},
@@ -326,6 +339,15 @@ _ADDITIONAL_CSS_FIELDS = {
     "patient": {
         "buttons": [
             ("patient_secondary_color", "Fond de page", "color", "#B6F5F5"),
+            # Contour et fond du TEXTE des boutons (mode avancé uniquement jusqu'ici).
+            ("circle_button_text_border_color", "Contour du texte des boutons ronds", "color", "black"),
+            ("circle_button_text_background_color", "Fond du texte des boutons ronds", "color", "transparent"),
+            ("square_button_text_border_color", "Contour du texte des boutons", "color", "black"),
+            ("square_button_text_background_color", "Fond du texte des boutons", "color", "transparent"),
+            ("square_cancel_button_text_border_color", "Contour du texte du bouton retour", "color", "black"),
+            ("square_cancel_button_text_background_color", "Fond du texte du bouton retour", "color", "transparent"),
+            ("validation_button_text_border_color", "Contour du texte des boutons de validation", "color", "black"),
+            ("validation_button_text_background_color", "Fond du texte des boutons de validation", "color", "transparent"),
             ("square_button_text_color", "Texte des boutons", "color", "#FFFFFF"),
             ("square_button_text_size", "Taille du texte des boutons", "size", "30px"),
             ("square_button_text_border_size", "Contour du texte des boutons", "size", "0px"),
@@ -717,6 +739,11 @@ def builtin_themes(page):
                        subtitle_no_activity_font_size="46px" if large else "40px",
                        subtitle_specific_message_font_size="46px" if large else "40px",
                        flag_size="110px" if large else "100px")
+            # Le texte des boutons n'a pas de fond propre : sans cela, la règle
+            # générique (« surface ») poserait un bandeau blanc derrière chaque
+            # libellé de bouton en appliquant un thème.
+            for prefix in ("circle_button", "square_button", "square_cancel_button", "validation_button"):
+                css[f"{prefix}_text_background_color"] = "transparent"
         else:
             block("phone_title", on_primary, primary, "24px" if large else "20px")
             css.update(phone_title_font_weight="800",
@@ -752,7 +779,7 @@ def builtin_themes(page):
 
 
 def enabled_pages():
-    raw = current_app.config.get("PAGE_EDITOR_ENABLED_PAGES", "announce")
+    raw = current_app.config.get("PAGE_EDITOR_ENABLED_PAGES", "announce,patient")
     if isinstance(raw, str):
         pages = {item.strip() for item in raw.split(",") if item.strip()}
     else:
