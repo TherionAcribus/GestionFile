@@ -777,6 +777,7 @@
                     control.type = 'number';
                     control.className = 'form-control';
                     control.step = '1';
+                    if (field.min != null) control.min = String(field.min);
                     control.value = payload.config[field.key] == null ? 0 : payload.config[field.key];
                     bindValue(control, function (element) {
                         setConfigValue(field.key, Number.parseInt(element.value, 10) || 0);
@@ -790,6 +791,15 @@
                 }
                 control.id = 'editor-config-' + field.key;
                 const group = formGroup(field.label, control);
+                if (field.help) {
+                    // Aide courte sous le champ (ex. où choisir les images).
+                    const help = document.createElement('div');
+                    help.className = 'form-text';
+                    help.id = control.id + '-help';
+                    help.textContent = field.help;
+                    control.setAttribute('aria-describedby', help.id);
+                    group.appendChild(help);
+                }
                 if (field.markers && field.markers.length && control instanceof HTMLTextAreaElement) {
                     group.appendChild(createMarkerToolbar(control, field.markers));
                 }

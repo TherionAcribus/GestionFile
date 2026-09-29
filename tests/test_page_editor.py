@@ -52,7 +52,8 @@ def make_payload(page):
             if spec.value_type == "value_bool":
                 config[field["key"]] = False
             elif spec.value_type == "value_int":
-                config[field["key"]] = 5
+                # Respecte le minimum déclaré (ex. largeur de galerie ≥ 50).
+                config[field["key"]] = max(5, field.get("min") or 0)
             elif spec.allowed_values:
                 config[field["key"]] = sorted(spec.allowed_values)[0]
             else:

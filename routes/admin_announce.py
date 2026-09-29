@@ -62,7 +62,13 @@ def announce_page(tab=None):
     # existants vers /admin/announce/googleVoice y mènent toujours.
     if tab == 'googleVoice':
         tab = 'audio'
-    valid_tabs = ['visual', 'audio', 'gallery']
+    # L'onglet « Galerie » a rejoint le mode avancé de l'onglet Apparence
+    # (ses réglages sont aussi dans l'éditeur visuel) : l'ancien lien ouvre
+    # directement ce mode avancé.
+    open_advanced = tab == 'gallery'
+    if tab == 'gallery':
+        tab = 'visual'
+    valid_tabs = ['visual', 'audio']
     if tab not in valid_tabs:
         tab = 'visual'
 
@@ -71,6 +77,7 @@ def announce_page(tab=None):
 
     return render_template('/admin/announce.html',
                             active_tab=tab,
+                            open_advanced=open_advanced,
                             announce_sound = app.config['ANNOUNCE_SOUND'],
                             announce_alert = app.config['ANNOUNCE_ALERT'],
                             announce_player = app.config['ANNOUNCE_PLAYER'],

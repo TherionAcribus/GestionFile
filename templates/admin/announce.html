@@ -1,14 +1,18 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Page "Annonce"{% endblock %}
+{% block title %}Écran d'annonce{% endblock %}
 
 {% block content %}
+{% set editor_enabled = page_editor_enabled('announce') %}
 <div class="advanced-editor-page">
     <div class="advanced-editor-header">
         <div>
-            <h2 class="mb-1">Page « Annonce »</h2>
-            <p class="text-muted mb-2">Réglages détaillés des contenus, couleurs, dimensions et fonctions de l’écran.</p>
-            {% if page_editor_enabled('announce') %}
+            <h2 class="mb-1">Écran d'annonce</h2>
+            <p class="text-muted mb-2">
+                L'écran de la salle d'attente : numéros appelés, messages, galerie d'images, son et voix.
+                <a href="/announce" target="_blank" rel="noopener">Voir l'écran <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>
+            </p>
+            {% if editor_enabled %}
             <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
                 <a class="btn btn-outline-primary" href="/admin/page-editor/announce">Éditeur visuel</a>
                 <a class="btn btn-primary active" aria-current="page" href="/admin/announce">Mode avancé</a>
@@ -19,40 +23,87 @@
 
     <div class="row advanced-editor-workspace">
         <div class="col-12">
-            <!-- Nav tabs -->
             <ul class="nav nav-tabs" id="announceTab" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if active_tab == 'visual' %}active{% endif %}" id="visual-tab" data-bs-toggle="tab" data-bs-target="#tab_visual" type="button" role="tab" aria-controls="tab_visual" aria-selected="{{ 'true' if active_tab == 'visual' else 'false' }}">Visuel</button>
+                    <button class="nav-link {% if active_tab == 'visual' %}active{% endif %}" id="visual-tab" data-bs-toggle="tab" data-bs-target="#tab_visual" type="button" role="tab" aria-controls="tab_visual" aria-selected="{{ 'true' if active_tab == 'visual' else 'false' }}">
+                        <i class="bi bi-palette" aria-hidden="true"></i> Apparence
+                    </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if active_tab == 'audio' %}active{% endif %}" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="{{ 'true' if active_tab == 'audio' else 'false' }}">Son et voix</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if active_tab == 'gallery' %}active{% endif %}" id="gallery-tab" data-bs-toggle="tab" data-bs-target="#tab_gallery" type="button" role="tab" aria-controls="tab_gallery" aria-selected="{{ 'true' if active_tab == 'gallery' else 'false' }}">Galerie</button>
+                    <button class="nav-link {% if active_tab == 'audio' %}active{% endif %}" id="audio-tab" data-bs-toggle="tab" data-bs-target="#tab_audio" type="button" role="tab" aria-controls="tab_audio" aria-selected="{{ 'true' if active_tab == 'audio' else 'false' }}">
+                        <i class="bi bi-volume-up" aria-hidden="true"></i> Son et voix
+                    </button>
                 </li>
             </ul>
 
-            <!-- Tab content -->
             <div class="tab-content" id="announceTabContent">
                 <div class="tab-pane fade {% if active_tab == 'visual' %}show active{% endif %}" id="tab_visual" role="tabpanel" aria-labelledby="visual-tab">
-                    {% include 'admin/announce_visual.html' %}
+
+                    {% if editor_enabled %}
+                    {# L'éditeur visuel est la voie recommandée : aperçu en
+                       direct, thèmes, disposition, brouillon puis publication.
+                       Il couvre tous les réglages d'apparence (galerie
+                       comprise) ; le mode avancé reste disponible, replié. #}
+                    <section class="card border-primary announce-editor-hero my-3" aria-labelledby="editor_hero_title">
+                        <div class="card-body d-flex flex-wrap gap-4 align-items-center">
+                            <div class="announce-editor-hero-icon" aria-hidden="true"><i class="bi bi-easel2"></i></div>
+                            <div class="flex-grow-1">
+                                <h3 id="editor_hero_title" class="h5 mb-1">
+                                    Éditeur visuel <span class="badge text-bg-primary align-middle">Recommandé</span>
+                                </h3>
+                                <p class="text-muted mb-2">Modifiez l'écran en voyant le résultat, avant de le publier.</p>
+                                <ul class="small mb-0 announce-editor-benefits">
+                                    <li><i class="bi bi-eye" aria-hidden="true"></i> Aperçu en direct, selon la situation : file vide, appel en cours, plusieurs appels, galerie.</li>
+                                    <li><i class="bi bi-palette2" aria-hidden="true"></i> Thèmes prêts à l'emploi et palette de couleurs appliquée en un clic.</li>
+                                    <li><i class="bi bi-arrows-move" aria-hidden="true"></i> Blocs à déplacer, afficher ou masquer ; textes, tailles et couleurs de chaque bloc.</li>
+                                    <li><i class="bi bi-shield-check" aria-hidden="true"></i> Brouillon, comparaison et historique : rien ne change sur l'écran avant « Publier ».</li>
+                                </ul>
+                            </div>
+                            <div class="d-flex flex-column gap-2">
+                                <a class="btn btn-primary btn-lg" href="/admin/page-editor/announce">
+                                    <i class="bi bi-pencil-square" aria-hidden="true"></i> Ouvrir l'éditeur visuel
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+                    {% endif %}
+
+                    <details class="announce-advanced" {% if not editor_enabled or open_advanced %}open{% endif %}>
+                        <summary class="fw-semibold">
+                            <i class="bi bi-sliders" aria-hidden="true"></i> Mode avancé : réglages détaillés
+                            {% if editor_enabled %}<span class="text-muted fw-normal small">— les mêmes réglages, sans aperçu</span>{% endif %}
+                        </summary>
+                        <p class="small text-muted mt-2">
+                            Chaque modification est enregistrée et appliquée immédiatement sur l'écran.
+                            {% if editor_enabled %}L'éditeur visuel reprend ces valeurs à sa prochaine ouverture.{% endif %}
+                        </p>
+
+                        <h3 class="h6 mt-3">Couleurs, textes et blocs</h3>
+                        {% include 'admin/announce_visual.html' %}
+
+                        <h3 class="h6 mt-4" id="announce-gallery-settings">Galerie d'images</h3>
+                        <p class="small text-muted">
+                            Diaporama affiché sur le côté de l'écran. Les images se choisissent dans
+                            <a href="/admin/info">Galerie média</a>.
+                        </p>
+                        {% include 'admin/announce_gallery.html' %}
+                    </details>
                 </div>
                 <div class="tab-pane fade {% if active_tab == 'audio' %}show active{% endif %}" id="tab_audio" role="tabpanel" aria-labelledby="audio-tab">
                     {% include 'admin/announce_audio.html' %}
-                </div>
-                <div class="tab-pane fade {% if active_tab == 'gallery' %}show active{% endif %}" id="tab_gallery" role="tabpanel" aria-labelledby="gallery-tab">
-                    {% include 'admin/announce_gallery.html' %}
                 </div>
             </div>
         </div>
     </div>
 
-    <div>
+    <div class="mt-3">
         <!-- POST : action mutatrice reservee a l'administration (permission
              'announce' cote serveur). csrf.js injecte le jeton automatiquement. -->
-        <button class="btn btn-danger"
+        <button class="btn btn-outline-danger btn-sm"
                 hx-post="/announce/refresh"
-                hx-swap="none">Relancer la page "Annonce"
+                hx-swap="none"
+                hx-confirm="Recharger tous les écrans d'annonce ?">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recharger les écrans d'annonce
         </button>
     </div>
 </div>

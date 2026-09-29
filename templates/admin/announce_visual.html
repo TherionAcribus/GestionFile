@@ -18,7 +18,7 @@
   <div class="accordion-item">
       <h2 class="accordion-header">
           <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TitleAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TitleAnnounce">
-              <h3>Première ligne de la page</h3>
+              <span class="fw-semibold">Première ligne de la page</span>
           </button>
       </h2>
       <div id="panelsStayOpen-TitleAnnounce" class="accordion-collapse collapse">
@@ -53,7 +53,7 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-SubTitleAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-SubTitleAnnounce">
-            <h3>Seconde ligne de la page</h3>
+            <span class="fw-semibold">Seconde ligne de la page</span>
         </button>
     </h2>
     <div id="panelsStayOpen-SubTitleAnnounce" class="accordion-collapse collapse">
@@ -81,13 +81,13 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TextUpAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TextUpAnnounce">
-            <h3>Texte affiché au dessus des patients appelés</h3>
+            <span class="fw-semibold">Texte affiché au-dessus des patients appelés</span>
         </button>
     </h2>
     <div id="panelsStayOpen-TextUpAnnounce" class="accordion-collapse collapse">
         <div class="accordion-body">
 
-            {{ macros.textbloc_welcome("announce_text_up_patients", announce_text_up_patients, "Texte affiché au dessus des patients appelés") }}
+            {{ macros.textbloc_welcome("announce_text_up_patients", announce_text_up_patients, "Texte affiché au-dessus des patients appelés") }}
 
             <!-- Select affichage texte up -->
             <div class="input-field col s12">
@@ -132,7 +132,7 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TextCallingAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TextCallingAnnounce">
-            <h3>Texte pour appeler les patients</h3>
+            <span class="fw-semibold">Texte pour appeler les patients</span>
         </button>
     </h2>
     <div id="panelsStayOpen-TextCallingAnnounce" class="accordion-collapse collapse">
@@ -166,7 +166,7 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-TextDownAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-TextDownAnnounce">
-            <h3>Texte affiché si aucun patient n'est appelé</h3>
+            <span class="fw-semibold">Texte affiché si aucun patient n'est appelé</span>
         </button>
     </h2>
     <div id="panelsStayOpen-TextDownAnnounce" class="accordion-collapse collapse">
@@ -215,17 +215,17 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-OngoingAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-OngoingAnnounce">
-            <h3>Texte affiché pour les patient au comptoir</h3>
+            <span class="fw-semibold">Patients au comptoir</span>
         </button>
     </h2>
     <div id="panelsStayOpen-OngoingAnnounce" class="accordion-collapse collapse">
         <div class="accordion-body">
 
-            {{ macros.textbloc_after_call("announce_ongoing_text", announce_ongoing_text, "Texte affiché pour les patient déjà appelés") }}
+            {{ macros.textbloc_after_call("announce_ongoing_text", announce_ongoing_text, "Texte affiché pour les patients déjà au comptoir") }}
 
             {{ macros.switch("announce_ongoing_display", 
                 announce_ongoing_display,
-                "Afficher les patients au comptoir'")
+                "Afficher les patients au comptoir")
             }}        
 
             <strong>Police du texte</strong>
@@ -254,7 +254,7 @@
 <div class="accordion-item">
     <h2 class="accordion-header">
         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-NextPatientsAnnounce" aria-expanded="false" aria-controls="panelsStayOpen-NextPatientsAnnounce">
-            <h3>Liste des prochains patients</h3>
+            <span class="fw-semibold">Liste des prochains patients</span>
         </button>
     </h2>
     <div id="panelsStayOpen-NextPatientsAnnounce" class="accordion-collapse collapse">

@@ -989,3 +989,40 @@ font-size: 0.85rem;
     margin-top: 2px;
     max-width: 10rem;
 }
+
+/* --- Page Écran d'annonce : mise en avant de l'éditeur visuel ------------- */
+.announce-editor-hero-icon {
+    align-items: center;
+    background: var(--bs-primary-bg-subtle);
+    border-radius: 1rem;
+    color: var(--bs-primary);
+    display: flex;
+    font-size: 2.5rem;
+    height: 5rem;
+    justify-content: center;
+    width: 5rem;
+}
+
+.announce-editor-benefits {
+    list-style: none;
+    padding-left: 0;
+}
+
+.announce-editor-benefits li + li {
+    margin-top: .2rem;
+}
+
+.announce-editor-benefits i {
+    color: var(--bs-primary);
+    margin-right: .35rem;
+}
+
+.announce-advanced {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    padding: .75rem 1rem;
+}
+
+.announce-advanced > summary {
+    cursor: pointer;
+}

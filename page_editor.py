@@ -139,7 +139,19 @@ ADAPTERS = {
                      {"key": "ongoing_font_border_color", "label": "Couleur contour", "type": "color"}]),
             "gallery": _component("Galerie", "aside", "#div_pub", span=6,
                 scenarios=["gallery"], managed_bool="announce_infos_display",
-                config=[{"key": "announce_infos_display", "label": "Afficher", "type": "bool"}]),
+                # Réglages auparavant réservés à l'onglet « Galerie » du mode
+                # avancé. Le choix des images se fait dans « Galerie média ».
+                config=[{"key": "announce_infos_display", "label": "Afficher", "type": "bool"},
+                        {"key": "announce_infos_display_time", "label": "Durée d'affichage de chaque image (secondes)",
+                         "type": "int", "min": 1,
+                         "help": "Les images se choisissent dans la page « Galerie média »."},
+                        {"key": "announce_infos_transition", "label": "Transition entre les images", "type": "select",
+                         "choices": [["slide", "Glissement"], ["fade", "Fondu"], ["cube", "Cube"],
+                                     ["coverflow", "Carrousel 3D"], ["flip", "Retournement"], ["cards", "Cartes"]]},
+                        {"key": "announce_infos_mix_folders", "label": "Mélanger les images", "type": "bool"},
+                        {"key": "announce_infos_width", "label": "Largeur de la galerie (px)", "type": "int", "min": 50,
+                         "help": "Taille et transition s'appliquent sur l'écran après publication."},
+                        {"key": "announce_infos_height", "label": "Hauteur de la galerie (px)", "type": "int", "min": 50}]),
             "next": _component("Prochains patients", "footer", "#div_next_patients",
                 managed_bool="announce_next_patients_display",
                 config=[{"key": "announce_next_patients_display", "label": "Afficher la liste des prochains patients", "type": "bool"},
@@ -1063,6 +1075,11 @@ def validate_payload(page, payload):
     # brouillons) sont complétées avec la configuration publiée.
     if not isinstance(config_values, dict) or not set(config_values) <= allowed_config:
         raise ValueError("Paramètre de contenu inconnu.")
+    # Bornes basses déclarées sur les champs (« min ») : une largeur de
+    # galerie nulle ou négative ne doit pas pouvoir être publiée.
+    config_minimums = {field["key"]: field["min"]
+                       for component in adapter["components"].values()
+                       for field in component["config"] if field.get("min") is not None}
     normalized_config = {}
     for key, value in config_values.items():
         spec = get_spec(key)
@@ -1074,6 +1091,12 @@ def validate_payload(page, payload):
         elif spec.value_type == "value_int":
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError(f"Valeur numérique invalide pour {key}.")
+            minimum = config_minimums.get(key)
+            # Seulement pour une valeur modifiée : une valeur déjà publiée
+            # (même atypique) ne doit pas bloquer la publication du reste.
+            if (minimum is not None and value < minimum
+                    and value != current_app.config.get(spec.config_name)):
+                raise ValueError(f"Valeur trop petite pour {key} (minimum {minimum}).")
         else:
             if not isinstance(value, str) or len(value) > 6000:
                 raise ValueError(f"Texte invalide pour {key}.")
