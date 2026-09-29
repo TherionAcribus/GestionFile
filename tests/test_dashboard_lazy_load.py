@@ -103,11 +103,16 @@ def test_appschedule_dashboard_uses_single_query_assembler():
     assert "JobExecutionLog.query.filter_by" not in body
 
 
-def test_save_configuration_appschedule_uses_assembler_not_ghost_model():
+def test_save_configuration_returns_lazy_slots_not_rebuilt_cards():
+    """L'enregistrement de la configuration renvoie les enveloppes à
+    chargement différé : chaque carte passe par SA route (contenu et
+    permission). La reconstruction à la main (logique dupliquée, dont une
+    branche visait un modèle SchedulerLog inexistant) a disparu."""
     src = _read("routes/admin_dashboard.py")
-    assert "build_jobs_info(" in src
-    # SchedulerLog n'existe pas dans models : l'ancienne branche était cassée.
+    assert "_render_card_slots(" in src
+    assert "dashboard_load_" in src
     assert "SchedulerLog" not in src
+    assert "build_jobs_info(" not in src
 
 
 # --------------------------------------------------------------------------

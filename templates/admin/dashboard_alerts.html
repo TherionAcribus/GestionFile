@@ -1,3 +1,4 @@
+{% from 'admin/_dashboard_cards.html' import card_shell %}
 {# Carte « Alertes » : problèmes de configuration de la page borne détectés par
    diagnostics.collect_patient_page_alerts. La carte n'est rendue QUE s'il reste
    au moins une alerte : sans problème, la réponse est vide et le slot de
@@ -5,36 +6,15 @@
    Chaque alerte reprend son niveau (danger/warning/info). #}
 {% set has_alerts = alerts and alerts|length > 0 %}
 {% if has_alerts %}
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-    <div class="card border-warning">
-        <div class="card-header d-flex justify-content-between align-items-center bg-warning">
-            <span><i class="bi bi-exclamation-triangle-fill"></i> Alertes
-                <span class="badge bg-danger">{{ alerts|length }}</span>
-            </span>
-            <div class="d-flex align-items-center">
-                <a href="/admin/patient?tab=buttons" target="_blank" class="btn btn-link p-0" title="Configurer les boutons">
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger"
-                    hx-post="/admin/dashboard/hide"
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}'
-                    hx-target="#card-{{ dashboardcard.id }}"
-                    hx-swap="delete">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
+{% call card_shell(dashboardcard, variant='warning', badge=alerts|length) %}
+    {% for alert in alerts %}
+        <div class="alert alert-{{ alert.level }} d-flex align-items-start py-2 mb-2" role="alert">
+            <i class="bi {% if alert.level == 'danger' %}bi-x-octagon-fill{% elif alert.level == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2" aria-hidden="true"></i>
+            <div>{{ alert.message }}</div>
         </div>
-        <div class="card-body">
-            {% for alert in alerts %}
-                <div class="alert alert-{{ alert.level }} d-flex align-items-start mb-2" role="alert">
-                    <i class="bi {% if alert.level == 'danger' %}bi-x-octagon-fill{% elif alert.level == 'warning' %}bi-exclamation-triangle-fill{% else %}bi-info-circle-fill{% endif %} me-2"></i>
-                    <div>{{ alert.message }}</div>
-                </div>
-            {% endfor %}
-            <a href="/admin/patient?tab=buttons" class="btn btn-sm btn-outline-primary" target="_blank">
-                <i class="bi bi-gear"></i> Configurer les boutons
-            </a>
-        </div>
-    </div>
-</div>
+    {% endfor %}
+    <a href="/admin/patient?tab=buttons" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-gear" aria-hidden="true"></i> Configurer les boutons
+    </a>
+{% endcall %}
 {% endif %}

@@ -1,84 +1,31 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-18">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Planifications</span>
-            <div>
-                <a href="/admin/database" target="_blank" class="btn btn-link p-0">
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="outerHTML">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            <!-- Tâches principales -->
-            {% for job in main_jobs %}
-                <div class="mb-2 {% if job.last_execution and job.last_execution.status == 'failed' %}bg-danger text-white p-2 rounded{% endif %}">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>{{ job.id }}</strong>
-                        <small>
-                            {% if job.next_run_time %}
-                                {{ job.next_run_time.strftime('%H:%M') }}
-                            {% else %}
-                                Non planifié
-                            {% endif %}
-                        </small>
-                    </div>
-                    {% if job.last_execution %}
-                        <small class="d-block text-muted">
-                            Dernière exécution: {{ job.last_execution.time.strftime('%Y-%m-%d %H:%M') }}
-                            <span class="{% if job.last_execution.status == 'success' %}text-success{% else %}text-danger{% endif %}">
-                                ({{ job.last_execution.status }})
-                            </span>
-                        </small>
-                    {% endif %}
-                </div>
-            {% endfor %}
-
-            <!-- Autres tâches dans un accordéon -->
-            {% if other_jobs %}
-                <div class="accordion mt-3">
-                    <div class="accordion-item">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button" 
-                                    data-bs-toggle="collapse" data-bs-target="#otherTasks">
-                                Autres tâches ({{ other_jobs|length }})
-                            </button>
-                        </h2>
-                        <div id="otherTasks" class="accordion-collapse collapse">
-                            <div class="accordion-body">
-                                {% for job in other_jobs %}
-                                    <div class="mb-2 {% if job.last_execution and job.last_execution.status == 'failed' %}bg-danger text-white p-2 rounded{% endif %}">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <strong>{{ job.id }}</strong>
-                                            <small>
-                                                {% if job.next_run_time %}
-                                                    {{ job.next_run_time.strftime('%H:%M') }}
-                                                {% else %}
-                                                    Non planifié
-                                                {% endif %}
-                                            </small>
-                                        </div>
-                                        {% if job.last_execution %}
-                                            <small class="d-block text-muted">
-                                                Dernière exécution: {{ job.last_execution.time.strftime('%Y-%m-%d %H:%M') }}
-                                                <span class="{% if job.last_execution.status == 'success' %}text-success{% else %}text-danger{% endif %}">
-                                                    ({{ job.last_execution.status }})
-                                                </span>
-                                            </small>
-                                        {% endif %}
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-        </div>
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{# Carte « Tâches planifiées » : les tâches principales et, parmi toutes,
+   celles dont la dernière exécution a échoué (seules à demander une action).
+   Libellés et statuts lisibles : build_jobs_info(detailed=True). #}
+{% set all_jobs = main_jobs + other_jobs %}
+{% set failed = all_jobs | selectattr('last_execution') | selectattr('last_execution.status', 'equalto', 'failed') | list %}
+{% call card_shell(dashboardcard, variant=('danger' if failed else none), badge=(failed | length ~ ' en échec') if failed else none) %}
+{% if not all_jobs %}
+    <p class="text-muted mb-0">Aucune tâche planifiée : le planificateur ne tourne peut-être pas.</p>
+{% else %}
+    {% for job in failed %}
+    <div class="alert alert-danger small py-2 mb-2">
+        <strong>{{ job.label }}</strong> — dernière exécution échouée
+        {% if job.last_execution.error %}<div class="text-muted">{{ job.last_execution.error }}</div>{% endif %}
     </div>
-</div>
+    {% endfor %}
+    <ul class="list-unstyled small mb-0">
+        {% for job in main_jobs %}
+        <li class="d-flex gap-2 py-1 border-top">
+            <span>{{ job.label }}</span>
+            <span class="ms-auto text-nowrap text-muted">
+                {% if job.next_run_time %}prochaine : {{ job.next_run_time.strftime('%d/%m %H:%M') }}{% else %}non planifiée{% endif %}
+            </span>
+        </li>
+        {% endfor %}
+        {% if other_jobs %}
+        <li class="py-1 border-top text-muted">+ {{ other_jobs | length }} autre{{ 's' if other_jobs | length > 1 }} tâche{{ 's' if other_jobs | length > 1 }} (maintenance, ouvertures d'activités)</li>
+        {% endif %}
+    </ul>
+{% endif %}
+{% endcall %}

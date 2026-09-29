@@ -278,20 +278,33 @@
 
 /* DASHBOARD */
 
-.dashboard-flex {
-    display: flex;
-    flex-wrap: wrap;
+/* Grille réactive : autant de colonnes que la largeur le permet (≥ 320 px
+   chacune). La largeur d'une carte vient du catalogue (dashboard_catalog) :
+   span-wide = deux colonnes, span-full = toute la ligne. Remplace l'ancienne
+   largeur fixe de 400 px (et des classes size-* jamais stylées). */
+.dashboard-grid {
+    display: grid;
     gap: 1rem;
-    padding: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    align-items: start;
+}
+
+.dashboard-card-slot.span-wide {
+    grid-column: span 2;
+}
+
+.dashboard-card-slot.span-full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+    .dashboard-card-slot.span-wide {
+        grid-column: auto;
+    }
 }
 
 .dashboard-card {
-    flex: 0 0 auto;
-    width: 400px;
-    min-width: 300px;
-    max-width: 600px;
-    margin-bottom: 1rem;
-    box-sizing: border-box;
+    width: 100%;
 }
 
 .dashboard-card .card {
@@ -299,23 +312,44 @@
     width: 100%;
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
 }
 
 .dashboard-card .card-body {
     flex-grow: 1;
+    max-height: 26rem;
     overflow-y: auto;
     overflow-x: hidden;
-    width: 100%;
-    box-sizing: border-box;
 }
 
-@media (max-width: 768px) {
-    .dashboard-card {
-        width: 100%;
-        min-width: 100%;
-        max-width: 100%;
-    }
+/* Carte « Aujourd'hui » : chiffres clés. */
+.today-kpi {
+    background: var(--bs-tertiary-bg);
+    border-radius: .5rem;
+    padding: .5rem;
+    height: 100%;
+}
+
+.today-kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.today-kpi-label {
+    color: var(--bs-secondary-color);
+    font-size: .8rem;
+}
+
+/* Carte « Équipe » : pastilles d'initiales compactes. */
+.staff-avatar.staff-avatar-sm {
+    font-size: .75rem;
+    height: 2rem;
+    width: 2rem;
+}
+
+.staff-avatar.is-away {
+    border-color: var(--bs-border-color);
+    color: var(--bs-secondary-color);
 }
 
 .sortable-ghost {
@@ -386,7 +420,7 @@
 
 /* Card Manager - Interface de gestion des cartes */
 .card-manager {
-    background: white;
+    background: var(--bs-body-bg);
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 2rem;
@@ -394,29 +428,29 @@
 
 .card-manager-header {
     padding: 1.5rem;
-    border-bottom: 1px solid #e9ecef;
+    border-bottom: 1px solid var(--bs-border-color);
     transition: background-color 0.2s;
 }
 
 .card-manager-header:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bs-tertiary-bg);
 }
 
 .card-manager-header h5 {
     margin: 0;
-    color: #212529;
+    color: var(--bs-body-color);
     font-weight: 600;
 }
 
 .card-manager-header h5 i {
     margin-right: 0.5rem;
-    color: #0d6efd;
+    color: var(--bs-primary);
 }
 
 .card-manager-instructions {
     padding: 1rem 1.5rem;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e9ecef;
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
 }
 
 .card-list {
@@ -430,27 +464,27 @@
     align-items: center;
     padding: 0.75rem;
     margin-bottom: 0.5rem;
-    background: #f8f9fa;
-    border: 2px solid #dee2e6;
+    background: var(--bs-tertiary-bg);
+    border: 2px solid var(--bs-border-color);
     border-radius: 6px;
     transition: all 0.2s;
 }
 
 .card-item:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
+    background: var(--bs-border-color);
+    border-color: var(--bs-secondary-color);
 }
 
 .card-item-hidden {
     opacity: 0.5;
-    background: #fff;
+    background: var(--bs-body-bg);
     border-style: dashed;
 }
 
 .card-item-drag-handle {
     cursor: grab;
     padding: 0 0.5rem;
-    color: #6c757d;
+    color: var(--bs-secondary-color);
     font-size: 1.2rem;
 }
 
@@ -465,7 +499,7 @@
 
 .card-item-name {
     font-weight: 500;
-    color: #212529;
+    color: var(--bs-body-color);
 }
 
 .card-item-actions {
@@ -478,27 +512,27 @@
     border: none;
     padding: 0.25rem 0.5rem;
     cursor: pointer;
-    color: #6c757d;
+    color: var(--bs-secondary-color);
     font-size: 1.2rem;
     transition: color 0.2s;
 }
 
 .btn-toggle-visibility:hover {
-    color: #0d6efd;
+    color: var(--bs-primary);
 }
 
 .card-item-hidden .btn-toggle-visibility {
-    color: #dc3545;
+    color: var(--bs-danger);
 }
 
 .card-item-ghost {
     opacity: 0.4;
-    background: #e9ecef;
+    background: var(--bs-border-color);
 }
 
 .card-item-chosen {
-    background: #cfe2ff;
-    border-color: #0d6efd;
+    background: var(--bs-primary-bg-subtle);
+    border-color: var(--bs-primary);
 }
 
 .card-item-drag {
@@ -508,7 +542,7 @@
 
 .card-manager-footer {
     padding: 1rem 1.5rem;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--bs-border-color);
     text-align: right;
 }
 

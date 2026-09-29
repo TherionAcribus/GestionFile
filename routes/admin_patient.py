@@ -926,8 +926,10 @@ def admin_printer_status():
 
 @admin_patient_bp.route('/admin/printer/dashboard')
 @require_permission_dashboard('patient')
-def dashboard_staff():
-    dashboardcard = DashboardCard.query.filter_by(name="staff").first()
+def dashboard_printer():
+    # Auparavant nommée dashboard_staff et liée à la carte « staff » : les
+    # identifiants HTML des deux cartes se confondaient (masquage, cible).
+    dashboardcard = DashboardCard.query.filter_by(name="printer").first()
     printer_infos = get_printer_infos()
     app.logger.debug('PRINTERINFOS %s', printer_infos)
     return render_template('/admin/dashboard_printer.html',

@@ -1,14 +1,56 @@
-from flask import Blueprint,render_template, request, current_app as app
-from sqlalchemy.orm import joinedload
-from models import DashboardCard, db, Pharmacist, Patient, Counter, Button
+from flask import Blueprint, render_template, request, current_app as app
+from flask_security import current_user
+from models import DashboardCard, db
 from communication import communikation
-from routes.admin_security import check_default_admin, require_permission, require_permission_api
-from extensions import scheduler
-from sockets import active_connections
+from routes.admin_security import check_default_admin, require_permission, require_permission_api, user_has_permission
+from dashboard_catalog import CATALOG, card_info, missing_cards, visible_cards
 from audit_service import record_audit
 from audit_log import ACTION_CREATE, ACTION_UPDATE, OUTCOME_SUCCESS
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
+
+
+@admin_dashboard_bp.app_context_processor
+def _dashboard_helpers():
+    """``dashboard_card_info(name)`` dans les gabarits des cartes (libellé,
+    icône, page liée, largeur) — voir dashboard_catalog."""
+    return {"dashboard_card_info": card_info}
+
+
+def _can(resource):
+    return user_has_permission(current_user, resource)
+
+
+def _ensure_catalog_cards():
+    """Crée les cartes du catalogue absentes de la base (nouvelle carte après
+    une mise à jour : « Aujourd'hui »…). Les cartes affichées par défaut sont
+    placées en tête."""
+    names = [name for (name,) in db.session.query(DashboardCard.name).all()]
+    missing = missing_cards(names)
+    if not missing:
+        return
+    first = (db.session.query(db.func.min(DashboardCard.position)).scalar() or 0) - len(missing)
+    last = db.session.query(db.func.max(DashboardCard.position)).scalar() or 0
+    for index, name in enumerate(missing, start=1):
+        info = card_info(name)
+        db.session.add(DashboardCard(
+            name=name, visible=info.default_visible,
+            position=(first + index) if info.default_visible else (last + index),
+            size='36', color='bg-white'))
+    db.session.commit()
+    record_audit(ACTION_CREATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
+                 details=f"ajout automatique : {','.join(missing)}")
+
+
+def _visible_cards_for_user():
+    cards = DashboardCard.query.order_by(DashboardCard.position).all()
+    return visible_cards(cards, _can)
+
+
+def _render_card_slots(cards):
+    """Enveloppes à chargement différé des cartes (dashboard_load_*)."""
+    return "".join(render_template(f'admin/dashboard_load_{card.name}.html', dashboardcard=card)
+                   for card in cards if card.name in CATALOG)
 
 # La page d'accueil du tableau de bord n'exige que l'authentification (garantie
 # par la garde globale ``/admin`` du point 1.2) : tout admin y accède et n'y voit
@@ -26,9 +68,13 @@ def admin():
                      outcome=OUTCOME_SUCCESS,
                      details="auto-affichage (admin par défaut actif)")
 
-    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
+    _ensure_catalog_cards()
+    # Seules les cartes que l'utilisateur peut charger (permission de la
+    # route de la carte) : plus de carte « erreur » pour les autres.
+    dashboardcards = [card for card in _visible_cards_for_user() if card.name in CATALOG]
     return render_template('/admin/admin.html',
-                            dashboardcards=dashboardcards)
+                            dashboardcards=dashboardcards,
+                            can_customize=_can('options'))
 
 @admin_dashboard_bp.route('/admin/dashboard/hide', methods=['POST'])
 @require_permission('options')
@@ -80,9 +126,12 @@ def dashboard_valid_select():
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])
 @require_permission('options')
 def dashboard_display_select():
-    all_dashboardcards = DashboardCard.query.all()
+    all_dashboardcards = [card for card in DashboardCard.query.order_by(DashboardCard.position).all()
+                          if card.name in CATALOG]
     return render_template('/admin/dashboard_select.html',
-                        all_dashboardcards=all_dashboardcards)
+                        all_dashboardcards=all_dashboardcards,
+                        card_info=card_info,
+                        can=_can)
 
 
 @admin_dashboard_bp.route('/admin/dashboard/save_order', methods=['POST'])
@@ -191,94 +240,9 @@ def save_dashboard_configuration():
                  details=f"config: visibles={','.join(map(str, visible_cards))}")
     communikation("admin", event="refresh_dashboard_select")
     
-    # Retourner le HTML des cartes visibles avec leur contenu
-    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
-    html = ""
-    
-    for dashboardcard in dashboardcards:
-        # Préparer les données nécessaires pour chaque type de carte
-        context = {'dashboardcard': dashboardcard}
-        
-        if dashboardcard.name == 'staff':
-            context['staffs'] = Pharmacist.query.all()
-            
-        elif dashboardcard.name == 'queue':
-            # dashboard_queue.html lit patient.activity.name par ligne → joinedload.
-            context['patients'] = Patient.query.options(joinedload(Patient.activity)).all()
-            
-        elif dashboardcard.name == 'button':
-            # Logique pour les boutons (copié depuis admin_patient.py)
-            all_buttons = Button.query.all()
-            # Index id -> bouton : évite une requête par groupe pour retrouver le
-            # parent (déjà chargé dans all_buttons) — cf. admin_patient.dashboard_button.
-            buttons_by_id = {button.id: button for button in all_buttons}
-            grouped_buttons = {}
-            other_buttons = []
-
-            for button in all_buttons:
-                if button.parent_button_id:
-                    parent_id = button.parent_button_id
-                    if parent_id not in grouped_buttons:
-                        parent_button = buttons_by_id.get(parent_id)
-                        grouped_buttons[parent_id] = {
-                            'parent': parent_button,
-                            'children': []
-                        }
-                    grouped_buttons[parent_id]['children'].append(button)
-                elif button.is_parent:
-                    if button.id not in grouped_buttons:
-                        grouped_buttons[button.id] = {
-                            'parent': button,
-                            'children': []
-                        }
-                else:
-                    other_buttons.append(button)
-            
-            sorted_groups = sorted(grouped_buttons.values(), key=lambda x: x['parent'].label.lower())
-            for group in sorted_groups:
-                group['children'].sort(key=lambda x: x.label.lower())
-            
-            other_buttons.sort(key=lambda x: x.label.lower())
-            
-            context['grouped_buttons'] = sorted_groups
-            context['other_buttons'] = other_buttons
-            
-        elif dashboardcard.name == 'counter':
-            # dashboard_counter.html lit counter.staff.name par ligne → joinedload.
-            context['counters'] = Counter.query.options(joinedload(Counter.staff)).all()
-            
-        elif dashboardcard.name == 'connection':
-            context['namespaces'] = list(active_connections.keys())
-            
-        elif dashboardcard.name == 'appschedule':
-            # Mêmes infos que la route /admin/appschedule/dashboard, via le même
-            # assembleur : une seule requête pour toutes les dernières exécutions
-            # (au lieu d'une par tâche) — cf. scheduler_dashboard, point 5.3.
-            # ``scheduler`` est l'instance APScheduler creee par app.py et exposee
-            # sur l'application (app.py: scheduler). L'ancien ``from scheduler
-            # import scheduler`` visait un module scheduler.py vide : la carte
-            # levait ImportError des qu'elle etait affichee.
-            from scheduler_dashboard import build_jobs_info
-
-            context['main_jobs'], context['other_jobs'] = build_jobs_info(scheduler.get_jobs())
-        
-        elif dashboardcard.name == 'security':
-            context['is_default_admin'] = check_default_admin()
-
-        elif dashboardcard.name == 'alerts':
-            # Mêmes alertes que la route /admin/alerts/dashboard.
-            from routes.admin_patient import get_patient_page_alerts
-            context['alerts'] = get_patient_page_alerts()
-
-        # Utiliser le template avec contenu, pas le wrapper
-        template_name = f'admin/dashboard_{dashboardcard.name}.html'
-        try:
-            html += render_template(template_name, **context)
-        except Exception:
-            # Repli sur le gabarit d'attente si celui de la carte n'existe pas
-            # (ou leve). Trace complete : une erreur Jinja dans une carte etait
-            # jusqu'ici indiscernable d'un gabarit simplement absent.
-            app.logger.exception("Rendu impossible du gabarit de carte %s", template_name)
-            html += render_template(f'admin/dashboard_load_{dashboardcard.name}.html', dashboardcard=dashboardcard)
-    
+    # Enveloppes à chargement différé, comme au chargement de la page : chaque
+    # carte appelle sa propre route (contenu et permission). Auparavant, cette
+    # route reconstruisait à la main le contenu de chaque carte — logique
+    # dupliquée, qui avait divergé de celle des routes.
+    html = _render_card_slots(_visible_cards_for_user())
     return html, 200

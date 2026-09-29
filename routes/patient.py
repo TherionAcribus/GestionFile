@@ -1,5 +1,6 @@
 import uuid
 import markdown2
+from routes.admin_security import require_permission
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
@@ -848,8 +849,13 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
                         )
 
 @patient_bp.route('/patient/refresh')
+@require_permission('patient')
 def patient_refresh():
-    """ Permet de rafraichir la page des patients pour effectuer des changements """
+    """ Recharge toutes les bornes (bouton de l'administration).
+
+    N'exigeait aucune authentification : n'importe quel poste du réseau
+    pouvait relancer toutes les bornes en boucle. Réservé désormais aux
+    administrateurs ayant la permission « patient ». """
     communikation("patient", event="refresh")
     return '', 204
 

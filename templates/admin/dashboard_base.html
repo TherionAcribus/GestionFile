@@ -1,23 +1,10 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>{{title}}</span>
-            <div>
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="outerHTML">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="text-center">
-                {{ error_message }}
-            </div>
-        </div>
-    </div>
-</div>
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{# Carte de repli (permission refusée, cf. require_permission_dashboard).
+   Rare depuis le filtrage des cartes par permission dans /admin. #}
+{% if dashboardcard %}
+{% call card_shell(dashboardcard) %}
+    <p class="text-center text-muted mb-0">{{ error_message }}</p>
+{% endcall %}
+{% else %}
+<p class="text-muted small">{{ error_message }}</p>
+{% endif %}

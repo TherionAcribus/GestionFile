@@ -1,20 +1,12 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Connexions</span>
-            <div>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="outerHTML">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            {% include 'admin/app_connexion.html' %}
-        </div>
-    </div>
-</div>
-
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{% call card_shell(dashboardcard, badge=total) %}
+<ul class="list-unstyled mb-0">
+    {% for row in rows %}
+    <li class="d-flex align-items-center py-1 {{ '' if row.count else 'text-muted' }}">
+        <i class="bi bi-circle-fill me-2 small {{ 'text-success' if row.count else 'text-body-tertiary' }}" aria-hidden="true"></i>
+        {{ row.label }}
+        <span class="ms-auto fw-semibold">{{ row.count }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endcall %}

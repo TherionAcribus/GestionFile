@@ -1,33 +1,13 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-18">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Musique</span>
-            <div>
-                <a href="/admin/music" target="_blank" class="btn btn-link p-0">
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="outerHTML">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            {% if error_message %}
-                <div class="text-center">
-                    {{ error_message }}
-                </div>
-            {% else %}
-                {% if spotify_connected %}
-                    {% include 'admin/music_player.html' %}
-                {% else %}
-                    <p>Connectez-vous à Spotify pour utiliser ce service</p>
-                    <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-primary">Se connecter à Spotify</a>
-                {% endif %}
-            {% endif %}
-        </div>
-    </div>
-</div>
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{% call card_shell(dashboardcard) %}
+    {% if error_message %}
+        <p class="text-center text-muted mb-0">{{ error_message }}</p>
+    {% elif spotify_connected %}
+        {% include 'admin/music_player.html' %}
+    {% else %}
+        <p class="small text-muted">Connectez un compte Spotify pour piloter la musique de l'écran d'annonce.</p>
+        <a href="{{ url_for('admin_music.spotify_login') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-spotify" aria-hidden="true"></i> Se connecter à Spotify
+        </a>
+    {% endif %}
+{% endcall %}

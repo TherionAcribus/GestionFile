@@ -1,32 +1,13 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-    <div class="card {% if is_default_admin %}border-danger{% endif %}">
-        <div class="card-header d-flex justify-content-between align-items-center {% if is_default_admin %}bg-danger text-white{% endif %}">
-            <span><i class="bi bi-shield-lock"></i> Sécurité</span>
-            <div class="d-flex align-items-center">
-                <a href="/admin/security" target="_blank" class="btn btn-link p-0 {% if is_default_admin %}text-white{% endif %}">
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="delete">
-                    <i class="bi bi-x-circle-fill {% if is_default_admin %}text-white{% endif %}"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            {% if is_default_admin %}
-                <div class="alert alert-danger mb-0">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                    L'utilisateur <strong>"admin"</strong> possède encore le mot de passe par défaut. 
-                    <a href="/admin/security" class="alert-link">Modifier le mot de passe</a>
-                </div>
-            {% else %}
-                <div class="text-center text-success">
-                    <i class="bi bi-check-circle-fill"></i> Aucun problème de sécurité détecté
-                </div>
-            {% endif %}
-        </div>
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{% call card_shell(dashboardcard, variant=('danger' if is_default_admin else none)) %}
+{% if is_default_admin %}
+    <div class="alert alert-danger mb-0">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        L'utilisateur <strong>« admin »</strong> a encore le mot de passe par défaut : n'importe qui peut se connecter
+        à l'administration.
+        <a href="/admin/security" class="alert-link d-block mt-1">Changer le mot de passe maintenant</a>
     </div>
-</div>
+{% else %}
+    <p class="text-success mb-0"><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Aucun problème de sécurité détecté.</p>
+{% endif %}
+{% endcall %}

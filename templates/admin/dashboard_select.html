@@ -1,49 +1,46 @@
+{# Gestionnaire des cartes : libellé, icône et description (dashboard_catalog)
+   au lieu des noms techniques. Les cartes que l'utilisateur ne peut pas
+   voir (permission) sont signalées. Logique : static/js/admin_dashboard_select.js. #}
 <div class="card-manager">
-    <div class="card-manager-header" data-card-manager-toggle style="cursor: pointer;">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h5 class="mb-1"><i class="bi bi-layout-wtf"></i> Gestion des cartes du dashboard</h5>
-                <p class="text-muted small mb-0">Cliquez pour ouvrir/fermer</p>
-            </div>
-            <i id="card-manager-toggle-icon" class="bi bi-chevron-down" style="font-size: 1.5rem; transition: transform 0.3s;"></i>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div>
+            <h5 class="mb-1"><i class="bi bi-layout-wtf" aria-hidden="true"></i> Cartes du tableau de bord</h5>
+            <p class="text-muted small mb-0">
+                <i class="bi bi-grip-vertical" aria-hidden="true"></i> Glissez pour changer l'ordre ·
+                cochez les cartes à afficher. Réglage commun à tous les administrateurs.
+            </p>
         </div>
+        <button type="button" class="btn btn-primary btn-sm" data-card-manager-save>
+            <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
+        </button>
     </div>
-    
-    <div id="card-manager-content" style="display: none;">
-        <div class="card-manager-instructions">
-            <small class="text-muted">
-                <i class="bi bi-grip-vertical"></i> Glissez-déposez pour réorganiser • 
-                <i class="bi bi-eye"></i> Cliquez sur l'œil pour afficher/masquer
-            </small>
-        </div>
-        
-        <div id="card-list-sortable" class="card-list">
-            {% for card in all_dashboardcards %}
-            <div class="card-item {% if not card.visible %}card-item-hidden{% endif %}" 
-                 data-card-id="{{ card.id }}" 
-                 data-card-name="{{ card.name }}">
-                <div class="card-item-drag-handle">
-                    <i class="bi bi-grip-vertical"></i>
-                </div>
-                <div class="card-item-content">
-                    <span class="card-item-name">{{ card.name }}</span>
-                </div>
-                <div class="card-item-actions">
-                    <button class="btn-toggle-visibility"
-                            data-card-id="{{ card.id }}"
-                            title="{% if card.visible %}Masquer{% else %}Afficher{% endif %}">
-                        <i class="bi bi-eye{% if not card.visible %}-slash{% endif %}"></i>
-                    </button>
-                </div>
+
+    <div id="card-list-sortable" class="card-list">
+        {% for card in all_dashboardcards %}
+        {% set info = card_info(card.name) %}
+        <div class="card-item {% if not card.visible %}card-item-hidden{% endif %}"
+             data-card-id="{{ card.id }}"
+             data-card-name="{{ card.name }}">
+            <div class="card-item-drag-handle" title="Glisser pour déplacer">
+                <i class="bi bi-grip-vertical" aria-hidden="true"></i>
             </div>
-            {% endfor %}
+            <i class="bi {{ info.icon }} fs-5 me-2" aria-hidden="true"></i>
+            <div class="card-item-content">
+                <span class="card-item-name">{{ info.label }}</span>
+                <span class="d-block small text-muted">{{ info.description }}
+                    {% if not can(info.permission) %}<span class="text-warning-emphasis">(vous n'avez pas accès à cette carte)</span>{% endif %}
+                </span>
+            </div>
+            <div class="card-item-actions">
+                <button type="button" class="btn-toggle-visibility"
+                        data-card-id="{{ card.id }}"
+                        aria-pressed="{{ 'true' if card.visible else 'false' }}"
+                        title="{% if card.visible %}Masquer{% else %}Afficher{% endif %}">
+                    <i class="bi bi-eye{% if not card.visible %}-slash{% endif %}" aria-hidden="true"></i>
+                    <span class="visually-hidden">Afficher / masquer {{ info.label }}</span>
+                </button>
+            </div>
         </div>
-        
-        <div class="card-manager-footer">
-            <button class="btn btn-primary btn-sm" data-card-manager-save>
-                <i class="bi bi-check-lg"></i> Appliquer les modifications
-            </button>
-        </div>
+        {% endfor %}
     </div>
 </div>
-

@@ -780,10 +780,12 @@ def display_schedule_tasks_list():
 
 @admin_config_bp.route('/admin/appschedule/dashboard')
 @require_permission_dashboard('schedule')
-def dashboard_counter():
+def dashboard_appschedule():
     # Une seule requête pour la dernière exécution de toutes les tâches (au lieu
-    # d'une par tâche — cf. scheduler_dashboard, point 5.3).
-    main_jobs_info, other_jobs_info = build_jobs_info(scheduler.get_jobs())
+    # d'une par tâche — cf. scheduler_dashboard, point 5.3). ``detailed`` :
+    # libellés lisibles et statuts traduits (la carte affichait les
+    # identifiants techniques et « failed »/« success »).
+    main_jobs_info, other_jobs_info = build_jobs_info(scheduler.get_jobs(), detailed=True)
 
     dashboardcard = DashboardCard.query.filter_by(name="appschedule").first()
     

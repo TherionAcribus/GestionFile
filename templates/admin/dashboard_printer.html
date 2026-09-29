@@ -1,32 +1,26 @@
-
-            <div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <span>Printer</span>
-                        <div>
-                            <a class="text-danger" 
-                                hx-post="/admin/dashboard/hide" 
-                                hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                                hx-target="#card-{{ dashboardcard.id }}" 
-                                hx-swap="outerHTML">
-                                <i class="bi bi-x-circle-fill"></i>
-                            </a>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        {% if printer_error == None %}
-                            Pas d'infos
-                        {% elif printer_error %}
-                            Erreur !!!
-                        {% else %}
-                            Pas d'erreur
-                        {% endif %}
-                        <div>
-                            {% for info in printer_infos %}
-                                <p>{{info["timestamp"]}}{% if info["borne_id"] %} [{{ info["borne_id"] }}]{% endif %} : {{ info["message"]}}</p>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{# Carte « Imprimante » : état global des bornes (models.get_printer_error :
+   None = aucun statut reçu) et derniers messages, les plus récents d'abord. #}
+{% if printer_error == None %}
+    {% set state, variant, icon = "Aucune information reçue des bornes", none, "bi-question-circle" %}
+{% elif printer_error %}
+    {% set state, variant, icon = "Problème d'impression", "danger", "bi-exclamation-octagon-fill" %}
+{% else %}
+    {% set state, variant, icon = "Imprimante opérationnelle", "success", "bi-check-circle-fill" %}
+{% endif %}
+{% call card_shell(dashboardcard, variant=variant) %}
+<p class="fw-semibold mb-2 {{ 'text-' ~ variant if variant else 'text-muted' }}">
+    <i class="bi {{ icon }}" aria-hidden="true"></i> {{ state }}
+</p>
+{% if printer_infos %}
+<ul class="list-unstyled small mb-0 printer-log">
+    {% for info in printer_infos | reverse %}
+    <li class="d-flex gap-2 py-1 border-top">
+        <i class="bi {{ 'bi-x-circle-fill text-danger' if info.error else 'bi-check-circle text-success' }}" aria-hidden="true"></i>
+        <span class="text-muted text-nowrap">{{ info.timestamp }}</span>
+        <span>{% if info.borne_id %}<span class="badge text-bg-light border">{{ info.borne_id }}</span> {% endif %}{{ info.message }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endcall %}

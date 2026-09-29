@@ -92,9 +92,10 @@ def test_counter_staff_eager_loaded():
 # boutons parent/enfant : plus de requête par groupe dans une boucle
 # --------------------------------------------------------------------------
 
+# admin_dashboard.py ne reconstruit plus le contenu des cartes (il renvoie les
+# enveloppes à chargement différé) : seule la route de la carte groupe.
 @pytest.mark.parametrize("rel", [
     "routes/admin_patient.py",
-    "routes/admin_dashboard.py",
 ])
 def test_button_grouping_uses_in_memory_index(rel):
     src = _read(rel)

@@ -219,11 +219,14 @@ def add_new_staff():
 @admin_staff_bp.route('/admin/staff/dashboard')
 @require_permission_dashboard('staff')
 def dashboard_staff():
-    app.logger.debug("dashboard staff")
-    staffs = Pharmacist.query.all()
+    staffs = Pharmacist.query.order_by(Pharmacist.name).all()
+    counters_by_staff = {}
+    for counter in Counter.query.filter(Counter.staff_id.isnot(None)).order_by(Counter.sort_order).all():
+        counters_by_staff.setdefault(counter.staff_id, []).append(counter.name)
     dashboardcard = DashboardCard.query.filter_by(name="staff").first()
-    return render_template('/admin/dashboard_staff.html', 
+    return render_template('/admin/dashboard_staff.html',
                             staffs=staffs,
+                            counters_by_staff=counters_by_staff,
                             dashboardcard=dashboardcard)
 
 

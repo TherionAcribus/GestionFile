@@ -13,6 +13,7 @@ from services import calling_service
 from services.queue_service import record_patient_step
 from transactions import atomic
 from auth_utils import require_app_token_or_login, require_counter_access
+from routes.admin_security import require_permission
 
 counter_bp = Blueprint('counter', __name__)
 
@@ -107,6 +108,8 @@ def update_counter_staff():
 
         # mise a jour des boutons
         communikation("counter", event="update buttons")
+        # Cartes « Comptoirs » / « Équipe » du tableau de bord admin.
+        communikation("admin", event="refresh_counter_dashboard")
         # On rappelle la base de donnees pour etre sur que bonne personne au bon comptoir
         if from_app:
             return api_is_staff_on_counter(request.form.get('counter_id'))
@@ -119,6 +122,8 @@ def update_counter_staff():
         counter.staff = None
     # mise a jour des boutons
     communikation("counter", event="update buttons")
+    # Cartes « Comptoirs » / « Équipe » du tableau de bord admin.
+    communikation("admin", event="refresh_counter_dashboard")
     # on affiche une erreur a la place du nom
     if from_app:
         return "", 204
@@ -162,6 +167,8 @@ def remove_counter_staff(origine=None):
     # evenement ne signalait la coupure d'autocalling, l'affichage web restait
     # dans son ancien etat.
     communikation("counter", event="update buttons")
+    # Cartes « Comptoirs » / « Équipe » du tableau de bord admin.
+    communikation("admin", event="refresh_counter_dashboard")
     communikation("counter", event="refresh_auto_calling", data={"auto_calling": False})
     return is_staff_on_counter(request.form.get('counter_id'))
 
@@ -189,6 +196,8 @@ def deconnect_staff_from_all_counters(staff):
 
     # TODO A MODIFIER....
     communikation("counter", event="update buttons")
+    # Cartes « Comptoirs » / « Équipe » du tableau de bord admin.
+    communikation("admin", event="refresh_counter_dashboard")
 
     app.logger.debug(f"Deconnexion reussie de {len(affected_counters)} comptoir(s).")
 
@@ -360,7 +369,12 @@ def counter_remove_staff():
     return remove_counter_staff()
 
 @counter_bp.route('/dash/counter/remove_staff', methods=['POST'])
+@require_permission('counter')
 def dashboard_remove_counter_staff():
+    # Route du tableau de bord : elle n'exigeait AUCUNE authentification —
+    # n'importe quel poste du réseau pouvait déconnecter un comptoir. La carte
+    # passe désormais par /admin/counter/disconnect/<id> ; celle-ci reste pour
+    # compatibilité, protégée par la même permission.
     remove_counter_staff(origine="dashboard")
     communikation("admin", event="refresh_counter_dashboard")
     

@@ -1,172 +1,98 @@
-// Gestionnaire des cartes du tableau de bord.
-// Extrait du fragment templates/admin/dashboard_select.html (Phase 8, point 2).
+// Gestionnaire des cartes du tableau de bord (fragment dashboard_select.html,
+// chargé dans le panneau « Personnaliser » de admin.html).
 //
-// Le fragment etant reinjecte par HTMX, son <script> etait rejoue a chaque
-// echange : l'ecouteur `htmx:afterSwap` ci-dessous etait donc repose sur
-// document.body a chaque fois, et ils s'empilaient. Il est desormais pose une
-// seule fois, au chargement de la page.
-//
-// Un bloc `DOMContentLoaded` final a ete supprime : il ne contenait que deux
-// console.log et ne pouvait de toute facon jamais s'executer, l'evenement etant
-// deja passe au moment ou le fragment arrive dans la page.
+// Écouteurs posés une seule fois (délégation) : le fragment est réinjecté par
+// HTMX, un <script> interne serait rejoué et ses écouteurs s'empileraient.
 
 var cardListSortable = null;
-var isCardManagerOpen = false;
-
-function toggleCardManager(evt) {
-    if (evt) evt.stopPropagation();
-    
-    var content = document.getElementById('card-manager-content');
-    var icon = document.getElementById('card-manager-toggle-icon');
-    
-    
-    if (isCardManagerOpen) {
-        content.style.display = 'none';
-        icon.style.transform = 'rotate(0deg)';
-        isCardManagerOpen = false;
-    } else {
-        content.style.display = 'block';
-        icon.style.transform = 'rotate(180deg)';
-        isCardManagerOpen = true;
-        
-        // Initialiser Sortable quand on ouvre
-        setTimeout(function() {
-            initializeCardListSortable();
-        }, 150);
-    }
-}
 
 function initializeCardListSortable() {
     var cardListEl = document.getElementById('card-list-sortable');
-    if (!cardListEl) {
-        console.error('Element card-list-sortable non trouvé');
-        return;
-    }
-    
+    if (!cardListEl || typeof Sortable === 'undefined') { return; }
     if (cardListSortable) {
         cardListSortable.destroy();
         cardListSortable = null;
     }
-    
-    
-    try {
-        cardListSortable = new Sortable(cardListEl, {
-            handle: '.card-item-drag-handle',
-            animation: 150,
-            ghostClass: 'card-item-ghost',
-            chosenClass: 'card-item-chosen',
-            dragClass: 'card-item-drag',
-            forceFallback: false,
-            fallbackTolerance: 3
-        });
-    } catch(e) {
-        console.error('Erreur lors de l\'initialisation de Sortable:', e);
-    }
+    cardListSortable = new Sortable(cardListEl, {
+        handle: '.card-item-drag-handle',
+        animation: 150,
+        ghostClass: 'card-item-ghost',
+        chosenClass: 'card-item-chosen',
+        dragClass: 'card-item-drag',
+        fallbackTolerance: 3
+    });
 }
 
-function toggleCardVisibility(cardId, button) {
+function toggleCardVisibility(button) {
     var cardItem = button.closest('.card-item');
     var icon = button.querySelector('i');
-    
-    cardItem.classList.toggle('card-item-hidden');
-    
-    if (cardItem.classList.contains('card-item-hidden')) {
-        icon.className = 'bi bi-eye-slash';
-        button.title = 'Afficher';
-    } else {
-        icon.className = 'bi bi-eye';
-        button.title = 'Masquer';
-    }
+    var hidden = cardItem.classList.toggle('card-item-hidden');
+    icon.className = hidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+    button.title = hidden ? 'Afficher' : 'Masquer';
+    button.setAttribute('aria-pressed', hidden ? 'false' : 'true');
 }
 
-function saveCardConfiguration(evt) {
-    if (evt) evt.stopPropagation();
-    
-    var cardItems = document.querySelectorAll('.card-item');
+function saveCardConfiguration(btn) {
     var visibleCards = [];
     var cardOrder = [];
-    
-    cardItems.forEach(function(item, index) {
-        var cardName = item.getAttribute('data-card-name');
-        var isVisible = !item.classList.contains('card-item-hidden');
-        
-        cardOrder.push({
-            id: parseInt(item.getAttribute('data-card-id')),
-            position: index + 1
-        });
-        
-        if (isVisible) {
-            visibleCards.push(cardName);
+    document.querySelectorAll('#card-list-sortable .card-item').forEach(function (item, index) {
+        cardOrder.push({ id: parseInt(item.getAttribute('data-card-id'), 10), position: index + 1 });
+        if (!item.classList.contains('card-item-hidden')) {
+            visibleCards.push(item.getAttribute('data-card-name'));
         }
     });
-    
-    
-    var btn = evt ? evt.target.closest('button') : document.querySelector('.card-manager-footer button');
-    
+
     fetch('/admin/dashboard/save_configuration', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            visible_cards: visibleCards,
-            card_order: cardOrder
-        })
-    }).then(response => {
-        if (response.ok) {
-            return response.text();
-        } else {
-            throw new Error('Erreur lors de la sauvegarde');
-        }
-    }).then(html => {
-        document.getElementById('sortable-dashboard').innerHTML = html;
-        if (typeof htmx !== 'undefined') {
-            htmx.trigger('#sortable-dashboard', 'cardsUpdated');
-        }
-        
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visible_cards: visibleCards, card_order: cardOrder })
+    }).then(function (response) {
+        if (!response.ok) { throw new Error('HTTP ' + response.status); }
+        return response.text();
+    }).then(function (html) {
+        var dashboard = document.getElementById('sortable-dashboard');
+        dashboard.innerHTML = html;
+        // Sans htmx.process, les enveloppes insérées à la main ne
+        // déclenchaient jamais leur chargement (cartes figées en squelette).
+        if (typeof htmx !== 'undefined') { htmx.process(dashboard); }
+        if (typeof initializeSortable === 'function') { initializeSortable(); }
+
         if (btn) {
             var originalHTML = btn.innerHTML;
-            btn.innerHTML = '<i class="bi bi-check-lg"></i> Sauvegardé !';
-            btn.classList.add('btn-success');
-            btn.classList.remove('btn-primary');
-            
-            setTimeout(function() {
+            btn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Enregistré';
+            btn.classList.replace('btn-primary', 'btn-success');
+            setTimeout(function () {
                 btn.innerHTML = originalHTML;
-                btn.classList.remove('btn-success');
-                btn.classList.add('btn-primary');
+                btn.classList.replace('btn-success', 'btn-primary');
             }, 2000);
         }
-    }).catch(error => {
-        console.error('Erreur:', error);
-        alert('Erreur lors de la sauvegarde de la configuration');
+    }).catch(function (error) {
+        console.error('Enregistrement du tableau de bord :', error);
+        alert("L'enregistrement de la configuration a échoué.");
     });
 }
 
-
-// --- Comportements délégués (remplacent les onclick inline, CSP) -----------
-// Le fragment est réinjecté par HTMX : délégation sur document, posée une
-// seule fois au chargement.
+// --- Comportements délégués (CSP : pas d'onclick inline) -----------------
 document.addEventListener('click', function (evt) {
     if (!evt.target || !evt.target.closest) { return; }
-    var btn = evt.target.closest('.btn-toggle-visibility');
-    if (btn) {
-        evt.stopPropagation();
-        toggleCardVisibility(btn.getAttribute('data-card-id'), btn);
+    var toggle = evt.target.closest('.btn-toggle-visibility');
+    if (toggle) {
+        evt.preventDefault();
+        toggleCardVisibility(toggle);
         return;
     }
-    if (evt.target.closest('[data-card-manager-save]')) {
-        saveCardConfiguration(evt);
-        return;
-    }
-    if (evt.target.closest('.card-manager-header')) {
-        toggleCardManager(evt);
+    var save = evt.target.closest('[data-card-manager-save]');
+    if (save) {
+        evt.preventDefault();
+        saveCardConfiguration(save);
     }
 });
 
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.id === 'card-list-sortable') {
-        if (isCardManagerOpen) {
-            initializeCardListSortable();
-        }
+// Le fragment arrive (première ouverture ou refresh_dashboard_select) :
+// la liste devient triable.
+document.body.addEventListener('htmx:afterSwap', function (evt) {
+    var target = evt.detail && evt.detail.target;
+    if (target && (target.id === 'div_select_dashboard' || target.id === 'card-list-sortable')) {
+        initializeCardListSortable();
     }
 });

@@ -123,11 +123,18 @@ def admin_app_mail_test():
 @admin_app_bp.route('/admin/communication/dashboard')
 @require_permission_dashboard('app')
 def dashboard_communication():
+    # Résumé compact : nombre de connexions par type d'appareil. Le détail
+    # (qui, filtres) est dans l'onglet Application › Connexions en direct.
+    # Auparavant la carte incluait ce même onglet, dont la liste attend
+    # l'ouverture d'un onglet absent du tableau de bord : elle ne se chargeait
+    # jamais.
     dashboardcard = DashboardCard.query.filter_by(name="connection").first()
+    rows = [{"label": NAMESPACE_LABELS.get(ns, ns), "count": len(get_connected_clients(ns))}
+            for ns in active_connections.keys()]
     return render_template('/admin/dashboard_connection.html',
                             dashboardcard=dashboardcard,
-                            namespaces=[(ns, NAMESPACE_LABELS.get(ns, ns))
-                                        for ns in active_connections.keys()])
+                            rows=rows,
+                            total=sum(r["count"] for r in rows))
 
 
 @admin_app_bp.route('/admin/app/get_connections', methods=['POST'])

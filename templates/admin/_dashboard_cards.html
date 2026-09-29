@@ -11,11 +11,13 @@
    - En attendant la réponse : un squelette occupe la place (pas de saut de mise
      en page). En cas d'échec réseau/serveur : un état d'erreur avec bouton
      « Réessayer » (voir les gestionnaires htmx:responseError / htmx:sendError et
-     dashboardCardRetry dans static/js/admin_home.js). #}
+     dashboardCardRetry dans static/js/admin_home.js).
+   - La largeur dans la grille (`span-*`) vient du catalogue (dashboard_catalog). #}
 
 {% macro card_slot(dashboardcard, url, extra_triggers='') %}
+{% set info = dashboard_card_info(dashboardcard.name) if dashboard_card_info is defined else none %}
 <div id="card-wrapper-{{ dashboardcard.id }}"
-     class="dashboard-card-slot"
+     class="dashboard-card-slot{% if info %} span-{{ info.span }}{% endif %}"
      data-card-id="{{ dashboardcard.id }}"
      data-card-url="{{ url }}"
      hx-get="{{ url }}"
@@ -38,6 +40,44 @@
             <span class="skeleton-bar"></span>
             <span class="skeleton-bar"></span>
             <span class="skeleton-bar skeleton-bar-short"></span>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Coquille commune d'une carte chargée : en-tête uniforme (poignée de
+   déplacement, icône, titre, lien « Ouvrir » vers la page, bouton
+   « Masquer » réservé aux administrateurs autorisés à personnaliser).
+   `variant` : 'danger' / 'warning' / 'success' pour une carte d'état.
+   Le contenu est fourni par {% call %}. #}
+{% macro card_shell(dashboardcard, title=None, variant=None, badge=None) %}
+{% set info = dashboard_card_info(dashboardcard.name) if dashboard_card_info is defined else none %}
+{% set label = title or (info.label if info else dashboardcard.name) %}
+<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}{% if variant %} dashboard-card-{{ variant }}{% endif %}">
+    <div class="card h-100{% if variant %} border-{{ variant }}{% endif %}">
+        <div class="card-header d-flex align-items-center gap-2" title="Glisser pour déplacer la carte">
+            <i class="bi bi-grip-vertical text-body-tertiary" aria-hidden="true"></i>
+            {% if info %}<i class="bi {{ info.icon }}{% if variant %} text-{{ variant }}{% endif %}" aria-hidden="true"></i>{% endif %}
+            <h2 class="h6 mb-0 me-auto">{{ label }}{% if badge %} <span class="badge text-bg-{{ variant or 'secondary' }} ms-1">{{ badge }}</span>{% endif %}</h2>
+            {% if info and info.url %}
+            <a href="{{ info.url }}" class="btn btn-sm btn-link p-0 text-decoration-none" aria-label="Ouvrir la page {{ label }}">
+                Ouvrir <i class="bi bi-arrow-right-short" aria-hidden="true"></i>
+            </a>
+            {% endif %}
+            {% if user_has_permission is defined and current_user is defined and user_has_permission(current_user, 'options') %}
+            <button type="button" class="btn btn-sm btn-link text-body-secondary p-0"
+                    hx-post="/admin/dashboard/hide"
+                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}'
+                    hx-target="closest .dashboard-card-slot"
+                    hx-swap="delete"
+                    title="Masquer cette carte (réaffichable via « Personnaliser »)"
+                    aria-label="Masquer la carte {{ label }}">
+                <i class="bi bi-eye-slash" aria-hidden="true"></i>
+            </button>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {{ caller() }}
         </div>
     </div>
 </div>

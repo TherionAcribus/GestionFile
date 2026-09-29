@@ -514,6 +514,12 @@ function refresh_queue(){
         htmx.trigger(queueTable, 'refresh_queue_patient', {target: "#div_queue_table"});
     }
 
+    // Carte « Aujourd'hui » : mêmes données (file du jour).
+    var todayCardSlot = document.querySelector('[data-card-url="/admin/today/dashboard"]');
+    if (todayCardSlot) {
+        htmx.trigger(todayCardSlot, 'refresh_queue_patient');
+    }
+
     // Vérifie si la carte dashboard existe
     if (queueCardSlot) {
         htmx.trigger(queueCardSlot, 'refresh_queue_patient');
@@ -581,6 +587,11 @@ function refresh_printer_dashboard(){
 function refresh_counter_dashboard(){
     var slot = document.querySelector('[data-card-url="/admin/counter/dashboard"]');
     if (slot) { htmx.trigger(slot, 'refresh_counter_dashboard'); }
+    // Cartes qui dépendent aussi des connexions aux comptoirs.
+    ['/admin/staff/dashboard', '/admin/today/dashboard'].forEach(function (url) {
+        var other = document.querySelector('[data-card-url="' + url + '"]');
+        if (other) { htmx.trigger(other, 'refresh_counter_dashboard'); }
+    });
 }
 
 

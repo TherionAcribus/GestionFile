@@ -1,38 +1,42 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Patients</span>
-            <div class="d-flex align-items-center">
-                <a href="/admin/queue" target="_blank" class="btn btn-link p-0">
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="delete">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            
-            {% if patients|length == 0 %}
-                <div class="text-center">
-                    Aucun patient dans la file d'attente
-                </div>
-            {% endif %}
-
-            {% for patient in patients %}
-            <div 
-                {% if patient.status == "ongoing" %}
-                    class="bg-primary-subtle"
-                {% elif patient.status == "calling" %}
-                    class="bg-warning-subtle"
-                {% endif %}>
-                {{ patient.call_number }} - {{ patient.activity.name }}
-            </div>
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{# Carte « File d'attente » : au comptoir / appelés d'abord, puis en attente
+   (ordre d'arrivée, avec l'attente). Liste bornée : le détail complet est
+   sur la page File d'attente. #}
+{% set max_rows = 10 %}
+{% call card_shell(dashboardcard, badge=(waiting | length) if waiting else none) %}
+{% if not patients %}
+    <p class="text-center text-muted my-3"><i class="bi bi-cup-hot" aria-hidden="true"></i> Personne dans la file.</p>
+{% else %}
+    {% if at_counter %}
+    <h3 class="small text-muted text-uppercase mb-1">Au comptoir</h3>
+    <ul class="list-unstyled mb-2">
+        {% for p in at_counter %}
+        <li class="d-flex align-items-center gap-2 py-1">
+            <span class="badge {{ 'text-bg-warning' if p.status == 'calling' else 'text-bg-success' }}">{{ 'Appelé' if p.status == 'calling' else 'Au comptoir' }}</span>
+            <strong>{{ p.call_number }}</strong>
+            <span class="text-muted small text-truncate">{{ p.activity.name if p.activity else '' }}</span>
+            <span class="ms-auto small">{{ p.counter.name if p.counter else '—' }}</span>
+        </li>
         {% endfor %}
-        </div>
-    </div>
-</div>
+    </ul>
+    {% endif %}
+
+    <h3 class="small text-muted text-uppercase mb-1">En attente ({{ waiting | length }})</h3>
+    {% if waiting %}
+    <ul class="list-unstyled mb-0">
+        {% for p in waiting[:max_rows] %}
+        <li class="d-flex align-items-center gap-2 py-1">
+            <strong>{{ p.call_number }}</strong>
+            <span class="text-muted small text-truncate">{{ p.activity.name if p.activity else '' }}</span>
+            <span class="ms-auto small {{ 'text-danger fw-semibold' if loop.first }}">{{ wait_of(p) }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    {% if waiting | length > max_rows %}
+        <p class="small text-muted mb-0 mt-1">… et {{ waiting | length - max_rows }} autre{{ 's' if waiting | length - max_rows > 1 }}.</p>
+    {% endif %}
+    {% else %}
+    <p class="small text-muted mb-0">Aucun patient en attente.</p>
+    {% endif %}
+{% endif %}
+{% endcall %}

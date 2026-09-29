@@ -1,0 +1,46 @@
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{# Carte « Aujourd'hui » : situation en direct + chiffres clés du jour.
+   Rafraîchie avec la file (refresh_queue_patient). #}
+{% call card_shell(dashboardcard) %}
+<div class="row g-2 today-kpis text-center">
+    <div class="col-6 col-md">
+        <div class="today-kpi">
+            <div class="today-kpi-value text-primary">{{ counts.get('standing', 0) }}</div>
+            <div class="today-kpi-label">en attente</div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="today-kpi">
+            <div class="today-kpi-value {{ 'text-danger' if (longest_minutes or 0) >= 15 else '' }}">{{ longest_wait or '—' }}</div>
+            <div class="today-kpi-label">attente la plus longue{% if oldest %} ({{ oldest.call_number }}){% endif %}</div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="today-kpi">
+            <div class="today-kpi-value">{{ counts.get('calling', 0) + counts.get('ongoing', 0) }}</div>
+            <div class="today-kpi-label">appelés ou au comptoir</div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="today-kpi">
+            <div class="today-kpi-value text-success">{{ counts.get('done', 0) }}</div>
+            <div class="today-kpi-label">servis aujourd'hui</div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="today-kpi">
+            <div class="today-kpi-value">{{ fmt(kpi.avg_wait) }}</div>
+            <div class="today-kpi-label">attente moyenne du jour</div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="today-kpi">
+            <div class="today-kpi-value {{ 'text-warning' if counters_busy == 0 else '' }}">{{ counters_busy }}/{{ counters_total }}</div>
+            <div class="today-kpi-label">comptoirs occupés</div>
+        </div>
+    </div>
+</div>
+{% if counts.get('cancelled', 0) %}
+<p class="small text-muted mb-0 mt-2 text-center">{{ counts.get('cancelled') }} patient{{ 's' if counts.get('cancelled') > 1 }} retiré{{ 's' if counts.get('cancelled') > 1 }} de la file aujourd'hui.</p>
+{% endif %}
+{% endcall %}

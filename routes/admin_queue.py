@@ -17,8 +17,9 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE, OUTCOME_SUCCESS, OUTCOME_FAILURE,
 )
 from config import time_tz
+from stats_insights import format_minutes, kpis as stats_kpis
 from queue_explain import (
-    EDITABLE_STATUSES, STATUS_BADGES, STATUS_LABELS, TERMINAL_STATUSES,
+    EDITABLE_STATUSES, STATS_EXCLUDED_STATUSES, STATUS_BADGES, STATUS_LABELS, TERMINAL_STATUSES,
     describe_minutes,
     minutes_between, validate_edit,
 )
@@ -293,18 +294,59 @@ def create_new_patient_auto():
     return "", 204, _QUEUE_CHANGED
 
 
+@admin_queue_bp.route('/admin/today/dashboard')
+@require_permission_dashboard('queue')
+def dashboard_today():
+    """Carte « Aujourd'hui » : la situation en direct et les chiffres clés du
+    jour (rafraîchie avec la file : refresh_queue_patient)."""
+    now = _now().replace(tzinfo=None)
+    start = datetime.combine(now.date(), datetime.min.time())
+    counts = dict(db.session.query(Patient.status, func.count(Patient.id))
+                  .filter(Patient.timestamp >= start)
+                  .group_by(Patient.status).all())
+    rows = (db.session.query(Patient.timestamp, Patient.timestamp_counter, Patient.timestamp_end,
+                             Patient.status, Patient.activity_id, Patient.counter_id,
+                             Patient.language_id, Patient.overtaken)
+            .filter(Patient.timestamp >= start,
+                    Patient.status.notin_(STATS_EXCLUDED_STATUSES))
+            .all())
+    today_kpis = stats_kpis(rows)
+    oldest = (Patient.query.filter_by(status='standing')
+              .order_by(Patient.timestamp).first())
+    counters_total = Counter.query.count()
+    counters_busy = Counter.query.filter(Counter.staff_id.isnot(None)).count()
+    return render_template('/admin/dashboard_today.html',
+                           dashboardcard=DashboardCard.query.filter_by(name="today").first(),
+                           counts=counts,
+                           kpi=today_kpis,
+                           longest_wait=describe_minutes(minutes_between(oldest.timestamp, now)) if oldest else None,
+                           longest_minutes=minutes_between(oldest.timestamp, now) if oldest else None,
+                           oldest=oldest,
+                           counters_total=counters_total,
+                           counters_busy=counters_busy,
+                           fmt=format_minutes)
+
+
 @admin_queue_bp.route('/admin/queue/dashboard')
 @require_permission_dashboard('queue')
 def dashboard_queue():
     # Le gabarit dashboard_queue.html affiche patient.activity.name par ligne :
     # joinedload évite un N+1 sur l'activité.
+    # Patients encore dans le parcours (ni servis, ni retirés, ni hors file),
+    # dans l'ordre d'arrivée. joinedload : le gabarit lit l'activité et le
+    # comptoir de chaque ligne (évite un N+1).
     patients = (
         Patient.query
-        .filter(Patient.status != "done")
-        .options(joinedload(Patient.activity))
+        .filter(Patient.status.in_(('standing', 'calling', 'ongoing')))
+        .options(joinedload(Patient.activity), joinedload(Patient.counter))
+        .order_by(Patient.timestamp, Patient.id)
         .all()
     )
+    now = _now().replace(tzinfo=None)
     dashboardcard = DashboardCard.query.filter_by(name="queue").first()
-    return render_template('/admin/dashboard_queue.html', 
-                            patients=patients, 
+    return render_template('/admin/dashboard_queue.html',
+                            patients=patients,
+                            at_counter=[p for p in patients if p.status in ('calling', 'ongoing')],
+                            waiting=[p for p in patients if p.status == 'standing'],
+                            wait_of=lambda p: describe_minutes(minutes_between(p.timestamp, now)),
                             dashboardcard=dashboardcard)

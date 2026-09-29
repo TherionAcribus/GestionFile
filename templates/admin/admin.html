@@ -1,28 +1,51 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Tableau de bord{% endblock %}
 
 {% block content %}
+<div class="dashboard-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div>
+            <h2 class="mb-0">Tableau de bord</h2>
+            <p class="text-muted small mb-0">La situation en direct. Glissez une carte par son en-tête pour la déplacer.</p>
+        </div>
+        {% if can_customize %}
+        <button type="button" class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="collapse" data-bs-target="#card-manager-collapse"
+                aria-expanded="false" aria-controls="card-manager-collapse">
+            <i class="bi bi-layout-wtf" aria-hidden="true"></i> Personnaliser
+        </button>
+        {% endif %}
+    </div>
 
-<div id="div_select_dashboard"
-    hx-get="/admin/dashboard/display_select"
-    hx-trigger="load, refresh_dashboard_select">
-</div>
+    {% if can_customize %}
+    {# Gestionnaire chargé à la première ouverture seulement. #}
+    <div id="card-manager-collapse" class="collapse mb-3">
+        <div id="div_select_dashboard"
+             hx-get="/admin/dashboard/display_select"
+             hx-trigger="shown.bs.collapse once from:#card-manager-collapse, refresh_dashboard_select">
+            <p class="text-muted small">Chargement…</p>
+        </div>
+    </div>
+    {% endif %}
 
-
-<div id="dashboard" class="container-fluid">
-    <div id="sortable-dashboard" class="dashboard-flex">
-        {% for dashboardcard in dashboardcards %}
-            {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
-            {% with dashboardcard = dashboardcard %}
-                {% include template_name %}
-            {% endwith %}
-        {% endfor %}
+    <div id="dashboard">
+        <div id="sortable-dashboard" class="dashboard-grid">
+            {% for dashboardcard in dashboardcards %}
+                {% set template_name = 'admin/dashboard_load_' + dashboardcard.name + '.html' %}
+                {% with dashboardcard = dashboardcard %}
+                    {% include template_name %}
+                {% endwith %}
+            {% endfor %}
+        </div>
+        {% if not dashboardcards %}
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-grid-1x2 fs-2 d-block mb-2" aria-hidden="true"></i>
+            Aucune carte affichée.{% if can_customize %} Utilisez « Personnaliser » pour en ajouter.{% endif %}
+        </div>
+        {% endif %}
     </div>
 </div>
-
-
-
 {% endblock %}
 
 

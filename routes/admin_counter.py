@@ -127,6 +127,8 @@ def disconnect_counter(counter_id):
     record_audit(ACTION_UPDATE, "counter", target_id=counter_id,
                  outcome=OUTCOME_SUCCESS, details=f"déconnexion staff={name}")
     communikation("counter", event="update buttons")
+    # La carte « Comptoirs » du tableau de bord se met à jour elle aussi.
+    communikation("admin", event="refresh_counter_dashboard")
     display_toast(success=True, message=(f"Session de {name} fermée sur le comptoir {counter.name}"
                                          if name else f"Comptoir {counter.name} libéré"))
     return display_counter_table()
@@ -276,13 +278,16 @@ def update_counter_order():
 @require_permission_dashboard('counter')
 def dashboard_counter():
     # Le gabarit lit counter.staff.name par ligne : joinedload évite un N+1.
-    counters = Counter.query.options(joinedload(Counter.staff)).all()
+    counters = (Counter.query.options(joinedload(Counter.staff))
+                .order_by(Counter.sort_order, Counter.id).all())
+    current_patients = _current_patients()
 
     dashboardcard = DashboardCard.query.filter_by(name="counter").first()
 
     return render_template('/admin/dashboard_counter.html', 
                             counters=counters,
-                            dashboardcard=dashboardcard)
+                            dashboardcard=dashboardcard,
+                            current_patients=current_patients)
 
 
 

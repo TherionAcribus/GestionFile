@@ -1,43 +1,32 @@
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}">
-    <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Comptoirs</span>
-            <div>
-                <a href="/admin/queue" target="_blank" class="btn btn-link p-0">
-                    <i class="bi bi-arrow-up-right-square-fill"></i>
-                </a>
-                <a class="text-danger" 
-                    hx-post="/admin/dashboard/hide" 
-                    hx-vals='{"card_name": "{{ dashboardcard.name }}"}' 
-                    hx-target="#card-{{ dashboardcard.id }}" 
-                    hx-swap="outerHTML">
-                    <i class="bi bi-x-circle-fill"></i>
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-
-            {% for counter in counters %}
-            <div>
-                {{counter.name}} : 
-                {% if counter.staff %}
-                    {{ counter.staff.name }}
-                    {% if counter.auto_calling %}
-                        (AC)
-                    {% endif %}
-                    <a class="btn btn-danger"
-                        hx-post="/dash/counter/remove_staff"
-                        hx-target="#invisible"
-                        hx-trigger="click" 
-                        hx-vals='{"staff_id": "{{counter.staff.id}}", "counter_id": "{{counter.id}}"}'>
-                        Déconnecter
-                    </a>
-                {% else %}
-                    Personne
-                {% endif %}
-
-            </div>
-        {% endfor %}
-        </div>
-    </div>
-</div>
+{% from 'admin/_dashboard_cards.html' import card_shell %}
+{# Carte « Comptoirs » : personne connectée, appel automatique, patient en
+   cours. « Déconnecter » passe par la route protégée de la page Comptoirs
+   (permission « counter »), avec confirmation. #}
+{% call card_shell(dashboardcard) %}
+{% if not counters %}
+    <p class="text-center text-muted my-3">Aucun comptoir. <a href="/admin/counter">En créer un</a>.</p>
+{% else %}
+<ul class="list-unstyled mb-0">
+    {% for counter in counters %}
+    {% set patient = (current_patients or {}).get(counter.id) %}
+    <li class="d-flex flex-wrap align-items-center gap-2 py-1 border-bottom">
+        <strong class="me-1">{{ counter.name }}</strong>
+        {% if counter.staff %}
+            <span class="badge text-bg-success"><i class="bi bi-person-fill" aria-hidden="true"></i> {{ counter.staff.name }}</span>
+            {% if counter.auto_calling %}<span class="badge text-bg-info" title="Reçoit le prochain patient dès qu'il est libre">appel auto</span>{% endif %}
+            {% if patient %}<span class="badge text-bg-warning">{{ 'appelle' if patient.status == 'calling' else 'avec' }} {{ patient.call_number }}</span>{% endif %}
+            <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto"
+                    hx-post="/admin/counter/disconnect/{{ counter.id }}"
+                    hx-target="#invisible"
+                    hx-confirm="Fermer la session de {{ counter.staff.name }} sur le comptoir {{ counter.name }} ?"
+                    title="Fermer la session (oubli de déconnexion)">
+                <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Déconnecter
+            </button>
+        {% else %}
+            <span class="text-muted small">libre</span>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+{% endcall %}

@@ -20,8 +20,11 @@ function initializeSortable() {
         dragClass: 'sortable-drag',
         onEnd: function (evt) {
             var order = [];
-            document.querySelectorAll('#sortable-dashboard .dashboard-card').forEach(function (item, index) {
-                var cardId = parseInt(item.id.replace('card-', ''));
+            // Enveloppes (.dashboard-card-slot) : présentes même quand la
+            // carte n'est pas encore chargée (squelette) ou a répondu vide
+            // (carte « Alertes » sans alerte).
+            document.querySelectorAll('#sortable-dashboard .dashboard-card-slot').forEach(function (item, index) {
+                var cardId = parseInt(item.getAttribute('data-card-id'), 10);
                 order.push({
                     id: cardId,
                     position: index + 1
