@@ -49,15 +49,19 @@ Toutes les données persistent dans des volumes Docker (`mysql_data`,
 ### Étape 1 — Créer la ressource
 
 1. Dans Coolify, ouvrez votre **Project** puis l'**Environment** (`production`).
-2. Cliquez **+ New** → **Application**.
+2. Cliquez **+ Add Resource**.
 3. Choisissez la source Git :
-   - dépôt **public** : collez l'URL HTTPS du dépôt, **Check Repository** ;
-   - dépôt **privé** : sélectionnez votre Git App / deploy key existante.
-4. Dans **Configuration > General** :
-   - **Build Pack** : `Docker Compose` ;
+   - dépôt **public** : **Public Repository**, collez l'URL HTTPS du dépôt ;
+   - dépôt **privé** : votre Git App / deploy key existante.
+   Puis sélectionnez le serveur de destination.
+4. Dans **General**, cliquez sur le **Build Pack** `Docker Compose` (le
+   formulaire change : les champs Nixpacks disparaissent), puis réglez :
    - **Base Directory** : `/` (ou le sous-dossier contenant le compose si le
      dépôt est un monorepo) ;
-   - **Docker Compose Location** : `docker-compose.coolify.yaml`.
+   - **Docker Compose Location** : `docker-compose.coolify.yaml`
+     (chemin relatif, sans `/` initial) ;
+   - **Configuration > Git Source** → **Branch** : `master`
+     (Coolify propose `main` par défaut).
 5. **Save**, puis vérifiez **Docker Compose Content** : les 5 services
    (`init`, `web`, `scheduler`, `mysql`, `rabbitmq`) doivent y figurer.
 
