@@ -356,6 +356,14 @@ def create_app(config_class=Config):
 load_dotenv()
 app = create_app(config_class=Config)
 
+# Derrière un reverse proxy (Coolify/Traefik), les en-têtes X-Forwarded-* sont
+# émis par un proxy de confiance : TRUST_PROXY=1 restaure le schéma (is_secure,
+# url_for) et l'IP client réelle (remote_addr : rate-limiting, audit login).
+# À laisser désactivé sans proxy : sinon un client pourrait forger X-Forwarded-For.
+if os.getenv("TRUST_PROXY", "").strip().lower() in {"1", "true", "yes", "on"}:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
 # Etat des connexions temps reel : vit desormais dans sockets.py. Reexpose sur
 # l'objet app car les pages d'administration le consultent via current_app.
 app.active_connections = sockets.active_connections

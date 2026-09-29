@@ -56,6 +56,8 @@ x-app-env: &app-env
   BASE32_KEY: ${SERVICE_REALBASE64_32_GFB32}
   # HTTPS par défaut derrière le proxy Coolify ; mettre 0 en test HTTP local.
   COOKIE_SECURE: ${COOKIE_SECURE:-1}
+  # En-têtes X-Forwarded-* émis par le proxy Coolify (schéma réel, IP client).
+  TRUST_PROXY: ${TRUST_PROXY:-1}
 
 # Volumes partagés web/scheduler/init (médias persistants + dossier instance).
 x-app-volumes: &app-volumes
