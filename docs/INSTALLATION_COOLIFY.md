@@ -135,6 +135,34 @@ fichier compose. Pour le dépôt serveur seul, `/` convient.
 3. Ne configurez **aucun domaine** sur les autres services (`mysql`,
    `rabbitmq`, `scheduler`, `init` restent invisibles de l'extérieur).
 
+### Tester sans nom de domaine : l'URL temporaire Coolify (sslip.io)
+
+Coolify peut générer un domaine gratuit qui pointe automatiquement vers
+l'IP de votre serveur — pratique pour tester avant d'acheter ou de configurer
+un vrai domaine :
+
+1. Dans le champ **Domains** du service `web`, cliquez sur le bouton
+   **Generate Domain** (icône à côté du champ) → Coolify produit une URL du
+   type `http://xxxx.<ip-serveur>.sslip.io` ;
+2. **Remplacez `http://` par `https://`** dans le champ (les ports 80 et 443
+   du serveur doivent être ouverts : le 80 sert à valider le certificat),
+   puis **Save** ;
+3. Attendez ~30 s le temps que Let's Encrypt émette le certificat, puis ouvrez
+   `https://xxxx.<ip>.sslip.io/healthz`.
+
+:::warning HTTPS obligatoire
+La connexion échoue en HTTP : le cookie de session est marqué `Secure`
+(`COOKIE_SECURE=1` par défaut) et le navigateur le refuse hors HTTPS —
+l'erreur typique est `CSRF validation failed` au login. Ne passez
+`COOKIE_SECURE=0` que pour un test local, jamais en production exposée.
+:::
+
+:::tip Après le test
+Quand vous passez au vrai domaine, remplacez simplement l'URL sslip.io par
+`https://votre-domaine.fr:5000` dans le même champ. Pensez aussi à mettre la
+variable `SITE` à jour si elle était renseignée.
+:::
+
 ---
 
 ## 5. Étape 3 — Variables d'environnement
@@ -350,6 +378,7 @@ suppression de volume.
 | `init` échoue sur les migrations | MySQL pas prêt, ou `MYSQL_PASSWORD` modifié **après** le premier déploiement | Ne jamais changer `MYSQL_PASSWORD` sur une base existante ; lire les logs `init` |
 | `web` en échec / unhealthy | Dépendance injoignable ou `APP_SECRET` absent | Consulter `https://domaine/readyz` puis les logs `web` |
 | Login impossible, cookies refusés | Accès en HTTP alors que `COOKIE_SECURE=1` | Utilisez HTTPS ; `COOKIE_SECURE=0` seulement pour un test local |
+| `CSRF validation failed` au login | Domaine sslip.io généré en `http://` : le cookie `Secure` n'est pas stocké | Préfixer le domaine par `https://` dans **Domains** (ports 80/443 ouverts), attendre le certificat, recharger |
 | « Database schema is not initialized » | `web` a démarré sans `init` terminé | Vérifier les logs `init`, Redeploy |
 | Clients refusés (401) | `APP_SECRET` différent côté client | Copier la valeur exacte depuis Environment Variables |
 | Écrans/comptoirs ne se rafraîchissent plus | Relais RabbitMQ inactif | Activer l'option RabbitMQ dans l'admin + Restart |
