@@ -8,14 +8,19 @@
 # Variables à saisir dans Coolify (Environment Variables de la ressource) :
 #   - ADMIN_INITIAL_PASSWORD : OBLIGATOIRE (mot de passe du 1er admin ; le
 #     déploiement est bloqué tant qu'elle est vide).
-#   - DOMAIN : pas une variable ici — le domaine se configure dans le champ
+#   - Domaine : pas une variable ici — il se configure dans le champ
 #     « Domains » du service web, sous la forme https://mon-domaine.fr:5000
 #     (le suffixe indique le port interne du conteneur au proxy Coolify).
 #
 # Les secrets techniques sont auto-générés par Coolify grâce aux variables
-# SERVICE_* ci-dessous (mot de passe MySQL/RabbitMQ, SECRET_KEY, sel, clé
-# Fernet...). Chacun reste surchargeable : saisir la variable correspondante
-# (MYSQL_PASSWORD, SECRET_KEY...) dans l'UI pour imposer sa propre valeur.
+# SERVICE_* utilisées DIRECTEMENT comme valeur ci-dessous (mot de passe
+# MySQL/RabbitMQ, SECRET_KEY, sel, clé Fernet...). Chacune reste modifiable
+# dans l'UI Coolify pour imposer sa propre valeur.
+#
+# ATTENTION : ne jamais écrire de référence imbriquée du type
+# ${VAR:-${SERVICE_...}} — Coolify recopie la valeur brute dans l'env-file de
+# build et `docker compose` la rejette (« Invalid template »). Une variable
+# générée se référence seule : ${SERVICE_PASSWORD_GFMYSQL}.
 # =============================================================================
 
 # Variables communes aux trois processus applicatifs.
@@ -29,21 +34,26 @@ x-app-env: &app-env
   MYSQL_HOST: ${MYSQL_HOST:-mysql}
   MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
   MYSQL_USER: ${MYSQL_USER:-gestionfile}
-  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-${SERVICE_PASSWORD_GFMYSQL:-change-me}}
+  MYSQL_PASSWORD: ${SERVICE_PASSWORD_GFMYSQL}
   # Base dédiée au jobstore APScheduler (vide = même base que l'app)
   MYSQL_SCHEDULER_DATABASE: ${MYSQL_SCHEDULER_DATABASE:-}
   # URLs complètes (prioritaires sur les MYSQL_* si renseignées — mode externe)
   DATABASE_URL: ${DATABASE_URL:-}
   DATABASE_URL_SCHEDULER: ${DATABASE_URL_SCHEDULER:-}
   # --- RabbitMQ (relais Socket.IO web <-> scheduler) ---
-  RABBITMQ_URL: ${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-gestionfile}:${RABBITMQ_PASSWORD:-${SERVICE_PASSWORD_GFRABBIT:-change-me}}@rabbitmq:5672/%2F}
-  # --- Secrets applicatifs (auto-générés par Coolify si non saisis) ---
-  SECRET_KEY: ${SECRET_KEY:-${SERVICE_BASE64_64_GFSECRET:-}}
-  SECURITY_PASSWORD_SALT: ${SECURITY_PASSWORD_SALT:-${SERVICE_BASE64_64_GFSALT:-}}
-  APP_SECRET: ${APP_SECRET:-${SERVICE_BASE64_64_GFAPPSECRET:-}}
+  # RABBITMQ_URL reste prioritaire si renseignée (broker externe). Sinon
+  # l'application construit l'URL depuis HOST/USER/PASSWORD (config.py).
+  RABBITMQ_URL: ${RABBITMQ_URL:-}
+  RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+  RABBITMQ_USER: ${SERVICE_USER_GFRABBIT}
+  RABBITMQ_PASSWORD: ${SERVICE_PASSWORD_GFRABBIT}
+  # --- Secrets applicatifs (auto-générés par Coolify) ---
+  SECRET_KEY: ${SERVICE_BASE64_64_GFSECRET}
+  SECURITY_PASSWORD_SALT: ${SERVICE_BASE64_64_GFSALT}
+  APP_SECRET: ${SERVICE_BASE64_64_GFAPPSECRET}
   # Clé Fernet (32 octets en base64) pour chiffrer les clés de service.
   # SERVICE_REALBASE64_32 = base64 de 32 octets aléatoires : format Fernet.
-  BASE32_KEY: ${BASE32_KEY:-${SERVICE_REALBASE64_32_GFB32:-}}
+  BASE32_KEY: ${SERVICE_REALBASE64_32_GFB32}
   # HTTPS par défaut derrière le proxy Coolify ; mettre 0 en test HTTP local.
   COOKIE_SECURE: ${COOKIE_SECURE:-1}
 
@@ -63,12 +73,12 @@ services:
     restart: unless-stopped
     command: --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-${SERVICE_PASSWORD_GFROOT:-change-me}}
+      MYSQL_ROOT_PASSWORD: ${SERVICE_PASSWORD_GFROOT}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}
       # Utilisateur applicatif (non-root) créé automatiquement par l'image MySQL
       # avec tous les droits sur MYSQL_DATABASE uniquement.
       MYSQL_USER: ${MYSQL_USER:-gestionfile}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-${SERVICE_PASSWORD_GFMYSQL:-change-me}}
+      MYSQL_PASSWORD: ${SERVICE_PASSWORD_GFMYSQL}
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -82,8 +92,8 @@ services:
     image: rabbitmq:3-management
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-gestionfile}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-${SERVICE_PASSWORD_GFRABBIT:-change-me}}
+      RABBITMQ_DEFAULT_USER: ${SERVICE_USER_GFRABBIT}
+      RABBITMQ_DEFAULT_PASS: ${SERVICE_PASSWORD_GFRABBIT}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:

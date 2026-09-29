@@ -71,6 +71,18 @@ def _validate_sqlalchemy_url(value: str | None, env_name: str) -> str | None:
             f"Note: 'mysql://...' defaults to MySQLdb; use 'mysql+pymysql://...'."
         ) from e
 
+def _build_rabbitmq_url() -> str | None:
+    """Construit l'URL AMQP depuis les variables séparées quand RABBITMQ_URL
+    n'est pas défini (stack Coolify tout-en-un : user/password auto-générés,
+    hôte fixe). Renvoie None si les identifiants ne sont pas fournis."""
+    user = os.getenv("RABBITMQ_USER")
+    password = os.getenv("RABBITMQ_PASSWORD")
+    if not user or not password:
+        return None
+    host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+    return f"amqp://{user}:{password}@{host}:5672/%2F"
+
+
 class Config:
     SECRET_KEY = _load_or_create_secret("SECRET_KEY", "flask_secret_key.txt")
     SECURITY_PASSWORD_SALT = _load_or_create_secret("SECURITY_PASSWORD_SALT", "security_password_salt.txt")
@@ -152,7 +164,7 @@ class Config:
             HOST = os.getenv('MYSQL_HOST')
             DB_NAME = os.getenv('MYSQL_DATABASE')
             BASE32_KEY = os.getenv('BASE32_KEY')
-            RABBITMQ_URL = os.getenv("RABBITMQ_URL")
+            RABBITMQ_URL = os.getenv("RABBITMQ_URL") or _build_rabbitmq_url()
 
         # MySQL Configuration
         SQLALCHEMY_DATABASE_URI = database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{DB_NAME}'
@@ -198,6 +210,7 @@ class Config:
     elif database == "sqlite":
         SQLALCHEMY_DATABASE_URI = database_url or 'sqlite:///queuedatabase.db'
         SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or SQLALCHEMY_DATABASE_URI
+        RABBITMQ_URL = os.getenv("RABBITMQ_URL") or _build_rabbitmq_url()
         SQLALCHEMY_BINDS = {
             'users': 'sqlite:///userdatabase.db'
         }
