@@ -832,9 +832,13 @@ Enregistrer
                 </button>
 
                 {# Bouton de validation #}
+                {# Toujours actif (il applique la valeur à plusieurs éléments) :
+                   data-unsaved-ignore l'exclut du garde-fou « modifications non
+                   enregistrées », qui avertissait à chaque départ de page. #}
                 <button type="button"
                         id="{{ source }}_{{ variable }}_button"
                         class="btn btn-primary"
+                        data-unsaved-ignore
                         hx-swap="none"
                         hx-vals='{"source": "{{ source }}", "variable": "{{ variable }}"}'
                         data-param-value="#{{ source }}_{{ variable }}"

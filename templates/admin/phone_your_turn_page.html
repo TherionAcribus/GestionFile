@@ -10,7 +10,7 @@
 
     {{ macros.parent_number_input_bloc(source="phone", variable="phone_your_turn_lines_font_size", value=phone_your_turn_lines_font_size, label="Taille du texte des lignes", unit="px") }}
 
-    {{ macros.parent_number_input_bloc(source="phone", variable="phone_your_turn_lines_font_weight", value=phone_your_turn_lines_font_weight, label="Epaisseur du texte des lignes", unit="px") }}
+    {{ macros.parent_number_input_bloc(source="phone", variable="phone_your_turn_lines_font_weight", value=phone_your_turn_lines_font_weight, label="Épaisseur (graisse) du texte des lignes, ex. 400 ou 700", unit="") }}
 
     <div class="accordion" id="accordionPanelsStayOpen">
 
@@ -24,7 +24,7 @@
         <div class="accordion-item">
             <h2 class="accordion-header">
                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#panelsStayOpen-YourTurnLine{{ i }}" aria-expanded="false" aria-controls="panelsStayOpen-YourTurnLine{{ i }}">
-                    <h4>Ligne {{ i }}</h4>
+                    <span class="fw-semibold">Ligne {{ i }}</span>
                 </button>
             </h2>
             <div id="panelsStayOpen-YourTurnLine{{ i }}" class="accordion-collapse collapse">

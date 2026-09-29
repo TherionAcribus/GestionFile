@@ -28,7 +28,10 @@
     // la valeur diffère de data-initial-value. On scanne les boutons portant
     // l'id *_button et on vérifie s'ils ne sont pas disabled.
     function refreshUnsavedState() {
-        var buttons = document.querySelectorAll('button[id$="_button"]');
+        // [data-unsaved-ignore] : boutons « Enregistrer » toujours actifs par
+        // conception (ex. appliquer une taille à toutes les lignes) — ils ne
+        // signalent pas une modification en attente.
+        var buttons = document.querySelectorAll('button[id$="_button"]:not([data-unsaved-ignore])');
         var dirty = false;
         for (var i = 0; i < buttons.length; i++) {
             // Un bouton d'enregistrement actif (non disabled) signifie qu'une

@@ -125,10 +125,10 @@ class Config:
     REMEMBER_COOKIE_SECURE = _COOKIE_SECURE
     REMEMBER_COOKIE_HTTPONLY = True
     REMEMBER_COOKIE_SAMESITE = "Lax"
-    # Éditeur visuel : écran d'annonce et borne patient par défaut (la page
-    # d'administration de chacune le met en avant). « phone » reste à activer.
+    # Éditeur visuel : les trois pages par défaut (leur page d'administration
+    # le met en avant). Restreindre via la variable d'environnement.
     PAGE_EDITOR_ENABLED_PAGES = os.getenv(
-        "PAGE_EDITOR_ENABLED_PAGES", "announce,patient"
+        "PAGE_EDITOR_ENABLED_PAGES", "announce,patient,phone"
     )
 
     # Définir les valeurs par défaut ici

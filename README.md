@@ -55,14 +55,14 @@ L’éditeur quasi-WYSIWYG est disponible dans l’administration après migrati
 flask db upgrade
 ```
 
-La variable suivante contrôle les adaptateurs exposés. `announce` et `patient`
-sont activés par défaut (leur page d'administration met l'éditeur en avant) ;
-`phone` est disponible pour un déploiement progressif après validation des
-aperçus sur les téléphones réels. Retirer `patient` rétablit l'ancien comportement :
+La variable suivante contrôle les adaptateurs exposés. Les trois pages
+(`announce`, `patient`, `phone`) sont activées par défaut : leur page
+d'administration met l'éditeur en avant. Retirer une page de la liste rétablit
+pour elle le seul mode avancé :
 
 ```dotenv
-PAGE_EDITOR_ENABLED_PAGES=announce,patient
-# PAGE_EDITOR_ENABLED_PAGES=announce,patient,phone
+PAGE_EDITOR_ENABLED_PAGES=announce,patient,phone
+# PAGE_EDITOR_ENABLED_PAGES=announce   (écran d'annonce seulement)
 ```
 
 La publication ne recharge jamais automatiquement les écrans en service :

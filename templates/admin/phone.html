@@ -3,12 +3,16 @@
 {% block title %}Téléphone patient{% endblock %}
 
 {% block content %}
+{% set editor_enabled = page_editor_enabled('phone') %}
 <div class="advanced-editor-page">
     <div class="advanced-editor-header">
         <div>
             <h2 class="mb-1">Téléphone patient</h2>
-            <p class="text-muted mb-2">Réglages détaillés des messages et de l’apparence affichés après le scan du QR Code.</p>
-            {% if page_editor_enabled('phone') %}
+            <p class="text-muted mb-2">
+                La page qui s'ouvre sur le téléphone du patient après le scan du QR code : sa place dans la file,
+                puis l'alerte quand c'est son tour.
+            </p>
+            {% if editor_enabled %}
             <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
                 <a class="btn btn-outline-primary" href="/admin/page-editor/phone">Éditeur visuel</a>
                 <a class="btn btn-primary active" aria-current="page" href="/admin/phone">Mode avancé</a>
@@ -19,29 +23,66 @@
 
     <div class="row advanced-editor-workspace">
         <div class="col-12">
-            <!-- Nav tabs -->
-            <ul class="nav nav-tabs" id="phoneTab" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="phoneMaine-tab" data-bs-toggle="tab" data-bs-target="#tab_phoneMaine" type="button" role="tab" aria-controls="tab_phoneMaine" aria-selected="true">Page de principale</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="phoneYourTurn-tab" data-bs-toggle="tab" data-bs-target="#phoneYourTurn" type="button" role="tab" aria-controls="phoneYourTurn" aria-selected="false">Page pour appeler le patient</button>
-                </li>
-            </ul>
+            {% if editor_enabled %}
+            {# L'éditeur visuel est la voie recommandée ; il couvre tous les
+               réglages de la page. Le mode avancé reste disponible, replié. #}
+            <section class="card border-primary announce-editor-hero my-3" aria-labelledby="editor_hero_title">
+                <div class="card-body d-flex flex-wrap gap-4 align-items-center">
+                    <div class="announce-editor-hero-icon" aria-hidden="true"><i class="bi bi-phone"></i></div>
+                    <div class="flex-grow-1">
+                        <h3 id="editor_hero_title" class="h5 mb-1">
+                            Éditeur visuel <span class="badge text-bg-primary align-middle">Recommandé</span>
+                        </h3>
+                        <p class="text-muted mb-2">Modifiez la page téléphone en voyant le résultat, avant de le publier.</p>
+                        <ul class="small mb-0 announce-editor-benefits">
+                            <li><i class="bi bi-eye" aria-hidden="true"></i> Aperçu au format téléphone, pour chaque étape : attente, confirmation, appel du patient.</li>
+                            <li><i class="bi bi-palette2" aria-hidden="true"></i> Thèmes prêts à l'emploi et palette de couleurs appliquée en un clic.</li>
+                            <li><i class="bi bi-list-ol" aria-hidden="true"></i> Les 6 lignes de texte et le titre : contenu, taille, graisse, couleurs.</li>
+                            <li><i class="bi bi-shield-check" aria-hidden="true"></i> Brouillon, comparaison et historique : rien ne change avant « Publier ».</li>
+                        </ul>
+                    </div>
+                    <a class="btn btn-primary btn-lg" href="/admin/page-editor/phone">
+                        <i class="bi bi-pencil-square" aria-hidden="true"></i> Ouvrir l'éditeur visuel
+                    </a>
+                </div>
+            </section>
+            {% endif %}
 
-            <!-- Tab content -->
-            <div class="tab-content" id="phoneTabContent">
-                <div class="tab-pane fade show active" id="tab_phoneMaine" role="tabpanel" aria-labelledby="phoneMaine-tab">
-                    {% include 'admin/phone_confirmation_page.html' %}
+            <details class="announce-advanced" {% if not editor_enabled %}open{% endif %}>
+                <summary class="fw-semibold">
+                    <i class="bi bi-sliders" aria-hidden="true"></i> Mode avancé : réglages détaillés
+                    {% if editor_enabled %}<span class="text-muted fw-normal small">— les mêmes réglages, sans aperçu</span>{% endif %}
+                </summary>
+                <p class="small text-muted mt-2">
+                    Chaque modification est enregistrée et appliquée immédiatement.
+                    {% if editor_enabled %}L'éditeur visuel reprend ces valeurs à sa prochaine ouverture.{% endif %}
+                </p>
+
+                <ul class="nav nav-tabs mt-3" id="phoneTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="phoneMaine-tab" data-bs-toggle="tab" data-bs-target="#tab_phoneMaine" type="button" role="tab" aria-controls="tab_phoneMaine" aria-selected="true">
+                            <i class="bi bi-hourglass-split" aria-hidden="true"></i> Pendant l'attente
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="phoneYourTurn-tab" data-bs-toggle="tab" data-bs-target="#phoneYourTurn" type="button" role="tab" aria-controls="phoneYourTurn" aria-selected="false">
+                            <i class="bi bi-bell" aria-hidden="true"></i> Quand c'est son tour
+                        </button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3" id="phoneTabContent">
+                    <div class="tab-pane fade show active" id="tab_phoneMaine" role="tabpanel" aria-labelledby="phoneMaine-tab">
+                        {% include 'admin/phone_confirmation_page.html' %}
+                    </div>
+                    <div class="tab-pane fade" id="phoneYourTurn" role="tabpanel" aria-labelledby="phoneYourTurn-tab">
+                        {% include 'admin/phone_your_turn_page.html' %}
+                    </div>
                 </div>
-                <div class="tab-pane fade" id="phoneYourTurn" role="tabpanel" aria-labelledby="phoneYourTurn-tab">
-                    {% include 'admin/phone_your_turn_page.html' %}
-                </div>
-            </div>
+
+                {{ macros.backup_buttons_page("css_phone", "config_phone", "Page Téléphone") }}
+            </details>
         </div>
     </div>
-
-    {{ macros.backup_buttons_page("css_phone", "config_phone", "Page Téléphone") }}
 </div>
 {% endblock %}
 

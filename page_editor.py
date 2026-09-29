@@ -321,6 +321,7 @@ ADAPTERS["phone"]["components"]["specific"] = _component(
     managed_bool="phone_display_specific_message",
     config=[{"key": "phone_display_specific_message", "label": "Afficher le message spécifique", "type": "bool"}],
     css=[{"key": "phone_specific_message_font_size", "label": "Taille", "type": "size"},
+         {"key": "phone_specific_message_font_weight", "label": "Graisse", "type": "number"},
          {"key": "phone_specific_message_font_color", "label": "Couleur", "type": "color"},
          {"key": "phone_specific_message_background_color", "label": "Fond", "type": "color"},
          {"key": "phone_specific_message_background_height", "label": "Hauteur", "type": "size"},
@@ -760,6 +761,9 @@ def builtin_themes(page):
             css["phone_your_turn_line1_font_weight"] = "700"
             block("phone_specific_message", text, soft, "34px" if large else "30px")
             css["phone_specific_message_background_height"] = "60px" if large else "50px"
+            # Texte courant : graisse normale (la règle générique des nombres
+            # donnerait 600).
+            css["phone_specific_message_font_weight"] = "400"
 
         css.update(overrides.get(page, {}))
 
@@ -779,7 +783,7 @@ def builtin_themes(page):
 
 
 def enabled_pages():
-    raw = current_app.config.get("PAGE_EDITOR_ENABLED_PAGES", "announce,patient")
+    raw = current_app.config.get("PAGE_EDITOR_ENABLED_PAGES", "announce,patient,phone")
     if isinstance(raw, str):
         pages = {item.strip() for item in raw.split(",") if item.strip()}
     else:
