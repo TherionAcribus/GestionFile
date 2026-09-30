@@ -2,12 +2,12 @@
     <div class="card-body">
         <h5 class="card-title">Nouveau rôle</h5>
         <div class="mb-3">
-            <label for="name" class="form-label">Nom</label>
-            <input type="text" class="form-control" id="name" name="name" required>
+            <label for="new_role_name" class="form-label">Nom</label>
+            <input type="text" class="form-control" id="new_role_name" name="name" required>
         </div>
         <div class="mb-3">
-            <label for="description" class="form-label">Description</label>
-            <input type="text" class="form-control" id="description" name="description">
+            <label for="new_role_description" class="form-label">Description</label>
+            <input type="text" class="form-control" id="new_role_description" name="description">
         </div>
 
         <div class="mb-3">
@@ -41,8 +41,8 @@
             hx-post="/admin/security/save_role"
             hx-target="#div_role_table"
             hx-swap="innerHTML"
-            data-param-name="#name"
-            data-param-description="#description"
+            data-param-name="#new_role_name"
+            data-param-description="#new_role_description"
             data-params-fn="rolePermissions">
             Créer le rôle
         </button>

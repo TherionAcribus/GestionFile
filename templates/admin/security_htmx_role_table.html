@@ -1,7 +1,7 @@
 {% import '/admin/pagination.html' as pg %}
 
         {% for role in roles %}
-        <div id="role-{{ role.id }}">
+        <div id="role-item-{{ role.id }}">
             <div class="mb-3">
                 <label for="name-{{ role.id }}" class="form-label">Nom</label>
                 <input type="text" class="form-control" value="{{ role.name }}" id="name-{{ role.id }}">
@@ -44,14 +44,13 @@
             <div>
                 <button class="btn btn-primary"
                     {% if role.name == "admin" %} disabled {% endif %}
-                    hx-target="#invisible"
                     hx-post="/admin/security/role_update/{{ role.id }}"
                     hx-trigger="click"
-                    hx-swap="outerHTML"
+                    hx-swap="none"
                     data-param-name="#name-{{ role.id }}"
                     data-param-description="#description-{{ role.id }}"
                     data-params-fn="rolePermissions"
-                    data-params-scope="#role-{{ role.id }}">
+                    data-params-scope="#role-item-{{ role.id }}">
                     Enregistrer
                 </button>
 

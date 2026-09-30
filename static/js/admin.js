@@ -451,7 +451,13 @@ function setupHttpFeedback() {
         if (feedbackSkipped(evt)) return;
         const xhr = evt.detail && evt.detail.xhr;
         const serverMsg = (xhr && xhr.responseText ? xhr.responseText.trim() : '');
-        const msg = serverMsg || ("L'enregistrement a échoué (erreur " + (xhr ? xhr.status : '?') + ").");
+        let msg = serverMsg;
+        try {
+            const payload = JSON.parse(serverMsg);
+            if (payload && typeof payload.error === 'string') msg = payload.error;
+            else if (payload && typeof payload.message === 'string') msg = payload.message;
+        } catch (e) { /* réponse non JSON : garder le texte brut */ }
+        msg = msg || ("L'enregistrement a échoué (erreur " + (xhr ? xhr.status : '?') + ").");
         AdminFeedback.error(msg, { retry: retryFromEvent(evt) });
     });
 

@@ -7,7 +7,7 @@ from flask_login import current_user, logout_user
 from functools import wraps
 from sqlalchemy.orm import selectinload
 from models import db, Role, User, DashboardCard
-from permissions_registry import PERMISSIONS, permissions_by_category
+from permissions_registry import PERMISSIONS, PERMISSION_FIELDS, permissions_by_category
 from flask_mailman import EmailMessage
 from flask_security import login_user
 from wtforms import StringField, PasswordField, HiddenField, BooleanField
@@ -316,12 +316,17 @@ def add_new_user():
         
         # Récupération des données du formulaire
         data = request.get_json() if request.is_json else request.form
-        username = data.get('username')
-        email = data.get('email')
+        username = (data.get('username') or '').strip()
+        email = (data.get('email') or '').strip() or None
         password1 = data.get('password1')
         password2 = data.get('password2')
         role_id = data.get('role_id')
-        
+
+        if not username:
+            app.logger.error("Le nom d'utilisateur est requis")
+            display_toast(success=False, message="Le nom d'utilisateur est requis")
+            return display_security_table()
+
         app.logger.info(f"Données reçues - username: {username}, email: {email}, role_id: {role_id}")
 
         # Vérification des mots de passe
@@ -343,7 +348,17 @@ def add_new_user():
             display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
             return display_security_table()
 
+        # Vérification de l'unicité de l'email (colonne unique : '' y deviendrait
+        # un doublon — on stocke NULL, cf. normalisation plus haut)
+        if email is not None and User.query.filter_by(email=email).first():
+            app.logger.error(f"L'email {email} est déjà utilisé")
+            display_toast(success=False, message="Cet email est déjà utilisé")
+            return display_security_table()
+
         # Récupération du rôle
+        if not role_id:
+            display_toast(success=False, message="Sélectionnez un rôle")
+            return display_security_table()
         role = db.session.get(Role, role_id)
         if not role:
             app.logger.error(f"Le rôle {role_id} n'existe pas")
@@ -389,9 +404,16 @@ def security_update_user(user_id):
 
         # Récupérer les données du formulaire
         data = request.get_json() if request.is_json else request.form
-        username = data.get('username')
-        email = data.get('email')
+        username = (data.get('username') or '').strip()
+        email = (data.get('email') or '').strip() or None
         role_id = data.get('role_id')
+
+        if not username:
+            display_toast(success=False, message="Le nom d'utilisateur est requis")
+            return display_security_table()
+        if not role_id:
+            display_toast(success=False, message="Rôle invalide")
+            return display_security_table()
 
         # Vérifier si le nom d'utilisateur existe déjà
         existing_user = User.query.filter_by(username=username).first()
@@ -780,59 +802,44 @@ def reset_admin():
 @require_permission_api('security')
 def security_update_role(role_id):
     try:
-        app.logger.info(f"=== Début de la mise à jour du rôle {role_id} ===")
-        app.logger.info(f"Request data: {request.data}")
-        app.logger.info(f"Request form: {request.form}")
-        app.logger.info(f"Request content type: {request.content_type}")
-        
-        # Récupérer les données du formulaire
-        if request.is_json:
-            data = request.get_json()
-        else:
-            data = request.form.to_dict()
-            
-        app.logger.info(f"Data after parsing: {data}")
-        
-        name = data.get('name')
-        description = data.get('description')
-        permissions_str = data.get('permissions', '{}')
-        
-        app.logger.info(f"Permissions string: {permissions_str}")
-        
-        try:
-            permissions = json.loads(permissions_str)
-        except json.JSONDecodeError as e:
-            app.logger.error(f"Erreur de décodage JSON: {str(e)}")
-            app.logger.error(f"Contenu qui a causé l'erreur: {permissions_str}")
-            return jsonify({'error': 'Invalid JSON format for permissions'}), 400
+        app.logger.info(f"Mise à jour du rôle {role_id}")
 
-        app.logger.info(f"Permissions parsed: {permissions}")
+        data = request.get_json() if request.is_json else request.form.to_dict()
 
-        # Récupérer le rôle
         role = db.session.get(Role, role_id)
         if not role:
             app.logger.error(f"Rôle {role_id} non trouvé")
             return jsonify({'error': 'Role not found'}), 404
 
-        # Mise à jour des données de base
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Le nom est requis'}), 400
+        if Role.query.filter(Role.name == name, Role.id != role_id).first():
+            return jsonify({'error': 'Ce nom existe déjà'}), 400
+
+        permissions_str = data.get('permissions', '{}')
+        try:
+            permissions = json.loads(permissions_str)
+        except json.JSONDecodeError:
+            app.logger.error(f"JSON de permissions invalide: {permissions_str}")
+            return jsonify({'error': 'Invalid JSON format for permissions'}), 400
+
+        # Liste blanche stricte : seules les colonnes admin_* du registre sont
+        # modifiables, et uniquement avec des booléens (hasattr laissait passer
+        # n'importe quel attribut du modèle, et bool("false") valait True).
+        if not isinstance(permissions, dict):
+            return jsonify({'error': 'Format de permissions invalide'}), 400
+        for key, value in permissions.items():
+            if key not in PERMISSION_FIELDS or not isinstance(value, bool):
+                return jsonify({'error': 'Format de permissions invalide'}), 400
+
         role.name = name
-        role.description = description
-
-        # Mise à jour des permissions
-        app.logger.info(f"Permissions avant mise à jour: {role.get_permissions()}")
-        for permission_name, value in permissions.items():
-            if hasattr(role, permission_name):
-                app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
-                new_value = bool(value)
-                app.logger.info(f"Setting {permission_name} to {new_value} (type: {type(value)})")
-                setattr(role, permission_name, new_value)
-
-        app.logger.info(f"Permissions après mise à jour: {role.get_permissions()}")
+        role.description = data.get('description')
+        for key, value in permissions.items():
+            setattr(role, key, value)
 
         try:
             db.session.commit()
-            app.logger.info("Rôle mis à jour avec succès")
-            app.logger.info(f"Permissions finales du rôle: {role.to_dict()['permissions']}")
             record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_SUCCESS,
                          details=f"name={name}")
             display_toast(success=True, message="Rôle mis à jour avec succès")
@@ -840,7 +847,6 @@ def security_update_role(role_id):
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Erreur lors du commit: {str(e)}")
-            app.logger.error(f"Type d'erreur: {type(e)}")
             record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
             display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
             return jsonify({'error': "La mise à jour a échoué."}), 500
@@ -848,7 +854,6 @@ def security_update_role(role_id):
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Erreur générale: {str(e)}")
-        app.logger.error(f"Type d'erreur: {type(e)}")
         record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="Erreur lors de la mise à jour du rôle")
         return jsonify({'error': "La mise à jour a échoué."}), 500
@@ -858,13 +863,18 @@ def security_update_role(role_id):
 def save_role():
     try:
         data = request.get_json() if request.is_json else request.form
-        name = data.get('name')
+        name = (data.get('name') or '').strip()
         description = data.get('description')
-        
+
         if not name:
             app.logger.error("Le nom est requis")
             display_toast(success=False, message="Le nom est requis")
-            return ""
+            return "", 204
+
+        if Role.query.filter_by(name=name).first():
+            app.logger.error(f"Le nom de rôle {name} existe déjà")
+            display_toast(success=False, message="Ce nom existe déjà")
+            return "", 204
 
         permissions_str = data.get('permissions', '{}')
         try:
@@ -872,10 +882,21 @@ def save_role():
         except json.JSONDecodeError:
             app.logger.error("Format de permissions invalide")
             display_toast(success=False, message="Format de permissions invalide")
-            return ""
+            return "", 204
+
+        # Même liste blanche que role_update : colonnes admin_* du registre,
+        # valeurs strictement booléennes.
+        if not isinstance(permissions, dict):
+            app.logger.error("Format de permissions invalide")
+            display_toast(success=False, message="Format de permissions invalide")
+            return "", 204
+        for key, value in permissions.items():
+            if key not in PERMISSION_FIELDS or not isinstance(value, bool):
+                app.logger.error("Format de permissions invalide")
+                display_toast(success=False, message="Format de permissions invalide")
+                return "", 204
 
         app.logger.info(f"Création d'un nouveau rôle - name: {name}, description: {description}")
-        app.logger.info(f"Permissions: {permissions}")
 
         # Création du rôle : les colonnes admin_* du modèle valent False par
         # défaut, inutile de les répéter ici. On n'active que ce qui est soumis.
@@ -883,37 +904,29 @@ def save_role():
             name=name,
             description=description,
         )
-
-        # Attribution des permissions. On restreint aux champs réellement connus
-        # du modèle (hasattr) : une clé parasite venue du formulaire est ignorée.
-        for permission_name, value in permissions.items():
-            if hasattr(role, permission_name):
-                app.logger.info(f"Setting {permission_name} to {value} (type: {type(value)})")
-                new_value = bool(value)
-                app.logger.info(f"Setting {permission_name} to {new_value} (type: {type(value)})")
-                setattr(role, permission_name, new_value)
-                app.logger.info(f"Nouvelle valeur de {permission_name}: {getattr(role, permission_name)}")
+        for key, value in permissions.items():
+            setattr(role, key, value)
 
         try:
             db.session.add(role)
             db.session.commit()
-            app.logger.info("Rôle créé avec succès")
-            app.logger.info(f"Permissions finales du rôle: {role.to_dict()['permissions']}")
             record_audit(ACTION_CREATE, "role", target_id=role.id, outcome=OUTCOME_SUCCESS,
                          details=f"name={name}")
             display_toast(success=True, message="Rôle créé avec succès")
-            return ""
+            # Effacer le formulaire via swap-oob (même idiome que add_new_user)
+            clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_role_form"></div>"""
+            return f"{display_security_role_table()}{clear_form_html}"
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Erreur lors de la création du rôle: {str(e)}")
             record_audit(ACTION_CREATE, "role", target_id=name, outcome=OUTCOME_FAILURE)
             display_toast(success=False, message="Erreur lors de la création du rôle")
-            return ""
+            return "", 204
 
     except Exception as e:
         app.logger.error(f"Erreur lors de la création du rôle: {str(e)}")
         display_toast(success=False, message="Erreur lors de la création du rôle")
-        return ""
+        return "", 204
 
 @admin_security_bp.route('/admin/security/add_role_form')
 @require_permission('security')

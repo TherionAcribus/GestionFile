@@ -21,7 +21,7 @@
                 <input type="email" class="form-control" value="{{ user.email or '' }}" id="email-{{ user.id }}" aria-label="Adresse e-mail">
             </td>
             <td>
-                <select class="form-select" id="role-{{ user.id }}" aria-label="Rôle">
+                <select class="form-select" id="user-role-{{ user.id }}" aria-label="Rôle">
                     {% for role in roles %}
                     <option value="{{ role.id }}" 
                         {% if role in user.roles %}selected{% endif %}>
@@ -33,12 +33,12 @@
             <td>
                 <button class="btn btn-primary"
                     {% if user.username == "admin" %}disabled{% endif %}
-                    hx-target="#invisible"
+                    hx-target="#div_user_table"
                     hx-post="/admin/security/user_update/{{ user.id }}"
                     hx-trigger="click"
                     data-param-username="#username-{{ user.id }}"
                     data-param-email="#email-{{ user.id }}"
-                    data-param-role_id="#role-{{ user.id }}">
+                    data-param-role_id="#user-role-{{ user.id }}">
                     <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
                 </button>
 
