@@ -1,5 +1,6 @@
 #div_buttons_parents{
-    height: 80%;
+    height: auto;
+    min-height: 0;
     display: flex;
     flex-direction: row;
 }

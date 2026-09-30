@@ -1,0 +1,17 @@
+{#
+  La borne réelle utilise la forme enregistrée bouton par bouton. Dans
+  l'éditeur visuel, les deux variantes sont présentes mais une seule est
+  affichée : page_editor_preview.js peut ainsi changer de forme immédiatement
+  sans recharger l'iframe.
+#}
+{% if preview_layout_shape | default('') == 'square' %}
+    {% set preview_variant = 'square' %}
+    {% include 'patient/one_button_square.html' %}
+{% elif preview_layout_shape | default('') == 'circle' %}
+    {% set preview_variant = 'circle' %}
+    {% include 'patient/one_button_circle.html' %}
+{% elif button.shape == 'square' %}
+    {% include 'patient/one_button_square.html' %}
+{% else %}
+    {% include 'patient/one_button_circle.html' %}
+{% endif %}

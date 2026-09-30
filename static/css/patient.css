@@ -107,7 +107,11 @@ html, body {
 #div_title_area {
     height: var(--patient_title_background_height);
     text-align: center;
-    font-size: var(--patient_title_font_size);
+    font-size: min(var(--patient_title_font_size), 5vw);
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    padding: .1em .35em;
+    box-sizing: border-box;
     font-weight: bold;
     background-color: var(--patient_title_background_color);
     color: var(--patient_title_font_color);
@@ -127,7 +131,11 @@ html, body {
 }
 
 .div_validation_buttons{
-    margin-left: 50px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 0;
+    margin-left: min(50px, 4vw);
 }
 
 .cancel_button_container {
@@ -142,6 +150,10 @@ html, body {
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
     background-color: var(--subtitle_background_color);
+    min-height: 0;
+    overflow: hidden;
+    padding: .1em .35em;
+    box-sizing: border-box;
 }
 
 .buttons_children_inactive {
@@ -150,6 +162,10 @@ html, body {
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
     background-color: var(--subtitle_no_activity_background_color);
+    min-height: 0;
+    overflow: hidden;
+    padding: .1em .35em;
+    box-sizing: border-box;
 }
 
 .buttons_children_specific_message {
@@ -158,6 +174,10 @@ html, body {
     align-items: center;  /* Centre le contenu verticalement */
     justify-content: center; /* Centre le contenu horizontalement */
     background-color: var(--subtitle_specific_message_background_color);
+    min-height: 0;
+    overflow: hidden;
+    padding: .1em .35em;
+    box-sizing: border-box;
 }
 
 .div_bloc_activity{
@@ -342,11 +362,21 @@ html, body {
 .div_summary{
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 #div_qr_code{
     display: flex;
-    width: 50%;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
     text-align: center;
     padding-top: 1%;
 }
@@ -356,18 +386,22 @@ html, body {
    largeur de son conteneur. */
 #div_qr_code img {
     max-width: 100%;
+    max-height: 28vh;
     height: auto;
 }
 
 .div_validation_one_button{
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color:var(--validation_button_color);
-    height: var(--validation_button_height);
-    width: var(--validation_button_width);
+    height: min(var(--validation_button_height), 9vh);
+    width: min(var(--validation_button_width), 42vw);
     border-radius: 5%;
     box-shadow: 5px 5px 5px #888888;
     color: var(--validation_button_text_color);
     text-align: center;
-    margin: 30px ;
+    margin: min(12px, 1.5vh);
     padding-top: 5px;
     padding-bottom: 5px;
     border-color: var(--validation_button_border_color);
@@ -380,13 +414,13 @@ html, body {
     align-items: center;
     justify-content: center;
     background-color:var(--validation_button_color);
-    height: var(--validation_button_height);
-    width: var(--validation_button_width);
+    height: min(var(--validation_button_height), 9vh);
+    width: min(var(--validation_button_width), 42vw);
     border-radius: 5%;
     box-shadow: 5px 5px 5px #888888;
     color: var(--validation_button_text_color);
     text-align: center;
-    margin: 30px ;
+    margin: min(12px, 1.5vh);
     padding-top: 5px;
     padding-bottom: 5px;
     border-color: var(--validation_button_border_color);
@@ -401,7 +435,11 @@ html, body {
 }
 
 .validation_button {
-    font-size: var(--validation_button_text_size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    font-size: min(var(--validation_button_text_size), 4vh);
     font-weight: 500;
     -webkit-text-stroke-color: var(--validation_button_text_border_color);
     -webkit-text-stroke-width: var(--validation_button_text_border_size);
@@ -409,7 +447,7 @@ html, body {
 
 #div_call_number{
     text-align: center;
-    font-size: var(--validation_text_font_size);
+    font-size: min(var(--validation_text_font_size), 5vh);
     font-weight: 500;
     color: var(--validation_text_font_color);
     -webkit-text-stroke-color: var(--validation_text_border_color);
@@ -418,7 +456,7 @@ html, body {
 
 #conclusion_text{
     text-align: center;
-    font-size: var(--confirmation_text_font_size);
+    font-size: min(var(--confirmation_text_font_size), 5vh);
     font-weight: 500;
     color: var(--confirmation_text_font_color);
     -webkit-text-stroke-color: var(--confirmation_text_border_color);
@@ -433,22 +471,23 @@ html, body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 24px;
+    gap: min(24px, 3vh);
     text-align: center;
-    min-height: 40vh;
-    padding: 20px;
+    height: 100%;
+    min-height: 0;
+    padding: min(20px, 2.5vh);
     box-sizing: border-box;
 }
 
 #print_status_message {
     width: 100%;
-    font-size: var(--print_error_font_size);
+    font-size: min(var(--print_error_font_size), 6vh);
     font-weight: bold;
     color: var(--print_error_font_color);
     background-color: var(--print_error_background_color);
     -webkit-text-stroke-color: var(--print_error_border_color);
     -webkit-text-stroke-width: var(--print_error_border_size);
-    padding: 30px 50px;
+    padding: min(24px, 3vh) min(50px, 4vw);
     border-radius: 20px;
 }
 
@@ -457,13 +496,15 @@ html, body {
 }
 
 .print_status_number {
-    font-size: var(--print_error_number_size);
+    font-size: min(var(--print_error_number_size), 10vh);
     font-weight: bold;
 }
 
 .div_qr_plus_buttons{
     display: grid;
     grid-template-columns: 1fr 2fr;
+    align-items: center;
+    min-height: 0;
 }
 
 
@@ -562,7 +603,9 @@ html, body {
 
 .div_text_explanation{
     text-align: center;
-    font-size: var(--subtitle_font_size);
+    font-size: min(var(--subtitle_font_size), 4vw);
+    line-height: 1.1;
+    overflow-wrap: anywhere;
     color: var(--subtitle_font_color);
     font-weight: bold;
     -webkit-text-stroke-color: var(--subtitle_border_color);

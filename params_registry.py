@@ -98,11 +98,13 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "music_spotify_user": ("MUSIC_SPOTIFY_USER", "value_str"),
     "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
     "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
+    "page_patient_button_shape": ("PAGE_PATIENT_BUTTON_SHAPE", "value_str"),
     "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
     "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
     "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
     "page_patient_validation_message": ("PAGE_PATIENT_VALIDATION_MESSAGE", "value_str"),
     "page_patient_confirmation_message": ("PAGE_PATIENT_CONFIRMATION_MESSAGE", "value_str"),
+    "page_patient_interface_children_back": ("PAGE_PATIENT_INTERFACE_CHILDREN_BACK", "value_str"),
     "page_patient_qrcode_display": ("PAGE_PATIENT_QRCODE_DISPLAY", "value_bool"),
     "page_patient_display_button_scan": ("PAGE_PATIENT_DISPLAY_BUTTON_SCAN", "value_bool"),
     "page_patient_display_scan_explanation": ("PAGE_PATIENT_DISPLAY_SCAN_EXPLANATION", "value_bool"),
@@ -355,6 +357,7 @@ _TRANSLATABLE_KEYS = {
     "page_patient_interface_validate_scan",
     "page_patient_interface_scan_explanation",
     "page_patient_interface_validate_cancel",
+    "page_patient_interface_children_back",
     "page_patient_interface_done_print",
     "page_patient_interface_done_extend",
     "page_patient_interface_done_back",
@@ -409,6 +412,9 @@ _ENUM_VALUES: dict[str, frozenset[str]] = {
     "music_announce_action": frozenset({"pause", "down", "nothing"}),
     # Modifié via update_input (select à hx-post="/admin/update_input").
     "page_patient_print_fail_behavior": frozenset({"ask", "keep", "cancel"}),
+    # Valeur de synchronisation de l'éditeur visuel. ``mixed`` signifie que le
+    # mode avancé conserve des formes différentes bouton par bouton.
+    "page_patient_button_shape": frozenset({"mixed", "circle", "square"}),
 }
 
 

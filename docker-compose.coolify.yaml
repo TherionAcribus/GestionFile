@@ -29,7 +29,7 @@ x-app-env: &app-env
   SITE: ${SITE:-prod}
   FLASK_DEBUG: ${FLASK_DEBUG:-0}
   PORT: ${PORT:-5000}
-  PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce}
+  PAGE_EDITOR_ENABLED_PAGES: ${PAGE_EDITOR_ENABLED_PAGES:-announce,patient,phone}
   # --- Base de données ---
   MYSQL_HOST: ${MYSQL_HOST:-mysql}
   MYSQL_DATABASE: ${MYSQL_DATABASE:-queuedatabase}

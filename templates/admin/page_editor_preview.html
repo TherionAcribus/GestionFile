@@ -24,8 +24,10 @@
         [data-page-editor-selected="true"] { outline: max(2px, .15vw) solid #ffb300 !important; outline-offset: max(-2px, -.15vw); }
         .page-editor-gallery-placeholder { align-items:center; background:linear-gradient(135deg,#dfe9f3,#fff); color:#345; display:flex; font-size:3vw; height:100%; justify-content:center; min-height:12rem; }
         .page-editor-demo-button { align-items:center; background:var(--square_button_color, darkcyan); border-radius:1rem; color:white; display:flex; font-size:2rem; justify-content:center; margin:1rem; min-height:7rem; padding:1rem 2rem; }
-        .page-editor-demo-flags { bottom:1rem; display:flex; gap:1rem; position:absolute; right:1rem; }
-        .page-editor-demo-flag { background:#fff; border:2px solid #777; border-radius:.25rem; display:grid; font-size:1.5rem; height:var(--flag_size,70px); place-items:center; width:var(--flag_size,70px); }
+        #div_qr_code img[src*="bootstrap-icons/qr-code.svg"] { image-rendering:pixelated; width:min(330px,100%); }
+        .page-editor-timer-label { color:#334155; display:block; font-size:18px; padding:.25rem; text-align:center; }
+        .page-editor-button-shape-preview { align-items:center; display:flex; height:100%; justify-content:center; width:100%; }
+        .page-editor-inactive-example-note { background:#fff8dc; border:1px solid #c69100; border-radius:.4rem; color:#5c4400; font:600 16px/1.25 sans-serif; left:50%; max-width:min(90%,760px); padding:.45rem .7rem; position:absolute; text-align:center; top:.5rem; transform:translateX(-50%); z-index:4; }
         /* En aperçu, la grille du centre est pilotée par des classes dédiées
            (le JS les fait basculer quand « Afficher la galerie » change) au
            lieu des identifiants div_center_divided/not_divided des pages
@@ -70,33 +72,74 @@
     <div id="main">
         {{ page_components.patient_title(preview_config.page_patient_title, true) }}
         <div id="div_buttons_parents" data-page-editor-component="buttons">
-            {% if scenario in ('home', 'children') %}
+            {% if scenario in ('home', 'children', 'activity_inactive') %}
                 {% if preview_buttons %}
-                    {% with buttons=preview_buttons, max_length=preview_buttons_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, page_patient_interface_validate_cancel=preview_patient_interface.validate_cancel, button_translations=preview_button_translations %}
+                    {% if scenario == 'activity_inactive' and preview_inactive_is_example %}
+                        <div class="page-editor-inactive-example-note">
+                            Aucune activité n’est indisponible ou programmée pour le devenir pour l’instant : un bouton est grisé uniquement comme exemple de présentation.
+                        </div>
+                    {% endif %}
+                    {% set chosen_button_shape = payload.config.page_patient_button_shape %}
+                    {% set chosen_max_length = 2 if chosen_button_shape == 'square' else (4 if chosen_button_shape == 'circle' else preview_buttons_max_length) %}
+                    {% with buttons=preview_buttons, max_length=chosen_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, preview_inactive_mode=preview_inactive_mode, preview_inactive_button_ids=preview_inactive_button_ids, preview_show_inactive=payload.config.page_patient_disable_button, page_editor_preview=true, preview_button_shape=chosen_button_shape, page_patient_interface_children_back=preview_config.page_patient_interface_children_back, button_translations=preview_button_translations %}
                         {% include 'patient/patient_buttons_left.html' %}
                     {% endwith %}
                 {% else %}
                     <div class="div_no_buttons_message"><p class="no_buttons_title">Aucun bouton configuré</p></div>
                 {% endif %}
             {% elif scenario == 'validation' %}
-                <div class="div_summary">
-                    <div class="div_text_summary"><p class="text_summary">{{ preview_activity_label }}</p></div>
-                    <div class="div_validation_buttons">
-                        <div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.validate_print }}</p></div>
-                        <div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.validate_scan }}</p></div>
-                        <div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.validate_cancel }}</p></div>
-                    </div>
-                </div>
+                {% with page_editor_preview=true,
+                    page_patient_validation_message=preview_config.page_patient_validation_message,
+                    page_patient_display_qrcode=payload.config.page_patient_qrcode_display,
+                    qr_data_uri=preview_qr_data_uri,
+                    activity=preview_activity,
+                    journey_id='preview',
+                    page_patient_button_print_ticket_display_picture=payload.config.page_patient_button_print_ticket_display_picture,
+                    page_patient_button_print_ticket_picture=preview_print_picture,
+                    page_patient_interface_validate_print=preview_config.page_patient_interface_validate_print,
+                    page_patient_display_button_scan=payload.config.page_patient_display_button_scan,
+                    page_patient_interface_validate_scan=preview_config.page_patient_interface_validate_scan,
+                    page_patient_display_scan_explanation=payload.config.page_patient_display_scan_explanation,
+                    page_patient_interface_scan_explanation=preview_config.page_patient_interface_scan_explanation,
+                    page_patient_button_cancel_display_picture=payload.config.page_patient_button_cancel_display_picture,
+                    page_patient_button_cancel_picture=preview_cancel_picture,
+                    page_patient_interface_validate_cancel=preview_config.page_patient_interface_validate_cancel %}
+                    {% include 'patient/patient_qr_right_page.html' %}
+                {% endwith %}
             {% elif scenario == 'conclusion' %}
-                <div class="div_summary">
-                    <div class="div_text_summary"><p class="text_summary">{{ preview_patient_interface.confirmation }}</p></div>
-                    <div class="div_validation_buttons"><div class="div_validation_one_button"><p class="validation_button">{{ preview_patient_interface.done_back }}</p></div></div>
-                </div>
-            {% elif scenario == 'print_error' %}
+                {% with page_editor_preview=true,
+                    page_patient_confirmation_message=preview_config.page_patient_confirmation_message,
+                    page_patient_display_qrcode=payload.config.page_patient_qrcode_display,
+                    qr_data_uri=preview_qr_data_uri,
+                    reprint=payload.config.page_patient_print_after_scan or payload.config.page_patient_print_after_print,
+                    page_patient_interface_done_print=preview_config.page_patient_interface_done_print,
+                    page_patient_interface_done_extend=preview_config.page_patient_interface_done_extend,
+                    page_patient_interface_done_back=preview_config.page_patient_interface_done_back,
+                    page_patient_end_timer=payload.config.page_patient_end_timer %}
+                    {% include 'patient/conclusion_page.html' %}
+                {% endwith %}
+            {% elif scenario in ('print_error', 'printing', 'print_uncertain', 'staff_called') %}
                 {# Reproduit l'overlay de conclusion_page.html : le message dépend
                    du comportement d'échec choisi (Demander/Conserver/Annuler). #}
                 <div class="div_summary">
                     <div id="print_status_overlay" data-page-editor-component="print_error" style="display:flex;">
+                        {% if scenario == 'printing' %}
+                        <div id="print_status_message" class="div_text_summary">
+                            <p class="text_summary" data-config-key="page_patient_interface_printing">{{ preview_config.page_patient_interface_printing }}</p>
+                        </div>
+                        {% elif scenario == 'print_uncertain' %}
+                        <div id="print_status_message" class="div_text_summary">
+                            <p class="text_summary" data-config-key="page_patient_interface_print_uncertain" data-number-styled>{{ preview_config.page_patient_interface_print_uncertain }}</p>
+                        </div>
+                        <div id="print_status_buttons" class="div_validation_buttons">
+                            <div class="div_validation_one_button"><p class="validation_button" data-config-key="page_patient_interface_ticket_received">{{ preview_config.page_patient_interface_ticket_received }}</p></div>
+                            <div class="div_validation_one_button"><p class="validation_button" data-config-key="page_patient_interface_ticket_missing">{{ preview_config.page_patient_interface_ticket_missing }}</p></div>
+                        </div>
+                        {% elif scenario == 'staff_called' %}
+                        <div id="print_status_message" class="div_text_summary">
+                            <p class="text_summary" data-config-key="page_patient_interface_staff_called" data-number-styled>{{ preview_config.page_patient_interface_staff_called }}</p>
+                        </div>
+                        {% else %}
                         <div id="print_status_message" class="div_text_summary">
                             <p class="text_summary" data-config-key="page_patient_interface_print_failed" data-number-styled
                                data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["keep","cancel"]'
@@ -128,22 +171,50 @@
                                 <p class="validation_button" data-config-key="page_patient_interface_call_staff">{{ preview_config.page_patient_interface_call_staff }}</p>
                             </div>
                         </div>
+                        {% endif %}
                     </div>
                 </div>
             {% endif %}
         </div>
-        {% set show_specific = scenario in ('validation', 'conclusion') and preview_specific_message and payload.config.page_patient_display_specific_message %}
-        <div id="div_buttons_children" class="{{ 'buttons_children_specific_message' if show_specific else 'buttons_children_active' }}" data-page-editor-component="subtitle">
-            <div class="{{ 'div_text_explanation_specific_message' if show_specific else 'div_text_explanation' }}" data-config-key="page_patient_subtitle">{{ preview_specific_message if show_specific else preview_config.page_patient_subtitle }}</div>
-        </div>
+        {% if scenario == 'activity_inactive' %}
+            <div id="div_buttons_children" class="buttons_children_inactive" data-page-editor-component="activity_status"
+                 data-config-bool="page_patient_disable_button"
+                 {% if not payload.config.page_patient_disable_button %}data-config-hidden{% endif %}>
+                {% with page_patient_disable_default_message=preview_config.page_patient_disable_default_message,
+                    default_subtitle=preview_config.page_patient_subtitle,
+                    page_patient_timer_activity_inactive=payload.config.page_patient_timer_activity_inactive %}
+                    {% include 'patient/activity_inactive.html' %}
+                {% endwith %}
+            </div>
+            <div id="div_buttons_children_default" class="buttons_children_active"
+                 data-config-display-key="page_patient_disable_button" data-config-hide-values='[true]'
+                 {% if payload.config.page_patient_disable_button %}data-config-hidden{% endif %}>
+                <div class="div_text_explanation" data-config-key="page_patient_subtitle">{{ preview_config.page_patient_subtitle }}</div>
+            </div>
+        {% else %}
+            {% set show_specific = scenario in ('validation', 'conclusion') and preview_specific_message and payload.config.page_patient_display_specific_message %}
+            <div id="div_buttons_children"
+                 class="{{ 'buttons_children_specific_message' if show_specific else 'buttons_children_active' }}"
+                 data-page-editor-component="{{ 'specific_message' if show_specific else 'subtitle' }}">
+                {% if show_specific %}
+                    <div class="div_text_explanation_specific_message">{{ preview_specific_message }}</div>
+                {% else %}
+                    <div class="div_text_explanation" data-config-key="page_patient_subtitle">{{ preview_config.page_patient_subtitle }}</div>
+                {% endif %}
+            </div>
+        {% endif %}
         {% if preview_languages|length > 1 %}
-            <div class="language-selector page-editor-demo-flags" data-page-editor-component="languages" data-config-bool="page_patient_display_translations" {% if not payload.config.page_patient_display_translations %}data-config-hidden{% endif %}>
+            <div class="language-selector" role="group" aria-label="Choisir la langue"
+                 data-page-editor-component="languages" data-config-bool="page_patient_display_translations"
+                 {% if not payload.config.page_patient_display_translations %}data-config-hidden{% endif %}>
                 {% for language in preview_languages %}
-                    {% if language.flag_url and language.flag_url != 'None' %}
-                        <img class="flag" src="/static/images/flags/{{ language.flag_url }}" alt="{{ language.translation }}">
-                    {% else %}
-                        <span class="page-editor-demo-flag">{{ language.code|upper }}</span>
-                    {% endif %}
+                    <button type="button" class="flag-button" aria-label="{{ language.translation }}" lang="{{ language.code }}">
+                        {% if language.flag_url and language.flag_url != 'None' %}
+                            <img src="/static/images/flags/{{ language.flag_url }}" alt="">
+                        {% else %}
+                            <span class="flag-name">{{ language.name }}</span>
+                        {% endif %}
+                    </button>
                 {% endfor %}
             </div>
         {% endif %}

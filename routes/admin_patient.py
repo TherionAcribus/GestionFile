@@ -4,6 +4,8 @@ import datetime
 import json
 import re
 import uuid
+
+import config_sync
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app, make_response
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
@@ -34,6 +36,30 @@ from audit_log import (
 )
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
+
+
+def _sync_patient_button_shape_mode():
+    """Reflète les formes bouton par bouton dans le sélecteur global.
+
+    Le mode avancé reste libre : dès que les formes divergent, l'éditeur
+    visuel affiche « formes différentes » au lieu de réappliquer silencieusement
+    son dernier choix global.
+    """
+    db.session.flush()
+    shapes = {
+        shape for (shape,) in db.session.query(Button.shape).distinct().all()
+        if shape in {"circle", "square"}
+    }
+    mode = next(iter(shapes)) if len(shapes) == 1 else "mixed"
+    option = ConfigOption.query.filter_by(
+        config_key="page_patient_button_shape"
+    ).first()
+    if option is None:
+        option = ConfigOption(config_key="page_patient_button_shape")
+        db.session.add(option)
+    option.value_str = mode
+    app.config["PAGE_PATIENT_BUTTON_SHAPE"] = mode
+    config_sync.bump_generation(db=db, ConfigOption=ConfigOption)
 
 
 @admin_patient_bp.route('/admin/patient')
@@ -284,6 +310,7 @@ def update_button(button_id):
             button.label = label
             button.shape = shape      
 
+            _sync_patient_button_shape_mode()
             db.session.commit()
             record_audit(ACTION_UPDATE, "button", target_id=button_id,
                          outcome=OUTCOME_SUCCESS,
@@ -396,6 +423,7 @@ def add_new_button():
             return display_button_table()        
 
         db.session.add(new_button)
+        _sync_patient_button_shape_mode()
         db.session.commit()
 
         record_audit(ACTION_CREATE, "button", target_id=new_button.id,

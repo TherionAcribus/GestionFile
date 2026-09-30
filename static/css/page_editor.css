@@ -34,6 +34,15 @@
     }
 }
 
+@media (min-width: 1200px) {
+    .page-editor-grid > aside:last-child {
+        max-height: calc(100vh - var(--page-editor-toolbar-height, 6rem) - .5rem);
+        overflow-y: auto;
+        position: sticky;
+        top: var(--page-editor-toolbar-height, 6rem);
+    }
+}
+
 .page-editor-panel,
 .page-editor-canvas {
     background: var(--bs-body-bg);
@@ -130,9 +139,19 @@
     padding-bottom: .75rem;
 }
 
-.page-editor-fieldset legend {
+.page-editor-fieldset summary {
+    cursor: pointer;
     font-size: .9rem;
     font-weight: 600;
+    margin-bottom: .75rem;
+}
+
+.page-editor-fieldset:not([open]) summary {
+    margin-bottom: 0;
+}
+
+.page-editor-fieldset-body {
+    min-width: 0;
 }
 
 .page-editor-color-control,

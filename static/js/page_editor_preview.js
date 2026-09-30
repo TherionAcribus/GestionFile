@@ -72,6 +72,14 @@
         document.querySelectorAll('[data-config-bool]').forEach(function (element) {
             markHidden(element, !payload.config[element.dataset.configBool]);
         });
+        document.querySelectorAll('[data-config-any-bool]').forEach(function (element) {
+            const keys = element.dataset.configAnyBool.split(',').map(function (key) { return key.trim(); });
+            markHidden(element, !keys.some(function (key) { return Boolean(payload.config[key]); }));
+        });
+        document.querySelectorAll('[data-config-all-bool]').forEach(function (element) {
+            const keys = element.dataset.configAllBool.split(',').map(function (key) { return key.trim(); });
+            markHidden(element, !keys.every(function (key) { return Boolean(payload.config[key]); }));
+        });
         document.querySelectorAll('[data-config-hide-values]').forEach(function (element) {
             let values = [];
             try { values = JSON.parse(element.dataset.configHideValues); } catch (error) { values = []; }
@@ -108,6 +116,7 @@
             document.querySelectorAll('[data-page-editor-component="' + CSS.escape(entry[0]) + '"]').forEach(function (element) {
                 const item = entry[1];
                 element.toggleAttribute('data-page-editor-hidden', !item.visible);
+                if (document.body.dataset.page === 'patient') return;
                 element.style.order = String(item.order);
                 element.style.width = ((item.span / 12) * 100).toFixed(4) + '%';
                 element.style.alignSelf = item.alignment === 'left' ? 'flex-start' : (item.alignment === 'right' ? 'flex-end' : item.alignment);

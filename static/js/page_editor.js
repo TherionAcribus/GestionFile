@@ -344,13 +344,16 @@
     }
 
     function addFieldset(titleText) {
-        const fieldset = document.createElement('fieldset');
-        fieldset.className = 'page-editor-fieldset';
-        const legend = document.createElement('legend');
-        legend.textContent = titleText;
-        fieldset.appendChild(legend);
-        inspector.appendChild(fieldset);
-        return fieldset;
+        const details = document.createElement('details');
+        details.className = 'page-editor-fieldset';
+        details.open = titleText !== 'Apparence';
+        const summary = document.createElement('summary');
+        summary.textContent = titleText;
+        const body = document.createElement('div');
+        body.className = 'page-editor-fieldset-body';
+        details.append(summary, body);
+        inspector.appendChild(details);
+        return body;
     }
 
     function bindValue(control, change) {
@@ -635,6 +638,7 @@
         }
         const definition = adapter.components[selectedComponent];
         const layout = payload.layout[selectedComponent];
+        const layoutControls = definition.layout_controls || ['visible', 'span', 'alignment', 'order'];
         const heading = document.createElement('p');
         heading.className = 'fw-semibold';
         heading.textContent = definition.label;
@@ -665,7 +669,7 @@
         visibilityLabel.htmlFor = visibility.id;
         visibilityLabel.textContent = 'Afficher ce composant';
         visibilityWrapper.append(visibility, visibilityLabel);
-        layoutFields.appendChild(visibilityWrapper);
+        if (layoutControls.includes('visible')) layoutFields.appendChild(visibilityWrapper);
 
         const span = document.createElement('input');
         span.type = 'range';
@@ -675,7 +679,7 @@
         span.max = '12';
         span.value = String(layout.span);
         bindValue(span, function (control) { layout.span = Number(control.value); });
-        layoutFields.appendChild(formGroup('Largeur (' + layout.span + '/12)', span));
+        if (layoutControls.includes('span')) layoutFields.appendChild(formGroup('Largeur (' + layout.span + '/12)', span));
 
         const spanPresets = document.createElement('div');
         spanPresets.className = 'btn-group btn-group-sm w-100 mb-3';
@@ -694,7 +698,7 @@
             });
             spanPresets.appendChild(presetButton);
         });
-        layoutFields.appendChild(spanPresets);
+        if (layoutControls.includes('span')) layoutFields.appendChild(spanPresets);
 
         const alignment = document.createElement('select');
         alignment.className = 'form-select';
@@ -707,7 +711,7 @@
             alignment.appendChild(option);
         });
         bindValue(alignment, function (control) { layout.alignment = control.value; });
-        layoutFields.appendChild(formGroup('Alignement', alignment));
+        if (layoutControls.includes('alignment')) layoutFields.appendChild(formGroup('Alignement', alignment));
 
         const movement = document.createElement('div');
         movement.className = 'btn-group w-100';
@@ -719,7 +723,7 @@
             button.addEventListener('click', function () { moveSelected(item[1]); });
             movement.appendChild(button);
         });
-        layoutFields.appendChild(movement);
+        if (layoutControls.includes('order')) layoutFields.appendChild(movement);
 
         const resetButton = document.createElement('button');
         resetButton.type = 'button';
@@ -740,7 +744,17 @@
         });
         layoutFields.appendChild(resetButton);
 
-        if (definition.config.length) {
+        const fieldIsRelevant = function (field) {
+            if (field.scenarios && !field.scenarios.includes(scenarioSelect.value)) return false;
+            if (field.visible_when) {
+                return (field.visible_when.values || []).includes(
+                    payload.config[field.visible_when.key]
+                );
+            }
+            return true;
+        };
+        const scenarioConfigFields = definition.config.filter(fieldIsRelevant);
+        if (scenarioConfigFields.length) {
             // Réglages qui conditionnent l'affichage d'un composant : leur
             // modification rafraîchit aussi les badges de la liste.
             const gatedKeys = new Set();
@@ -753,7 +767,7 @@
                 if (gatedKeys.has(key)) renderPalette();
             };
             const contentFields = addFieldset('Contenu');
-            definition.config.forEach(function (field) {
+            scenarioConfigFields.forEach(function (field) {
                 let control;
                 if (field.type === 'bool') {
                     control = document.createElement('input');
@@ -807,9 +821,10 @@
             });
         }
 
-        if (definition.css.length) {
+        const scenarioCssFields = definition.css.filter(fieldIsRelevant);
+        if (scenarioCssFields.length) {
             const appearanceFields = addFieldset('Apparence');
-            definition.css.forEach(function (field) {
+            scenarioCssFields.forEach(function (field) {
                 let control;
                 if (field.type === 'color') {
                     control = createColorControl(
@@ -828,7 +843,7 @@
                 }
                 appearanceFields.appendChild(formGroup(field.label, control));
             });
-            appendContrastWarning(appearanceFields, definition);
+            appendContrastWarning(appearanceFields, Object.assign({}, definition, {css: scenarioCssFields}));
         }
 
         // La palette de la page est rendue après les propriétés du composant :
@@ -1154,6 +1169,25 @@
                     message: 'Du contenu dépasse la largeur du format « ' + viewport.label + ' ».',
                 });
             }
+            const clippedComponents = new Set();
+            doc.querySelectorAll('[data-page-editor-component]').forEach(function (componentEl) {
+                if (componentEl.offsetParent === null) return;
+                const rect = componentEl.getBoundingClientRect();
+                const componentId = componentEl.dataset.pageEditorComponent;
+                const label = (adapter.components[componentId] || {}).label || componentId;
+                if (rect.top < -4 || rect.left < -4
+                    || rect.bottom > viewport.height + 4 || rect.right > viewport.width + 4
+                    || componentEl.scrollHeight > componentEl.clientHeight + 4
+                    || componentEl.scrollWidth > componentEl.clientWidth + 4) {
+                    clippedComponents.add(label);
+                }
+            });
+            clippedComponents.forEach(function (label) {
+                findings.push({
+                    level: 'warning',
+                    message: '« ' + label + ' » dépasse ou coupe une partie de son contenu dans ce format.',
+                });
+            });
             const minFont = {announce: 20, patient: 14, phone: 12}[page] || 12;
             const smallFonts = new Set();
             doc.querySelectorAll('[data-page-editor-component]').forEach(function (componentEl) {
@@ -1758,7 +1792,7 @@
         historyButton.setAttribute('aria-expanded', historyPanel.hidden ? 'false' : 'true');
     });
     scenarioSelect.addEventListener('change', function () {
-        renderPalette();
+        rerenderAll();
         loadPreview();
     });
     viewportSelect.addEventListener('change', resizePreview);

@@ -47,7 +47,8 @@ _MARKER_LABELS = {
 
 
 def _component(label, zone, selector, *, config=None, css=None, span=12,
-               scenarios=None, managed_bool=None, hidden_when=None):
+               scenarios=None, managed_bool=None, hidden_when=None,
+               layout_controls=None):
     return {
         "label": label,
         "zone": zone,
@@ -57,6 +58,7 @@ def _component(label, zone, selector, *, config=None, css=None, span=12,
         "scenarios": scenarios,
         "managed_bool": managed_bool,
         "hidden_when": hidden_when,
+        "layout_controls": layout_controls or ["visible", "span", "alignment", "order"],
         "config": config or [],
         "css": css or [],
     }
@@ -176,12 +178,17 @@ ADAPTERS = {
         "scenarios": [
             {"id": "home", "label": "Accueil"},
             {"id": "children", "label": "Sous-activités"},
+            {"id": "activity_inactive", "label": "Activités indisponibles"},
             {"id": "validation", "label": "Validation QR / impression"},
             {"id": "conclusion", "label": "Conclusion"},
             {"id": "print_error", "label": "Erreur d'impression"},
+            {"id": "printing", "label": "Impression en cours"},
+            {"id": "print_uncertain", "label": "Impression incertaine"},
+            {"id": "staff_called", "label": "Personnel appelé"},
         ],
         "components": {
             "title": _component("Titre", "header", "#div_title_area",
+                layout_controls=["visible"],
                 config=[{"key": "page_patient_title", "label": "Texte", "type": "text"}],
                 css=[{"key": "patient_title_font_size", "label": "Taille", "type": "size"},
                      {"key": "patient_title_font_color", "label": "Couleur", "type": "color"},
@@ -189,9 +196,16 @@ ADAPTERS = {
                      {"key": "patient_title_background_height", "label": "Hauteur", "type": "size"},
                      {"key": "patient_title_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "patient_title_border_color", "label": "Couleur contour", "type": "color"}]),
-            "buttons": _component("Boutons d'activité", "main", "#div_buttons_parents",
-                config=[{"key": "page_patient_disable_button", "label": "Griser les boutons si l'activité n'est pas en cours", "type": "bool"},
+            "buttons": _component("Contenu principal", "main", "#div_buttons_parents",
+                layout_controls=["visible"],
+                config=[{"key": "page_patient_button_shape", "label": "Forme de tous les boutons d’activité", "type": "select",
+                         "choices": [["mixed", "Formes actuelles différentes — choisir une forme"],
+                                     ["circle", "Boutons ronds"],
+                                     ["square", "Boutons rectangulaires"]],
+                         "help": "Le choix sera appliqué à tous les boutons lors de la publication. Le mode avancé permet ensuite de les différencier."},
                         {"key": "page_patient_direct_print", "label": "Imprimer directement le ticket (sans écran de validation)", "type": "bool"},
+                        {"key": "page_patient_qrcode_display", "label": "Afficher le QR code", "type": "bool",
+                         "help": "Ce réglage est partagé avec l’onglet QR code du mode avancé."},
                         {"key": "page_patient_display_button_scan", "label": "Afficher le bouton « Scanner et valider »", "type": "bool"},
                         {"key": "page_patient_display_scan_explanation", "label": "Afficher les explications pour scanner le QR-Code", "type": "bool"},
                         {"key": "page_patient_print_after_scan", "label": "Page de réimpression après « Scan »", "type": "bool"},
@@ -209,28 +223,54 @@ ADAPTERS = {
                         {"key": "page_patient_interface_scan_explanation", "label": "Consignes pour scanner le QR code", "type": "text"},
                         {"key": "page_patient_interface_validate_cancel", "label": "Écran de validation : bouton « Annuler »", "type": "text"},
                         {"key": "page_patient_button_cancel_display_picture", "label": "Image sur le bouton « Annuler »", "type": "bool"},
-                        {"key": "page_patient_confirmation_message", "label": "Message de confirmation (après inscription)", "type": "text"}],
+                        {"key": "page_patient_confirmation_message", "label": "Message de confirmation (après inscription)", "type": "text"},
+                        {"key": "page_patient_interface_done_print", "label": "Conclusion : bouton « Imprimer »", "type": "text"},
+                        {"key": "page_patient_interface_done_extend", "label": "Conclusion : bouton « Prolonger »", "type": "text"},
+                        {"key": "page_patient_interface_done_back", "label": "Conclusion : bouton de retour", "type": "text"}],
                 css=[{"key": "circle_button_size", "label": "Bouton rond", "type": "size"},
                      {"key": "square_button_width", "label": "Largeur bouton", "type": "size"},
                      {"key": "square_button_height", "label": "Hauteur bouton", "type": "size"},
                      {"key": "square_button_color", "label": "Couleur bouton", "type": "color"},
                      {"key": "square_button_border_size", "label": "Épaisseur bordure", "type": "size"},
                      {"key": "square_button_border_color", "label": "Couleur bordure", "type": "color"}]),
-            "subtitle": _component("Sous-titre / état", "footer", "#div_buttons_children",
-                config=[{"key": "page_patient_subtitle", "label": "Texte", "type": "text"},
-                        {"key": "page_patient_disable_default_message", "label": "Texte si l'activité n'est pas en cours", "type": "text"},
-                        {"key": "page_patient_display_specific_message", "label": "Message spécifique d'activité dans le pied de page", "type": "bool"},
-                        {"key": "page_patient_timer_activity_inactive", "label": "Durée du message « indisponible » (s)", "type": "int"}],
+            "back_button": _component("Bouton Retour", "main",
+                "[data-page-editor-component='back_button']",
+                scenarios=["children"],
+                layout_controls=["visible"],
+                config=[{"key": "page_patient_interface_children_back", "label": "Texte", "type": "text"}],
+                css=[]),
+            "subtitle": _component("Sous-titre standard", "footer", "[data-page-editor-component='subtitle']",
+                layout_controls=["visible"],
+                scenarios=["home", "children", "validation", "conclusion", "print_error", "printing", "print_uncertain", "staff_called"],
+                config=[{"key": "page_patient_subtitle", "label": "Texte du sous-titre", "type": "text"}],
                 css=[{"key": "subtitle_font_size", "label": "Taille", "type": "size"},
                      {"key": "subtitle_font_color", "label": "Couleur", "type": "color"},
                      {"key": "subtitle_background_color", "label": "Fond", "type": "color"},
                      {"key": "subtitle_background_height", "label": "Hauteur", "type": "size"},
                      {"key": "subtitle_border_size", "label": "Épaisseur contour", "type": "size"},
                      {"key": "subtitle_border_color", "label": "Couleur contour", "type": "color"}]),
+            "activity_status": _component("Affichage des activités indisponibles", "footer",
+                "[data-page-editor-component='activity_status']",
+                scenarios=["activity_inactive"],
+                layout_controls=["visible"],
+                config=[{"key": "page_patient_disable_button", "label": "Griser les boutons indisponibles (sinon les masquer)", "type": "bool",
+                         "help": "Activé : le bouton reste visible en grisé. Désactivé : le bouton disparaît et les autres conservent leur présentation normale."},
+                        {"key": "page_patient_disable_default_message", "label": "Message affiché après sélection", "type": "text"},
+                        {"key": "page_patient_timer_activity_inactive", "label": "Durée d'affichage du message (s)", "type": "int"}],
+                css=[]),
+            "specific_message": _component("Message spécifique d’activité", "footer",
+                "[data-page-editor-component='specific_message']",
+                scenarios=["validation", "conclusion"],
+                managed_bool="page_patient_display_specific_message",
+                layout_controls=["visible"],
+                config=[{"key": "page_patient_display_specific_message", "label": "Afficher le message spécifique de l'activité", "type": "bool",
+                         "help": "Le texte du message se configure sur chaque activité."}],
+                css=[]),
             # Écran affiché quand le ticket ne peut pas être imprimé (overlay
             # rempli par patients.js selon le comportement d'échec choisi).
             "print_error": _component("Erreur d'impression", "main", "#print_status_overlay",
-                scenarios=["print_error"],
+                scenarios=["print_error", "printing", "print_uncertain", "staff_called"],
+                layout_controls=["visible"],
                 config=[{"key": "page_patient_print_fail_behavior", "label": "Comportement en cas d'échec", "type": "select",
                          "choices": [["ask", "Demander au patient"],
                                      ["keep", "Conserver dans la file"],
@@ -250,6 +290,7 @@ ADAPTERS = {
                         {"key": "page_patient_interface_call_staff", "label": "Bouton « Appeler le personnel »", "type": "text"}]),
             "languages": _component("Choix de langue", "overlay", ".language-selector",
                 managed_bool="page_patient_display_translations",
+                layout_controls=["visible"],
                 config=[{"key": "page_patient_display_translations", "label": "Afficher", "type": "bool"}],
                 css=[{"key": "flag_size", "label": "Taille drapeau", "type": "size"}]),
         },
@@ -345,8 +386,6 @@ _ADDITIONAL_CSS_FIELDS = {
             ("circle_button_text_background_color", "Fond du texte des boutons ronds", "color", "transparent"),
             ("square_button_text_border_color", "Contour du texte des boutons", "color", "black"),
             ("square_button_text_background_color", "Fond du texte des boutons", "color", "transparent"),
-            ("square_cancel_button_text_border_color", "Contour du texte du bouton retour", "color", "black"),
-            ("square_cancel_button_text_background_color", "Fond du texte du bouton retour", "color", "transparent"),
             ("validation_button_text_border_color", "Contour du texte des boutons de validation", "color", "black"),
             ("validation_button_text_background_color", "Fond du texte des boutons de validation", "color", "transparent"),
             ("square_button_text_color", "Texte des boutons", "color", "#FFFFFF"),
@@ -360,15 +399,6 @@ _ADDITIONAL_CSS_FIELDS = {
             ("circle_button_border_size", "Bordure des boutons ronds", "size", "0px"),
             ("circle_button_border_color", "Couleur bordure des boutons ronds", "color", "#000000"),
             ("circle_button_image_size", "Taille de l'image des boutons ronds", "size", "200px"),
-            ("square_cancel_button_width", "Largeur du bouton retour", "size", "500px"),
-            ("square_cancel_button_height", "Hauteur du bouton retour", "size", "150px"),
-            ("square_cancel_button_color", "Fond du bouton retour", "color", "#008B8B"),
-            ("square_cancel_button_border_size", "Bordure du bouton retour", "size", "0px"),
-            ("square_cancel_button_border_color", "Couleur bordure retour", "color", "#000000"),
-            ("square_cancel_button_text_color", "Texte du bouton retour", "color", "#FFFFFF"),
-            ("square_cancel_button_text_size", "Taille du texte retour", "size", "30px"),
-            ("square_cancel_button_text_border_size", "Contour du texte retour", "size", "0px"),
-            ("square_cancel_button_image_size", "Taille de l'image du bouton retour", "size", "200px"),
             ("validation_button_width", "Largeur des boutons de validation", "size", "500px"),
             ("validation_button_height", "Hauteur des boutons de validation", "size", "150px"),
             ("validation_button_color", "Fond des boutons de validation", "color", "#008B8B"),
@@ -394,6 +424,19 @@ _ADDITIONAL_CSS_FIELDS = {
             ("scan_explanation_border_color", "Couleur contour des consignes QR", "color", "#000000"),
             ("scan_explanation_background_color", "Fond des consignes QR", "color", "#B6F5F5"),
         ],
+        "back_button": [
+            ("square_cancel_button_width", "Largeur du bouton retour", "size", "500px"),
+            ("square_cancel_button_height", "Hauteur du bouton retour", "size", "150px"),
+            ("square_cancel_button_color", "Fond du bouton retour", "color", "#008B8B"),
+            ("square_cancel_button_border_size", "Bordure du bouton retour", "size", "0px"),
+            ("square_cancel_button_border_color", "Couleur bordure retour", "color", "#000000"),
+            ("square_cancel_button_text_color", "Texte du bouton retour", "color", "#FFFFFF"),
+            ("square_cancel_button_text_size", "Taille du texte retour", "size", "30px"),
+            ("square_cancel_button_text_border_size", "Contour du texte retour", "size", "0px"),
+            ("square_cancel_button_text_border_color", "Contour du texte du bouton retour", "color", "black"),
+            ("square_cancel_button_text_background_color", "Fond du texte du bouton retour", "color", "transparent"),
+            ("square_cancel_button_image_size", "Taille de l'image du bouton retour", "size", "200px"),
+        ],
         "print_error": [
             ("print_error_font_size", "Taille du message", "size", "50px"),
             ("print_error_font_color", "Couleur du message", "color", "#008B8B"),
@@ -402,12 +445,14 @@ _ADDITIONAL_CSS_FIELDS = {
             ("print_error_background_color", "Fond du message", "color", "#B6F5F5"),
             ("print_error_number_size", "Taille du numéro", "size", "80px"),
         ],
-        "subtitle": [
+        "activity_status": [
             ("subtitle_no_activity_font_color", "Texte sans activité", "color", "#FFFFFF"),
             ("subtitle_no_activity_font_size", "Taille sans activité", "size", "40px"),
             ("subtitle_no_activity_border_size", "Contour sans activité", "size", "0px"),
             ("subtitle_no_activity_border_color", "Couleur contour sans activité", "color", "#000000"),
             ("subtitle_no_activity_background_color", "Fond sans activité", "color", "#008B8B"),
+        ],
+        "specific_message": [
             ("subtitle_specific_message_font_color", "Texte du message spécifique", "color", "#FFFFFF"),
             ("subtitle_specific_message_font_size", "Taille du message spécifique", "size", "40px"),
             ("subtitle_specific_message_border_size", "Contour du message spécifique", "size", "0px"),
@@ -427,6 +472,74 @@ for _page, _components in _ADDITIONAL_CSS_FIELDS.items():
             {"key": key, "label": label, "type": field_type, "default": default, "optional": True}
             for key, label, field_type, default in _fields
         )
+
+
+# L'ancien composant patient « Boutons » regroupait 74 contrôles sans tenir
+# compte de l'étape affichée. Les métadonnées ci-dessous conservent un payload
+# rétrocompatible tout en ne présentant que les réglages utiles au scénario.
+_PATIENT_CONFIG_SCENARIOS = {
+    "page_patient_button_shape": ["home"],
+    "page_patient_direct_print": ["home", "validation"],
+    "page_patient_qrcode_display": ["validation", "conclusion"],
+    "page_patient_display_button_scan": ["validation"],
+    "page_patient_display_scan_explanation": ["validation"],
+    "page_patient_print_after_scan": ["conclusion"],
+    "page_patient_print_after_print": ["conclusion"],
+    "page_patient_end_timer": ["conclusion"],
+    "page_patient_validation_message": ["validation"],
+    "page_patient_interface_validate_print": ["validation"],
+    "page_patient_button_print_ticket_display_picture": ["validation"],
+    "page_patient_interface_validate_scan": ["validation"],
+    "page_patient_interface_scan_explanation": ["validation"],
+    "page_patient_interface_validate_cancel": ["validation"],
+    "page_patient_button_cancel_display_picture": ["validation"],
+    "page_patient_confirmation_message": ["conclusion"],
+    "page_patient_interface_done_print": ["conclusion"],
+    "page_patient_interface_done_extend": ["conclusion"],
+    "page_patient_interface_done_back": ["conclusion"],
+}
+for _field in ADAPTERS["patient"]["components"]["buttons"]["config"]:
+    _field["scenarios"] = _PATIENT_CONFIG_SCENARIOS[_field["key"]]
+
+for _field in ADAPTERS["patient"]["components"]["buttons"]["css"]:
+    _key = _field["key"]
+    if _key == "patient_secondary_color":
+        _field["scenarios"] = ["home", "validation", "conclusion", "print_error"]
+    elif _key.startswith("circle_"):
+        _field["scenarios"] = ["home"]
+        _field["visible_when"] = {
+            "key": "page_patient_button_shape", "values": ["circle"]
+        }
+    elif _key.startswith("square_button_"):
+        _field["scenarios"] = ["home"]
+        _field["visible_when"] = {
+            "key": "page_patient_button_shape", "values": ["square"]
+        }
+    elif _key.startswith("validation_button_"):
+        _field["scenarios"] = ["validation", "conclusion", "print_error"]
+    elif _key.startswith("validation_text_") or _key.startswith("scan_explanation_"):
+        _field["scenarios"] = ["validation"]
+    elif _key.startswith("confirmation_text_"):
+        _field["scenarios"] = ["conclusion"]
+
+_PRINT_ERROR_FIELD_SCENARIOS = {
+    "page_patient_print_fail_behavior": ["print_error"],
+    "page_patient_print_fail_show_retry": ["print_error"],
+    "page_patient_print_fail_show_staff": ["print_error"],
+    "page_patient_print_fail_abandon_timer": ["print_error"],
+    "page_patient_interface_printing": ["printing"],
+    "page_patient_interface_print_failed": ["print_error"],
+    "page_patient_interface_no_ticket": ["print_error"],
+    "page_patient_interface_print_failed_staff": ["print_error"],
+    "page_patient_interface_staff_called": ["staff_called"],
+    "page_patient_interface_print_uncertain": ["print_uncertain"],
+    "page_patient_interface_retry": ["print_error"],
+    "page_patient_interface_ticket_received": ["print_uncertain"],
+    "page_patient_interface_ticket_missing": ["print_uncertain"],
+    "page_patient_interface_call_staff": ["print_error"],
+}
+for _field in ADAPTERS["patient"]["components"]["print_error"]["config"]:
+    _field["scenarios"] = _PRINT_ERROR_FIELD_SCENARIOS[_field["key"]]
 
 
 _BUILTIN_THEMES = (
@@ -1289,6 +1402,12 @@ def layout_style(page, layout=None, preview=False):
             if not preview:
                 rules.append(f"{selector}{{display:none!important}}")
             continue
+        # La borne patient possède trois régions structurelles et un overlay.
+        # Leur appliquer les largeurs/ordres du moteur générique transforme la
+        # colonne plein écran en flex horizontal et agrandit le sélecteur de
+        # langues sur toute la page. Seule leur visibilité est personnalisable.
+        if page == "patient":
+            continue
         try:
             order = max(0, min(1000, int(item.get("order", defaults[component_id]["order"]))))
             span = max(1, min(12, int(item.get("span", defaults[component_id]["span"]))))
@@ -1316,7 +1435,15 @@ def layout_style(page, layout=None, preview=False):
         if not preview and isinstance(gallery, dict) and gallery.get("visible") is False:
             rules.append("#div_center_divided{grid-template-columns:1fr}")
     elif page == "patient":
-        rules.append("#main{display:flex;flex-flow:row wrap;align-content:flex-start;align-items:stretch}")
+        rules.extend([
+            "#main{display:grid;grid-template-columns:minmax(0,1fr);"
+            "grid-template-rows:auto minmax(0,1fr) auto;height:100%;"
+            "min-height:0;align-content:stretch;align-items:stretch;overflow:hidden}",
+            "#div_title_area{grid-column:1;grid-row:1;min-width:0}",
+            "#div_buttons_parents{grid-column:1;grid-row:2;height:auto;"
+            "min-height:0;min-width:0}",
+            "#div_buttons_children{grid-column:1;grid-row:3;min-width:0}",
+        ])
     elif page == "phone":
         rules.append(".container,#div_infos{display:flex;flex-flow:row wrap;align-content:flex-start;align-items:stretch}")
     return Markup("<style data-page-editor-layout>" + "".join(rules) + "</style>")

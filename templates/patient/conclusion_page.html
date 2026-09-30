@@ -5,7 +5,7 @@
   <div id="conclusion_normal">
 
     <div id="conclusion_text" class="div_text_summary">
-        <p class="text_summary">
+        <p class="text_summary" data-config-key="page_patient_confirmation_message">
             {{page_patient_confirmation_message}}
         </p>
     </div>
@@ -16,8 +16,10 @@
     {% endif %}
     >
 
-        {% if qr_data_uri %}
-        <div id="div_qr_code" class="div_qr_code">
+        {% if qr_data_uri or page_editor_preview %}
+        <div id="div_qr_code" class="div_qr_code"
+             data-config-bool="page_patient_qrcode_display"
+             {% if not page_patient_display_qrcode %}data-config-hidden{% endif %}>
             <img src="{{ qr_data_uri }}" alt="QR Code">
         </div>
         {% endif %}
@@ -30,16 +32,20 @@
             
             <div
                 id="print_btn"
-                {% if not reprint %} style="display: none;" {% endif %} 
+                {% if not reprint and not page_editor_preview %} style="display: none;" {% endif %}
+                data-config-any-bool="page_patient_print_after_scan,page_patient_print_after_print"
+                {% if page_editor_preview and not reprint %}data-config-hidden{% endif %}
                 class="div_validation_one_button">
-                <p class="validation_button">{{ page_patient_interface_done_print }}</p>
+                <p class="validation_button" data-config-key="page_patient_interface_done_print">{{ page_patient_interface_done_print }}</p>
             </div>
 
             <div
                 id="prolong_btn"
-                {% if not reprint %} style="display: none;" {% endif %} 
+                {% if not reprint and not page_editor_preview %} style="display: none;" {% endif %}
+                data-config-any-bool="page_patient_print_after_scan,page_patient_print_after_print"
+                {% if page_editor_preview and not reprint %}data-config-hidden{% endif %}
                 class="div_validation_one_button">
-                <p class="validation_button">{{page_patient_interface_done_extend}}</p>
+                <p class="validation_button" data-config-key="page_patient_interface_done_extend">{{page_patient_interface_done_extend}}</p>
             </div>
 
             <div
@@ -47,7 +53,7 @@
                 class="div_validation_one_button"
                 hx-get="/patient/cancel_patient"
                 hx-target="#div_buttons_parents">
-                <p class="validation_button">{{page_patient_interface_done_back}}</p>
+                <p class="validation_button" data-config-key="page_patient_interface_done_back">{{page_patient_interface_done_back}}</p>
             </div>
 
         </div>
@@ -55,6 +61,9 @@
 
     <div id="timer_container">
         <div id="timer_gauge" data-duration="{{page_patient_end_timer}}"></div>
+        {% if page_editor_preview %}
+        <span class="page-editor-timer-label">Retour automatique : <span data-config-key="page_patient_end_timer">{{ page_patient_end_timer }}</span> s</span>
+        {% endif %}
     </div>
 
   </div><!-- /#conclusion_normal -->
@@ -69,9 +78,11 @@
 
 </div>
 
+{% if not page_editor_preview %}
 <div id="print_data" print-ticket="{{ print_ticket }}" data-print="{{ print_data | escape }}" data-print-job-id="{{ print_job_id if print_job_id else '' }}" data-call-number="{{ call_number }}" style="display: none;"></div>
 
 <!-- Libellés (traduits) du flux d'impression, lus par patients.js. -->
 <script id="print_ui_labels" type="application/json">{{ print_ui_labels | tojson }}</script>
 
 <script src="{{ url_for('static', filename='js/patient_conclusion.js') }}"></script>
+{% endif %}

@@ -1,0 +1,29 @@
+{% if buttons|length > max_length %}
+    {% set half_length = (buttons|length // 2) + (buttons|length % 2) %}
+    <div class="outer-grid-container">
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ half_length }}, 1fr);">
+            {% for button in buttons[:half_length] %}
+                {% include "patient/button_by_shape.html" %}
+            {% endfor %}
+        </div>
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length - half_length }}, 1fr);">
+            {% for button in buttons[half_length:] %}
+                {% include "patient/button_by_shape.html" %}
+            {% endfor %}
+        </div>
+    </div>
+{% else %}
+    <div class="outer-grid-container">
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length }}, 1fr);">
+            {% for button in buttons %}
+                {% include "patient/button_by_shape.html" %}
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+
+{% if children %}
+    <div class="cancel_button_container" data-page-editor-component="back_button">
+        {% include "patient/cancel_button.html" %}
+    </div>
+{% endif %}

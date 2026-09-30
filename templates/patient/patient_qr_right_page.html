@@ -1,6 +1,7 @@
 <div id="div_confirmation" class="div_summary" style="zoom: 0.8;">
     <div id="div_call_number" class="div_text_summary">
-        <p id="text_call_number" class="text_summary">{{page_patient_validation_message}}</p>
+        <p id="text_call_number" class="text_summary"
+           data-config-key="page_patient_validation_message">{{page_patient_validation_message}}</p>
     </div>
 
     <div class="div_qr_plus_buttons"
@@ -9,8 +10,10 @@
         {% endif %}
     >
         
-        {% if page_patient_display_qrcode %}
-        <div id="div_qr_code" class="div_qr_code">
+        {% if page_patient_display_qrcode or page_editor_preview %}
+        <div id="div_qr_code" class="div_qr_code"
+             data-config-bool="page_patient_qrcode_display"
+             {% if not page_patient_display_qrcode %}data-config-hidden{% endif %}>
             <img src="{{ qr_data_uri }}" alt="QR Code">
         </div>
         {% endif %}
@@ -25,37 +28,41 @@
                définie : sinon l'affichage retomberait sur un <img> cassé. #}
             <div
                 id="print_and_validate"
-                class="{% if page_patient_button_print_ticket_display_picture and page_patient_button_print_ticket_picture %}
+                class="{% if (page_patient_button_print_ticket_display_picture or page_editor_preview) and page_patient_button_print_ticket_picture %}
                             div_validation_one_button_with_img
                         {% else %}
                             div_validation_one_button
                         {% endif %}"
                 hx-post="/patient/print_and_validate"
-                hx-vals='{"activity_id": "{{ activity.id }}", "journey": "{{ journey_id }}"}'
+                hx-vals='{"activity_id": "{{ activity.id if activity else 0 }}", "journey": "{{ journey_id }}"}'
                 hx-target="#div_buttons_parents"
                 hx-sync="this:drop"
             >
-                {% if page_patient_button_print_ticket_display_picture and page_patient_button_print_ticket_picture %}
+                {% if (page_patient_button_print_ticket_display_picture or page_editor_preview) and page_patient_button_print_ticket_picture %}
                     <img src="/static/images/buttons/{{ page_patient_button_print_ticket_picture }}"
                     class="img_for_div_validation"
+                    data-config-bool="page_patient_button_print_ticket_display_picture"
+                    {% if not page_patient_button_print_ticket_display_picture %}data-config-hidden{% endif %}
                     >
                 {% endif %}
-                <p class="validation_button">{{ page_patient_interface_validate_print }}</p>
+                <p class="validation_button" data-config-key="page_patient_interface_validate_print">{{ page_patient_interface_validate_print }}</p>
             </div>
             
-            {% if page_patient_display_button_scan %}
-                <div class="div_validation_one_button"
+            {% if page_patient_display_button_scan or page_editor_preview %}
+                <div class="div_validation_one_button" data-config-bool="page_patient_display_button_scan"
+                    {% if not page_patient_display_button_scan %}data-config-hidden{% endif %}
                     hx-post="patient/scan_and_validate"
                     hx-target="#div_buttons_parents"
-                    hx-vals='{"activity_id": "{{ activity.id }}", "journey": "{{ journey_id }}"}'
+                    hx-vals='{"activity_id": "{{ activity.id if activity else 0 }}", "journey": "{{ journey_id }}"}'
                     hx-sync="this:drop">
-                    <p class="validation_button">{{page_patient_interface_validate_scan}}</p>
+                    <p class="validation_button" data-config-key="page_patient_interface_validate_scan">{{page_patient_interface_validate_scan}}</p>
                 </div>
             {% endif %}
 
-            {% if page_patient_display_scan_explanation and page_patient_display_qrcode %}
-                <div class="div_explanation">
-                    {{page_patient_interface_scan_explanation}}
+            {% if (page_patient_display_scan_explanation and page_patient_display_qrcode) or page_editor_preview %}
+                <div class="div_explanation" data-config-all-bool="page_patient_display_scan_explanation,page_patient_qrcode_display"
+                     {% if not page_patient_display_scan_explanation or not page_patient_display_qrcode %}data-config-hidden{% endif %}>
+                    <span data-config-key="page_patient_interface_scan_explanation">{{page_patient_interface_scan_explanation}}</span>
                 </div>
             {% endif %}
 
@@ -69,22 +76,24 @@
                 hx-trigger="qrcode_is_scanned"
                 hx-post="patient/scan_already_validate"
                 hx-target="#div_buttons_parents"
-                hx-vals='{"patient_call_number": "{{ futur_patient.call_number }}"}'>
+                hx-vals='{"patient_call_number": "{{ futur_patient.call_number if futur_patient else 42 }}"}'>
             </div>
     
-            <div class="{% if page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}
+            <div class="{% if (page_patient_button_cancel_display_picture or page_editor_preview) and page_patient_button_cancel_picture %}
                     div_validation_one_button_with_img
                 {% else %}
                     div_validation_one_button
                 {% endif %}"
                 hx-get="/patient/patient_cancel"
                 hx-target="#div_buttons_parents">
-                {% if page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}
+                {% if (page_patient_button_cancel_display_picture or page_editor_preview) and page_patient_button_cancel_picture %}
                     <img src="/static/images/buttons/{{ page_patient_button_cancel_picture }}"
                     class="img_for_div_validation"
+                    data-config-bool="page_patient_button_cancel_display_picture"
+                    {% if not page_patient_button_cancel_display_picture %}data-config-hidden{% endif %}
                 >
             {% endif %}
-                <p class="validation_button">{{page_patient_interface_validate_cancel}}</p>
+                <p class="validation_button" data-config-key="page_patient_interface_validate_cancel">{{page_patient_interface_validate_cancel}}</p>
             </div>
         </div>
     </div>
@@ -93,4 +102,3 @@
 
     <!-- Inclure les données d'impression 
     <div id="print_data" data-print='{{ print_data | safe }}' style="display:none"></div>-->
-

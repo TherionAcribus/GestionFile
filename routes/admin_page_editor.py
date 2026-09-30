@@ -1,5 +1,6 @@
 from copy import deepcopy
 from datetime import datetime
+from types import SimpleNamespace
 
 import markdown2
 import bleach
@@ -109,13 +110,16 @@ def _render_phone_markdown(config, tokens=None):
 
 
 def _patient_preview_data(scenario, tokens):
-    top_level = (
-        Button.query.filter_by(is_present=True, parent_button_id=None)
+    all_top_level = (
+        Button.query.filter_by(parent_button_id=None)
         .order_by(Button.sort_order, Button.id)
         .all()
     )
+    top_level = [button for button in all_top_level if button.is_present]
     buttons = top_level
     children = False
+    inactive_button_ids = set()
+    inactive_is_example = False
     if scenario == "children":
         parent = next(
             (
@@ -130,6 +134,46 @@ def _patient_preview_data(scenario, tokens):
                 key=lambda child: (child.sort_order, child.id),
             )
             children = True
+    elif scenario == "activity_inactive":
+        # Conserver le cadre naturel de l'accueil : seuls les boutons déjà
+        # indisponibles ou liés à une activité planifiée sont présentés comme
+        # indisponibles ; tous les autres restent normaux autour d'eux.
+        inactive_candidates = [
+            button for button in all_top_level
+            if button.activity is not None and (
+                not button.is_active
+                or not button.is_present
+                or bool(button.activity.schedules)
+            )
+        ]
+        if inactive_candidates:
+            inactive_button_ids = {button.id for button in inactive_candidates}
+            buttons = [
+                button for button in all_top_level
+                if button.is_present or button.id in inactive_button_ids
+            ]
+        else:
+            inactive_preview = next(
+                (button for button in top_level if button.activity is not None),
+                None,
+            )
+            inactive_is_example = True
+            if inactive_preview is None:
+                inactive_preview = SimpleNamespace(
+                    id=0,
+                    label="Service momentanément indisponible",
+                    shape="square",
+                    image_url=None,
+                    is_active=True,
+                    is_parent=False,
+                    activity=SimpleNamespace(
+                        id=0,
+                        name="Service momentanément indisponible",
+                        specific_message="",
+                    ),
+                )
+                buttons = [inactive_preview]
+            inactive_button_ids = {inactive_preview.id}
 
     empty_parent_ids = {
         button.id for button in buttons
@@ -145,8 +189,12 @@ def _patient_preview_data(scenario, tokens):
         # réelle ; l'aperçu s'affiche dans la langue de référence (fr).
         "preview_button_translations": get_button_translations(buttons, "fr"),
         "preview_buttons_children": children,
+        "preview_inactive_mode": scenario == "activity_inactive",
+        "preview_inactive_button_ids": inactive_button_ids,
+        "preview_inactive_is_example": inactive_is_example,
         "preview_buttons_max_length": 2 if buttons and buttons[0].shape == "square" else 4,
         "preview_empty_parent_ids": empty_parent_ids,
+        "preview_activity": selected_button.activity if selected_button else None,
         "preview_languages": (
             Language.query.filter_by(is_active=True)
             .order_by(Language.sort_order, Language.id)
@@ -156,6 +204,13 @@ def _patient_preview_data(scenario, tokens):
         "preview_specific_message": (
             selected_button.activity.specific_message
             if selected_button and selected_button.activity else ""
+        ),
+        "preview_qr_data_uri": "/static/css/libs/bootstrap-icons/qr-code.svg",
+        "preview_print_picture": current_app.config.get(
+            "PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE"
+        ),
+        "preview_cancel_picture": current_app.config.get(
+            "PAGE_PATIENT_BUTTON_CANCEL_PICTURE"
         ),
         "preview_patient_interface": {
             "validate_print": current_app.config.get(
@@ -300,6 +355,15 @@ def _publish(page, adapter, state, payload, *, require_base_match):
 
     for key, value in normalized["config"].items():
         _stage_config(key, value)
+    if page == "patient":
+        button_shape = normalized["config"].get("page_patient_button_shape")
+        if button_shape in {"circle", "square"}:
+            # Modification groupée et transactionnelle : le brouillon ne
+            # touche pas aux boutons avant « Publier ». Le mode avancé pourra
+            # ensuite les différencier à nouveau.
+            Button.query.update(
+                {Button.shape: button_shape}, synchronize_session="fetch"
+            )
     _stage_config(adapter["layout_key"], normalized["layout"])
 
     css_manager = current_app.css_variable_manager

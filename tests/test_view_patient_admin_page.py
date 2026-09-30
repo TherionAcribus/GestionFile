@@ -11,6 +11,7 @@ Couvre :
 """
 
 import re
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -34,6 +35,24 @@ def test_editeur_borne_active_par_defaut():
     assert {"announce", "patient"} <= pages
 
 
+def test_boutons_patient_rectangulaires_par_defaut():
+    defaults = json.loads(_read("static/json/default_config.json"))
+    assert defaults["configurations"]["page_patient_button_shape"] == "square"
+    assert defaults["configurations"]["page_patient_interface_children_back"] == "Retour"
+    assert Config.PAGE_PATIENT_BUTTON_SHAPE == "square"
+    assert Config.PAGE_PATIENT_INTERFACE_CHILDREN_BACK == "Retour"
+
+
+def test_deploiement_coolify_ne_desactive_pas_editeur_borne_par_defaut():
+    """Le compose ne doit pas écraser le défaut Python avec ``announce`` seul,
+    sinon la carte et le lien de l'éditeur disparaissent après déploiement."""
+    compose = _read("docker-compose.coolify.yaml")
+    assert (
+        "PAGE_EDITOR_ENABLED_PAGES: "
+        "${PAGE_EDITOR_ENABLED_PAGES:-announce,patient,phone}"
+    ) in compose
+
+
 def test_editeur_couvre_l_ecran_de_validation():
     buttons = ADAPTERS["patient"]["components"]["buttons"]
     config = {f["key"] for f in buttons["config"]}
@@ -44,9 +63,13 @@ def test_editeur_couvre_l_ecran_de_validation():
                 "page_patient_button_cancel_display_picture"):
         assert key in config, key
     css = {f["key"] for f in buttons["css"]}
-    for prefix in ("circle_button", "square_button", "square_cancel_button", "validation_button"):
+    for prefix in ("circle_button", "square_button", "validation_button"):
         assert f"{prefix}_text_border_color" in css
         assert f"{prefix}_text_background_color" in css
+    back_button = ADAPTERS["patient"]["components"]["back_button"]
+    back_css = {f["key"] for f in back_button["css"]}
+    assert "square_cancel_button_text_border_color" in back_css
+    assert "square_cancel_button_text_background_color" in back_css
 
 
 def test_mode_avance_sans_reglage_orphelin():

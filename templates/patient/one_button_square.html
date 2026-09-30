@@ -1,18 +1,21 @@
 {# Un parent sans sous-bouton affiché est grisé et non cliquable (pas de hx-post). #}
 {% set is_empty_parent = empty_parent_ids is defined and button.id in empty_parent_ids %}
+{% set preview_is_inactive = preview_inactive_mode | default(false) and button.id in preview_inactive_button_ids %}
+{% set is_active = (not preview_is_inactive) if preview_inactive_mode | default(false) else button.is_active %}
 <div class="grid-item div_square_bloc_activity
-                {% if button.is_active %} div_square_button_active {% else %} div_square_button_inactive {% endif %}
+                {% if is_active %} div_square_button_active {% else %} div_square_button_inactive {% endif %}
                 {% if is_empty_parent %} div_button_disabled {% endif %}"
-                    id="{{ button.activity.name | replace(' ', '_') }}"
+                    id="{{ button.activity.name | replace(' ', '_') }}{% if preview_variant is defined %}_square{% endif %}"
+                {% if preview_is_inactive %}data-preview-inactive-button data-config-bool="page_patient_disable_button" {% if not preview_show_inactive %}data-config-hidden{% endif %}{% endif %}
                 {% if not is_empty_parent %}
                 hx-post="/patients_submit"
                 hx-vals='{"activity_id": "{{ button.activity.id }}",
                         "is_parent": "{{ button.is_parent }}",
-                        "is_active": "{{ button.is_active }}",
+                        "is_active": "{{ is_active }}",
                         "button_id": "{{ button.id }}",
                         "journey": "{{ journey_id or '' }}"
                         }'
-                {% if button.is_active %}
+                {% if is_active %}
                         hx-target="#div_buttons_parents"
                 {% else %}
                         hx-target="#div_buttons_children"
@@ -24,10 +27,10 @@
                                 {% if button.image_url %} grid_square_buttons {% endif %}
                                 ">
                                 {% if button.image_url %}
-                                        <img class="img_square_button {% if button.is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}"
+                                        <img class="img_square_button {% if is_active %} img_btn_active {% else %} img_btn_inactive {% endif %}"
                                                 src='/static/images/buttons/{{ button.image_url }}'>
                                 {% endif %}
-                                <div class="div_text_button {% if button.is_active %} div_text_button_square_active {% else %} div_text_button_inactive {% endif %}">
+                                <div class="div_text_button {% if is_active %} div_text_button_square_active {% else %} div_text_button_inactive {% endif %}">
                                         <p>{{ button_translations.get(button.id) or button.label }}</p>
                                 </div>
                         </div>

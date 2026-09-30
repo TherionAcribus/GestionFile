@@ -130,6 +130,10 @@ class Config:
     PAGE_EDITOR_ENABLED_PAGES = os.getenv(
         "PAGE_EDITOR_ENABLED_PAGES", "announce,patient,phone"
     )
+    # Choix initial de l'éditeur visuel. La valeur ``mixed`` sera enregistrée
+    # automatiquement dès que le mode avancé différencie les boutons.
+    PAGE_PATIENT_BUTTON_SHAPE = "square"
+    PAGE_PATIENT_INTERFACE_CHILDREN_BACK = "Retour"
 
     # Définir les valeurs par défaut ici
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement

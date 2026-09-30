@@ -195,9 +195,13 @@ def display_children_buttons_for_right_page(request):
     button_translations = {}
     if language_code != "fr":
         button_translations = get_button_translations(children_buttons, language_code)
-        page_patient_interface_validate_cancel = get_text_translation("page_patient_interface_validate_cancel", language_code)["translation"]
+        page_patient_interface_children_back = get_text_translation(
+            "page_patient_interface_children_back", language_code
+        )["translation"]
     else:
-        page_patient_interface_validate_cancel = app.config["PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL"]
+        page_patient_interface_children_back = app.config[
+            "PAGE_PATIENT_INTERFACE_CHILDREN_BACK"
+        ]
 
     # Garde-fou : un parent sans sous-bouton affiché est normalement grisé côté
     # borne (cf. patient_right_page), mais on protège quand même l'accès direct
@@ -206,7 +210,7 @@ def display_children_buttons_for_right_page(request):
     return render_template('patient/patient_buttons_left.html',
                             buttons=children_buttons,
                             button_translations=button_translations,
-                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
+                            page_patient_interface_children_back=page_patient_interface_children_back,
                             max_length=max_length,
                             # L'intention de parcours suit la navigation dans
                             # les sous-boutons : l'inscription finale reste

@@ -7,7 +7,7 @@ from flask import Flask
 from flask_login import LoginManager
 
 from css_manager import CSSManager
-from models import Activity, Button, ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
+from models import Activity, ActivitySchedule, Button, ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
 from page_editor import (
     ADAPTERS,
     complete_css,
@@ -28,6 +28,7 @@ from routes.admin_page_editor import (
     _render_phone_markdown,
     admin_page_editor_bp,
 )
+from routes.admin_patient import _sync_patient_button_shape_mode
 from routes.admin_config import (
     COLOR_PAGE_ROLES,
     admin_config_bp,
@@ -758,6 +759,25 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
         page_layout_style=layout_style, preview_vars_style=preview_vars_style,
         user_has_permission=lambda *args, **kwargs: True, page_editor_enabled=lambda page: True,
     )
+    if page_key == "patient":
+        with app.app_context():
+            activity = Activity(name="Accueil E2E", letter="E")
+            child_activity = Activity(name="Enfant E2E", letter="F")
+            parent = Button(
+                label="Bouton E2E", activity=activity, is_parent=True,
+                is_present=True, is_active=True, shape="circle", sort_order=1,
+            )
+            db.session.add_all([
+                activity,
+                child_activity,
+                parent,
+                Button(
+                    label="Sous-bouton E2E", activity=child_activity,
+                    parent_button=parent, is_present=True, is_active=True,
+                    shape="circle", sort_order=1,
+                ),
+            ])
+            db.session.commit()
     client = authenticated_client(editor_app)
     before = client.get(f"/admin/page-editor/{page_key}/state").get_json()
     baseline = before["published"]
@@ -798,6 +818,20 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                     assert applied["css"] == theme["snapshot"]["css"]
                     preview = page.frame_locator("#editor-preview").locator("html")
                     playwright.expect(preview).to_have_css("--" + page_key + "_secondary_color", theme["snapshot"]["css"][page_key + "_secondary_color"])
+                    if page_key == "patient" and theme["id"] == "builtin-officine":
+                        geometry = page.frame_locator("#editor-preview").locator("#main").evaluate("""main => {
+                            const footer = document.querySelector('#div_buttons_children').getBoundingClientRect();
+                            const center = document.querySelector('#div_buttons_parents').getBoundingClientRect();
+                            return {
+                                mainHeight: main.clientHeight,
+                                mainScrollHeight: main.scrollHeight,
+                                centerHeight: center.height,
+                                footerBottom: footer.bottom,
+                            };
+                        }""")
+                        assert geometry["mainScrollHeight"] <= geometry["mainHeight"] + 1
+                        assert geometry["centerHeight"] > 0
+                        assert geometry["footerBottom"] <= 801
                     page.locator("#editor-undo").click()
                     assert working() == baseline
 
@@ -834,6 +868,202 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                 assert rects["canvas"]["y"] <= rects["toolbar"]["y"] + rects["toolbar"]["height"] + 8
                 assert rects["preview"]["y"] < rects["canvas"]["y"] + rects["canvas"]["height"]
                 page.evaluate("window.scrollTo(0, 0)")
+
+                if page_key == "patient":
+                    def assert_patient_center_fits():
+                        geometry = page.frame_locator("#editor-preview").locator(
+                            "#div_buttons_parents"
+                        ).evaluate("""center => {
+                            const bounds = center.getBoundingClientRect();
+                            const visibleChildren = Array.from(center.children).filter(child => {
+                                const style = getComputedStyle(child);
+                                return !child.hidden && style.display !== 'none' && style.visibility !== 'hidden';
+                            });
+                            return {
+                                clientHeight: center.clientHeight,
+                                scrollHeight: center.scrollHeight,
+                                childTop: Math.min(...visibleChildren.map(child => child.getBoundingClientRect().top)),
+                                childBottom: Math.max(...visibleChildren.map(child => child.getBoundingClientRect().bottom)),
+                                centerTop: bounds.top,
+                                centerBottom: bounds.bottom,
+                            };
+                        }""")
+                        assert geometry["scrollHeight"] <= geometry["clientHeight"] + 1
+                        assert geometry["childTop"] >= geometry["centerTop"] - 1
+                        assert geometry["childBottom"] <= geometry["centerBottom"] + 1
+
+                    page.locator("#editor-scenario").select_option("home")
+                    page.locator("[data-component-id='buttons']").click()
+                    shape_select = page.locator(
+                        "#editor-config-page_patient_button_shape"
+                    )
+                    playwright.expect(shape_select).to_be_visible()
+                    shape_select.select_option("circle")
+                    playwright.expect(page.locator(
+                        "#editor-css-circle_button_size"
+                    )).to_have_count(1)
+                    playwright.expect(page.locator(
+                        "#editor-css-square_button_width"
+                    )).to_have_count(0)
+                    preview_frame = page.frame_locator("#editor-preview")
+                    playwright.expect(preview_frame.locator(
+                        ".page-editor-button-shape-preview:visible"
+                    )).to_have_count(1)
+                    playwright.expect(preview_frame.locator(
+                        ".page-editor-button-shape-preview:visible .div_circle_buttons"
+                    )).to_have_count(1)
+
+                    shape_select.select_option("square")
+                    playwright.expect(page.locator(
+                        "#editor-css-square_button_width"
+                    )).to_have_count(1)
+                    playwright.expect(page.locator(
+                        "#editor-css-circle_button_size"
+                    )).to_have_count(0)
+                    playwright.expect(preview_frame.locator(
+                        ".page-editor-button-shape-preview:visible .div_square_bloc_activity"
+                    )).to_have_count(1)
+                    assert_patient_center_fits()
+
+                    page.locator("#editor-scenario").select_option("children")
+                    page.locator("[data-component-id='buttons']").click()
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_button_shape"
+                    )).to_have_count(0)
+                    playwright.expect(page.locator(
+                        "#editor-css-square_button_width"
+                    )).to_have_count(0)
+                    playwright.expect(page.locator(
+                        "#editor-css-circle_button_size"
+                    )).to_have_count(0)
+                    page.locator("[data-component-id='back_button']").click()
+                    back_text = page.locator(
+                        "#editor-config-page_patient_interface_children_back"
+                    )
+                    playwright.expect(back_text).to_be_visible()
+                    playwright.expect(page.locator(
+                        "#editor-css-square_cancel_button_width"
+                    )).to_have_count(1)
+                    back_text.fill("Revenir E2E")
+                    playwright.expect(preview_frame.locator(
+                        "[data-config-key='page_patient_interface_children_back']:visible"
+                    )).to_have_text("Revenir E2E")
+                    back_geometry = preview_frame.locator(
+                        "[data-page-editor-component='back_button']:visible"
+                    ).evaluate("""back => {
+                        const center = document.querySelector('#div_buttons_parents').getBoundingClientRect();
+                        const bounds = back.getBoundingClientRect();
+                        return {
+                            top: bounds.top,
+                            right: bounds.right,
+                            bottom: bounds.bottom,
+                            centerTop: center.top,
+                            centerRight: center.right,
+                            centerBottom: center.bottom,
+                        };
+                    }""")
+                    assert back_geometry["top"] >= back_geometry["centerTop"] - 1
+                    assert back_geometry["right"] <= back_geometry["centerRight"] + 1
+                    assert back_geometry["bottom"] <= back_geometry["centerBottom"] + 1
+
+                    page.locator("#editor-scenario").select_option("validation")
+                    page.locator("[data-component-id='buttons']").click()
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_validation_message"
+                    )).to_be_visible()
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_confirmation_message"
+                    )).to_have_count(0)
+                    scan_toggle = page.locator(
+                        "#editor-config-page_patient_display_button_scan"
+                    )
+                    scan_button = page.frame_locator("#editor-preview").locator(
+                        "[data-config-bool='page_patient_display_button_scan']"
+                    )
+                    playwright.expect(scan_button).not_to_be_visible()
+                    scan_toggle.check()
+                    playwright.expect(scan_button).to_be_visible()
+                    validation_message = page.locator(
+                        "#editor-config-page_patient_validation_message"
+                    )
+                    validation_message.fill("Confirmez votre choix E2E")
+                    playwright.expect(page.frame_locator("#editor-preview").locator(
+                        "[data-config-key='page_patient_validation_message']"
+                    )).to_have_text("Confirmez votre choix E2E")
+                    assert_patient_center_fits()
+
+                    page.locator("#editor-scenario").select_option("conclusion")
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_confirmation_message"
+                    )).to_be_visible()
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_validation_message"
+                    )).to_have_count(0)
+                    playwright.expect(page.frame_locator("#editor-preview").locator(
+                        "#div_conclusion"
+                    )).to_be_visible()
+                    assert_patient_center_fits()
+
+                    for print_scenario in (
+                        "print_error", "printing", "print_uncertain", "staff_called"
+                    ):
+                        page.locator("#editor-scenario").select_option(print_scenario)
+                        playwright.expect(page.frame_locator("#editor-preview").locator(
+                            "#print_status_overlay"
+                        )).to_be_visible()
+                        assert_patient_center_fits()
+
+                    page.locator("#editor-scenario").select_option(
+                        "activity_inactive"
+                    )
+                    page.locator("[data-component-id='buttons']").click()
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_button_shape"
+                    )).to_have_count(0)
+                    playwright.expect(page.locator(
+                        "#editor-css-square_button_width"
+                    )).to_have_count(0)
+                    playwright.expect(page.locator(
+                        "#editor-css-square_button_color"
+                    )).to_have_count(0)
+                    playwright.expect(page.locator(
+                        "#editor-css-circle_button_size"
+                    )).to_have_count(0)
+                    page.locator(
+                        "[data-component-id='activity_status']"
+                    ).click()
+                    inactive_toggle = page.locator(
+                        "#editor-config-page_patient_disable_button"
+                    )
+                    playwright.expect(inactive_toggle).to_be_visible()
+                    inactive_message = page.locator(
+                        "#editor-config-page_patient_disable_default_message"
+                    )
+                    playwright.expect(inactive_message).to_be_visible()
+                    playwright.expect(page.locator(
+                        "#editor-config-page_patient_subtitle"
+                    )).to_have_count(0)
+                    inactive_button = page.frame_locator(
+                        "#editor-preview"
+                    ).locator(
+                        ".page-editor-button-shape-preview:visible "
+                        ".div_square_button_inactive, "
+                        ".page-editor-button-shape-preview:visible "
+                        ".div_button_inactive"
+                    )
+                    playwright.expect(inactive_button).to_have_count(1)
+                    inactive_toggle.uncheck()
+                    playwright.expect(inactive_button).not_to_be_visible()
+                    playwright.expect(page.frame_locator("#editor-preview").locator(
+                        "#div_buttons_children_default"
+                    )).to_be_visible()
+                    inactive_toggle.check()
+                    playwright.expect(inactive_button).to_be_visible()
+                    inactive_message.fill("Cette activité est fermée pour le test E2E")
+                    playwright.expect(page.frame_locator("#editor-preview").locator(
+                        "[data-config-key='page_patient_disable_default_message']"
+                    )).to_have_text("Cette activité est fermée pour le test E2E")
+                    assert_patient_center_fits()
 
                 page.set_viewport_size({"width": 390, "height": 844})
                 page.locator("#editor-themes").click()
@@ -1339,7 +1569,9 @@ def test_patient_adapter_exposes_print_error_scenario():
     component = adapter["components"]["print_error"]
     assert component["zone"] == "main"
     assert component["selector"] == "#print_status_overlay"
-    assert component["scenarios"] == ["print_error"]
+    assert component["scenarios"] == [
+        "print_error", "printing", "print_uncertain", "staff_called"
+    ]
 
     config_keys = {field["key"] for field in component["config"]}
     assert {
@@ -1469,6 +1701,267 @@ def test_preview_home_renders_real_buttons(editor_app):
     assert "Déposer une ordonnance" in response.get_data(as_text=True)
 
 
+def test_patient_preview_reuses_real_validation_and_conclusion_markup(editor_app):
+    """Les étapes sensibles ne doivent plus être des maquettes divergentes :
+    elles réutilisent les mêmes gabarits que la borne et restent pilotables par
+    le brouillon envoyé en postMessage."""
+    client = authenticated_client(editor_app)
+    _preview_ready_app(editor_app[0])
+
+    validation = client.get(
+        "/admin/page-editor/patient/preview?scenario=validation"
+    ).get_data(as_text=True)
+    assert 'id="div_confirmation"' in validation
+    assert 'id="print_and_validate"' in validation
+    assert 'data-config-key="page_patient_validation_message"' in validation
+    assert 'data-config-bool="page_patient_display_button_scan"' in validation
+    assert 'data-config-all-bool="page_patient_display_scan_explanation,page_patient_qrcode_display"' in validation
+
+    conclusion = client.get(
+        "/admin/page-editor/patient/preview?scenario=conclusion"
+    ).get_data(as_text=True)
+    assert 'id="div_conclusion"' in conclusion
+    assert 'data-config-key="page_patient_confirmation_message"' in conclusion
+    assert 'data-config-key="page_patient_interface_done_back"' in conclusion
+    assert 'data-config-any-bool="page_patient_print_after_scan,page_patient_print_after_print"' in conclusion
+    assert "patient_conclusion.js" not in conclusion
+
+
+def test_patient_children_preview_separates_back_button_from_activity_buttons(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PAGE_PATIENT_INTERFACE_CHILDREN_BACK"] = "Retour"
+        parent_activity = Activity(name="Accueil", letter="A")
+        child_activity = Activity(name="Ordonnances", letter="O")
+        parent = Button(
+            label="Démarches", activity=parent_activity, is_parent=True,
+            is_present=True, is_active=True, shape="square", sort_order=1,
+        )
+        child = Button(
+            label="Ordonnances", activity=child_activity, parent_button=parent,
+            is_present=True, is_active=True, shape="square", sort_order=1,
+        )
+        db.session.add_all([parent_activity, child_activity, parent, child])
+        db.session.commit()
+
+    preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=children"
+    ).get_data(as_text=True)
+    assert 'data-page-editor-component="back_button"' in preview
+    marker = 'data-config-key="page_patient_interface_children_back">'
+    assert marker in preview
+    assert preview.split(marker, 1)[1].split("</p>", 1)[0].strip() == "Retour"
+
+
+def test_patient_adapter_limits_layout_controls_and_filters_fields_by_scenario():
+    adapter = public_adapter_data("patient")
+    assert all(
+        component["layout_controls"] == ["visible"]
+        for component in adapter["components"].values()
+    )
+    fields = {
+        field["key"]: field["scenarios"]
+        for field in adapter["components"]["buttons"]["config"]
+    }
+    assert fields["page_patient_validation_message"] == ["validation"]
+    assert fields["page_patient_confirmation_message"] == ["conclusion"]
+    assert fields["page_patient_qrcode_display"] == ["validation", "conclusion"]
+    assert fields["page_patient_button_shape"] == ["home"]
+    shape_field = next(
+        field for field in adapter["components"]["buttons"]["config"]
+        if field["key"] == "page_patient_button_shape"
+    )
+    assert shape_field["choices"] == [
+        ["mixed", "Formes actuelles différentes — choisir une forme"],
+        ["circle", "Boutons ronds"],
+        ["square", "Boutons rectangulaires"],
+    ]
+    css_fields = {
+        field["key"]: field
+        for field in adapter["components"]["buttons"]["css"]
+    }
+    assert css_fields["circle_button_size"]["visible_when"] == {
+        "key": "page_patient_button_shape", "values": ["circle"]
+    }
+    assert css_fields["circle_button_size"]["scenarios"] == ["home"]
+    assert css_fields["square_button_width"]["visible_when"] == {
+        "key": "page_patient_button_shape", "values": ["square"]
+    }
+    assert css_fields["square_button_width"]["scenarios"] == ["home"]
+    assert not any(key.startswith("square_cancel_") for key in css_fields)
+    back_button = adapter["components"]["back_button"]
+    assert back_button["label"] == "Bouton Retour"
+    assert back_button["scenarios"] == ["children"]
+    assert [field["key"] for field in back_button["config"]] == [
+        "page_patient_interface_children_back"
+    ]
+    assert {
+        field["key"] for field in back_button["css"]
+    } == {
+        "square_cancel_button_width",
+        "square_cancel_button_height",
+        "square_cancel_button_color",
+        "square_cancel_button_border_size",
+        "square_cancel_button_border_color",
+        "square_cancel_button_text_color",
+        "square_cancel_button_text_size",
+        "square_cancel_button_text_border_size",
+        "square_cancel_button_text_border_color",
+        "square_cancel_button_text_background_color",
+        "square_cancel_button_image_size",
+    }
+    assert adapter["components"]["subtitle"]["label"] == "Sous-titre standard"
+    assert adapter["components"]["activity_status"]["scenarios"] == [
+        "activity_inactive"
+    ]
+    assert adapter["components"]["specific_message"]["scenarios"] == [
+        "validation", "conclusion"
+    ]
+    status_keys = {
+        field["key"]
+        for field in adapter["components"]["activity_status"]["config"]
+    }
+    assert status_keys == {
+        "page_patient_disable_button",
+        "page_patient_disable_default_message",
+        "page_patient_timer_activity_inactive",
+    }
+
+
+def test_patient_inactive_activity_preview_keeps_normal_buttons_and_marks_example(editor_app):
+    """Sans activité planifiée, un seul bouton sert d'exemple et les autres
+    restent normaux dans le cadre complet de l'accueil."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        activity = Activity(name="Vaccination", letter="V")
+        other_activity = Activity(name="Ordonnances", letter="O")
+        db.session.add_all([
+            activity,
+            other_activity,
+            Button(label="Vaccination", activity=activity, is_present=True,
+                   is_active=True, shape="square", sort_order=1),
+            Button(label="Ordonnances", activity=other_activity, is_present=True,
+                   is_active=True, shape="square", sort_order=2),
+        ])
+        db.session.commit()
+
+    preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=activity_inactive"
+    ).get_data(as_text=True)
+
+    assert preview.count('class="page-editor-button-shape-preview"') == 3
+    assert "div_square_bloc_activity" in preview
+    assert "div_circle_buttons" in preview
+    assert "div_square_button_inactive" in preview
+    assert "div_square_button_active" in preview
+    assert '"is_active": "False"' in preview
+    assert '"is_active": "True"' in preview
+    assert "Aucune activité n’est indisponible ou programmée" in preview
+    assert preview.count("data-preview-inactive-button") == 3
+    assert 'data-page-editor-component="activity_status"' in preview
+    assert 'data-config-key="page_patient_disable_default_message"' in preview
+    assert 'data-config-display-key="page_patient_disable_button"' in preview
+
+
+def test_patient_inactive_activity_preview_uses_scheduled_activities(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        scheduled = Activity(name="Vaccination", letter="V")
+        normal = Activity(name="Ordonnances", letter="O")
+        scheduled.schedules.append(ActivitySchedule(name="Horaires vaccination"))
+        db.session.add_all([
+            scheduled,
+            normal,
+            Button(label="Vaccination", activity=scheduled, is_present=True,
+                   is_active=True, shape="square", sort_order=1),
+            Button(label="Ordonnances", activity=normal, is_present=True,
+                   is_active=True, shape="square", sort_order=2),
+        ])
+        db.session.commit()
+
+    preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=activity_inactive"
+    ).get_data(as_text=True)
+
+    assert "Aucune activité n’est indisponible ou programmée" not in preview
+    assert preview.count("data-preview-inactive-button") == 3
+    assert "div_square_button_inactive" in preview
+    assert "div_square_button_active" in preview
+
+
+def test_patient_shape_is_applied_to_all_buttons_only_on_publish(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        first_activity = Activity(name="Ordonnances", letter="O")
+        second_activity = Activity(name="Vaccination", letter="V")
+        db.session.add_all([
+            first_activity,
+            second_activity,
+            Button(label="Ordonnances", activity=first_activity,
+                   is_present=True, is_active=True, shape="circle", sort_order=1),
+            Button(label="Vaccination", activity=second_activity,
+                   is_present=True, is_active=True, shape="square", sort_order=2),
+        ])
+        app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "mixed"
+        db.session.commit()
+        payload = current_payload("patient")
+        payload["config"]["page_patient_button_shape"] = "square"
+        payload["base_hash"] = payload_hash(current_payload("patient"))
+
+    saved = client.put(
+        "/admin/page-editor/patient/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert saved.status_code == 200
+    with app.app_context():
+        assert {button.shape for button in Button.query.all()} == {
+            "circle", "square"
+        }
+
+    published = client.post(
+        "/admin/page-editor/patient/publish",
+        json={"draft_version": saved.get_json()["draft_version"]},
+    )
+    assert published.status_code == 200
+    with app.app_context():
+        assert {button.shape for button in Button.query.all()} == {"square"}
+        assert ConfigOption.query.filter_by(
+            config_key="page_patient_button_shape"
+        ).one().value_str == "square"
+
+
+def test_advanced_button_changes_switch_shape_selector_to_mixed(editor_app):
+    """Une personnalisation bouton par bouton ne doit pas être écrasée à la
+    prochaine ouverture de l'éditeur visuel."""
+    app, _ = editor_app
+    with app.app_context():
+        first_activity = Activity(name="A", letter="A")
+        second_activity = Activity(name="B", letter="B")
+        first = Button(label="A", activity=first_activity, is_present=True,
+                       is_active=True, shape="circle", sort_order=1)
+        second = Button(label="B", activity=second_activity, is_present=True,
+                        is_active=True, shape="square", sort_order=2)
+        db.session.add_all([first_activity, second_activity, first, second])
+        _sync_patient_button_shape_mode()
+        db.session.commit()
+        assert app.config["PAGE_PATIENT_BUTTON_SHAPE"] == "mixed"
+
+        second.shape = "circle"
+        _sync_patient_button_shape_mode()
+        db.session.commit()
+        assert app.config["PAGE_PATIENT_BUTTON_SHAPE"] == "circle"
+        assert ConfigOption.query.filter_by(
+            config_key="page_patient_button_shape"
+        ).one().value_str == "circle"
+
+
 def test_print_error_preview_renders_overlay(editor_app):
     """L'aperçu du scénario reproduit l'overlay de la borne : message lié à la
     clé de config, numéro en grand masqué si le texte contient {N}, boutons du
@@ -1487,11 +1980,15 @@ def test_print_error_preview_renders_overlay(editor_app):
     assert 'data-config-key="page_patient_interface_retry"' in preview
 
 
-def test_layout_style_positions_print_error_without_forcing_display():
-    """La règle de layout positionne l'overlay mais ne force pas son affichage :
-    c'est patients.js qui le montre/masque (display inline)."""
+def test_patient_layout_uses_fixed_three_row_grid_without_forcing_overlay():
+    """La borne conserve ses trois régions dans les 800 px disponibles ;
+    l'overlay d'impression reste piloté par patients.js dans la zone centrale."""
     style = str(layout_style("patient"))
-    assert "#print_status_overlay{order:" in style
+    assert "#main{display:grid" in style
+    assert "grid-template-rows:auto minmax(0,1fr) auto" in style
+    assert "#div_buttons_parents{grid-column:1;grid-row:2;height:auto" in style
+    assert ".language-selector{order:" not in style
+    assert "#print_status_overlay{order:" not in style
     assert "#print_status_overlay{display:none" not in style
 
 
