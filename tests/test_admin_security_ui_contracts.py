@@ -332,3 +332,172 @@ def test_add_user_form_un_seul_tr_dans_thead():
     thead = re.search(r"<thead>(.*?)</thead>", tpl, re.DOTALL)
     assert thead
     assert thead.group(1).count("<tr") == 1
+
+
+# ---------------------------------------------------------------------------
+# Invariant « dernier accès Sécurité » : il doit toujours rester au moins un
+# utilisateur ACTIF dont un rôle accorde admin_security (remplace l'ancienne
+# convention « rôle nommé admin »), et rôle assigné non supprimable.
+# ---------------------------------------------------------------------------
+
+def _add_role(app, name, **permissions):
+    with app.app_context():
+        role = Role(name=name, description=name)
+        for key, value in permissions.items():
+            setattr(role, key, value)
+        db.session.add(role)
+        db.session.commit()
+        return role.id
+
+
+def _add_user(app, username, role_id=None, active=True):
+    with app.app_context():
+        user = User(username=username, email=None)
+        user.set_password("Motdepasse-2026!")  # >= 10 caractères
+        user.active = active
+        if role_id is not None:
+            user.roles.append(db.session.get(Role, role_id))
+        db.session.add(user)
+        db.session.commit()
+        return user.id
+
+
+def _user_id(app, username):
+    with app.app_context():
+        return User.query.filter_by(username=username).first().id
+
+
+def _user(app, user_id):
+    with app.app_context():
+        return db.session.get(User, user_id)
+
+
+def _user_role_names(app, user_id):
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        return None if user is None else [r.name for r in user.roles]
+
+
+def _post_user_update(client, user_id, **fields):
+    payload = {"username": "root", "email": "", "role_id": "1"}
+    payload.update(fields)
+    return client.post(f"/admin/security/user_update/{user_id}", data=payload)
+
+
+def test_delete_role_refuse_un_role_assigne(client, app):
+    rid = _role_id(app, "admin")
+    resp = client.delete(f"/admin/security/delete_role/{rid}")
+    assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
+    assert _role(app, rid) is not None
+
+
+def test_delete_role_supprime_un_role_non_assigne(client, app):
+    rid = _add_role(app, "temp")
+    resp = client.delete(f"/admin/security/delete_role/{rid}")
+    assert resp.status_code == 200
+    assert _role(app, rid) is None
+
+
+def test_role_update_refuse_de_retirer_la_derniere_permission_securite(client, app):
+    rid = _role_id(app, "admin")
+    resp = _post_update(client, rid, name="admin",
+                        permissions=json.dumps({"admin_security": False}))
+    assert resp.status_code == 400
+    assert "error" in resp.get_json()
+    assert _role(app, rid).admin_security is True
+
+
+def test_role_update_autorise_le_retrait_si_un_autre_capable(client, app):
+    admin_rid = _role_id(app, "admin")
+    sec2_rid = _add_role(app, "sec2", admin_security=True)
+    bob_id = _add_user(app, "bob", sec2_rid)
+    resp = _post_update(client, admin_rid, name="admin",
+                        permissions=json.dumps({"admin_security": False}))
+    assert resp.status_code == 200
+    assert _role(app, admin_rid).admin_security is False
+    with app.app_context():
+        bob = db.session.get(User, bob_id)
+        assert any(r.admin_security for r in bob.roles)
+
+
+def test_role_update_refuse_de_renommer_admin(client, app):
+    rid = _role_id(app, "admin")
+    resp = _post_update(client, rid, name="boss", permissions="{}")
+    assert resp.status_code == 400
+    assert "error" in resp.get_json()
+    assert _role(app, rid).name == "admin"
+
+
+def test_user_update_refuse_de_demoir_le_dernier_capable(client, app):
+    root_id = _user_id(app, "root")
+    resp = _post_user_update(client, root_id,
+                             role_id=str(_role_id(app, "operateur")))
+    assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
+    assert _user_role_names(app, root_id) == ["admin"]
+
+
+def test_user_update_autorise_la_demotion_si_un_autre_capable(client, app, monkeypatch):
+    sec2_rid = _add_role(app, "sec2", admin_security=True)
+    _add_user(app, "bob", sec2_rid)
+    root_id = _user_id(app, "root")
+    # Une fois démoti, root n'a plus la permission : le rendu de la table en
+    # fin de vue renverrait l'écran de refus (csrf_token absent de l'app
+    # minimale) — hors sujet ici, on vérifie la mutation elle-même.
+    import routes.admin_security as security
+    monkeypatch.setattr(security, "display_security_table", lambda: "TABLE")
+    resp = _post_user_update(client, root_id,
+                             role_id=str(_role_id(app, "operateur")))
+    assert resp.status_code == 200
+    assert _user_role_names(app, root_id) == ["operateur"]
+
+
+def test_delete_user_refuse_le_dernier_capable(client, app):
+    root_id = _user_id(app, "root")
+    resp = client.post(f"/admin/security/delete_user/{root_id}")
+    assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
+    assert _user(app, root_id) is not None
+
+
+def test_delete_user_autorise_si_un_autre_capable(client, app):
+    sec2_rid = _add_role(app, "sec2", admin_security=True)
+    _add_user(app, "bob", sec2_rid)
+    root_id = _user_id(app, "root")
+    resp = client.post(f"/admin/security/delete_user/{root_id}")
+    assert resp.status_code == 200
+    assert _user(app, root_id) is None
+
+
+def test_delete_user_inactif_capable_autorise(client, app):
+    # Supprimer un utilisateur capable mais INACTIF ne touche pas à l'invariant
+    # (seuls les actifs comptent) : autorisé même si root est le seul capable actif.
+    sec2_rid = _add_role(app, "sec2", admin_security=True)
+    bob_id = _add_user(app, "bob", sec2_rid, active=False)
+    resp = client.post(f"/admin/security/delete_user/{bob_id}")
+    assert resp.status_code == 200
+    assert _user(app, bob_id) is None
+
+
+def test_user_update_ne_compte_que_les_utilisateurs_actifs(client, app):
+    # bob possède la permission Sécurité mais est inactif : il ne compte pas.
+    sec2_rid = _add_role(app, "sec2", admin_security=True)
+    _add_user(app, "bob", sec2_rid, active=False)
+    root_id = _user_id(app, "root")
+    resp = _post_user_update(client, root_id,
+                             role_id=str(_role_id(app, "operateur")))
+    assert resp.status_code == 200
+    assert _user_role_names(app, root_id) == ["admin"]  # toujours refusé
+
+
+def test_role_update_retire_une_permission_hors_securite(client, app):
+    # Régression : retirer admin_queue au dernier capable ne touche pas à
+    # l'invariant Sécurité → autorisé.
+    rid = _role_id(app, "admin")
+    with app.app_context():
+        db.session.get(Role, rid).admin_queue = True
+        db.session.commit()
+    resp = _post_update(client, rid, name="admin",
+                        permissions=json.dumps({"admin_queue": False}))
+    assert resp.status_code == 200
+    role = _role(app, rid)
+    assert role.admin_queue is False
+    assert role.admin_security is True

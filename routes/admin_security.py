@@ -428,15 +428,6 @@ def security_update_user(user_id):
                 display_toast(success=False, message="Cet email est déjà utilisé")
                 return display_security_table()
 
-        # Vérifier le changement de rôle pour un admin
-        if has_admin_role(user):
-            new_role = db.session.get(Role, role_id)
-            if not new_role or new_role.name != "admin":
-                # Si c'est le dernier admin, on refuse le changement
-                if count_admin_users() <= 1:
-                    display_toast(success=False, message="Impossible de retirer le rôle admin du dernier administrateur")
-                    return display_security_table()
-
         # Mettre à jour les informations de base
         user.username = username
         user.email = email
@@ -449,6 +440,14 @@ def security_update_user(user_id):
 
         # Remplacer tous les rôles par le nouveau
         user.roles = [role]
+
+        if not _security_capable_active_users():
+            db.session.rollback()
+            record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
+                         details="refus: dernier accès Sécurité")
+            display_toast(success=False,
+                          message="Impossible : c'est le dernier utilisateur actif avec la permission Sécurité")
+            return display_security_table()
 
         db.session.commit()
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
@@ -463,16 +462,19 @@ def security_update_user(user_id):
         app.logger.error(f"Error in security_update_user: {str(e)}")
         return display_security_table()
 
-def has_admin_role(user):
-    """Vérifie si l'utilisateur a le rôle admin"""
-    return any(role.name == "admin" for role in user.roles)
+def _has_security_capability(user):
+    """Vrai si un rôle de ``user`` accorde la permission Sécurité."""
+    return any(getattr(role, 'admin_security', False) for role in user.roles)
 
-def count_admin_users():
-    """Compte le nombre d'utilisateurs ayant le rôle admin"""
-    admin_role = Role.query.filter_by(name="admin").first()
-    if not admin_role:
-        return 0
-    return User.query.filter(User.roles.contains(admin_role)).count()
+
+def _security_capable_active_users():
+    """Utilisateurs actifs capables d'administrer la sécurité.
+
+    Évalué en mémoire sur l'état de session courant : utilisable APRÈS une
+    mutation non committée pour savoir ce qu'il resterait.
+    """
+    users = User.query.filter(User.active.is_(True)).all()
+    return [u for u in users if _has_security_capability(u)]
 
 @admin_security_bp.route('/admin/security/delete_user/<int:user_id>', methods=['POST'])
 @require_permission('security')
@@ -483,14 +485,13 @@ def delete_user2(user_id):
             display_toast(success=False, message="Utilisateur non trouvé")
             return display_security_table()
 
-        # Vérifier si c'est un admin
-        if has_admin_role(user):
-            # Si c'est le dernier admin, on refuse la suppression
-            if count_admin_users() <= 1:
-                record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
-                             details="refus: dernier administrateur")
-                display_toast(success=False, message="Impossible de supprimer le dernier administrateur")
-                return display_security_table()
+        if (user.active and _has_security_capability(user)
+                and len(_security_capable_active_users()) <= 1):
+            record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
+                         details="refus: dernier accès Sécurité")
+            display_toast(success=False,
+                          message="Impossible de supprimer le dernier utilisateur actif avec la permission Sécurité")
+            return display_security_table()
 
         deleted_username = user.username
         db.session.delete(user)
@@ -816,6 +817,8 @@ def security_update_role(role_id):
             return jsonify({'error': 'Le nom est requis'}), 400
         if Role.query.filter(Role.name == name, Role.id != role_id).first():
             return jsonify({'error': 'Ce nom existe déjà'}), 400
+        if role.name == 'admin' and name != 'admin':
+            return jsonify({'error': "Le rôle « admin » ne peut pas être renommé"}), 400
 
         permissions_str = data.get('permissions', '{}')
         try:
@@ -837,6 +840,10 @@ def security_update_role(role_id):
         role.description = data.get('description')
         for key, value in permissions.items():
             setattr(role, key, value)
+
+        if not _security_capable_active_users():
+            db.session.rollback()
+            return jsonify({'error': "Impossible : plus aucun utilisateur actif n'aurait la permission Sécurité"}), 400
 
         try:
             db.session.commit()
@@ -948,6 +955,14 @@ def delete_role(role_id):
         role = db.session.get(Role, role_id)
         if not role:
             display_toast(success=False, message="Role non trouvé")
+            return display_security_role_table()
+
+        assigned = role.users.count()   # backref lazy='dynamic'
+        if assigned:
+            record_audit(ACTION_DELETE, "role", target_id=role_id, outcome=OUTCOME_FAILURE,
+                         details=f"refus: {assigned} utilisateur(s) assignés")
+            display_toast(success=False,
+                          message=f"Ce rôle est attribué à {assigned} utilisateur(s). Réattribuez-les avant de le supprimer.")
             return display_security_role_table()
 
         deleted_role_name = role.name
