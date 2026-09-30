@@ -1,10 +1,14 @@
 <p>Vous vous appretez à supprimer l'utilisateur {{user.username}} définitivement. Confirmez-vous la suppression ? </p>
+<p class="text-muted small">Rôles : {{ user.roles | map(attribute='name') | join(', ') }}</p>
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
     <button type="button" class="btn btn-danger"
     hx-post="/admin/security/delete_user/{{ user.id }}"
     hx-target="#div_user_table"
-    data-bs-dismiss="modal"
+    data-param-search="#users-search"
+    data-param-per_page="#users-per_page"
+    data-param-sort="#users-sort"
+    data-param-dir="#users-dir"
     >Supprimer</button>
 </div>

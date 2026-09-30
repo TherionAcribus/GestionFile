@@ -47,8 +47,24 @@ def _make_app():
         # Les tests connectent l'utilisateur via session['_user_id'] directement ;
         # la protection de session exigerait aussi le '_id' posé par login_user.
         SESSION_PROTECTION="none",
+        # Réglages rendus par l'onglet « Général » de la page Sécurité.
+        SECURITY_LOGIN_ADMIN=True,
+        SECURITY_LOGIN_COUNTER=True,
+        SECURITY_LOGIN_SCREEN=True,
+        SECURITY_LOGIN_PATIENT=True,
+        SECURITY_REMEMBER_DURATION=30,
     )
     db.init_app(app)
+
+    # La page /admin/security étend base.html, qui appelle csrf_token()
+    # (Flask-WTF absent de l'app minimale) et user_has_permission() (context
+    # processor enregistré par l'app réelle).
+    app.jinja_env.globals["csrf_token"] = lambda: "test-token"
+
+    @app.context_processor
+    def _inject_security_helpers():
+        from routes.admin_security import user_has_permission
+        return {"user_has_permission": user_has_permission}
 
     login_manager = LoginManager(app)
 
@@ -254,14 +270,17 @@ def test_add_user_username_vide_refuse(client, app):
     with app.app_context():
         avant = User.query.count()
     resp = _post_user(client, username="   ")
-    assert resp.status_code == 200
+    # Échec : 204 + corps vide -> pas de swap HTMX (saisies préservées).
+    assert resp.status_code == 204
+    assert resp.data == b""
     with app.app_context():
         assert User.query.count() == avant
 
 
 def test_add_user_role_vide_refuse(client, app):
     resp = _post_user(client, role_ids="[]")
-    assert resp.status_code == 200
+    assert resp.status_code == 204
+    assert resp.data == b""
     with app.app_context():
         assert User.query.filter_by(username="alice").first() is None
 
@@ -403,7 +422,9 @@ def _post_user_update(client, user_id, **fields):
 def test_delete_role_refuse_un_role_assigne(client, app):
     rid = _role_id(app, "admin")
     resp = client.delete(f"/admin/security/delete_role/{rid}")
-    assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
+    # Refus : 204, la modale reste ouverte (pas de swap).
+    assert resp.status_code == 204
+    assert resp.data == b""
     assert _role(app, rid) is not None
 
 
@@ -448,7 +469,8 @@ def test_user_update_refuse_de_demoir_le_dernier_capable(client, app):
     root_id = _user_id(app, "root")
     resp = _post_user_update(client, root_id,
                              role_ids=json.dumps([_role_id(app, "operateur")]))
-    assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
+    assert resp.status_code == 204  # refus : pas de swap, saisies préservées
+    assert resp.data == b""
     assert _user_role_names(app, root_id) == ["admin"]
 
 
@@ -470,7 +492,8 @@ def test_user_update_autorise_la_demotion_si_un_autre_capable(client, app, monke
 def test_delete_user_refuse_le_dernier_capable(client, app):
     root_id = _user_id(app, "root")
     resp = client.post(f"/admin/security/delete_user/{root_id}")
-    assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
+    assert resp.status_code == 204  # refus : la modale reste ouverte
+    assert resp.data == b""
     assert _user(app, root_id) is not None
 
 
@@ -500,7 +523,8 @@ def test_user_update_ne_compte_que_les_utilisateurs_actifs(client, app):
     root_id = _user_id(app, "root")
     resp = _post_user_update(client, root_id,
                              role_ids=json.dumps([_role_id(app, "operateur")]))
-    assert resp.status_code == 200
+    assert resp.status_code == 204
+    assert resp.data == b""
     assert _user_role_names(app, root_id) == ["admin"]  # toujours refusé
 
 
@@ -541,14 +565,16 @@ def test_user_update_assigne_plusieurs_roles(client, app):
 def test_user_update_sans_role_refuse(client, app):
     root_id = _user_id(app, "root")
     resp = _post_user_update(client, root_id, role_ids="[]")
-    assert resp.status_code == 200
+    assert resp.status_code == 204
+    assert resp.data == b""
     assert _user_role_names(app, root_id) == ["admin"]  # inchangés
 
 
 def test_user_update_role_inconnu_refuse(client, app):
     root_id = _user_id(app, "root")
     resp = _post_user_update(client, root_id, role_ids="[999]")
-    assert resp.status_code == 200
+    assert resp.status_code == 204
+    assert resp.data == b""
     assert _user_role_names(app, root_id) == ["admin"]  # inchangés
 
 
@@ -571,7 +597,8 @@ def test_user_update_desactiver_le_dernier_capable_refuse(client, app):
     admin_rid = _role_id(app, "admin")
     resp = _post_user_update(client, root_id,
                              role_ids=json.dumps([admin_rid]), active="false")
-    assert resp.status_code == 200
+    assert resp.status_code == 204
+    assert resp.data == b""
     assert _user(app, root_id).active is True
 
 
@@ -651,3 +678,167 @@ def test_login_accepte_un_compte_actif(app, monkeypatch):
     assert resp.status_code == 302
     with client.session_transaction() as sess:
         assert sess.get("_user_id") is not None
+
+
+# ---------------------------------------------------------------------------
+# Contrat succès/échec HTMX : échec -> ("", 204) sans swap (la modale et les
+# saisies sont préservées) ; succès -> 200 + fragment de table.
+# ---------------------------------------------------------------------------
+
+def test_update_password_mismatch_renvoi_204(client, app):
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid)
+    resp = client.post(f"/admin/security/update_password/{bob_id}",
+                       data={"password1": "Nouveau-pass-2026!",
+                             "password2": "different-pass-2026!"})
+    assert resp.status_code == 204
+    assert resp.data == b""
+    with app.app_context():
+        # Mot de passe inchangé : la saisie est préservée côté client.
+        assert db.session.get(User, bob_id).verify_password("Motdepasse-2026!")
+
+
+def test_update_password_champs_vides_renvoi_204(client, app):
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid)
+    resp = client.post(f"/admin/security/update_password/{bob_id}",
+                       data={"password1": "", "password2": ""})
+    assert resp.status_code == 204
+    assert resp.data == b""
+
+
+def test_delete_user_inconnu_renvoi_204(client, app):
+    resp = client.post("/admin/security/delete_user/9999")
+    assert resp.status_code == 204
+    assert resp.data == b""
+
+
+# ---------------------------------------------------------------------------
+# Onglet actif rendu côté serveur (?tab=…)
+# ---------------------------------------------------------------------------
+
+def _pane_tag(body, pane_id):
+    m = re.search(r'<div[^>]*id="' + pane_id + r'"[^>]*>', body)
+    assert m, f"pane {pane_id} introuvable"
+    return m.group(0)
+
+
+def test_page_securite_onglet_roles_actif_via_url(client):
+    resp = client.get("/admin/security?tab=roles")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "show active" in _pane_tag(body, "tab_roles")
+    btn = re.search(r'<button[^>]*id="roles-tab"[^>]*>', body)
+    assert btn and "active" in btn.group(0)
+    assert 'aria-selected="true"' in btn.group(0)
+    # Les autres onglets restent inactifs.
+    assert "show active" not in _pane_tag(body, "tab_general")
+
+
+def test_page_securite_onglet_inconnu_replie_sur_general(client):
+    resp = client.get("/admin/security?tab=bogus")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "show active" in _pane_tag(body, "tab_general")
+    assert "show active" not in _pane_tag(body, "tab_roles")
+    assert "show active" not in _pane_tag(body, "tab_users")
+
+
+def test_page_securite_onglet_users_actif_via_url(client):
+    resp = client.get("/admin/security?tab=users")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "show active" in _pane_tag(body, "tab_users")
+    btn = re.search(r'<button[^>]*id="users-tab"[^>]*>', body)
+    assert btn and "active" in btn.group(0)
+
+
+# ---------------------------------------------------------------------------
+# Modale de confirmation : impact visible avant suppression
+# ---------------------------------------------------------------------------
+
+def test_confirm_delete_role_signale_les_utilisateurs_assignes(client, app):
+    # Le rôle « admin » est porté par root : la modale annonce l'impact et le
+    # refus à venir (le serveur refuse désormais de supprimer un rôle assigné).
+    rid = _role_id(app, "admin")
+    resp = client.get(f"/admin/security/confirm_delete_role/{rid}")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "attribué" in body
+    assert "1 utilisateur" in body
+    assert "alert-warning" in body
+
+
+def test_confirm_delete_user_liste_les_roles(client, app):
+    root_id = _user_id(app, "root")
+    resp = client.get(f"/admin/security/confirm_delete_user/{root_id}")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Rôles" in body
+    assert "admin" in body
+
+
+# ---------------------------------------------------------------------------
+# Assertions statiques : fermeture de modale par succès, aides de saisie,
+# badges de risque, boutons d'ouverture en <button>
+# ---------------------------------------------------------------------------
+
+def test_boutons_action_des_modales_ne_ferment_pas_en_avance():
+    # Un échec renvoie ("", 204) sans swap : si le bouton d'action portait
+    # data-bs-dismiss, la modale se fermerait AVANT le résultat. Seul un 200
+    # (succès) la ferme — voir le handler htmx:afterRequest de admin.js.
+    for rel, label in [
+        ("templates/admin/security_modal_confirm_delete_user.html", "Supprimer"),
+        ("templates/admin/security_modal_confirm_delete_role.html", "Supprimer"),
+        ("templates/admin/security_change_password.html", "Enregistrer"),
+    ]:
+        tpl = _read(rel)
+        m = re.search(r'<button[^>]*>\s*' + label + r'\s*</button>', tpl, re.DOTALL)
+        assert m, f"{rel}: bouton {label} introuvable"
+        assert 'data-bs-dismiss' not in m.group(0), rel
+        # L'annulation reste une fermeture pure (elle n'émet pas de requête).
+        assert tpl.count('data-bs-dismiss="modal"') == 1, rel
+
+
+def test_actions_des_modales_conservent_l_etat_de_la_toolbar():
+    # Les requêtes mutantes re-rendent la table avec l'état courant de la barre
+    # d'outils (recherche/taille de page/tri) au lieu de retomber sur la 1re page.
+    for rel, prefix in [
+        ("templates/admin/security_modal_confirm_delete_user.html", "users"),
+        ("templates/admin/security_change_password.html", "users"),
+        ("templates/admin/security_modal_confirm_delete_role.html", "roles"),
+        ("templates/admin/security_add_role_form.html", "roles"),
+    ]:
+        tpl = _read(rel)
+        for field in ("search", "per_page", "sort", "dir"):
+            assert f'data-param-{field}="#{prefix}-{field}"' in tpl, (
+                f"{rel}: data-param-{field} manquant")
+    tpl = _read("templates/admin/security_htmx_table.html")
+    for field in ("search", "per_page", "sort", "dir"):
+        assert f'data-param-{field}="#users-{field}"' in tpl, (
+            f"security_htmx_table.html: data-param-{field} manquant")
+
+
+def test_change_password_propose_un_toggle_de_visibilite():
+    tpl = _read("templates/admin/security_change_password.html")
+    assert 'data-toggle-password="#pwd_change_1"' in tpl
+    assert 'data-toggle-password="#pwd_change_2"' in tpl
+    assert tpl.count("input-group") >= 2
+
+
+def test_permissions_a_risque_badgees_critique():
+    for rel in ("templates/admin/security_htmx_role_table.html",
+                "templates/admin/security_add_role_form.html"):
+        tpl = _read(rel)
+        assert 'perm.risk == "high"' in tpl, rel
+        assert "Critique" in tpl, rel
+        assert "badge" in tpl, rel
+
+
+def test_ouvreurs_de_formulaires_sont_des_boutons():
+    # Un <a> sans href n'est pas un bouton (ni focus clavier, ni sémantique).
+    for rel in ("templates/admin/security_user.html",
+                "templates/admin/security_roles.html"):
+        tpl = _read(rel)
+        assert '<button type="button" class="btn btn-primary"' in tpl, rel
+        assert '<a class="btn btn-primary"' not in tpl, rel

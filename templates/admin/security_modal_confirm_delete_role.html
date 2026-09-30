@@ -1,10 +1,15 @@
+{% set n = role.users.count() %}
 <p>Vous vous appretez à supprimer le role {{role.name}} définitivement. Confirmez-vous la suppression ? </p>
+<p class="{% if n > 0 %}alert alert-warning small py-1{% else %}text-muted small{% endif %}">Ce rôle est attribué à {{ n }} utilisateur(s){% if n > 0 %} — la suppression sera refusée tant qu'il reste assigné.{% else %}.{% endif %}</p>
 
 <div class="modal-footer">
     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
     <button type="button" class="btn btn-danger"
     hx-delete="/admin/security/delete_role/{{ role.id }}"
     hx-target="#div_role_table"
-    data-bs-dismiss="modal"
+    data-param-search="#roles-search"
+    data-param-per_page="#roles-per_page"
+    data-param-sort="#roles-sort"
+    data-param-dir="#roles-dir"
     >Supprimer</button>
 </div>

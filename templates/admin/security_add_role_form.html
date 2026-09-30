@@ -28,6 +28,7 @@
                                     title="{{ perm.description }}">
                                     {{ perm.label }}
                                 </label>
+                                {% if perm.risk == "high" %}<span class="badge text-bg-danger ms-1">Critique</span>{% endif %}
                             </div>
                         </div>
                     </div>
@@ -43,6 +44,10 @@
             hx-swap="innerHTML"
             data-param-name="#new_role_name"
             data-param-description="#new_role_description"
+            data-param-search="#roles-search"
+            data-param-per_page="#roles-per_page"
+            data-param-sort="#roles-sort"
+            data-param-dir="#roles-dir"
             data-params-fn="rolePermissions">
             Créer le rôle
         </button>

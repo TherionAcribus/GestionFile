@@ -265,12 +265,13 @@ def dashboard_security():
 @require_permission('security')
 def admin_security():
 
-    valid_tabs = ['general', 'users']
+    valid_tabs = ['general', 'users', 'roles']
     tab = request.args.get('tab', 'general')
     if tab not in valid_tabs:
         tab = 'general'
 
     return render_template('admin/security.html',
+                        tab=tab,
                         security_login_admin=app.config["SECURITY_LOGIN_ADMIN"],
                         security_login_counter=app.config["SECURITY_LOGIN_COUNTER"],
                         security_login_screen=app.config["SECURITY_LOGIN_SCREEN"],
@@ -329,7 +330,7 @@ def add_new_user():
         if not username:
             app.logger.error("Le nom d'utilisateur est requis")
             display_toast(success=False, message="Le nom d'utilisateur est requis")
-            return display_security_table()
+            return "", 204
 
         app.logger.info(f"Données reçues - username: {username}, email: {email}, role_ids: {role_ids}")
 
@@ -337,38 +338,38 @@ def add_new_user():
         if password1 != password2:
             app.logger.error("Les mots de passe ne correspondent pas")
             display_toast(success=False, message="Les mots de passe ne correspondent pas")
-            return display_security_table()
+            return "", 204
 
         # Politique minimale de mot de passe (point 3.4)
         policy_problems = validate_password(password1, username=username)
         if policy_problems:
             app.logger.warning("Mot de passe refusé par la politique à la création d'utilisateur")
             display_toast(success=False, message=" ".join(policy_problems))
-            return display_security_table()
+            return "", 204
 
         # Vérification de l'unicité du nom d'utilisateur
         if User.query.filter_by(username=username).first():
             app.logger.error(f"Le nom d'utilisateur {username} existe déjà")
             display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
-            return display_security_table()
+            return "", 204
 
         # Vérification de l'unicité de l'email (colonne unique : '' y deviendrait
         # un doublon — on stocke NULL, cf. normalisation plus haut)
         if email is not None and User.query.filter_by(email=email).first():
             app.logger.error(f"L'email {email} est déjà utilisé")
             display_toast(success=False, message="Cet email est déjà utilisé")
-            return display_security_table()
+            return "", 204
 
         # Récupération des rôles (multi-rôle : les ids peuvent arriver en
         # "1" ou 1 — la validation compare donc des ensembles de chaînes).
         if not isinstance(role_ids, list) or not role_ids:
             display_toast(success=False, message="Sélectionnez au moins un rôle")
-            return display_security_table()
+            return "", 204
         roles = Role.query.filter(Role.id.in_(role_ids)).all()
         if len(roles) != len(set(map(str, role_ids))):
             app.logger.error(f"Un des rôles {role_ids} n'existe pas")
             display_toast(success=False, message="Un des rôles sélectionnés est invalide")
-            return display_security_table()
+            return "", 204
 
         # Création de l'utilisateur
         user = User(
@@ -395,7 +396,7 @@ def add_new_user():
         app.logger.error(f"Erreur lors de la création de l'utilisateur: {str(e)}")
         record_audit(ACTION_CREATE, "user", target_id=username, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="La création a échoué.")
-        return display_security_table()
+        return "", 204
 
 
 @admin_security_bp.route('/admin/security/user_update/<int:user_id>', methods=['POST'])
@@ -405,7 +406,7 @@ def security_update_user(user_id):
         user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
-            return display_security_table()
+            return "", 204
 
         # Récupérer les données du formulaire
         data = request.get_json() if request.is_json else request.form
@@ -419,23 +420,23 @@ def security_update_user(user_id):
 
         if not username:
             display_toast(success=False, message="Le nom d'utilisateur est requis")
-            return display_security_table()
+            return "", 204
         if not isinstance(role_ids, list) or not role_ids:
             display_toast(success=False, message="Sélectionnez au moins un rôle")
-            return display_security_table()
+            return "", 204
 
         # Vérifier si le nom d'utilisateur existe déjà
         existing_user = User.query.filter_by(username=username).first()
         if existing_user and existing_user.id != user_id:
             display_toast(success=False, message="Ce nom d'utilisateur existe déjà")
-            return display_security_table()
+            return "", 204
 
         # Vérifier si l'email existe déjà
         if email:
             existing_user = User.query.filter_by(email=email).first()
             if existing_user and existing_user.id != user_id:
                 display_toast(success=False, message="Cet email est déjà utilisé")
-                return display_security_table()
+                return "", 204
 
         # Mettre à jour les informations de base
         user.username = username
@@ -446,7 +447,7 @@ def security_update_user(user_id):
         roles = Role.query.filter(Role.id.in_(role_ids)).all()
         if len(roles) != len(set(map(str, role_ids))):
             display_toast(success=False, message="Un des rôles sélectionnés est invalide")
-            return display_security_table()
+            return "", 204
 
         # Remplacer tous les rôles par la sélection
         user.roles = list(roles)
@@ -469,7 +470,7 @@ def security_update_user(user_id):
                          details="refus: dernier accès Sécurité")
             display_toast(success=False,
                           message="Impossible : c'est le dernier utilisateur actif avec la permission Sécurité")
-            return display_security_table()
+            return "", 204
 
         db.session.commit()
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
@@ -482,7 +483,7 @@ def security_update_user(user_id):
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="La mise à jour a échoué.")
         app.logger.error(f"Error in security_update_user: {str(e)}")
-        return display_security_table()
+        return "", 204
 
 def _has_security_capability(user):
     """Vrai si un rôle de ``user`` accorde la permission Sécurité."""
@@ -505,7 +506,7 @@ def delete_user2(user_id):
         user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
-            return display_security_table()
+            return "", 204
 
         if (user.active and _has_security_capability(user)
                 and len(_security_capable_active_users()) <= 1):
@@ -513,7 +514,7 @@ def delete_user2(user_id):
                          details="refus: dernier accès Sécurité")
             display_toast(success=False,
                           message="Impossible de supprimer le dernier utilisateur actif avec la permission Sécurité")
-            return display_security_table()
+            return "", 204
 
         deleted_username = user.username
         db.session.delete(user)
@@ -529,7 +530,7 @@ def delete_user2(user_id):
         record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="La suppression a échoué.")
         app.logger.error(f"Error in delete_user: {str(e)}")
-        return display_security_table()
+        return "", 204
 
 # affiche la modale pour confirmer la suppression d'un membre
 @admin_security_bp.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
@@ -980,7 +981,7 @@ def delete_role(role_id):
         role = db.session.get(Role, role_id)
         if not role:
             display_toast(success=False, message="Role non trouvé")
-            return display_security_role_table()
+            return "", 204
 
         assigned = role.users.count()   # backref lazy='dynamic'
         if assigned:
@@ -988,7 +989,7 @@ def delete_role(role_id):
                          details=f"refus: {assigned} utilisateur(s) assignés")
             display_toast(success=False,
                           message=f"Ce rôle est attribué à {assigned} utilisateur(s). Réattribuez-les avant de le supprimer.")
-            return display_security_role_table()
+            return "", 204
 
         deleted_role_name = role.name
         db.session.delete(role)
@@ -1004,7 +1005,7 @@ def delete_role(role_id):
         record_audit(ACTION_DELETE, "role", target_id=role_id, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="La suppression a échoué.")
         app.logger.exception("Echec de la suppression d'un role")
-        return display_security_role_table()
+        return "", 204
 
 @admin_security_bp.route('/admin/security/change_password/<int:user_id>', methods=['GET'])
 @require_permission('security')
@@ -1029,25 +1030,25 @@ def update_password(user_id):
         user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
-            return display_security_table()
+            return "", 204
 
         password1 = request.form.get('password1')
         password2 = request.form.get('password2')
 
         if not password1 or not password2:
             display_toast(success=False, message="Les deux champs de mot de passe sont obligatoires")
-            return display_security_table()
+            return "", 204
 
         if password1 != password2:
             display_toast(success=False, message="Les mots de passe ne correspondent pas")
-            return display_security_table()
+            return "", 204
 
         # Politique minimale de mot de passe (point 3.4)
         policy_problems = validate_password(password1, username=user.username)
         if policy_problems:
             app.logger.warning("Mot de passe refusé par la politique au changement de mot de passe")
             display_toast(success=False, message=" ".join(policy_problems))
-            return display_security_table()
+            return "", 204
 
         user.set_password(password1)
         # Révocation des sessions du compte : le cookie de session et le cookie
@@ -1079,7 +1080,7 @@ def update_password(user_id):
         record_audit(ACTION_UPDATE, "password", target_id=user_id, outcome=OUTCOME_FAILURE)
         display_toast(success=False, message="La mise à jour a échoué.")
         app.logger.error(f"Error in update_password: {str(e)}")
-        return display_security_table()
+        return "", 204
 
 def create_default_user():
     """Crée l'utilisateur admin initial s'il n'y a aucun utilisateur.

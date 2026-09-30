@@ -956,3 +956,58 @@ function print_test_result(msg) {
         borne.replace(/[<>&"]/g, '') + ' : ' +
         String(label).replace(/[<>&"]/g, '') + '</div>');
 }
+
+
+// ============================================================================
+//  Page Admin > Sécurité — contrats UX communs
+//
+//  Contrat de réponse (routes/admin_security.py) :
+//  - succès      -> 200 + fragment de table re-rendu (swap dans le conteneur) ;
+//  - échec/refus -> ("", 204) + display_toast : aucun swap, donc les saisies du
+//    formulaire et la modale ouverte sont préservées.
+//  En conséquence, les boutons d'action des modales ne portent plus
+//  `data-bs-dismiss` : la fermeture n'a lieu QUE sur succès HTTP 200.
+// ============================================================================
+
+// Fermeture des modales uniquement après un succès : un 204 (refus/échec) ou
+// une erreur laisse la modale ouverte avec les saisies intactes.
+document.body.addEventListener('htmx:afterRequest', function (evt) {
+    var elt = evt.detail && evt.detail.elt;
+    var xhr = evt.detail && evt.detail.xhr;
+    if (!elt || !elt.closest || evt.detail.failed || !xhr || xhr.status !== 200) return;
+    var modalEl = elt.closest('#modal_generic, #modal_delete');
+    if (!modalEl || typeof bootstrap === 'undefined') return;
+    var inst = bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+});
+
+// Visibilité des champs de mot de passe (bouton « œil »). Délégué au document :
+// fonctionne aussi dans le contenu injecté par HTMX (modale de changement).
+document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-toggle-password]') : null;
+    if (!btn) return;
+    var input = document.querySelector(btn.getAttribute('data-toggle-password'));
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+});
+
+// Avertissement « modifications non enregistrées » sur les tables/formulaires
+// de la page Sécurité : toute saisie dans une table ou un formulaire d'ajout
+// marque l'état « dirty » ; un re-rendu HTMX de la table le réinitialise
+// (le fragment renvoyé EST le nouvel état de base). beforeunload prévient
+// l'utilisateur avant de quitter la page avec des modifications en attente.
+var _securityTableDirty = false;
+document.addEventListener('input', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#div_user_table, #div_role_table, #div_add_user_form, #div_add_role_form')) {
+        _securityTableDirty = true;
+    }
+});
+document.body.addEventListener('htmx:afterSwap', function (evt) {
+    var t = evt.detail && evt.detail.target;
+    if (t && (t.id === 'div_user_table' || t.id === 'div_role_table')) {
+        _securityTableDirty = false;   // re-render = nouvel état de base
+    }
+});
+window.addEventListener('beforeunload', function (e) {
+    if (_securityTableDirty) { e.preventDefault(); e.returnValue = ''; }
+});
