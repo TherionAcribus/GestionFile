@@ -128,7 +128,6 @@ class User(db.Model, UserMixin):
         app.logger.debug(f"Définition du mot de passe pour {self.username}")
         # Utilise bcrypt par défaut pour rester cohérent avec Flask-Security
         self.password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-        self.active = True  # Activer l'utilisateur lors de la définition du mot de passe
 
 class Patient(db.Model):
     __table_args__ = (

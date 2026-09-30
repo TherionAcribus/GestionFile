@@ -21,10 +21,11 @@ Deux familles de vérifications :
 import json
 import os
 import re
+import types
 
 import pytest
 from flask import Blueprint, Flask
-from flask_login import LoginManager
+from flask_login import LoginManager, login_user
 
 from models import db, Role, User
 
@@ -243,7 +244,7 @@ def test_save_role_permissions_invalides_renvoi_204(client, app, permissions):
 # ---------------------------------------------------------------------------
 
 def _post_user(client, **fields):
-    payload = {"username": "alice", "email": "", "role_id": "1",
+    payload = {"username": "alice", "email": "", "role_ids": json.dumps([1]),
                "password1": "Alice-pass-2026!", "password2": "Alice-pass-2026!"}
     payload.update(fields)
     return client.post("/admin/security/add_new_user", data=payload)
@@ -259,10 +260,19 @@ def test_add_user_username_vide_refuse(client, app):
 
 
 def test_add_user_role_vide_refuse(client, app):
-    resp = _post_user(client, role_id="")
+    resp = _post_user(client, role_ids="[]")
     assert resp.status_code == 200
     with app.app_context():
         assert User.query.filter_by(username="alice").first() is None
+
+
+def test_add_user_multi_roles(client, app):
+    admin_rid = _role_id(app, "admin")
+    op_rid = _role_id(app, "operateur")
+    resp = _post_user(client, role_ids=json.dumps([admin_rid, op_rid]))
+    assert resp.status_code == 200
+    alice_id = _user_id(app, "alice")
+    assert sorted(_user_role_names(app, alice_id)) == ["admin", "operateur"]
 
 
 def test_add_user_email_vide_devient_null(client, app):
@@ -287,11 +297,17 @@ def _ids(template):
     return set(re.findall(r'id="([^"]+)"', template))
 
 
-def test_users_table_role_select_est_prefixe():
+def test_users_table_roles_en_cases_et_switch_actif():
     tpl = _read("templates/admin/security_htmx_table.html")
-    assert 'id="user-role-' in tpl
-    assert 'id="role-' not in tpl
-    assert 'data-param-role_id="#user-role-' in tpl
+    assert "user-role-checkbox" in tpl
+    assert "user-active-" in tpl
+    assert "data-param-role_id" not in tpl
+
+
+def test_add_user_form_roles_en_cases():
+    tpl = _read("templates/admin/security_add_user_form.html")
+    assert "user-role-checkbox" in tpl
+    assert "data-param-role_id" not in tpl
 
 
 def test_user_save_cible_la_table_et_pas_invisible():
@@ -379,7 +395,7 @@ def _user_role_names(app, user_id):
 
 
 def _post_user_update(client, user_id, **fields):
-    payload = {"username": "root", "email": "", "role_id": "1"}
+    payload = {"username": "root", "email": "", "role_ids": json.dumps([1])}
     payload.update(fields)
     return client.post(f"/admin/security/user_update/{user_id}", data=payload)
 
@@ -431,7 +447,7 @@ def test_role_update_refuse_de_renommer_admin(client, app):
 def test_user_update_refuse_de_demoir_le_dernier_capable(client, app):
     root_id = _user_id(app, "root")
     resp = _post_user_update(client, root_id,
-                             role_id=str(_role_id(app, "operateur")))
+                             role_ids=json.dumps([_role_id(app, "operateur")]))
     assert resp.status_code == 200  # fragment de table (HTMX), pas de JSON
     assert _user_role_names(app, root_id) == ["admin"]
 
@@ -446,7 +462,7 @@ def test_user_update_autorise_la_demotion_si_un_autre_capable(client, app, monke
     import routes.admin_security as security
     monkeypatch.setattr(security, "display_security_table", lambda: "TABLE")
     resp = _post_user_update(client, root_id,
-                             role_id=str(_role_id(app, "operateur")))
+                             role_ids=json.dumps([_role_id(app, "operateur")]))
     assert resp.status_code == 200
     assert _user_role_names(app, root_id) == ["operateur"]
 
@@ -483,7 +499,7 @@ def test_user_update_ne_compte_que_les_utilisateurs_actifs(client, app):
     _add_user(app, "bob", sec2_rid, active=False)
     root_id = _user_id(app, "root")
     resp = _post_user_update(client, root_id,
-                             role_id=str(_role_id(app, "operateur")))
+                             role_ids=json.dumps([_role_id(app, "operateur")]))
     assert resp.status_code == 200
     assert _user_role_names(app, root_id) == ["admin"]  # toujours refusé
 
@@ -501,3 +517,137 @@ def test_role_update_retire_une_permission_hors_securite(client, app):
     role = _role(app, rid)
     assert role.admin_queue is False
     assert role.admin_security is True
+
+
+# ---------------------------------------------------------------------------
+# Multi-rôle, cycle de vie actif/inactif et refus de connexion des suspendus
+# ---------------------------------------------------------------------------
+
+def _uniquifier(app, user_id):
+    with app.app_context():
+        return db.session.get(User, user_id).fs_uniquifier
+
+
+def test_user_update_assigne_plusieurs_roles(client, app):
+    op_rid = _role_id(app, "operateur")
+    sec2_rid = _add_role(app, "sec2", admin_security=True)
+    bob_id = _add_user(app, "bob", op_rid)
+    resp = _post_user_update(client, bob_id, username="bob",
+                             role_ids=json.dumps([op_rid, sec2_rid]))
+    assert resp.status_code == 200
+    assert sorted(_user_role_names(app, bob_id)) == ["operateur", "sec2"]
+
+
+def test_user_update_sans_role_refuse(client, app):
+    root_id = _user_id(app, "root")
+    resp = _post_user_update(client, root_id, role_ids="[]")
+    assert resp.status_code == 200
+    assert _user_role_names(app, root_id) == ["admin"]  # inchangés
+
+
+def test_user_update_role_inconnu_refuse(client, app):
+    root_id = _user_id(app, "root")
+    resp = _post_user_update(client, root_id, role_ids="[999]")
+    assert resp.status_code == 200
+    assert _user_role_names(app, root_id) == ["admin"]  # inchangés
+
+
+def test_user_update_desactivation_revoque_les_sessions(client, app):
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid)
+    avant = _uniquifier(app, bob_id)
+    resp = _post_user_update(client, bob_id, username="bob",
+                             role_ids=json.dumps([op_rid]), active="false")
+    assert resp.status_code == 200
+    with app.app_context():
+        bob = db.session.get(User, bob_id)
+        assert bob.active is False
+        # fs_uniquifier tourné -> session + cookie remember révoqués.
+        assert bob.fs_uniquifier != avant
+
+
+def test_user_update_desactiver_le_dernier_capable_refuse(client, app):
+    root_id = _user_id(app, "root")
+    admin_rid = _role_id(app, "admin")
+    resp = _post_user_update(client, root_id,
+                             role_ids=json.dumps([admin_rid]), active="false")
+    assert resp.status_code == 200
+    assert _user(app, root_id).active is True
+
+
+def test_update_password_ne_reactive_pas_un_compte_inactif(client, app):
+    # set_password est découplé du cycle de vie : un admin peut définir le mot
+    # de passe d'un compte suspendu sans le réactiver.
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid, active=False)
+    avant = _uniquifier(app, bob_id)
+    resp = client.post(f"/admin/security/update_password/{bob_id}",
+                       data={"password1": "Nouveau-pass-2026!",
+                             "password2": "Nouveau-pass-2026!"})
+    assert resp.status_code == 200
+    with app.app_context():
+        bob = db.session.get(User, bob_id)
+        assert bob.active is False
+        assert bob.fs_uniquifier != avant
+        assert bob.verify_password("Nouveau-pass-2026!")
+
+
+# ---------------------------------------------------------------------------
+# login : un compte inactif est refusé comme un mot de passe erroné
+# ---------------------------------------------------------------------------
+
+class _StubField:
+    """Champ WTForms minimal : ``.data`` pour la vue, rendu neutre pour le
+    gabarit de connexion (``label``, ``errors``, appel)."""
+    def __init__(self, data=""):
+        self.data = data
+        self.label = ""
+        self.errors = []
+
+    def __call__(self, **kwargs):
+        return ""
+
+    def __str__(self):
+        return ""
+
+
+def _post_login(app, monkeypatch, username, password):
+    """POST /login avec ``ExtendedLoginForm`` simulé : la validation WTForms /
+    CSRF est hors sujet ici, on teste la décision de la route."""
+    import routes.admin_security as security
+    form = types.SimpleNamespace(
+        username=_StubField(username),
+        password=_StubField(password),
+        remember=_StubField(False),
+        next=_StubField(""),
+        errors={},
+        validate_on_submit=lambda: True,
+        hidden_tag=lambda: "",
+    )
+    monkeypatch.setattr(security, "ExtendedLoginForm", lambda: form)
+    # flask_security.login_user exige l'extension Security (absente de l'app
+    # minimale) ; flask_login.login_user fait exactement le nécessaire ici.
+    monkeypatch.setattr(security, "login_user", login_user)
+    client = app.test_client()
+    resp = client.post("/login", data={"username": username, "password": password})
+    return client, resp
+
+
+def test_login_refuse_un_compte_inactif(app, monkeypatch):
+    op_rid = _role_id(app, "operateur")
+    _add_user(app, "bob", op_rid, active=False)
+    client, resp = _post_login(app, monkeypatch, "bob", "Motdepasse-2026!")
+    # Mot de passe correct mais compte suspendu : même refus générique, page
+    # de connexion re-rendue (pas de redirection, pas de session ouverte).
+    assert resp.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess.get("_user_id") is None
+
+
+def test_login_accepte_un_compte_actif(app, monkeypatch):
+    op_rid = _role_id(app, "operateur")
+    _add_user(app, "bob", op_rid, active=True)
+    client, resp = _post_login(app, monkeypatch, "bob", "Motdepasse-2026!")
+    assert resp.status_code == 302
+    with client.session_transaction() as sess:
+        assert sess.get("_user_id") is not None

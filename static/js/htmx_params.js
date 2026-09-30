@@ -150,6 +150,19 @@
         params['permissions'] = JSON.stringify(perms);
     };
 
+    // Collecteur partagé : cases `.user-role-checkbox` cochées -> liste JSON
+    // d'identifiants de rôles envoyée dans le paramètre `role_ids`. La portée
+    // est `data-params-scope` (la ligne <tr> d'un utilisateur en édition) ou
+    // le formulaire de création.
+    HX_PARAM_COLLECTORS.userRoles = function (elt, params) {
+        var scopeSel = elt.getAttribute('data-params-scope');
+        var root = scopeSel ? findElement(scopeSel) : document;
+        var ids = [];
+        (root || document).querySelectorAll('.user-role-checkbox:checked')
+            .forEach(function (cb) { ids.push(cb.value); });
+        params['role_ids'] = JSON.stringify(ids);
+    };
+
     // Remplace le tri par en-tête : l'attribut onclick qui mettait à jour les
     // champs cachés {prefix}-sort / {prefix}-dir avant la requête. La requête
     // du <th> porte déjà sort/dir en hx-vals statique ; la mise à jour des

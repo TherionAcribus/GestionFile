@@ -320,14 +320,18 @@ def add_new_user():
         email = (data.get('email') or '').strip() or None
         password1 = data.get('password1')
         password2 = data.get('password2')
-        role_id = data.get('role_id')
+        role_ids_raw = data.get('role_ids', '[]')
+        try:
+            role_ids = json.loads(role_ids_raw)
+        except json.JSONDecodeError:
+            role_ids = []
 
         if not username:
             app.logger.error("Le nom d'utilisateur est requis")
             display_toast(success=False, message="Le nom d'utilisateur est requis")
             return display_security_table()
 
-        app.logger.info(f"Données reçues - username: {username}, email: {email}, role_id: {role_id}")
+        app.logger.info(f"Données reçues - username: {username}, email: {email}, role_ids: {role_ids}")
 
         # Vérification des mots de passe
         if password1 != password2:
@@ -355,14 +359,15 @@ def add_new_user():
             display_toast(success=False, message="Cet email est déjà utilisé")
             return display_security_table()
 
-        # Récupération du rôle
-        if not role_id:
-            display_toast(success=False, message="Sélectionnez un rôle")
+        # Récupération des rôles (multi-rôle : les ids peuvent arriver en
+        # "1" ou 1 — la validation compare donc des ensembles de chaînes).
+        if not isinstance(role_ids, list) or not role_ids:
+            display_toast(success=False, message="Sélectionnez au moins un rôle")
             return display_security_table()
-        role = db.session.get(Role, role_id)
-        if not role:
-            app.logger.error(f"Le rôle {role_id} n'existe pas")
-            display_toast(success=False, message="Le rôle sélectionné n'existe pas")
+        roles = Role.query.filter(Role.id.in_(role_ids)).all()
+        if len(roles) != len(set(map(str, role_ids))):
+            app.logger.error(f"Un des rôles {role_ids} n'existe pas")
+            display_toast(success=False, message="Un des rôles sélectionnés est invalide")
             return display_security_table()
 
         # Création de l'utilisateur
@@ -372,7 +377,7 @@ def add_new_user():
             active=True
         )
         user.set_password(password1)
-        user.roles.append(role)
+        user.roles = list(roles)
 
         db.session.add(user)
         db.session.commit()
@@ -406,13 +411,17 @@ def security_update_user(user_id):
         data = request.get_json() if request.is_json else request.form
         username = (data.get('username') or '').strip()
         email = (data.get('email') or '').strip() or None
-        role_id = data.get('role_id')
+        role_ids_raw = data.get('role_ids', '[]')
+        try:
+            role_ids = json.loads(role_ids_raw)
+        except json.JSONDecodeError:
+            role_ids = []
 
         if not username:
             display_toast(success=False, message="Le nom d'utilisateur est requis")
             return display_security_table()
-        if not role_id:
-            display_toast(success=False, message="Rôle invalide")
+        if not isinstance(role_ids, list) or not role_ids:
+            display_toast(success=False, message="Sélectionnez au moins un rôle")
             return display_security_table()
 
         # Vérifier si le nom d'utilisateur existe déjà
@@ -432,14 +441,27 @@ def security_update_user(user_id):
         user.username = username
         user.email = email
 
-        # Mettre à jour le rôle
-        role = db.session.get(Role, role_id)
-        if not role:
-            display_toast(success=False, message="Rôle invalide")
+        # Mettre à jour les rôles (les ids peuvent arriver en "1" ou 1 — la
+        # validation compare des ensembles de chaînes).
+        roles = Role.query.filter(Role.id.in_(role_ids)).all()
+        if len(roles) != len(set(map(str, role_ids))):
+            display_toast(success=False, message="Un des rôles sélectionnés est invalide")
             return display_security_table()
 
-        # Remplacer tous les rôles par le nouveau
-        user.roles = [role]
+        # Remplacer tous les rôles par la sélection
+        user.roles = list(roles)
+
+        # Cycle de vie actif/inactif : la désactivation révoque aussi les
+        # sessions et le cookie « se souvenir de moi » du compte (renouvellement
+        # de fs_uniquifier, même mécanisme que logout_all / update_password).
+        active_param = data.get('active')
+        if active_param is not None:
+            want_active = str(active_param).lower() == 'true'
+            if want_active != bool(user.active):
+                user.active = want_active
+                if not want_active:
+                    # Révocation des sessions + cookie remember du compte.
+                    user.fs_uniquifier = str(uuid.uuid4())
 
         if not _security_capable_active_users():
             db.session.rollback()
@@ -451,7 +473,7 @@ def security_update_user(user_id):
 
         db.session.commit()
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
-                     details=f"username={username} role={role.name}")
+                     details=f"username={username} roles={[r.name for r in roles]} active={user.active}")
         display_toast(success=True, message="Utilisateur mis à jour avec succès")
         return display_security_table()
 
@@ -598,7 +620,10 @@ def login():
         else:
             _dummy_password_check(form.password.data)
 
-        if not password_ok:
+        # Un compte désactivé (user.active à False) emprunte la même voie
+        # qu'un mot de passe erroné : refus générique + échec enregistré, sans
+        # révéler que le compte existe mais est suspendu.
+        if not password_ok or user is None or not user.active:
             # 3) Échec : on compte l'échec sur les deux clés (IP + identité) puis
             #    on journalise. Le délai renvoyé sert au calcul mais n'est pas
             #    divulgué à l'utilisateur.
