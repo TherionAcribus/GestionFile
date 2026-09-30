@@ -42,10 +42,6 @@ def application():
     app = Flask(__name__)
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        # db.metadatas est partagé entre fichiers de test : les fichiers
-        # précédents ont déjà enregistré le bind 'users' — sans cette entrée,
-        # le create_all échouerait (même motif que test_queue_purge).
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         ALGO_IS_ACTIVATED=True,
         ALGO_OVERTAKEN_LIMIT=10,

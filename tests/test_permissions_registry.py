@@ -222,11 +222,22 @@ def client(tmp_path):
     return _make_app(tmp_path).test_client()
 
 
+# Famille Sécurité : ressources hiérarchiques qui s'impliquent mutuellement
+# (grant ⊃ manage ⊃ view, et admin_security historique = accès complet). Un
+# rôle de la famille n'est donc jamais un « mauvais rôle » pour une ressource
+# de la famille — cf. _SECURITY_PERMISSION_CHAIN dans routes/admin_security.
+_SECURITY_FAMILY = {"security", "security_view", "security_manage",
+                    "security_grant"}
+
+
 def _other_resource(resource):
-    """Une ressource DIFFERENTE, pour jouer le mauvais role."""
+    """Une ressource DIFFERENTE et sans implication, pour jouer le mauvais role."""
     for candidate in PERMISSION_RESOURCES:
-        if candidate != resource:
-            return candidate
+        if candidate == resource:
+            continue
+        if resource in _SECURITY_FAMILY and candidate in _SECURITY_FAMILY:
+            continue
+        return candidate
     raise AssertionError("registre trop petit pour le test")
 
 

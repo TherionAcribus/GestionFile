@@ -82,22 +82,54 @@ def _audit_login(outcome, *, username=None, retry_after=None):
         app.logger.warning(line)
 
 
+# Hiérarchie Sécurité : un niveau inclut les niveaux inférieurs ; la colonne
+# historique ``admin_security`` vaut accès complet aux trois niveaux.
+_SECURITY_PERMISSION_CHAIN = {
+    'security':        ('admin_security', 'admin_security_grant', 'admin_security_manage', 'admin_security_view'),
+    'security_view':   ('admin_security', 'admin_security_grant', 'admin_security_manage', 'admin_security_view'),
+    'security_manage': ('admin_security', 'admin_security_grant', 'admin_security_manage'),
+    'security_grant':  ('admin_security', 'admin_security_grant'),
+}
+
+# Champs de rôle rendant un compte « sensible » (toute capacité Sécurité) :
+# leur attribution et la gestion de leur détenteur exigent security_grant.
+_SENSITIVE_ROLE_FIELDS = ('admin_security', 'admin_security_view',
+                          'admin_security_manage', 'admin_security_grant')
+
+
 def user_has_permission(user, resource):
     """Indique si ``user`` possède la permission ``admin_<resource>``.
 
     Source de vérité unique pour toutes les vérifications de permission (pages
     et API). Un utilisateur non authentifié ou sans rôle n'a aucune permission.
+
+    Les ressources ``security*`` sont hiérarchiques (cf.
+    ``_SECURITY_PERMISSION_CHAIN``) : les niveaux supérieurs incluent les
+    inférieurs et la colonne historique ``admin_security`` vaut accès complet.
+    Toute autre ressource vérifie sa seule colonne ``admin_<resource>``.
     """
     if user is None or not getattr(user, "is_authenticated", False):
         return False
     if not getattr(user, "roles", None):
         return False
 
-    permission_field = f'admin_{resource}'
-    for role in user.roles:
-        if getattr(role, permission_field, False):
-            return True
-    return False
+    fields = _SECURITY_PERMISSION_CHAIN.get(resource, (f'admin_{resource}',))
+    return any(getattr(role, field, False)
+               for role in user.roles for field in fields)
+
+
+def _role_grants_security_access(role):
+    """Vrai si le rôle accorde une capacité Sécurité (n'importe quel niveau)."""
+    return any(getattr(role, f, False) for f in _SENSITIVE_ROLE_FIELDS)
+
+
+def _user_is_security_sensitive(user):
+    """Vrai si ``user`` détient un rôle à capacité Sécurité.
+
+    Un tel compte est une cible « sensible » : sa gestion (modification,
+    suppression, mot de passe) exige la permission security_grant.
+    """
+    return any(_role_grants_security_access(r) for r in user.roles)
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +264,7 @@ ROLE_SORT_COLUMNS = {
 
 
 @admin_security_bp.route('/admin/security/role/table')
-@require_permission('security')
+@require_permission('security_view')
 def display_security_role_table():
     # request.values : fonctionne que la table soit demandée en GET (nav/recherche)
     # ou re-rendue après une mutation POST (delete_role) — dans ce dernier cas les
@@ -262,7 +294,7 @@ def dashboard_security():
                             is_default_admin=is_default)
 
 @admin_security_bp.route('/admin/security')
-@require_permission('security')
+@require_permission('security_view')
 def admin_security():
 
     valid_tabs = ['general', 'users', 'roles']
@@ -280,7 +312,7 @@ def admin_security():
                         is_default_admin = check_default_admin())
 
 @admin_security_bp.route('/admin/security/table')
-@require_permission('security')
+@require_permission('security_view')
 def display_security_table():
     params = parse_page_params(
         request.values,
@@ -302,14 +334,14 @@ def display_security_table():
 
 # affiche le formulaire pour ajouter un utilisateur
 @admin_security_bp.route('/admin/security/add_user_form')
-@require_permission('security')
+@require_permission('security_manage')
 def add_user_form():
     roles = Role.query.all()
     return render_template('/admin/security_add_user_form.html', roles=roles)
 
 
 @admin_security_bp.route('/admin/security/add_new_user', methods=['POST'])
-@require_permission('security')
+@require_permission('security_manage')
 def add_new_user():
     """Ajoute un nouvel utilisateur"""
     try:
@@ -371,6 +403,15 @@ def add_new_user():
             display_toast(success=False, message="Un des rôles sélectionnés est invalide")
             return "", 204
 
+        # Attribution d'un rôle à capacité Sécurité : réservée à
+        # security_grant, même pour un gestionnaire de comptes.
+        if (any(_role_grants_security_access(r) for r in roles)
+                and not user_has_permission(current_user, 'security_grant')):
+            record_audit(ACTION_CREATE, "user", target_id=username, outcome=OUTCOME_FAILURE,
+                         details="refus: attribution de rôle sensible sans security_grant")
+            display_toast(success=False, message="Attribuer un rôle avec accès Sécurité exige la permission « Sécurité — rôles & attributions »")
+            return "", 204
+
         # Création de l'utilisateur
         user = User(
             username=username,
@@ -400,12 +441,22 @@ def add_new_user():
 
 
 @admin_security_bp.route('/admin/security/user_update/<int:user_id>', methods=['POST'])
-@require_permission('security')
+@require_permission('security_manage')
 def security_update_user(user_id):
     try:
         user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
+            return "", 204
+
+        # Compte détenteur d'un accès Sécurité : sa gestion exige
+        # security_grant (un gestionnaire de comptes ne peut pas toucher un
+        # compte capable de s'administrer).
+        if (_user_is_security_sensitive(user)
+                and not user_has_permission(current_user, 'security_grant')):
+            record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
+                         details="refus: compte sensible sans security_grant")
+            display_toast(success=False, message="Ce compte détient un accès Sécurité : sa gestion exige la permission « Sécurité — rôles & attributions »")
             return "", 204
 
         # Récupérer les données du formulaire
@@ -449,6 +500,18 @@ def security_update_user(user_id):
             display_toast(success=False, message="Un des rôles sélectionnés est invalide")
             return "", 204
 
+        # Attribution d'un rôle à capacité Sécurité : réservée à
+        # security_grant. Le rollback précède l'audit : username/email sont
+        # déjà mutés sur l'objet, et record_audit committerait ces changements
+        # non validés avec sa ligne de journal.
+        if (any(_role_grants_security_access(r) for r in roles)
+                and not user_has_permission(current_user, 'security_grant')):
+            db.session.rollback()
+            record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
+                         details="refus: attribution de rôle sensible sans security_grant")
+            display_toast(success=False, message="Attribuer un rôle avec accès Sécurité exige la permission « Sécurité — rôles & attributions »")
+            return "", 204
+
         # Remplacer tous les rôles par la sélection
         user.roles = list(roles)
 
@@ -476,6 +539,15 @@ def security_update_user(user_id):
         record_audit(ACTION_UPDATE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
                      details=f"username={username} roles={[r.name for r in roles]} active={user.active}")
         display_toast(success=True, message="Utilisateur mis à jour avec succès")
+        # Auto-mutation : si l'administrateur vient de se désactiver ou de se
+        # retirer sa propre permission Sécurité, la table re-rendue lui serait
+        # refusée (302/403 injecté dans la liste). HX-Redirect déclenche une
+        # navigation pleine page vers une destination cohérente avec son nouvel
+        # état : /login si la session est morte, /admin sinon.
+        if user.id == current_user.id and not user.active:
+            return "", 200, {"HX-Redirect": url_for('admin_security.login')}
+        if not user_has_permission(current_user, 'security'):
+            return "", 200, {"HX-Redirect": url_for('admin_dashboard.admin')}
         return display_security_table()
 
     except Exception as e:
@@ -486,8 +558,16 @@ def security_update_user(user_id):
         return "", 204
 
 def _has_security_capability(user):
-    """Vrai si un rôle de ``user`` accorde la permission Sécurité."""
-    return any(getattr(role, 'admin_security', False) for role in user.roles)
+    """Vrai si un rôle de ``user`` accorde le niveau « rôles & attributions ».
+
+    L'invariant « dernier accès Sécurité » se mesure sur le niveau
+    security_grant : c'est lui qui permet de réattribuer un accès Sécurité et
+    donc de sortir d'un lock-out. (La colonne historique ``admin_security``
+    vaut accès complet, donc compte aussi.)
+    """
+    return any(getattr(role, 'admin_security', False)
+               or getattr(role, 'admin_security_grant', False)
+               for role in user.roles)
 
 
 def _security_capable_active_users():
@@ -500,12 +580,21 @@ def _security_capable_active_users():
     return [u for u in users if _has_security_capability(u)]
 
 @admin_security_bp.route('/admin/security/delete_user/<int:user_id>', methods=['POST'])
-@require_permission('security')
+@require_permission('security_manage')
 def delete_user2(user_id):
     try:
         user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
+            return "", 204
+
+        # Compte détenteur d'un accès Sécurité : sa suppression exige
+        # security_grant.
+        if (_user_is_security_sensitive(user)
+                and not user_has_permission(current_user, 'security_grant')):
+            record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_FAILURE,
+                         details="refus: compte sensible sans security_grant")
+            display_toast(success=False, message="Ce compte détient un accès Sécurité : sa gestion exige la permission « Sécurité — rôles & attributions »")
             return "", 204
 
         if (user.active and _has_security_capability(user)
@@ -517,12 +606,18 @@ def delete_user2(user_id):
             return "", 204
 
         deleted_username = user.username
+        was_self = user.id == getattr(current_user, "id", None)
         db.session.delete(user)
         db.session.commit()
 
         record_audit(ACTION_DELETE, "user", target_id=user_id, outcome=OUTCOME_SUCCESS,
                      details=f"username={deleted_username}")
         display_toast(success=True, message="Utilisateur supprimé avec succès")
+        if was_self:
+            # Suppression de son propre compte : la session est morte —
+            # navigation pleine page vers la connexion plutôt qu'un fragment
+            # de redirection injecté dans la table.
+            return "", 200, {"HX-Redirect": url_for('admin_security.login')}
         return display_security_table()
 
     except Exception as e:
@@ -534,14 +629,14 @@ def delete_user2(user_id):
 
 # affiche la modale pour confirmer la suppression d'un membre
 @admin_security_bp.route('/admin/security/confirm_delete_user/<int:user_id>', methods=['GET'])
-@require_permission('security')
+@require_permission('security_manage')
 def confirm_delete_user(user_id):
     user = db.session.get(User, user_id)
     return render_template('/admin/security_modal_confirm_delete_user.html', user=user)
 
 # affiche la modale pour confirmer la suppression d'un role
 @admin_security_bp.route('/admin/security/confirm_delete_role/<int:role_id>', methods=['GET'])
-@require_permission('security')
+@require_permission('security_grant')
 def confirm_delete_role(role_id):
     role = db.session.get(Role, role_id)
     return render_template('/admin/security_modal_confirm_delete_role.html', role=role)
@@ -696,7 +791,7 @@ class ExtendedLoginForm(FlaskForm):
         return True
     
 @admin_security_bp.route('/admin/logout_all', methods=['POST'])
-@require_permission('security')
+@require_permission('security_grant')
 def logout_all():
     """Déconnexion de tous les utilisateurs.
 
@@ -801,7 +896,7 @@ def reset_admin_user():
 # ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
 # tests/test_code_mort.py.
 # @admin_security_bp.route('/admin/reset_admin', methods=['POST'])
-@require_permission('security')
+@require_permission('security_grant')
 def reset_admin():
     """Reset the admin user and create a new one"""
     try:
@@ -826,7 +921,7 @@ def reset_admin():
         return display_security_table()
 
 @admin_security_bp.route('/admin/security/role_update/<int:role_id>', methods=['POST'])
-@require_permission_api('security')
+@require_permission_api('security_grant')
 def security_update_role(role_id):
     try:
         app.logger.info(f"Mise à jour du rôle {role_id}")
@@ -876,7 +971,13 @@ def security_update_role(role_id):
             record_audit(ACTION_UPDATE, "role", target_id=role_id, outcome=OUTCOME_SUCCESS,
                          details=f"name={name}")
             display_toast(success=True, message="Rôle mis à jour avec succès")
-            return jsonify({'success': True})
+            resp = jsonify({'success': True})
+            if not user_has_permission(current_user, 'security'):
+                # La modification vient de retirer notre propre accès Sécurité
+                # (possible seulement si un autre capable existe) : navigation
+                # pleine page vers le tableau de bord.
+                resp.headers["HX-Redirect"] = url_for('admin_dashboard.admin')
+            return resp
         except Exception as e:
             db.session.rollback()
             app.logger.error(f"Erreur lors du commit: {str(e)}")
@@ -892,7 +993,7 @@ def security_update_role(role_id):
         return jsonify({'error': "La mise à jour a échoué."}), 500
 
 @admin_security_bp.route('/admin/security/save_role', methods=['POST'])
-@require_permission('security')
+@require_permission('security_grant')
 def save_role():
     try:
         data = request.get_json() if request.is_json else request.form
@@ -962,7 +1063,7 @@ def save_role():
         return "", 204
 
 @admin_security_bp.route('/admin/security/add_role_form')
-@require_permission('security')
+@require_permission('security_grant')
 def add_role_form():
     """Affiche le formulaire d'ajout de rôle.
 
@@ -974,7 +1075,7 @@ def add_role_form():
                            permissions_by_category=permissions_by_category())
 
 @admin_security_bp.route('/admin/security/delete_role/<int:role_id>', methods=['DELETE'])
-@require_permission('security')
+@require_permission('security_grant')
 # supprime un rôle
 def delete_role(role_id):
     try:
@@ -1008,7 +1109,7 @@ def delete_role(role_id):
         return "", 204
 
 @admin_security_bp.route('/admin/security/change_password/<int:user_id>', methods=['GET'])
-@require_permission('security')
+@require_permission('security_manage')
 def change_password_form(user_id):
     try:
         user = db.session.get(User, user_id)
@@ -1024,12 +1125,21 @@ def change_password_form(user_id):
         return ""
 
 @admin_security_bp.route('/admin/security/update_password/<int:user_id>', methods=['POST'])
-@require_permission('security')
+@require_permission('security_manage')
 def update_password(user_id):
     try:
         user = db.session.get(User, user_id)
         if not user:
             display_toast(success=False, message="Utilisateur non trouvé")
+            return "", 204
+
+        # Compte détenteur d'un accès Sécurité : le changement de mot de passe
+        # révoque ses sessions — action réservée à security_grant.
+        if (_user_is_security_sensitive(user)
+                and not user_has_permission(current_user, 'security_grant')):
+            record_audit(ACTION_UPDATE, "password", target_id=user_id, outcome=OUTCOME_FAILURE,
+                         details="refus: compte sensible sans security_grant")
+            display_toast(success=False, message="Ce compte détient un accès Sécurité : sa gestion exige la permission « Sécurité — rôles & attributions »")
             return "", 204
 
         password1 = request.form.get('password1')

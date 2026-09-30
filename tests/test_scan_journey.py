@@ -49,9 +49,6 @@ def application(tmp_path):
     app.config.update(
         SECRET_KEY="secret-test-scan-journey",
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        # db.metadatas est partagé entre fichiers de test : le bind 'users'
-        # peut déjà y être déclaré (cf. test_phone_patient_token).
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         PAGE_PATIENT_QRCODE_WEB_PAGE=True,
         SERVER_URL="http://borne.test/",

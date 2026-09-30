@@ -46,7 +46,6 @@ def application(tmp_path):
     app.config.update(
         SECRET_KEY="secret-test-phone-convergence",
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         PHONE_TITLE="Suivi",
         PHONE_LINE1="{N}",

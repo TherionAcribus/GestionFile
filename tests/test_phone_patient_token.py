@@ -37,11 +37,6 @@ def application():
     app.config.update(
         SECRET_KEY="secret-test-phone",
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        # Obligatoire ici : ce fichier s'exécute après test_calling_service /
-        # test_transactions, qui enregistrent le bind 'users' — db.metadatas
-        # est partagé et conserve ce bind, create_all() l'exige donc dans la
-        # config de TOUTE app ultérieure.
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
     )
     db.init_app(app)

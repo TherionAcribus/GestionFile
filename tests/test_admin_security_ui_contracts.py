@@ -28,6 +28,7 @@ from flask import Blueprint, Flask
 from flask_login import LoginManager, login_user
 
 from models import db, Role, User
+from routes.admin_security import user_has_permission
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
@@ -87,6 +88,16 @@ def _make_app():
         return "login", 200
 
     app.register_blueprint(security_stub)
+
+    # Stub du tableau de bord (admin_dashboard.admin), cible des HX-Redirect
+    # émis lorsqu'une auto-mutation retire l'accès Sécurité au demandeur.
+    dashboard_stub = Blueprint("admin_dashboard", __name__)
+
+    @dashboard_stub.route("/admin", endpoint="admin")
+    def _admin_home():
+        return "admin", 200
+
+    app.register_blueprint(dashboard_stub)
 
     with app.app_context():
         db.create_all()
@@ -842,3 +853,262 @@ def test_ouvreurs_de_formulaires_sont_des_boutons():
         tpl = _read(rel)
         assert '<button type="button" class="btn btn-primary"' in tpl, rel
         assert '<a class="btn btn-primary"' not in tpl, rel
+
+# ---------------------------------------------------------------------------
+# Auto-mutations : HX-Redirect pleine page au lieu d'un fragment refusé
+# ---------------------------------------------------------------------------
+
+def _add_capable_user(app, username="backup"):
+    admin_rid = _role_id(app, "admin")
+    return _add_user(app, username, admin_rid)
+
+
+def test_user_update_auto_demission_redirige_vers_admin(client, app):
+    # Un second capable existe : root peut se retirer la permission Sécurité.
+    # La réponse ne doit pas réinjecter un 403 dans la table — HX-Redirect.
+    _add_capable_user(app)
+    root_id = _user_id(app, "root")
+    resp = _post_user_update(client, root_id,
+                             role_ids=json.dumps([_role_id(app, "operateur")]))
+    assert resp.status_code == 200
+    assert resp.headers.get("HX-Redirect") == "/admin"
+
+
+def test_user_update_auto_desactivation_redirige_vers_login(client, app):
+    _add_capable_user(app)
+    root_id = _user_id(app, "root")
+    resp = _post_user_update(client, root_id,
+                             role_ids=json.dumps([_role_id(app, "admin")]),
+                             active="false")
+    assert resp.status_code == 200
+    assert resp.headers.get("HX-Redirect") == "/login"
+
+
+def test_delete_user_auto_suppression_redirige_vers_login(client, app):
+    _add_capable_user(app)
+    root_id = _user_id(app, "root")
+    resp = client.post(f"/admin/security/delete_user/{root_id}")
+    assert resp.status_code == 200
+    assert resp.headers.get("HX-Redirect") == "/login"
+    assert _user(app, root_id) is None
+
+
+def test_role_update_retrait_de_sa_propre_permission_redirige(client, app):
+    # backup est capable via un AUTRE rôle : retirer admin_security au rôle
+    # admin de root laisse l'invariant satisfait mais prive root de l'accès.
+    suppleant_rid = _add_role(app, "suppleant", admin_security=True)
+    _add_user(app, "backup", suppleant_rid)
+    admin_rid = _role_id(app, "admin")
+    resp = _post_update(client, admin_rid, name="admin",
+                        permissions=json.dumps({"admin_security": False}))
+    assert resp.status_code == 200
+    assert resp.get_json() == {"success": True}
+    assert resp.headers.get("HX-Redirect") == "/admin"
+
+
+def test_table_utilisateurs_ne_desactive_plus_par_le_nom():
+    # La convention « utilisateur nommé admin » est remplacée par l'invariant
+    # serveur « dernier accès Sécurité » : plus de disabled lié au username.
+    tpl = _read("templates/admin/security_htmx_table.html")
+    assert 'username == "admin"' not in tpl
+
+
+# ---------------------------------------------------------------------------
+# Hiérarchie Sécurité : view ⊂ manage ⊂ grant ; admin_security = accès complet
+# ---------------------------------------------------------------------------
+
+def _login_as(app, username):
+    """Client de test connecté comme ``username`` — même mécanisme que le
+    fixture ``client`` (session ``_user_id`` = ``fs_uniquifier``)."""
+    cl = app.test_client()
+    with app.app_context():
+        uniquifier = User.query.filter_by(username=username).first().fs_uniquifier
+    with cl.session_transaction() as sess:
+        sess["_user_id"] = str(uniquifier)
+    return cl
+
+
+def _perm_map(app, username):
+    """Droits effectifs de ``username`` sur chaque ressource Sécurité."""
+    with app.app_context():
+        user = User.query.filter_by(username=username).first()
+        return {res: user_has_permission(user, res) for res in
+                ("security", "security_view", "security_manage", "security_grant")}
+
+
+def test_hierarchie_admin_security_vaut_acces_complet(app):
+    # Le rôle « admin » historique (admin_security=True) garde tout.
+    assert _perm_map(app, "root") == {
+        "security": True, "security_view": True,
+        "security_manage": True, "security_grant": True}
+
+
+def test_hierarchie_view_seul_ne_donne_que_la_consultation(app):
+    rid = _add_role(app, "lecteur", admin_security_view=True)
+    _add_user(app, "watcher", rid)
+    assert _perm_map(app, "watcher") == {
+        "security": True, "security_view": True,
+        "security_manage": False, "security_grant": False}
+
+
+def test_hierarchie_manage_inclut_view_mais_pas_grant(app):
+    rid = _add_role(app, "gestionnaire", admin_security_manage=True)
+    _add_user(app, "manager", rid)
+    assert _perm_map(app, "manager") == {
+        "security": True, "security_view": True,
+        "security_manage": True, "security_grant": False}
+
+
+def test_hierarchie_grant_inclut_tous_les_niveaux(app):
+    rid = _add_role(app, "accordeur", admin_security_grant=True)
+    _add_user(app, "granter", rid)
+    assert _perm_map(app, "granter") == {
+        "security": True, "security_view": True,
+        "security_manage": True, "security_grant": True}
+
+
+# --- Répartition des niveaux sur les routes (statique) ----------------------
+
+def _ressource_de_garde(view_name):
+    """Ressource du dernier décorateur ``require_permission*`` avant la vue."""
+    src = _read("routes/admin_security.py")
+    head = src[:src.index(f"def {view_name}(")]
+    matches = re.findall(
+        r"require_permission(?:_api|_dashboard)?\(\s*'([a-z_]+)'\s*\)", head)
+    return matches[-1] if matches else None
+
+
+def test_repartition_des_niveaux_sur_les_routes():
+    # Consultation (la carte de tableau de bord reste 'security' : la ressource
+    # est le nom de la carte, et la chaîne la couvre déjà au niveau view).
+    for view in ("admin_security", "display_security_table",
+                 "display_security_role_table"):
+        assert _ressource_de_garde(view) == "security_view", view
+    assert _ressource_de_garde("dashboard_security") == "security"
+    # Cycle de vie des comptes.
+    for view in ("add_user_form", "add_new_user", "security_update_user",
+                 "delete_user2", "confirm_delete_user", "change_password_form",
+                 "update_password"):
+        assert _ressource_de_garde(view) == "security_manage", view
+    # Rôles, attributions sensibles et actions globales.
+    for view in ("add_role_form", "save_role", "security_update_role",
+                 "delete_role", "confirm_delete_role", "logout_all",
+                 "reset_admin"):
+        assert _ressource_de_garde(view) == "security_grant", view
+
+
+# --- Niveau view : lecture seule ---------------------------------------------
+
+def test_view_peut_consulter_mais_pas_creer(app):
+    rid = _add_role(app, "lecteur", admin_security_view=True)
+    _add_user(app, "watcher", rid)
+    cl = _login_as(app, "watcher")
+    assert cl.get("/admin/security/table").status_code == 200
+    resp = _post_user(cl)
+    # require_permission (variante PAGE) rend la page d'erreur 403.
+    assert resp.status_code == 403
+    with app.app_context():
+        assert User.query.filter_by(username="alice").first() is None
+
+
+# --- Niveau manage : comptes ordinaires seulement -----------------------------
+
+def test_manage_peut_editer_un_compte_non_sensible(app):
+    rid = _add_role(app, "gestionnaire", admin_security_manage=True)
+    _add_user(app, "manager", rid)
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid)
+    cl = _login_as(app, "manager")
+    resp = _post_user_update(cl, bob_id, username="bob",
+                             role_ids=json.dumps([op_rid]))
+    assert resp.status_code == 200
+
+
+def test_manage_ne_peut_pas_modifier_les_roles(app):
+    rid = _add_role(app, "gestionnaire", admin_security_manage=True)
+    _add_user(app, "manager", rid)
+    cl = _login_as(app, "manager")
+    resp = _post_update(cl, _role_id(app, "operateur"))
+    assert resp.status_code == 403  # variante API : refus JSON
+
+
+def test_manage_ne_peut_pas_toucher_un_compte_sensible(app):
+    rid = _add_role(app, "gestionnaire", admin_security_manage=True)
+    _add_user(app, "manager", rid)
+    root_id = _user_id(app, "root")
+    cl = _login_as(app, "manager")
+    resp = _post_user_update(cl, root_id, username="root",
+                             role_ids=json.dumps([_role_id(app, "admin")]))
+    assert resp.status_code == 204  # refus : compte sensible
+    assert resp.data == b""
+    assert _user_role_names(app, root_id) == ["admin"]
+
+
+def test_manage_ne_peut_pas_attribuer_un_role_sensible(app):
+    rid = _add_role(app, "gestionnaire", admin_security_manage=True)
+    _add_user(app, "manager", rid)
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid)
+    cl = _login_as(app, "manager")
+    resp = _post_user_update(cl, bob_id, username="bob",
+                             role_ids=json.dumps([_role_id(app, "admin")]))
+    assert resp.status_code == 204  # refus : attribution de rôle sensible
+    assert resp.data == b""
+    assert _user_role_names(app, bob_id) == ["operateur"]
+
+
+def test_manage_peut_attribuer_un_role_ordinaire(app):
+    rid = _add_role(app, "gestionnaire", admin_security_manage=True)
+    _add_user(app, "manager", rid)
+    op_rid = _role_id(app, "operateur")
+    bob_id = _add_user(app, "bob", op_rid)
+    cl = _login_as(app, "manager")
+    resp = _post_user_update(cl, bob_id, username="bob",
+                             role_ids=json.dumps([op_rid]))
+    assert resp.status_code == 200
+    assert _user_role_names(app, bob_id) == ["operateur"]
+
+
+# --- Niveau grant : rôles et comptes sensibles --------------------------------
+
+def test_grant_peut_modifier_les_roles(app):
+    rid = _add_role(app, "accordeur", admin_security_grant=True)
+    _add_user(app, "granter", rid)
+    cl = _login_as(app, "granter")
+    resp = _post_update(cl, _role_id(app, "operateur"), name="operateur")
+    assert resp.status_code == 200
+    assert resp.get_json() == {"success": True}
+
+
+def test_grant_peut_modifier_un_compte_sensible(app):
+    rid = _add_role(app, "accordeur", admin_security_grant=True)
+    _add_user(app, "granter", rid)
+    root_id = _user_id(app, "root")
+    cl = _login_as(app, "granter")
+    resp = _post_user_update(cl, root_id, username="root",
+                             role_ids=json.dumps([_role_id(app, "admin")]))
+    assert resp.status_code == 200
+
+
+# --- Gabarits : gating par niveau ----------------------------------------------
+
+def test_table_utilisateurs_conditionnee_par_security_manage():
+    tpl = _read("templates/admin/security_htmx_table.html")
+    assert "user_has_permission(current_user, 'security_manage')" in tpl
+    assert "{% if not can_manage %}disabled{% endif %}" in tpl
+    assert "{% if can_manage %}" in tpl          # actions réservées
+    assert '<span class="text-muted">—</span>' in tpl
+
+
+def test_table_roles_conditionnee_par_security_grant():
+    tpl = _read("templates/admin/security_htmx_role_table.html")
+    assert "user_has_permission(current_user, 'security_grant')" in tpl
+    assert "not can_grant" in tpl                # champs désactivés
+    assert "{% if can_grant %}" in tpl           # boutons réservés
+
+
+def test_boutons_d_ajout_conditionnes_par_niveau():
+    assert "user_has_permission(current_user, 'security_manage')" in _read(
+        "templates/admin/security_user.html")
+    assert "user_has_permission(current_user, 'security_grant')" in _read(
+        "templates/admin/security_roles.html")

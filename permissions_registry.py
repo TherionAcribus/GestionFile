@@ -73,7 +73,31 @@ PERMISSIONS = [
     Permission(
         "security",
         "Sécurité",
-        "Gestion des utilisateurs, des rôles et des permissions.",
+        "Accès complet à la section Sécurité (inclut consultation, gestion des comptes et gestion des rôles).",
+        "Système",
+        RISK_HIGH,
+    ),
+    # Sous-niveaux de la Sécurité : un niveau inclut les niveaux inférieurs
+    # (grant ⊃ manage ⊃ view) ; la permission historique ``security`` inclut
+    # les trois (cf. _SECURITY_PERMISSION_CHAIN dans routes/admin_security.py).
+    Permission(
+        "security_view",
+        "Sécurité — consultation",
+        "Consultation des utilisateurs, des rôles et de leurs permissions.",
+        "Système",
+        RISK_LOW,
+    ),
+    Permission(
+        "security_manage",
+        "Sécurité — comptes",
+        "Création, modification, désactivation et suppression des comptes utilisateurs.",
+        "Système",
+        RISK_HIGH,
+    ),
+    Permission(
+        "security_grant",
+        "Sécurité — rôles & attributions",
+        "Gestion des rôles et de leurs permissions, attributions de rôles sensibles, actions globales.",
         "Système",
         RISK_HIGH,
     ),

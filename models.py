@@ -27,6 +27,13 @@ class Role(db.Model, RoleMixin):
     
     # Permissions pour les différentes pages admin
     admin_security = db.Column(db.Boolean, nullable=False, default=False)
+    # Découpage de la Sécurité : consultation / gestion des comptes / rôles &
+    # attributions. La colonne historique admin_security vaut accès complet
+    # aux trois niveaux (cf. _SECURITY_PERMISSION_CHAIN dans
+    # routes/admin_security.py).
+    admin_security_view = db.Column(db.Boolean, nullable=False, default=False)
+    admin_security_manage = db.Column(db.Boolean, nullable=False, default=False)
+    admin_security_grant = db.Column(db.Boolean, nullable=False, default=False)
     admin_counter = db.Column(db.Boolean, nullable=False, default=False)
     admin_activity = db.Column(db.Boolean, nullable=False, default=False)
     admin_schedule = db.Column(db.Boolean, nullable=False, default=False)

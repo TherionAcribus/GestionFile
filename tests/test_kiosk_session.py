@@ -41,11 +41,6 @@ def _make_app(*, patient_security=True):
     app = Flask(__name__)
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        # L'extension db est partagée entre fichiers de test : db.metadatas
-        # accumule le bind 'users' dès qu'un module le déclare
-        # (test_phone_patient_token, test_calling_service...). Sans cette
-        # entrée, create_all() échoue selon l'ordre d'exécution des tests.
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         SECRET_KEY="test-secret-kiosk",
         SECURITY_LOGIN_PATIENT=patient_security,

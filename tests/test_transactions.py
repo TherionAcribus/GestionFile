@@ -31,7 +31,6 @@ def application():
     app = Flask(__name__)
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
     )
     db.init_app(app)

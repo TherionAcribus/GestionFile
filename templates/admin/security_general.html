@@ -39,6 +39,7 @@ security_login_counter,
 {#  déclenchée par un formulaire POST (CSRF) avec confirmation, pas par  #}
 {#  un simple lien GET (risque de CSRF par image/iframe).               #}
 {# ------------------------------------------------------------------ #}
+{% if user_has_permission(current_user, 'security_grant') %}
 <div class="card border-danger mt-4">
     <div class="card-header bg-danger-subtle">
         <i class="bi bi-exclamation-triangle"></i> <strong>Actions avancées</strong>
@@ -61,3 +62,4 @@ security_login_counter,
         </form>
     </div>
 </div>
+{% endif %}

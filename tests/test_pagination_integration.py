@@ -56,6 +56,11 @@ class Obj:
 def app():
     app = Flask(__name__, template_folder=_TEMPLATES)
     app.config["SERVER_NAME"] = "localhost"  # pour url_for('static', ...)
+    # Les gabarits Sécurité conditionnent leurs actions sur
+    # user_has_permission(current_user, ...) — fournis en production par le
+    # context processor de l'app et flask_login ; hors requête, on les expose.
+    app.jinja_env.globals["user_has_permission"] = lambda *a, **k: True
+    app.jinja_env.globals["current_user"] = Obj(id=0, username="tester", roles=[])
     return app
 
 

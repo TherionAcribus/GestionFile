@@ -1,14 +1,17 @@
 {% import '/admin/pagination.html' as pg %}
+{# « Sécurité — consultation » = lecture seule : édition des rôles réservée
+   à security_grant (le serveur re-vérifie de toute façon). #}
+{% set can_grant = user_has_permission(current_user, 'security_grant') %}
 
         {% for role in roles %}
         <div id="role-item-{{ role.id }}">
             <div class="mb-3">
                 <label for="name-{{ role.id }}" class="form-label">Nom</label>
-                <input type="text" class="form-control" value="{{ role.name }}" id="name-{{ role.id }}">
+                <input type="text" class="form-control" value="{{ role.name }}" id="name-{{ role.id }}"{% if not can_grant %} disabled{% endif %}>
             </div>
             <div class="mb-3">
                 <label for="description-{{ role.id }}" class="form-label">Description</label>
-                <input type="text" class="form-control" value="{{ role.description }}" id="description-{{ role.id }}">
+                <input type="text" class="form-control" value="{{ role.description }}" id="description-{{ role.id }}"{% if not can_grant %} disabled{% endif %}>
             </div>
 
             {# Cases générées depuis le registre (libellés français, groupées par
@@ -27,7 +30,7 @@
                                         id="{{ perm.field }}-{{ role.id }}"
                                         data-permission="{{ perm.field }}"
                                         {% if role_perms.get(perm.field) %}checked{% endif %}
-                                        {% if role.name == "admin" %}disabled{% endif %}>
+                                        {% if role.name == "admin" or not can_grant %}disabled{% endif %}>
                                     <label class="form-check-label" for="{{ perm.field }}-{{ role.id }}"
                                         title="{{ perm.description }}">
                                         {{ perm.label }}
@@ -43,6 +46,7 @@
             </div>
 
             <div>
+                {% if can_grant %}
                 <button class="btn btn-primary"
                     {% if role.name == "admin" %} disabled {% endif %}
                     hx-post="/admin/security/role_update/{{ role.id }}"
@@ -63,7 +67,10 @@
                     data-bs-target="#modal_delete"
                     data-bs-toggle="modal">
                     Supprimer
-                </button> 
+                </button>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
 
             </div>
         </div>

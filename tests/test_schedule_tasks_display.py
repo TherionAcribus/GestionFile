@@ -48,9 +48,6 @@ def app(tmp_path):
     app = Flask(__name__)
     app.config.update(
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",
-        # db.metadatas est partagé entre fichiers de test : le bind 'users'
-        # est requis par db.create_all() (convention de la suite).
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         TESTING=True,
     )

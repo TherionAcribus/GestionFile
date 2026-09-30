@@ -5,10 +5,6 @@ Couvre :
 - le repli gTTS du moteur (Google en échec, modèle jamais réglé) ;
 - les routes du tableau récapitulatif, du passage « tout sur Google », de la
   présélection de voix par langue et du panneau de langue.
-
-Nom de fichier volontairement trié après test_upload_security : ce fichier
-enregistre le bind 'users' dans db.metadatas (partagé entre fichiers), ce que
-ne tolèrent pas les fichiers antérieurs qui ne déclarent pas SQLALCHEMY_BINDS.
 """
 
 import json
@@ -137,7 +133,6 @@ def app(tmp_path):
     app.config.update(
         SECRET_KEY="test",
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         TESTING=True,
         BASE32_KEY=Fernet.generate_key(),

@@ -177,10 +177,6 @@ def app(tmp_path):
     app.config.update(
         SECRET_KEY="test",
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",
-        # db.metadatas est partagé entre fichiers de test : les fichiers
-        # précédents ont déjà enregistré le bind 'users' — sans cette entrée,
-        # db.create_all() lève UnboundExecutionError (convention de la suite).
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         TESTING=True,
         BASE32_KEY=Fernet.generate_key(),

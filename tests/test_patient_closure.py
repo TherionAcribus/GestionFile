@@ -40,7 +40,6 @@ def application():
     app.config.update(
         SECRET_KEY="secret-test-closure",
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         ALGO_IS_ACTIVATED=False,
         ALGO_OVERTAKEN_LIMIT=10,

@@ -44,7 +44,6 @@ def _make_app():
     )
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         SECRET_KEY="test-secret-revocation",
     )
@@ -61,8 +60,13 @@ def _make_app():
             return user
         return None
 
-    from routes.admin_security import admin_security_bp
+    from routes.admin_security import admin_security_bp, user_has_permission
     app.register_blueprint(admin_security_bp, url_prefix="")
+
+    # Le fragment de table Sécurité (rendu après update_password) conditionne
+    # ses actions sur user_has_permission — fourni par l'app réelle via un
+    # context processor ; on expose la vraie fonction ici.
+    app.jinja_env.globals["user_has_permission"] = user_has_permission
 
     # Stub de l'endpoint Flask-Security (security.login) : la garde
     # require_permission y redirige les anonymes — il doit donc exister dans

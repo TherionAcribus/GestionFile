@@ -53,7 +53,8 @@ def test_logout_all_is_post_only():
 
 
 def test_logout_all_still_has_permission_guard():
-    """La route doit toujours être protégée par require_permission('security')."""
+    """La route doit toujours être protégée — par require_permission
+    ('security_grant' depuis le découpage view/manage/grant : action globale)."""
     source = _read("routes/admin_security.py")
     # Trouver le bloc route + décorateurs
     m = re.search(
@@ -61,7 +62,7 @@ def test_logout_all_still_has_permission_guard():
         source, re.DOTALL)
     assert m, "route /admin/logout_all introuvable"
     block = m.group(0)
-    assert "require_permission('security')" in block
+    assert "require_permission('security_grant')" in block
 
 
 def test_logout_all_still_calls_record_audit():

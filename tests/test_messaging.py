@@ -22,7 +22,6 @@ def messaging_app():
         TESTING=True,
         SECRET_KEY="messaging-test-secret",
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         APP_MESSAGING_ENABLED=True,
     )

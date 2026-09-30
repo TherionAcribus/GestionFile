@@ -127,7 +127,8 @@ def test_user_creation_routes_require_security_permission():
     """La création d'utilisateurs n'est possible que depuis l'admin protégée.
 
     add_user_form (formulaire) et add_new_user (création) doivent porter le
-    décorateur @require_permission('security')."""
+    décorateur @require_permission('security_manage') — la gestion des comptes
+    est le niveau Sécurité dédié depuis le découpage view/manage/grant."""
     source = _read("routes/admin_security.py")
     for view in ("def add_user_form(", "def add_new_user("):
         # Fenêtre de source précédant la définition de la vue.
@@ -135,6 +136,6 @@ def test_user_creation_routes_require_security_permission():
         preceding = source[:idx]
         # Le dernier bloc de décorateurs avant la vue doit contenir la garde.
         decorators = preceding[preceding.rindex("@admin_security_bp.route"):]
-        assert "@require_permission('security')" in decorators, (
-            f"{view} doit être protégée par require_permission('security')"
+        assert "@require_permission('security_manage')" in decorators, (
+            f"{view} doit être protégée par require_permission('security_manage')"
         )

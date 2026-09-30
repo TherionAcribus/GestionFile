@@ -39,9 +39,6 @@ def application():
     app = Flask(__name__)
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        # db.metadatas est partagé entre fichiers de test : un autre module
-        # peut déjà y avoir enregistré le bind 'users'.
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
     )
     db.init_app(app)

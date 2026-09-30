@@ -142,7 +142,6 @@ def app_db():
     app.config.update(
         SECRET_KEY="secret-test-ticket-value-text",
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
     )
     db.init_app(app)

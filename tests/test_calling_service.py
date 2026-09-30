@@ -36,7 +36,6 @@ def application(monkeypatch):
     app = Flask(__name__)
     app.config.update(
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         TESTING=True,
         ANNOUNCE_CALL_TEXT="Patient {N} au comptoir {C}",
         COUNTER_ORDER="order",

@@ -76,7 +76,6 @@ def app(tmp_path):
     app.config.update(
         SECRET_KEY="test",
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",
-        SQLALCHEMY_BINDS={"users": "sqlite:///:memory:"},
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         TESTING=True,
     )
