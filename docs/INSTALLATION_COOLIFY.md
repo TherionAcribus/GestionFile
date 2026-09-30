@@ -180,7 +180,7 @@ Ouvrez la section **Environment Variables** de la ressource.
 | Variable | Défaut | Quand la modifier |
 |---|---|---|
 | `ADMIN_USERNAME` | `admin` | Choisir un autre identifiant pour le premier admin |
-| `APP_SECRET` | auto-généré | Secret partagé avec les clients (comptoir, borne, imprimante). Laissez Coolify le générer, puis **notez sa valeur** : vous la saisirez dans chaque client |
+| `APP_SECRET` | auto-généré | Secret partagé avec les clients (comptoir, borne, imprimante). Dans Coolify, il s'appelle **`SERVICE_BASE64_64_GFAPPSECRET`** : le Compose le renomme `APP_SECRET` à l'intérieur des conteneurs. **Notez sa valeur** : vous la saisirez dans chaque client |
 | `COOKIE_SECURE` | `1` | Ne mettre `0` que pour un test local sans HTTPS |
 | `PAGE_EDITOR_ENABLED_PAGES` | `announce,patient,phone` | Pages ouvertes à l'éditeur visuel (retirer une page pour n'y garder que le mode avancé) |
 | `PORT` | `5000` | Ne pas modifier sauf besoin spécifique |
@@ -194,9 +194,11 @@ variables `SERVICE_*` déclarées dans le compose :
 `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, `RABBITMQ_PASSWORD`.
 
 :::tip Retrouver un secret généré
-Dans **Environment Variables**, la valeur des variables générées (dont
-`APP_SECRET`, nécessaire côté clients) est affichée en clair aux personnes
-autorisées. Notez `APP_SECRET` dans votre coffre de mots de passe.
+Dans **Environment Variables**, les secrets générés portent un nom
+`SERVICE_*` — pas le nom qu'ils auront dans les conteneurs. Le secret à
+saisir dans les clients (comptoir, borne, imprimante) est
+**`SERVICE_BASE64_64_GFAPPSECRET`** : sa valeur devient `APP_SECRET` dans
+les conteneurs. Notez-la dans votre coffre de mots de passe.
 :::
 
 :::danger Jamais dans le code
@@ -257,10 +259,11 @@ statut « exited (0) » signifie **succès**, pas un crash.
 Pour chaque client (application comptoir, borne, écran, imprimante) :
 
 1. Dans Coolify → **Environment Variables**, copiez la valeur de
-   **`APP_SECRET`** (auto-générée).
+   **`SERVICE_BASE64_64_GFAPPSECRET`** (auto-générée — c'est cette valeur
+   qui devient `APP_SECRET` dans les conteneurs).
 2. Dans le client, renseignez :
    - **URL du serveur** : `https://votre-domaine.fr`
-   - **Secret applicatif** : la valeur d'`APP_SECRET`
+   - **Secret applicatif** : la valeur copiée à l'étape 1
 3. Vérifiez la connexion (le client obtient un jeton via `/api/get_app_token`).
 
 ### Temps réel (Socket.IO / RabbitMQ)
@@ -380,7 +383,7 @@ suppression de volume.
 | Login impossible, cookies refusés | Accès en HTTP alors que `COOKIE_SECURE=1` | Utilisez HTTPS ; `COOKIE_SECURE=0` seulement pour un test local |
 | `CSRF validation failed` au login | Domaine sslip.io généré en `http://` : le cookie `Secure` n'est pas stocké | Préfixer le domaine par `https://` dans **Domains** (ports 80/443 ouverts), attendre le certificat, recharger |
 | « Database schema is not initialized » | `web` a démarré sans `init` terminé | Vérifier les logs `init`, Redeploy |
-| Clients refusés (401) | `APP_SECRET` différent côté client | Copier la valeur exacte depuis Environment Variables |
+| Clients refusés (401) | `APP_SECRET` différent côté client | Copier la valeur exacte de `SERVICE_BASE64_64_GFAPPSECRET` dans Environment Variables |
 | Écrans/comptoirs ne se rafraîchissent plus | Relais RabbitMQ inactif | Activer l'option RabbitMQ dans l'admin + Restart |
 | `E: Failed to fetch … deb11u16 … 404 Not Found` pendant le build | Image de base `python:3.10.4` (Debian bullseye) obsolète : paquets retirés des miroirs | Corrigé dans le Dockerfile (`python:3.12-slim-bookworm`) ; utiliser un commit à jour puis Redeploy |
 | Certificat TLS absent | DNS non propagé ou domaine incorrect | Vérifier l'enregistrement A, le champ Domains (`https://...:5000`), attendre la propagation |

@@ -85,15 +85,17 @@ obligatoire à saisir :
 |---|---|---|
 | `ADMIN_INITIAL_PASSWORD` | **Oui** — le déploiement est bloqué sans elle | Mot de passe du premier compte admin (>= 10 car., politique interne) |
 | `ADMIN_USERNAME` | Non | Identifiant du premier admin (défaut : `admin`) |
-| `APP_SECRET` | Non (auto-généré) | Secret partagé avec les clients (App comptoir, borne, imprimante). Auto-généré par Coolify ; **notez-le**, vous le saisirez dans chaque client |
+| `APP_SECRET` | Non (auto-généré) | Secret partagé avec les clients (App comptoir, borne, imprimante). Dans Coolify, il s'appelle **`SERVICE_BASE64_64_GFAPPSECRET`** (renommé `APP_SECRET` dans les conteneurs) ; **notez sa valeur**, vous la saisirez dans chaque client |
 | `SECRET_KEY`, `SECURITY_PASSWORD_SALT` | Non (auto-générés) | Secrets Flask — ne pas saisir, laisser Coolify générer |
 | `BASE32_KEY` | Non (auto-générée) | Clé de chiffrement Fernet des clés de service — auto-générée |
 | `MYSQL_*`, `RABBITMQ_*` | Non (auto-générés) | Mots de passe internes des services inclus |
 | `COOKIE_SECURE` | Non | `1` par défaut (HTTPS). Ne mettre `0` que pour un test HTTP sans TLS |
 | `DATABASE_URL`, `DATABASE_URL_SCHEDULER` | Non | Uniquement pour une base MySQL externe (voir §7) |
 
-> Pour lire un secret auto-généré (ex. `APP_SECRET`), ouvrez la variable
-> dans **Environment Variables** : sa valeur y est affichée.
+> Pour lire un secret auto-généré, ouvrez la variable dans **Environment
+> Variables** : sa valeur y est affichée. Attention aux noms : les secrets
+> générés s'appellent `SERVICE_*` — celui destiné aux clients est
+> `SERVICE_BASE64_64_GFAPPSECRET` (= `APP_SECRET` dans les conteneurs).
 
 ### Étape 4 — Déployer
 
@@ -123,7 +125,8 @@ obligatoire à saisir :
 Dans chaque client (App comptoir, borne, imprimante), renseignez :
 
 - l'URL du serveur : `https://files.mapharmacie.fr` ;
-- le secret applicatif : la valeur d'`APP_SECRET` dans les variables Coolify.
+- le secret applicatif : la valeur de `SERVICE_BASE64_64_GFAPPSECRET` dans
+  les variables Coolify (elle devient `APP_SECRET` dans les conteneurs).
 
 Puis faites un test métier complet : ticket → file d'attente → appel →
 affichage écran (+ impression si une borne est connectée).
@@ -147,7 +150,7 @@ affichage écran (+ impression si une borne est connectée).
 | `init` échoue sur `manage.py migrate` | MySQL pas prêt ou identifiants incohérents | Lire les logs `init` ; vérifier que `MYSQL_PASSWORD` n'a pas changé **après** le 1er déploiement (le mot de passe est fixé à la création du volume `mysql_data`) |
 | `web` unhealthy | Voir logs `web` ; souvent DB ou `APP_SECRET` absent | `/readyz` indique la dépendance en échec |
 | Login admin refusé | Mauvais mot de passe, ou cookie `Secure` sur HTTP | S'assurer d'être en HTTPS ; sinon `COOKIE_SECURE=0` (test seulement) |
-| Clients (App/borne) refusés | `APP_SECRET` différent côté client | Copier la valeur exacte depuis Environment Variables |
+| Clients (App/borne) refusés | `APP_SECRET` différent côté client | Copier la valeur exacte de `SERVICE_BASE64_64_GFAPPSECRET` dans Environment Variables |
 | Écrans/comptoirs ne se rafraîchissent pas en temps réel | Relais RabbitMQ inactif | Activer « Démarrer le serveur avec RabbitMQ » dans l'admin, redémarrer |
 | « Database schema is not initialized » | `web` démarré avant la fin d'`init` | Ne devrait pas arriver (depends_on) ; vérifier les logs `init` |
 
