@@ -69,7 +69,7 @@ from routes.admin_queue import admin_queue_bp
 from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
-from routes.admin_security import admin_security_bp, create_default_user, create_default_role, require_permission
+from routes.admin_security import admin_security_bp, create_default_user, create_default_role, create_default_roles, require_permission
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -206,6 +206,7 @@ def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_
 
         # Création du rôle admin et de l'utilisateur admin par défaut
         create_default_role()  # Toujours créer le rôle admin s'il n'existe pas
+        create_default_roles()  # Rôles de base (idempotent, jamais réécrits)
         create_default_user()  # Crée l'utilisateur admin seulement s'il n'y a pas d'utilisateurs
 
         init_days_of_week_db_from_json()

@@ -40,3 +40,7 @@
     </div>
 </div>
 {% endblock %}
+
+{% block scripts_end %}
+<script defer src="{{ url_for('static', filename='js/admin_network_adress.js') }}"></script>
+{% endblock %}

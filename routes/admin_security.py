@@ -861,6 +861,54 @@ def create_default_role():
         app.logger.error(f"Erreur lors de la création du rôle admin: {str(e)}")
         return False
 
+
+# Rôles de base proposés en complément du rôle « admin » (tout pouvoir).
+# Le seeding est idempotent : un rôle déjà présent n'est JAMAIS modifié, ce
+# qui laisse l'administrateur libre de renommer ou redécouper ces profils.
+_BASE_ROLE_SPECS = (
+    # (nom, description, champs de permission accordés)
+    (
+        "admin-fonctionnel",
+        "Toutes les permissions sauf la section Sécurité",
+        tuple(p.field for p in PERMISSIONS
+              if p.field not in _SENSITIVE_ROLE_FIELDS),
+    ),
+    (
+        "affichage-medias",
+        "Écrans publics (patient, annonce, téléphone), galerie, musique et traductions",
+        ("admin_patient", "admin_announce", "admin_phone", "admin_gallery",
+         "admin_music_play", "admin_translation"),
+    ),
+    (
+        "exploitation",
+        "File d'attente, comptoirs, équipe et statistiques",
+        ("admin_queue", "admin_counter", "admin_staff", "admin_stats"),
+    ),
+)
+
+
+def create_default_roles():
+    """Crée les rôles de base absents ; ne modifie jamais un rôle existant."""
+    try:
+        created = []
+        for name, description, fields in _BASE_ROLE_SPECS:
+            if Role.query.filter_by(name=name).first():
+                continue
+            role = Role(name=name, description=description)
+            for field in fields:
+                setattr(role, field, True)
+            db.session.add(role)
+            created.append(name)
+        if created:
+            db.session.commit()
+            app.logger.info("Rôles de base créés : %s", ", ".join(created))
+        return True
+
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Erreur lors de la création des rôles de base: {str(e)}")
+        return False
+
 # Fonction utilitaire (PAS une route) : consultée en interne pour signaler la
 # présence des identifiants par défaut. L'ancienne route GET
 # ``/admin/check_default_admin`` a été retirée : elle renvoyait un booléen (vue

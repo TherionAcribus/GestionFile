@@ -923,17 +923,24 @@ def qr_code_data_uri(patient, journey_id=None):
                 template = template + "\n" + patient.activity.specific_message
         data = replace_balise_phone(template, patient)
 
-    # Générer le QR Code en mémoire. qrcode utilise Pillow si présent
-    # (save(buffer, format=...)), sinon PyPNGImage (save(buffer) — le PNG
-    # est son seul format) : on tolère les deux signatures.
+    encoded = base64.b64encode(qr_png_bytes(data)).decode('ascii')
+    return f"data:image/png;base64,{encoded}"
+
+
+def qr_png_bytes(data):
+    """PNG du QR code encodant ``data``, généré en mémoire (bytes).
+
+    qrcode utilise Pillow si présent (save(buffer, format=...)), sinon
+    PyPNGImage (save(buffer) — le PNG est son seul format) : on tolère les
+    deux signatures.
+    """
     img = qrcode.make(data)
     buffer = io.BytesIO()
     try:
         img.save(buffer, format='PNG')
     except TypeError:
         img.save(buffer)
-    encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
-    return f"data:image/png;base64,{encoded}"
+    return buffer.getvalue()
 
 
 def set_server_url(app, request):

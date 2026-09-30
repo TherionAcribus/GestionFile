@@ -1,7 +1,10 @@
+import io
 import re
+import socket
 import time
+from urllib.parse import urlparse
 
-from flask import Blueprint, render_template, request, current_app as app
+from flask import Blueprint, jsonify, render_template, request, send_file, current_app as app
 from flask_security import current_user
 from routes.admin_security import send_test_email, require_permission, require_permission_dashboard, require_permission_api
 from models import DashboardCard
@@ -11,6 +14,7 @@ from sockets import active_connections
 from sockets import connected_clients_info
 from audit_log import ACTION_CONNECT, OUTCOME_SUCCESS, OUTCOME_FAILURE
 from audit_service import record_audit
+from python.engine import qr_png_bytes
 
 admin_app_bp = Blueprint('admin_app', __name__)
 
@@ -69,6 +73,73 @@ def admin_app(tab=None):
                             namespaces=[(ns, NAMESPACE_LABELS.get(ns, ns))
                                         for ns in active_connections.keys()]
     )
+
+
+def _split_host_port(host):
+    """(nom d'hôte, port) depuis ``request.host`` — gère ``[::1]:5000``."""
+    host = host or ""
+    if host.startswith("[") and "]" in host:
+        name, _, rest = host.partition("]")
+        return name + "]", rest.lstrip(":")
+    name, sep, port = host.partition(":")
+    return name, port if sep else ""
+
+
+def _is_loopback_host(hostname):
+    h = (hostname or "").strip().lower()
+    return (not h) or h.startswith("127.") or h in ("localhost", "::1", "[::1]")
+
+
+def _detect_lan_ipv4():
+    """IPv4 locale de l'interface de sortie, ou ``None``.
+
+    Astuce standard : ``connect()`` UDP vers TEST-NET-1 (192.0.2.1) n'émet
+    aucun trafic mais force le noyau à choisir l'interface de sortie, dont
+    ``getsockname()`` donne alors l'adresse.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("192.0.2.1", 80))
+        ip = sock.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        sock.close()
+    if not ip or _is_loopback_host(ip):
+        return None
+    return ip
+
+
+@admin_app_bp.route('/admin/app/network_adress/suggest')
+@require_permission_api('app')
+def admin_app_network_adress_suggest():
+    """Propose une valeur pour le réglage ``network_adress`` (onglet Général)."""
+    # L'administrateur accède déjà au serveur par une adresse joignable depuis
+    # le réseau : c'est la meilleure réponse possible.
+    hostname, host_port = _split_host_port(request.host)
+    if not _is_loopback_host(hostname):
+        return jsonify(url=request.host_url, source="adresse actuelle")
+
+    ip = _detect_lan_ipv4()
+    if not ip:
+        return jsonify(error="Adresse réseau introuvable"), 404
+
+    port = host_port or app.config.get("PORT", 5000)
+    scheme = "https" if request.is_secure else "http"
+    return jsonify(url=f"{scheme}://{ip}:{port}", source="détectée")
+
+
+@admin_app_bp.route('/admin/app/network_adress/qrcode.png')
+@require_permission_api('app')
+def admin_app_network_adress_qrcode():
+    """QR de TEST encodant l'URL fournie : jamais contactée (pas de SSRF),
+    la validation évite seulement de générer un code inutilisable."""
+    url = request.args.get("url", "")
+    parsed = urlparse(url) if 0 < len(url) <= 500 else None
+    if parsed is None or parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return jsonify(error="URL invalide"), 400
+    return send_file(io.BytesIO(qr_png_bytes(url)), mimetype="image/png")
+
 
 @admin_app_bp.route('/admin/app/mail/test', methods=['POST'])
 @require_permission_api('app')

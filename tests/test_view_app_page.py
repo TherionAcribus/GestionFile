@@ -6,6 +6,7 @@ Couvre :
   connus, total ;
 - les gabarits : alerte RabbitMQ déplacée dans « Avancé », alerte TLS+SSL,
   honnêteté sur l'usage des e-mails ;
+- les endpoints ``network_adress`` (suggestion d'adresse, QR de test) ;
 - ``call_numbering.next_category_call_number`` : plus grand numéro + 1
   (l'ancien « nombre + 1 » redonnait un numéro après un retrait).
 
@@ -13,8 +14,9 @@ Nom de fichier trié après test_upload_security : ce fichier enregistre le
 bind 'users' dans db.metadatas, partagé entre fichiers de test.
 """
 
+import json
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import Flask, jsonify
@@ -84,19 +86,24 @@ def app(tmp_path):
     app.register_blueprint(admin_app.admin_app_bp)
     app.add_url_rule("/login", endpoint="security.login", view_func=lambda: "")
 
-    def test_login():
+    def test_login(username="admin"):
         from flask_login import login_user
-        login_user(User.query.filter_by(username="admin").first())
+        login_user(User.query.filter_by(username=username).first())
         return jsonify(authenticated=True)
 
     app.add_url_rule("/_test/login", view_func=test_login, methods=["POST"])
+    app.add_url_rule("/_test/login/<username>", view_func=test_login, methods=["POST"])
 
     with app.app_context():
         db.create_all()
         admin = User(username="admin", email="a@a.a",
                      password=generate_password_hash("x"), active=True)
         admin.roles.append(Role(name="admin", admin_app=True))
-        db.session.add(admin)
+        # Compte sans la permission 'app' (vérifie le 403 des endpoints API).
+        noperm = User(username="noperm", email="n@n.n",
+                      password=generate_password_hash("x"), active=True)
+        noperm.roles.append(Role(name="comptoir", admin_queue=True))
+        db.session.add_all([admin, noperm])
         db.session.commit()
     yield app
 
@@ -134,3 +141,94 @@ def test_connexions_lisibles(client):
     assert "Sans compte" in html and "admin" in html
     assert "/pirate" not in html
     assert "<strong>2</strong> connexions actives" in html
+
+
+# --- Adresse réseau (network_adress) -------------------------------------------
+
+def test_default_config_network_adress_vide():
+    # Plus d'IP de dev préremplie : une nouvelle installation part d'un champ
+    # vide (l'admin remplit via « Détecter » ou manuellement si besoin).
+    cfg = json.loads(_read("static/json/default_config.json"))
+    assert cfg["configurations"]["network_adress"] == ""
+
+
+def test_gabarit_network_adress():
+    general = _read("templates/admin/app_general.html")
+    assert 'id="network-adress-detect"' in general
+    assert 'id="network-adress-test"' in general
+    assert 'id="network-adress-test-result"' in general
+    # Alerte réservée à l'ancienne valeur préremplie héritée des installs
+    # antérieures.
+    assert "http://192.168.86.221:5000" in general
+    assert "alert-warning" in general
+
+
+def test_suggest_reprend_adresse_actuelle(app):
+    # Host non-loopback : l'admin joint déjà le serveur par une adresse
+    # joignable depuis le réseau — on la propose telle quelle. Le cookie de
+    # session étant lié au domaine, la connexion doit utiliser le même Host.
+    host = "192.168.10.5:5000"
+    c = app.test_client()
+    c.post("/_test/login", headers={"Host": host})
+    resp = c.get("/admin/app/network_adress/suggest", headers={"Host": host})
+    assert resp.status_code == 200
+    assert resp.get_json() == {"url": "http://192.168.10.5:5000/",
+                               "source": "adresse actuelle"}
+
+
+def test_suggest_detecte_ipv4_depuis_localhost(client):
+    fake_sock = MagicMock()
+    fake_sock.getsockname.return_value = ("10.20.30.40", 0)
+    with patch("routes.admin_app.socket.socket", return_value=fake_sock):
+        resp = client.get("/admin/app/network_adress/suggest",
+                          headers={"Host": "localhost:5000"})
+    assert resp.status_code == 200
+    assert resp.get_json() == {"url": "http://10.20.30.40:5000",
+                               "source": "détectée"}
+    fake_sock.connect.assert_called_once_with(("192.0.2.1", 80))
+    fake_sock.close.assert_called_once()
+
+
+def test_suggest_detection_impossible(app):
+    # Interface de sortie loopback (ou absente) : rien de proposable.
+    host = "127.0.0.1:5000"
+    c = app.test_client()
+    c.post("/_test/login", headers={"Host": host})
+    fake_sock = MagicMock()
+    fake_sock.getsockname.return_value = ("127.0.0.1", 0)
+    with patch("routes.admin_app.socket.socket", return_value=fake_sock):
+        resp = c.get("/admin/app/network_adress/suggest",
+                     headers={"Host": host})
+    assert resp.status_code == 404
+    assert "error" in resp.get_json()
+
+
+def test_suggest_anonyme_refuse(app):
+    resp = app.test_client().get("/admin/app/network_adress/suggest")
+    assert resp.status_code == 401
+
+
+def test_suggest_sans_permission_refuse(app):
+    c = app.test_client()
+    c.post("/_test/login/noperm")
+    assert c.get("/admin/app/network_adress/suggest").status_code == 403
+
+
+def test_qrcode_png_ok(client):
+    resp = client.get("/admin/app/network_adress/qrcode.png",
+                      query_string={"url": "http://192.168.1.10:5000"})
+    assert resp.status_code == 200
+    assert resp.mimetype == "image/png"
+    assert resp.data[:4] == b"\x89PNG"
+
+
+@pytest.mark.parametrize("qs", [
+    {},                                        # paramètre absent
+    {"url": "ftp://192.168.1.10"},             # scheme non http(s)
+    {"url": "nimporte quoi"},                  # pas une URL
+    {"url": "https://"},                       # netloc vide
+])
+def test_qrcode_png_url_invalide(client, qs):
+    resp = client.get("/admin/app/network_adress/qrcode.png", query_string=qs)
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "URL invalide"

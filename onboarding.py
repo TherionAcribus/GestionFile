@@ -97,6 +97,9 @@ CATALOG = (
         "links": ({"label": "Ouvrir Application", "url": "/admin/app/general"},),
         "points": (
             "Attention : changer la numérotation en journée peut faire recommencer la série.",
+            "Si la borne patient tourne sur ce serveur, renseignez l'adresse "
+            "réseau (bouton « Détecter ») pour que les QR codes fonctionnent "
+            "sur les téléphones.",
         ),
     },
     {

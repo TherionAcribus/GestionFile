@@ -47,9 +47,25 @@
         Sert à fabriquer les <strong>QR codes</strong> que les patients scannent avec leur téléphone. Nécessaire
         seulement si la borne ouvre le serveur par <code>127.0.0.1</code> (même machine) : un téléphone ne peut pas
         joindre cette adresse. Indiquez l'adresse du serveur vue depuis le réseau Wi-Fi, par exemple
-        <code>http://192.168.1.20:5000/</code>.
+        <code>http://192.168.1.20:5000/</code>. Si la borne n'est pas sur la même machine que le serveur,
+        laissez ce champ vide.
     </p>
     {{ macros.textarea_full("network_adress", network_adress, "Adresse réseau (avec http:// et le port)") }}
+    {% if network_adress == "http://192.168.86.221:5000" %}
+    <div class="alert alert-warning small" role="note">
+        Valeur préremplie d'une ancienne version : vérifiez qu'elle correspond à ce serveur, sinon videz le champ
+        ou utilisez « Détecter ».
+    </div>
+    {% endif %}
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" id="network-adress-detect" class="btn btn-sm btn-outline-primary">
+            Détecter l'adresse de ce serveur
+        </button>
+        <button type="button" id="network-adress-test" class="btn btn-sm btn-outline-secondary">
+            Tester avec un QR code
+        </button>
+    </div>
+    <div id="network-adress-test-result" class="mt-2" role="status" aria-live="polite"></div>
 </section>
 
 <details class="admin-setting-card algo-section">

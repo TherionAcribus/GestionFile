@@ -12,7 +12,7 @@ import pytest
 from flask import Flask
 
 from models import db, Role, User
-from routes.admin_security import create_default_user
+from routes.admin_security import create_default_user, create_default_roles
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
@@ -97,3 +97,58 @@ def test_noop_when_users_exist(app_context, monkeypatch):
     assert create_default_user() is True
     assert User.query.count() == 1
     assert admin.password == first_hash
+
+
+# ---------------------------------------------------------------------------
+# Rôles de base (seeding idempotent, jamais destructeur)
+# ---------------------------------------------------------------------------
+
+_SENSITIVE = {"admin_security", "admin_security_view",
+              "admin_security_manage", "admin_security_grant"}
+
+
+def _role_fields(role):
+    return {c.name for c in Role.__table__.columns
+            if c.name.startswith("admin_") and getattr(role, c.name)}
+
+
+def test_base_roles_sont_crees(app_context):
+    assert create_default_roles() is True
+    roles = {r.name: r for r in Role.query.all()}
+    assert {"admin", "admin-fonctionnel",
+            "affichage-medias", "exploitation"} <= set(roles)
+
+
+def test_admin_fonctionnel_a_tout_sauf_securite(app_context):
+    create_default_roles()
+    role = Role.query.filter_by(name="admin-fonctionnel").one()
+    fields = _role_fields(role)
+    assert not fields & _SENSITIVE
+    # Et il couvre bien tout le reste du registre.
+    from permissions_registry import PERMISSION_FIELDS
+    assert set(PERMISSION_FIELDS) - _SENSITIVE == fields
+
+
+def test_affichage_medias_et_exploitation_ont_leur_perimetre(app_context):
+    create_default_roles()
+    assert _role_fields(Role.query.filter_by(
+        name="affichage-medias").one()) == {
+        "admin_patient", "admin_announce", "admin_phone",
+        "admin_gallery", "admin_music_play", "admin_translation"}
+    assert _role_fields(Role.query.filter_by(
+        name="exploitation").one()) == {
+        "admin_queue", "admin_counter", "admin_staff", "admin_stats"}
+
+
+def test_base_roles_jamais_reecrits(app_context):
+    create_default_roles()
+    role = Role.query.filter_by(name="exploitation").one()
+    role.description = "Personnalisé"
+    role.admin_stats = False
+    db.session.commit()
+
+    assert create_default_roles() is True
+    role = Role.query.filter_by(name="exploitation").one()
+    assert role.description == "Personnalisé"
+    assert role.admin_stats is False
+    assert Role.query.filter_by(name="exploitation").count() == 1
