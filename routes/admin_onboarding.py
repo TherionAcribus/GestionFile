@@ -20,6 +20,8 @@ Garde-fous :
   refusée 409 plutôt que d'écraser la progression faite dans un autre onglet.
 """
 
+import re
+
 from flask import (
     Blueprint, current_app, jsonify, redirect, render_template, request, url_for,
 )
@@ -29,7 +31,7 @@ from sqlalchemy.exc import IntegrityError
 import onboarding as ob
 from audit_log import ACTION_UPDATE, OUTCOME_SUCCESS
 from audit_service import record_audit
-from models import AdminOnboardingState, db
+from models import AdminOnboardingState, Pharmacist, db
 from routes.admin_security import user_has_permission
 from ui_feedback import display_toast
 
@@ -81,6 +83,56 @@ def _onboarding_helpers():
     }
 
 
+# Marqueurs repérant les comptes d'exemple/test laissés dans l'équipe.
+# Comparaison par mot (token) : « Attestation » ne doit pas matcher « test ».
+_EXAMPLE_MARKERS = ("exemple", "test", "demo", "démo", "bidule")
+
+
+def _tokens(text):
+    """Mots d'un nom (minuscules, sans ponctuation) pour le repérage d'exemples."""
+    return re.findall(r"[a-zà-ÿ0-9]+", (text or "").lower())
+
+
+def _names(members, limit=6):
+    """Liste courte de noms pour les signalements (tronquée au-delà du seuil)."""
+    names = ", ".join(m.name for m in members[:limit])
+    if len(members) > limit:
+        names += "…"
+    return names
+
+
+def _step_notices(step_id):
+    """Signalements factuels par étape (lecture seule, jamais d'exception).
+
+    Sur l'étape Équipe : les comptes ressemblant à des exemples (restes d'une
+    installation de test) et les membres sans compétences — ils pourront se
+    connecter à un comptoir mais n'appelleront aucun patient.
+    """
+    try:
+        if step_id == "staff":
+            notices = []
+            members = Pharmacist.query.order_by(Pharmacist.name).all()
+            examples = [m for m in members
+                        if any(token.startswith(_EXAMPLE_MARKERS)
+                               for token in _tokens(m.name))]
+            if examples:
+                notices.append(
+                    f"{len(examples)} membre(s) ressemblant à des exemples : "
+                    f"{_names(examples)}. Supprimez-les si ce sont des restes de test."
+                )
+            without_skills = [m for m in members if not m.activities]
+            if without_skills:
+                notices.append(
+                    f"{len(without_skills)} membre(s) sans compétences : "
+                    f"{_names(without_skills)}. Ils ne pourront appeler aucun "
+                    "patient — cochez leurs activités si ces comptes sont réels."
+                )
+            return notices
+    except Exception:  # pragma: no cover - signalement d'aide, jamais bloquant
+        current_app.logger.exception("_step_notices")
+    return []
+
+
 def _panel_dict(step_id, state):
     """Dict d'encart pour une étape précise — ou ``None`` si rien à montrer.
 
@@ -101,6 +153,7 @@ def _panel_dict(step_id, state):
         "is_current": state.current_step == step["id"],
         "version": state.version,
         "progress": ob.progress(steps_state, _can),
+        "notices": _step_notices(step["id"]),
     }
 
 

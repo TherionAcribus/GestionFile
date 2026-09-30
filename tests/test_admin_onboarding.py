@@ -23,7 +23,7 @@ from werkzeug.security import generate_password_hash
 
 import onboarding as ob
 import routes.admin_onboarding as admin_onboarding
-from models import AdminOnboardingState, Role, User, db
+from models import Activity, AdminOnboardingState, Pharmacist, Role, User, db
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
 
@@ -363,6 +363,35 @@ def test_contexte_panneau_selon_page(app, client):
         assert admin_onboarding.onboarding_panel_context() is None
     with app.test_request_context("/admin/onboarding"):
         assert admin_onboarding.onboarding_panel_context() is None
+
+
+def test_panneau_equipe_signale_exemples_et_sans_competences(app, client):
+    """Étape Équipe : l'encart liste les comptes ressemblant à des exemples
+    (marqueurs par mot : « Attestation » ne doit pas matcher « test ») et les
+    membres sans compétences — un membre ordinaire avec activités n'y figure
+    pas."""
+    from flask_login import login_user
+    _post(client, action="start")
+    with app.app_context():
+        conseil = Activity(name="Conseil", letter="C")
+        exemple = Pharmacist(name="Exemple à supprimer (Bidule)", initials="BI")
+        sans_comp = Pharmacist(name="John", initials="JO")
+        attestation = Pharmacist(name="Attestation", initials="AT")
+        attestation.activities.append(conseil)
+        marie = Pharmacist(name="Marie", initials="MA")
+        marie.activities.append(conseil)
+        db.session.add_all([conseil, exemple, sans_comp, attestation, marie])
+        db.session.commit()
+    with app.test_request_context("/admin/staff"):
+        login_user(User.query.filter_by(username="alice").one())
+        panel = admin_onboarding.onboarding_panel_context()
+    assert panel["step"]["id"] == "staff"
+    notices = panel["notices"]
+    assert len(notices) == 2
+    assert "Exemple à supprimer (Bidule)" in notices[0]
+    assert "Attestation" not in notices[0]
+    assert "John" in notices[1]
+    assert "Marie" not in notices[0] and "Marie" not in notices[1]
 
 
 def test_get_rend_sans_csrf_ni_mutation_metier(app, client):

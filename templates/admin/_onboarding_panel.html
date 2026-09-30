@@ -45,6 +45,11 @@
                 {% for point in ob_step.points %}<li>{{ point }}</li>{% endfor %}
             </ul>
             {% endif %}
+            {% for notice in onboarding_panel.notices or [] %}
+            <div class="alert alert-warning small py-1 px-2 mb-2" role="note">
+                <i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ notice }}
+            </div>
+            {% endfor %}
             <p class="small text-muted mb-2">
                 Les réglages modifiés ici s'appliquent à toute la pharmacie.
                 « Marquer comme vérifié » ne change aucun réglage : c'est votre
