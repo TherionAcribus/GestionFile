@@ -9,7 +9,9 @@
 {% macro patient_title(title='', preview=false) -%}
 <div id="div_title_area" data-page-editor-component="title"
      {% if not preview %}hx-get="/patient/patient_title" hx-trigger="load, refresh_title" hx-target="#div_title_area" hx-swap="innerHTML"{% endif %}>
-    {% if preview %}<h1 data-config-key="page_patient_title">{{ title }}</h1>{% endif %}
+    {# La borne injecte un <p> via /patient/patient_title ; un <h1> serait
+       figé à 4.2rem par Materialize et ignorerait la taille configurée. #}
+    {% if preview %}<p data-config-key="page_patient_title">{{ title }}</p>{% endif %}
 </div>
 {%- endmacro %}
 
