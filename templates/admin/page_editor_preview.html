@@ -72,7 +72,7 @@
         <div id="div_buttons_parents" data-page-editor-component="buttons">
             {% if scenario in ('home', 'children') %}
                 {% if preview_buttons %}
-                    {% with buttons=preview_buttons, max_length=preview_buttons_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, page_patient_interface_validate_cancel=preview_patient_interface.validate_cancel %}
+                    {% with buttons=preview_buttons, max_length=preview_buttons_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, page_patient_interface_validate_cancel=preview_patient_interface.validate_cancel, button_translations=preview_button_translations %}
                         {% include 'patient/patient_buttons_left.html' %}
                     {% endwith %}
                 {% else %}

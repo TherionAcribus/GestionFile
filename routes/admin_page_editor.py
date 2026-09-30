@@ -40,7 +40,7 @@ from page_editor import (
 )
 from params_registry import column_values_for, get_spec
 from routes.admin_security import permission_error_response, user_has_permission
-from utils import balise_values
+from utils import balise_values, get_button_translations
 
 
 admin_page_editor_bp = Blueprint("admin_page_editor", __name__)
@@ -141,6 +141,9 @@ def _patient_preview_data(scenario, tokens):
     )
     return {
         "preview_buttons": buttons,
+        # patient_buttons_*.html attendent button_translations comme la page
+        # réelle ; l'aperçu s'affiche dans la langue de référence (fr).
+        "preview_button_translations": get_button_translations(buttons, "fr"),
         "preview_buttons_children": children,
         "preview_buttons_max_length": 2 if buttons and buttons[0].shape == "square" else 4,
         "preview_empty_parent_ids": empty_parent_ids,

@@ -1448,6 +1448,27 @@ def test_publish_accepts_draft_predating_print_error_component(editor_app):
         assert app.css_variable_manager.values["patient"]["print_error_font_size"]
 
 
+def test_preview_home_renders_real_buttons(editor_app):
+    """Régression : l'aperçu « Accueil » inclut les gabarits de boutons de la
+    borne, qui attendent ``button_translations`` — son absence levait une
+    UndefinedError dès qu'un bouton existait."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        activity = Activity(name="Ordonnances", letter="O")
+        db.session.add_all([
+            activity,
+            Button(label="Déposer une ordonnance", activity=activity,
+                   is_present=True, is_active=True, shape="square", sort_order=1),
+        ])
+        db.session.commit()
+
+    response = client.get("/admin/page-editor/patient/preview?scenario=home")
+    assert response.status_code == 200
+    assert "Déposer une ordonnance" in response.get_data(as_text=True)
+
+
 def test_print_error_preview_renders_overlay(editor_app):
     """L'aperçu du scénario reproduit l'overlay de la borne : message lié à la
     clé de config, numéro en grand masqué si le texte contient {N}, boutons du
