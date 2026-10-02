@@ -88,6 +88,8 @@
 
   function populateSelectors() {
     const scenario = $("scenario"), profile = $("profile");
+    const selectedScenario = scenario.value;
+    const selectedProfile = profile.value;
     scenario.replaceChildren(); profile.replaceChildren();
     Object.entries(capabilities.scenarios).forEach(([key, spec]) => {
       if (capabilities.mode !== "production" || key === "consultation") {
@@ -97,6 +99,12 @@
     Object.entries(capabilities.profiles).forEach(([key, spec]) => {
       if (allowed(spec)) profile.appendChild(option(key, spec.label));
     });
+    if ([...scenario.options].some((item) => item.value === selectedScenario)) {
+      scenario.value = selectedScenario;
+    }
+    if ([...profile.options].some((item) => item.value === selectedProfile)) {
+      profile.value = selectedProfile;
+    }
     updateEstimate();
   }
 
@@ -150,6 +158,7 @@
   function renderHistory(runs) {
     const body = $("history-body");
     const selects = [$("compare-left"), $("compare-right")];
+    const selectedComparisons = selects.map((select) => select.value);
     body.replaceChildren(); selects.forEach((select) => select.replaceChildren());
     runs.forEach((run, index) => {
       const tr = document.createElement("tr");
@@ -173,7 +182,12 @@
       });
       tr.appendChild(exportCell); body.appendChild(tr);
       selects.forEach((select) => select.appendChild(option(run.uuid, `${date} · ${run.profile_label}`)));
-      if (index === 1) $("compare-left").value = run.uuid;
+      if (index === 1 && !selectedComparisons[0]) $("compare-left").value = run.uuid;
+    });
+    selects.forEach((select, index) => {
+      if ([...select.options].some((item) => item.value === selectedComparisons[index])) {
+        select.value = selectedComparisons[index];
+      }
     });
     if (!runs.length) {
       const td = document.createElement("td"); td.colSpan = 9;

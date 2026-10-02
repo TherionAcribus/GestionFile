@@ -36,3 +36,6 @@ def test_admin_page_exposes_a_readable_report_and_history_action():
     assert 'Voir le rapport' in script
     assert 'result_message' in script
     assert 'first_error' in script
+    assert 'selectedScenario' in script
+    assert 'selectedProfile' in script
+    assert 'selectedComparisons' in script
