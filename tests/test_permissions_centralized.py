@@ -54,6 +54,9 @@ _GUARD_DECORATORS = {
     "require_permission_api",
     "require_permission_dashboard",
     "require_app_token_or_login",
+    # Echanges du runner de charge : secret interne distinct, aucun acces par
+    # simple session administrateur.
+    "_internal_only",
 }
 
 # Exceptions documentées, par nom de fonction de vue. Chaque entrée est justifiée.

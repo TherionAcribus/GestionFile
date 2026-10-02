@@ -126,7 +126,8 @@ def test_admin_fonctionnel_a_tout_sauf_securite(app_context):
     assert not fields & _SENSITIVE
     # Et il couvre bien tout le reste du registre.
     from permissions_registry import PERMISSION_FIELDS
-    assert set(PERMISSION_FIELDS) - _SENSITIVE == fields
+    assert set(PERMISSION_FIELDS) - _SENSITIVE - {"admin_performance"} == fields
+    assert role.admin_performance is False
 
 
 def test_affichage_medias_et_exploitation_ont_leur_perimetre(app_context):

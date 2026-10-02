@@ -51,6 +51,11 @@ x-app-env: &app-env
   SECRET_KEY: ${SERVICE_BASE64_64_GFSECRET}
   SECURITY_PASSWORD_SALT: ${SERVICE_BASE64_64_GFSALT}
   APP_SECRET: ${SERVICE_BASE64_64_GFAPPSECRET}
+  # Tests de charge : desactives par defaut. La cible est interne et n'est
+  # jamais saisie dans l'administration.
+  STRESS_TEST_MODE: ${STRESS_TEST_MODE:-disabled}
+  STRESS_TARGET_URL: ${STRESS_TARGET_URL:-http://web:5000}
+  STRESS_RUNNER_SECRET: ${SERVICE_BASE64_64_GFSTRESS}
   # Clé Fernet (32 octets en base64) pour chiffrer les clés de service.
   # SERVICE_REALBASE64_32 = base64 de 32 octets aléatoires : format Fernet.
   BASE32_KEY: ${SERVICE_REALBASE64_32_GFB32}
@@ -181,6 +186,28 @@ services:
         condition: service_healthy
     volumes: *app-volumes
     command: ["sh", "-c", "python manage.py migrate && python app.py"]
+
+  # Generateur Locust separe. Aucun port n'est publie : il sonde la base pour
+  # les travaux et communique avec le service web sur le reseau Docker prive.
+  stress-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.stress
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      APP_ROLE: stress
+      SKIP_STARTUP_HOOKS: "1"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      web:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    volumes:
+      - instance_data:/app/instance
+    command: ["python", "stress_runner.py"]
 
 volumes:
   mysql_data:

@@ -218,6 +218,13 @@ PERMISSIONS = [
         "Analyse",
         RISK_LOW,
     ),
+    Permission(
+        "performance",
+        "Tests de performance",
+        "Lancement, arret et consultation des tests de charge du serveur.",
+        "Analyse",
+        RISK_HIGH,
+    ),
 ]
 
 

@@ -93,6 +93,14 @@ class Config:
     # correspondre à la valeur saisie côté clients. Le serveur refuse de démarrer
     # si cette valeur est absente (voir validation dans create_app).
     APP_SECRET = os.getenv("APP_SECRET", "")
+    # Tests de charge administrables. Fermes par defaut : la cible n'est
+    # jamais fournie par le navigateur et le secret runner est distinct des
+    # secrets de session et des clients metier.
+    STRESS_TEST_MODE = os.getenv("STRESS_TEST_MODE", "disabled").strip().lower()
+    STRESS_TARGET_URL = os.getenv("STRESS_TARGET_URL", "").strip().rstrip("/")
+    STRESS_RUNNER_SECRET = os.getenv("STRESS_RUNNER_SECRET", "")
+    STRESS_RESULTS_RETENTION_DAYS = 30
+    STRESS_RUNNER_STALE_SECONDS = 15
     SECURITY_PASSWORD_HASH = 'bcrypt'
     SECURITY_PASSWORD_SINGLE_HASH = False
     SECURITY_USER_IDENTITY_ATTRIBUTES = [{'username': {'case_insensitive': False}}]

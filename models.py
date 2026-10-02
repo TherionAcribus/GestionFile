@@ -45,6 +45,7 @@ class Role(db.Model, RoleMixin):
     admin_app = db.Column(db.Boolean, nullable=False, default=False)
     admin_queue = db.Column(db.Boolean, nullable=False, default=False)
     admin_stats = db.Column(db.Boolean, nullable=False, default=False)
+    admin_performance = db.Column(db.Boolean, nullable=False, default=False)
     admin_staff= db.Column(db.Boolean, nullable=False, default=False)
     admin_phone = db.Column(db.Boolean, nullable=False, default=False)
     admin_announce = db.Column(db.Boolean, nullable=False, default=False)
@@ -1361,6 +1362,103 @@ class AdminOnboardingState(db.Model):
 
     def __repr__(self):
         return f'<AdminOnboardingState user={self.user_id} {self.status} v{self.version}>'
+
+
+class StressTestRun(db.Model):
+    """Demande et rapport durable d'un test de charge."""
+
+    __tablename__ = 'stress_test_run'
+    id = db.Column(db.Integer, primary_key=True)
+    uuid = db.Column(db.String(36), nullable=False, unique=True, index=True,
+                     default=lambda: str(uuid.uuid4()))
+    mode = db.Column(db.String(16), nullable=False)
+    scenario = db.Column(db.String(32), nullable=False)
+    profile = db.Column(db.String(32), nullable=False)
+    requested_parameters = db.Column(db.JSON, nullable=False, default=dict)
+    applied_parameters = db.Column(db.JSON, nullable=False, default=dict)
+    requested_by_id = db.Column(
+        db.Integer, db.ForeignKey('app_users.id', name='fk_stress_run_requested_by'),
+        nullable=False, index=True)
+    target_url = db.Column(db.String(512), nullable=False)
+    application_version = db.Column(db.String(80), nullable=True)
+    config_fingerprint = db.Column(db.String(64), nullable=False)
+    state = db.Column(db.String(16), nullable=False, default='queued', index=True)
+    verdict = db.Column(db.String(16), nullable=True)
+    stop_reason = db.Column(db.String(80), nullable=True)
+    stop_requested = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False,
+                           default=lambda: datetime.now(time_tz), index=True)
+    started_at = db.Column(db.DateTime, nullable=True)
+    stopping_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    runner_heartbeat_at = db.Column(db.DateTime, nullable=True)
+    summary = db.Column(db.JSON, nullable=False, default=dict)
+    error_message = db.Column(db.String(500), nullable=True)
+    fixture_ids = db.Column(db.JSON, nullable=False, default=dict)
+
+    requested_by = db.relationship('User', backref=db.backref('stress_test_runs', lazy=True))
+    samples = db.relationship(
+        'StressTestSample', back_populates='run', cascade='all, delete-orphan',
+        passive_deletes=True, order_by='StressTestSample.elapsed_seconds')
+
+    __table_args__ = (
+        db.Index('ix_stress_run_state_created', 'state', 'created_at'),
+        CheckConstraint(
+            "state IN ('queued','preparing','running','stopping','completed',"
+            "'failed','aborted','interrupted')", name='ck_stress_run_state'),
+    )
+
+
+class StressTestSample(db.Model):
+    """Mesures agregees par seconde, sans contenu de requete sensible."""
+
+    __tablename__ = 'stress_test_sample'
+    id = db.Column(db.Integer, primary_key=True)
+    run_id = db.Column(db.Integer, db.ForeignKey(
+        'stress_test_run.id', name='fk_stress_sample_run', ondelete='CASCADE'),
+        nullable=False, index=True)
+    elapsed_seconds = db.Column(db.Integer, nullable=False)
+    active_users = db.Column(db.Integer, nullable=False, default=0)
+    requests = db.Column(db.Integer, nullable=False, default=0)
+    rps = db.Column(db.Float, nullable=False, default=0)
+    errors = db.Column(db.Integer, nullable=False, default=0)
+    error_rate = db.Column(db.Float, nullable=False, default=0)
+    latency_p50_ms = db.Column(db.Float, nullable=True)
+    latency_p95_ms = db.Column(db.Float, nullable=True)
+    latency_p99_ms = db.Column(db.Float, nullable=True)
+    latency_max_ms = db.Column(db.Float, nullable=True)
+    web_cpu_percent = db.Column(db.Float, nullable=True)
+    web_memory_bytes = db.Column(db.BigInteger, nullable=True)
+    web_memory_limit_bytes = db.Column(db.BigInteger, nullable=True)
+    web_threads = db.Column(db.Integer, nullable=True)
+    ready = db.Column(db.Boolean, nullable=False, default=True)
+    db_connections = db.Column(db.Integer, nullable=True)
+    db_activity = db.Column(db.Integer, nullable=True)
+    pool_checked_out = db.Column(db.Integer, nullable=True)
+    socket_connections = db.Column(db.Integer, nullable=True)
+    socket_reconnections = db.Column(db.Integer, nullable=True)
+    endpoint_summary = db.Column(db.JSON, nullable=False, default=dict)
+    created_at = db.Column(db.DateTime, nullable=False,
+                           default=lambda: datetime.now(time_tz))
+
+    run = db.relationship('StressTestRun', back_populates='samples')
+    __table_args__ = (
+        UniqueConstraint('run_id', 'elapsed_seconds', name='uq_stress_sample_run_second'),
+    )
+
+
+class StressTestLease(db.Model):
+    """Bail singleton : un seul runner et au plus un test actif."""
+
+    __tablename__ = 'stress_test_lease'
+    id = db.Column(db.Integer, primary_key=True, default=1)
+    run_id = db.Column(db.Integer, db.ForeignKey(
+        'stress_test_run.id', name='fk_stress_lease_run', ondelete='SET NULL'),
+        nullable=True, unique=True)
+    runner_id = db.Column(db.String(80), nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    heartbeat_at = db.Column(db.DateTime, nullable=True)
+    run = db.relationship('StressTestRun')
 
 
 class JobExecutionLog(db.Model):

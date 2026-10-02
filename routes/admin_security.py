@@ -95,6 +95,9 @@ _SECURITY_PERMISSION_CHAIN = {
 # leur attribution et la gestion de leur détenteur exigent security_grant.
 _SENSITIVE_ROLE_FIELDS = ('admin_security', 'admin_security_view',
                           'admin_security_manage', 'admin_security_grant')
+# Capacites a impact operationnel majeur qui ne doivent pas etre accordees au
+# profil large "admin-fonctionnel". Elles restent attribuables manuellement.
+_ADMIN_ONLY_DEFAULT_FIELDS = ('admin_performance',)
 
 
 def user_has_permission(user, resource):
@@ -871,7 +874,8 @@ _BASE_ROLE_SPECS = (
         "admin-fonctionnel",
         "Toutes les permissions sauf la section Sécurité",
         tuple(p.field for p in PERMISSIONS
-              if p.field not in _SENSITIVE_ROLE_FIELDS),
+              if p.field not in _SENSITIVE_ROLE_FIELDS
+              and p.field not in _ADMIN_ONLY_DEFAULT_FIELDS),
     ),
     (
         "affichage-medias",

@@ -65,6 +65,21 @@ PAGE_EDITOR_ENABLED_PAGES=announce,patient,phone
 # PAGE_EDITOR_ENABLED_PAGES=announce   (écran d'annonce seulement)
 ```
 
+### Tests de performance
+
+La page **Administration > Analyse > Tests de performance** pilote un runner
+Locust Docker separe. Elle est fermee par defaut. Pour une preproduction :
+
+```dotenv
+STRESS_TEST_MODE=staging
+STRESS_TARGET_URL=http://web:5000
+STRESS_RUNNER_SECRET=une-valeur-aleatoire-distincte-de-APP_SECRET
+```
+
+Le mode `production` n'autorise que le profil de verification (3 utilisateurs,
+30 secondes, consultation sans ecriture). Le service `stress-runner` ne publie
+aucun port ; les resultats sont conserves 30 jours.
+
 La publication ne recharge jamais automatiquement les écrans en service :
 l’action **Appliquer/recharger les écrans** reste explicite.
 

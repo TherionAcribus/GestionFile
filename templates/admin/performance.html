@@ -1,0 +1,121 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Tests de performance{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_performance.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3" id="performance-app">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-1">Tests de performance</h1>
+      <p class="text-muted mb-0">Mesurez les performances avec un runner Locust isole.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <span class="badge text-bg-secondary" id="mode-badge">Chargement…</span>
+      <span class="badge text-bg-secondary" id="runner-badge">Runner inconnu</span>
+    </div>
+  </div>
+
+  <div class="alert alert-warning" role="alert">
+    <strong>Mesure comparative.</strong> Le runner partage actuellement l'hote du serveur :
+    les resultats sous-estiment la capacite absolue et peuvent consommer des ressources utiles a l'application.
+  </div>
+  <div class="alert alert-danger d-none" id="production-warning" role="alert">
+    <strong>Mode production.</strong> Seule la consultation plafonnee a 3 utilisateurs pendant 30 secondes est permise.
+    Le test ne doit etre lance que pendant une file vide.
+  </div>
+
+  <div id="page-error" class="alert alert-danger d-none" role="alert"></div>
+
+  <div class="row g-4">
+    <div class="col-xl-5">
+      <section class="card shadow-sm h-100">
+        <div class="card-header"><h2 class="h5 mb-0">Nouveau test</h2></div>
+        <div class="card-body">
+          <form id="run-form">
+            <div class="mb-3">
+              <label class="form-label" for="scenario">Scenario</label>
+              <select class="form-select" id="scenario" required></select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="profile">Profil de charge</label>
+              <select class="form-select" id="profile" required></select>
+            </div>
+            <div class="row g-2 d-none" id="custom-fields">
+              <div class="col-4"><label class="form-label" for="users">Utilisateurs</label><input class="form-control" id="users" type="number" min="1" max="500" value="10"></div>
+              <div class="col-4"><label class="form-label" for="spawn-rate">Montee/s</label><input class="form-control" id="spawn-rate" type="number" min="1" max="50" step="0.5" value="2"></div>
+              <div class="col-4"><label class="form-label" for="duration">Duree (s)</label><input class="form-control" id="duration" type="number" min="10" max="900" value="60"></div>
+            </div>
+            <div class="performance-estimate my-3">
+              <span>Estimation</span><strong id="estimate">—</strong>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="confirmation">Confirmation</label>
+              <input class="form-control" id="confirmation" autocomplete="off" placeholder="LANCER LE TEST" required>
+              <div class="form-text">Saisissez exactement <code>LANCER LE TEST</code>.</div>
+            </div>
+            <button class="btn btn-danger w-100" id="launch-button" type="submit" disabled>
+              <i class="bi bi-play-fill"></i> Lancer le test
+            </button>
+          </form>
+        </div>
+      </section>
+    </div>
+    <div class="col-xl-7">
+      <section class="card shadow-sm h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h2 class="h5 mb-0">Controle prealable</h2>
+          <button class="btn btn-sm btn-outline-secondary" id="refresh-capabilities" type="button"><i class="bi bi-arrow-clockwise"></i> Reverifier</button>
+        </div>
+        <div class="card-body">
+          <ul class="list-group list-group-flush" id="preflight-list"></ul>
+          <p class="small text-muted mt-3 mb-0">Cible verrouillee cote serveur : <code id="target-url">—</code></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="card shadow-sm mt-4 d-none" id="live-section">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div><h2 class="h5 mb-0">Test en cours</h2><small id="live-identity" class="text-muted"></small></div>
+      <button class="btn btn-outline-danger" id="stop-button" type="button"><i class="bi bi-stop-circle"></i> Arret d'urgence</button>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 mb-3" id="metric-cards">
+        <div class="col-6 col-md-3"><div class="metric"><span>Etat</span><strong id="metric-state">—</strong></div></div>
+        <div class="col-6 col-md-3"><div class="metric"><span>RPS</span><strong id="metric-rps">—</strong></div></div>
+        <div class="col-6 col-md-3"><div class="metric"><span>p95</span><strong id="metric-p95">—</strong></div></div>
+        <div class="col-6 col-md-3"><div class="metric"><span>Erreurs</span><strong id="metric-errors">—</strong></div></div>
+      </div>
+      <canvas id="live-chart" height="180" aria-label="Evolution du debit et de la latence"></canvas>
+      <div id="final-verdict" class="alert mt-3 d-none"></div>
+    </div>
+  </section>
+
+  <section class="card shadow-sm mt-4">
+    <div class="card-header"><h2 class="h5 mb-0">Historique et comparaison</h2></div>
+    <div class="card-body">
+      <div class="row g-2 align-items-end mb-3">
+        <div class="col-md-5"><label class="form-label" for="compare-left">Test de reference</label><select class="form-select" id="compare-left"></select></div>
+        <div class="col-md-5"><label class="form-label" for="compare-right">Test compare</label><select class="form-select" id="compare-right"></select></div>
+        <div class="col-md-2"><button class="btn btn-outline-primary w-100" id="compare-button" type="button">Comparer</button></div>
+      </div>
+      <div id="comparison" class="table-responsive d-none"></div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle">
+          <thead><tr><th>Date</th><th>Scenario</th><th>Profil</th><th>Etat</th><th>Verdict</th><th>RPS</th><th>p95</th><th>Exports</th></tr></thead>
+          <tbody id="history-body"><tr><td colspan="8" class="text-muted">Chargement…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts_end %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/admin_performance.js') }}" defer></script>
+{% endblock %}

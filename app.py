@@ -46,6 +46,7 @@ from routes.calling import calling_bp
 from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
 from routes.admin_onboarding import admin_onboarding_bp
+from routes.admin_performance import admin_performance_bp
 from scheduler_functions import clear_old_patients_table, reconcile_scheduled_jobs
 from bdd import init_database
 from config import Config
@@ -89,7 +90,7 @@ database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
 status_list = ['ongoing', 'standing', 'done', 'calling']
 
 APP_ROLE = os.getenv("APP_ROLE", "all").strip().lower()
-VALID_APP_ROLES = {"all", "web", "scheduler", "init"}
+VALID_APP_ROLES = {"all", "web", "scheduler", "init", "stress"}
 if APP_ROLE not in VALID_APP_ROLES:
     APP_ROLE = "all"
 SKIP_STARTUP_HOOKS = os.getenv("SKIP_STARTUP_HOOKS", "").strip().lower() in {"1", "true", "yes", "on"}
@@ -277,6 +278,20 @@ def create_app(config_class=Config):
         else:
             raise RuntimeError(message)
 
+    stress_mode = str(app.config.get("STRESS_TEST_MODE", "disabled")).lower()
+    if stress_mode not in {"disabled", "staging", "production"}:
+        app.logger.warning("STRESS_TEST_MODE invalide : fonctionnalite desactivee")
+        app.config["STRESS_TEST_MODE"] = "disabled"
+        stress_mode = "disabled"
+    if stress_mode != "disabled":
+        if not app.config.get("STRESS_TARGET_URL"):
+            raise RuntimeError("STRESS_TARGET_URL est obligatoire quand les tests de performance sont actifs.")
+        if len(app.config.get("STRESS_RUNNER_SECRET") or "") < 32:
+            raise RuntimeError("STRESS_RUNNER_SECRET doit contenir au moins 32 caracteres.")
+        from stress_testing import normalize_target
+        app.config["STRESS_TARGET_URL"] = normalize_target(
+            app.config["STRESS_TARGET_URL"])
+
     db.init_app(app)
     migrate.init_app(app, db)
 
@@ -346,6 +361,12 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_config_bp, url_prefix='')
     app.register_blueprint(admin_page_editor_bp, url_prefix='')
     app.register_blueprint(admin_onboarding_bp, url_prefix='')
+    app.register_blueprint(admin_performance_bp, url_prefix='')
+
+    # Une signature de stress valide est marquee dans g pour permettre aux
+    # integrations externes de se neutraliser sans modifier la logique metier.
+    from stress_auth import identify_stress_request
+    app.before_request(identify_stress_request)
 
     # Temps reel et ordonnanceur : crees a vide dans extensions.py, lies ici.
     # Auparavant ils etaient instancies au niveau module APRES create_app(), ce
@@ -572,6 +593,9 @@ _CSRF_APP_TOKEN_ELIGIBLE_PREFIXES = (
 def _csrf_is_exempt():
     """Vrai si la requête courante ne doit PAS être soumise au contrôle CSRF."""
     path = request.path
+    if path.startswith('/internal/stress/'):
+        from stress_auth import RUNNER_SECRET_HEADER, runner_secret_valid
+        return runner_secret_valid(request.headers.get(RUNNER_SECRET_HEADER))
     if path.startswith(_CSRF_EXEMPT_PREFIXES):
         return True
     # Requêtes des applications clientes (App_Comptoir) sur une route à double
