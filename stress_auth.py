@@ -34,14 +34,20 @@ def signed_headers(secret: str, method: str, path: str, run_uuid: str) -> dict:
     }
 
 
-def identify_stress_request(max_age_seconds=30) -> bool:
-    """Marque g.stress_test_request uniquement pour une signature valide."""
+def identify_stress_request(max_age_seconds=30) -> None:
+    """Marque g.stress_test_request uniquement pour une signature valide.
+
+    Hook ``before_request`` : il ne doit JAMAIS retourner de valeur — Flask
+    traiterait tout retour non ``None`` (même ``False``) comme la réponse de
+    la requête, provoquant un TypeError/500 systématique. Il se contente de
+    peupler ``g`` ou d'``abort(401)`` sur une signature invalide.
+    """
     run_uuid = request.headers.get(RUN_HEADER)
     timestamp = request.headers.get(TIMESTAMP_HEADER)
     supplied = request.headers.get(SIGNATURE_HEADER)
     if not any((run_uuid, timestamp, supplied)):
         g.stress_test_request = False
-        return False
+        return
     secret = current_app.config.get('STRESS_RUNNER_SECRET') or ''
     try:
         fresh = abs(int(time.time()) - int(timestamp)) <= max_age_seconds
@@ -54,8 +60,7 @@ def identify_stress_request(max_age_seconds=30) -> bool:
     if not valid:
         abort(401)
     g.stress_test_request = valid
-    g.stress_test_run_uuid = run_uuid if valid else None
-    return valid
+    g.stress_test_run_uuid = run_uuid
 
 
 def is_stress_request() -> bool:
