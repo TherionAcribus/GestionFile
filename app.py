@@ -555,8 +555,10 @@ def require_login_for_admin():
         # Session borne (patient_kiosk) : la borne ouvre sa zone patient avec
         # son identité machine (jeton applicatif -> ticket signé), sans compte
         # utilisateur ni mot de passe injecté dans le DOM.
+        from stress_auth import is_authorized_stress_consultation
         if app.config["SECURITY_LOGIN_PATIENT"] and not (
-                current_user.is_authenticated or is_kiosk_patient_session()):
+                current_user.is_authenticated or is_kiosk_patient_session() or
+                is_authorized_stress_consultation()):
             return redirect(url_for('admin_security.login', next=request.url))
     elif request.path.startswith('/app'):
         if app.config["SECURITY_LOGIN_COUNTER"] and not (current_user.is_authenticated or is_valid_app_request):

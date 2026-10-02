@@ -62,7 +62,19 @@ class GestionFileUser(HttpUser):
         path = random.choice(('/healthz', '/readyz', '/patient',
                               '/patient/patient_buttons', '/display',
                               '/announce/state', '/announce/patients_next'))
-        self.client.get(path, name=path, headers=self._signed('GET', path))
+        # Une redirection vers /login ne doit jamais apparaitre comme une
+        # consultation reussie. Elle signale clairement un probleme d'acces et
+        # evite aussi de rejouer sur /login une signature liee au chemin initial.
+        with self.client.get(
+                path, name=path, headers=self._signed('GET', path),
+                allow_redirects=False, catch_response=True) as response:
+            if 300 <= response.status_code < 400:
+                location = response.headers.get('Location', '')
+                response.failure(
+                    f'HTTP {response.status_code}: redirection inattendue vers '
+                    f'{location[:120] or "une destination inconnue"}')
+            elif response.status_code >= 400:
+                response.failure(f'HTTP {response.status_code}')
 
     def journey(self):
         path = f'/internal/stress/runs/{self.run_uuid}/journey'
@@ -193,8 +205,12 @@ def _final_summary(run, environment, samples):
     error_rate = failure_count / request_count * 100 if request_count else 0
     summary = {
         'total_requests': request_count,
+        'successful_requests': max(0, request_count - failure_count),
         'total_errors': failure_count,
         'error_rate': error_rate,
+        'duration_seconds': len(samples),
+        'ready_percent': (sum(1 for sample in samples if sample.ready) /
+                          len(samples) * 100 if samples else 0),
         'average_rps': request_count / duration,
         'max_rps': max((s.rps for s in samples), default=0),
         'p50_ms': _percentile(total, .50), 'p95_ms': _percentile(total, .95),

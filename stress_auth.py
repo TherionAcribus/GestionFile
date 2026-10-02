@@ -13,6 +13,24 @@ RUN_HEADER = 'X-Stress-Run'
 TIMESTAMP_HEADER = 'X-Stress-Timestamp'
 SIGNATURE_HEADER = 'X-Stress-Signature'
 
+# Seules ces lectures peuvent utiliser l'identite interne du runner. Les
+# actions metier, l'administration et les autres routes restent soumises a
+# leur authentification habituelle.
+CONSULTATION_PATHS = frozenset({
+    '/patient',
+    '/patient/patient_buttons',
+    '/display',
+    '/announce/state',
+    '/announce/patients_next',
+})
+
+# Verifier la persistence a chaque requete fausserait principalement la mesure
+# du pool SQL. Ce cache tres court conserve le controle "test encore actif"
+# tout en limitant cette requete de securite a environ une fois par seconde et
+# par processus web.
+_ACTIVE_RUN_CACHE: dict[str, tuple[float, bool]] = {}
+_ACTIVE_RUN_CACHE_SECONDS = 1.0
+
 
 def runner_secret_valid(value: str | None) -> bool:
     expected = current_app.config.get('STRESS_RUNNER_SECRET') or ''
@@ -65,3 +83,38 @@ def identify_stress_request(max_age_seconds=30) -> None:
 
 def is_stress_request() -> bool:
     return bool(getattr(g, 'stress_test_request', False))
+
+
+def is_authorized_stress_consultation() -> bool:
+    """Autorise une lecture publique precise pendant un test actif.
+
+    Une signature valide ne devient jamais une session generale : l'UUID doit
+    correspondre a un test ``consultation`` ou ``mixed`` en cours, son mode
+    doit correspondre au mode du serveur, et le chemin/methode sont limites a
+    la liste blanche ci-dessus.
+    """
+    if (not is_stress_request() or request.method != 'GET' or
+            request.path not in CONSULTATION_PATHS):
+        return False
+
+    run_uuid = getattr(g, 'stress_test_run_uuid', '')
+    now = time.monotonic()
+    cached = _ACTIVE_RUN_CACHE.get(run_uuid)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    # Import local pour eviter un cycle stress_auth -> models -> application.
+    from models import StressTestRun
+
+    row = StressTestRun.query.with_entities(
+        StressTestRun.mode, StressTestRun.scenario, StressTestRun.state,
+    ).filter_by(uuid=run_uuid).first()
+    configured_mode = str(current_app.config.get('STRESS_TEST_MODE', 'disabled')).lower()
+    allowed = bool(
+        row and row.state in {'preparing', 'running', 'stopping'} and
+        row.scenario in {'consultation', 'mixed'} and
+        row.mode == configured_mode and
+        (row.mode != 'production' or row.scenario == 'consultation')
+    )
+    _ACTIVE_RUN_CACHE[run_uuid] = (now + _ACTIVE_RUN_CACHE_SECONDS, allowed)
+    return allowed

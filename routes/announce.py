@@ -10,6 +10,7 @@ from python.engine import get_next_patients_call_numbers
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
 from auth_utils import is_authenticated_request, wants_json_response
 from routes.admin_security import require_permission_api
+from stress_auth import is_authorized_stress_consultation
 
 announce_bp = Blueprint('announce', __name__)
 
@@ -40,6 +41,8 @@ def _require_screen_access():
     if request.endpoint in _ANNOUNCE_PUBLIC_ENDPOINTS:
         return
     if not app.config.get("SECURITY_LOGIN_SCREEN", False):
+        return
+    if is_authorized_stress_consultation():
         return
     if is_authenticated_request():
         return

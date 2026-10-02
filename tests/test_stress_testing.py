@@ -5,7 +5,9 @@ import pytest
 from flask import Flask
 
 from models import StressTestLease, StressTestRun, User, db
-from stress_auth import signature_for
+from stress_auth import (identify_stress_request,
+                         is_authorized_stress_consultation, signed_headers,
+                         signature_for)
 from stress_testing import (StressValidationError, claim_lease,
                             compare_summaries, heartbeat_lease, now_local,
                             StopThresholds, transition_run,
@@ -16,7 +18,9 @@ from stress_testing import (StressValidationError, claim_lease,
 def app():
     app = Flask(__name__)
     app.config.update(TESTING=True, SQLALCHEMY_DATABASE_URI='sqlite:///:memory:',
-                      SQLALCHEMY_TRACK_MODIFICATIONS=False)
+                      SQLALCHEMY_TRACK_MODIFICATIONS=False,
+                      STRESS_TEST_MODE='staging',
+                      STRESS_RUNNER_SECRET='s' * 40)
     db.init_app(app)
     with app.app_context():
         db.create_all()
@@ -115,3 +119,52 @@ def test_stress_signature_binds_method_path_run_and_time():
     signature = signature_for(secret, 'POST', '/patient', 'run-1', '123')
     assert signature == signature_for(secret, 'POST', '/patient', 'run-1', '123')
     assert signature != signature_for(secret, 'GET', '/patient', 'run-1', '123')
+
+
+def test_signed_consultation_only_opens_allowlisted_reads_for_active_run(app):
+    with app.app_context():
+        run = _run(User.query.one().id, state='running')
+        db.session.add(run)
+        db.session.commit()
+        headers = signed_headers(app.config['STRESS_RUNNER_SECRET'], 'GET',
+                                 '/patient', run.uuid)
+        with app.test_request_context('/patient', headers=headers):
+            identify_stress_request()
+            assert is_authorized_stress_consultation()
+
+        admin_headers = signed_headers(app.config['STRESS_RUNNER_SECRET'], 'GET',
+                                       '/admin', run.uuid)
+        with app.test_request_context('/admin', headers=admin_headers):
+            identify_stress_request()
+            assert not is_authorized_stress_consultation()
+
+        finished = _run(User.query.one().id, state='completed',
+                        verdict='successful')
+        db.session.add(finished)
+        db.session.commit()
+        finished_headers = signed_headers(
+            app.config['STRESS_RUNNER_SECRET'], 'GET', '/display', finished.uuid)
+        with app.test_request_context('/display', headers=finished_headers):
+            identify_stress_request()
+            assert not is_authorized_stress_consultation()
+
+
+def test_human_csv_report_contains_diagnosis_and_endpoint_details(app):
+    from routes.admin_performance import _csv_response
+
+    with app.app_context():
+        run = _run(User.query.one().id, state='aborted', verdict='failed',
+                   stop_reason='error_rate_threshold', summary={
+                       'total_requests': 20, 'successful_requests': 10,
+                       'total_errors': 10, 'error_rate': 50,
+                       'endpoints': {'GET /patient': {
+                           'requests': 10, 'errors': 10, 'p95_ms': 25,
+                           'first_error': 'HTTP 401'}},
+                   })
+        db.session.add(run)
+        db.session.commit()
+        text = _csv_response(run).get_data(as_text=True)
+        assert text.startswith('\ufeffRAPPORT DE TEST DE PERFORMANCE')
+        assert "Plus de 5 % d'erreurs pendant 10 secondes" in text
+        assert 'RESULTATS PAR PAGE OU ACTION' in text
+        assert 'GET /patient;10;10;100.0' in text

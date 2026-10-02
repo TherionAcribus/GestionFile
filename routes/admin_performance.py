@@ -218,16 +218,63 @@ def stop_run(run_uuid):
 
 def _csv_response(run):
     output = io.StringIO(newline='')
-    writer = csv.writer(output)
-    writer.writerow(['second', 'users', 'requests', 'rps', 'errors',
-                     'error_rate', 'p50_ms', 'p95_ms', 'p99_ms', 'max_ms',
-                     'cpu_percent', 'memory_bytes', 'ready'])
+    # BOM + point-virgule : ouverture directe lisible dans Excel en locale
+    # francaise. Le fichier contient d'abord le diagnostic humain, puis le
+    # detail par endpoint et enfin la serie temporelle exploitable.
+    output.write('\ufeff')
+    writer = csv.writer(output, delimiter=';')
+    report = serialize_run(run, detail=True)
+    summary = run.summary or {}
+    writer.writerow(['RAPPORT DE TEST DE PERFORMANCE'])
+    writer.writerow(['Identifiant', run.uuid])
+    writer.writerow(['Scenario', report['scenario_label']])
+    writer.writerow(['Profil', report['profile_label']])
+    writer.writerow(['Etat', report['state_label']])
+    writer.writerow(['Verdict', report['verdict_label'] or 'Non disponible'])
+    writer.writerow(['Explication', report['result_message']])
+    writer.writerow(['Debut', report['started_at'] or ''])
+    writer.writerow(['Fin', report['finished_at'] or ''])
+    writer.writerow([])
+    writer.writerow(['RESUME'])
+    writer.writerow(['Requetes totales', summary.get('total_requests', '')])
+    writer.writerow(['Requetes reussies', summary.get('successful_requests', '')])
+    writer.writerow(['Erreurs', summary.get('total_errors', '')])
+    writer.writerow(["Taux d'erreur (%)", summary.get('error_rate', '')])
+    writer.writerow(['Debit moyen (req/s)', summary.get('average_rps', '')])
+    writer.writerow(['Debit maximal (req/s)', summary.get('max_rps', '')])
+    writer.writerow(['Latence p50 (ms)', summary.get('p50_ms', '')])
+    writer.writerow(['Latence p95 (ms)', summary.get('p95_ms', '')])
+    writer.writerow(['Latence p99 (ms)', summary.get('p99_ms', '')])
+    writer.writerow(['Latence maximale (ms)', summary.get('max_ms', '')])
+    writer.writerow(['CPU maximal (%)', summary.get('max_cpu_percent', '')])
+    writer.writerow(['Memoire maximale (octets)', summary.get('max_memory_bytes', '')])
+    writer.writerow(['Disponibilite readyz (%)', summary.get('ready_percent', '')])
+    writer.writerow([])
+    writer.writerow(['RESULTATS PAR PAGE OU ACTION'])
+    writer.writerow(['Methode et endpoint', 'Requetes', 'Erreurs',
+                     "Taux d'erreur (%)", 'p50 (ms)', 'p95 (ms)', 'p99 (ms)',
+                     'Maximum (ms)', 'Premiere erreur'])
+    for name, values in (summary.get('endpoints') or {}).items():
+        requests_count = values.get('requests') or 0
+        errors = values.get('errors') or 0
+        rate = errors / requests_count * 100 if requests_count else 0
+        writer.writerow([name, requests_count, errors, rate,
+                         values.get('p50_ms'), values.get('p95_ms'),
+                         values.get('p99_ms'), values.get('max_ms'),
+                         values.get('first_error', '')])
+    writer.writerow([])
+    writer.writerow(['MESURES PAR SECONDE'])
+    writer.writerow(['Seconde', 'Utilisateurs', 'Requetes cumulees',
+                     'Requetes/s', 'Erreurs cumulees', "Taux d'erreur (%)",
+                     'p50 (ms)', 'p95 (ms)', 'p99 (ms)', 'Maximum (ms)',
+                     'CPU (%)', 'Memoire (octets)', 'Application prete'])
     for s in run.samples:
         writer.writerow([s.elapsed_seconds, s.active_users, s.requests, s.rps,
                          s.errors, s.error_rate, s.latency_p50_ms,
                          s.latency_p95_ms, s.latency_p99_ms, s.latency_max_ms,
-                         s.web_cpu_percent, s.web_memory_bytes, int(s.ready)])
-    return Response(output.getvalue(), mimetype='text/csv', headers={
+                         s.web_cpu_percent, s.web_memory_bytes,
+                         'Oui' if s.ready else 'Non'])
+    return Response(output.getvalue(), content_type='text/csv; charset=utf-8', headers={
         'Content-Disposition': f'attachment; filename="stress-{run.uuid}.csv"'})
 
 

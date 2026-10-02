@@ -16,12 +16,45 @@ from models import db, Patient, StressTestLease, StressTestRun, StressTestSample
 
 ACTIVE_STATES = frozenset({'queued', 'preparing', 'running', 'stopping'})
 TERMINAL_STATES = frozenset({'completed', 'failed', 'aborted', 'interrupted'})
+STATE_LABELS = {
+    'queued': 'En attente', 'preparing': 'Préparation', 'running': 'En cours',
+    'stopping': 'Arrêt en cours', 'completed': 'Terminé', 'failed': 'Échec',
+    'aborted': 'Arrêté', 'interrupted': 'Interrompu',
+}
+VERDICT_LABELS = {
+    'successful': 'Réussi', 'degraded': 'Dégradé', 'failed': 'Échoué',
+}
+STOP_REASON_LABELS = {
+    'user_stop': "Arrêt demandé par l'utilisateur",
+    'error_rate_threshold': "Plus de 5 % d'erreurs pendant 10 secondes",
+    'p95_threshold': 'Temps de réponse p95 supérieur à 3 secondes pendant 15 secondes',
+    'readiness_failed': "Application indisponible lors de trois contrôles consécutifs",
+    'memory_threshold': 'Mémoire du serveur supérieure à 85 % de la limite',
+    'runner_heartbeat_lost': 'Connexion avec le runner perdue',
+    'lease_lost': "Le runner a perdu l'autorisation exclusive d'exécuter le test",
+    'runner_error': 'Erreur interne du runner',
+}
 STATE_TRANSITIONS = {
     'queued': {'preparing', 'aborted', 'interrupted'},
     'preparing': {'running', 'stopping', 'failed', 'aborted', 'interrupted'},
     'running': {'stopping', 'completed', 'failed', 'aborted', 'interrupted'},
     'stopping': {'completed', 'failed', 'aborted', 'interrupted'},
 }
+
+
+def run_result_message(run):
+    """Explication courte, directement affichable, du resultat d'un test."""
+    if run.stop_reason:
+        return STOP_REASON_LABELS.get(run.stop_reason, run.stop_reason)
+    if run.state == 'completed':
+        if run.verdict == 'successful':
+            return 'Le test est allé au terme prévu sans dépasser les seuils.'
+        if run.verdict == 'degraded':
+            return 'Le test est allé au terme prévu, mais les performances sont dégradées.'
+        return 'Le test est allé au terme prévu, mais les seuils de qualité sont dépassés.'
+    if run.state in ACTIVE_STATES:
+        return 'Le test est en cours. Les résultats sont encore provisoires.'
+    return "Aucune explication supplémentaire n'est disponible."
 
 PROFILES = {
     'production_check': {'label': 'Verification production', 'users': 3,
@@ -241,7 +274,11 @@ def serialize_run(run: StressTestRun, *, detail=False):
         'requested_parameters': run.requested_parameters,
         'applied_parameters': run.applied_parameters,
         'state': run.state, 'verdict': run.verdict,
+        'state_label': STATE_LABELS.get(run.state, run.state),
+        'verdict_label': VERDICT_LABELS.get(run.verdict, run.verdict),
         'stop_reason': run.stop_reason, 'stop_requested': run.stop_requested,
+        'stop_reason_label': STOP_REASON_LABELS.get(run.stop_reason, run.stop_reason),
+        'result_message': run_result_message(run),
         'created_at': run.created_at.isoformat() if run.created_at else None,
         'started_at': run.started_at.isoformat() if run.started_at else None,
         'finished_at': run.finished_at.isoformat() if run.finished_at else None,

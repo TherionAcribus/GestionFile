@@ -11,6 +11,8 @@ def test_runner_is_decoupled_from_web_eventlet_app():
     assert "SKIP_EVENTLET_PATCH', '1'" in source
     assert "app = Flask('stress_runner')" in source
     assert 'gevent.sleep' in source
+    assert 'allow_redirects=False' in source
+    assert 'redirection inattendue' in source
 
 
 def test_runner_image_uses_versioned_locust_and_has_no_public_port():
@@ -22,3 +24,15 @@ def test_runner_image_uses_versioned_locust_and_has_no_public_port():
     assert 'Dockerfile.stress' in block
     assert 'SKIP_EVENTLET_PATCH: "1"' in block
     assert '\n    ports:' not in block
+
+
+def test_admin_page_exposes_a_readable_report_and_history_action():
+    template = (ROOT / 'templates' / 'admin' / 'performance.html').read_text(
+        encoding='utf-8')
+    script = (ROOT / 'static' / 'js' / 'admin_performance.js').read_text(
+        encoding='utf-8')
+    assert 'id="result-report"' in template
+    assert 'id="endpoint-body"' in template
+    assert 'Voir le rapport' in script
+    assert 'result_message' in script
+    assert 'first_error' in script
