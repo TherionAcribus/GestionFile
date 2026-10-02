@@ -198,6 +198,7 @@ services:
       <<: *app-env
       APP_ROLE: stress
       SKIP_STARTUP_HOOKS: "1"
+      SKIP_EVENTLET_PATCH: "1"
     depends_on:
       init:
         condition: service_completed_successfully

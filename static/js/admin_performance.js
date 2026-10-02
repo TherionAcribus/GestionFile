@@ -18,7 +18,7 @@
   }
   function error(message) { $("page-error").textContent = message; $("page-error").classList.toggle("d-none", !message); }
   function option(value, label) { const node = document.createElement("option"); node.value = value; node.textContent = label; return node; }
-  function preflightLabel(key) { return ({feature_enabled:"Lancement autorise dans Administration > Application",environment_mode:"Mode serveur configure",runner:"Runner sain et recent",readyz:"Application prete (/readyz)",no_active_run:"Aucun autre test actif",target_locked:"Cible conforme a la configuration",production_queue_empty:"File de production vide"})[key] || key; }
+  function preflightLabel(key) { return ({feature_enabled:"Lancement autorise dans Administration > Application",environment_mode:"Mode serveur configure",runner:"Runner connecte (heartbeat recent)",readyz:"Application prete (/readyz)",no_active_run:"Aucun autre test actif",target_locked:"Cible conforme a la configuration",production_queue_empty:"File de production vide"})[key] || key; }
   function updateLaunch() {
     if (!capabilities) return;
     const okay = Object.values(capabilities.preflight).every(Boolean);
@@ -55,6 +55,7 @@
     $("mode-badge").textContent = capabilities.mode; $("mode-badge").className = `badge text-bg-${capabilities.mode === "production" ? "danger" : "warning"}`;
     $("runner-badge").textContent = capabilities.runner.healthy ? "Runner operationnel" : "Runner indisponible";
     $("runner-badge").className = `badge text-bg-${capabilities.runner.healthy ? "success" : "danger"}`;
+    $("runner-warning").classList.toggle("d-none", capabilities.runner.healthy);
     $("production-warning").classList.toggle("d-none", capabilities.mode !== "production"); $("target-url").textContent = capabilities.target || "Non configuree";
     const disabledWarning = $("disabled-warning");
     if (capabilities.mode === "disabled") {

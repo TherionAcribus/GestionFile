@@ -2,22 +2,28 @@
 from __future__ import annotations
 
 import os
+
+# Le serveur web utilise Eventlet, Locust utilise Gevent. Le runner ne doit
+# jamais appliquer le monkey-patch Eventlet ni importer toute l'application web.
+os.environ.setdefault('SKIP_EVENTLET_PATCH', '1')
+os.environ.setdefault('SKIP_STARTUP_HOOKS', '1')
+os.environ.setdefault('APP_ROLE', 'stress')
+
 import json
+import logging
 import random
 import socket
 import threading
 import time
 import uuid
 
+import gevent
 import requests
+from flask import Flask
 from locust import HttpUser, between, task
 from locust.env import Environment
 
-# Importe l'application sans bootstrap ni ordonnanceur.
-os.environ.setdefault('SKIP_STARTUP_HOOKS', '1')
-os.environ.setdefault('APP_ROLE', 'stress')
-
-from app import app  # noqa: E402
+from config import Config  # noqa: E402
 from models import StressTestRun, StressTestSample, db  # noqa: E402
 from stress_auth import RUNNER_SECRET_HEADER, signed_headers  # noqa: E402
 from stress_fixtures import (cleanup_all_incomplete_runs, cleanup_fixtures,
@@ -26,6 +32,15 @@ from stress_testing import (claim_lease, heartbeat_lease,
                             mark_stale_runs_interrupted,
                             purge_old_runs, release_lease, StopThresholds,
                             transition_run)  # noqa: E402
+
+
+# Application minimale : configuration + SQLAlchemy uniquement. Importer
+# app.py initialiserait Flask-SocketIO/Eventlet et tous les blueprints dans le
+# processus Gevent de Locust, ce qui peut empêcher le heartbeat de démarrer.
+app = Flask('stress_runner')
+app.config.from_object(Config)
+app.logger.setLevel(logging.INFO)
+db.init_app(app)
 
 
 RUNNER_ID = f'{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
@@ -249,12 +264,12 @@ def execute_run(run):
                 transition_run(run, 'stopping', reason=auto_reason)
                 db.session.commit()
                 break
-            time.sleep(max(0, 1 - (time.monotonic() - tick)))
+            gevent.sleep(max(0, 1 - (time.monotonic() - tick)))
 
         runner.quit()
         deadline = time.monotonic() + STOP_DRAIN_SECONDS
         while environment.runner.user_count and time.monotonic() < deadline:
-            time.sleep(.1)
+            gevent.sleep(.1)
         _final_summary(run, environment, samples)
         if run.state == 'stopping' or auto_reason:
             transition_run(run, 'aborted', reason=auto_reason or 'user_stop',
@@ -288,6 +303,8 @@ def execute_run(run):
 def main():
     if len(SECRET) < 32:
         raise RuntimeError('STRESS_RUNNER_SECRET absent ou trop court.')
+    app.logger.info('stress-runner %s demarre, cible=%s', RUNNER_ID,
+                    app.config.get('STRESS_TARGET_URL'))
     last_purge = 0.0
     with app.app_context():
         stale = mark_stale_runs_interrupted(
@@ -299,7 +316,7 @@ def main():
         while True:
             try:
                 if not claim_lease(RUNNER_ID, None):
-                    time.sleep(1)
+                    gevent.sleep(1)
                     continue
                 run = StressTestRun.query.filter_by(state='queued').order_by(
                     StressTestRun.created_at).first()
@@ -311,7 +328,7 @@ def main():
             except Exception:
                 db.session.rollback()
                 app.logger.exception('Boucle stress-runner en erreur')
-            time.sleep(1)
+            gevent.sleep(1)
 
 
 if __name__ == '__main__':
