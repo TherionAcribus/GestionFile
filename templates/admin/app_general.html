@@ -48,6 +48,23 @@
     </p>
 </section>
 
+<section class="admin-setting-card algo-section" aria-labelledby="app_stress_title">
+    <h5 id="app_stress_title"><i class="bi bi-speedometer2" aria-hidden="true"></i> Tests de performance</h5>
+    {{ macros.switch("stress_test_enabled",
+        stress_test_enabled,
+        "Autoriser le lancement de tests de performance") }}
+    <p class="form-text mb-2">
+        La page et les anciens rapports restent consultables lorsque ce réglage est désactivé,
+        mais aucun nouveau test ne peut être lancé. Mode serveur actuel :
+        <strong>{{ stress_test_mode }}</strong>.
+    </p>
+    <div class="alert alert-warning small mb-0" role="note">
+        Un test consomme volontairement des ressources. Activez-le uniquement pendant une période
+        contrôlée et commencez par le profil léger. En production, seul le contrôle en lecture seule
+        est autorisé.
+    </div>
+</section>
+
 <section class="admin-setting-card algo-section" aria-labelledby="app_network_title">
     <h5 id="app_network_title"><i class="bi bi-qr-code" aria-hidden="true"></i> Adresse du serveur sur le réseau</h5>
     <p class="text-muted small mb-2">

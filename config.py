@@ -97,6 +97,9 @@ class Config:
     # jamais fournie par le navigateur et le secret runner est distinct des
     # secrets de session et des clients metier.
     STRESS_TEST_MODE = os.getenv("STRESS_TEST_MODE", "disabled").strip().lower()
+    # Interrupteur administrable, persiste dans ConfigOption. La page reste
+    # consultable quand il est coupe ; seul le lancement est bloque.
+    STRESS_TEST_ENABLED = False
     STRESS_TARGET_URL = os.getenv("STRESS_TARGET_URL", "").strip().rstrip("/")
     STRESS_RUNNER_SECRET = os.getenv("STRESS_RUNNER_SECRET", "")
     STRESS_RESULTS_RETENTION_DAYS = 30

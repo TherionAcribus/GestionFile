@@ -18,11 +18,11 @@
   }
   function error(message) { $("page-error").textContent = message; $("page-error").classList.toggle("d-none", !message); }
   function option(value, label) { const node = document.createElement("option"); node.value = value; node.textContent = label; return node; }
-  function preflightLabel(key) { return ({runner:"Runner sain et recent",readyz:"Application prete (/readyz)",no_active_run:"Aucun autre test actif",target_locked:"Cible conforme a la configuration",production_queue_empty:"File de production vide"})[key] || key; }
+  function preflightLabel(key) { return ({feature_enabled:"Lancement autorise dans Administration > Application",environment_mode:"Mode serveur configure",runner:"Runner sain et recent",readyz:"Application prete (/readyz)",no_active_run:"Aucun autre test actif",target_locked:"Cible conforme a la configuration",production_queue_empty:"File de production vide"})[key] || key; }
   function updateLaunch() {
     if (!capabilities) return;
     const okay = Object.values(capabilities.preflight).every(Boolean);
-    $("launch-button").disabled = !okay || $("confirmation").value !== "LANCER LE TEST";
+    $("launch-button").disabled = !capabilities.launch_allowed || !okay || $("confirmation").value !== "LANCER LE TEST";
   }
   function renderPreflight() {
     const list = $("preflight-list"); list.replaceChildren();
@@ -55,7 +55,17 @@
     $("mode-badge").textContent = capabilities.mode; $("mode-badge").className = `badge text-bg-${capabilities.mode === "production" ? "danger" : "warning"}`;
     $("runner-badge").textContent = capabilities.runner.healthy ? "Runner operationnel" : "Runner indisponible";
     $("runner-badge").className = `badge text-bg-${capabilities.runner.healthy ? "success" : "danger"}`;
-    $("production-warning").classList.toggle("d-none", capabilities.mode !== "production"); $("target-url").textContent = capabilities.target;
+    $("production-warning").classList.toggle("d-none", capabilities.mode !== "production"); $("target-url").textContent = capabilities.target || "Non configuree";
+    const disabledWarning = $("disabled-warning");
+    if (capabilities.mode === "disabled") {
+      disabledWarning.textContent = "La page est consultable, mais le mode serveur est desactive. Configurez STRESS_TEST_MODE pour autoriser un lancement.";
+      disabledWarning.classList.remove("d-none");
+    } else if (!capabilities.enabled) {
+      disabledWarning.textContent = "Le lancement est desactive par defaut. Activez-le dans Administration > Application > Tests de performance.";
+      disabledWarning.classList.remove("d-none");
+    } else {
+      disabledWarning.classList.add("d-none");
+    }
     populateSelectors(); renderPreflight();
   }
   function summaryValue(run,key,suffix="") { const value=(run.summary||{})[key]; return value == null ? "—" : `${typeof value === "number" ? value.toLocaleString("fr-FR",{maximumFractionDigits:2}) : value}${suffix}`; }

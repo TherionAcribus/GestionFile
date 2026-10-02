@@ -10,7 +10,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import pika
-from flask import (Blueprint, Response, abort, current_app, jsonify,
+from flask import (Blueprint, Response, current_app, jsonify,
                    render_template, request)
 from flask_login import current_user
 
@@ -39,17 +39,19 @@ admin_performance_bp = Blueprint('admin_performance', __name__)
 _CPU_SAMPLE = {'at': time.monotonic(), 'cpu': time.process_time()}
 
 
-def _feature_enabled(api=False):
-    def decorator(func):
-        @wraps(func)
-        def wrapped(*args, **kwargs):
-            if validate_mode(current_app.config.get('STRESS_TEST_MODE')) == 'disabled':
-                if api:
-                    return jsonify(error='disabled'), 404
-                abort(404)
-            return func(*args, **kwargs)
-        return wrapped
-    return decorator
+def _launch_enabled(func):
+    """Bloque uniquement le lancement, jamais la consultation de la page."""
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        if validate_mode(current_app.config.get('STRESS_TEST_MODE')) == 'disabled':
+            return jsonify(error=(
+                'Le mode serveur des tests de performance est désactivé. '
+                'Configurez STRESS_TEST_MODE avant tout lancement.')), 409
+        if not current_app.config.get('STRESS_TEST_ENABLED', False):
+            return jsonify(error=(
+                'Le lancement est désactivé dans Administration > Application.')), 409
+        return func(*args, **kwargs)
+    return wrapped
 
 
 def _internal_only(func):
@@ -62,6 +64,8 @@ def _internal_only(func):
 
 
 def _ready_check(target):
+    if not target:
+        return False
     try:
         req = Request(target + '/readyz', method='GET',
                       headers={'User-Agent': 'GestionFile-stress-preflight/1'})
@@ -78,7 +82,7 @@ def _preflight(mode, target):
         'readyz': _ready_check(target),
         'no_active_run': not StressTestRun.query.filter(
             StressTestRun.state.in_(ACTIVE_STATES)).first(),
-        'target_locked': target == normalize_target(current_app.config.get('STRESS_TARGET_URL')),
+        'target_locked': bool(target),
         'production_queue_empty': True,
     }
     if mode == 'production':
@@ -88,27 +92,32 @@ def _preflight(mode, target):
 
 @admin_performance_bp.route('/admin/performance')
 @require_permission('performance')
-@_feature_enabled()
 def performance_page():
     return render_template('admin/performance.html')
 
 
 @admin_performance_bp.route('/admin/performance/api/capabilities')
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def capabilities():
     mode = validate_mode(current_app.config.get('STRESS_TEST_MODE'))
-    target = normalize_target(current_app.config.get('STRESS_TARGET_URL'))
+    try:
+        target = normalize_target(current_app.config.get('STRESS_TARGET_URL'))
+    except StressValidationError:
+        target = ''
     checks, status = _preflight(mode, target)
+    enabled = bool(current_app.config.get('STRESS_TEST_ENABLED', False))
+    checks = {'feature_enabled': enabled,
+              'environment_mode': mode != 'disabled', **checks}
     return jsonify(mode=mode, profiles=PROFILES, scenarios=SCENARIOS,
                    target=target, preflight=checks, runner=status,
+                   enabled=enabled,
+                   launch_allowed=enabled and mode != 'disabled',
                    same_host_warning=True,
                    confirmation='LANCER LE TEST')
 
 
 @admin_performance_bp.route('/admin/performance/api/runs', methods=['GET'])
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def list_runs():
     limit = min(max(request.args.get('limit', 30, type=int), 1), 100)
     runs = StressTestRun.query.order_by(StressTestRun.created_at.desc()).limit(limit).all()
@@ -117,7 +126,7 @@ def list_runs():
 
 @admin_performance_bp.route('/admin/performance/api/runs', methods=['POST'])
 @require_permission_api('performance')
-@_feature_enabled(api=True)
+@_launch_enabled
 def create_run():
     payload = request.get_json(silent=True) or {}
     mode = validate_mode(current_app.config.get('STRESS_TEST_MODE'))
@@ -167,14 +176,12 @@ def _get_run_or_404(run_uuid):
 
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>')
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def get_run(run_uuid):
     return jsonify(run=serialize_run(_get_run_or_404(run_uuid), detail=True))
 
 
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>/samples')
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def get_samples(run_uuid):
     run = _get_run_or_404(run_uuid)
     after_id = max(request.args.get('after_id', 0, type=int), 0)
@@ -194,7 +201,6 @@ def get_samples(run_uuid):
 
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>/stop', methods=['POST'])
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def stop_run(run_uuid):
     run = _get_run_or_404(run_uuid)
     if run.state not in ACTIVE_STATES:
@@ -227,14 +233,12 @@ def _csv_response(run):
 
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>/export.csv')
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def export_csv(run_uuid):
     return _csv_response(_get_run_or_404(run_uuid))
 
 
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>/export.json')
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def export_json(run_uuid):
     run = _get_run_or_404(run_uuid)
     return jsonify(run=serialize_run(run, detail=True), samples=[{
@@ -250,7 +254,6 @@ def export_json(run_uuid):
 
 @admin_performance_bp.route('/admin/performance/api/compare')
 @require_permission_api('performance')
-@_feature_enabled(api=True)
 def compare_runs():
     left = _get_run_or_404(request.args.get('left', ''))
     right = _get_run_or_404(request.args.get('right', ''))

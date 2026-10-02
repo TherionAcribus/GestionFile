@@ -251,7 +251,7 @@
                         {% endif %}
 
                         {# --- Analyse --- #}
-                        {% if user_has_permission(current_user, 'stats') or (config.STRESS_TEST_MODE != 'disabled' and user_has_permission(current_user, 'performance')) %}
+                        {% if user_has_permission(current_user, 'stats') or user_has_permission(current_user, 'performance') %}
                         <li class="nav-item">
                             <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
                                 <span>Analyse</span>
@@ -272,7 +272,7 @@
                             </a>
                         </li>
                         {% endif %}
-                        {% if config.STRESS_TEST_MODE != 'disabled' and user_has_permission(current_user, 'performance') %}
+                        {% if user_has_permission(current_user, 'performance') %}
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path.startswith('/admin/performance') else '' }}"
                                {{ 'aria-current="page"' if request.path.startswith('/admin/performance') else '' }}
