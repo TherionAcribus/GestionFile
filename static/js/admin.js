@@ -352,14 +352,21 @@ const AdminFeedback = (function () {
         });
     }
 
+    // Un seul toast « connexion perdue » à la fois : si l'alerte est déjà
+    // affichée on la réutilise plutôt que d'empiler des toasts identiques
+    // que l'utilisateur devrait fermer un par un.
     function connectionLost(opts) {
         opts = opts || {};
-        const msg = "Connexion temps réel perdue : les mises à jour automatiques sont suspendues.";
+        const existing = container().querySelector('[data-feedback-connection]');
+        if (existing) return existing;
+        const msg = "Connexion temps réel perdue : les mises à jour automatiques sont suspendues. Reconnexion automatique en cours…";
         announce(msg, true);
-        return showToast(msg, {
+        const t = showToast(msg, {
             css: 'bg-warning', live: 'assertive', autohide: false,
             retry: opts.retry, retryLabel: 'Reconnecter'
         });
+        t.setAttribute('data-feedback-connection', '1');
+        return t;
     }
 
     function connectionRestored() {
@@ -376,6 +383,7 @@ const AdminFeedback = (function () {
         toast: toast,
         connectionLost: connectionLost,
         connectionRestored: connectionRestored,
+        hide: hide,
         showToast: showToast
     };
 })();
@@ -480,18 +488,35 @@ function setupRealtimeConnectionFeedback() {
     const socket = AdminRealtime.connect('/socket_admin');
     if (!socket) return;
     let lostToast = null;
+    let lostTimer = null;
+
+    // Socket.IO retente la connexion seul et vite sur les micro-coupures :
+    // on n'affiche l'alerte que si la perte dure, et on la referme
+    // automatiquement dès que la connexion revient. Plus de toasts « perdue »
+    // qui s'accumulent et restent à fermer à la main.
+    const LOST_DELAY_MS = 3000;
 
     socket.on('disconnect', function () {
-        if (lostToast) return;
-        lostToast = AdminFeedback.connectionLost({
-            retry: function () { try { socket.connect(); } catch (e) { /* ignore */ } }
-        });
+        if (lostToast || lostTimer) return;
+        lostTimer = window.setTimeout(function () {
+            lostTimer = null;
+            lostToast = AdminFeedback.connectionLost({
+                retry: function () { try { socket.connect(); } catch (e) { /* ignore */ } }
+            });
+        }, LOST_DELAY_MS);
     });
 
     function restored() {
-        if (!lostToast) return;
-        lostToast = null;
-        AdminFeedback.connectionRestored();
+        const hadLostToast = !!lostToast;
+        if (lostTimer) { window.clearTimeout(lostTimer); lostTimer = null; }
+        if (lostToast) {
+            const t = lostToast;
+            lostToast = null;
+            AdminFeedback.hide(t);
+        }
+        if (hadLostToast) {
+            AdminFeedback.connectionRestored();
+        }
     }
     socket.on('connect', restored);
     if (socket.io && socket.io.on) {
