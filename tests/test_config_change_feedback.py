@@ -72,6 +72,8 @@ def test_update_input_failures_return_failure_status():
     # joint comme avertissement — jamais un succès silencieux.
     assert "warning = special_functions_with_input(key)" in body
     assert "warning" in body
+    assert "spec.min_value" in body
+    assert "spec.max_value" in body
 
 
 def test_scheduling_side_effects_propagate_warning():

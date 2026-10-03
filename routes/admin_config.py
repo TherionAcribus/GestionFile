@@ -495,11 +495,19 @@ def update_input():
         return config_change_response(success=True, message="Secret inchangé (valeur actuelle conservée).")
 
     # --- Validation de TOUTES les valeurs AVANT toute mutation (point 10) ---
-    if validator == "int":
-        if value.isdigit():
+    if validator in {"int", "positive_int"}:
+        try:
             value = int(value)
-        else:
+        except (TypeError, ValueError):
             return config_change_response(success=False, message="L'entrée doit être un nombre.")
+        if spec.min_value is not None and value < spec.min_value:
+            return config_change_response(
+                success=False,
+                message=f"La valeur minimale autorisée est {spec.min_value}.")
+        if spec.max_value is not None and value > spec.max_value:
+            return config_change_response(
+                success=False,
+                message=f"La valeur maximale autorisée est {spec.max_value}.")
     else:
         # Le validateur du registre décide : balises {X} autorisées selon la
         # famille de texte (welcome / before_call / after_call / ticket), et

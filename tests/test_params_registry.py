@@ -86,6 +86,15 @@ def test_announce_cache_retention_is_int_schedule():
     assert spec.permission == "schedule"
 
 
+def test_stress_reference_patient_peak_is_bounded_and_administrable():
+    spec = reg.get_spec("stress_reference_patients")
+    assert spec is not None
+    assert spec.config_name == "STRESS_REFERENCE_PATIENTS"
+    assert spec.value_type == "value_int"
+    assert spec.permission == "app"
+    assert (spec.min_value, spec.max_value) == (1, 500)
+
+
 @pytest.mark.parametrize("key,permission", [
     ("security_login_admin", "security"),
     ("security_login_counter", "security"),

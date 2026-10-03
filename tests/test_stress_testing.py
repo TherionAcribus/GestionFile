@@ -9,7 +9,8 @@ from stress_auth import (identify_stress_request,
                          is_authorized_stress_consultation, signed_headers,
                          signature_for)
 from stress_testing import (StressValidationError, claim_lease,
-                            compare_summaries, heartbeat_lease, now_local,
+                            business_interpretation, compare_summaries,
+                            heartbeat_lease, now_local,
                             StopThresholds, transition_run,
                             validate_run_request)
 
@@ -168,3 +169,42 @@ def test_human_csv_report_contains_diagnosis_and_endpoint_details(app):
         assert "Plus de 5 % d'erreurs pendant 10 secondes" in text
         assert 'RESULTATS PAR PAGE OU ACTION' in text
         assert 'GET /patient;10;10;100.0' in text
+
+
+def test_business_interpretation_reports_validated_patient_margin(app):
+    with app.app_context():
+        run = _run(User.query.one().id, state='completed', verdict='successful',
+                   scenario='queue_counter', applied_parameters={
+                       'users': 25, 'spawn_rate': 5, 'duration': 180},
+                   summary={
+                       'p95_ms': 71, 'duration_seconds': 180,
+                       'endpoints': {'POST /stress/journey/complete': {
+                           'requests': 120, 'errors': 0}},
+                   })
+        result = business_interpretation(run, reference_patients=10)
+        assert result['grade'] == 'Marge confortable'
+        assert result['capacity_validated'] is True
+        assert result['margin_factor'] == 2.5
+        assert result['response_label'] == 'Excellente'
+        assert result['completed_journeys'] == 120
+        assert result['journeys_per_minute'] == 40
+
+
+def test_business_interpretation_does_not_certify_stopped_or_failed_test(app):
+    with app.app_context():
+        user_id = User.query.one().id
+        stopped = _run(user_id, state='aborted', verdict='successful',
+                       stop_reason='user_stop')
+        partial = business_interpretation(stopped, 10)
+        assert partial['grade'] == 'Résultat partiel'
+        assert partial['capacity_validated'] is False
+
+        failed = _run(user_id, state='aborted', verdict='failed',
+                      stop_reason='p95_threshold', applied_parameters={
+                          'users': 250, 'spawn_rate': 25, 'duration': 600},
+                      summary={'p95_ms': 4500})
+        limit = business_interpretation(failed, 10)
+        assert limit['grade'] == 'Limite du test dépassée'
+        assert limit['tone'] == 'danger'
+        assert limit['capacity_validated'] is False
+        assert 'ne remet pas en cause' in limit['conclusion']

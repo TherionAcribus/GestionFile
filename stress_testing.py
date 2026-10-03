@@ -56,6 +56,122 @@ def run_result_message(run):
         return 'Le test est en cours. Les résultats sont encore provisoires.'
     return "Aucune explication supplémentaire n'est disponible."
 
+
+def business_interpretation(run, reference_patients=10):
+    """Traduit les métriques techniques en lecture métier prudente.
+
+    Le nombre d'utilisateurs Locust est une charge simultanée, pas une mesure
+    exacte du nombre de patients que la pharmacie peut accueillir. Le rapport
+    parle donc toujours de capacité *validée* au niveau testé, jamais de
+    capacité maximale extrapolée depuis les RPS.
+    """
+    try:
+        reference = min(500, max(1, int(reference_patients)))
+    except (TypeError, ValueError):
+        reference = 10
+    try:
+        users = max(0, int((run.applied_parameters or {}).get('users', 0)))
+    except (TypeError, ValueError):
+        users = 0
+
+    load_names = {
+        'consultation': 'visiteurs simulés en parallèle',
+        'kiosk': 'parcours borne actifs en parallèle',
+        'queue_counter': 'prises en charge actives en parallèle',
+        'realtime': 'connexions temps réel simulées en parallèle',
+        'mixed': 'utilisateurs simulés en parallèle',
+    }
+    load_name = load_names.get(run.scenario, 'utilisateurs simulés en parallèle')
+    load_label = f'{users} {load_name}' if users else 'Charge simultanée inconnue'
+    margin = users / reference if users else None
+    margin_text = (f'{margin:.1f}'.rstrip('0').rstrip('.').replace('.', ',')
+                   if margin is not None else None)
+    margin_label = (f'{margin_text} fois le pic habituel'
+                    if margin_text is not None else 'Non calculable')
+
+    summary = run.summary or {}
+    p95 = summary.get('p95_ms')
+    if not isinstance(p95, (int, float)):
+        response_label, response_detail = 'Non mesurée', 'Latence indisponible'
+    elif p95 <= 100:
+        response_label, response_detail = 'Excellente', f'95 % des réponses en moins de {p95:.0f} ms'
+    elif p95 <= 300:
+        response_label, response_detail = 'Très bonne', f'95 % des réponses en moins de {p95:.0f} ms'
+    elif p95 <= 500:
+        response_label, response_detail = 'Bonne', f'95 % des réponses en moins de {p95:.0f} ms'
+    elif p95 <= 1000:
+        response_label, response_detail = 'Acceptable', f'95 % des réponses en moins de {p95:.0f} ms'
+    else:
+        response_label, response_detail = 'Lente', f'95 % des réponses en moins de {p95:.0f} ms'
+
+    endpoints = summary.get('endpoints') or {}
+    completed_journeys = None
+    journeys_per_minute = None
+    if run.scenario in {'kiosk', 'queue_counter', 'mixed'}:
+        complete = endpoints.get('POST /stress/journey/complete') or {}
+        completed_journeys = max(
+            0, int(complete.get('requests') or 0) - int(complete.get('errors') or 0))
+        duration = summary.get('duration_seconds')
+        if isinstance(duration, (int, float)) and duration > 0:
+            journeys_per_minute = completed_journeys / duration * 60
+
+    partial = run.state == 'aborted' and run.stop_reason == 'user_stop'
+    if run.state in ACTIVE_STATES:
+        grade, tone = 'Test en cours', 'info'
+        headline = 'Les résultats sont encore provisoires.'
+        conclusion = 'Attendez la fin du test avant d’évaluer la capacité.'
+    elif partial:
+        grade, tone = 'Résultat partiel', 'warning'
+        headline = "Aucun problème majeur détecté avant l'arrêt manuel."
+        conclusion = "La charge n'est pas considérée comme validée car le test n'est pas allé à son terme."
+    elif run.state == 'completed' and run.verdict == 'successful':
+        tone = 'success'
+        if margin is not None and margin >= 5:
+            grade = 'Marge très importante'
+        elif margin is not None and margin >= 2:
+            grade = 'Marge confortable'
+        elif margin is not None and margin >= 1:
+            grade = 'Charge habituelle validée'
+        else:
+            grade = 'Test réussi, charge trop légère'
+        headline = f'Le serveur a validé au moins {load_label}.'
+        conclusion = 'Le test est terminé sans dépasser les seuils de performance.'
+        if margin is not None:
+            conclusion += (f' La charge testée représente {margin_text} fois votre '
+                           f'pic habituel de {reference} patients.')
+    elif run.verdict == 'degraded':
+        grade, tone = 'Performances à surveiller', 'warning'
+        headline = f'La charge de {load_label} a été traitée avec des ralentissements.'
+        conclusion = 'Consultez les erreurs et la latence avant de valider ce niveau de charge.'
+    else:
+        grade, tone = 'Limite du test dépassée', 'danger'
+        headline = f'La charge de {load_label} a dépassé un seuil de sécurité.'
+        conclusion = run_result_message(run)
+        if margin is not None and margin > 1:
+            conclusion += (f' Cette charge extrême représente {margin_text} fois '
+                           f'votre pic habituel; '
+                           f'elle ne remet pas en cause à elle seule un pic habituel de {reference} patients.')
+
+    if run.scenario == 'realtime':
+        caveat = ('Les connexions temps réel ne correspondent pas directement à des patients : '
+                  'la comparaison donne seulement un ordre de grandeur de la marge.')
+    else:
+        caveat = ('Un utilisateur virtuel répète ses actions en boucle : cette comparaison est '
+                  'un indicateur prudent, pas une capacité maximale garantie.')
+
+    return {
+        'grade': grade, 'tone': tone, 'headline': headline,
+        'conclusion': conclusion, 'tested_users': users,
+        'load_label': load_label, 'reference_patients': reference,
+        'margin_factor': margin, 'margin_label': margin_label,
+        'response_label': response_label, 'response_detail': response_detail,
+        'completed_journeys': completed_journeys,
+        'journeys_per_minute': journeys_per_minute,
+        'capacity_validated': bool(
+            run.state == 'completed' and run.verdict == 'successful'),
+        'partial': partial, 'caveat': caveat,
+    }
+
 PROFILES = {
     'production_check': {'label': 'Verification production', 'users': 3,
                          'spawn_rate': 1, 'duration': 30,
@@ -265,7 +381,7 @@ def purge_old_runs(retention_days=30):
     return deleted
 
 
-def serialize_run(run: StressTestRun, *, detail=False):
+def serialize_run(run: StressTestRun, *, detail=False, reference_patients=None):
     data = {
         'uuid': run.uuid, 'mode': run.mode, 'scenario': run.scenario,
         'scenario_label': SCENARIOS.get(run.scenario, {}).get('label', run.scenario),
@@ -291,6 +407,9 @@ def serialize_run(run: StressTestRun, *, detail=False):
         data.update(target_url=run.target_url,
                     application_version=run.application_version,
                     config_fingerprint=run.config_fingerprint)
+    if reference_patients is not None:
+        data['business_interpretation'] = business_interpretation(
+            run, reference_patients)
     return data
 
 

@@ -100,6 +100,9 @@ class Config:
     # Interrupteur administrable, persiste dans ConfigOption. La page reste
     # consultable quand il est coupe ; seul le lancement est bloque.
     STRESS_TEST_ENABLED = False
+    # Référence métier utilisée uniquement pour expliquer les rapports de
+    # performance. Elle ne modifie ni la charge ni les seuils du runner.
+    STRESS_REFERENCE_PATIENTS = 10
     STRESS_TARGET_URL = os.getenv("STRESS_TARGET_URL", "").strip().rstrip("/")
     STRESS_RUNNER_SECRET = os.getenv("STRESS_RUNNER_SECRET", "")
     STRESS_RESULTS_RETENTION_DAYS = 30

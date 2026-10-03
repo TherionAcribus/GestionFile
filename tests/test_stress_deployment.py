@@ -39,3 +39,6 @@ def test_admin_page_exposes_a_readable_report_and_history_action():
     assert 'selectedScenario' in script
     assert 'selectedProfile' in script
     assert 'selectedComparisons' in script
+    assert 'id="business-summary"' in template
+    assert 'business_interpretation' in script
+    assert 'Lecture simple' in template

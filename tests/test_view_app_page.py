@@ -49,6 +49,8 @@ def test_numerotation_par_activite_prend_le_plus_grand():
 
 def test_gabarits_general_et_mail():
     general = _read("templates/admin/app_general.html")
+    assert 'id="stress_reference_patients"' in general
+    assert 'Pic habituel de patients' in general
     # L'avertissement « redémarrage requis » est dans la section RabbitMQ.
     avance = general.split("Avancé : relais entre processus", 1)[1]
     assert "Redémarrage requis" in avance and "start_rabbitmq" in avance

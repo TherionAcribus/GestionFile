@@ -59,6 +59,8 @@ def admin_app(tab=None):
                             app_messaging_enabled=app.config.get("APP_MESSAGING_ENABLED", False),
                             stress_test_enabled=app.config.get("STRESS_TEST_ENABLED", False),
                             stress_test_mode=app.config.get("STRESS_TEST_MODE", "disabled"),
+                            stress_reference_patients=app.config.get(
+                                "STRESS_REFERENCE_PATIENTS", 10),
                             network_adress = app.config["NETWORK_ADRESS"],
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],

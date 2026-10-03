@@ -58,6 +58,22 @@
         mais aucun nouveau test ne peut être lancé. Mode serveur actuel :
         <strong>{{ stress_test_mode }}</strong>.
     </p>
+    <div class="row align-items-end g-2 mb-3">
+        <div class="col-sm-7 col-md-5">
+            <label class="form-label" for="stress_reference_patients">
+                Pic habituel de patients présents simultanément
+            </label>
+            <input class="form-control" type="number" min="1" max="500"
+                   id="stress_reference_patients"
+                   value="{{ stress_reference_patients }}"
+                   data-config-key="stress_reference_patients"
+                   data-initial-value="{{ stress_reference_patients }}">
+            <div class="form-text">Cette valeur sert uniquement à expliquer la marge dans les rapports.</div>
+        </div>
+        <div class="col-sm-auto">
+            {{ macros.button("stress_reference_patients", "int") }}
+        </div>
+    </div>
     <div class="alert alert-warning small mb-0" role="note">
         Un test consomme volontairement des ressources. Activez-le uniquement pendant une période
         contrôlée et commencez par le profil léger. En production, seul le contrôle en lecture seule

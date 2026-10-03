@@ -5,7 +5,7 @@ import pytest
 from flask import Flask
 from flask_login import LoginManager, login_user
 
-from models import Role, StressTestLease, User, db
+from models import Role, StressTestLease, StressTestRun, User, db
 from routes.admin_performance import admin_performance_bp
 from routes.admin_security import user_has_permission
 
@@ -19,7 +19,7 @@ def app():
         SQLALCHEMY_DATABASE_URI='sqlite:///:memory:',
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         STRESS_TEST_MODE='disabled', STRESS_TARGET_URL='http://web:5000',
-        STRESS_TEST_ENABLED=False,
+        STRESS_TEST_ENABLED=False, STRESS_REFERENCE_PATIENTS=10,
         STRESS_RUNNER_SECRET='x' * 40, STRESS_RUNNER_STALE_SECONDS=15)
     db.init_app(app)
     login = LoginManager(app)
@@ -80,3 +80,23 @@ def test_enabled_permitted_api_is_available(app):
     response = client.get('/admin/performance/api/runs')
     assert response.status_code == 200
     assert response.get_json() == {'runs': []}
+
+
+def test_history_includes_business_interpretation(app):
+    with app.app_context():
+        alice = User.query.filter_by(username='alice').one()
+        db.session.add(StressTestRun(
+            mode='staging', scenario='kiosk', profile='normal',
+            requested_parameters={}, applied_parameters={
+                'users': 25, 'spawn_rate': 5, 'duration': 180},
+            requested_by_id=alice.id, target_url='http://web:5000',
+            config_fingerprint='0' * 64, state='completed',
+            verdict='successful', fixture_ids={}, summary={'p95_ms': 71}))
+        db.session.commit()
+    client = app.test_client()
+    client.post('/login/alice')
+    run = client.get('/admin/performance/api/runs').get_json()['runs'][0]
+    business = run['business_interpretation']
+    assert business['grade'] == 'Marge confortable'
+    assert business['margin_factor'] == 2.5
+    assert business['capacity_validated'] is True

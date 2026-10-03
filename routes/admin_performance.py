@@ -39,6 +39,12 @@ admin_performance_bp = Blueprint('admin_performance', __name__)
 _CPU_SAMPLE = {'at': time.monotonic(), 'cpu': time.process_time()}
 
 
+def _serialize_run(run, *, detail=False):
+    return serialize_run(
+        run, detail=detail,
+        reference_patients=current_app.config.get('STRESS_REFERENCE_PATIENTS', 10))
+
+
 def _launch_enabled(func):
     """Bloque uniquement le lancement, jamais la consultation de la page."""
     @wraps(func)
@@ -121,7 +127,7 @@ def capabilities():
 def list_runs():
     limit = min(max(request.args.get('limit', 30, type=int), 1), 100)
     runs = StressTestRun.query.order_by(StressTestRun.created_at.desc()).limit(limit).all()
-    return jsonify(runs=[serialize_run(run) for run in runs])
+    return jsonify(runs=[_serialize_run(run) for run in runs])
 
 
 @admin_performance_bp.route('/admin/performance/api/runs', methods=['POST'])
@@ -167,7 +173,7 @@ def create_run():
     db.session.commit()
     record_audit(ACTION_CREATE, 'stress_test', target_id=run.uuid,
                  details=f'{mode}/{scenario}/{profile}')
-    return jsonify(run=serialize_run(run, detail=True)), 201
+    return jsonify(run=_serialize_run(run, detail=True)), 201
 
 
 def _get_run_or_404(run_uuid):
@@ -177,7 +183,7 @@ def _get_run_or_404(run_uuid):
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>')
 @require_permission_api('performance')
 def get_run(run_uuid):
-    return jsonify(run=serialize_run(_get_run_or_404(run_uuid), detail=True))
+    return jsonify(run=_serialize_run(_get_run_or_404(run_uuid), detail=True))
 
 
 @admin_performance_bp.route('/admin/performance/api/runs/<run_uuid>/samples')
@@ -213,7 +219,7 @@ def stop_run(run_uuid):
     db.session.commit()
     record_audit(ACTION_UPDATE, 'stress_test', target_id=run.uuid,
                  details='arret demande')
-    return jsonify(run=serialize_run(run))
+    return jsonify(run=_serialize_run(run))
 
 
 def _csv_response(run):
@@ -223,7 +229,7 @@ def _csv_response(run):
     # detail par endpoint et enfin la serie temporelle exploitable.
     output.write('\ufeff')
     writer = csv.writer(output, delimiter=';')
-    report = serialize_run(run, detail=True)
+    report = _serialize_run(run, detail=True)
     summary = run.summary or {}
     writer.writerow(['RAPPORT DE TEST DE PERFORMANCE'])
     writer.writerow(['Identifiant', run.uuid])
@@ -234,6 +240,24 @@ def _csv_response(run):
     writer.writerow(['Explication', report['result_message']])
     writer.writerow(['Debut', report['started_at'] or ''])
     writer.writerow(['Fin', report['finished_at'] or ''])
+    writer.writerow([])
+    business = report.get('business_interpretation') or {}
+    writer.writerow(['LECTURE SIMPLIFIEE'])
+    writer.writerow(['Evaluation', business.get('grade', '')])
+    writer.writerow(['Conclusion', business.get('headline', '')])
+    writer.writerow(['Interpretation', business.get('conclusion', '')])
+    writer.writerow(['Charge simulee', business.get('load_label', '')])
+    writer.writerow(['Pic habituel de patients',
+                     business.get('reference_patients', '')])
+    writer.writerow(['Marge indicative', business.get('margin_label', '')])
+    writer.writerow(['Reactivite', business.get('response_label', '')])
+    writer.writerow(['Detail de reactivite', business.get('response_detail', '')])
+    if business.get('journeys_per_minute') is not None:
+        writer.writerow(['Parcours patients termines',
+                         business.get('completed_journeys', '')])
+        writer.writerow(['Parcours patients par minute',
+                         business.get('journeys_per_minute', '')])
+    writer.writerow(['Precaution de lecture', business.get('caveat', '')])
     writer.writerow([])
     writer.writerow(['RESUME'])
     writer.writerow(['Requetes totales', summary.get('total_requests', '')])
@@ -288,7 +312,7 @@ def export_csv(run_uuid):
 @require_permission_api('performance')
 def export_json(run_uuid):
     run = _get_run_or_404(run_uuid)
-    return jsonify(run=serialize_run(run, detail=True), samples=[{
+    return jsonify(run=_serialize_run(run, detail=True), samples=[{
         'second': s.elapsed_seconds, 'users': s.active_users,
         'requests': s.requests, 'rps': s.rps, 'errors': s.errors,
         'error_rate': s.error_rate, 'p50_ms': s.latency_p50_ms,
@@ -304,7 +328,7 @@ def export_json(run_uuid):
 def compare_runs():
     left = _get_run_or_404(request.args.get('left', ''))
     right = _get_run_or_404(request.args.get('right', ''))
-    return jsonify(left=serialize_run(left), right=serialize_run(right),
+    return jsonify(left=_serialize_run(left), right=_serialize_run(right),
                    differences=compare_summaries(left, right))
 
 

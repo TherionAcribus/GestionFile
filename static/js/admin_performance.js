@@ -164,8 +164,20 @@
       const tr = document.createElement("tr");
       const date = run.created_at ? new Date(run.created_at).toLocaleString("fr-FR") : "—";
       [date, run.scenario_label, run.profile_label, run.state_label || run.state,
-        run.verdict_label || "—", summaryValue(run, "average_rps"),
-        summaryValue(run, "p95_ms", " ms")].forEach((value) => {
+        run.verdict_label || "—"].forEach((value) => {
+          const td = document.createElement("td"); td.textContent = value; tr.appendChild(td);
+        });
+      const business = run.business_interpretation || {};
+      const businessCell = document.createElement("td");
+      businessCell.className = "history-business";
+      const businessGrade = document.createElement("strong");
+      businessGrade.textContent = business.grade || "Rapport technique";
+      const businessLoad = document.createElement("small");
+      businessLoad.className = "text-muted";
+      businessLoad.textContent = business.load_label || "Charge non précisée";
+      businessCell.append(businessGrade, businessLoad); tr.appendChild(businessCell);
+      [summaryValue(run, "average_rps"), summaryValue(run, "p95_ms", " ms")]
+        .forEach((value) => {
           const td = document.createElement("td"); td.textContent = value; tr.appendChild(td);
         });
       const reportCell = document.createElement("td");
@@ -190,7 +202,7 @@
       }
     });
     if (!runs.length) {
-      const td = document.createElement("td"); td.colSpan = 9;
+      const td = document.createElement("td"); td.colSpan = 10;
       td.className = "text-muted"; td.textContent = "Aucun test enregistré.";
       const tr = document.createElement("tr"); tr.appendChild(td); body.appendChild(tr);
     }
@@ -251,6 +263,7 @@
 
   function renderFinalReport(run) {
     const terminal = TERMINAL_STATES.includes(run.state);
+    $("live-monitor").classList.toggle("d-none", terminal);
     $("result-report").classList.toggle("d-none", !terminal);
     $("final-verdict").classList.toggle("d-none", !terminal);
     if (!terminal) return;
@@ -269,6 +282,28 @@
     const started = run.started_at ? new Date(run.started_at).toLocaleString("fr-FR") : "heure inconnue";
     const duration = summary.duration_seconds != null ? `${number(summary.duration_seconds, 0)} s` : "durée inconnue";
     $("result-period").textContent = `Démarré le ${started} · ${duration} · ${run.scenario_label} · ${run.profile_label}`;
+    const business = run.business_interpretation || {};
+    const businessBox = $("business-summary");
+    const tone = ["success", "warning", "danger", "info"].includes(business.tone) ? business.tone : "info";
+    businessBox.className = `alert alert-${tone} business-summary`;
+    $("business-grade").className = `badge text-bg-${tone}`;
+    $("business-grade").textContent = business.grade || "Lecture simplifiée";
+    $("business-headline").textContent = business.headline || "Interprétation indisponible";
+    $("business-conclusion").textContent = business.conclusion || "";
+    $("business-load").textContent = business.load_label || "—";
+    $("business-reference").textContent = business.reference_patients != null ?
+      `${number(business.reference_patients, 0)} patients` : "—";
+    $("business-margin").textContent = business.margin_label || "—";
+    $("business-response").textContent = business.response_label || "—";
+    $("business-response-detail").textContent = business.response_detail || "";
+    const throughput = $("business-throughput");
+    if (business.journeys_per_minute != null) {
+      throughput.textContent = `${number(business.completed_journeys, 0)} parcours patients terminés, soit ${number(business.journeys_per_minute, 1)} par minute pendant le test.`;
+      throughput.classList.remove("d-none");
+    } else {
+      throughput.textContent = ""; throughput.classList.add("d-none");
+    }
+    $("business-caveat").textContent = business.caveat || "";
     $("result-requests").textContent = number(summary.total_requests, 0);
     $("result-errors").textContent = `${number(summary.total_errors, 0)} (${number(summary.error_rate, 1)} %)`;
     $("result-rps").textContent = `${number(summary.average_rps, 1)} req/s`;
@@ -298,6 +333,7 @@
 
   function renderLive(run) {
     $("live-section").classList.remove("d-none");
+    $("live-title").textContent = TERMINAL_STATES.includes(run.state) ? "Rapport du test" : "Test en cours";
     $("live-identity").textContent = `${run.scenario_label} · ${run.profile_label} · ${run.uuid}`;
     $("metric-state").textContent = run.state_label || run.state;
     const last = samples[samples.length - 1];
@@ -305,6 +341,7 @@
     $("metric-p95").textContent = last && last.p95_ms != null ? `${number(last.p95_ms, 0)} ms` : "—";
     $("metric-errors").textContent = last ? `${number(last.error_rate || 0, 1)} %` : "—";
     $("stop-button").disabled = !ACTIVE_STATES.includes(run.state);
+    $("stop-button").classList.toggle("d-none", !ACTIVE_STATES.includes(run.state));
     drawChart(); renderFinalReport(run);
   }
 

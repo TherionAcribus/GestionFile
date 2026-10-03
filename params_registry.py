@@ -52,6 +52,7 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
     "app_messaging_enabled": ("APP_MESSAGING_ENABLED", "value_bool"),
     "stress_test_enabled": ("STRESS_TEST_ENABLED", "value_bool"),
+    "stress_reference_patients": ("STRESS_REFERENCE_PATIENTS", "value_int"),
     "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
     "algo_overtaken_limit": ("ALGO_OVERTAKEN_LIMIT", "value_int"),
     "printer": ("PRINTER", "value_bool"),
@@ -329,6 +330,12 @@ _POSITIVE_INT_KEYS = {
     "cron_announce_cache_retention_days",
 }
 
+# Bornes métier des réglages entiers. Elles sont appliquées par la route
+# générique à partir du registre, jamais depuis les attributs HTML seuls.
+_INT_RANGES = {
+    "stress_reference_patients": (1, 500),
+}
+
 
 # ---------------------------------------------------------------------------
 # Clés traduisibles (point 3 — catalogue unique)
@@ -507,11 +514,16 @@ class ParamSpec:
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)
     allowed_values: frozenset | None = None  # choix fermé (listes déroulantes)
     translatable: bool = False  # texte proposé à la traduction (référence « fr »)
+    min_value: int | None = None
+    max_value: int | None = None
 
 
 def _build_registry() -> dict[str, ParamSpec]:
     registry: dict[str, ParamSpec] = {}
     for key, (config_name, value_type) in _CONFIG_TYPES.items():
+        minimum, maximum = _INT_RANGES.get(key, (None, None))
+        if key in _POSITIVE_INT_KEYS:
+            minimum = 1
         registry[key] = ParamSpec(
             key=key,
             config_name=config_name,
@@ -523,6 +535,8 @@ def _build_registry() -> dict[str, ParamSpec]:
             secret=key in SECRET_CONFIG_KEYS,
             allowed_values=_ENUM_VALUES.get(key),
             translatable=key in _TRANSLATABLE_KEYS,
+            min_value=minimum,
+            max_value=maximum,
         )
     return registry
 
