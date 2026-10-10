@@ -123,6 +123,8 @@ def announce_page(tab=None):
                             title_font_size=app.css_variable_manager.get_variable('announce', 'title_font_size'),
                             title_font_border_size = app.css_variable_manager.get_variable('announce', 'title_font_border_size'),
                             title_font_border_color = app.css_variable_manager.get_variable('announce', 'title_font_border_color'),
+                            title_bottom_border_size = app.css_variable_manager.get_variable('announce', 'title_bottom_border_size'),
+                            title_bottom_border_color = app.css_variable_manager.get_variable('announce', 'title_bottom_border_color'),
                             #sous titre
                             subtitle_font_color=app.css_variable_manager.get_variable('announce', 'subtitle_font_color'),
                             subtitle_font_size=app.css_variable_manager.get_variable('announce', 'subtitle_font_size'),

@@ -373,6 +373,9 @@ ADAPTERS["phone"]["components"]["specific"] = _component(
 
 _ADDITIONAL_CSS_FIELDS = {
     "announce": {"title": [
+        # Liseré en bas du bandeau titre : même mécanisme que la borne patient.
+        ("title_bottom_border_size", "Épaisseur liseré bas", "size", "0px", "Liseré en bas"),
+        ("title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas"),
         ("announce_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
     ],
     "ongoing": [
@@ -592,6 +595,7 @@ _BUILTIN_CSS_OVERRIDES = {
             "title_font_size": "90px",
             "title_font_border_size": "2px",
             "title_font_border_color": "#000000",
+            "title_bottom_border_color": "#000000",
             "title_background_color": "#006666",
             "title_background_height": "200px",
             "subtitle_font_color": "#FFFFFF",

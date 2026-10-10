@@ -6,6 +6,8 @@
     --title_font_size: 75px;
     --title_font_border_size: 0px;
     --title_font_border_color: black;
+    --title_bottom_border_size: 0px;
+    --title_bottom_border_color: black;
     --subtitle_font_color: #FFFFFF;
     --subtitle_font_size: 75px;
     --subtitle_font_border_size: 0px;
@@ -59,6 +61,7 @@ html, body {
     text-align: center;
     font-weight: bold;
     background-color:var(--title_background_color);
+    border-bottom: var(--title_bottom_border_size) solid var(--title_bottom_border_color);
     min-height: var(--title_background_height);
     box-sizing: border-box;
     padding: 10px 20px; /* Ajoute un peu de padding pour l'espacement */
