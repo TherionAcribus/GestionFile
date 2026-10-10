@@ -162,6 +162,8 @@ def announce_page(tab=None):
                             next_patients_font_size=app.css_variable_manager.get_variable('announce', 'next_patients_font_size'),
                             next_patients_font_border_size = app.css_variable_manager.get_variable('announce', 'next_patients_font_border_size'),    
                             next_patients_font_border_color = app.css_variable_manager.get_variable('announce', 'next_patients_font_border_color'),
+                            next_patients_border_size = app.css_variable_manager.get_variable('announce', 'next_patients_border_size'),
+                            next_patients_border_color = app.css_variable_manager.get_variable('announce', 'next_patients_border_color'),
                             )
 
 

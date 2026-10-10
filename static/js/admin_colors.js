@@ -268,6 +268,7 @@ const colorMappings = {
             'ongoing_font_border_color',
             'ongoing_border_color',
             'next_patients_font_border_color',
+            'next_patients_border_color',
             // ... autres variables
         ]
     },
@@ -352,6 +353,7 @@ const variableDescriptions = {
     'next_patients_font_color': 'Texte des prochains patients',
     'next_patients_font_border_color': 'Contour du texte des prochains patients',
     'ongoing_border_color': 'Liseré zone patients au comptoir',
+    'next_patients_border_color': 'Liseré zone prochains patients',
     'title_bottom_border_color': 'Liseré sous le titre',
     // patient_third_color (Couleur des textes)
     'patient_title_font_color': 'Texte du titre',

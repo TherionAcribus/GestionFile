@@ -39,6 +39,8 @@
     --next_patients_font_size: 50px;
     --next_patients_font_border_size: 0px;
     --next_patients_font_border_color: black;
+    --next_patients_border_size: 0px;
+    --next_patients_border_color: black;
     --next_patients_background_color: #008B8B;
 }
 
@@ -218,6 +220,7 @@ html, body {
 
 #div_footer {
     background-color: var(--next_patients_background_color);
+    border: var(--next_patients_border_size) solid var(--next_patients_border_color);
     text-align: center;
     padding: 10px;
     width: 100%;

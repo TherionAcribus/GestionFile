@@ -384,6 +384,12 @@ _ADDITIONAL_CSS_FIELDS = {
         # thèmes — 0px = pas de liseré affiché.
         ("ongoing_border_size", "Épaisseur liseré", "size", "0px", "Liseré"),
         ("ongoing_border_color", "Couleur liseré", "color", "#000000", "Liseré"),
+    ],
+    "next": [
+        # Liseré autour du bandeau des prochains patients (appliqué à
+        # #div_footer, qui porte le fond de la zone).
+        ("next_patients_border_size", "Épaisseur liseré", "size", "0px", "Liseré"),
+        ("next_patients_border_color", "Couleur liseré", "color", "#000000", "Liseré"),
     ]},
     "phone": {"title": [
         ("phone_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
@@ -627,6 +633,7 @@ _BUILTIN_CSS_OVERRIDES = {
             "next_patients_font_size": "90px",
             "next_patients_font_border_size": "2px",
             "next_patients_font_border_color": "#000000",
+            "next_patients_border_color": "#000000",
             "next_patients_background_color": "#006666",
         },
         "patient": {
