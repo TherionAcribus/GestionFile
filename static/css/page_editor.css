@@ -154,6 +154,18 @@
     min-width: 0;
 }
 
+/* Sous-titre de groupe dans la section « Apparence » (ex. « Texte »,
+   « Bandeau », « Liseré en bas ») : sépare les réglages d'un même élément. */
+.page-editor-fieldgroup {
+    border-bottom: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    font-size: .8rem;
+    font-weight: 600;
+    margin: .25rem 0 .75rem;
+    padding-bottom: .25rem;
+    text-transform: uppercase;
+}
+
 .page-editor-color-control,
 .page-editor-palette-controls {
     align-items: stretch;

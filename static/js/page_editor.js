@@ -824,7 +824,20 @@
         const scenarioCssFields = definition.css.filter(fieldIsRelevant);
         if (scenarioCssFields.length) {
             const appearanceFields = addFieldset('Apparence');
+            let lastGroup = null;
             scenarioCssFields.forEach(function (field) {
+                // Sous-groupes déclarés par field.group (ex. « Texte »,
+                // « Bandeau », « Liseré ») : un titre sépare les réglages
+                // qui agissent sur le même élément.
+                if ((field.group || null) !== lastGroup) {
+                    lastGroup = field.group || null;
+                    if (lastGroup) {
+                        const heading = document.createElement('div');
+                        heading.className = 'page-editor-fieldgroup';
+                        heading.textContent = lastGroup;
+                        appearanceFields.appendChild(heading);
+                    }
+                }
                 let control;
                 if (field.type === 'color') {
                     control = createColorControl(

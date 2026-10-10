@@ -190,12 +190,12 @@ ADAPTERS = {
             "title": _component("Titre", "header", "#div_title_area",
                 layout_controls=["visible"],
                 config=[{"key": "page_patient_title", "label": "Texte", "type": "text"}],
-                css=[{"key": "patient_title_font_size", "label": "Taille", "type": "size"},
-                     {"key": "patient_title_font_color", "label": "Couleur", "type": "color"},
-                     {"key": "patient_title_background_color", "label": "Fond", "type": "color"},
-                     {"key": "patient_title_background_height", "label": "Hauteur", "type": "size"},
-                     {"key": "patient_title_border_size", "label": "Épaisseur contour", "type": "size"},
-                     {"key": "patient_title_border_color", "label": "Couleur contour", "type": "color"}]),
+                css=[{"key": "patient_title_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+                     {"key": "patient_title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "patient_title_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+                     {"key": "patient_title_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+                     {"key": "patient_title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+                     {"key": "patient_title_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}]),
             "buttons": _component("Contenu principal", "main", "#div_buttons_parents",
                 layout_controls=["visible"],
                 config=[{"key": "page_patient_button_shape", "label": "Forme de tous les boutons d’activité", "type": "select",
@@ -243,12 +243,12 @@ ADAPTERS = {
                 layout_controls=["visible"],
                 scenarios=["home", "children", "validation", "conclusion", "print_error", "printing", "print_uncertain", "staff_called"],
                 config=[{"key": "page_patient_subtitle", "label": "Texte du sous-titre", "type": "text"}],
-                css=[{"key": "subtitle_font_size", "label": "Taille", "type": "size"},
-                     {"key": "subtitle_font_color", "label": "Couleur", "type": "color"},
-                     {"key": "subtitle_background_color", "label": "Fond", "type": "color"},
-                     {"key": "subtitle_background_height", "label": "Hauteur", "type": "size"},
-                     {"key": "subtitle_border_size", "label": "Épaisseur contour", "type": "size"},
-                     {"key": "subtitle_border_color", "label": "Couleur contour", "type": "color"}]),
+                css=[{"key": "subtitle_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+                     {"key": "subtitle_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "subtitle_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+                     {"key": "subtitle_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+                     {"key": "subtitle_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+                     {"key": "subtitle_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}]),
             "activity_status": _component("Affichage des activités indisponibles", "footer",
                 "[data-page-editor-component='activity_status']",
                 scenarios=["activity_inactive"],
@@ -383,8 +383,8 @@ _ADDITIONAL_CSS_FIELDS = {
             # Liseré en bas du bandeau titre : nommé « ..._border_* » pour
             # rejoindre le rôle « Couleur des bordures » de la palette et le
             # défaut 0px des thèmes — 0px = pas de liseré affiché.
-            ("patient_title_bottom_border_size", "Épaisseur liseré bas", "size", "0px"),
-            ("patient_title_bottom_border_color", "Couleur liseré bas", "color", "#000000"),
+            ("patient_title_bottom_border_size", "Épaisseur liseré bas", "size", "0px", "Liseré en bas"),
+            ("patient_title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas"),
         ],
         "buttons": [
             ("patient_secondary_color", "Fond de page", "color", "#B6F5F5"),
@@ -435,8 +435,8 @@ _ADDITIONAL_CSS_FIELDS = {
             # Liseré en haut du bandeau de pied de page : appliqué aux trois
             # variantes (standard, activités indisponibles, message spécifique)
             # comme subtitle_background_height, partagé entre elles.
-            ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px"),
-            ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000"),
+            ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px", "Liseré en haut"),
+            ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000", "Liseré en haut"),
         ],
         "back_button": [
             ("square_cancel_button_width", "Largeur du bouton retour", "size", "500px"),
@@ -482,10 +482,13 @@ _ADDITIONAL_CSS_FIELDS = {
 
 for _page, _components in _ADDITIONAL_CSS_FIELDS.items():
     for _component_id, _fields in _components.items():
-        ADAPTERS[_page]["components"][_component_id]["css"].extend(
-            {"key": key, "label": label, "type": field_type, "default": default, "optional": True}
-            for key, label, field_type, default in _fields
-        )
+        for _field_def in _fields:
+            key, label, field_type, default, *rest = _field_def
+            field = {"key": key, "label": label, "type": field_type,
+                     "default": default, "optional": True}
+            if rest:
+                field["group"] = rest[0]
+            ADAPTERS[_page]["components"][_component_id]["css"].append(field)
 
 
 # L'ancien composant patient « Boutons » regroupait 74 contrôles sans tenir
