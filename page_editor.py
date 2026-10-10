@@ -320,13 +320,13 @@ for index in range(1, 7):
     ADAPTERS["phone"]["components"][f"line{index}"] = _component(
         f"Ligne {index}", "main", f"#phone_line{index}", scenarios=["confirmation"],
         config=[{"key": f"phone_line{index}", "label": "Texte Markdown", "type": "text"}],
-        css=[{"key": f"phone_line{index}_font_size", "label": "Taille", "type": "size"},
-             {"key": f"phone_line{index}_font_color", "label": "Couleur", "type": "color"},
-             {"key": f"phone_line{index}_font_weight", "label": "Graisse", "type": "number"},
-             {"key": f"phone_line{index}_background_color", "label": "Fond", "type": "color"},
-             {"key": f"phone_line{index}_background_height", "label": "Hauteur", "type": "size"},
-             {"key": f"phone_line{index}_border_size", "label": "Épaisseur bordure", "type": "size"},
-             {"key": f"phone_line{index}_border_color", "label": "Couleur bordure", "type": "color"}],
+        css=[{"key": f"phone_line{index}_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+             {"key": f"phone_line{index}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+             {"key": f"phone_line{index}_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
+             {"key": f"phone_line{index}_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+             {"key": f"phone_line{index}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+             {"key": f"phone_line{index}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"},
+             {"key": f"phone_line{index}_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
     )
     ADAPTERS["phone"]["components"][f"your_turn_line{index}"] = _component(
         f"Appel — ligne {index}", "main", f"#phone_your_turn_line{index}",
@@ -336,38 +336,38 @@ for index in range(1, 7):
             [{"key": "phone_display_your_turn", "label": "Afficher l'écran « Votre tour »", "type": "bool"}]
             if index == 1 else []
         ) + [{"key": f"phone_your_turn_line{index}", "label": "Texte Markdown", "type": "text"}],
-        css=[{"key": f"phone_your_turn_line{index}_font_size", "label": "Taille", "type": "size"},
-             {"key": f"phone_your_turn_line{index}_font_color", "label": "Couleur", "type": "color"},
-             {"key": f"phone_your_turn_line{index}_font_weight", "label": "Graisse", "type": "number"},
-             {"key": f"phone_your_turn_line{index}_background_color", "label": "Fond", "type": "color"},
-             {"key": f"phone_your_turn_line{index}_background_height", "label": "Hauteur", "type": "size"},
-             {"key": f"phone_your_turn_line{index}_border_size", "label": "Épaisseur bordure", "type": "size"},
-             {"key": f"phone_your_turn_line{index}_border_color", "label": "Couleur bordure", "type": "color"}],
+        css=[{"key": f"phone_your_turn_line{index}_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+             {"key": f"phone_your_turn_line{index}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+             {"key": f"phone_your_turn_line{index}_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
+             {"key": f"phone_your_turn_line{index}_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+             {"key": f"phone_your_turn_line{index}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+             {"key": f"phone_your_turn_line{index}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"},
+             {"key": f"phone_your_turn_line{index}_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
     )
 
 ADAPTERS["phone"]["components"]["title"] = _component(
     "Titre", "header", "#div_title_area",
     config=[{"key": "phone_title", "label": "Texte", "type": "text"},
             {"key": "phone_center", "label": "Centrer le contenu", "type": "bool"}],
-    css=[{"key": "phone_title_font_size", "label": "Taille", "type": "size"},
-         {"key": "phone_title_font_color", "label": "Couleur", "type": "color"},
-         {"key": "phone_title_font_weight", "label": "Graisse", "type": "number"},
-         {"key": "phone_title_background_color", "label": "Fond", "type": "color"},
-         {"key": "phone_title_background_height", "label": "Hauteur", "type": "size"},
-         {"key": "phone_title_border_size", "label": "Épaisseur bordure", "type": "size"},
-         {"key": "phone_title_border_color", "label": "Couleur bordure", "type": "color"}],
+    css=[{"key": "phone_title_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+         {"key": "phone_title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+         {"key": "phone_title_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
+         {"key": "phone_title_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+         {"key": "phone_title_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+         {"key": "phone_title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+         {"key": "phone_title_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}],
 )
 ADAPTERS["phone"]["components"]["specific"] = _component(
     "Message spécifique", "footer", "#specific_message",
     managed_bool="phone_display_specific_message",
     config=[{"key": "phone_display_specific_message", "label": "Afficher le message spécifique", "type": "bool"}],
-    css=[{"key": "phone_specific_message_font_size", "label": "Taille", "type": "size"},
-         {"key": "phone_specific_message_font_weight", "label": "Graisse", "type": "number"},
-         {"key": "phone_specific_message_font_color", "label": "Couleur", "type": "color"},
-         {"key": "phone_specific_message_background_color", "label": "Fond", "type": "color"},
-         {"key": "phone_specific_message_background_height", "label": "Hauteur", "type": "size"},
-         {"key": "phone_specific_message_border_size", "label": "Épaisseur bordure", "type": "size"},
-         {"key": "phone_specific_message_border_color", "label": "Couleur bordure", "type": "color"}],
+    css=[{"key": "phone_specific_message_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+         {"key": "phone_specific_message_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
+         {"key": "phone_specific_message_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+         {"key": "phone_specific_message_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+         {"key": "phone_specific_message_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+         {"key": "phone_specific_message_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"},
+         {"key": "phone_specific_message_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
 )
 
 
@@ -386,7 +386,7 @@ _ADDITIONAL_CSS_FIELDS = {
         ("ongoing_border_color", "Couleur liseré", "color", "#000000", "Liseré"),
     ]},
     "phone": {"title": [
-        ("phone_secondary_color", "Fond de page", "color", "#B6F5F5"),
+        ("phone_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
     ]},
     "patient": {
         "title": [
