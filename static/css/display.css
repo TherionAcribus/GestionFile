@@ -30,6 +30,8 @@
     --ongoing_font_size: 75px;
     --ongoing_font_border_size: 0px;
     --ongoing_font_border_color: black;
+    --ongoing_border_size: 0px;
+    --ongoing_border_color: black;
     --ongoing_background_color: #008B8B;
     --next_patients_font_color: #FFFFFF;
     --next_patients_font_size: 50px;
@@ -157,6 +159,8 @@ html, body {
 
 #div_ongoing {
     background-color: var(--ongoing_background_color);
+    border: var(--ongoing_border_size) solid var(--ongoing_border_color);
+    box-sizing: border-box;
 }
 
 .text_patient_ongoing {

@@ -1,7 +1,7 @@
 {
     "name": "gf_announce_css_variables",
     "type": "default",
-    "version": "0.9",
+    "version": "0.10",
     "timestamp": "2024-11-10 14:35:26",
     "comments": "Valeurs alignées sur la configuration de production (verts canard, grands textes)",
     "variables": {
@@ -40,6 +40,8 @@
         "ongoing_font_size": "75px",
         "ongoing_font_border_size": "0px",
         "ongoing_font_border_color": "#18332F",
+        "ongoing_border_size": "0px",
+        "ongoing_border_color": "#18332F",
         "next_patients_font_color": "#18332F",
         "next_patients_font_size": "90px",
         "next_patients_font_border_size": "0px",

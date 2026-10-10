@@ -134,11 +134,11 @@ ADAPTERS = {
                 managed_bool="announce_ongoing_display",
                 config=[{"key": "announce_ongoing_display", "label": "Afficher les patients au comptoir", "type": "bool"},
                         {"key": "announce_ongoing_text", "label": "Format", "type": "text"}],
-                css=[{"key": "ongoing_font_size", "label": "Taille", "type": "size"},
-                     {"key": "ongoing_font_color", "label": "Couleur", "type": "color"},
-                     {"key": "ongoing_background_color", "label": "Fond", "type": "color"},
-                     {"key": "ongoing_font_border_size", "label": "Épaisseur contour", "type": "size"},
-                     {"key": "ongoing_font_border_color", "label": "Couleur contour", "type": "color"}]),
+                css=[{"key": "ongoing_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+                     {"key": "ongoing_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "ongoing_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+                     {"key": "ongoing_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
+                     {"key": "ongoing_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"}]),
             "gallery": _component("Galerie", "aside", "#div_pub", span=6,
                 scenarios=["gallery"], managed_bool="announce_infos_display",
                 # Réglages auparavant réservés à l'onglet « Galerie » du mode
@@ -374,6 +374,13 @@ ADAPTERS["phone"]["components"]["specific"] = _component(
 _ADDITIONAL_CSS_FIELDS = {
     "announce": {"title": [
         ("announce_secondary_color", "Fond de page", "color", "#B6F5F5"),
+    ],
+    "ongoing": [
+        # Liseré autour de la zone : nommé « ..._border_* » pour rejoindre le
+        # rôle « Couleur des bordures » de la palette et le défaut 0px des
+        # thèmes — 0px = pas de liseré affiché.
+        ("ongoing_border_size", "Épaisseur liseré", "size", "0px", "Liseré"),
+        ("ongoing_border_color", "Couleur liseré", "color", "#000000", "Liseré"),
     ]},
     "phone": {"title": [
         ("phone_secondary_color", "Fond de page", "color", "#B6F5F5"),
@@ -611,6 +618,7 @@ _BUILTIN_CSS_OVERRIDES = {
             "ongoing_font_size": "75px",
             "ongoing_font_border_size": "0px",
             "ongoing_font_border_color": "#000000",
+            "ongoing_border_color": "#000000",
             "next_patients_font_color": "#FFFFFF",
             "next_patients_font_size": "90px",
             "next_patients_font_border_size": "2px",
