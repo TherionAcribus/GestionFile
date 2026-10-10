@@ -378,6 +378,12 @@ _ADDITIONAL_CSS_FIELDS = {
         ("title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas"),
         ("announce_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
     ],
+    "subtitle": [
+        # Filet séparateur tracé au-dessus du sous-titre, entre le titre et le
+        # sous-titre (les deux lignes partagent le même bandeau).
+        ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px", "Liseré en haut"),
+        ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000", "Liseré en haut"),
+    ],
     "ongoing": [
         # Liseré autour de la zone : nommé « ..._border_* » pour rejoindre le
         # rôle « Couleur des bordures » de la palette et le défaut 0px des
@@ -608,6 +614,7 @@ _BUILTIN_CSS_OVERRIDES = {
             "subtitle_font_size": "75px",
             "subtitle_font_border_size": "0px",
             "subtitle_font_border_color": "#000000",
+            "subtitle_top_border_color": "#000000",
             "text_up_background_color": "#008B8B",
             "text_up_font_color": "#FFFFFF",
             "text_up_font_size": "75px",

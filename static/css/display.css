@@ -12,6 +12,8 @@
     --subtitle_font_size: 75px;
     --subtitle_font_border_size: 0px;
     --subtitle_font_border_color: black;
+    --subtitle_top_border_size: 0px;
+    --subtitle_top_border_color: black;
     --text_up_background_color: #008B8B;
     --text_up_font_color: #FFFFFF;
     --text_up_font_size: 75px;
@@ -140,7 +142,8 @@ html, body {
     margin: auto;
     font-weight: 900;
     font-size: var(--subtitle_font_size);
-    color: var(--subtitle_font_color); 
+    color: var(--subtitle_font_color);
+    border-top: var(--subtitle_top_border_size) solid var(--subtitle_top_border_color);
     -webkit-text-stroke-color: var(--subtitle_font_border_color);
     -webkit-text-stroke-width: var(--subtitle_font_border_size);
     margin-top: 0px;
