@@ -379,6 +379,13 @@ _ADDITIONAL_CSS_FIELDS = {
         ("phone_secondary_color", "Fond de page", "color", "#B6F5F5"),
     ]},
     "patient": {
+        "title": [
+            # Liseré en bas du bandeau titre : nommé « ..._border_* » pour
+            # rejoindre le rôle « Couleur des bordures » de la palette et le
+            # défaut 0px des thèmes — 0px = pas de liseré affiché.
+            ("patient_title_bottom_border_size", "Épaisseur liseré bas", "size", "0px"),
+            ("patient_title_bottom_border_color", "Couleur liseré bas", "color", "#000000"),
+        ],
         "buttons": [
             ("patient_secondary_color", "Fond de page", "color", "#B6F5F5"),
             # Contour et fond du TEXTE des boutons (mode avancé uniquement jusqu'ici).
@@ -423,6 +430,13 @@ _ADDITIONAL_CSS_FIELDS = {
             ("scan_explanation_border_size", "Contour des consignes QR", "size", "0px"),
             ("scan_explanation_border_color", "Couleur contour des consignes QR", "color", "#000000"),
             ("scan_explanation_background_color", "Fond des consignes QR", "color", "#B6F5F5"),
+        ],
+        "subtitle": [
+            # Liseré en haut du bandeau de pied de page : appliqué aux trois
+            # variantes (standard, activités indisponibles, message spécifique)
+            # comme subtitle_background_height, partagé entre elles.
+            ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px"),
+            ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000"),
         ],
         "back_button": [
             ("square_cancel_button_width", "Largeur du bouton retour", "size", "500px"),
@@ -606,6 +620,7 @@ _BUILTIN_CSS_OVERRIDES = {
             "patient_title_font_color": "#FFFFFF",
             "patient_title_border_size": "2px",
             "patient_title_border_color": "#000000",
+            "patient_title_bottom_border_color": "#000000",
             "patient_title_background_color": "#008B8B",
             "patient_title_background_height": "150px",
             "circle_button_size": "200px",
@@ -671,6 +686,7 @@ _BUILTIN_CSS_OVERRIDES = {
             "subtitle_font_color": "#FFFFFF",
             "subtitle_border_size": "2px",
             "subtitle_border_color": "#000000",
+            "subtitle_top_border_color": "#000000",
             "subtitle_background_color": "#008B8B",
             "subtitle_background_height": "150px",
             "subtitle_no_activity_font_color": "#FFFFFF",

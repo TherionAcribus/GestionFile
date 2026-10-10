@@ -180,6 +180,8 @@ def admin_patient(tab=None):
                             patient_title_font_color=app.css_variable_manager.get_variable('patient', 'patient_title_font_color'),
                             patient_title_border_size=app.css_variable_manager.get_variable('patient', 'patient_title_border_size'),
                             patient_title_border_color=app.css_variable_manager.get_variable('patient', 'patient_title_border_color'),
+                            patient_title_bottom_border_size=app.css_variable_manager.get_variable('patient', 'patient_title_bottom_border_size'),
+                            patient_title_bottom_border_color=app.css_variable_manager.get_variable('patient', 'patient_title_bottom_border_color'),
                             patient_title_background_color=app.css_variable_manager.get_variable('patient', 'patient_title_background_color'),
                             patient_title_background_height=app.css_variable_manager.get_variable('patient', 'patient_title_background_height'),
                             #explication
@@ -193,6 +195,8 @@ def admin_patient(tab=None):
                             subtitle_background_height=app.css_variable_manager.get_variable('patient', 'subtitle_background_height'),
                             subtitle_border_size=app.css_variable_manager.get_variable('patient', 'subtitle_border_size'),
                             subtitle_border_color=app.css_variable_manager.get_variable('patient', 'subtitle_border_color'),
+                            subtitle_top_border_size=app.css_variable_manager.get_variable('patient', 'subtitle_top_border_size'),
+                            subtitle_top_border_color=app.css_variable_manager.get_variable('patient', 'subtitle_top_border_color'),
                             subtitle_background_color=app.css_variable_manager.get_variable('patient', 'subtitle_background_color'),
                             subtitle_no_activity_font_size=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_font_size'),
                             subtitle_no_activity_font_color=app.css_variable_manager.get_variable('patient', 'subtitle_no_activity_font_color'),

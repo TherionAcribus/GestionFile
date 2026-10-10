@@ -41,12 +41,16 @@
     --patient_title_font_color: #FFFFFF;
     --patient_title_border_size: 2px;
     --patient_title_border_color: #000000;
+    --patient_title_bottom_border_size: 0px;
+    --patient_title_bottom_border_color: #000000;
     --patient_title_background_color: #008B8B;
     --patient_title_background_height: 110px;
     --subtitle_font_size: 28px;
     --subtitle_font_color: #FFFFFF;
     --subtitle_border_size: 0px;
     --subtitle_border_color: black;
+    --subtitle_top_border_size: 0px;
+    --subtitle_top_border_color: black;
     --subtitle_no_activity_font_size: 28px;
     --subtitle_no_activity_font_color: white;
     --subtitle_no_activity_border_size: 0;
@@ -120,6 +124,7 @@ html, body {
     justify-content: center;
     -webkit-text-stroke-color: var(--patient_title_border_color);
     -webkit-text-stroke-width: var(--patient_title_border_size);
+    border-bottom: var(--patient_title_bottom_border_size) solid var(--patient_title_bottom_border_color);
 }
 
 #div_buttons_parents{
@@ -178,6 +183,14 @@ html, body {
     overflow: hidden;
     padding: .1em .35em;
     box-sizing: border-box;
+}
+
+/* Liseré en haut du bandeau de pied de page : commun aux trois variantes
+   (sous-titre standard, activités indisponibles, message spécifique). */
+.buttons_children_active,
+.buttons_children_inactive,
+.buttons_children_specific_message {
+    border-top: var(--subtitle_top_border_size) solid var(--subtitle_top_border_color);
 }
 
 .div_bloc_activity{

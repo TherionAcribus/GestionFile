@@ -205,7 +205,9 @@ const colorMappings = {
     'patient_border_color': {
         targets: [
             'patient_title_border_color',
+            'patient_title_bottom_border_color',
             'subtitle_border_color',
+            'subtitle_top_border_color',
             'subtitle_no_activity_border_color',
             'subtitle_specific_message_border_color',
             'scan_explanation_border_color',
@@ -363,7 +365,9 @@ const variableDescriptions = {
     'square_button_text_color': 'Texte bouton rectangulaire',
     // patient_border_color (Couleur des bordures)
     'patient_title_border_color': 'Contour du titre',
+    'patient_title_bottom_border_color': 'Liseré sous le titre',
     'subtitle_border_color': 'Contour texte bas de page',
+    'subtitle_top_border_color': 'Liseré au-dessus du bas de page',
     'subtitle_no_activity_border_color': 'Contour texte activité inactive',
     'subtitle_specific_message_border_color': 'Contour texte spécifique activité',
     'scan_explanation_border_color': 'Contour texte explication Scan QR',
