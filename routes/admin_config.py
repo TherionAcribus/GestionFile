@@ -611,6 +611,9 @@ def special_functions_with_input(key):
         # Prise en compte au prochain passage (le job recharge la config via
         # _refresh_config) ; on rafraîchit juste la section affichée.
         communikation("admin", event="refresh_announce_cache")
+    if key.startswith("call_auto_validation_"):
+        from services import call_auto_validation
+        call_auto_validation.announce_config_changed()
     return warning
 
 
@@ -695,6 +698,11 @@ def call_function_with_switch(key, value):
             messaging_service.announce_enabled()
         else:
             messaging_service.disable_and_clear_presence()
+    elif key == "call_auto_validation_enabled":
+        from services import call_auto_validation
+        if value != "true":
+            call_auto_validation.disable_and_clear_deadlines()
+        call_auto_validation.announce_config_changed()
     return warning
 
 

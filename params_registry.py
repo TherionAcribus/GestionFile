@@ -51,6 +51,13 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
     "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
     "app_messaging_enabled": ("APP_MESSAGING_ENABLED", "value_bool"),
+    "call_auto_validation_enabled": ("CALL_AUTO_VALIDATION_ENABLED", "value_bool"),
+    "call_auto_validation_warning_seconds": (
+        "CALL_AUTO_VALIDATION_WARNING_SECONDS", "value_int"),
+    "call_auto_validation_grace_seconds": (
+        "CALL_AUTO_VALIDATION_GRACE_SECONDS", "value_int"),
+    "call_auto_validation_extension_seconds": (
+        "CALL_AUTO_VALIDATION_EXTENSION_SECONDS", "value_int"),
     "stress_test_enabled": ("STRESS_TEST_ENABLED", "value_bool"),
     "stress_reference_patients": ("STRESS_REFERENCE_PATIENTS", "value_int"),
     "algo_activate": ("ALGO_IS_ACTIVATED", "value_bool"),
@@ -334,6 +341,9 @@ _POSITIVE_INT_KEYS = {
 # générique à partir du registre, jamais depuis les attributs HTML seuls.
 _INT_RANGES = {
     "stress_reference_patients": (1, 500),
+    "call_auto_validation_warning_seconds": (10, 600),
+    "call_auto_validation_grace_seconds": (10, 300),
+    "call_auto_validation_extension_seconds": (10, 600),
 }
 
 

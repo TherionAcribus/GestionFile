@@ -29,6 +29,7 @@ POST_ONLY_ROUTES = [
     # l'exigence POST, elle, est inchangee.
     ("routes/calling.py", "/call_specific_patient/<int:counter_id>/<int:patient_id>"),
     ("routes/calling.py", "/validate_patient/<int:counter_id>/<int:patient_id>"),
+    ("routes/calling.py", "/app/counter/extend_patient_call/<int:counter_id>/<int:patient_id>"),
     ("routes/calling.py", "/validate_and_call_next/<int:counter_id>"),
     ("routes/calling.py", "/pause_patient/<int:counter_id>/<int:patient_id>"),
 ]

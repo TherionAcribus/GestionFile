@@ -698,7 +698,8 @@ def test_reconcile_scheduled_jobs_covers_every_task():
     source = _read("scheduler_functions.py")
     body = _func_body(source, "reconcile_scheduled_jobs")
     for fn in ("ensure_scheduler_heartbeat_job", "reconcile_auto_archive_job",
-               "ensure_messaging_cleanup_job", "reconcile_clear_patient_table_job",
+               "ensure_messaging_cleanup_job", "ensure_call_auto_validation_job",
+               "reconcile_clear_patient_table_job",
                "reconcile_clear_announce_calls_job"):
         assert f"{fn}()" in body, f"{fn} absent de reconcile_scheduled_jobs"
 

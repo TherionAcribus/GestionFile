@@ -19,6 +19,7 @@ from call_numbering import next_category_call_number, next_simple_call_number
 from announcement_audio import cached_announcement_url
 from announcement_dispatcher import announcement_dispatcher
 from activity_explain import is_open_at, ENGLISH_DAY_NAMES
+from services import call_auto_validation
 
 engine_bp = Blueprint('engine', __name__)
 
@@ -71,7 +72,8 @@ def claim_patient(patient_id, counter_id):
             db.session.query(Patient)
             .filter(Patient.id == patient_id, Patient.status == "standing")
             .update(
-                {"status": "calling", "counter_id": counter_id},
+                {"status": "calling", "counter_id": counter_id,
+                 **call_auto_validation.values_for_new_call()},
                 synchronize_session=False,
             )
         )
@@ -96,6 +98,7 @@ def call_next(counter_id, attempts=0):
         previous_patients = Patient.query.filter_by(status='calling', counter_id=counter_id).all()
         for patient in previous_patients:
             patient.status = 'done'
+            patient.call_auto_validate_at = None
             # Fin horodatée : sans timestamp_end, ces clôtures ne participaient
             # à aucune statistique de durée. Le comptoir reste rattaché.
             patient.timestamp_end = datetime.now(time_tz)

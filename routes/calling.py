@@ -11,6 +11,7 @@ from auth_utils import require_app_token_or_login
 from idempotency import idempotent
 from models import Activity, Counter, Patient, db
 from services import calling_service
+from services import call_auto_validation
 
 calling_bp = Blueprint('calling', __name__)
 
@@ -49,6 +50,16 @@ def validate_patient(counter_id, patient_id):
     # depuis le mauvais comptoir.
     app.logger.debug('validation %s', patient_id)
     ok, payload, status_code = calling_service.arrive_at_counter(counter_id, patient_id)
+    return jsonify(payload), status_code
+
+
+@calling_bp.route(
+    '/app/counter/extend_patient_call/<int:counter_id>/<int:patient_id>',
+    methods=['POST'])
+@require_app_token_or_login
+def extend_patient_call(counter_id, patient_id):
+    _ok, payload, status_code = call_auto_validation.extend_call(
+        counter_id, patient_id)
     return jsonify(payload), status_code
 
 

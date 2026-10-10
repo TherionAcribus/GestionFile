@@ -9,7 +9,7 @@ from python.engine import trigger_async_audio_calling
 from communication import communikation, notify_patient_phone_closed, send_app_notification
 from config import time_tz
 from queue_explain import TERMINAL_STATUSES
-from services import calling_service
+from services import calling_service, call_auto_validation
 from services.queue_service import record_patient_step
 from transactions import atomic
 from auth_utils import require_app_token_or_login, require_counter_access
@@ -264,6 +264,7 @@ def api_counter_state(counter_id):
         "autocalling": counter.auto_calling,
         "add_paper": app.config["ADD_PAPER"],
         "messaging_enabled": bool(app.config.get("APP_MESSAGING_ENABLED", False)),
+        "call_auto_validation": call_auto_validation.client_config(),
         "activities_staff": [activity.to_dict_for_app() for activity in activity_staff],
         "staff": counter.staff.to_dict() if counter.staff else None,
     }), 200

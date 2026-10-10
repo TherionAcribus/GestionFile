@@ -48,6 +48,58 @@
     </p>
 </section>
 
+<section class="admin-setting-card algo-section" aria-labelledby="call_auto_validation_title">
+    <h5 id="call_auto_validation_title"><i class="bi bi-hourglass-split" aria-hidden="true"></i> Libération automatique de l'écran d'appel</h5>
+    {{ macros.switch("call_auto_validation_enabled",
+        call_auto_validation_enabled,
+        "Valider automatiquement les patients laissés en appel") }}
+    <p class="form-text mb-2">
+        Après le délai d'attente, l'application avertit l'agent et transforme temporairement
+        le bouton Pause en « Prolonger ». Sans action pendant le délai de grâce, le patient
+        passe automatiquement « Au comptoir » et disparaît de l'écran d'appel.
+        L'activation s'applique aux prochains appels ; elle ne force pas les patients
+        déjà affichés à changer d'état.
+    </p>
+    <div class="row align-items-end g-2">
+        <div class="col-sm-4">
+            <label class="form-label" for="call_auto_validation_warning_seconds">Avertissement après</label>
+            <div class="input-group">
+                <input class="form-control" type="number" min="10" max="600"
+                       id="call_auto_validation_warning_seconds"
+                       value="{{ call_auto_validation_warning_seconds }}"
+                       data-config-key="call_auto_validation_warning_seconds"
+                       data-initial-value="{{ call_auto_validation_warning_seconds }}">
+                <span class="input-group-text">s</span>
+            </div>
+            {{ macros.button("call_auto_validation_warning_seconds", "int") }}
+        </div>
+        <div class="col-sm-4">
+            <label class="form-label" for="call_auto_validation_grace_seconds">Délai de grâce</label>
+            <div class="input-group">
+                <input class="form-control" type="number" min="10" max="300"
+                       id="call_auto_validation_grace_seconds"
+                       value="{{ call_auto_validation_grace_seconds }}"
+                       data-config-key="call_auto_validation_grace_seconds"
+                       data-initial-value="{{ call_auto_validation_grace_seconds }}">
+                <span class="input-group-text">s</span>
+            </div>
+            {{ macros.button("call_auto_validation_grace_seconds", "int") }}
+        </div>
+        <div class="col-sm-4">
+            <label class="form-label" for="call_auto_validation_extension_seconds">Prolongation</label>
+            <div class="input-group">
+                <input class="form-control" type="number" min="10" max="600"
+                       id="call_auto_validation_extension_seconds"
+                       value="{{ call_auto_validation_extension_seconds }}"
+                       data-config-key="call_auto_validation_extension_seconds"
+                       data-initial-value="{{ call_auto_validation_extension_seconds }}">
+                <span class="input-group-text">s</span>
+            </div>
+            {{ macros.button("call_auto_validation_extension_seconds", "int") }}
+        </div>
+    </div>
+</section>
+
 <section class="admin-setting-card algo-section" aria-labelledby="app_stress_title">
     <h5 id="app_stress_title"><i class="bi bi-speedometer2" aria-hidden="true"></i> Tests de performance</h5>
     {{ macros.switch("stress_test_enabled",

@@ -109,6 +109,10 @@ def load_configuration(app):
     # Valeur par défaut pour le thème de couleurs
     app.config.setdefault("ADMIN_COLORS", "lumen")
     app.config.setdefault("APP_MESSAGING_ENABLED", False)
+    app.config.setdefault("CALL_AUTO_VALIDATION_ENABLED", False)
+    app.config.setdefault("CALL_AUTO_VALIDATION_WARNING_SECONDS", 60)
+    app.config.setdefault("CALL_AUTO_VALIDATION_GRACE_SECONDS", 30)
+    app.config.setdefault("CALL_AUTO_VALIDATION_EXTENSION_SECONDS", 60)
 
     # Comportement patient en cas d'échec d'impression (paramétrable en Admin,
     # onglet Page Patient). Défauts appliqués si aucune ligne ConfigOption

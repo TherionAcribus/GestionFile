@@ -147,12 +147,16 @@ class Patient(db.Model):
         # Requêtes propres à un comptoir : WHERE counter_id=? AND status ...
         # (validate_and_call_next, validate_current_patient, boutons comptoir).
         db.Index('ix_patient_counter_status', 'counter_id', 'status'),
+        db.Index('ix_patient_status_auto_validate_at',
+                 'status', 'call_auto_validate_at'),
     )
     id = db.Column(db.Integer, Sequence('patient_id_seq'), primary_key=True)
     call_number = db.Column(db.String(10), nullable=False)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(time_tz))
     timestamp_counter = db.Column(db.DateTime, default=None)
     timestamp_end = db.Column(db.DateTime, default=None)
+    call_auto_validate_at = db.Column(db.DateTime, default=None)
+    call_extension_count = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(50), nullable=False, default='standing')
     counter_id = db.Column(db.Integer, db.ForeignKey('counter.id', name='fk_patient_counter_id'), nullable=True)  # nullable=True si un patient peut ne pas être à un comptoir
     counter = db.relationship('Counter', backref=db.backref('patients', lazy=True))
@@ -177,6 +181,12 @@ class Patient(db.Model):
         return f'<Patient {self.call_number}> ({self.id})'
 
     def to_dict(self):
+        auto_validate_at = self.call_auto_validate_at
+        if auto_validate_at is not None:
+            if auto_validate_at.tzinfo is None:
+                auto_validate_at = time_tz.localize(auto_validate_at)
+            else:
+                auto_validate_at = auto_validate_at.astimezone(time_tz)
         return {
             "id": self.id,
             "call_number": self.call_number,
@@ -186,7 +196,11 @@ class Patient(db.Model):
             "status": self.status,
             "counter_id": self.counter_id,
             "language_id": self.language_id,
-            "language_code": self.language.code
+            "language_code": self.language.code,
+            "call_auto_validate_at": (
+                int(auto_validate_at.timestamp()) if auto_validate_at else None
+            ),
+            "call_extension_count": self.call_extension_count or 0,
         }
 
 

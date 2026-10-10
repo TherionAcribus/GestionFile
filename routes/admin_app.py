@@ -57,6 +57,14 @@ def admin_app(tab=None):
                             active_tab=tab,
                             start_rabbitmq= app.config["START_RABBITMQ"],
                             app_messaging_enabled=app.config.get("APP_MESSAGING_ENABLED", False),
+                            call_auto_validation_enabled=app.config.get(
+                                "CALL_AUTO_VALIDATION_ENABLED", False),
+                            call_auto_validation_warning_seconds=app.config.get(
+                                "CALL_AUTO_VALIDATION_WARNING_SECONDS", 60),
+                            call_auto_validation_grace_seconds=app.config.get(
+                                "CALL_AUTO_VALIDATION_GRACE_SECONDS", 30),
+                            call_auto_validation_extension_seconds=app.config.get(
+                                "CALL_AUTO_VALIDATION_EXTENSION_SECONDS", 60),
                             stress_test_enabled=app.config.get("STRESS_TEST_ENABLED", False),
                             stress_test_mode=app.config.get("STRESS_TEST_MODE", "disabled"),
                             stress_reference_patients=app.config.get(

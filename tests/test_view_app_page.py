@@ -49,6 +49,10 @@ def test_numerotation_par_activite_prend_le_plus_grand():
 
 def test_gabarits_general_et_mail():
     general = _read("templates/admin/app_general.html")
+    assert 'call_auto_validation_enabled' in general
+    assert 'call_auto_validation_warning_seconds' in general
+    assert 'call_auto_validation_grace_seconds' in general
+    assert 'call_auto_validation_extension_seconds' in general
     assert 'id="stress_reference_patients"' in general
     assert 'Pic habituel de patients' in general
     # L'avertissement « redémarrage requis » est dans la section RabbitMQ.
@@ -152,6 +156,7 @@ def test_default_config_network_adress_vide():
     # vide (l'admin remplit via « Détecter » ou manuellement si besoin).
     cfg = json.loads(_read("static/json/default_config.json"))
     assert cfg["configurations"]["network_adress"] == ""
+    assert cfg["configurations"]["call_auto_validation_enabled"] is False
 
 
 def test_gabarit_network_adress():

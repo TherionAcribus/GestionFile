@@ -23,6 +23,7 @@ MESSAGING_CLEANUP_JOB_ID = "Purge App Messaging"
 HEARTBEAT_JOB_ID = "Scheduler Heartbeat"
 CLEAR_PATIENT_TABLE_JOB_ID = "Clear Patient Table"
 CLEAR_ANNOUNCE_CALLS_JOB_ID = "Clear Announce Calls"
+CALL_AUTO_VALIDATION_JOB_ID = "Automatic Call Validation"
 
 
 def _refresh_config(app):
@@ -587,6 +588,40 @@ def messaging_cleanup_job():
             app.logger.exception("Échec de la purge de la messagerie")
 
 
+def ensure_call_auto_validation_job():
+    """Garantit la vérification courte des échéances d'appel persistées."""
+    if scheduler.get_job(CALL_AUTO_VALIDATION_JOB_ID):
+        return "unchanged"
+    scheduler.add_job(
+        id=CALL_AUTO_VALIDATION_JOB_ID,
+        func=call_auto_validation_job,
+        trigger="interval",
+        seconds=5,
+        misfire_grace_time=30,
+        coalesce=True,
+        max_instances=1,
+    )
+    return "added"
+
+
+def call_auto_validation_job():
+    app = AppHolder.get_app()
+    with app.app_context():
+        _refresh_config(app)
+        if not app.config.get("CALL_AUTO_VALIDATION_ENABLED", False):
+            return
+        from services.call_auto_validation import auto_validate_expired
+        try:
+            validated = auto_validate_expired()
+            if validated:
+                app.logger.info(
+                    "Validation automatique de %s appel(s) expiré(s)",
+                    len(validated))
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Échec de la validation automatique des appels")
+
+
 def ensure_scheduler_heartbeat_job():
     """Garantit le battement minuté du processus scheduler.
 
@@ -635,6 +670,7 @@ def reconcile_scheduled_jobs():
         HEARTBEAT_JOB_ID: ensure_scheduler_heartbeat_job(),
         AUTO_ARCHIVE_JOB_ID: reconcile_auto_archive_job(),
         MESSAGING_CLEANUP_JOB_ID: ensure_messaging_cleanup_job(),
+        CALL_AUTO_VALIDATION_JOB_ID: ensure_call_auto_validation_job(),
         CLEAR_PATIENT_TABLE_JOB_ID: reconcile_clear_patient_table_job(),
         CLEAR_ANNOUNCE_CALLS_JOB_ID: reconcile_clear_announce_calls_job(),
     }

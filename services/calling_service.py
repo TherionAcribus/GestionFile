@@ -43,6 +43,7 @@ from python.engine import (
     mark_overtaken_patients,
     trigger_async_audio_calling,
 )
+from services import call_auto_validation
 from utils import replace_balise_announces, get_announce_templates
 
 
@@ -128,7 +129,8 @@ def call_specific(counter_id, patient_id):
             db.session.query(Patient)
             .filter(Patient.id == patient_id, Patient.status == "standing")
             .update(
-                {"status": "calling", "counter_id": counter_id},
+                {"status": "calling", "counter_id": counter_id,
+                 **call_auto_validation.values_for_new_call()},
                 synchronize_session=False,
             )
         )
@@ -156,6 +158,7 @@ def call_specific(counter_id, patient_id):
         for patient in active_patients:
             patient.status = "done"
             patient.timestamp_end = now
+            patient.call_auto_validate_at = None
 
         db.session.query(Counter).filter(Counter.id == counter_id).update(
             {"is_active": True}, synchronize_session=False
@@ -220,6 +223,7 @@ def validate_current(counter_id):
         closed_numbers.append(patient.call_number)
         patient.status = "done"
         patient.timestamp_end = now
+        patient.call_auto_validate_at = None
     db.session.commit()
     # Emission APRES le commit : avant, remove_calling partait avant
     # l'ecriture — si le commit echouait, l'ecran retirait un appel encore
@@ -271,6 +275,7 @@ def arrive_at_counter(counter_id, patient_id):
             return False, {"error": "invalid_state"}, 409
         patient.status = "ongoing"
         patient.timestamp_counter = datetime.now(time_tz)
+        patient.call_auto_validate_at = None
         db.session.commit()
 
     communikation("update_patient")
@@ -296,6 +301,7 @@ def pause(counter_id, patient_id):
         closed_number = current_patient.call_number
         current_patient.status = "done"
         current_patient.timestamp_end = datetime.now(time_tz)
+        current_patient.call_auto_validate_at = None
         db.session.commit()
         # Le patient mis en pause pouvait etre encore « calling » : sans ce
         # remove_calling, sa banniere restait affichee a l'ecran. Emission

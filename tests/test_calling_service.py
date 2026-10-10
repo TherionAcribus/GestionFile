@@ -146,6 +146,75 @@ def test_la_reclamation_active_le_comptoir_dans_la_meme_transaction(application,
     assert db.session.get(Counter, comptoirs[0].id).is_active is True
 
 
+def test_reclamation_arme_validation_automatique(application, messages):
+    from python.engine import claim_patient
+
+    application.config.update(
+        CALL_AUTO_VALIDATION_ENABLED=True,
+        CALL_AUTO_VALIDATION_WARNING_SECONDS=60,
+        CALL_AUTO_VALIDATION_GRACE_SECONDS=30,
+    )
+    comptoirs, patients, _ = _jeu_de_donnees()
+
+    assert claim_patient(patients[0].id, comptoirs[0].id) is True
+    patient = db.session.get(Patient, patients[0].id)
+    assert patient.call_auto_validate_at is not None
+    assert patient.call_extension_count == 0
+
+
+def test_prolongation_repousse_echeance_sans_relancer_annonce(application, messages):
+    from datetime import datetime, timedelta
+    from config import time_tz
+    from services import call_auto_validation
+
+    application.config.update(
+        CALL_AUTO_VALIDATION_ENABLED=True,
+        CALL_AUTO_VALIDATION_WARNING_SECONDS=60,
+        CALL_AUTO_VALIDATION_GRACE_SECONDS=30,
+        CALL_AUTO_VALIDATION_EXTENSION_SECONDS=120,
+    )
+    comptoirs, patients, _ = _jeu_de_donnees()
+    now = datetime.now(time_tz).replace(tzinfo=None)
+    patient = patients[0]
+    patient.status = "calling"
+    patient.counter_id = comptoirs[0].id
+    patient.call_auto_validate_at = now + timedelta(seconds=10)
+    db.session.commit()
+
+    ok, payload, status = call_auto_validation.extend_call(
+        comptoirs[0].id, patient.id, now=now)
+
+    assert (ok, status) == (True, 200)
+    assert payload["call_extension_count"] == 1
+    assert db.session.get(Patient, patient.id).call_auto_validate_at == (
+        now + timedelta(seconds=120))
+    assert not any(event == "audio" for _stream, event, _data in messages)
+
+
+def test_seule_echeance_expiree_est_validee_automatiquement(application, messages):
+    from datetime import datetime, timedelta
+    from config import time_tz
+    from services import call_auto_validation
+
+    application.config.update(CALL_AUTO_VALIDATION_ENABLED=True)
+    comptoirs, patients, _ = _jeu_de_donnees(nb_patients=2)
+    now = datetime.now(time_tz).replace(tzinfo=None)
+    expire, futur = patients
+    for patient in patients:
+        patient.status = "calling"
+        patient.counter_id = comptoirs[0].id
+    expire.call_auto_validate_at = now - timedelta(seconds=1)
+    futur.call_auto_validate_at = now + timedelta(seconds=60)
+    db.session.commit()
+
+    validated = call_auto_validation.auto_validate_expired(now=now)
+
+    assert validated == [expire.id]
+    assert db.session.get(Patient, expire.id).status == "ongoing"
+    assert db.session.get(Patient, expire.id).call_auto_validate_at is None
+    assert db.session.get(Patient, futur.id).status == "calling"
+
+
 def test_appel_cible_refuse_un_patient_deja_pris(application, messages):
     from services import calling_service
 
