@@ -214,6 +214,20 @@
     padding: .75rem;
 }
 
+/* Bouton discret « valeur d'usine » dans la ligne du libellé : simple
+   icône, visible seulement quand la valeur courante diffère de l'usine. */
+.page-editor-factory-reset {
+    color: var(--bs-secondary-color);
+    line-height: 1;
+    padding: .1rem .25rem;
+    text-decoration: none;
+}
+
+.page-editor-factory-reset:hover,
+.page-editor-factory-reset:focus-visible {
+    color: var(--bs-primary);
+}
+
 .page-editor-palette-copy {
     background: color-mix(in srgb, var(--bs-primary) 5%, var(--bs-body-bg));
     border: 1px solid color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));

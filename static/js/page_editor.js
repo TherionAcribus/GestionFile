@@ -43,6 +43,7 @@
     let adapter;
     let payload;
     let published;
+    let defaults = null;
     let draftVersion = 0;
     let hasDraft = false;
     let dirty = false;
@@ -395,7 +396,7 @@
         return disabledComponents[componentId] || null;
     }
 
-    function formGroup(labelText, control) {
+    function formGroup(labelText, control, labelAction) {
         const wrapper = document.createElement('div');
         wrapper.className = 'mb-3';
         const label = document.createElement('label');
@@ -403,8 +404,66 @@
         label.textContent = labelText;
         if (control.id) label.htmlFor = control.id;
         if (control.dataset.labelFor) label.htmlFor = control.dataset.labelFor;
-        wrapper.append(label, control);
+        if (labelAction) {
+            // Bouton discret de la ligne du libellé (ex. « valeur d'usine »)
+            // : le libellé et l'action partagent la même ligne.
+            const row = document.createElement('div');
+            row.className = 'd-flex align-items-center justify-content-between gap-2';
+            label.classList.add('mb-0');
+            row.append(label, labelAction);
+            wrapper.append(row, control);
+        } else {
+            wrapper.append(label, control);
+        }
         return wrapper;
+    }
+
+    // Valeur d'usine d'un réglage (``defaults`` servi par /state) : ``null``
+    // signifie « absente des JSON d'usine » — pas de bouton dans ce cas.
+    function factoryValue(section, key) {
+        if (!defaults || !defaults[section]) return undefined;
+        const value = defaults[section][key];
+        return value === null || value === undefined ? undefined : value;
+    }
+
+    // Bouton « valeur d'usine » discret, visible seulement quand la valeur
+    // courante diffère de l'usine. La comparaison des variables d'apparence
+    // ignore la casse et les espaces : « #008B8B » et « #008b8b » sont la
+    // même couleur une fois normalisée côté serveur.
+    function differsFromFactory(section, key) {
+        const value = factoryValue(section, key);
+        if (value === undefined) return false;
+        const current = payload[section][key];
+        if (current === value) return false;
+        if (section === 'css') {
+            return String(current).trim().toLowerCase()
+                !== String(value).trim().toLowerCase();
+        }
+        return true;
+    }
+
+    function factoryResetButton(section, key) {
+        if (!differsFromFactory(section, key)) return null;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-link btn-sm page-editor-factory-reset';
+        button.title = 'Reprendre la valeur d’usine : ' + defaults[section][key];
+        const icon = document.createElement('i');
+        icon.className = 'bi bi-arrow-counterclockwise';
+        icon.setAttribute('aria-hidden', 'true');
+        const hiddenLabel = document.createElement('span');
+        hiddenLabel.className = 'visually-hidden';
+        hiddenLabel.textContent = 'Reprendre la valeur d’usine';
+        button.append(icon, hiddenLabel);
+        button.addEventListener('click', function () {
+            const value = clone(defaults[section][key]);
+            // mutate re-rend l'inspecteur : le contrôle reflète la valeur
+            // usine et le bouton disparaît (plus de différence).
+            mutate(function () {
+                payload[section][key] = value;
+            }, 'Valeur d’usine rétablie pour ce réglage.');
+        });
+        return button;
     }
 
     function addFieldset(titleText) {
@@ -909,7 +968,7 @@
         const resetButton = document.createElement('button');
         resetButton.type = 'button';
         resetButton.className = 'btn btn-sm btn-outline-secondary w-100 mt-2';
-        resetButton.textContent = 'Réinitialiser ce composant';
+        resetButton.textContent = 'Reprendre la version publiée';
         resetButton.title = 'Reprend les réglages de la version publiée pour ce composant.';
         resetButton.addEventListener('click', function () {
             if (!published || !published.layout[selectedComponent]) return;
@@ -924,6 +983,30 @@
             }, 'Composant réinitialisé sur la version publiée.');
         });
         layoutFields.appendChild(resetButton);
+
+        const factoryButton = document.createElement('button');
+        factoryButton.type = 'button';
+        factoryButton.className = 'btn btn-sm btn-outline-secondary w-100 mt-2';
+        factoryButton.textContent = 'Reprendre les valeurs d’usine';
+        factoryButton.title = 'Reprend les réglages livrés avec l’application pour ce composant.';
+        factoryButton.addEventListener('click', function () {
+            if (!defaults || !defaults.layout[selectedComponent]) return;
+            mutate(function () {
+                payload.layout[selectedComponent] = clone(defaults.layout[selectedComponent]);
+                // Un réglage sans valeur d'usine (``null`` dans defaults)
+                // conserve sa valeur : réassigner ``null`` produirait un
+                // brouillon refusé à la sauvegarde.
+                definition.config.forEach(function (field) {
+                    const value = factoryValue('config', field.key);
+                    if (value !== undefined) payload.config[field.key] = clone(value);
+                });
+                definition.css.forEach(function (field) {
+                    const value = factoryValue('css', field.key);
+                    if (value !== undefined) payload.css[field.key] = clone(value);
+                });
+            }, 'Composant réinitialisé sur les valeurs d’usine.');
+        });
+        layoutFields.appendChild(factoryButton);
 
         const fieldIsRelevant = function (field) {
             if (field.scenarios && !field.scenarios.includes(scenarioSelect.value)) return false;
@@ -1024,7 +1107,8 @@
                     bindValue(control, function (element) { setConfigValue(field.key, element.value); });
                 }
                 control.id = 'editor-config-' + field.key;
-                const group = formGroup(field.label, control);
+                const group = formGroup(
+                    field.label, control, factoryResetButton('config', field.key));
                 if (field.help) {
                     // Aide courte sous le champ (ex. où choisir les images).
                     const help = document.createElement('div');
@@ -1074,7 +1158,8 @@
                     control.placeholder = field.type === 'number' ? '400' : '32px';
                     bindValue(control, function (element) { payload.css[field.key] = element.value; });
                 }
-                appearanceFields.appendChild(formGroup(field.label, control));
+                appearanceFields.appendChild(formGroup(
+                    field.label, control, factoryResetButton('css', field.key)));
             });
             appendContrastWarning(appearanceFields, Object.assign({}, definition, {css: scenarioCssFields}));
         }
@@ -1281,6 +1366,7 @@
             paletteSources = state.palette_sources || [];
             disabledComponents = state.disabled_components || {};
             published = clone(state.published);
+            defaults = state.defaults || null;
             hasDraft = Boolean(state.draft);
             payload = clone(state.draft || state.published);
             draftVersion = state.draft_version;
@@ -1865,6 +1951,13 @@
             });
             actions.appendChild(applyButton);
             if (!theme.builtin) {
+                const exportButton = document.createElement('button');
+                exportButton.type = 'button';
+                exportButton.className = 'btn btn-sm btn-outline-secondary';
+                exportButton.textContent = 'Exporter';
+                exportButton.setAttribute('aria-label', 'Exporter le thème ' + theme.name);
+                exportButton.addEventListener('click', function () { exportTheme(theme); });
+                actions.appendChild(exportButton);
                 const deleteButton = document.createElement('button');
                 deleteButton.type = 'button';
                 deleteButton.className = 'btn btn-sm btn-outline-danger';
@@ -1911,6 +2004,36 @@
         });
         saveCard.append(saveHeading, nameInput, descInput, saveButton);
         container.appendChild(saveCard);
+
+        const importCard = document.createElement('div');
+        importCard.className = 'page-editor-palette-copy mb-3';
+        const importHeading = document.createElement('div');
+        importHeading.className = 'fw-semibold mb-1';
+        importHeading.textContent = 'Importer un thème';
+        const importHelp = document.createElement('div');
+        importHelp.className = 'small text-muted mb-2';
+        importHelp.textContent = 'Fichier JSON produit par « Exporter » ou instantané brut (layout, config, css).';
+        const importFile = document.createElement('input');
+        importFile.type = 'file';
+        importFile.accept = '.json,application/json';
+        importFile.id = 'editor-theme-import-file';
+        importFile.className = 'd-none';
+        importFile.setAttribute('aria-label', 'Fichier de thème à importer');
+        const importButton = document.createElement('button');
+        importButton.type = 'button';
+        importButton.className = 'btn btn-sm btn-outline-primary';
+        importButton.id = 'editor-theme-import';
+        importButton.textContent = 'Importer…';
+        importButton.addEventListener('click', function () { importFile.click(); });
+        importFile.addEventListener('change', function () {
+            const file = importFile.files && importFile.files[0];
+            // Vider la sélection : réimporter le même fichier redéclenche
+            // « change ».
+            importFile.value = '';
+            if (file) importThemeFile(file);
+        });
+        importCard.append(importHeading, importHelp, importButton, importFile);
+        container.appendChild(importCard);
 
         const sectionHeading = document.createElement('div');
         sectionHeading.className = 'fw-semibold mb-1';
@@ -1973,31 +2096,170 @@
         }
     }
 
-    async function saveTheme(name, description, overwrite) {
+    // POST /themes partagé par « Enregistrer comme thème » et l'import :
+    // le 409 « nom déjà pris » propose l'écrasement explicite, avec un
+    // message adapté à l'origine du thème.
+    async function storeTheme(options) {
         try {
             await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/themes', {
                 method: 'POST',
                 body: JSON.stringify({
-                    name: name,
-                    description: description,
-                    overwrite: Boolean(overwrite),
-                    payload: payload,
+                    name: options.name,
+                    description: options.description || '',
+                    overwrite: Boolean(options.overwrite),
+                    payload: options.payload,
                 }),
             });
-            setStatus('Thème « ' + name.trim() + ' » enregistré.', 'success');
+            setStatus(options.successMessage
+                || ('Thème « ' + options.name.trim() + ' » enregistré.'), 'success');
             closeThemesDialog();
             showThemes();
         } catch (error) {
             if (error.status === 409) {
                 if (await confirmDialog('Remplacer le thème',
-                    'Un thème porte déjà ce nom : le remplacer par le brouillon courant ?',
+                    options.conflictMessage
+                        || 'Un thème porte déjà ce nom : le remplacer ?',
                     'Remplacer', true)) {
-                    return saveTheme(name, description, true);
+                    return storeTheme(Object.assign({}, options, {overwrite: true}));
                 }
                 return;
             }
             setStatus(error.message, 'danger');
         }
+    }
+
+    async function saveTheme(name, description, overwrite) {
+        return storeTheme({
+            name: name,
+            description: description,
+            overwrite: overwrite,
+            payload: payload,
+            conflictMessage: 'Un thème porte déjà ce nom : le remplacer par le brouillon courant ?',
+        });
+    }
+
+    function slugifyThemeName(name) {
+        const slug = String(name || '')
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        return slug || 'theme';
+    }
+
+    function exportTheme(theme) {
+        // L'instantané « complété » servi par GET /themes est exporté tel
+        // quel : le fichier contient déjà les réglages apparus après
+        // l'enregistrement du thème.
+        const data = {
+            format: 'gf-page-theme',
+            page: page,
+            name: theme.name,
+            schema_version: (theme.snapshot || {}).schema_version || null,
+            exported_at: new Date().toISOString(),
+            snapshot: theme.snapshot || {},
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'theme-' + page + '-' + slugifyThemeName(theme.name) + '.json';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+        setStatus('Thème « ' + theme.name + ' » exporté.', 'success');
+    }
+
+    // Nom du thème importé : pré-rempli par data.name ou le nom de fichier
+    // via un dialogue dédié (jamais de boîte native) — redemandé tant que
+    // le nom reste vide.
+    async function confirmThemeImportName(suggestedName) {
+        const body = document.createElement('div');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control';
+        input.id = 'editor-theme-import-name';
+        input.maxLength = 80;
+        input.value = suggestedName;
+        input.addEventListener('input', function () {
+            input.classList.remove('is-invalid');
+        });
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = input.id;
+        label.textContent = 'Nom du thème importé';
+        const hint = document.createElement('div');
+        hint.className = 'form-text';
+        hint.textContent = 'Le thème sera enregistré dans « Mes thèmes ».';
+        body.append(label, input, hint);
+        for (;;) {
+            const choice = await openDialog({
+                title: 'Importer un thème',
+                body: body,
+                actions: [
+                    {label: 'Annuler', className: 'btn btn-outline-secondary', value: null},
+                    {label: 'Importer', className: 'btn btn-primary', value: true, autofocus: true},
+                ],
+            });
+            if (!choice) return null;
+            const name = input.value.trim();
+            if (name) return name;
+            input.classList.add('is-invalid');
+        }
+    }
+
+    async function importThemeFile(file) {
+        let text;
+        try {
+            text = await file.text();
+        } catch (error) {
+            setStatus('Lecture du fichier impossible : import annulé.', 'danger');
+            return;
+        }
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch (error) { /* l'objet reste null : signalé juste après */ }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            setStatus('Fichier JSON illisible : import annulé.', 'danger');
+            return;
+        }
+        if (data.page && data.page !== page) {
+            setStatus('Ce thème appartient à la page « ' + data.page
+                + ' » — import refusé sur « ' + page + ' ».', 'danger');
+            return;
+        }
+        // Deux formes acceptées : l'enveloppe d'export (« snapshot ») ou
+        // l'instantané brut portant layout/config/css à la racine.
+        const snapshot = (data.snapshot && typeof data.snapshot === 'object')
+            ? data.snapshot
+            : data;
+        if (typeof snapshot.layout !== 'object' && typeof snapshot.config !== 'object'
+            && typeof snapshot.css !== 'object') {
+            setStatus('Ce fichier ne contient pas d’instantané de thème exploitable.', 'danger');
+            return;
+        }
+        const suggested = (typeof data.name === 'string' ? data.name.trim() : '')
+            || file.name.replace(/\.[^.]*$/, '')
+            || 'Thème importé';
+        const name = await confirmThemeImportName(suggested.slice(0, 80));
+        if (name === null) return;
+        // Un instantané brut ou ancien peut manquer de clés : l'enveloppe
+        // est reconstruite ici et les sections sont complétées côté serveur
+        // (_complete_payload), comme pour les thèmes anciens en base.
+        await storeTheme({
+            name: name,
+            payload: {
+                schema_version: payload.schema_version,
+                page: page,
+                base_hash: payload.base_hash,
+                layout: snapshot.layout || {},
+                config: snapshot.config || {},
+                css: snapshot.css || {},
+            },
+            successMessage: 'Thème « ' + name + ' » importé.',
+            conflictMessage: 'Un thème porte déjà ce nom : le remplacer par le thème importé ?',
+        });
     }
 
     async function deleteTheme(theme) {

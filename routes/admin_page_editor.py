@@ -45,6 +45,7 @@ from page_editor import (
     current_payload,
     enabled_pages,
     external_changes,
+    factory_payload,
     get_adapter,
     palette_source_data,
     payload_diff,
@@ -304,6 +305,9 @@ def _state_document(page, adapter):
     return {
         "adapter": public_adapter_data(page),
         "published": published,
+        # Valeurs d'usine (JSON de ``static/json``) : référence des boutons
+        # « reprendre la valeur d'usine » de l'inspecteur.
+        "defaults": factory_payload(page),
         "draft": draft,
         "disabled_components": advanced_disabled_components(page),
         "draft_version": state.draft_version if state else 0,
@@ -862,7 +866,12 @@ def save_theme(page):
         return jsonify({"error": "Le nom du thème doit faire entre 1 et 80 caractères."}), 400
     description = str(body.get("description") or "").strip()[:300]
     try:
-        normalized = validate_payload(page, body.get("payload"))
+        # L'instantané reçu peut être un export ancien ou un fichier importé
+        # ne connaissant pas les réglages/composants apparus depuis : même
+        # complétion qu'à la lecture des thèmes, sinon ``validate_payload``
+        # refuserait la « structure incomplète ».
+        normalized = validate_payload(
+            page, _complete_payload(page, body.get("payload")))
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
 

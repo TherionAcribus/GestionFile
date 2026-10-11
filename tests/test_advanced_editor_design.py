@@ -148,3 +148,37 @@ def test_screens_panel_shows_identity_and_per_screen_reload():
     assert "String(screen.sid).slice(0, 8)" in source
     assert "'Recharger'" in source
     assert "watchScreenAcks(sid)" in source
+
+
+def test_editor_offers_factory_resets_and_renamed_published_reset():
+    """§3.12 : chaque champ de contenu/apparence propose un retour discret
+    à la valeur d'usine (icône Bootstrap, visible seulement en cas
+    d'écart) ; au niveau du composant, « version publiée » et « valeurs
+    d'usine » sont deux actions distinctes, toutes deux via ``mutate``."""
+    source = _read("static/js/page_editor.js")
+    assert "state.defaults || null" in source
+    assert "function factoryResetButton(section, key)" in source
+    assert "factoryResetButton('config', field.key)" in source
+    assert "factoryResetButton('css', field.key)" in source
+    assert "page-editor-factory-reset" in source
+    assert "bi bi-arrow-counterclockwise" in source
+    assert "Reprendre la version publiée" in source
+    assert "Reprendre les valeurs d’usine" in source
+    assert "Réinitialiser ce composant" not in source
+
+
+def test_theme_export_import_uses_named_format_and_rejects_foreign_page():
+    """Export « gf-page-theme » par thème (nom de fichier slugifié) et
+    import JSON : le client refuse un fichier d'une autre page, accepte
+    enveloppe et instantané brut, et ne repose sur aucune boîte native."""
+    source = _read("static/js/page_editor.js")
+    assert "'gf-page-theme'" in source
+    assert "'theme-' + page + '-' + slugifyThemeName(theme.name) + '.json'" in source
+    assert "exportTheme(theme)" in source
+    assert "editor-theme-import" in source
+    assert "data.page && data.page !== page" in source
+    assert "layout: snapshot.layout || {}" in source
+    assert "window.prompt" not in source
+    server = _read("routes/admin_page_editor.py")
+    assert '"defaults": factory_payload(page)' in server
+    assert "_complete_payload(page, body.get(\"payload\"))" in server

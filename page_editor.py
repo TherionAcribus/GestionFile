@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 import re
 from copy import deepcopy
 
@@ -13,6 +15,8 @@ from params_registry import BALISE_LETTERS, get_spec
 from utils import validate_config_text
 from variables import is_safe_css_value
 
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 ALIGNMENTS = frozenset({"left", "center", "right", "stretch"})
@@ -1333,6 +1337,57 @@ def current_payload(page):
     }
     payload["base_hash"] = payload_hash(payload)
     return payload
+
+
+def _factory_json(filename):
+    """Lit un JSON « valeurs d'usine » de ``static/json`` — les mêmes
+    fichiers qu'``init_restore`` charge au démarrage. Fichier absent ou
+    contenu invalide → ``{}`` : les valeurs d'usine deviennent simplement
+    indisponibles dans l'éditeur, jamais bloquantes."""
+    path = os.path.join(
+        os.path.dirname(__file__), "static", "json", filename)
+    try:
+        with open(path, encoding="utf-8") as stream:
+            data = json.load(stream)
+    except (OSError, ValueError):
+        logger.warning("Fichier de valeurs d'usine illisible : %s", filename)
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def factory_payload(page):
+    """Valeurs d'usine de la page, sous la même forme qu'un payload.
+
+    ``layout`` reprend la disposition par défaut ; ``config`` et ``css``
+    viennent des JSON d'usine (et non de la configuration publiée, qui peut
+    avoir été personnalisée). Une clé de contenu absente du JSON vaut
+    ``None`` — le client n'affiche alors aucun bouton de réinitialisation.
+    Les couleurs sont normalisées comme à la validation (le fichier
+    annonce écrit ``#008B8B`` en majuscules) pour éviter les faux diffs.
+    """
+    adapter = ADAPTERS[page]
+    factory_config = (
+        _factory_json("default_config.json").get("configurations") or {})
+    factory_css = (
+        _factory_json(f"default_{adapter['css_source']}_css_variables.json")
+        .get("variables") or {})
+    css_values = {}
+    for component in adapter["components"].values():
+        for field in component["css"]:
+            css_values[field["key"]] = _normalize_css_value(
+                factory_css.get(field["key"], field.get("default")),
+                field["type"],
+            )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "page": page,
+        "layout": default_layout(page),
+        "config": {
+            key: factory_config.get(key)
+            for key in _managed_keys(adapter, "config")
+        },
+        "css": css_values,
+    }
 
 
 def palette_source_data(page):

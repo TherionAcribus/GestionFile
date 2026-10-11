@@ -19,6 +19,7 @@ from page_editor import (
     complete_layout,
     current_payload,
     default_layout,
+    factory_payload,
     layout_style,
     palette_source_data,
     payload_hash,
@@ -1431,6 +1432,72 @@ def test_builtin_theme_snapshots_are_independent():
     fresh = builtin_themes("announce")
     assert fresh[0]["snapshot"]["css"]["title_font_color"] != "#000000"
     assert fresh[0]["snapshot"]["layout"]["title"]["span"] == 12
+
+
+@pytest.mark.parametrize("page", list(ADAPTERS))
+def test_factory_payload_reads_shipped_defaults(page):
+    """« Valeurs d'usine » : disposition par défaut, configuration et
+    variables des JSON de ``static/json`` (et non de la configuration
+    publiée, qui peut avoir été personnalisée)."""
+    adapter = ADAPTERS[page]
+    payload = factory_payload(page)
+    assert payload["schema_version"] == 1
+    assert payload["page"] == page
+    assert payload["layout"] == default_layout(page)
+    managed_config = {
+        field["key"]
+        for component in adapter["components"].values()
+        for field in component["config"]
+    }
+    assert set(payload["config"]) == managed_config
+
+
+def test_factory_payload_normalizes_factory_css_values():
+    """Le fichier annonce écrit ses couleurs en majuscules : la
+    normalisation (même règle qu'à la validation) évite les faux diffs
+    entre valeur courante et valeur d'usine."""
+    payload = factory_payload("announce")
+    assert payload["css"]["title_background_color"] == "#176b52"
+    assert payload["css"]["announce_secondary_color"] == "#f5f8f7"
+    assert payload["config"]["announce_title"] == "Bienvenue à la pharmacie {P}"
+    assert payload["config"]["announce_ongoing_display"] is True
+
+
+def test_factory_payload_marks_missing_config_keys_none():
+    """Un réglage géré absent du JSON d'usine vaut ``None`` : le client
+    n'affiche alors aucun bouton « reprendre la valeur d'usine »."""
+    payload = factory_payload("patient")
+    assert "page_patient_print_fail_behavior" in payload["config"]
+    assert payload["config"]["page_patient_print_fail_behavior"] is None
+
+
+def test_state_exposes_factory_defaults(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    document = client.get("/admin/page-editor/announce/state").get_json()
+    assert document["defaults"]["layout"] == default_layout("announce")
+    assert document["defaults"]["css"]["title_background_color"] == "#176b52"
+    assert document["defaults"]["config"]["announce_title"] == \
+        "Bienvenue à la pharmacie {P}"
+
+
+def test_theme_import_of_partial_snapshot_is_completed(editor_app):
+    """Un instantané importé amputé (réglages/composants apparus depuis)
+    est accepté : ``save_theme`` le complète comme les thèmes anciens en
+    base avant validation, sinon l'import d'un export d'ancienne version
+    échouerait sur la « structure incomplète »."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = _legacy_patient_draft()
+
+    saved = client.post("/admin/page-editor/patient/themes", json={
+        "name": "Import ancien", "payload": payload,
+    })
+    assert saved.status_code == 200
+    snapshot = saved.get_json()["theme"]["snapshot"]
+    assert snapshot["layout"]["print_error"]["zone"] == "main"
+    assert "print_error_font_size" in snapshot["css"]
+    assert validate_payload("patient", snapshot)
 
 
 def test_themes_crud_and_validation(editor_app):
