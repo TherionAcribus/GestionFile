@@ -80,6 +80,11 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
            ? target : target.closest('.dashboard-card-slot'))
         : null;
     if (slot) {
+        // Carte « conditionnelle » (ex. Alertes sans alerte) : une réponse
+        // vide masque l'enveloppe pour ne pas laisser un emplacement vide
+        // dans la grille ; elle réapparaît dès qu'un contenu arrive
+        // (polling ou évènement temps réel).
+        slot.hidden = slot.innerHTML.trim() === '';
         slot.setAttribute('data-updated-at', String(Date.now()));
         var btn = slot.querySelector('[data-card-refresh]');
         if (btn) { btn.classList.remove('is-refreshing'); }

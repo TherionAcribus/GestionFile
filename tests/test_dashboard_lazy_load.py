@@ -133,6 +133,14 @@ def test_card_shell_has_refresh_and_timestamp():
     assert admin_js.count("refresh_printer_dashboard()") == 2   # handler + onReconnect
 
 
+def test_empty_card_response_hides_slot():
+    """Carte « conditionnelle » (ex. Alertes sans alerte) : une réponse vide
+    masque l'enveloppe dans la grille (sinon un emplacement vide subsiste) ;
+    elle réapparaît si un contenu arrive ensuite (polling/évènement)."""
+    js = _read("static/js/admin_home.js")
+    assert "slot.hidden" in js
+
+
 def test_manager_keyboard_and_reset():
     """Gestionnaire : déplacement au clavier (flèches) et bouton
     « Réinitialiser » confirmé, câblés côté JS."""
