@@ -73,3 +73,30 @@ def test_editor_exposes_local_backup_contrast_and_zone_labels():
     assert "offerLocalBackup" in source
     assert "appendContrastWarning" in source
     assert "ZONE_LABELS" in source
+
+
+def test_editor_shows_shared_draft_author_and_date():
+    source = _read("static/js/page_editor.js")
+    assert "draftStatusText(state)" in source
+    assert "state.draft_author" in source
+    assert "state.draft_updated_at" in source
+    assert "Brouillon partagé — modifié " in source
+    assert "toLocaleString('fr-FR')" in source
+
+
+def test_editor_autosaves_changes_and_supports_ctrl_s():
+    source = _read("static/js/page_editor.js")
+    assert "let autosaveTimer = null;" in source
+    assert "function scheduleAutosave()" in source
+    assert "setTimeout(function ()" in source
+    assert "clearTimeout(autosaveTimer)" in source
+    # L'autosave et le raccourci partagent le traitement d'erreur du bouton.
+    assert "key === 's'" in source
+    assert "event.preventDefault()" in source
+    assert "error.status === 409 ? 'warning' : 'danger'" in source
+
+
+def test_editor_span_label_tracks_slider_in_real_time():
+    source = _read("static/js/page_editor.js")
+    assert "querySelector('.form-label')" in source
+    assert "'Largeur (' + span.value + '/12)'" in source

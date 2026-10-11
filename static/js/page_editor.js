@@ -48,6 +48,7 @@
     let dirty = false;
     let saving = false;
     let saveQueued = false;
+    let autosaveTimer = null;
     let selectedComponent = null;
     let undoStack = [];
     let redoStack = [];
@@ -266,11 +267,29 @@
         redoStack = [];
         change();
         dirty = true;
+        scheduleAutosave();
         persistBackup();
         rerenderAll();
         pushPayloadToPreview();
         updateButtons();
         setStatus(message || 'Modifications non enregistrées.', 'warning');
+    }
+
+    // Sauvegarde automatique : chaque modification repousse le minuteur
+    // (~3 s d'inactivité). ``saveDraft`` gère la réentrance (``saveQueued``)
+    // et ne remplace le document local que s'il n'a pas bougé pendant la
+    // requête ; si un enregistrement manuel est en cours, on attend son
+    // terme — la reprise est assurée par ``saveDraft`` lui-même.
+    function scheduleAutosave() {
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(function () {
+            autosaveTimer = null;
+            if (dirty && !saving) {
+                saveDraft().catch(function (error) {
+                    setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
+                });
+            }
+        }, 3000);
     }
 
     function destroySortables() {
@@ -347,6 +366,7 @@
                     undoStack.push(before);
                     redoStack = [];
                     dirty = true;
+                    scheduleAutosave();
                     persistBackup();
                     rerenderAll();
                     pushPayloadToPreview();
@@ -409,6 +429,7 @@
             if (beforeEdit === null) beforeEdit = clone(payload);
             change(control);
             dirty = true;
+            scheduleAutosave();
             pushPayloadToPreview();
             updateButtons();
             setStatus('Modifications non enregistrées.', 'warning');
@@ -723,7 +744,16 @@
         span.max = '12';
         span.value = String(layout.span);
         bindValue(span, function (control) { layout.span = Number(control.value); });
-        if (layoutControls.includes('span')) layoutFields.appendChild(formGroup('Largeur (' + layout.span + '/12)', span));
+        if (layoutControls.includes('span')) {
+            const spanGroup = formGroup('Largeur (' + layout.span + '/12)', span);
+            // bindValue ne re-rend pas à chaque « input » : le libellé suit
+            // le curseur en direct, sinon sa valeur resterait figée.
+            const spanLabel = spanGroup.querySelector('.form-label');
+            span.addEventListener('input', function () {
+                spanLabel.textContent = 'Largeur (' + span.value + '/12)';
+            });
+            layoutFields.appendChild(spanGroup);
+        }
 
         const spanPresets = document.createElement('div');
         spanPresets.className = 'btn-group btn-group-sm w-100 mb-3';
@@ -998,6 +1028,21 @@
         revisionsContainer.appendChild(list);
     }
 
+    // Le brouillon est partagé entre administrateurs : nommer son dernier
+    // auteur rend visible un travail mené en parallèle. Le client ne
+    // connaît pas son propre identifiant — l'auteur est affiché tel quel,
+    // sans tentative de comparaison.
+    function draftStatusText(state) {
+        const details = [];
+        if (state.draft_author) details.push('par ' + state.draft_author);
+        if (state.draft_updated_at) {
+            details.push('le ' + new Date(state.draft_updated_at).toLocaleString('fr-FR'));
+        }
+        return details.length
+            ? 'Brouillon partagé — modifié ' + details.join(' ') + '.'
+            : 'Brouillon partagé chargé.';
+    }
+
     function offerLocalBackup(state) {
         let backup = null;
         try {
@@ -1043,6 +1088,7 @@
             });
             payload = restored;
             dirty = true;
+            scheduleAutosave();
             rerenderAll();
             pushPayloadToPreview();
             updateButtons();
@@ -1054,7 +1100,7 @@
         ignoreButton.textContent = 'Ignorer';
         ignoreButton.addEventListener('click', function () {
             clearBackup();
-            setStatus(hasDraft ? 'Brouillon partagé chargé.' : 'Configuration publiée chargée.',
+            setStatus(hasDraft ? draftStatusText(state) : 'Configuration publiée chargée.',
                 hasDraft ? 'info' : 'light');
         });
         statusBox.append(text, restoreButton, ignoreButton);
@@ -1087,7 +1133,7 @@
             } else {
                 offerLocalBackup(state);
                 if (!statusBox.querySelector('button')) {
-                    setStatus(hasDraft ? 'Brouillon partagé chargé.' : 'Configuration publiée chargée.',
+                    setStatus(hasDraft ? draftStatusText(state) : 'Configuration publiée chargée.',
                         hasDraft ? 'info' : 'light');
                 }
             }
@@ -1119,6 +1165,13 @@
             if (canonical(payload) === sent) {
                 payload = clone(data.draft);
                 dirty = false;
+                // Plus rien à enregistrer : un minuteur d'autosave encore
+                // armé (saisie juste avant l'enregistrement) ne doit pas
+                // renvoyer le même brouillon une seconde fois.
+                if (autosaveTimer) {
+                    clearTimeout(autosaveTimer);
+                    autosaveTimer = null;
+                }
                 if (canonical(payload) !== sent) {
                     // Le serveur a normalisé des valeurs : les refléter dans
                     // l'inspecteur pour éviter toute divergence silencieuse.
@@ -1128,6 +1181,9 @@
                 setStatus('Brouillon partagé enregistré.', 'success');
             } else {
                 dirty = true;
+                // La saisie pendant la requête n'est pas dans ce brouillon :
+                // l'autosave la reprendra sans attendre un nouveau geste.
+                scheduleAutosave();
                 setStatus('Brouillon enregistré ; les modifications saisies pendant l’enregistrement restent à sauvegarder.', 'warning');
             }
             return data;
@@ -1916,6 +1972,7 @@
         redoStack.push(clone(payload));
         payload = undoStack.pop();
         dirty = true;
+        scheduleAutosave();
         persistBackup();
         rerenderAll(); pushPayloadToPreview(); updateButtons();
         setStatus('Modification annulée.', 'warning');
@@ -1925,6 +1982,7 @@
         undoStack.push(clone(payload));
         payload = redoStack.pop();
         dirty = true;
+        scheduleAutosave();
         persistBackup();
         rerenderAll(); pushPayloadToPreview(); updateButtons();
         setStatus('Modification rétablie.', 'warning');
@@ -1972,13 +2030,27 @@
     });
 
     // Ctrl+Z / Ctrl+Maj+Z / Ctrl+Y hors champs de saisie (dans un champ, le
-    // navigateur applique déjà son propre undo sur le texte).
+    // navigateur applique déjà son propre undo sur le texte). Ctrl+S est
+    // traité partout, champs compris : contrairement à l'undo texte, il n'a
+    // pas de comportement natif utile à préserver — le raccourci enregistre
+    // le brouillon sans quitter la saisie. Sans modification, il est un
+    // no-op : un envoi re-datant le brouillon brouillerait l'identité de
+    // son dernier auteur (voir ``draftStatusText``).
     document.addEventListener('keydown', function (event) {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+        const key = event.key.toLowerCase();
+        if (key === 's') {
+            event.preventDefault();
+            if (dirty) {
+                saveDraft().catch(function (error) {
+                    setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
+                });
+            }
+            return;
+        }
         const target = event.target;
         if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT'
             || target.tagName === 'SELECT' || target.isContentEditable)) return;
-        if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-        const key = event.key.toLowerCase();
         if (key === 'z' && !event.shiftKey && !undoButton.disabled) {
             event.preventDefault();
             undoButton.click();
