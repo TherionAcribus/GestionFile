@@ -1418,6 +1418,19 @@ _LAYOUT_PROP_LABELS = {
 }
 
 
+def _field_label_maps(adapter):
+    """``(labels, composants)`` des champs config/css indexés par clé :
+    partagés par ``payload_diff`` et le diff des changements externes."""
+    field_labels = {}
+    field_component = {}
+    for component in adapter["components"].values():
+        for section in ("config", "css"):
+            for field in component[section]:
+                field_labels[field["key"]] = field["label"]
+                field_component[field["key"]] = component["label"]
+    return field_labels, field_component
+
+
 def payload_diff(page, working):
     """Différences libellées entre ``working`` et la version publiée.
 
@@ -1428,13 +1441,7 @@ def payload_diff(page, working):
     """
     adapter = ADAPTERS[page]
     published = current_payload(page)
-    field_labels = {}
-    field_component = {}
-    for component_id, component in adapter["components"].items():
-        for section in ("config", "css"):
-            for field in component[section]:
-                field_labels[field["key"]] = field["label"]
-                field_component[field["key"]] = component["label"]
+    field_labels, field_component = _field_label_maps(adapter)
 
     changes = []
     for section in ("config", "css"):
@@ -1468,6 +1475,53 @@ def payload_diff(page, working):
     for change in changes:
         counts[change["section"]] += 1
     return {"identical": not changes, "counts": counts, "changes": changes}
+
+
+def external_changes(page, base, current):
+    """Réglages modifiés hors de l'éditeur entre ``base`` (instantané de la
+    configuration au moment de la création du brouillon) et ``current``
+    (configuration publiée actuelle), avec les libellés de l'inspecteur.
+
+    ``base`` et ``current`` sont des payloads complets. Retourne ``None``
+    quand l'instantané de référence est inconnu (brouillon créé avant son
+    enregistrement, ou client désynchronisé au premier enregistrement).
+    """
+    if not isinstance(base, dict) or not isinstance(current, dict):
+        return None
+    adapter = ADAPTERS[page]
+    field_labels, field_component = _field_label_maps(adapter)
+    changes = []
+    for section in ("config", "css"):
+        base_values = base.get(section) or {}
+        current_values = current.get(section) or {}
+        for key in sorted(set(base_values) | set(current_values)):
+            old = base_values.get(key)
+            new = current_values.get(key)
+            if old != new:
+                changes.append({
+                    "section": section,
+                    "component": field_component.get(key),
+                    "key": key,
+                    "label": field_labels.get(key, key),
+                    "old": old,
+                    "new": new,
+                })
+    base_layout = base.get("layout") or {}
+    current_layout = current.get("layout") or {}
+    for component_id, component in adapter["components"].items():
+        old_item = base_layout.get(component_id) or {}
+        new_item = current_layout.get(component_id) or {}
+        for prop in ("visible", "zone", "order", "span", "alignment"):
+            if old_item.get(prop) != new_item.get(prop):
+                changes.append({
+                    "section": "layout",
+                    "component": component["label"],
+                    "key": prop,
+                    "label": _LAYOUT_PROP_LABELS[prop],
+                    "old": old_item.get(prop),
+                    "new": new_item.get(prop),
+                })
+    return changes
 
 
 def layout_style(page, layout=None, preview=False):

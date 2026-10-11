@@ -1658,6 +1658,173 @@ def test_advanced_change_between_load_and_first_save_blocks_publish(editor_app):
         assert ConfigOption.query.filter_by(config_key="announce_title").first() is None
 
 
+def _save_first_draft(client, payload):
+    """Premier enregistrement d'un brouillon dont ``base_hash`` est
+    l'empreinte du ``published`` chargé dans l'éditeur (client à jour)."""
+    return client.put(
+        "/admin/page-editor/announce/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+
+
+def test_publish_conflict_lists_external_changes(editor_app):
+    """Quand le client était à jour à la création du brouillon, le conflit
+    détaille les réglages modifiés en mode avancé depuis."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = make_payload("announce")
+    payload["config"]["announce_title"] = "Titre du brouillon"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = _save_first_draft(client, payload).get_json()
+    with app.app_context():
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_base_json is not None
+        app.config["ANNOUNCE_SUBTITLE"] = "Modification avancée concurrente"
+        app.config["ANNOUNCE_LAYOUT"]["title"]["span"] = 6
+
+    conflict = client.post("/admin/page-editor/announce/publish",
+                           json={"draft_version": saved["draft_version"]})
+    assert conflict.status_code == 409
+    data = conflict.get_json()
+    assert data["code"] == "base_conflict"
+    changes = {change["key"]: change for change in data["external_changes"]}
+    assert changes["announce_subtitle"]["section"] == "config"
+    assert changes["announce_subtitle"]["component"] == "Sous-titre"
+    assert changes["announce_subtitle"]["new"] == \
+        "Modification avancée concurrente"
+    assert changes["span"]["section"] == "layout"
+    assert changes["span"]["component"] == "Titre"
+
+
+def test_publish_conflict_without_reference_reports_no_external_changes(editor_app):
+    """Client désynchronisé au premier enregistrement : la référence du
+    brouillon est inconnue, le conflit renvoie ``external_changes: null``."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    loaded = client.get("/admin/page-editor/announce/state").get_json()
+    payload = loaded["published"]
+    payload["config"]["announce_title"] = "Titre édité"
+    with app.app_context():
+        app.config["ANNOUNCE_SUBTITLE"] = "Modification avancée concurrente"
+    saved = client.put("/admin/page-editor/announce/draft",
+                       json={"draft_version": loaded["draft_version"],
+                             "payload": payload})
+    assert saved.status_code == 200
+    with app.app_context():
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_base_json is None
+    conflict = client.post("/admin/page-editor/announce/publish",
+                           json={"draft_version": saved.get_json()["draft_version"]})
+    assert conflict.status_code == 409
+    data = conflict.get_json()
+    assert data["code"] == "base_conflict"
+    assert data["external_changes"] is None
+
+
+def test_rebase_keeps_draft_edits_and_takes_external_values(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = make_payload("announce")
+    payload["config"]["announce_title"] = "Titre du brouillon"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = _save_first_draft(client, payload).get_json()
+    with app.app_context():
+        app.config["ANNOUNCE_SUBTITLE"] = "Sous-titre externe"
+    conflict = client.post("/admin/page-editor/announce/publish",
+                           json={"draft_version": saved["draft_version"]})
+    assert conflict.status_code == 409
+
+    stale = client.post("/admin/page-editor/announce/draft/rebase",
+                        json={"draft_version": saved["draft_version"] - 1})
+    assert stale.status_code == 409
+
+    rebased = client.post("/admin/page-editor/announce/draft/rebase",
+                          json={"draft_version": saved["draft_version"]})
+    assert rebased.status_code == 200
+    data = rebased.get_json()
+    assert data["draft"]["config"]["announce_title"] == "Titre du brouillon"
+    assert data["draft"]["config"]["announce_subtitle"] == "Sous-titre externe"
+    with app.app_context():
+        current = current_payload("announce")
+        assert data["draft"]["base_hash"] == payload_hash(current)
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_base_json == current
+
+    published = client.post("/admin/page-editor/announce/publish",
+                            json={"draft_version": data["draft_version"]})
+    assert published.status_code == 200
+    with app.app_context():
+        assert ConfigOption.query.filter_by(
+            config_key="announce_title").one().value_str == "Titre du brouillon"
+        assert ConfigOption.query.filter_by(
+            config_key="announce_subtitle").one().value_str == "Sous-titre externe"
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_base_json is None
+
+
+def test_publish_force_applies_draft_despite_conflict(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = make_payload("announce")
+    payload["config"]["announce_title"] = "Titre du brouillon"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = _save_first_draft(client, payload).get_json()
+    with app.app_context():
+        app.config["ANNOUNCE_SUBTITLE"] = "Sous-titre externe"
+
+    published = client.post(
+        "/admin/page-editor/announce/publish",
+        json={"draft_version": saved["draft_version"], "force": True},
+    )
+    assert published.status_code == 200
+    with app.app_context():
+        assert ConfigOption.query.filter_by(
+            config_key="announce_title").one().value_str == "Titre du brouillon"
+        # La publication complète écrase la modification externe.
+        assert app.config["ANNOUNCE_SUBTITLE"] == "Texte de démonstration"
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_json is None
+        assert state.draft_base_json is None
+
+
+def test_rebase_requires_an_existing_draft(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    missing = client.post("/admin/page-editor/announce/draft/rebase",
+                          json={"draft_version": 0})
+    assert missing.status_code == 404
+
+    payload = make_payload("announce")
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = _save_first_draft(client, payload).get_json()
+    published = client.post("/admin/page-editor/announce/publish",
+                            json={"draft_version": saved["draft_version"]})
+    assert published.status_code == 200
+    # L'état existe mais sans brouillon : 400.
+    empty = client.post("/admin/page-editor/announce/draft/rebase",
+                        json={"draft_version": published.get_json()["draft_version"]})
+    assert empty.status_code == 400
+
+
+def test_draft_base_json_cleared_on_delete(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = make_payload("announce")
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = _save_first_draft(client, payload).get_json()
+    with app.app_context():
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_base_json is not None
+
+    deleted = client.delete("/admin/page-editor/announce/draft",
+                            json={"draft_version": saved["draft_version"]})
+    assert deleted.status_code == 200
+    with app.app_context():
+        state = PageEditorState.query.filter_by(page_key="announce").one()
+        assert state.draft_json is None
+        assert state.draft_base_json is None
+
+
 @pytest.mark.parametrize(
     ("key", "value", "ok"),
     [

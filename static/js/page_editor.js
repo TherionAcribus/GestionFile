@@ -214,6 +214,8 @@
         if (!response.ok) {
             const error = new Error(data.error || 'La requête a échoué.');
             error.status = response.status;
+            error.code = data.code;
+            error.data = data;
             throw error;
         }
         return data;
@@ -1769,7 +1771,75 @@
         });
     }
 
-    async function publish() {
+    function buildExternalChangesList(changes) {
+        const fragment = document.createElement('div');
+        const intro = document.createElement('p');
+        intro.textContent = 'Ces réglages ont été modifiés depuis la création du brouillon :';
+        const list = document.createElement('ul');
+        list.className = 'page-editor-diff-list';
+        changes.forEach(function (change) {
+            const item = document.createElement('li');
+            const subject = document.createElement('strong');
+            subject.textContent = (change.component ? change.component + ' · ' : '') + change.label;
+            const arrow = document.createElement('span');
+            arrow.textContent = ' : ' + formatDiffValue(change, change.old) + ' → ';
+            const value = document.createElement('span');
+            value.className = 'page-editor-diff-new';
+            value.textContent = formatDiffValue(change, change.new);
+            item.append(subject, arrow, value);
+            list.appendChild(item);
+        });
+        fragment.append(intro, list);
+        return fragment;
+    }
+
+    // Conflit de publication : la configuration a été modifiée hors de
+    // l'éditeur depuis la création du brouillon. Propose de rebaser le
+    // brouillon sur la configuration actuelle (les valeurs externes sont
+    // reprises pour les clés non modifiées) ou de publier malgré tout.
+    async function showBaseConflictDialog(error) {
+        const body = document.createElement('div');
+        if (error.data && Array.isArray(error.data.external_changes)) {
+            body.appendChild(buildExternalChangesList(error.data.external_changes));
+        } else {
+            // Référence du brouillon inconnue : on montre le diff
+            // brouillon↔publié à la place du détail des changements externes.
+            try {
+                body.appendChild(buildDiffList(await fetchDiff()));
+            } catch (diffError) {
+                setStatus(diffError.message, 'danger');
+            }
+            const note = document.createElement('p');
+            note.className = 'small text-muted mt-3 mb-0';
+            note.textContent = 'Impossible de détailler les changements externes : la référence du brouillon est trop ancienne.';
+            body.appendChild(note);
+        }
+        const choice = await openDialog({
+            title: 'La configuration a changé hors de l’éditeur',
+            body: body,
+            actions: [
+                {label: 'Fermer', className: 'btn btn-outline-secondary', value: null},
+                {label: 'Publier quand même', className: 'btn btn-warning', value: 'force'},
+                {label: 'Rebaser le brouillon', className: 'btn btn-primary', value: 'rebase', autofocus: true},
+            ],
+        });
+        if (choice === 'rebase') {
+            try {
+                await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/draft/rebase', {
+                    method: 'POST',
+                    body: JSON.stringify({draft_version: draftVersion})
+                });
+                await loadState('Base réalignée : les réglages externes ont été repris, les vôtres conservés.');
+            } catch (rebaseError) {
+                setStatus(rebaseError.message, rebaseError.status === 409 ? 'warning' : 'danger');
+            }
+        } else if (choice === 'force') {
+            await publish({force: true});
+        }
+    }
+
+    async function publish(opts) {
+        const options = opts || {};
         try {
             publishButton.disabled = true;
             if (dirty || !hasDraft) await saveDraft();
@@ -1781,22 +1851,28 @@
                 publishButton.disabled = false;
                 return;
             }
-            const approved = await confirmPublish();
+            // La publication forcée suit le dialogue de conflit : l'utilisateur
+            // vient de voir les changements, pas de second récapitulatif.
+            const approved = options.force ? true : await confirmPublish();
             if (!approved) {
                 publishButton.disabled = false;
                 return;
             }
             const result = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/publish', {
                 method: 'POST',
-                body: JSON.stringify({draft_version: draftVersion})
+                body: JSON.stringify({draft_version: draftVersion, force: Boolean(options.force)})
             });
             clearBackup();
             await loadState('Révision ' + result.revision + ' publiée. Les écrans en service ne sont pas rechargés automatiquement.');
             applyButton.disabled = false;
             setStatus('Publication terminée. Utilisez « Appliquer/recharger les écrans » au moment opportun.', 'success');
         } catch (error) {
-            setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
             publishButton.disabled = false;
+            if (error.status === 409 && error.code === 'base_conflict') {
+                await showBaseConflictDialog(error);
+                return;
+            }
+            setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
         }
     }
 
@@ -1856,7 +1932,8 @@
     saveButton.addEventListener('click', function () {
         saveDraft().catch(function (error) { setStatus(error.message, error.status === 409 ? 'warning' : 'danger'); });
     });
-    publishButton.addEventListener('click', publish);
+    // Appel sans argument : l'événement ne doit pas être lu comme ``opts``.
+    publishButton.addEventListener('click', function () { publish(); });
     diffButton.addEventListener('click', showDiff);
     if (screensButton) screensButton.addEventListener('click', showScreens);
     if (themesButton) themesButton.addEventListener('click', showThemes);

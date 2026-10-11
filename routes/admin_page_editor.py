@@ -25,6 +25,7 @@ from models import (
 )
 from page_editor import (
     ADAPTERS,
+    SCHEMA_VERSION,
     advanced_disabled_components,
     builtin_themes,
     complete_config,
@@ -32,6 +33,7 @@ from page_editor import (
     complete_layout,
     current_payload,
     enabled_pages,
+    external_changes,
     get_adapter,
     palette_source_data,
     payload_diff,
@@ -385,6 +387,7 @@ def _publish(page, adapter, state, payload, *, require_base_match):
     state.published_at = datetime.now(time_tz)
     state.draft_json = None
     state.draft_base_hash = None
+    state.draft_base_json = None
     state.draft_version += 1
     state.draft_updated_by_id = None
     state.draft_updated_at = None
@@ -465,6 +468,15 @@ def save_draft(page):
             base_hash = state_row.draft_base_hash or payload_hash(current_payload(page))
         else:
             base_hash = normalized["base_hash"]
+            # Instantané de référence pour un futur diff des changements
+            # externes : mémorisé seulement si le client confirme être parti
+            # de la configuration actuellement publiée. Sinon la base qu'il
+            # avait sous les yeux est inconnue.
+            published = current_payload(page)
+            state_row.draft_base_json = (
+                published if payload_hash(published) == normalized["base_hash"]
+                else None
+            )
         normalized["base_hash"] = base_hash
         state_row.draft_json = normalized
         state_row.draft_base_hash = base_hash
@@ -502,6 +514,7 @@ def delete_draft(page):
             return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
         state_row.draft_json = None
         state_row.draft_base_hash = None
+        state_row.draft_base_json = None
         state_row.draft_version += 1
         state_row.draft_updated_by_id = None
         state_row.draft_updated_at = None
@@ -512,6 +525,90 @@ def delete_draft(page):
         db.session.rollback()
         current_app.logger.exception("Suppression du brouillon visuel impossible (%s)", page)
         return jsonify({"error": "Suppression du brouillon impossible."}), 500
+
+
+@admin_page_editor_bp.post("/admin/page-editor/<page>/draft/rebase")
+def rebase_draft(page):
+    """Réaligne la base du brouillon sur la configuration publiée actuelle.
+
+    Les clés que le brouillon a modifiées par rapport à sa référence
+    conservent leur valeur ; les autres reprennent la valeur publiée, y
+    compris les changements faits en mode avancé depuis la création du
+    brouillon. Sans instantané de référence (brouillon trop ancien), les
+    valeurs du brouillon sont conservées pour les clés qu'il connaît.
+    """
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    body = request.get_json(silent=True) or {}
+    try:
+        state_row = _locked_state(page)
+        if state_row is None:
+            return jsonify({"error": "Aucun brouillon à rebaser."}), 404
+        if state_row.draft_json is None:
+            return jsonify({"error": "Aucun brouillon à rebaser."}), 400
+        if body.get("draft_version") != state_row.draft_version:
+            db.session.rollback()
+            return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
+
+        current = current_payload(page)
+        base = state_row.draft_base_json
+        draft = deepcopy(state_row.draft_json)
+        rebased = {"schema_version": SCHEMA_VERSION, "page": page}
+        for section in ("config", "css"):
+            draft_values = draft.get(section) or {}
+            base_values = (base or {}).get(section) or {}
+            if base is not None:
+                rebased[section] = {
+                    key: (draft_values[key]
+                          if key in draft_values
+                          and draft_values[key] != base_values.get(key)
+                          else value)
+                    for key, value in current[section].items()
+                }
+            else:
+                rebased[section] = {
+                    key: draft_values.get(key, value)
+                    for key, value in current[section].items()
+                }
+        # Même logique pour la disposition, par composant puis par propriété.
+        draft_layout = draft.get("layout") or {}
+        base_layout = (base or {}).get("layout") or {}
+        rebased_layout = {}
+        for component_id, current_item in current["layout"].items():
+            draft_item = draft_layout.get(component_id)
+            base_item = base_layout.get(component_id)
+            if (base is not None and isinstance(draft_item, dict)
+                    and isinstance(base_item, dict)):
+                rebased_layout[component_id] = {
+                    prop: (draft_item[prop]
+                           if prop in draft_item
+                           and draft_item[prop] != base_item.get(prop)
+                           else value)
+                    for prop, value in current_item.items()
+                }
+            elif isinstance(draft_item, dict):
+                rebased_layout[component_id] = draft_item
+            else:
+                rebased_layout[component_id] = deepcopy(current_item)
+        rebased["layout"] = rebased_layout
+
+        rebased["base_hash"] = payload_hash(current)
+        state_row.draft_json = rebased
+        state_row.draft_base_hash = rebased["base_hash"]
+        state_row.draft_base_json = current
+        state_row.draft_version += 1
+        state_row.draft_updated_by_id = current_user.id
+        state_row.draft_updated_at = datetime.now(time_tz)
+        db.session.commit()
+        record_audit(ACTION_UPDATE, "page_design_draft", target_id=page,
+                     details="rebase")
+        return jsonify({"success": True, "draft": rebased,
+                        "draft_version": state_row.draft_version})
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Rebase du brouillon visuel impossible (%s)", page)
+        return jsonify({"error": "Rebase du brouillon impossible."}), 500
 
 
 @admin_page_editor_bp.get("/admin/page-editor/<page>/preview")
@@ -632,11 +729,19 @@ def publish(page):
             return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
         revision, conflict = _publish(
             page, adapter, state_row, state_row.draft_json,
-            require_base_match=True,
+            require_base_match=not body.get("force"),
         )
         if conflict:
+            # Le détail des changements externes (instantané de référence vs
+            # configuration actuelle) permet au client de proposer un rebase.
+            external = external_changes(
+                page, state_row.draft_base_json, current_payload(page)) or None
             db.session.rollback()
-            return jsonify({"error": conflict}), 409
+            return jsonify({
+                "error": conflict,
+                "code": "base_conflict",
+                "external_changes": external,
+            }), 409
         record_audit(ACTION_UPDATE, "page_design", target_id=page,
                      details=f"revision={revision}")
         return jsonify({"success": True, "revision": revision,
@@ -771,6 +876,8 @@ def restore(page, revision):
         restored_payload["base_hash"] = payload_hash(current_payload(page))
         state_row.draft_json = restored_payload
         state_row.draft_base_hash = restored_payload["base_hash"]
+        # La référence d'un brouillon restauré est la configuration courante.
+        state_row.draft_base_json = current_payload(page)
         state_row.draft_version += 1
         state_row.draft_updated_by_id = current_user.id
         state_row.draft_updated_at = datetime.now(time_tz)

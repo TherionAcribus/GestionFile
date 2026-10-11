@@ -692,6 +692,10 @@ class PageEditorState(db.Model):
     page_key = db.Column(db.String(20), unique=True, nullable=False)
     draft_json = db.Column(db.JSON, nullable=True)
     draft_base_hash = db.Column(db.String(64), nullable=True)
+    # Instantané de la configuration de référence du brouillon (celle que
+    # l'utilisateur avait sous les yeux) : sert à lister les changements
+    # externes lors d'un conflit de publication.
+    draft_base_json = db.Column(db.JSON, nullable=True)
     draft_version = db.Column(db.Integer, nullable=False, default=0)
     draft_updated_by_id = db.Column(db.Integer, db.ForeignKey('app_users.id'), nullable=True)
     draft_updated_at = db.Column(db.DateTime, nullable=True)
