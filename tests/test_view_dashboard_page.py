@@ -28,7 +28,8 @@ import routes.admin_counter as admin_counter
 import routes.admin_dashboard as admin_dashboard
 import routes.admin_queue as admin_queue
 import routes.admin_staff as admin_staff
-from dashboard_catalog import CATALOG, card_info, missing_cards, visible_cards
+from dashboard_catalog import (CATALOG, card_info, missing_cards,
+                               reorder_positions, visible_cards)
 from models import (Activity, Counter, DashboardCard, Language, Patient, Pharmacist,
                     Role, User, db)
 
@@ -174,6 +175,72 @@ def test_carte_comptoirs(client):
     assert "Marie" in html and "appel auto" in html and "avec A-2" in html
     assert "/admin/counter/disconnect/" in html and "hx-confirm" in html
     assert "/dash/counter/remove_staff" not in html
+
+
+def test_reorder_positions_pur():
+    def cards(*pairs):
+        return [SimpleNamespace(id=i, position=p) for i, p in pairs]
+
+    result = reorder_positions(cards((1, 1), (2, 2), (3, 3), (4, 4)), [4, 2, 1])
+    assert result == {4: 1, 2: 2, 3: 3, 1: 4}
+
+    result = reorder_positions(cards((1, 0), (2, 1), (3, 1), (4, 2)), [])
+    assert [result[i] for i in (1, 2, 3, 4)] == [1, 2, 3, 4]
+
+    result = reorder_positions(cards((1, 1), (2, 2)), [2, 99, 2, 1])
+    assert result == {2: 1, 1: 2}
+
+
+def _card_id(name):
+    return DashboardCard.query.filter_by(name=name).first().id
+
+
+def test_save_order_conserve_les_cartes_non_citees(app, client):
+    with app.app_context():
+        DashboardCard.query.filter_by(name="counter").first().visible = False
+        db.session.commit()
+        ids = {name: _card_id(name)
+               for name in ("security", "queue", "counter", "staff")}
+    response = client.post("/admin/dashboard/save_order", json={"order": [
+        {"id": ids["staff"], "position": 1},
+        {"id": ids["queue"], "position": 2},
+        {"id": ids["security"], "position": 3}]})
+    assert response.status_code == 204
+    with app.app_context():
+        cards = DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
+        assert sorted(c.position for c in cards) == [1, 2, 3, 4]
+        assert [c.name for c in cards] == ["staff", "queue", "counter", "security"]
+
+
+def test_save_order_payload_invalide(app, client):
+    assert client.post("/admin/dashboard/save_order", json={}).status_code == 400
+    assert client.post("/admin/dashboard/save_order",
+                       json={"order": [{"id": "abc", "position": 1}]}).status_code == 400
+    assert client.post("/admin/dashboard/save_order",
+                       json={"order": "nope"}).status_code == 400
+    assert client.post("/admin/dashboard/save_order",
+                       data="x", content_type="text/plain").status_code == 400
+    assert client.post("/admin/dashboard/save_configuration",
+                       json={"visible_cards": ["queue"],
+                             "card_order": [{"id": 1}]}).status_code == 400
+    with app.app_context():
+        assert DashboardCard.query.filter_by(name="security").first().visible is True
+
+
+def test_save_configuration_renumerote(client, app):
+    with app.app_context():
+        ids = {name: _card_id(name)
+               for name in ("security", "queue", "counter", "staff")}
+    card_order = [{"id": ids[name], "position": i}
+                  for i, name in enumerate(("staff", "counter", "queue", "security"), start=1)]
+    response = client.post("/admin/dashboard/save_configuration",
+                           json={"visible_cards": ["queue", "staff"],
+                                 "card_order": card_order})
+    assert response.status_code == 200
+    with app.app_context():
+        cards = DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
+        assert [c.position for c in cards] == [1, 2, 3, 4]
+        assert [c.name for c in cards] == ["staff", "counter", "queue", "security"]
 
 
 def test_carte_equipe(client):

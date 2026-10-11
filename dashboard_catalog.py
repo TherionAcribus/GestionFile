@@ -8,7 +8,8 @@ requise pour la voir, et sa largeur dans la grille.
 La permission est celle de la route de la carte (``require_permission_dashboard``) :
 une carte que l'utilisateur ne peut pas charger n'est plus affichée du tout
 (auparavant : une carte « Erreur de chargement » pour tout admin sans le
-droit correspondant).
+droit correspondant), et le réordonnancement partiel des positions
+(``reorder_positions``).
 
 Aucune dépendance Flask/SQLAlchemy.
 """
@@ -87,3 +88,23 @@ def missing_cards(existing_names):
     """Cartes du catalogue absentes de la base (à créer), dans l'ordre du catalogue."""
     existing = set(existing_names)
     return [name for name in CATALOG if name not in existing]
+
+
+def reorder_positions(cards, ordered_ids):
+    """Nouvelles positions après un réordonnancement partiel.
+
+    ``cards`` : objets exposant ``id`` et ``position`` (toutes les cartes) ;
+    ``ordered_ids`` : identifiants dans l'ordre souhaité (sous-ensemble, par
+    ex. les seules cartes visibles par l'administrateur qui a glissé).
+    Renumérote d'abord toutes les cartes 1..N (ordre position puis id, ce qui
+    absorbe les doublons et les positions ≤ 0), puis répartit les cartes citées
+    dans les créneaux qu'elles occupaient, dans l'ordre demandé : les cartes
+    non citées ne bougent pas. Les identifiants inconnus sont ignorés, les
+    doublons dédoublonnés. Retourne ``{id: position}``.
+    """
+    ranked = sorted(cards, key=lambda c: (c.position, c.id))
+    positions = {c.id: index for index, c in enumerate(ranked, start=1)}
+    cited = [i for i in dict.fromkeys(ordered_ids) if i in positions]
+    slots = sorted(positions[i] for i in cited)
+    positions.update(zip(cited, slots))
+    return positions

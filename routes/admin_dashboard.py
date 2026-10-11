@@ -3,7 +3,7 @@ from flask_security import current_user
 from models import DashboardCard, db
 from communication import communikation
 from routes.admin_security import check_default_admin, require_permission, require_permission_api, user_has_permission
-from dashboard_catalog import CATALOG, card_info, missing_cards, visible_cards
+from dashboard_catalog import CATALOG, card_info, missing_cards, reorder_positions, visible_cards
 from audit_service import record_audit
 from audit_log import ACTION_CREATE, ACTION_UPDATE, OUTCOME_SUCCESS
 
@@ -43,8 +43,33 @@ def _ensure_catalog_cards():
 
 
 def _visible_cards_for_user():
-    cards = DashboardCard.query.order_by(DashboardCard.position).all()
+    cards = DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
     return visible_cards(cards, _can)
+
+
+def _ordered_ids(items):
+    """Identifiants dans l'ordre demandé par le client.
+
+    ``items`` : ``[{"id": ..., "position": ...}, ...]`` ; les entrées sont
+    triées par ``position`` puis réduites à leur ``id`` (int). Lève
+    ``ValueError`` sur toute charge mal formée.
+    """
+    if not isinstance(items, list):
+        raise ValueError("order doit être une liste")
+    try:
+        return [int(item["id"]) for item in
+                sorted(items, key=lambda item: int(item["position"]))]
+    except (TypeError, KeyError, ValueError) as exc:
+        raise ValueError("order mal formé") from exc
+
+
+def _apply_order(ordered_ids):
+    """Réordonne toutes les cartes (cf. reorder_positions) et renvoie-les."""
+    cards = DashboardCard.query.all()
+    positions = reorder_positions(cards, ordered_ids)
+    for card in cards:
+        card.position = positions[card.id]
+    return cards
 
 
 def _render_card_slots(cards):
@@ -116,7 +141,7 @@ def dashboard_valid_select():
                  details=f"visibles={','.join(data)}")
     communikation("admin", event="refresh_dashboard_select")
 
-    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position).all()
+    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position, DashboardCard.id).all()
     html = ""
     for dashboardcard in dashboardcards:
         template_name = f'admin/dashboard_load_{dashboardcard.name}.html'
@@ -126,7 +151,7 @@ def dashboard_valid_select():
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])
 @require_permission('options')
 def dashboard_display_select():
-    all_dashboardcards = [card for card in DashboardCard.query.order_by(DashboardCard.position).all()
+    all_dashboardcards = [card for card in DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
                           if card.name in CATALOG]
     return render_template('/admin/dashboard_select.html',
                         all_dashboardcards=all_dashboardcards,
@@ -137,19 +162,18 @@ def dashboard_display_select():
 @admin_dashboard_bp.route('/admin/dashboard/save_order', methods=['POST'])
 @require_permission_api('options')
 def save_dashboard_order():
-    data = request.get_json()  # Récupérer les données JSON envoyées depuis le frontend
-    if 'order' in data:
-        for card_data in data['order']:
-            card_id = int(card_data['id'])
-            position = int(card_data['position'])
-            card = DashboardCard.query.filter_by(id=card_id).first()
-            if card:
-                card.position = position  # Mettre à jour la position
-        db.session.commit()  # Sauvegarder les modifications dans la base de données
-        record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
-                     details="réordonnancement")
-        return '', 204  # Réponse vide avec succès
-    return 'Invalid data', 400
+    data = request.get_json(silent=True) or {}  # Récupérer les données JSON envoyées depuis le frontend
+    if 'order' not in data:
+        return 'Invalid data', 400
+    try:
+        ordered_ids = _ordered_ids(data['order'])
+    except ValueError:
+        return 'Invalid data', 400
+    _apply_order(ordered_ids)
+    db.session.commit()  # Sauvegarder les modifications dans la base de données
+    record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
+                 details="réordonnancement")
+    return '', 204  # Réponse vide avec succès
 
 # [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
 # (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
@@ -218,23 +242,22 @@ def add_dashboard_card():
 @admin_dashboard_bp.route('/admin/dashboard/save_configuration', methods=['POST'])
 @require_permission_api('options')
 def save_dashboard_configuration():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     visible_cards = data.get('visible_cards', [])
     card_order = data.get('card_order', [])
-    
+    try:
+        ordered_ids = _ordered_ids(card_order)
+    except ValueError:
+        return 'Invalid data', 400
+
     # Mettre à jour la visibilité
     all_cards = DashboardCard.query.all()
     for card in all_cards:
         card.visible = card.name in visible_cards
-    
+
     # Mettre à jour l'ordre
-    for card_data in card_order:
-        card_id = int(card_data['id'])
-        position = int(card_data['position'])
-        card = DashboardCard.query.filter_by(id=card_id).first()
-        if card:
-            card.position = position
-    
+    _apply_order(ordered_ids)
+
     db.session.commit()
     record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
                  details=f"config: visibles={','.join(map(str, visible_cards))}")
