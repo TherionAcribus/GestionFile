@@ -8,6 +8,7 @@ from copy import deepcopy
 from flask import current_app
 from markupsafe import Markup
 
+from image_storage import ALLOWED_IMAGE_EXTENSIONS
 from params_registry import BALISE_LETTERS, get_spec
 from utils import validate_config_text
 from variables import is_safe_css_value
@@ -232,6 +233,10 @@ ADAPTERS = {
                         {"key": "page_patient_direct_print", "label": "Imprimer directement le ticket (sans écran de validation)", "type": "bool"},
                         {"key": "page_patient_qrcode_display", "label": "Afficher le QR code", "type": "bool",
                          "help": "Ce réglage est partagé avec l’onglet QR code du mode avancé."},
+                        {"key": "page_patient_qrcode_web_page", "label": "Le QR code affiche une adresse web (sinon des données brutes)", "type": "bool",
+                         "help": "Non disponible si le serveur tourne en local."},
+                        {"key": "page_patient_qrcode_data", "label": "Données brutes du QR code", "type": "text"},
+                        {"key": "page_patient_qrcode_display_specific_message", "label": "Inclure le message spécifique de l'activité dans le QR code", "type": "bool"},
                         {"key": "page_patient_display_button_scan", "label": "Afficher le bouton « Scanner et valider »", "type": "bool"},
                         {"key": "page_patient_display_scan_explanation", "label": "Afficher les explications pour scanner le QR-Code", "type": "bool"},
                         {"key": "page_patient_print_after_scan", "label": "Page de réimpression après « Scan »", "type": "bool"},
@@ -243,12 +248,13 @@ ADAPTERS = {
                         {"key": "page_patient_validation_message", "label": "Écran de validation : message",
                          "type": "text", "help": "Affiché après le choix d'une activité, avant l'impression ou le scan."},
                         {"key": "page_patient_interface_validate_print", "label": "Écran de validation : bouton « Imprimer »", "type": "text"},
-                        {"key": "page_patient_button_print_ticket_display_picture", "label": "Image sur le bouton « Imprimer »", "type": "bool",
-                         "help": "L'image se choisit dans le mode avancé."},
+                        {"key": "page_patient_button_print_ticket_display_picture", "label": "Image sur le bouton « Imprimer »", "type": "bool"},
+                        {"key": "page_patient_button_print_ticket_picture", "label": "Image du bouton « Imprimer »", "type": "image"},
                         {"key": "page_patient_interface_validate_scan", "label": "Écran de validation : bouton « Scanner »", "type": "text"},
                         {"key": "page_patient_interface_scan_explanation", "label": "Consignes pour scanner le QR code", "type": "text"},
                         {"key": "page_patient_interface_validate_cancel", "label": "Écran de validation : bouton « Annuler »", "type": "text"},
                         {"key": "page_patient_button_cancel_display_picture", "label": "Image sur le bouton « Annuler »", "type": "bool"},
+                        {"key": "page_patient_button_cancel_picture", "label": "Image du bouton « Annuler »", "type": "image"},
                         {"key": "page_patient_confirmation_message", "label": "Message de confirmation (après inscription)", "type": "text"},
                         {"key": "page_patient_interface_done_print", "label": "Conclusion : bouton « Imprimer »", "type": "text"},
                         {"key": "page_patient_interface_done_extend", "label": "Conclusion : bouton « Prolonger »", "type": "text"},
@@ -589,6 +595,9 @@ _PATIENT_CONFIG_SCENARIOS = {
     "page_patient_button_shape": ["home"],
     "page_patient_direct_print": ["home", "validation"],
     "page_patient_qrcode_display": ["validation", "conclusion"],
+    "page_patient_qrcode_web_page": ["validation", "conclusion"],
+    "page_patient_qrcode_data": ["validation", "conclusion"],
+    "page_patient_qrcode_display_specific_message": ["validation", "conclusion"],
     "page_patient_display_button_scan": ["validation"],
     "page_patient_display_scan_explanation": ["validation"],
     "page_patient_print_after_scan": ["conclusion"],
@@ -597,10 +606,12 @@ _PATIENT_CONFIG_SCENARIOS = {
     "page_patient_validation_message": ["validation"],
     "page_patient_interface_validate_print": ["validation"],
     "page_patient_button_print_ticket_display_picture": ["validation"],
+    "page_patient_button_print_ticket_picture": ["validation"],
     "page_patient_interface_validate_scan": ["validation"],
     "page_patient_interface_scan_explanation": ["validation"],
     "page_patient_interface_validate_cancel": ["validation"],
     "page_patient_button_cancel_display_picture": ["validation"],
+    "page_patient_button_cancel_picture": ["validation"],
     "page_patient_confirmation_message": ["conclusion"],
     "page_patient_interface_done_print": ["conclusion"],
     "page_patient_interface_done_extend": ["conclusion"],
@@ -1314,6 +1325,22 @@ def complete_css(page, css):
     return completed
 
 
+def _is_button_image_name(value):
+    """Nom d'image accepté par les champs ``type: "image"`` : ``""``
+    (aucune image) ou un nom de fichier simple — sans ``/``, ``\\``,
+    ``..`` ni ``:`` — dont l'extension figure dans
+    ``ALLOWED_IMAGE_EXTENSIONS``. Le fichier doit exister dans
+    ``static/images/buttons`` ; l'éditeur ne propose que les fichiers
+    réellement présents (pas d'upload ici : le dépôt reste au mode
+    avancé)."""
+    if not value:
+        return True
+    if any(sep in value for sep in ("/", "\\", "..", ":")):
+        return False
+    return ("." in value
+            and value.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS)
+
+
 def validate_payload(page, payload):
     adapter = ADAPTERS[page]
     if not isinstance(payload, dict):
@@ -1340,6 +1367,9 @@ def validate_payload(page, payload):
     config_maximums = {field["key"]: field["max"]
                        for component in adapter["components"].values()
                        for field in component["config"] if field.get("max") is not None}
+    config_types = {field["key"]: field.get("type", "text")
+                    for component in adapter["components"].values()
+                    for field in component["config"]}
     normalized_config = {}
     for key, value in config_values.items():
         spec = get_spec(key)
@@ -1376,6 +1406,10 @@ def validate_payload(page, payload):
             if not check["success"]:
                 raise ValueError(str(check["value"]))
             value = check["value"]
+            if config_types.get(key) == "image" and not _is_button_image_name(value):
+                raise ValueError(
+                    f"Image invalide pour {key} : nom de fichier attendu, "
+                    "sans chemin ni extension non image.")
         if spec.allowed_values is not None and value not in spec.allowed_values:
             raise ValueError(f"Valeur non autorisée pour {key}.")
         normalized_config[key] = value

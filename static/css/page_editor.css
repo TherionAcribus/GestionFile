@@ -284,6 +284,72 @@
     outline: 0;
 }
 
+/* Champ « image » : vignette du fichier choisi + boutons ; la boîte de
+   choix présente la grille des images du dépôt (static/images/buttons). */
+.page-editor-image-current {
+    align-items: center;
+    display: flex;
+    gap: .6rem;
+    margin-bottom: .5rem;
+}
+
+.page-editor-image-thumb {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .35rem;
+    height: 3rem;
+    object-fit: contain;
+    width: 3rem;
+}
+
+.page-editor-image-name {
+    font-family: var(--bs-font-monospace);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.page-editor-image-actions {
+    display: flex;
+    gap: .5rem;
+}
+
+.page-editor-image-grid {
+    display: grid;
+    gap: .6rem;
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+}
+
+.page-editor-image-choice {
+    align-items: center;
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: .6rem;
+}
+
+.page-editor-image-choice:hover,
+.page-editor-image-choice:focus-visible {
+    background: var(--bs-primary-bg-subtle);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 .15rem rgba(var(--bs-primary-rgb), .14);
+    outline: 0;
+}
+
+.page-editor-image-choice-thumb {
+    height: 4rem;
+    object-fit: contain;
+    width: 100%;
+}
+
+.page-editor-image-choice-name {
+    font-family: var(--bs-font-monospace);
+    font-size: .75rem;
+    overflow-wrap: anywhere;
+}
+
 .page-editor-dialog-backdrop {
     align-items: center;
     background: rgba(0, 0, 0, .45);

@@ -38,7 +38,18 @@
                 hx-target="#div_buttons_parents"
                 hx-sync="this:drop"
             >
-                {% if (page_patient_button_print_ticket_display_picture or page_editor_preview) and page_patient_button_print_ticket_picture %}
+                {% if page_editor_preview %}
+                    {# En aperçu, l'<img> est toujours rendue : sa source et sa
+                       visibilité suivent le brouillon via page_editor_preview.js
+                       (data-config-src). #}
+                    <img src="{% if page_patient_button_print_ticket_picture %}/static/images/buttons/{{ page_patient_button_print_ticket_picture }}{% endif %}"
+                    class="img_for_div_validation"
+                    data-config-bool="page_patient_button_print_ticket_display_picture"
+                    data-config-src="page_patient_button_print_ticket_picture"
+                    data-config-src-prefix="/static/images/buttons/"
+                    {% if not page_patient_button_print_ticket_display_picture or not page_patient_button_print_ticket_picture %}data-config-hidden{% endif %}
+                    >
+                {% elif page_patient_button_print_ticket_display_picture and page_patient_button_print_ticket_picture %}
                     <img src="/static/images/buttons/{{ page_patient_button_print_ticket_picture }}"
                     class="img_for_div_validation"
                     data-config-bool="page_patient_button_print_ticket_display_picture"
@@ -86,7 +97,16 @@
                 {% endif %}"
                 hx-get="/patient/patient_cancel"
                 hx-target="#div_buttons_parents">
-                {% if (page_patient_button_cancel_display_picture or page_editor_preview) and page_patient_button_cancel_picture %}
+                {% if page_editor_preview %}
+                    {# Même mécanisme que le bouton « Imprimer » ci-dessus. #}
+                    <img src="{% if page_patient_button_cancel_picture %}/static/images/buttons/{{ page_patient_button_cancel_picture }}{% endif %}"
+                    class="img_for_div_validation"
+                    data-config-bool="page_patient_button_cancel_display_picture"
+                    data-config-src="page_patient_button_cancel_picture"
+                    data-config-src-prefix="/static/images/buttons/"
+                    {% if not page_patient_button_cancel_display_picture or not page_patient_button_cancel_picture %}data-config-hidden{% endif %}
+                >
+            {% elif page_patient_button_cancel_display_picture and page_patient_button_cancel_picture %}
                     <img src="/static/images/buttons/{{ page_patient_button_cancel_picture }}"
                     class="img_for_div_validation"
                     data-config-bool="page_patient_button_cancel_display_picture"

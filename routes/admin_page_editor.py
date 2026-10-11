@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 from datetime import datetime
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ from audit_log import ACTION_CREATE, ACTION_DELETE, ACTION_RESTORE, ACTION_UPDAT
 from audit_service import record_audit
 from communication import communikation
 from config import time_tz
+from image_storage import ALLOWED_IMAGE_EXTENSIONS
 from models import (
     Button,
     ConfigOption,
@@ -111,7 +113,11 @@ def _render_phone_markdown(config, tokens=None):
     return rendered
 
 
-def _patient_preview_data(scenario, tokens):
+def _patient_preview_data(scenario, tokens, payload=None):
+    # Les images des boutons Imprimer/Annuler suivent le brouillon
+    # (``payload``) ; sans brouillon — appel direct, tests — la
+    # configuration publiée sert de repli.
+    draft_config = (payload or {}).get("config") or {}
     all_top_level = (
         Button.query.filter_by(parent_button_id=None)
         .order_by(Button.sort_order, Button.id)
@@ -208,11 +214,13 @@ def _patient_preview_data(scenario, tokens):
             if selected_button and selected_button.activity else ""
         ),
         "preview_qr_data_uri": "/static/css/libs/bootstrap-icons/qr-code.svg",
-        "preview_print_picture": current_app.config.get(
-            "PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE"
+        "preview_print_picture": draft_config.get(
+            "page_patient_button_print_ticket_picture",
+            current_app.config.get("PAGE_PATIENT_BUTTON_PRINT_TICKET_PICTURE")
         ),
-        "preview_cancel_picture": current_app.config.get(
-            "PAGE_PATIENT_BUTTON_CANCEL_PICTURE"
+        "preview_cancel_picture": draft_config.get(
+            "page_patient_button_cancel_picture",
+            current_app.config.get("PAGE_PATIENT_BUTTON_CANCEL_PICTURE")
         ),
         "preview_patient_interface": {
             "validate_print": current_app.config.get(
@@ -636,7 +644,9 @@ def preview(page):
     phone_html = {}
     if page == "phone":
         phone_html = _render_phone_markdown(payload["config"], tokens)
-    patient_preview = _patient_preview_data(scenario, tokens) if page == "patient" else {}
+    patient_preview = (
+        _patient_preview_data(scenario, tokens, payload) if page == "patient" else {}
+    )
     second_call_tokens = dict(tokens)
     second_call_tokens["{N}"] = "057"
     preview_call_texts = [
@@ -682,6 +692,30 @@ def preview(page):
         phone_your_turn_lines=[phone_html.get(f"phone_your_turn_line{index}", "") for index in range(1, 7)],
         **patient_preview,
     )
+
+
+@admin_page_editor_bp.get("/admin/page-editor/<page>/images")
+def button_images(page):
+    """Fichiers image proposés par les champs ``type: "image"`` de la page.
+
+    Le dépôt ``static/images/buttons`` se remplit en mode avancé
+    (``gallery_button_images_for_interface``) : l'éditeur visuel ne fait
+    que choisir un fichier existant — jamais d'upload ici.
+    """
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    directory = os.path.join(current_app.static_folder, "images", "buttons")
+    if not os.path.isdir(directory):
+        return jsonify({"images": []})
+    images = sorted(
+        (name for name in os.listdir(directory)
+         if os.path.isfile(os.path.join(directory, name))
+         and "." in name
+         and name.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS),
+        key=str.casefold,
+    )
+    return jsonify({"images": images})
 
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/preview/render")

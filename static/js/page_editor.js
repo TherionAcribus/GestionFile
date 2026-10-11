@@ -498,6 +498,113 @@
         return wrapper;
     }
 
+    const BUTTONS_IMAGE_PREFIX = '/static/images/buttons/';
+
+    // Champ « image » : choix d'un fichier existant de
+    // static/images/buttons (le dépôt se remplit en mode avancé — pas
+    // d'upload dans l'éditeur). La valeur vit dans un input caché relié
+    // au circuit habituel par ``bindValue`` : « input » enregistre la
+    // valeur (dirty/autosave), « change » empile l'annulation et pousse
+    // le brouillon vers l'aperçu.
+    function createImageControl(id, key, change) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'page-editor-image-control';
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.id = id + '-value';
+        input.value = payload.config[key] == null ? '' : String(payload.config[key]);
+        wrapper.dataset.labelFor = input.id;
+        bindValue(input, change);
+
+        const current = document.createElement('div');
+        current.className = 'page-editor-image-current';
+        const thumb = document.createElement('img');
+        thumb.className = 'page-editor-image-thumb';
+        thumb.alt = '';
+        const name = document.createElement('span');
+        name.className = 'page-editor-image-name';
+        current.append(thumb, name);
+
+        const actions = document.createElement('div');
+        actions.className = 'page-editor-image-actions';
+        const chooseButton = document.createElement('button');
+        chooseButton.type = 'button';
+        chooseButton.className = 'btn btn-sm btn-outline-primary';
+        chooseButton.textContent = 'Choisir…';
+        const removeButton = document.createElement('button');
+        removeButton.type = 'button';
+        removeButton.className = 'btn btn-sm btn-outline-secondary';
+        removeButton.textContent = 'Retirer';
+        actions.append(chooseButton, removeButton);
+
+        function sync() {
+            const file = input.value;
+            thumb.hidden = !file;
+            thumb.src = file ? BUTTONS_IMAGE_PREFIX + file : '';
+            name.textContent = file || 'Aucune image';
+            removeButton.disabled = !file;
+        }
+        function commit(file) {
+            if (input.value === file) return;
+            input.value = file;
+            sync();
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+        sync();
+
+        chooseButton.addEventListener('click', function () { openImageDialog(commit); });
+        removeButton.addEventListener('click', function () { commit(''); });
+
+        wrapper.append(current, actions, input);
+        return wrapper;
+    }
+
+    async function openImageDialog(commit) {
+        let images = [];
+        try {
+            const data = await requestJSON(
+                '/admin/page-editor/' + encodeURIComponent(page) + '/images');
+            images = data.images || [];
+        } catch (error) {
+            setStatus(error.message, 'danger');
+            return;
+        }
+        const grid = document.createElement('div');
+        grid.className = 'page-editor-image-grid';
+        if (!images.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-muted';
+            empty.textContent = 'Aucune image disponible : le dépôt se gère dans le mode avancé.';
+            grid.appendChild(empty);
+        }
+        images.forEach(function (file) {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'page-editor-image-choice';
+            const thumb = document.createElement('img');
+            thumb.className = 'page-editor-image-choice-thumb';
+            thumb.src = BUTTONS_IMAGE_PREFIX + file;
+            thumb.alt = '';
+            const label = document.createElement('span');
+            label.className = 'page-editor-image-choice-name';
+            label.textContent = file;
+            item.append(thumb, label);
+            item.addEventListener('click', function () {
+                commit(file);
+                const backdrop = item.closest('.page-editor-dialog-backdrop');
+                if (backdrop && backdrop.closeDialog) backdrop.closeDialog(file);
+            });
+            grid.appendChild(item);
+        });
+        await openDialog({
+            title: 'Choisir une image',
+            body: grid,
+            actions: [{label: 'Fermer', className: 'btn btn-secondary', value: null, autofocus: true}],
+        });
+    }
+
     function mostCommonPaletteColor(keys) {
         const counts = new Map();
         keys.forEach(function (key) {
@@ -875,6 +982,11 @@
                         if (field.max != null) parsed = Math.min(field.max, parsed);
                         setConfigValue(field.key, parsed);
                     });
+                } else if (field.type === 'image') {
+                    control = createImageControl(
+                        'editor-config-' + field.key,
+                        field.key,
+                        function (element) { setConfigValue(field.key, element.value); });
                 } else {
                     control = document.createElement('textarea');
                     control.className = 'form-control';

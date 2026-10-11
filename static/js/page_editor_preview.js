@@ -72,6 +72,15 @@
         document.querySelectorAll('[data-config-bool]').forEach(function (element) {
             markHidden(element, !payload.config[element.dataset.configBool]);
         });
+        // Images pilotées par une clé de nom de fichier (ex. image du bouton
+        // « Imprimer ») : la source suit le brouillon et l'image reste
+        // masquée tant qu'aucun fichier n'est choisi (ou que le booléen
+        // « display_picture » associé est décoché — les règles se cumulent).
+        document.querySelectorAll('[data-config-src]').forEach(function (element) {
+            const file = String(payload.config[element.dataset.configSrc] || '');
+            element.src = file ? (element.dataset.configSrcPrefix || '') + file : '';
+            markHidden(element, !file);
+        });
         document.querySelectorAll('[data-config-any-bool]').forEach(function (element) {
             const keys = element.dataset.configAnyBool.split(',').map(function (key) { return key.trim(); });
             markHidden(element, !keys.some(function (key) { return Boolean(payload.config[key]); }));

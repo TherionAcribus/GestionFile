@@ -60,6 +60,9 @@ def make_payload(page):
                 config[field["key"]] = max(5, field.get("min") or 0)
             elif spec.allowed_values:
                 config[field["key"]] = sorted(spec.allowed_values)[0]
+            elif field.get("type") == "image":
+                # Nom de fichier simple attendu (pas de chemin).
+                config[field["key"]] = "image.png"
             else:
                 config[field["key"]] = "Texte de démonstration"
         for field in component["css"]:
@@ -2176,6 +2179,98 @@ def test_patient_preview_reuses_real_validation_and_conclusion_markup(editor_app
     assert 'data-config-key="page_patient_interface_done_back"' in conclusion
     assert 'data-config-any-bool="page_patient_print_after_scan,page_patient_print_after_print"' in conclusion
     assert "patient_conclusion.js" not in conclusion
+
+
+# --- Images des boutons de validation et réglages QR code --------------------
+
+def test_patient_buttons_component_exposes_picture_and_qrcode_fields():
+    """Le choix d'image des boutons « Imprimer »/« Annuler » et les réglages
+    QR code sont exposés par l'éditeur visuel (auparavant réservés au mode
+    avancé) avec le bon type de champ et le bon scénario."""
+    fields = {
+        field["key"]: field
+        for field in public_adapter_data("patient")["components"]["buttons"]["config"]
+    }
+    for key in ("page_patient_button_print_ticket_picture",
+                "page_patient_button_cancel_picture"):
+        assert fields[key]["type"] == "image"
+        assert fields[key]["scenarios"] == ["validation"]
+    # Le booléen « image sur le bouton » ne renvoie plus vers le mode
+    # avancé : le fichier se choisit dans l'éditeur.
+    assert "help" not in fields["page_patient_button_print_ticket_display_picture"]
+    for key in ("page_patient_qrcode_web_page",
+                "page_patient_qrcode_data",
+                "page_patient_qrcode_display_specific_message"):
+        assert fields[key]["scenarios"] == ["validation", "conclusion"]
+    # La barre de balises suit le validateur « before_call » du registre.
+    tokens = {marker["token"]
+              for marker in fields["page_patient_qrcode_data"]["markers"]}
+    assert {"{N}", "{A}"} <= tokens
+
+
+@pytest.mark.parametrize("value", ["imprimer.png", "annuler.webp", ""])
+def test_image_fields_accept_simple_filenames_or_empty(value):
+    """``""`` signifie « aucune image » ; sinon seul un nom de fichier
+    simple avec une extension image connue est accepté."""
+    payload = make_payload("patient")
+    payload["config"]["page_patient_button_print_ticket_picture"] = value
+    result = validate_payload("patient", payload)
+    assert result["config"]["page_patient_button_print_ticket_picture"] == value
+
+
+@pytest.mark.parametrize("value", [
+    "../x.png", "a/b.png", "sous\\dossier.png", "C:\\x.png", "fichier.txt", 42,
+])
+def test_image_fields_reject_paths_and_non_image_values(value):
+    payload = make_payload("patient")
+    payload["config"]["page_patient_button_print_ticket_picture"] = value
+    with pytest.raises(ValueError):
+        validate_payload("patient", payload)
+
+
+def test_button_images_endpoint_lists_real_files(editor_app):
+    """La boîte « Choisir… » liste les fichiers réels du dépôt
+    static/images/buttons (tri insensible à la casse, extension connue) ;
+    l'endpoint exige la permission de la page."""
+    app, _ = editor_app
+    app.static_folder = str(Path(__file__).resolve().parents[1] / "static")
+    client = authenticated_client(editor_app)
+    response = client.get("/admin/page-editor/patient/images")
+    assert response.status_code == 200
+    images = response.get_json()["images"]
+    assert "imprimer.png" in images
+    assert images == sorted(images, key=str.casefold)
+    assert all("/" not in name and "\\" not in name for name in images)
+
+    assert app.test_client().get(
+        "/admin/page-editor/patient/images").status_code == 401
+    with app.app_context():
+        role = Role.query.filter_by(name="page-editor").one()
+        role.admin_patient = False
+        db.session.commit()
+    assert client.get("/admin/page-editor/patient/images").status_code == 403
+
+
+def test_patient_validation_preview_uses_draft_pictures(editor_app):
+    """En aperçu, les <img> des boutons Imprimer/Annuler sont toujours
+    rendues (data-config-src) : leur source suit le brouillon et non la
+    configuration publiée."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    payload = make_payload("patient")
+    payload["config"]["page_patient_button_print_ticket_picture"] = "imprimer.png"
+    payload["base_hash"] = payload_hash(make_payload("patient"))
+    saved = client.put("/admin/page-editor/patient/draft",
+                       json={"draft_version": 0, "payload": payload})
+    assert saved.status_code == 200
+
+    preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=validation"
+    ).get_data(as_text=True)
+    assert 'data-config-src="page_patient_button_print_ticket_picture"' in preview
+    assert 'data-config-src="page_patient_button_cancel_picture"' in preview
+    assert 'src="/static/images/buttons/imprimer.png"' in preview
 
 
 def test_patient_children_preview_separates_back_button_from_activity_buttons(editor_app):
