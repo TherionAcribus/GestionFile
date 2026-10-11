@@ -1,10 +1,5 @@
 <div class="row g-4 align-items-start mt-1" data-ticket-preview-root>
     <div class="col-lg-7">
-        {{ macros.switch("page_patient_print_ticket_display",
-                    page_patient_print_ticket_display,
-                    "Afficher la possibilité d'imprimer le ticket - NON EFFECTIF")
-        }}
-
         <div class="mt-4">
             {{ macros.textbloc_int("printer_width", printer_width, "Largeur d'impression") }}
         </div>

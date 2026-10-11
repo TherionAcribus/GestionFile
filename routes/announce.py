@@ -74,14 +74,10 @@ def display():
                             announce_subtitle=replace_balise_welcome(app.config['ANNOUNCE_SUBTITLE']),
                             announce_text_up_patients=replace_balise_welcome(app.config['ANNOUNCE_TEXT_UP_PATIENTS']),
                             announce_text_up_patients_display=app.config['ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY'],
-                            announce_text_up_patients_size=app.config['ANNOUNCE_TEXT_UP_PATIENTS_SIZE'],
                             announce_text_down_patients=replace_balise_welcome(app.config['ANNOUNCE_TEXT_DOWN_PATIENTS']),
                             announce_text_down_patients_display=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY'],
-                            announce_text_down_patients_size=app.config['ANNOUNCE_TEXT_DOWN_PATIENTS_SIZE'],
                             call_patients = patient_list_for_init_display(),
                             announce_ongoing_display=app.config['ANNOUNCE_ONGOING_DISPLAY'],
-                            announce_title_size=app.config['ANNOUNCE_TITLE_SIZE'],
-                            announce_call_text_size=app.config['ANNOUNCE_CALL_TEXT_SIZE'],
                             announce_next_patients_display=app.config.get('ANNOUNCE_NEXT_PATIENTS_DISPLAY', False),
                             # Révision publiée par l'éditeur visuel : renvoyée
                             # au serveur dans l'accusé socket de (re)connexion.

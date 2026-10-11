@@ -156,6 +156,10 @@ ADAPTERS = {
                      {"key": "ongoing_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
             "gallery": _component("Galerie", "aside", "#div_pub", span=6,
                 scenarios=["gallery"], managed_bool="announce_infos_display",
+                # Seul composant de la zone « aside » : largeur, ordre et
+                # alignement n'ont aucun effet (« span » reste exigé par
+                # validate_payload, d'où sa valeur conservée ci-dessus).
+                layout_controls=["visible"],
                 # Réglages auparavant réservés à l'onglet « Galerie » du mode
                 # avancé. Le choix des images se fait dans « Galerie média ».
                 config=[{"key": "announce_infos_display", "label": "Afficher", "type": "bool"},
@@ -389,6 +393,9 @@ for index in range(1, 7):
 
 ADAPTERS["phone"]["components"]["title"] = _component(
     "Titre", "header", "#div_title_area",
+    # Seul composant de la zone « header » ; le centrage se règle via
+    # « phone_center » ci-dessous, pas par les contrôles de disposition.
+    layout_controls=["visible"],
     contrast_pairs=[("phone_title_font_color", "phone_title_background_color")],
     config=[{"key": "phone_title", "label": "Texte", "type": "text"},
             {"key": "phone_center", "label": "Centrer le contenu", "type": "bool"}],
@@ -402,6 +409,9 @@ ADAPTERS["phone"]["components"]["title"] = _component(
 )
 ADAPTERS["phone"]["components"]["specific"] = _component(
     "Message spécifique", "footer", "#specific_message",
+    # Seul composant de la zone « footer » : disposition sans effet (le
+    # centrage dépend de « phone_center », réglé sur le composant Titre).
+    layout_controls=["visible"],
     managed_bool="phone_display_specific_message",
     contrast_pairs=[("phone_specific_message_font_color", "phone_specific_message_background_color")],
     config=[{"key": "phone_display_specific_message", "label": "Afficher le message spécifique", "type": "bool"}],

@@ -196,13 +196,9 @@ def test_display_remplace_la_balise_p_du_titre(monkeypatch):
         ANNOUNCE_SUBTITLE="",
         ANNOUNCE_TEXT_UP_PATIENTS="",
         ANNOUNCE_TEXT_UP_PATIENTS_DISPLAY="never",
-        ANNOUNCE_TEXT_UP_PATIENTS_SIZE=20,
         ANNOUNCE_TEXT_DOWN_PATIENTS="",
         ANNOUNCE_TEXT_DOWN_PATIENTS_DISPLAY="never",
-        ANNOUNCE_TEXT_DOWN_PATIENTS_SIZE=20,
         ANNOUNCE_ONGOING_DISPLAY=False,
-        ANNOUNCE_TITLE_SIZE=50,
-        ANNOUNCE_CALL_TEXT_SIZE=80,
         PHARMACY_NAME="Pharmacie du Centre",
     )
     captures = {}
