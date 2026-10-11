@@ -1013,14 +1013,33 @@ def screens(page):
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/apply")
 def apply_to_screens(page):
+    """Ordre de rechargement aux écrans de la page.
+
+    Sans corps : diffusion à tous les écrans connectés. Avec
+    ``{"sid": "<sid complet>"}`` : rechargement ciblé — le sid doit
+    appartenir aux écrans de cette page (404 sinon), ce qui empêche de
+    viser un client raccordé au namespace d'une autre page.
+    """
     adapter, refusal = _page_context(page, api=True)
     if refusal is not None:
         return refusal
-    if page == "announce":
-        communikation("update_screen", event="refresh")
-    elif page == "patient":
-        communikation("patient", event="refresh")
+    stream = {
+        "announce": "update_screen",
+        "patient": "patient",
+    }.get(page, "phone")
+    body = request.get_json(silent=True) or {}
+    target_sid = body.get("sid")
+    if target_sid:
+        from sockets import screen_status_for
+        known_sids = {screen["sid"] for screen in screen_status_for(page)}
+        if target_sid not in known_sids:
+            return jsonify({"error": "Écran inconnu."}), 404
+        # Même enveloppe qu'une diffusion : seul le room= change — le
+        # client n'a pas de protocole spécifique au rechargement ciblé.
+        communikation(stream, event="refresh", room=target_sid)
+        record_audit(ACTION_UPDATE, "page_design_screens", target_id=page,
+                     details=f"sid={target_sid}")
     else:
-        communikation("phone", event="refresh")
-    record_audit(ACTION_UPDATE, "page_design_screens", target_id=page)
+        communikation(stream, event="refresh")
+        record_audit(ACTION_UPDATE, "page_design_screens", target_id=page)
     return jsonify({"success": True})

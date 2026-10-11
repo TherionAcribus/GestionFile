@@ -124,3 +124,27 @@ def test_editor_confirmations_use_dialogs_and_zoom_is_a_select():
     html = _read("templates/admin/page_editor.html")
     assert 'id="editor-zoom"' in html
     assert 'id="editor-real-size"' not in html
+
+
+def test_editor_groups_config_fields_and_suffixes_int_units():
+    """§3.4/§3.5 : l'inspecteur titre les sous-groupes des champs de contenu
+    comme ceux de l'apparence, et suffixe l'unité des champs numériques dans
+    un input-group plutôt que dans le libellé."""
+    source = _read("static/js/page_editor.js")
+    assert "lastConfigGroup" in source
+    assert "field.unit" in source
+    assert "input-group" in source
+    assert "input-group-text" in source
+    assert "page-editor-fieldgroup" in source
+
+
+def test_screens_panel_shows_identity_and_per_screen_reload():
+    """§3.8 : chaque écran du panneau affiche IP et agent en plus du nom et
+    du sid tronqué, et propose « Recharger » — le sid complet sert au
+    ciblage via POST /apply sans être affiché."""
+    source = _read("static/js/page_editor.js")
+    assert "screen.ip" in source
+    assert "screen.user_agent" in source
+    assert "String(screen.sid).slice(0, 8)" in source
+    assert "'Recharger'" in source
+    assert "watchScreenAcks(sid)" in source

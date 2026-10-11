@@ -2689,7 +2689,7 @@ def test_validation_errors_use_field_labels():
     with pytest.raises(ValueError) as excinfo:
         validate_payload("announce", payload)
     message = str(excinfo.value)
-    assert "Galerie › Durée d'affichage de chaque image (secondes)" in message
+    assert "Galerie › Durée d'affichage de chaque image" in message
     assert "announce_infos_display_time" in message
 
     # Clé inconnue de l'adaptateur : repli sur la clé brute.
@@ -2697,7 +2697,7 @@ def test_validation_errors_use_field_labels():
     payload["config"]["announce_infos_width"] = 49
     with pytest.raises(ValueError) as excinfo:
         validate_payload("announce", payload)
-    assert "Galerie › Largeur de la galerie (px) (announce_infos_width)" in \
+    assert "Galerie › Largeur de la galerie (announce_infos_width)" in \
         str(excinfo.value)
 
 
@@ -2850,3 +2850,173 @@ def test_theme_overwrite_keeps_original_author(editor_app):
     theme = overwritten.get_json()["theme"]
     assert theme["id"] == theme_id
     assert theme["author"] == "editor"
+
+
+# --- Sous-groupes de l'inspecteur et unités des champs numériques ----------
+
+
+def test_patient_buttons_config_fields_are_grouped_and_contiguous():
+    """§3.4 : les ~24 réglages de contenu du composant « Contenu principal »
+    sont rangés en sous-groupes titrés, contigus pour n'afficher chaque
+    titre qu'une fois."""
+    fields = public_adapter_data("patient")["components"]["buttons"]["config"]
+    seen = []
+    for field in fields:
+        group = field.get("group")
+        assert group, f"{field['key']} sans sous-groupe"
+        if not seen or seen[-1] != group:
+            assert group not in seen, f"groupe « {group} » non contigu"
+            seen.append(group)
+    assert seen == [
+        "Boutons d'activité",
+        "QR code et scan",
+        "Écran de validation",
+        "Conclusion et délais",
+    ]
+    # « Imprimer directement » pilote l'apparition de l'écran de validation :
+    # il ouvre son groupe.
+    direct_print = next(
+        field for field in fields if field["key"] == "page_patient_direct_print")
+    assert direct_print["group"] == "Écran de validation"
+
+
+def test_int_fields_expose_units_and_unit_free_labels():
+    """§3.5 : les champs ``int`` portent leur unité (suffixe affiché par le
+    client) ; les libellés n'en répètent plus la valeur."""
+    announce_fields = {
+        field["key"]: field
+        for component in public_adapter_data("announce")["components"].values()
+        for field in component["config"]
+    }
+    assert announce_fields["announce_infos_display_time"]["unit"] == "s"
+    assert announce_fields["announce_infos_display_time"]["label"] == \
+        "Durée d'affichage de chaque image"
+    assert announce_fields["announce_infos_width"]["unit"] == "px"
+    assert announce_fields["announce_infos_width"]["label"] == "Largeur de la galerie"
+    assert announce_fields["announce_infos_height"]["unit"] == "px"
+    assert announce_fields["announce_infos_height"]["label"] == "Hauteur de la galerie"
+
+    patient_fields = {
+        field["key"]: field
+        for component in public_adapter_data("patient")["components"].values()
+        for field in component["config"]
+    }
+    for key, label in (
+        ("page_patient_end_timer", "Délai avant retour à l'accueil"),
+        ("page_patient_timer_activity_inactive", "Durée d'affichage du message"),
+        ("page_patient_print_fail_abandon_timer",
+         "Retour auto à l'accueil si aucun choix (0 = jamais)"),
+    ):
+        assert patient_fields[key]["unit"] == "s"
+        assert patient_fields[key]["label"] == label
+
+
+# --- Panneau « Écrans » : identité des clients et rechargement ciblé -------
+
+
+def test_register_client_records_ip_and_user_agent():
+    """§3.8 : la connexion mémorise l'IP et l'agent du client — affichés
+    dans le panneau « Écrans » de l'éditeur."""
+    from flask import request as flask_request
+
+    from sockets import connected_clients_info, register_client
+
+    app = Flask("register-client")
+    with app.test_request_context(
+            "/", headers={"User-Agent": "Borne/2.0", "username": "borne hall"},
+            environ_overrides={"REMOTE_ADDR": "192.0.2.20"}):
+        flask_request.sid = "s-identite"
+        register_client(flask_request)
+    try:
+        info = connected_clients_info["s-identite"]
+        assert info["username"] == "borne hall"
+        assert info["ip"] == "192.0.2.20"
+        assert info["user_agent"] == "Borne/2.0"
+    finally:
+        connected_clients_info.pop("s-identite", None)
+
+
+def test_screen_status_for_exposes_full_sid_ip_and_user_agent(monkeypatch):
+    """Le sid complet sert au rechargement ciblé ; IP et agent identifient
+    l'écran dans le panneau."""
+    from types import SimpleNamespace
+
+    from extensions import socketio
+    from sockets import connected_clients_info, page_screen_status, screen_status_for
+
+    sid = "sid-complet-0123456789"
+    connected_clients_info[sid] = {
+        "username": "écran hall", "ip": "192.0.2.10", "user_agent": "Borne/1.0"}
+    page_screen_status["announce"][sid] = {
+        "username": "écran hall", "revision": 2, "at": 1700000000.0}
+    fake_manager = SimpleNamespace(
+        rooms={"/socket_update_screen": {None: {sid}}})
+    monkeypatch.setattr(socketio, "server", SimpleNamespace(manager=fake_manager))
+    try:
+        (screen,) = screen_status_for("announce")
+        assert screen["sid"] == sid
+        assert screen["ip"] == "192.0.2.10"
+        assert screen["user_agent"] == "Borne/1.0"
+        assert screen["username"] == "écran hall"
+        assert screen["revision"] == 2
+    finally:
+        connected_clients_info.pop(sid, None)
+        page_screen_status["announce"].clear()
+
+
+def test_apply_targets_a_single_screen_or_404(editor_app, monkeypatch):
+    """POST /apply avec ``sid`` connu émet le refresh dans la room de cet
+    écran seul ; sid inconnu → 404 sans émission ; sans sid → diffusion."""
+    from types import SimpleNamespace
+
+    import routes.admin_page_editor as editor_module
+    from extensions import socketio
+    from models import AuditLog
+    from sockets import connected_clients_info, page_screen_status
+
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+
+    sid = "sid-complet-0123456789"
+    connected_clients_info[sid] = {
+        "username": "écran hall", "ip": "192.0.2.10", "user_agent": "Borne/1.0"}
+    page_screen_status["announce"][sid] = {
+        "username": "écran hall", "revision": 1, "at": 1700000000.0}
+    fake_manager = SimpleNamespace(
+        rooms={"/socket_update_screen": {None: {sid}}})
+    monkeypatch.setattr(socketio, "server", SimpleNamespace(manager=fake_manager))
+    calls = []
+    monkeypatch.setattr(
+        editor_module, "communikation",
+        lambda *args, **kwargs: calls.append((args, kwargs)))
+    try:
+        # /screens expose le sid complet (tronqué seulement à l'affichage)
+        # et l'identité de l'écran.
+        data = client.get("/admin/page-editor/announce/screens").get_json()
+        (item,) = [s for s in data["screens"] if s["sid"] == sid]
+        assert item["ip"] == "192.0.2.10"
+        assert item["user_agent"] == "Borne/1.0"
+
+        unknown = client.post("/admin/page-editor/announce/apply",
+                              json={"sid": "sid-inconnu-999"})
+        assert unknown.status_code == 404
+        assert unknown.get_json()["error"] == "Écran inconnu."
+        assert calls == []
+
+        targeted = client.post("/admin/page-editor/announce/apply",
+                               json={"sid": sid})
+        assert targeted.status_code == 200
+        assert calls[-1] == (
+            ("update_screen",), {"event": "refresh", "room": sid})
+        with app.app_context():
+            entry = AuditLog.query.filter_by(
+                resource="page_design_screens").order_by(
+                    AuditLog.id.desc()).first()
+            assert entry.details == f"sid={sid}"
+
+        broadcast = client.post("/admin/page-editor/announce/apply", json={})
+        assert broadcast.status_code == 200
+        assert calls[-1] == (("update_screen",), {"event": "refresh"})
+    finally:
+        connected_clients_info.pop(sid, None)
+        page_screen_status["announce"].clear()

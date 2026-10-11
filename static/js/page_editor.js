@@ -948,7 +948,20 @@
                 if (gatedKeys.has(key)) renderPalette();
             };
             const contentFields = addFieldset('Contenu');
+            let lastConfigGroup = null;
             scenarioConfigFields.forEach(function (field) {
+                // Sous-groupes déclarés par field.group (ex. « QR code et
+                // scan », « Écran de validation ») : même rendu qu'en
+                // « Apparence » — un titre sépare les familles de réglages.
+                if ((field.group || null) !== lastConfigGroup) {
+                    lastConfigGroup = field.group || null;
+                    if (lastConfigGroup) {
+                        const heading = document.createElement('div');
+                        heading.className = 'page-editor-fieldgroup';
+                        heading.textContent = lastConfigGroup;
+                        contentFields.appendChild(heading);
+                    }
+                }
                 let control;
                 if (field.type === 'bool') {
                     control = document.createElement('input');
@@ -982,6 +995,19 @@
                         if (field.max != null) parsed = Math.min(field.max, parsed);
                         setConfigValue(field.key, parsed);
                     });
+                    if (field.unit) {
+                        // L'unité (« s », « px ») est suffixée au champ en
+                        // input-group plutôt que répétée dans le libellé.
+                        const unitGroup = document.createElement('div');
+                        unitGroup.className = 'input-group';
+                        control.id = 'editor-config-' + field.key + '-value';
+                        unitGroup.dataset.labelFor = control.id;
+                        const suffix = document.createElement('span');
+                        suffix.className = 'input-group-text';
+                        suffix.textContent = field.unit;
+                        unitGroup.append(control, suffix);
+                        control = unitGroup;
+                    }
                 } else if (field.type === 'image') {
                     control = createImageControl(
                         'editor-config-' + field.key,
@@ -1663,24 +1689,65 @@
         }
         const list = document.createElement('ul');
         list.className = 'page-editor-diff-list';
+        renderScreenRows(list, data);
+        container.appendChild(list);
+        return container;
+    }
+
+    function renderScreenRows(list, data) {
+        list.replaceChildren();
         data.screens.forEach(function (screen) {
             const item = document.createElement('li');
             item.className = 'd-flex align-items-center gap-2';
+            const identity = document.createElement('div');
             const name = document.createElement('span');
             const when = screen.at
                 ? ' · accusé ' + new Date(screen.at * 1000).toLocaleTimeString('fr-FR')
                 : '';
-            name.textContent = screen.username + ' (#' + screen.sid + ')'
+            // ``screen.sid`` est le sid complet : il sert à cibler le
+            // rechargement ; l'affichage reste tronqué à 8 caractères.
+            name.textContent = screen.username + ' (#' + String(screen.sid).slice(0, 8) + ')'
                 + ' — révision ' + (screen.revision === null ? 'inconnue' : screen.revision) + when;
+            const details = document.createElement('div');
+            details.className = 'small text-muted';
+            const agent = screen.user_agent || 'agent inconnu';
+            details.textContent = (screen.ip || 'IP inconnue') + ' · '
+                + (agent.length > 60 ? agent.slice(0, 57) + '…' : agent);
+            details.title = agent;
+            identity.append(name, details);
             const badge = document.createElement('span');
             const status = SCREEN_STATUS[screen.status] || SCREEN_STATUS.pending;
             badge.className = 'badge ms-auto ' + status.className;
             badge.textContent = status.label;
-            item.append(name, badge);
+            const reload = document.createElement('button');
+            reload.type = 'button';
+            reload.className = 'btn btn-sm btn-outline-primary';
+            reload.textContent = 'Recharger';
+            reload.title = 'Recharger uniquement cet écran.';
+            reload.addEventListener('click', async function () {
+                reload.disabled = true;
+                try {
+                    await reloadScreen(screen.sid);
+                    // Le badge de l'écran reflète son nouvel accusé : la
+                    // liste est relue plutôt que figée.
+                    renderScreenRows(list, await fetchScreens());
+                } catch (error) {
+                    setStatus(error.message, 'danger');
+                    reload.disabled = false;
+                }
+            });
+            item.append(identity, badge, reload);
             list.appendChild(item);
         });
-        container.appendChild(list);
-        return container;
+    }
+
+    async function reloadScreen(sid) {
+        await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/apply', {
+            method: 'POST',
+            body: JSON.stringify({sid: sid}),
+        });
+        setStatus('Ordre de rechargement envoyé à cet écran.', 'success');
+        await watchScreenAcks(sid);
     }
 
     async function fetchScreens() {
@@ -1700,28 +1767,38 @@
         }
     }
 
-    // Après « Appliquer » : surveille les accusés jusqu'à ce que tous les
-    // écrans connectés affichent la révision publiée (ou 30 s max).
-    async function watchScreenAcks() {
+    // Après « Appliquer » (ou « Recharger » sur un écran précis) : surveille
+    // les accusés jusqu'à ce que les écrans concernés affichent la révision
+    // publiée (ou 30 s max). ``targetSid`` limite l'attente à un seul écran.
+    async function watchScreenAcks(targetSid) {
         const deadline = Date.now() + 30000;
         while (Date.now() < deadline) {
             const data = await fetchScreens();
-            const total = data.screens.length;
-            const confirmed = data.screens.filter(function (screen) {
+            const screens = targetSid
+                ? data.screens.filter(function (screen) { return screen.sid === targetSid; })
+                : data.screens;
+            const total = screens.length;
+            const confirmed = screens.filter(function (screen) {
                 return screen.status === 'current';
             }).length;
             if (!total) {
-                setStatus('Ordre de rechargement envoyé ; aucun écran connecté détecté.', 'warning');
+                setStatus(targetSid
+                    ? 'L’écran visé n’est plus détecté : vérifiez « Écrans ».'
+                    : 'Ordre de rechargement envoyé ; aucun écran connecté détecté.', 'warning');
                 return;
             }
             if (confirmed === total) {
-                setStatus('Rechargement confirmé sur ' + total + ' écran(s).', 'success');
+                setStatus(targetSid
+                    ? 'Rechargement confirmé sur cet écran.'
+                    : 'Rechargement confirmé sur ' + total + ' écran(s).', 'success');
                 return;
             }
             setStatus('Ordre envoyé — ' + confirmed + '/' + total + ' écran(s) confirmé(s)…', 'info');
             await new Promise(function (resolve) { setTimeout(resolve, 2000); });
         }
-        setStatus('Rechargement non confirmé par tous les écrans : vérifiez « Écrans ».', 'warning');
+        setStatus(targetSid
+            ? 'Rechargement non confirmé par l’écran visé : vérifiez « Écrans ».'
+            : 'Rechargement non confirmé par tous les écrans : vérifiez « Écrans ».', 'warning');
     }
 
     // --- Thèmes nommés (instantanés réutilisables du payload) ---

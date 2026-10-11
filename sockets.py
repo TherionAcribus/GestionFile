@@ -43,7 +43,9 @@ NAMESPACES = (
 # pratique la liste des namespaces ci-dessus.
 active_connections = {namespace: set() for namespace in NAMESPACES}
 
-# {sid: {"username": ...}} — alimenté à la connexion, purgé à la déconnexion.
+# {sid: {"username", "ip", "user_agent"}} — alimenté à la connexion, purgé à
+# la déconnexion. IP et agent servent à identifier les écrans dans le
+# panneau « Écrans » de l'éditeur visuel.
 connected_clients_info = {}
 
 # Accusés de rechargement des écrans pilotés par l'éditeur visuel :
@@ -89,9 +91,14 @@ def screen_status_for(page):
     screens = []
     for sid in sorted(sids | set(bucket)):
         ack = bucket.get(sid)
+        info = connected_clients_info.get(sid, {})
         screens.append({
-            "sid": sid[:8],
-            "username": connected_clients_info.get(sid, {}).get("username", "Unknown"),
+            # Le sid complet sert à cibler l'écran (rechargement ciblé via
+            # /apply) ; l'affichage reste tronqué côté client.
+            "sid": sid,
+            "username": info.get("username", "Unknown"),
+            "ip": info.get("ip"),
+            "user_agent": info.get("user_agent"),
             "revision": ack["revision"] if ack else None,
             "at": ack["at"] if ack else None,
         })
@@ -99,7 +106,7 @@ def screen_status_for(page):
 
 
 def register_client(req):
-    """Mémorise le nom d'utilisateur associé à la connexion.
+    """Mémorise l'identité associée à la connexion (nom, IP, agent).
 
     Les noms d'utilisateur arrivent par un en-tête côté PySide et par la
     querystring côté JavaScript, pour des raisons de simplicité côté client.
@@ -108,7 +115,11 @@ def register_client(req):
     if not username:
         username = req.args.get("username", "Unknown")
 
-    connected_clients_info[req.sid] = {"username": username}
+    connected_clients_info[req.sid] = {
+        "username": username,
+        "ip": req.environ.get("REMOTE_ADDR"),
+        "user_agent": req.headers.get("User-Agent"),
+    }
     return username
 
 
