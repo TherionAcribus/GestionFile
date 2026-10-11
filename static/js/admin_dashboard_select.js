@@ -109,7 +109,62 @@ document.addEventListener('click', function (evt) {
     if (save) {
         evt.preventDefault();
         saveCardConfiguration(save);
+        return;
     }
+    var toggleSettings = evt.target.closest('[data-card-settings-toggle]');
+    if (toggleSettings) {
+        evt.preventDefault();
+        var form = document.getElementById(toggleSettings.getAttribute('aria-controls'));
+        if (form) {
+            form.hidden = !form.hidden;
+            toggleSettings.setAttribute('aria-expanded', form.hidden ? 'false' : 'true');
+        }
+    }
+});
+
+// Réglages propres à une carte : enregistrés immédiatement (ils ne
+// participent pas au badge « Modifications non enregistrées » qui ne couvre
+// que visibilité et ordre).
+function saveCardSettings(form) {
+    var name = form.getAttribute('data-card-settings');
+    var payload = {};
+    new FormData(form).forEach(function (value, key) { payload[key] = Number(value); });
+    fetch('/admin/dashboard/settings/' + name, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(function (response) {
+        if (response.ok) {
+            if (typeof AdminFeedback !== 'undefined') {
+                AdminFeedback.toast('Réglages enregistrés', true);
+            }
+            form.hidden = true;
+            var toggle = document.querySelector(
+                '[data-card-settings-toggle][aria-controls="' + form.id + '"]');
+            if (toggle) { toggle.setAttribute('aria-expanded', 'false'); }
+            return null;
+        }
+        return response.text();
+    }).then(function (errorText) {
+        if (errorText !== null && typeof AdminFeedback !== 'undefined') {
+            AdminFeedback.error(errorText || "Échec de l'enregistrement des réglages");
+        }
+    }).catch(function (error) {
+        if (typeof AdminFeedback !== 'undefined') {
+            AdminFeedback.error("Échec de l'enregistrement des réglages");
+        } else {
+            console.error('Réglages de carte :', error);
+        }
+    });
+}
+
+document.addEventListener('submit', function (evt) {
+    var form = evt.target && evt.target.closest
+        ? evt.target.closest('form[data-card-settings]') : null;
+    if (!form) { return; }
+    evt.preventDefault();
+    if (!form.reportValidity()) { return; }
+    saveCardSettings(form);
 });
 
 // Le fragment arrive (première ouverture ou refresh_dashboard_select) :

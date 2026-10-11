@@ -748,29 +748,25 @@ class DashboardSection(BackupSection):
                 "name": c.name,
                 "visible": c.visible,
                 "position": c.position,
-                "size": c.size,
-                "color": c.color,
                 "settings": c.settings,
             }
             for c in cards
         ]
 
     def restore_data(self, data):
+        # Les anciens exports contiennent encore size/color (colonnes mortes,
+        # supprimées du modèle) : ignorées à la restauration.
         for item in data:
             card = DashboardCard.query.filter_by(name=item["name"]).first()
             if card:
                 card.visible = item["visible"]
                 card.position = item["position"]
-                card.size = item["size"]
-                card.color = item["color"]
                 card.settings = item.get("settings")
             else:
                 card = DashboardCard(
                     name=item["name"],
                     visible=item["visible"],
                     position=item["position"],
-                    size=item["size"],
-                    color=item["color"],
                     settings=item.get("settings"),
                 )
                 db.session.add(card)

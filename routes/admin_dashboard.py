@@ -3,9 +3,10 @@ from flask_security import current_user
 from models import DashboardCard, db
 from communication import communikation
 from routes.admin_security import check_default_admin, require_permission, require_permission_api, user_has_permission
-from dashboard_catalog import CATALOG, card_info, missing_cards, reorder_positions, visible_cards
+from dashboard_catalog import (CATALOG, card_info, card_settings,
+                               reorder_positions, validate_settings, visible_cards)
 from audit_service import record_audit
-from audit_log import ACTION_CREATE, ACTION_UPDATE, OUTCOME_SUCCESS
+from audit_log import ACTION_UPDATE, OUTCOME_SUCCESS
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
 
@@ -19,27 +20,6 @@ def _dashboard_helpers():
 
 def _can(resource):
     return user_has_permission(current_user, resource)
-
-
-def _ensure_catalog_cards():
-    """Crée les cartes du catalogue absentes de la base (nouvelle carte après
-    une mise à jour : « Aujourd'hui »…). Les cartes affichées par défaut sont
-    placées en tête."""
-    names = [name for (name,) in db.session.query(DashboardCard.name).all()]
-    missing = missing_cards(names)
-    if not missing:
-        return
-    first = (db.session.query(db.func.min(DashboardCard.position)).scalar() or 0) - len(missing)
-    last = db.session.query(db.func.max(DashboardCard.position)).scalar() or 0
-    for index, name in enumerate(missing, start=1):
-        info = card_info(name)
-        db.session.add(DashboardCard(
-            name=name, visible=info.default_visible,
-            position=(first + index) if info.default_visible else (last + index),
-            size='36', color='bg-white'))
-    db.session.commit()
-    record_audit(ACTION_CREATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
-                 details=f"ajout automatique : {','.join(missing)}")
 
 
 def _visible_cards_for_user():
@@ -98,7 +78,6 @@ def admin():
                      outcome=OUTCOME_SUCCESS,
                      details="auto-affichage (admin par défaut actif)")
 
-    _ensure_catalog_cards()
     # Seules les cartes que l'utilisateur peut charger (permission de la
     # route de la carte) : plus de carte « erreur » pour les autres.
     dashboardcards = [card for card in _visible_cards_for_user() if card.name in CATALOG]
@@ -129,35 +108,7 @@ def hide_dashboard_card():
         return '', 200
     else:
         return 'Card non trouvée', 404
-    
 
-# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
-# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
-# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
-# tests/test_code_mort.py.
-# @admin_dashboard_bp.route('/admin/dashboard/valide_select', methods=['POST'])
-@require_permission('options')
-def dashboard_valid_select():
-    data = request.form.getlist('dashboard_options')
-
-    all_cards = DashboardCard.query.all()
-
-    for card in all_cards:
-        if card.name in data:
-            card.visible = True
-        else:
-            card.visible = False
-
-    db.session.commit()
-    record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
-                 details=f"visibles={','.join(data)}")
-    communikation("admin", event="refresh_dashboard_select")
-
-    dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position, DashboardCard.id).all()
-    html = ""
-    for dashboardcard in dashboardcards:
-        html += render_template('admin/dashboard_slot.html', dashboardcard=dashboardcard)
-    return html, 200
 
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])
 @require_permission('options')
@@ -167,6 +118,7 @@ def dashboard_display_select():
     return render_template('/admin/dashboard_select.html',
                         all_dashboardcards=all_dashboardcards,
                         card_info=card_info,
+                        card_settings=card_settings,
                         can=_can)
 
 
@@ -187,69 +139,29 @@ def save_dashboard_order():
     communikation("admin", event="refresh_dashboard")
     return '', 204  # Réponse vide avec succès
 
-# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
-# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
-# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
-# tests/test_code_mort.py.
-# @admin_dashboard_bp.route('/admin/dashboard/resize', methods=['POST'])
-@require_permission_api('options')
-def resize_dashboard_card():
-    data = request.get_json()
-    card_id = data.get('card_id')
-    new_size = data.get('size')
-    
-    if not card_id or not new_size:
-        return 'Missing card_id or size', 400
-    
-    if new_size not in ['18', '24', '36', '48']:
-        return 'Invalid size', 400
-    
-    card = DashboardCard.query.filter_by(id=card_id).first()
-    if card:
-        card.size = new_size
-        db.session.commit()
-        record_audit(ACTION_UPDATE, "dashboard_card", target_id=card_id,
-                     outcome=OUTCOME_SUCCESS, details=f"size={new_size}")
-        return '', 204
-    else:
-        return 'Card non trouvée', 404
 
-# [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
-# (gabarits, JS, App_Comptoir, borne). Reactiver = decommenter la ligne
-# ci-dessous, puis retirer l'entree de ROUTES_DESACTIVEES dans
-# tests/test_code_mort.py.
-# @admin_dashboard_bp.route('/admin/dashboard/add', methods=['POST'])
+@admin_dashboard_bp.route('/admin/dashboard/settings/<name>', methods=['POST'])
 @require_permission_api('options')
-def add_dashboard_card():
-    data = request.get_json()
-    name = data.get('name')
-    
-    if not name:
-        return 'Missing name', 400
-    
-    # Vérifier si la carte existe déjà
-    existing_card = DashboardCard.query.filter_by(name=name).first()
-    if existing_card:
-        return 'Card already exists', 409
-    
-    # Trouver la position maximale actuelle
-    max_position = db.session.query(db.func.max(DashboardCard.position)).scalar() or 0
-    
-    # Créer la nouvelle carte
-    new_card = DashboardCard(
-        name=name,
-        visible=True,
-        position=max_position + 1,
-        size='36',
-        color='bg-white'
-    )
-    
-    db.session.add(new_card)
+def save_dashboard_card_settings(name):
+    if name not in CATALOG:
+        return 'Card non trouvée', 404
+    card = DashboardCard.query.filter_by(name=name).first()
+    if not card:
+        return 'Card non trouvée', 404
+    try:
+        clean = validate_settings(name, request.get_json(silent=True))
+    except ValueError as exc:
+        # Messages de validation rédigés dans validate_settings (sûrs à
+        # renvoyer au client), jamais un détail d'exception technique.
+        message = exc.args[0] if exc.args else 'Invalid data'
+        return message, 400
+    card.settings = {**(card.settings or {}), **clean}
     db.session.commit()
-    record_audit(ACTION_CREATE, "dashboard_card", target_id=new_card.id,
-                 outcome=OUTCOME_SUCCESS, details=f"name={name}")
-    
-    return '', 201
+    record_audit(ACTION_UPDATE, "dashboard_card", target_id=name,
+                 outcome=OUTCOME_SUCCESS, details=f"settings={clean}")
+    communikation("admin", data={"name": name}, event="refresh_dashboard_card")
+    return '', 204
+
 
 @admin_dashboard_bp.route('/admin/dashboard/save_configuration', methods=['POST'])
 @require_permission_api('options')

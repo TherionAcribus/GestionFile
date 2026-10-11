@@ -2,7 +2,7 @@
 {# Carte « File d'attente » : au comptoir / appelés d'abord, puis en attente
    (ordre d'arrivée, avec l'attente). Liste bornée : le détail complet est
    sur la page File d'attente. #}
-{% set max_rows = 10 %}
+{# max_rows : réglage de la carte (dashboard_catalog / card.settings). #}
 {% call card_shell(dashboardcard, badge=(waiting | length) if waiting else none) %}
 {% if not patients %}
     <p class="text-center text-muted my-3"><i class="bi bi-cup-hot" aria-hidden="true"></i> Personne dans la file.</p>

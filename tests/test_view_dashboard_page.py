@@ -29,7 +29,9 @@ import routes.admin_dashboard as admin_dashboard
 import routes.admin_queue as admin_queue
 import routes.admin_staff as admin_staff
 from dashboard_catalog import (CATALOG, card_info, card_name_for_url,
-                               missing_cards, reorder_positions, visible_cards)
+                               card_settings, missing_cards, reorder_positions,
+                               validate_settings, visible_cards)
+from dashboard_service import ensure_catalog_cards
 from models import (Activity, Counter, DashboardCard, Language, Patient, Pharmacist,
                     Role, User, db)
 
@@ -120,7 +122,7 @@ def app(tmp_path):
                     timestamp=now - timedelta(minutes=2)),
         ])
         for position, name in enumerate(("security", "queue", "counter", "staff")):
-            db.session.add(DashboardCard(name=name, visible=True, position=position, size="36"))
+            db.session.add(DashboardCard(name=name, visible=True, position=position))
         db.session.commit()
     yield app
 
@@ -134,13 +136,13 @@ def client(app):
 
 def test_cartes_manquantes_creees_aujourd_hui_en_tete(app):
     with app.test_request_context():
-        admin_dashboard._ensure_catalog_cards()
+        ensure_catalog_cards()
         cards = DashboardCard.query.order_by(DashboardCard.position).all()
         assert cards[0].name == "today" and cards[0].visible
         created = {c.name: c.visible for c in cards}
         assert set(CATALOG) <= set(created)
         assert created["player"] is False          # ajoutée masquée
-        admin_dashboard._ensure_catalog_cards()     # idempotent
+        ensure_catalog_cards()                      # idempotent
         assert DashboardCard.query.count() == len(set(created))
 
 
@@ -195,7 +197,7 @@ def test_page_admin_rend_les_enveloppes_depuis_le_catalogue(app, client):
     """Les enveloppes de chargement différé tirent URL et triggers du
     catalogue (via le gabarit unique dashboard_slot.html)."""
     with app.test_request_context():
-        admin_dashboard._ensure_catalog_cards()   # crée « today » notamment
+        ensure_catalog_cards()   # crée « today » notamment
         html = admin_dashboard._render_card_slots(DashboardCard.query.all())
     assert 'data-card-url="/admin/queue/dashboard"' in html
     assert 'data-card-url="/admin/counter/dashboard"' in html
@@ -290,10 +292,73 @@ def test_card_name_for_url():
     assert card_name_for_url("/nope") is None
 
 
+def test_card_settings_pur():
+    assert card_settings("queue", None) == {"max_rows": 10}
+    assert card_settings("queue", {"max_rows": 999})["max_rows"] == 10
+    assert card_settings("queue", {"max_rows": "7"})["max_rows"] == 7
+    assert card_settings("alerts", {"x": 1}) == {}
+    assert validate_settings("queue", {"max_rows": 5}) == {"max_rows": 5}
+    with pytest.raises(ValueError):
+        validate_settings("queue", {"max_rows": 0})
+    with pytest.raises(ValueError):
+        validate_settings("queue", {"inconnu": 1})
+    with pytest.raises(ValueError):
+        validate_settings("queue", "pas un dict")
+
+
+def test_route_settings(app, client):
+    with patch.object(admin_dashboard, "communikation") as mock:
+        assert client.post("/admin/dashboard/settings/queue",
+                           json={"max_rows": 3}).status_code == 204
+        assert any(c.kwargs.get("event") == "refresh_dashboard_card"
+                   for c in mock.call_args_list)
+    with app.app_context():
+        assert (DashboardCard.query.filter_by(name="queue").first().settings
+                == {"max_rows": 3})
+        # 4 patients en attente (2 dans le fixture + 2 ajoutés) : à max_rows=3,
+        # la carte affiche « … et 1 autre ».
+        ordo = Activity.query.first()
+        fr = Language.query.first()
+        now = datetime.now(admin_queue.time_tz).replace(tzinfo=None)
+        db.session.add_all([
+            Patient(call_number="A-5", status="standing", activity_id=ordo.id,
+                    language_id=fr.id, timestamp=now),
+            Patient(call_number="A-6", status="standing", activity_id=ordo.id,
+                    language_id=fr.id, timestamp=now),
+        ])
+        db.session.commit()
+    html = client.get("/admin/queue/dashboard").get_data(as_text=True)
+    assert "… et 1 autre" in html
+
+    assert client.post("/admin/dashboard/settings/queue",
+                       json={"max_rows": 0}).status_code == 400
+    assert client.post("/admin/dashboard/settings/inconnue",
+                       json={"x": 1}).status_code == 404
+
+
+def test_today_seuil_rouge(client, app):
+    with app.app_context():
+        db.session.add(DashboardCard(name="today", visible=True, position=10))
+        db.session.commit()
+    html = client.get("/admin/today/dashboard").get_data(as_text=True)
+    assert "text-danger" in html          # attente 20 min ≥ seuil 15 par défaut
+    assert client.post("/admin/dashboard/settings/today",
+                       json={"wait_alert_minutes": 30}).status_code == 204
+    html = client.get("/admin/today/dashboard").get_data(as_text=True)
+    assert "text-danger" not in html      # 20 min < 30 : plus de rouge
+
+
+def test_gestionnaire_affiche_les_reglages(client):
+    body = client.get("/admin/dashboard/display_select").get_data(as_text=True)
+    assert 'data-card-settings="queue"' in body
+    assert 'name="max_rows"' in body
+    assert 'data-card-settings="staff"' not in body
+
+
 def test_nom_de_carte_unique(app):
     from sqlalchemy.exc import IntegrityError
     with app.app_context():
-        db.session.add(DashboardCard(name="queue", visible=True, position=99, size="36"))
+        db.session.add(DashboardCard(name="queue", visible=True, position=99))
         with pytest.raises(IntegrityError):
             db.session.commit()
         db.session.rollback()

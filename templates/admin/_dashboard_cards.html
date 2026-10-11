@@ -22,6 +22,7 @@
 <div id="card-wrapper-{{ dashboardcard.id }}"
      class="dashboard-card-slot{% if info %} span-{{ info.span }}{% endif %}"
      data-card-id="{{ dashboardcard.id }}"
+     data-card-name="{{ dashboardcard.name }}"
      data-card-url="{{ url }}"
      hx-get="{{ url }}"
      hx-trigger="revealed once{% if extra_triggers %}, {{ extra_triggers }}{% endif %}"
@@ -56,7 +57,7 @@
 {% macro card_shell(dashboardcard, title=None, variant=None, badge=None) %}
 {% set info = dashboard_card_info(dashboardcard.name) if dashboard_card_info is defined else none %}
 {% set label = title or (info.label if info else dashboardcard.name) %}
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }}{% if variant %} dashboard-card-{{ variant }}{% endif %}">
+<div id="card-{{ dashboardcard.id }}" class="dashboard-card{% if variant %} dashboard-card-{{ variant }}{% endif %}">
     <div class="card h-100{% if variant %} border-{{ variant }}{% endif %}">
         <div class="card-header d-flex align-items-center gap-2" title="Glisser pour déplacer la carte">
             <i class="bi bi-grip-vertical text-body-tertiary" aria-hidden="true"></i>

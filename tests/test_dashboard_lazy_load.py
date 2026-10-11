@@ -111,6 +111,14 @@ def test_dashboard_realtime_refresh_wiring():
     assert "data-card-manager-dirty" in _read("templates/admin/dashboard_select.html")
 
 
+def test_settings_realtime_wiring():
+    """Réglages par carte : l'évènement refresh_dashboard_card recharge la
+    seule carte concernée, repérée par data-card-name sur le slot."""
+    assert "'refresh_dashboard_card'" in _read("static/js/admin.js")
+    assert "data-card-name" in _read("static/js/admin_home.js")
+    assert "data-card-name=" in _read("templates/admin/_dashboard_cards.html")
+
+
 def test_admin_page_has_per_card_error_state():
     # Le script de la page a ete extrait vers static/js/admin_home.js (point 2).
     src = _read("templates/admin/admin.html") + _read("static/js/admin_home.js")

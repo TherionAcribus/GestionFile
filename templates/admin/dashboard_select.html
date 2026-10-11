@@ -35,6 +35,15 @@
                 </span>
             </div>
             <div class="card-item-actions">
+                {% if info.settings %}
+                <button type="button" class="btn-card-settings"
+                        data-card-settings-toggle aria-expanded="false"
+                        aria-controls="card-settings-{{ card.id }}"
+                        title="Réglages de la carte">
+                    <i class="bi bi-gear" aria-hidden="true"></i>
+                    <span class="visually-hidden">Réglages {{ info.label }}</span>
+                </button>
+                {% endif %}
                 <button type="button" class="btn-toggle-visibility"
                         data-card-id="{{ card.id }}"
                         aria-pressed="{{ 'true' if card.visible else 'false' }}"
@@ -43,6 +52,24 @@
                     <span class="visually-hidden">Afficher / masquer {{ info.label }}</span>
                 </button>
             </div>
+            {% if info.settings %}
+            {% set values = card_settings(card.name, card.settings) %}
+            <form id="card-settings-{{ card.id }}" class="card-item-settings"
+                  data-card-settings="{{ card.name }}" hidden>
+                {% for spec in info.settings %}
+                <div>
+                    <label class="form-label small mb-0"
+                           for="card-settings-{{ card.id }}-{{ spec.key }}">{{ spec.label }}</label>
+                    <input type="number" class="form-control form-control-sm"
+                           id="card-settings-{{ card.id }}-{{ spec.key }}"
+                           name="{{ spec.key }}" min="{{ spec.min }}" max="{{ spec.max }}"
+                           value="{{ values[spec.key] }}" required>
+                    {% if spec.help %}<div class="form-text">{{ spec.help }}</div>{% endif %}
+                </div>
+                {% endfor %}
+                <button type="submit" class="btn btn-sm btn-outline-primary">Appliquer</button>
+            </form>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

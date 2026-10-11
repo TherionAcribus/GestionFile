@@ -21,6 +21,16 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
+class SettingSpec:
+    key: str
+    label: str
+    default: int
+    min: int
+    max: int
+    help: str = ""
+
+
+@dataclass(frozen=True)
 class CardInfo:
     label: str
     icon: str
@@ -35,6 +45,8 @@ class CardInfo:
     data_url: str | None = None
     # Évènements HTMX temps réel qui rechargent la carte (en plus de « revealed once »).
     triggers: tuple[str, ...] = ()
+    # Réglages éditables dans le gestionnaire (stockés dans card.settings).
+    settings: tuple[SettingSpec, ...] = ()
 
 
 CATALOG = {
@@ -42,7 +54,11 @@ CATALOG = {
                       "Les chiffres clés de la journée : attente, patients servis, comptoirs occupés.",
                       "/admin/stats", "queue", span="full", default_visible=True,
                       data_url="/admin/today/dashboard",
-                      triggers=("refresh_queue_patient", "refresh_counter_dashboard")),
+                      triggers=("refresh_queue_patient", "refresh_counter_dashboard"),
+                      settings=(SettingSpec(
+                          "wait_alert_minutes",
+                          "Attente la plus longue en rouge à partir de (minutes)",
+                          15, 1, 240),)),
     "alerts": CardInfo("Alertes", "bi-exclamation-triangle",
                        "Problèmes de configuration de la borne (n'apparaît que s'il y en a).",
                        "/admin/patient?tab=buttons", "patient",
@@ -55,7 +71,10 @@ CATALOG = {
                       "Patients en attente, appelés et au comptoir, en direct.",
                       "/admin/queue", "queue",
                       data_url="/admin/queue/dashboard",
-                      triggers=("refresh_queue_patient",)),
+                      triggers=("refresh_queue_patient",),
+                      settings=(SettingSpec(
+                          "max_rows", "Patients en attente affichés", 10, 3, 50,
+                          "Au-delà, « … et N autres »."),)),
     "counter": CardInfo("Comptoirs", "bi-window-stack",
                         "Qui est connecté à quel comptoir, et avec quel patient.",
                         "/admin/counter", "counter",
@@ -103,6 +122,43 @@ def visible_cards(cards, can):
     """
     return [card for card in cards
             if card.visible and can(card_info(card.name).permission)]
+
+
+def card_settings(name, raw):
+    """Réglages effectifs d'une carte : valeurs par défaut du catalogue,
+    surchargées par ``raw`` (dict JSON stocké) — valeurs hors bornes ou
+    invalides ignorées."""
+    out = {}
+    raw = raw if isinstance(raw, dict) else {}
+    for spec in card_info(name).settings:
+        value = raw.get(spec.key, spec.default)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = spec.default
+        out[spec.key] = value if spec.min <= value <= spec.max else spec.default
+    return out
+
+
+def validate_settings(name, raw):
+    """Réglages soumis par le gestionnaire → dict propre à stocker.
+    Lève ValueError (message lisible) sur clé inconnue ou valeur hors bornes."""
+    if not isinstance(raw, dict):
+        raise ValueError("Réglages invalides : objet attendu")
+    specs = {spec.key: spec for spec in card_info(name).settings}
+    clean = {}
+    for key, value in raw.items():
+        spec = specs.get(key)
+        if spec is None:
+            raise ValueError(f"Réglage inconnu : {key}")
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{spec.label} : nombre entier attendu")
+        if not spec.min <= value <= spec.max:
+            raise ValueError(f"{spec.label} : entre {spec.min} et {spec.max}")
+        clean[key] = value
+    return clean
 
 
 def card_name_for_url(path):

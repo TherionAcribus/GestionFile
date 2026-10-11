@@ -116,6 +116,18 @@ function refresh_dashboard(){
         });
 }
 
+// Recharge une seule carte (réglages modifiés par un autre admin) : le
+// serveur diffuse 'refresh_dashboard_card' avec data = {name}.
+function refresh_dashboard_card(msg) {
+    var name = msg && msg.data && msg.data.name;
+    if (!name) { return; }
+    var slot = document.querySelector(
+        '#sortable-dashboard .dashboard-card-slot[data-card-name="' + name + '"]');
+    if (slot) {
+        htmx.ajax('GET', slot.getAttribute('data-card-url'), { target: slot, swap: 'innerHTML' });
+    }
+}
+
 // -------- Point 5.3 : squelette + état d'erreur par carte --------
 // Chaque carte est chargée en différé (voir _dashboard_cards.html). Si sa
 // requête échoue (erreur serveur ou réseau), on remplace le squelette par un

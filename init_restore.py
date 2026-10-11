@@ -7,7 +7,7 @@ from datetime import datetime, time
 from flask import current_app
 from io import BytesIO
 
-from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable, DashboardCard
+from models import db, ConfigVersion, ConfigOption, Weekday, ActivitySchedule, Activity, Counter, Pharmacist, Button, AlgoRule, Language, Patient, PatientCssVariable, AnnounceCssVariable, PhoneCssVariable
 from params_registry import column_values_for
 from page_editor import ADAPTERS, builtin_themes, default_layout
 
@@ -769,35 +769,12 @@ def _fix_missing_flag_urls(json_file):
         db.session.commit()
 
 
-def init_default_dashboard_db_from_json():
-    json_file = 'static/json/default_dashboard.json'
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    current_app.logger.debug('DATA VERSION %s', data['version'])
-
-    current_version = ConfigVersion.query.filter_by(config_key="dashboard_version").first()
-    current_app.logger.debug('Data version: %s', data['version'])
-    if not current_version or current_version.version != data['version']:
-        # Mise à jour de la version
-        if current_version:
-            current_version.version = data['version']
-        else:
-            create_version_number(ConfigVersion, data, db, key="dashboard_version")
-
-        # Mise à jour ou ajout de textes
-        for dashboard_data in data['dashboard']:
-            dashboard_card = DashboardCard.query.filter_by(id=dashboard_data['id']).first()
-            if not dashboard_card:
-                new_dashboard_card = DashboardCard(name=dashboard_data['name'],
-                                                    visible=dashboard_data['visible'],
-                                                    position=dashboard_data['position'],
-                                                    size=dashboard_data['size'],
-                                                    color=dashboard_data['color'])
-                db.session.add(new_dashboard_card)
-
-        db.session.commit()
-        current_app.logger.debug('Database updated to version: %s', data['version'])
+def init_default_dashboard_db():
+    """Crée les cartes du catalogue absentes (remplace le seeding par
+    default_dashboard.json : la source de vérité est dashboard_catalog, ce qui
+    évite les doublons sur la contrainte unique de ``name``)."""
+    from dashboard_service import ensure_catalog_cards
+    ensure_catalog_cards()
 
 
 def init_days_of_week_db_from_json():

@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', function () {
     AdminRealtime.on(NS_ADMIN, 'refresh_printer_dashboard', function (msg) { refresh_printer_dashboard(msg); }, '#sortable-dashboard');
     AdminRealtime.on(NS_ADMIN, 'refresh_counter_dashboard', function (msg) { refresh_counter_dashboard(msg); }, '#sortable-dashboard');
     AdminRealtime.on(NS_ADMIN, 'refresh_dashboard', function () { refresh_dashboard(); }, '#sortable-dashboard');
+    AdminRealtime.on(NS_ADMIN, 'refresh_dashboard_card', function (msg) { refresh_dashboard_card(msg); }, '#sortable-dashboard');
     // Liste des tâches planifiées (page Planification).
     AdminRealtime.on(NS_ADMIN, 'refresh_schedule_tasks_list', function (msg) { refresh_schedule_tasks_list(msg); }, '#div_schedule_tasks_list');
     // Section « Cache des annonces vocales » (même page).

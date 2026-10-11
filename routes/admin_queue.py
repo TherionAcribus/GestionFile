@@ -12,6 +12,7 @@ from communication import communikation, notify_patient_phone_closed
 from services.queue_service import archive_and_purge_all_patients, purge_all_patients
 from routes.admin_security import require_permission, require_permission_dashboard
 from pagination import parse_page_params, paginate_query
+from dashboard_catalog import card_settings
 from audit_service import record_audit
 from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE, OUTCOME_SUCCESS, OUTCOME_FAILURE,
@@ -315,8 +316,13 @@ def dashboard_today():
               .order_by(Patient.timestamp).first())
     counters_total = Counter.query.count()
     counters_busy = Counter.query.filter(Counter.staff_id.isnot(None)).count()
+    dashboardcard = DashboardCard.query.filter_by(name="today").first()
     return render_template('/admin/dashboard_today.html',
-                           dashboardcard=DashboardCard.query.filter_by(name="today").first(),
+                           dashboardcard=dashboardcard,
+                           wait_alert=card_settings(
+                               "today",
+                               dashboardcard.settings if dashboardcard else None
+                           )["wait_alert_minutes"],
                            counts=counts,
                            kpi=today_kpis,
                            longest_wait=describe_minutes(minutes_between(oldest.timestamp, now)) if oldest else None,
@@ -349,4 +355,8 @@ def dashboard_queue():
                             at_counter=[p for p in patients if p.status in ('calling', 'ongoing')],
                             waiting=[p for p in patients if p.status == 'standing'],
                             wait_of=lambda p: describe_minutes(minutes_between(p.timestamp, now)),
+                            max_rows=card_settings(
+                                "queue",
+                                dashboardcard.settings if dashboardcard else None
+                            )["max_rows"],
                             dashboardcard=dashboardcard)

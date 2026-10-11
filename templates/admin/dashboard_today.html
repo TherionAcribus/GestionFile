@@ -11,7 +11,7 @@
     </div>
     <div class="col-6 col-md">
         <div class="today-kpi">
-            <div class="today-kpi-value {{ 'text-danger' if (longest_minutes or 0) >= 15 else '' }}">{{ longest_wait or '—' }}</div>
+            <div class="today-kpi-value {{ 'text-danger' if (longest_minutes or 0) >= wait_alert else '' }}">{{ longest_wait or '—' }}</div>
             <div class="today-kpi-label">attente la plus longue{% if oldest %} ({{ oldest.call_number }}){% endif %}</div>
         </div>
     </div>

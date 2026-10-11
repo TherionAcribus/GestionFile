@@ -112,6 +112,12 @@ ROUTES_RETIREES = [
     # le message_queue de Socket.IO.
     ("routes/api_system.py", "/send"),
     ("routes/api_system.py", "/test"),
+    # Personnalisation du tableau de bord, désactivées puis supprimées : la
+    # sélection de visibilité vit dans dashboard_select.html, le
+    # redimensionnement et l'ajout n'avaient aucune interface.
+    ("routes/admin_dashboard.py", "/admin/dashboard/valide_select"),
+    ("routes/admin_dashboard.py", "/admin/dashboard/resize"),
+    ("routes/admin_dashboard.py", "/admin/dashboard/add"),
 ]
 
 
@@ -233,11 +239,8 @@ def test_toute_vue_est_appelable_avec_les_variables_de_l_url():
 ROUTES_DESACTIVEES = [
     # Réglage de l'algorithme : aucun formulaire ne l'envoie.
     ("routes/admin_algo.py", "/admin/algo/change_overtaken_limit"),
-    # Personnalisation du tableau de bord : sélection, redimensionnement, ajout
-    # de carte. L'interface actuelle n'expose aucune de ces trois actions.
-    ("routes/admin_dashboard.py", "/admin/dashboard/valide_select"),
-    ("routes/admin_dashboard.py", "/admin/dashboard/resize"),
-    ("routes/admin_dashboard.py", "/admin/dashboard/add"),
+    # (les trois routes de personnalisation du tableau de bord qui figuraient
+    # ici ont été supprimées : voir ROUTES_RETIREES)
     # Lecteur Spotify : commandes et bibliothèque.
     ("routes/admin_music.py", "/admin/music/player/<action>"),
     # Corps VIDE (`# Code existant...` puis `pass`) : n'a jamais rien fait.
