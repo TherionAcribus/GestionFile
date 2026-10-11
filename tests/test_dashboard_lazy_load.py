@@ -154,7 +154,9 @@ def test_manager_scope_wiring():
     assert "data-scope=" in html
     assert "scope=me" in html
     assert "/admin/dashboard/me/reset" in html
-    assert "/admin/dashboard/me/save" in _read("static/js/admin_dashboard_select.js")
+    js = _read("static/js/admin_dashboard_select.js")
+    assert "/admin/dashboard/me/save" in js
+    assert "display_select?scope=" in js
 
 
 def test_admin_page_has_per_card_error_state():

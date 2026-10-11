@@ -213,6 +213,20 @@ def apply_user_layout(cards, layout):
     return views
 
 
+def pin_card_first(views, name):
+    """Rend la carte ``name`` visible et la place en tête (positions renumérotées).
+    Sans effet si elle est absente. Utilisé pour l'alerte Sécurité."""
+    view = next((v for v in views if v.name == name), None)
+    if view is None:
+        return views
+    view.visible = True
+    views.remove(view)
+    views.insert(0, view)
+    for index, v in enumerate(views, start=1):
+        v.position = index
+    return views
+
+
 def layout_from_order(ordered_names, visible_names):
     """Disposition personnelle à stocker à partir du gestionnaire :
     ``order`` = noms connus du catalogue, dédoublonnés, dans l'ordre ;

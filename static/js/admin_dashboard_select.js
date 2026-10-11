@@ -81,9 +81,14 @@ function saveCardConfiguration(btn) {
         }
 
         setDirty(false);
-        // Recharge le gestionnaire : le badge « disposition personnelle »,
-        // l'étendue par défaut et le bouton « Disposition commune » changent.
-        if (typeof refresh_dashboard_select === 'function') { refresh_dashboard_select(); }
+        // Recharge le gestionnaire sur la MÊME étendue (me/all) : le badge
+        // « disposition personnelle » et le bouton « Disposition commune »
+        // changent après l'enregistrement.
+        if (typeof htmx !== 'undefined') {
+            htmx.ajax('GET', '/admin/dashboard/display_select?scope=' +
+                      encodeURIComponent(scope),
+                      { target: '#div_select_dashboard', swap: 'innerHTML' });
+        }
         if (btn) {
             var originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Enregistré';

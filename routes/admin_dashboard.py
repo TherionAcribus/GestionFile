@@ -5,8 +5,9 @@ from communication import communikation
 from routes.admin_security import check_default_admin, require_permission_api, user_has_permission
 from dashboard_catalog import (CATALOG, apply_user_layout, card_info,
                                card_settings, default_layout, layout_from_order,
-                               reorder_positions, validate_layout,
-                               validate_settings, visible_cards)
+                               pin_card_first, reorder_positions,
+                               validate_layout, validate_settings,
+                               visible_cards)
 from audit_service import record_audit
 from audit_log import ACTION_DELETE, ACTION_UPDATE, OUTCOME_SUCCESS
 
@@ -40,8 +41,13 @@ def _views_for_user():
     """Cartes vues par l'admin courant : sa disposition personnelle si elle
     existe, sinon la commune."""
     row = _user_layout()
-    return apply_user_layout(
+    views = apply_user_layout(
         _common_cards(), validate_layout(row.layout) if row else None)
+    # Sans disposition personnelle, la commune est déjà forcée par admin() ;
+    # avec, la carte Sécurité prime tant que le mot de passe par défaut court.
+    if row and check_default_admin():
+        pin_card_first(views, 'security')
+    return views
 
 
 def _save_user_layout(layout):
@@ -152,6 +158,9 @@ def hide_dashboard_card():
     card_name = request.form.get('card_name')
 
     if _user_layout() is not None or not _can('options'):
+        if card_name == 'security' and check_default_admin():
+            return ("La carte Sécurité reste affichée tant que le mot de "
+                    "passe administrateur par défaut est actif.", 409)
         views = _views_for_user()
         if not any(view.name == card_name for view in views):
             return 'Card non trouvée', 404

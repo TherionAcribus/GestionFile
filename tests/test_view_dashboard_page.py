@@ -30,7 +30,7 @@ import routes.admin_queue as admin_queue
 import routes.admin_staff as admin_staff
 from dashboard_catalog import (CATALOG, apply_user_layout, card_info,
                                card_name_for_url, card_settings, default_layout,
-                               layout_from_order, missing_cards,
+                               layout_from_order, missing_cards, pin_card_first,
                                reorder_positions, validate_layout,
                                validate_settings, visible_cards)
 from dashboard_service import ensure_catalog_cards
@@ -104,7 +104,8 @@ def app(tmp_path):
                                 admin_staff=True, admin_options=True))
         viewer = User(username="viewer", email="v@v.v",
                       password=generate_password_hash("x"), active=True)
-        viewer.roles.append(Role(name="viewer", admin_queue=True))
+        viewer.roles.append(Role(name="viewer", admin_queue=True,
+                                 admin_security=True))
         db.session.add_all([admin, viewer])
         ordo = Activity(name="Ordonnance", letter="A")
         fr = Language(code="fr", name="Français", translation="Français")
@@ -512,6 +513,55 @@ def test_admin_options_edite_le_commun_par_defaut(client, app):
     assert "Disposition commune" in body          # bouton de retour
     assert client.get(
         "/admin/dashboard/display_select?scope=all").status_code == 200
+
+
+def test_pin_card_first():
+    views = apply_user_layout(
+        _common_view_cards(),
+        {"order": ["staff", "queue", "security", "counter"],
+         "hidden": ["security"]})
+    pin_card_first(views, "security")
+    assert views[0].name == "security"
+    assert views[0].visible is True
+    assert [v.position for v in views] == [1, 2, 3, 4]
+
+    snapshot = [(v.name, v.visible, v.position) for v in views]
+    assert pin_card_first(views, "inconnue") is views
+    assert [(v.name, v.visible, v.position) for v in views] == snapshot
+
+
+def test_securite_forcee_avec_disposition_personnelle(viewer_client, app):
+    """Tant que le mot de passe admin par défaut est actif, la carte Sécurité
+    est visible en tête même si la disposition personnelle la masque, et ne
+    peut pas être masquée."""
+    with app.app_context():
+        ensure_catalog_cards()
+        viewer = User.query.filter_by(username="viewer").first()
+        viewer_id = viewer.id
+        db.session.add(DashboardUserLayout(
+            user_id=viewer_id,
+            layout={"order": ["queue", "security"], "hidden": ["security"]}))
+        db.session.commit()
+
+    with patch.object(admin_dashboard, "check_default_admin", lambda: True):
+        with app.test_request_context():
+            from flask_login import login_user
+            login_user(User.query.filter_by(username="viewer").first())
+            views = admin_dashboard._views_for_user()
+        assert views[0].name == "security"
+        assert views[0].visible is True
+
+        r = viewer_client.post("/admin/dashboard/hide",
+                               data={"card_name": "security"})
+        assert r.status_code == 409
+
+    with patch.object(admin_dashboard, "check_default_admin", lambda: False):
+        r = viewer_client.post("/admin/dashboard/hide",
+                               data={"card_name": "security"})
+        assert r.status_code == 200
+    with app.app_context():
+        row = DashboardUserLayout.query.filter_by(user_id=viewer_id).first()
+        assert "security" in row.layout["hidden"]
 
 
 def test_nom_de_carte_unique(app):
