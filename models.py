@@ -912,7 +912,27 @@ class DashboardCard(db.Model):
 
     def __repr__(self):
         return f'<DashboardCard {self.name}>'
-    
+
+
+class DashboardUserLayout(db.Model):
+    """Disposition personnelle du tableau de bord d'un administrateur.
+
+    ``layout`` : ``{"order": [noms de cartes dans l'ordre], "hidden": [noms masqués]}``.
+    Une carte du catalogue absente de ``order`` (ajoutée depuis) suit la
+    disposition commune : à la suite, visibilité par défaut du catalogue.
+    Absence de ligne = disposition commune. Les réglages des cartes
+    (DashboardCard.settings) restent communs.
+    """
+    __tablename__ = 'dashboard_user_layout'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('app_users.id', name='fk_dashboard_user_layout_user_id'),
+                        nullable=False, unique=True, index=True)
+    layout = db.Column(db.JSON, nullable=False, default=dict)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(time_tz),
+                           onupdate=lambda: datetime.now(time_tz))
+    user = db.relationship('User', backref=db.backref(
+        'dashboard_layout', uselist=False, cascade='all, delete-orphan'))
+
 class IdempotencyKey(db.Model):
     """ Mémorise la réponse associée à une clé d'idempotence pour rendre les
     commandes non rejouables (ex. « appeler le suivant ») insensibles aux

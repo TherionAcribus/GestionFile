@@ -28,13 +28,14 @@ import routes.admin_counter as admin_counter
 import routes.admin_dashboard as admin_dashboard
 import routes.admin_queue as admin_queue
 import routes.admin_staff as admin_staff
-from dashboard_catalog import (CATALOG, card_info, card_name_for_url,
-                               card_settings, default_layout, missing_cards,
-                               reorder_positions, validate_settings,
-                               visible_cards)
+from dashboard_catalog import (CATALOG, apply_user_layout, card_info,
+                               card_name_for_url, card_settings, default_layout,
+                               layout_from_order, missing_cards,
+                               reorder_positions, validate_layout,
+                               validate_settings, visible_cards)
 from dashboard_service import ensure_catalog_cards
-from models import (Activity, Counter, DashboardCard, Language, Patient, Pharmacist,
-                    Role, User, db)
+from models import (Activity, Counter, DashboardCard, DashboardUserLayout,
+                    Language, Patient, Pharmacist, Role, User, db)
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
 
@@ -86,8 +87,10 @@ def app(tmp_path):
     app.add_url_rule("/login", endpoint="security.login", view_func=lambda: "")
 
     def test_login():
+        from flask import request as req
         from flask_login import login_user
-        login_user(User.query.filter_by(username="admin").first())
+        login_user(User.query.filter_by(
+            username=req.args.get("user", "admin")).first())
         return jsonify(authenticated=True)
 
     app.add_url_rule("/_test/login", view_func=test_login, methods=["POST"])
@@ -99,7 +102,10 @@ def app(tmp_path):
                      password=generate_password_hash("x"), active=True)
         admin.roles.append(Role(name="admin", admin_queue=True, admin_counter=True,
                                 admin_staff=True, admin_options=True))
-        db.session.add(admin)
+        viewer = User(username="viewer", email="v@v.v",
+                      password=generate_password_hash("x"), active=True)
+        viewer.roles.append(Role(name="viewer", admin_queue=True))
+        db.session.add_all([admin, viewer])
         ordo = Activity(name="Ordonnance", letter="A")
         fr = Language(code="fr", name="Français", translation="Français")
         marie = Pharmacist(name="Marie", initials="MA")
@@ -132,6 +138,13 @@ def app(tmp_path):
 def client(app):
     c = app.test_client()
     c.post("/_test/login")
+    return c
+
+
+@pytest.fixture()
+def viewer_client(app):
+    c = app.test_client()
+    c.post("/_test/login?user=viewer")
     return c
 
 
@@ -403,6 +416,102 @@ def test_slot_polling_depuis_le_catalogue(app):
     assert "every 60s" in html_connection
     assert "document.visibilityState" in html_connection   # quotes échappées (&#39;)
     assert "every" not in html_queue
+
+
+def _common_view_cards():
+    return [SimpleNamespace(id=i, name=name, visible=visible, settings=None)
+            for i, (name, visible) in enumerate(
+                [("security", True), ("queue", True),
+                 ("counter", False), ("staff", True)], start=1)]
+
+
+def test_apply_user_layout():
+    cards = _common_view_cards()
+    views = apply_user_layout(cards, {"order": ["staff", "queue"],
+                                      "hidden": ["queue"]})
+    assert [v.name for v in views] == ["staff", "queue", "security", "counter"]
+    assert [v.visible for v in views] == [True, False, False, False]
+    assert [v.position for v in views] == [1, 2, 3, 4]
+
+    views = apply_user_layout(cards, None)
+    assert [v.name for v in views] == ["security", "queue", "counter", "staff"]
+    assert [v.visible for v in views] == [True, True, False, True]
+
+    assert layout_from_order(["queue", "inconnue", "queue", "staff"],
+                             ["staff"]) == {"order": ["queue", "staff"],
+                                            "hidden": ["queue"]}
+    assert validate_layout("x") is None
+    assert validate_layout({"order": ["queue"], "hidden": ["queue", "nope"]}
+                           ) == {"order": ["queue"], "hidden": ["queue"]}
+
+
+def test_viewer_personnalise_sans_options(viewer_client, app):
+    body = viewer_client.get("/admin/dashboard/display_select").get_data(as_text=True)
+    assert 'data-scope="me"' in body
+    assert "Commune (tous)" not in body
+    assert viewer_client.get(
+        "/admin/dashboard/display_select?scope=all").status_code == 403
+
+    with app.app_context():
+        ids = [_card_id(n) for n in ("security", "queue", "counter", "staff")]
+    # Ordre inversé : enregistré comme disposition personnelle (viewer n'a
+    # pas 'options'), la commune reste intacte.
+    order = [{"id": i, "position": p} for p, i in enumerate(reversed(ids), 1)]
+    assert viewer_client.post("/admin/dashboard/save_order",
+                              json={"order": order}).status_code == 204
+    with app.app_context():
+        viewer = User.query.filter_by(username="viewer").first()
+        row = DashboardUserLayout.query.filter_by(user_id=viewer.id).first()
+        assert row is not None
+        assert row.layout["order"] == ["staff", "counter", "queue", "security"]
+        common = {c.name: c.position
+                  for c in DashboardCard.query.all()}
+        assert [common[n] for n in ("security", "queue", "counter", "staff")] \
+            == [0, 1, 2, 3]
+
+    body = viewer_client.get("/admin/dashboard/cards").get_data(as_text=True)
+    assert 'data-card-url="/admin/queue/dashboard"' in body   # permission queue
+
+    assert viewer_client.post("/admin/dashboard/hide",
+                              data={"card_name": "queue"}).status_code == 200
+    with app.app_context():
+        row = DashboardUserLayout.query.filter_by(user_id=viewer.id).first()
+        assert "queue" in row.layout["hidden"]
+        assert DashboardCard.query.filter_by(name="queue").first().visible is True
+
+    assert viewer_client.post("/admin/dashboard/me/reset").status_code == 200
+    with app.app_context():
+        assert DashboardUserLayout.query.filter_by(user_id=viewer.id).first() is None
+
+
+def test_admin_options_edite_le_commun_par_defaut(client, app):
+    body = client.get("/admin/dashboard/display_select").get_data(as_text=True)
+    assert 'data-scope="all"' in body
+
+    with app.app_context():
+        ids = {n: _card_id(n) for n in ("security", "queue", "counter", "staff")}
+    order = [{"id": ids[n], "position": p}
+             for p, n in enumerate(("staff", "counter", "queue", "security"), 1)]
+    assert client.post("/admin/dashboard/save_order",
+                       json={"order": order}).status_code == 204
+    with app.app_context():
+        assert DashboardUserLayout.query.count() == 0
+        common = {c.name: c.position for c in DashboardCard.query.all()}
+        assert common["staff"] < common["security"]
+
+    card_order = [{"id": i, "position": p}
+                  for p, i in enumerate(ids.values(), 1)]
+    assert client.post("/admin/dashboard/me/save",
+                       json={"visible_cards": ["queue"],
+                             "card_order": card_order}).status_code == 200
+    with app.app_context():
+        admin = User.query.filter_by(username="admin").first()
+        assert DashboardUserLayout.query.filter_by(user_id=admin.id).first()
+    body = client.get("/admin/dashboard/display_select").get_data(as_text=True)
+    assert 'data-scope="me"' in body
+    assert "Disposition commune" in body          # bouton de retour
+    assert client.get(
+        "/admin/dashboard/display_select?scope=all").status_code == 200
 
 
 def test_nom_de_carte_unique(app):

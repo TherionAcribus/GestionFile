@@ -10,13 +10,11 @@
             <h2 class="mb-0">Tableau de bord</h2>
             <p class="text-muted small mb-0">La situation en direct. Glissez une carte par son en-tête pour la déplacer.</p>
         </div>
-        {% if can_customize %}
         <button type="button" class="btn btn-outline-secondary btn-sm"
                 data-bs-toggle="collapse" data-bs-target="#card-manager-collapse"
                 aria-expanded="false" aria-controls="card-manager-collapse">
             <i class="bi bi-layout-wtf" aria-hidden="true"></i> Personnaliser
         </button>
-        {% endif %}
     </div>
 
     {# Invitation / reprise du parcours de configuration guidée, hors du
@@ -26,8 +24,8 @@
     {% set onboarding_home = onboarding_home_context() if onboarding_home_context is defined else none %}
     {% include 'admin/_onboarding_home.html' %}
 
-    {% if can_customize %}
-    {# Gestionnaire chargé à la première ouverture seulement. #}
+    {# Gestionnaire chargé à la première ouverture seulement : disposition
+       personnelle pour tout admin, commune pour la permission 'options'. #}
     <div id="card-manager-collapse" class="collapse mb-3">
         <div id="div_select_dashboard"
              hx-get="/admin/dashboard/display_select"
@@ -35,7 +33,6 @@
             <p class="text-muted small">Chargement…</p>
         </div>
     </div>
-    {% endif %}
 
     <template id="dashboard-skeleton">{{ skeleton() }}</template>
     <div id="dashboard">
@@ -46,7 +43,7 @@
         </div>
         <div id="dashboard-empty" class="text-center text-muted py-5"{% if dashboardcards %} hidden{% endif %}>
             <i class="bi bi-grid-1x2 fs-2 d-block mb-2" aria-hidden="true"></i>
-            Aucune carte affichée.{% if can_customize %} Utilisez « Personnaliser » pour en ajouter.{% endif %}
+            Aucune carte affichée. Utilisez « Personnaliser » pour en ajouter.
         </div>
     </div>
 </div>

@@ -168,6 +168,76 @@ def validate_settings(name, raw):
     return clean
 
 
+@dataclass
+class CardView:
+    """Carte telle que vue par un administrateur (commune ou personnalisée)."""
+    id: int
+    name: str
+    visible: bool
+    position: int
+    settings: dict | None = None
+
+
+def apply_user_layout(cards, layout):
+    """Vues des cartes pour un administrateur.
+
+    ``cards`` : cartes communes triées (position, id) exposant id/name/visible/settings ;
+    ``layout`` : ``{"order": [...], "hidden": [...]}`` ou None (→ vues identiques
+    aux cartes communes). Avec disposition : les cartes citées dans ``order``
+    d'abord, dans cet ordre, visibles sauf si dans ``hidden`` ; puis les cartes
+    non citées (ajoutées au catalogue depuis), dans l'ordre commun, avec la
+    visibilité par défaut du catalogue. Positions renumérotées 1..N.
+    """
+    views = []
+    if not layout:
+        for index, card in enumerate(cards, start=1):
+            views.append(CardView(card.id, card.name, card.visible, index,
+                                  getattr(card, "settings", None)))
+        return views
+    by_name = {card.name: card for card in cards}
+    hidden = set(layout.get("hidden", []))
+    seen = set()
+    for name in layout.get("order", []):
+        if name in by_name and name not in seen:
+            seen.add(name)
+            card = by_name[name]
+            views.append(CardView(card.id, name, name not in hidden, 0,
+                                  getattr(card, "settings", None)))
+    for card in cards:
+        if card.name not in seen:
+            views.append(CardView(card.id, card.name,
+                                  card_info(card.name).default_visible, 0,
+                                  getattr(card, "settings", None)))
+    for index, view in enumerate(views, start=1):
+        view.position = index
+    return views
+
+
+def layout_from_order(ordered_names, visible_names):
+    """Disposition personnelle à stocker à partir du gestionnaire :
+    ``order`` = noms connus du catalogue, dédoublonnés, dans l'ordre ;
+    ``hidden`` = ceux de ``order`` absents de ``visible_names``."""
+    order = [name for name in dict.fromkeys(ordered_names) if name in CATALOG]
+    visible = set(visible_names)
+    return {"order": order, "hidden": [n for n in order if n not in visible]}
+
+
+def validate_layout(raw):
+    """Disposition lue en base → forme sûre (listes de str du catalogue,
+    dédoublonnées, hidden ⊆ order). None/forme invalide → None."""
+    if not isinstance(raw, dict):
+        return None
+    order, hidden = raw.get("order"), raw.get("hidden")
+    if not isinstance(order, list) or not isinstance(hidden, list):
+        return None
+    order = [n for n in dict.fromkeys(order)
+             if isinstance(n, str) and n in CATALOG]
+    if not order:
+        return None
+    hidden = [n for n in dict.fromkeys(hidden) if n in order]
+    return {"order": order, "hidden": hidden}
+
+
 def default_layout():
     """Disposition d'usine : ``{name: (visible, position)}`` dans l'ordre du catalogue."""
     return {name: (info.default_visible, index)

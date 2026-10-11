@@ -5,12 +5,32 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
         <div>
             <h5 class="mb-1"><i class="bi bi-layout-wtf" aria-hidden="true"></i> Cartes du tableau de bord</h5>
+            <div class="btn-group btn-group-sm mb-1" role="group" aria-label="Étendue de la disposition">
+                <button type="button" class="btn btn-outline-primary{% if scope == 'me' %} active{% endif %}"
+                        hx-get="/admin/dashboard/display_select?scope=me"
+                        hx-target="#div_select_dashboard">
+                    Ma disposition
+                </button>
+                {% if can_edit_common %}
+                <button type="button" class="btn btn-outline-primary{% if scope == 'all' %} active{% endif %}"
+                        hx-get="/admin/dashboard/display_select?scope=all"
+                        hx-target="#div_select_dashboard">
+                    Commune (tous)
+                </button>
+                {% endif %}
+            </div>
             <p class="text-muted small mb-0">
                 <i class="bi bi-grip-vertical" aria-hidden="true"></i> Glissez (ou utilisez les flèches) pour changer l'ordre ·
-                cochez les cartes à afficher. Réglage commun à tous les administrateurs.
+                cochez les cartes à afficher.
+                {% if scope == 'me' %}
+                Vous seul voyez cette disposition.{% if not has_personal %} Pour l'instant identique à la disposition commune.{% endif %}
+                {% else %}
+                Réglage commun à tous les administrateurs (les dispositions personnelles le remplacent chez ceux qui en ont une).
+                {% endif %}
             </p>
         </div>
         <div class="d-flex align-items-center gap-2">
+            {% if scope == 'all' %}
             <button type="button" class="btn btn-outline-secondary btn-sm"
                     data-card-manager-reset
                     hx-post="/admin/dashboard/reset"
@@ -18,6 +38,15 @@
                     hx-target="#sortable-dashboard" hx-swap="innerHTML">
                 <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Réinitialiser
             </button>
+            {% elif has_personal %}
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    data-card-manager-reset
+                    hx-post="/admin/dashboard/me/reset"
+                    hx-confirm="Revenir à la disposition commune ? Votre disposition personnelle sera supprimée."
+                    hx-target="#sortable-dashboard" hx-swap="innerHTML">
+                <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Disposition commune
+            </button>
+            {% endif %}
             <span class="badge text-bg-warning" data-card-manager-dirty hidden>Modifications non enregistrées</span>
             <button type="button" class="btn btn-primary btn-sm" data-card-manager-save>
                 <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
@@ -25,7 +54,7 @@
         </div>
     </div>
 
-    <div id="card-list-sortable" class="card-list">
+    <div id="card-list-sortable" class="card-list" data-scope="{{ scope }}">
         {% for card in all_dashboardcards %}
         {% set info = card_info(card.name) %}
         <div class="card-item {% if not card.visible %}card-item-hidden{% endif %}"
@@ -52,7 +81,7 @@
                     <i class="bi bi-chevron-down" aria-hidden="true"></i>
                     <span class="visually-hidden">Descendre {{ info.label }}</span>
                 </button>
-                {% if info.settings %}
+                {% if info.settings and scope == 'all' %}
                 <button type="button" class="btn-card-settings"
                         data-card-settings-toggle aria-expanded="false"
                         aria-controls="card-settings-{{ card.id }}"
@@ -69,7 +98,7 @@
                     <span class="visually-hidden">Afficher / masquer {{ info.label }}</span>
                 </button>
             </div>
-            {% if info.settings %}
+            {% if info.settings and scope == 'all' %}
             {% set values = card_settings(card.name, card.settings) %}
             <form id="card-settings-{{ card.id }}" class="card-item-settings"
                   data-card-settings="{{ card.name }}" hidden>

@@ -76,6 +76,16 @@ _ALLOWED_WITHOUT_GUARD = {
     # admin n'y reçoit que les cartes de son ressort.
     "admin",
     "dashboard_cards",
+    # Gestionnaire et mutations du tableau de bord : auth-only — chaque admin
+    # dispose d'une disposition *personnelle*. L'écriture dans la disposition
+    # commune reste aiguillée en ligne sur la permission 'options'
+    # (display_select?scope=all, hide, save_order) ; les routes me/* ne
+    # touchent jamais la commune.
+    "dashboard_display_select",
+    "hide_dashboard_card",
+    "save_dashboard_order",
+    "save_my_dashboard",
+    "reset_my_dashboard",
     # Parcours de configuration guidée : auth-only (garde globale /admin), le
     # parcours est personnel et ne débloque rien — chaque étape exige sa propre
     # permission, vérifiée via user_has_permission dans onboarding.apply_action

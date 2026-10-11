@@ -146,6 +146,17 @@ def test_manager_keyboard_and_reset():
     assert "data-card-manager-reset" in js
 
 
+def test_manager_scope_wiring():
+    """Le gestionnaire distingue disposition personnelle (me) et commune
+    (all) : sélecteur d'étendue, bouton de retour à la commune et URL de
+    sauvegarde dédiée."""
+    html = _read("templates/admin/dashboard_select.html")
+    assert "data-scope=" in html
+    assert "scope=me" in html
+    assert "/admin/dashboard/me/reset" in html
+    assert "/admin/dashboard/me/save" in _read("static/js/admin_dashboard_select.js")
+
+
 def test_admin_page_has_per_card_error_state():
     # Le script de la page a ete extrait vers static/js/admin_home.js (point 2).
     src = _read("templates/admin/admin.html") + _read("static/js/admin_home.js")

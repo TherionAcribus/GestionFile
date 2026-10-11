@@ -104,6 +104,8 @@ _AUDITED = [
     ("routes/admin_dashboard.py", "save_dashboard_order"),
     ("routes/admin_dashboard.py", "reset_dashboard"),
     ("routes/admin_dashboard.py", "save_dashboard_card_settings"),
+    ("routes/admin_dashboard.py", "_save_user_layout"),
+    ("routes/admin_dashboard.py", "reset_my_dashboard"),
     ("routes/admin_dashboard.py", "save_dashboard_configuration"),
     ("routes/admin_gallery.py", "choose_gallery"),
     ("routes/admin_gallery.py", "upload_gallery"),

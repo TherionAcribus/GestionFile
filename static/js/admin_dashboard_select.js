@@ -50,6 +50,10 @@ function toggleCardVisibility(button) {
 function saveCardConfiguration(btn) {
     var visibleCards = [];
     var cardOrder = [];
+    var list = document.getElementById('card-list-sortable');
+    var scope = list ? list.getAttribute('data-scope') : 'all';
+    var url = scope === 'me' ? '/admin/dashboard/me/save'
+                             : '/admin/dashboard/save_configuration';
     document.querySelectorAll('#card-list-sortable .card-item').forEach(function (item, index) {
         cardOrder.push({ id: parseInt(item.getAttribute('data-card-id'), 10), position: index + 1 });
         if (!item.classList.contains('card-item-hidden')) {
@@ -57,7 +61,7 @@ function saveCardConfiguration(btn) {
         }
     });
 
-    fetch('/admin/dashboard/save_configuration', {
+    fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ visible_cards: visibleCards, card_order: cardOrder })
@@ -77,6 +81,9 @@ function saveCardConfiguration(btn) {
         }
 
         setDirty(false);
+        // Recharge le gestionnaire : le badge « disposition personnelle »,
+        // l'étendue par défaut et le bouton « Disposition commune » changent.
+        if (typeof refresh_dashboard_select === 'function') { refresh_dashboard_select(); }
         if (btn) {
             var originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="bi bi-check-lg" aria-hidden="true"></i> Enregistré';

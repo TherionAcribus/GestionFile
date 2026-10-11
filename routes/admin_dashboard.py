@@ -1,13 +1,14 @@
 from flask import Blueprint, render_template, request, current_app as app
 from flask_security import current_user
-from models import DashboardCard, db
+from models import DashboardCard, DashboardUserLayout, db
 from communication import communikation
-from routes.admin_security import check_default_admin, require_permission, require_permission_api, user_has_permission
-from dashboard_catalog import (CATALOG, card_info, card_settings,
-                               default_layout, reorder_positions,
+from routes.admin_security import check_default_admin, require_permission_api, user_has_permission
+from dashboard_catalog import (CATALOG, apply_user_layout, card_info,
+                               card_settings, default_layout, layout_from_order,
+                               reorder_positions, validate_layout,
                                validate_settings, visible_cards)
 from audit_service import record_audit
-from audit_log import ACTION_UPDATE, OUTCOME_SUCCESS
+from audit_log import ACTION_DELETE, ACTION_UPDATE, OUTCOME_SUCCESS
 
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__)
 
@@ -23,9 +24,59 @@ def _can(resource):
     return user_has_permission(current_user, resource)
 
 
+def _user_layout():
+    """Ligne de disposition personnelle de l'admin courant (None sinon)."""
+    if not getattr(current_user, 'is_authenticated', False):
+        return None
+    return (DashboardUserLayout.query
+            .filter_by(user_id=current_user.id).first())
+
+
+def _common_cards():
+    return DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
+
+
+def _views_for_user():
+    """Cartes vues par l'admin courant : sa disposition personnelle si elle
+    existe, sinon la commune."""
+    row = _user_layout()
+    return apply_user_layout(
+        _common_cards(), validate_layout(row.layout) if row else None)
+
+
+def _save_user_layout(layout):
+    """Crée/remplace la disposition personnelle de l'admin courant."""
+    row = _user_layout()
+    if row is None:
+        row = DashboardUserLayout(user_id=current_user.id)
+        db.session.add(row)
+    row.layout = layout
+    db.session.commit()
+    record_audit(ACTION_UPDATE, "dashboard_user_layout",
+                 target_id=current_user.id, outcome=OUTCOME_SUCCESS,
+                 details=f"order={len(layout['order'])} hidden={len(layout['hidden'])}")
+
+
+def _personalize_from_views(views):
+    """Enregistre comme disposition personnelle la suite de vues (ordre +
+    cartes masquées) passée en argument."""
+    layout = layout_from_order(
+        [view.name for view in views],
+        [view.name for view in views if view.visible])
+    _save_user_layout(layout)
+
+
+def _reorder_views(ordered_ids):
+    """Vues de l'admin courant réordonnées d'après les ids reçus (les cartes
+    non citées gardent leur ordre relatif — reorder_positions)."""
+    views = _views_for_user()
+    positions = reorder_positions(views, ordered_ids)
+    views.sort(key=lambda v: positions[v.id])
+    return views
+
+
 def _visible_cards_for_user():
-    cards = DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
-    return visible_cards(cards, _can)
+    return visible_cards(_views_for_user(), _can)
 
 
 def _ordered_ids(items):
@@ -92,11 +143,24 @@ def admin():
 def dashboard_cards():
     return _user_slots_html(), 200
 
+# Masquer une carte : sans disposition personnelle ni permission 'options',
+# l'admin ne masque que pour lui (disposition personnelle créée à la volée) ;
+# avec disposition personnelle, idem ; sinon réglage commun (permission
+# 'options' requise).
 @admin_dashboard_bp.route('/admin/dashboard/hide', methods=['POST'])
-@require_permission('options')
 def hide_dashboard_card():
     card_name = request.form.get('card_name')
-    
+
+    if _user_layout() is not None or not _can('options'):
+        views = _views_for_user()
+        if not any(view.name == card_name for view in views):
+            return 'Card non trouvée', 404
+        for view in views:
+            if view.name == card_name:
+                view.visible = False
+        _personalize_from_views(views)
+        return '', 200
+
     card = DashboardCard.query.filter_by(name=card_name).first()
 
     if card:
@@ -111,20 +175,62 @@ def hide_dashboard_card():
         return 'Card non trouvée', 404
 
 
+# Tout admin peut gérer SA disposition (scope=me) ; l'étendue « all »
+# (disposition commune) reste réservée à la permission 'options', vérifiée
+# ici-même.
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])
-@require_permission('options')
 def dashboard_display_select():
-    all_dashboardcards = [card for card in DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
-                          if card.name in CATALOG]
+    row = _user_layout()
+    scope = request.args.get('scope')
+    if scope is None:
+        scope = 'me' if row else ('all' if _can('options') else 'me')
+    if scope == 'all' and not _can('options'):
+        return 'Permission refusée', 403
+    cards = (apply_user_layout(_common_cards(), None)
+             if scope == 'all' else _views_for_user())
+    all_dashboardcards = [card for card in cards if card.name in CATALOG]
     return render_template('/admin/dashboard_select.html',
                         all_dashboardcards=all_dashboardcards,
+                        scope=scope,
+                        can_edit_common=_can('options'),
+                        has_personal=bool(row),
                         card_info=card_info,
                         card_settings=card_settings,
                         can=_can)
 
 
+# Disposition personnelle de l'admin courant : accessible à tout admin
+# authentifié (garde globale /admin) — elle ne modifie que sa propre vue.
+@admin_dashboard_bp.route('/admin/dashboard/me/save', methods=['POST'])
+def save_my_dashboard():
+    data = request.get_json(silent=True) or {}
+    visible_cards = data.get('visible_cards', [])
+    card_order = data.get('card_order', [])
+    try:
+        ordered_ids = _ordered_ids(card_order)
+    except ValueError:
+        return 'Invalid data', 400
+    names_by_id = {card.id: card.name for card in DashboardCard.query.all()}
+    names = [names_by_id[i] for i in ordered_ids if i in names_by_id]
+    _save_user_layout(layout_from_order(names, visible_cards))
+    return _user_slots_html(), 200
+
+
+@admin_dashboard_bp.route('/admin/dashboard/me/reset', methods=['POST'])
+def reset_my_dashboard():
+    row = _user_layout()
+    if row:
+        db.session.delete(row)
+        db.session.commit()
+    record_audit(ACTION_DELETE, "dashboard_user_layout",
+                 target_id=current_user.id, outcome=OUTCOME_SUCCESS,
+                 details="retour à la disposition commune")
+    return _user_slots_html(), 200
+
+
+# Réordonner : avec disposition personnelle (ou sans permission 'options'),
+# l'ordre n'est enregistré que pour l'admin courant ; sinon ordre commun.
 @admin_dashboard_bp.route('/admin/dashboard/save_order', methods=['POST'])
-@require_permission_api('options')
 def save_dashboard_order():
     data = request.get_json(silent=True) or {}  # Récupérer les données JSON envoyées depuis le frontend
     if 'order' not in data:
@@ -133,6 +239,9 @@ def save_dashboard_order():
         ordered_ids = _ordered_ids(data['order'])
     except ValueError:
         return 'Invalid data', 400
+    if _user_layout() is not None or not _can('options'):
+        _personalize_from_views(_reorder_views(ordered_ids))
+        return '', 204
     _apply_order(ordered_ids)
     db.session.commit()  # Sauvegarder les modifications dans la base de données
     record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,

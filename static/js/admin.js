@@ -590,6 +590,7 @@ function refresh_gallery_list(data) {
 function refresh_dashboard_select(){
     // On ne détruit pas les modifications en cours d'un admin dans le
     // gestionnaire de cartes : dernier enregistrement gagnant.
+    // L'étendue (personnelle / commune) est recalculée côté serveur.
     if (document.querySelector('#card-list-sortable[data-dirty="1"]')) { return; }
     htmx.trigger('#div_select_dashboard', 'refresh_dashboard_select', {target: "#div_select_dashboard"});
 }
