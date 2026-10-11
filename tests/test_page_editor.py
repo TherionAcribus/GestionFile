@@ -3087,3 +3087,168 @@ def test_apply_targets_a_single_screen_or_404(editor_app, monkeypatch):
     finally:
         connected_clients_info.pop(sid, None)
         page_screen_status["announce"].clear()
+
+
+# --- Langue d'aperçu et alerte « traductions à revoir » (§4) ----------------
+
+
+def _preview_language_setup(app, **translations):
+    """Langue active « en » + traductions ConfigOption demandées
+    (``{clé: texte}``) ; « nl » reste inactive pour couvrir le repli."""
+    from models import Language, Translation
+
+    with app.app_context():
+        db.session.add(Language(
+            code="en", name="Anglais", translation="English",
+            is_active=True, sort_order=2))
+        db.session.add(Language(
+            code="nl", name="Néerlandais", translation="Nederlands",
+            is_active=False, sort_order=3))
+        for index, (key, text) in enumerate(translations.items()):
+            db.session.add(Translation(
+                table_name="ConfigOption", column_name="value_str",
+                row_id=index + 1, key_name=key, language_code="en",
+                translated_text=text))
+        db.session.commit()
+
+
+def test_state_lists_active_languages_for_preview_selector(editor_app):
+    """Le document d'état expose les langues actives ; le client masque le
+    sélecteur d'aperçu quand une seule langue est active."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_language_setup(app)
+    languages = client.get(
+        "/admin/page-editor/patient/state").get_json()["languages"]
+    assert languages == [{"code": "en", "name": "Anglais"}]
+
+
+def test_patient_preview_renders_draft_texts_in_preview_language(editor_app):
+    """``?lang=xx`` remplace les textes traduisibles par leur traduction
+    AVANT la substitution des balises ; traduction vide, code inconnu ou
+    langue inactive retombent sur la source française."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    _preview_language_setup(
+        app,
+        page_patient_title="Welcome to {P}",
+        page_patient_subtitle="",   # vide : repli sur la source
+    )
+    with app.app_context():
+        app.config["PHARMACY_NAME"] = "Pharmacie du Centre"
+        app.config["PAGE_PATIENT_TITLE"] = "Bienvenue à la {P}"
+        app.config["PAGE_PATIENT_SUBTITLE"] = "Choisissez votre activité"
+
+    translated = client.get(
+        "/admin/page-editor/patient/preview?scenario=home&lang=en"
+    ).get_data(as_text=True)
+    assert "Welcome to Pharmacie du Centre" in translated
+    # Traduction vide : le texte source reste affiché.
+    assert "Choisissez votre activité" in translated
+    # La table des traductions est embarquée pour les remplacements faits
+    # en direct par page_editor_preview.js.
+    assert '"page_patient_title": "Welcome to {P}"' in translated
+
+    for url in (
+        "/admin/page-editor/patient/preview?scenario=home",
+        "/admin/page-editor/patient/preview?scenario=home&lang=zz",
+        "/admin/page-editor/patient/preview?scenario=home&lang=nl",
+    ):
+        french = client.get(url).get_data(as_text=True)
+        assert "Bienvenue à la Pharmacie du Centre" in french
+        assert "Welcome to" not in french
+
+
+def test_announce_preview_translates_call_text_format(editor_app):
+    """Les « call_texts » de l'écran d'annonce suivent aussi ``?lang=``."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    _preview_language_setup(app, announce_call_text="Ticket {N} at {C}")
+    with app.app_context():
+        app.config["ANNOUNCE_CALL_TEXT"] = "Numéro {N} au {C}"
+
+    preview = client.get(
+        "/admin/page-editor/announce/preview?scenario=active&lang=en"
+    ).get_data(as_text=True)
+    assert "Ticket 042 at Comptoir 1" in preview
+    assert "Numéro 042" not in preview
+
+
+def test_phone_preview_renders_markdown_in_preview_language(editor_app):
+    """Le markdown téléphone est traduit au rendu initial comme au
+    re-rendu POST (``lang`` du corps, même validation que ``?lang=``)."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    _preview_language_setup(app, phone_line1="**Number {N}**")
+    with app.app_context():
+        app.config["PHONE_LINE1"] = "**Numéro {N}**"
+
+    preview = client.get(
+        "/admin/page-editor/phone/preview?scenario=confirmation&lang=en"
+    ).get_data(as_text=True)
+    assert "<strong>Number 042</strong>" in preview
+
+    payload = make_payload("phone")
+    payload["config"]["phone_line1"] = "**Numéro {N}**"
+    response = client.post(
+        "/admin/page-editor/phone/preview/render",
+        json={"payload": payload, "lang": "en"})
+    assert response.status_code == 200
+    assert "<strong>Number 042</strong>" in \
+        response.get_json()["html"]["phone_line1"]
+
+    response = client.post(
+        "/admin/page-editor/phone/preview/render",
+        json={"payload": payload, "lang": "zz"})
+    assert "<strong>Numéro 042</strong>" in \
+        response.get_json()["html"]["phone_line1"]
+
+
+def test_publish_reports_translatable_texts_to_review(editor_app):
+    """La réponse de publication liste les clés traduisibles dont la source
+    change (``translation_review``) — le client propose alors d'ouvrir
+    l'administration des traductions."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+
+    payload = make_payload("announce")
+    payload["config"]["announce_call_text"] = "Numéro {N}, comptoir {C}"
+    payload["config"]["announce_title"] = "Bienvenue"   # non traduisible
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = client.put(
+        "/admin/page-editor/announce/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert saved.status_code == 200
+    response = client.post(
+        "/admin/page-editor/announce/publish",
+        json={"draft_version": saved.get_json()["draft_version"]},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["translation_review"] == [
+        {"key": "announce_call_text", "label": "Format"}]
+
+
+def test_publish_without_translatable_change_reports_empty_review(editor_app):
+    """Une modification hors catalogue traduisible (titre de l'écran
+    d'annonce, purement français) ne déclenche pas l'alerte."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+
+    payload = make_payload("announce")
+    payload["config"]["announce_title"] = "Nouveau titre"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = client.put(
+        "/admin/page-editor/announce/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert saved.status_code == 200
+    response = client.post(
+        "/admin/page-editor/announce/publish",
+        json={"draft_version": saved.get_json()["draft_version"]},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["translation_review"] == []

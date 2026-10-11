@@ -182,3 +182,37 @@ def test_theme_export_import_uses_named_format_and_rejects_foreign_page():
     server = _read("routes/admin_page_editor.py")
     assert '"defaults": factory_payload(page)' in server
     assert "_complete_payload(page, body.get(\"payload\"))" in server
+
+
+def test_editor_preview_language_and_translation_review_alert():
+    """§4 : la barre de l'aperçu porte un sélecteur de langue relayé par
+    ``?lang=`` (serveur et re-rendu markdown de l'iframe) et la publication
+    d'un texte traduisible ouvre un dialogue « traductions à revoir » —
+    toujours sans boîte native."""
+    html = _read("templates/admin/page_editor.html")
+    assert 'id="editor-language"' in html
+    assert 'id="editor-language-field" hidden' in html
+    source = _read("static/js/page_editor.js")
+    assert "state.languages" in source
+    assert "previewLanguages.length <= 1" in source
+    assert "'&lang=' + encodeURIComponent(languageSelect.value" in source
+    assert "languageSelect.addEventListener('change', loadPreview)" in source
+    assert "result.translation_review" in source
+    assert "showTranslationReviewDialog" in source
+    assert "texte(s) traduisible(s) modifié(s)" in source
+    assert "Ouvrir les traductions" in source
+    assert "window.location.assign('/admin/translations')" in source
+    assert "window.confirm" not in source
+    assert "window.prompt" not in source
+    preview_js = _read("static/js/page_editor_preview.js")
+    assert "page-editor-preview-translations" in preview_js
+    assert "lang: previewLang" in preview_js
+    assert "location.search" in preview_js
+    preview_html = _read("templates/admin/page_editor_preview.html")
+    assert "preview_translations | tojson" in preview_html
+    server = _read("routes/admin_page_editor.py")
+    assert "_preview_language_code" in server
+    assert "_translated_preview_config" in server
+    assert "TRANSLATABLE_CONFIG_KEYS" in server
+    assert '"translation_review": translation_review' in server
+    assert '"languages"' in server

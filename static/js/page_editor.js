@@ -10,6 +10,8 @@
     const preview = document.getElementById('editor-preview');
     const previewShell = document.getElementById('editor-preview-shell');
     const scenarioSelect = document.getElementById('editor-scenario');
+    const languageSelect = document.getElementById('editor-language');
+    const languageField = document.getElementById('editor-language-field');
     const viewportSelect = document.getElementById('editor-viewport');
     const statusBox = document.getElementById('editor-status');
     const undoButton = document.getElementById('editor-undo');
@@ -56,6 +58,7 @@
     let sortableInstances = [];
     let paletteSources = [];
     let disabledComponents = {};
+    let previewLanguages = [];
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -1208,10 +1211,22 @@
             option.textContent = viewport.label;
             viewportSelect.appendChild(option);
         });
+        languageSelect.replaceChildren();
+        previewLanguages.forEach(function (language) {
+            const option = document.createElement('option');
+            option.value = language.code;
+            option.textContent = language.name;
+            languageSelect.appendChild(option);
+        });
+        // Une seule langue active (« fr ») : le choix serait figé — le
+        // sélecteur n'apparaît que s'il y a réellement une alternative.
+        languageField.hidden = previewLanguages.length <= 1;
     }
 
     function loadPreview() {
-        preview.src = '/admin/page-editor/' + encodeURIComponent(page) + '/preview?scenario=' + encodeURIComponent(scenarioSelect.value);
+        preview.src = '/admin/page-editor/' + encodeURIComponent(page)
+            + '/preview?scenario=' + encodeURIComponent(scenarioSelect.value)
+            + '&lang=' + encodeURIComponent(languageSelect.value || 'fr');
     }
 
     function resizePreview() {
@@ -1365,6 +1380,7 @@
             adapter = state.adapter;
             paletteSources = state.palette_sources || [];
             disabledComponents = state.disabled_components || {};
+            previewLanguages = state.languages || [];
             published = clone(state.published);
             defaults = state.defaults || null;
             hasDraft = Boolean(state.draft);
@@ -2404,6 +2420,36 @@
         }
     }
 
+    // Après une publication qui a modifié des textes sources traduisibles :
+    // rappel non bloquant que leurs traductions sont à revoir — le dialogue
+    // s'affiche par-dessus le statut de publication, sans le remettre en
+    // cause. « Ouvrir les traductions » mène à l'administration dédiée.
+    async function showTranslationReviewDialog(review) {
+        const body = document.createElement('div');
+        const intro = document.createElement('p');
+        intro.textContent = review.length
+            + ' texte(s) traduisible(s) modifié(s) — vérifiez leurs traductions.';
+        const list = document.createElement('ul');
+        list.className = 'page-editor-diff-list';
+        review.forEach(function (item) {
+            const entry = document.createElement('li');
+            entry.textContent = item.label;
+            list.appendChild(entry);
+        });
+        body.append(intro, list);
+        const choice = await openDialog({
+            title: 'Traductions à revoir',
+            body: body,
+            actions: [
+                {label: 'Fermer', className: 'btn btn-outline-secondary', value: null},
+                {label: 'Ouvrir les traductions', className: 'btn btn-primary', value: 'translations', autofocus: true},
+            ],
+        });
+        if (choice === 'translations') {
+            window.location.assign('/admin/translations');
+        }
+    }
+
     async function publish(opts) {
         const options = opts || {};
         try {
@@ -2432,6 +2478,9 @@
             await loadState('Révision ' + result.revision + ' publiée. Les écrans en service ne sont pas rechargés automatiquement.');
             applyButton.disabled = false;
             setStatus('Publication terminée. Utilisez « Appliquer/recharger les écrans » au moment opportun.', 'success');
+            if (result.translation_review && result.translation_review.length) {
+                showTranslationReviewDialog(result.translation_review);
+            }
         } catch (error) {
             publishButton.disabled = false;
             if (error.status === 409 && error.code === 'base_conflict') {
@@ -2525,6 +2574,7 @@
         rerenderAll();
         loadPreview();
     });
+    languageSelect.addEventListener('change', loadPreview);
     viewportSelect.addEventListener('change', resizePreview);
     if (zoomSelect) zoomSelect.addEventListener('change', resizePreview);
     preview.addEventListener('load', function () { resizePreview(); pushPayloadToPreview(); });

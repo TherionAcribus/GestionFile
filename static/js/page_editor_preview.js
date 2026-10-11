@@ -5,6 +5,11 @@
     const tokenValues = tokensNode ? JSON.parse(tokensNode.textContent) : {};
     const hiddenNode = document.getElementById('page-editor-initial-hidden');
     const initialHidden = hiddenNode ? JSON.parse(hiddenNode.textContent) : [];
+    const translationsNode = document.getElementById('page-editor-preview-translations');
+    const translatedTexts = translationsNode ? JSON.parse(translationsNode.textContent) : {};
+    // Langue d'aperçu portée par l'URL de l'iframe : le re-rendu du markdown
+    // la relaie au serveur, sinon il retomberait sur le français.
+    const previewLang = new URLSearchParams(window.location.search).get('lang') || 'fr';
     let markdownTimer = null;
     let markdownRequest = 0;
 
@@ -50,11 +55,17 @@
         });
         Object.entries(payload.config || {}).forEach(function (entry) {
             if (document.body.dataset.page === 'phone' && (entry[0].startsWith('phone_line') || entry[0].startsWith('phone_your_turn_line'))) return;
+            // En aperçu de langue étrangère, le texte affiché est la
+            // traduction — le brouillon porte la source française : sans
+            // substitution, chaque saisie repasserait l'aperçu en français.
+            const displayValue = Object.prototype.hasOwnProperty.call(translatedTexts, entry[0])
+                ? translatedTexts[entry[0]]
+                : entry[1];
             document.querySelectorAll('[data-config-key="' + CSS.escape(entry[0]) + '"]').forEach(function (element) {
                 if (element.hasAttribute('data-number-styled')) {
-                    element.innerHTML = demoHtml(entry[1], element);
+                    element.innerHTML = demoHtml(displayValue, element);
                 } else {
-                    element.textContent = demoText(entry[1], element);
+                    element.textContent = demoText(displayValue, element);
                 }
             });
         });
@@ -144,7 +155,7 @@
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({payload: payload})
+                    body: JSON.stringify({payload: payload, lang: previewLang})
                 });
                 if (!response.ok) return;
                 const data = await response.json();

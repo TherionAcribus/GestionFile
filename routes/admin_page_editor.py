@@ -31,6 +31,7 @@ from models import (
     PageEditorState,
     PageEditorTheme,
     Pharmacist,
+    Translation,
     db,
 )
 from page_editor import (
@@ -53,9 +54,17 @@ from page_editor import (
     public_adapter_data,
     validate_payload,
 )
-from params_registry import column_values_for, get_spec
+from params_registry import (
+    TRANSLATABLE_CONFIG_KEYS,
+    column_values_for,
+    get_spec,
+)
 from routes.admin_security import permission_error_response, user_has_permission
-from utils import balise_values, get_button_translations
+from utils import (
+    balise_values,
+    get_activity_message_translation,
+    get_button_translations,
+)
 
 
 admin_page_editor_bp = Blueprint("admin_page_editor", __name__)
@@ -107,8 +116,56 @@ def _demo_text(value, tokens=None):
     return result
 
 
-def _render_phone_markdown(config, tokens=None):
+def _preview_language_code(raw):
+    """Langue d'aperçu demandée par ``?lang=``/le corps JSON : seules les
+    langues actives sont admises ; toute autre valeur (ou l'absence)
+    retombe sur la référence « fr »."""
+    code = str(raw or "").strip().lower()
+    if not code or code == "fr":
+        return "fr"
+    if Language.query.filter_by(code=code, is_active=True).first() is None:
+        return "fr"
+    return code
+
+
+def _preview_translations(config, lang):
+    """Traductions non vides des clés textuelles traduisibles de ``config``
+    pour ``lang`` — une seule requête, quel que soit le nombre de clés."""
+    if lang == "fr":
+        return {}
+    keys = [
+        key for key, value in (config or {}).items()
+        if key in TRANSLATABLE_CONFIG_KEYS and isinstance(value, str)
+    ]
+    if not keys:
+        return {}
+    return {
+        row.key_name: row.translated_text
+        for row in Translation.query.filter(
+            Translation.key_name.in_(keys),
+            Translation.language_code == lang,
+            Translation.translated_text != "",
+        ).all()
+    }
+
+
+def _translated_preview_config(config, lang):
+    """``config`` où les textes traduisibles sont remplacés par leur
+    traduction dans ``lang`` — avant substitution des balises : celles-ci
+    se résolvent ensuite dans le texte traduit. Repli sur la source quand
+    la traduction manque ou est vide (règle de ``get_text_translation``)."""
+    translations = _preview_translations(config, lang)
+    if not translations:
+        return config
+    return {
+        key: translations.get(key) or value
+        for key, value in config.items()
+    }
+
+
+def _render_phone_markdown(config, tokens=None, lang="fr"):
     rendered = {}
+    config = _translated_preview_config(config, lang)
     for key, value in config.items():
         if not (key.startswith("phone_line") or key.startswith("phone_your_turn_line")):
             continue
@@ -123,7 +180,7 @@ def _render_phone_markdown(config, tokens=None):
     return rendered
 
 
-def _patient_preview_data(scenario, tokens, payload=None):
+def _patient_preview_data(scenario, tokens, payload=None, lang="fr"):
     # Les images des boutons Imprimer/Annuler suivent le brouillon
     # (``payload``) ; sans brouillon — appel direct, tests — la
     # configuration publiée sert de repli.
@@ -204,8 +261,9 @@ def _patient_preview_data(scenario, tokens, payload=None):
     return {
         "preview_buttons": buttons,
         # patient_buttons_*.html attendent button_translations comme la page
-        # réelle ; l'aperçu s'affiche dans la langue de référence (fr).
-        "preview_button_translations": get_button_translations(buttons, "fr"),
+        # réelle ; le sélecteur d'aperçu choisit la langue affichée (« fr »
+        # par défaut — les libellés non traduits retombent sur la source).
+        "preview_button_translations": get_button_translations(buttons, lang),
         "preview_buttons_children": children,
         "preview_inactive_mode": scenario == "activity_inactive",
         "preview_inactive_button_ids": inactive_button_ids,
@@ -219,8 +277,11 @@ def _patient_preview_data(scenario, tokens, payload=None):
             .all()
         ),
         "preview_activity_label": selected_button.label if selected_button else "Activité",
+        # Le message spécifique de l'activité est traduit sur la borne
+        # réelle : l'aperçu en langue étrangère fait de même (« fr » et
+        # traduction vide retombent sur la source, comme en production).
         "preview_specific_message": (
-            selected_button.activity.specific_message
+            get_activity_message_translation(selected_button.activity, lang)
             if selected_button and selected_button.activity else ""
         ),
         "preview_qr_data_uri": "/static/css/libs/bootstrap-icons/qr-code.svg",
@@ -321,6 +382,16 @@ def _state_document(page, adapter):
         ),
         "published_revision": state.published_revision if state else 0,
         "revisions": [_revision_document(item) for item in revisions],
+        # Langues actives proposées par le sélecteur d'aperçu (le client
+        # masque le choix quand « fr » est la seule langue active).
+        "languages": [
+            {"code": language.code, "name": language.name}
+            for language in (
+                Language.query.filter_by(is_active=True)
+                .order_by(Language.sort_order, Language.id)
+                .all()
+            )
+        ],
         "palette_sources": [
             palette_source_data(source_page)
             for source_page in sorted(enabled_pages())
@@ -667,22 +738,32 @@ def preview(page):
     # Les brouillons antérieurs à l'exposition d'un réglage dans l'éditeur ne
     # contiennent pas sa clé : on les complète avec la configuration publiée.
     payload = _complete_payload(page, payload)
+    # « lang » choisit la langue de démonstration : les textes traduisibles
+    # sont remplacés par leur traduction AVANT la substitution des balises
+    # ({N}, {P}…), qui se résout donc dans le texte traduit.
+    lang = _preview_language_code(request.args.get("lang"))
+    translations = _preview_translations(payload["config"], lang)
+    display_config = {
+        key: translations.get(key) or value
+        for key, value in payload["config"].items()
+    }
     tokens = _preview_tokens()
     preview_config = {
         key: _demo_text(value, tokens) if isinstance(value, str) else value
-        for key, value in payload["config"].items()
+        for key, value in display_config.items()
     }
     phone_html = {}
     if page == "phone":
-        phone_html = _render_phone_markdown(payload["config"], tokens)
+        phone_html = _render_phone_markdown(display_config, tokens)
     patient_preview = (
-        _patient_preview_data(scenario, tokens, payload) if page == "patient" else {}
+        _patient_preview_data(scenario, tokens, payload, lang)
+        if page == "patient" else {}
     )
     second_call_tokens = dict(tokens)
     second_call_tokens["{N}"] = "057"
     preview_call_texts = [
-        _demo_text(payload["config"].get("announce_call_text", ""), tokens),
-        _demo_text(payload["config"].get("announce_call_text", ""), second_call_tokens),
+        _demo_text(display_config.get("announce_call_text", ""), tokens),
+        _demo_text(display_config.get("announce_call_text", ""), second_call_tokens),
     ]
     preview_button = _first_preview_button()
     announce_flags = {}
@@ -705,14 +786,19 @@ def preview(page):
         page=page,
         scenario=scenario,
         payload=payload,
+        preview_lang=lang,
         preview_config=preview_config,
         preview_announce_flags=announce_flags,
         preview_hidden_components=hidden_components,
         preview_phone_center=bool(payload["config"].get("phone_center", False)),
         preview_tokens=tokens,
         preview_call_texts=preview_call_texts,
+        # Clés traduisibles -> texte affiché dans la langue d'aperçu : le JS
+        # de l'aperçu les substitue aussi aux valeurs brutes du brouillon
+        # poussé en direct (sinon chaque saisie repasserait en français).
+        preview_translations=translations,
         preview_phone_specific_message=(
-            preview_button.activity.specific_message
+            get_activity_message_translation(preview_button.activity, lang)
             if preview_button and preview_button.activity else ""
         ),
         preview_phone_display_specific_message=bool(payload["config"].get(
@@ -761,7 +847,11 @@ def render_preview_content(page):
         normalized = validate_payload(page, body.get("payload"))
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
-    return jsonify({"html": _render_phone_markdown(normalized["config"], _preview_tokens())})
+    # Même langue d'aperçu que le chargement de l'iframe : sinon le re-rendu
+    # du markdown repasserait en français.
+    lang = _preview_language_code(body.get("lang"))
+    return jsonify({"html": _render_phone_markdown(
+        normalized["config"], _preview_tokens(), lang)})
 
 
 @admin_page_editor_bp.post("/admin/page-editor/<page>/diff")
@@ -792,6 +882,19 @@ def publish(page):
         if body.get("draft_version") != state_row.draft_version:
             db.session.rollback()
             return jsonify({"error": "Le brouillon a été modifié par un autre utilisateur."}), 409
+        # Textes traduisibles dont la source change à la publication : leurs
+        # traductions sont probablement à revoir — signalé au client, qui
+        # propose d'ouvrir l'administration des traductions. Le brouillon en
+        # base est déjà normalisé ; _complete_payload couvre par prudence
+        # les clés apparues depuis son enregistrement.
+        translation_review = [
+            {"key": change["key"], "label": change["label"]}
+            for change in payload_diff(
+                page, _complete_payload(page, state_row.draft_json)
+            )["changes"]
+            if change["section"] == "config"
+            and change["key"] in TRANSLATABLE_CONFIG_KEYS
+        ]
         revision, conflict = _publish(
             page, adapter, state_row, state_row.draft_json,
             require_base_match=not body.get("force"),
@@ -810,7 +913,8 @@ def publish(page):
         record_audit(ACTION_UPDATE, "page_design", target_id=page,
                      details=f"revision={revision}")
         return jsonify({"success": True, "revision": revision,
-                        "draft_version": state_row.draft_version})
+                        "draft_version": state_row.draft_version,
+                        "translation_review": translation_review})
     except ValueError as error:
         db.session.rollback()
         return jsonify({"error": str(error)}), 400

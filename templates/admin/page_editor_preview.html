@@ -1,6 +1,6 @@
 {% import 'shared/page_components.html' as page_components %}
 <!doctype html>
-<html lang="fr">
+<html lang="{{ preview_lang or 'fr' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -244,6 +244,7 @@
 {% endif %}
 <script id="page-editor-preview-tokens" type="application/json">{{ preview_tokens | tojson }}</script>
 <script id="page-editor-initial-hidden" type="application/json">{{ preview_hidden_components | tojson }}</script>
+<script id="page-editor-preview-translations" type="application/json">{{ preview_translations | tojson }}</script>
 <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/page_editor_preview.js') }}"></script>
 </body>
