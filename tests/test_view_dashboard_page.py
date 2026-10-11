@@ -28,8 +28,8 @@ import routes.admin_counter as admin_counter
 import routes.admin_dashboard as admin_dashboard
 import routes.admin_queue as admin_queue
 import routes.admin_staff as admin_staff
-from dashboard_catalog import (CATALOG, card_info, missing_cards,
-                               reorder_positions, visible_cards)
+from dashboard_catalog import (CATALOG, card_info, card_name_for_url,
+                               missing_cards, reorder_positions, visible_cards)
 from models import (Activity, Counter, DashboardCard, Language, Patient, Pharmacist,
                     Role, User, db)
 
@@ -253,6 +253,41 @@ def test_save_configuration_renumerote(client, app):
         cards = DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
         assert [c.position for c in cards] == [1, 2, 3, 4]
         assert [c.name for c in cards] == ["staff", "counter", "queue", "security"]
+
+
+def test_route_cards_renvoie_les_enveloppes_autorisees(client):
+    with patch.object(admin_dashboard, "_can", lambda perm: perm == "queue"):
+        response = client.get("/admin/dashboard/cards")
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'data-card-url="/admin/queue/dashboard"' in body
+    assert "/admin/security/dashboard" not in body
+
+
+def test_mutations_diffusent_refresh_dashboard(app, client):
+    with patch.object(admin_dashboard, "communikation") as mock:
+        with app.app_context():
+            queue_id = _card_id("queue")
+        assert client.post("/admin/dashboard/hide",
+                           data={"card_name": "queue"}).status_code == 200
+        assert any(c.kwargs.get("event") == "refresh_dashboard"
+                   for c in mock.call_args_list)
+        mock.reset_mock()
+        assert client.post("/admin/dashboard/save_order", json={"order": [
+            {"id": queue_id, "position": 1}]}).status_code == 204
+        assert any(c.kwargs.get("event") == "refresh_dashboard"
+                   for c in mock.call_args_list)
+        mock.reset_mock()
+        assert client.post("/admin/dashboard/save_configuration",
+                           json={"visible_cards": ["queue"],
+                                 "card_order": []}).status_code == 200
+        assert any(c.kwargs.get("event") == "refresh_dashboard"
+                   for c in mock.call_args_list)
+
+
+def test_card_name_for_url():
+    assert card_name_for_url("/admin/music/dashboard") == "player"
+    assert card_name_for_url("/nope") is None
 
 
 def test_nom_de_carte_unique(app):

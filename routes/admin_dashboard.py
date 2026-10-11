@@ -77,6 +77,11 @@ def _render_card_slots(cards):
     return "".join(render_template('admin/dashboard_slot.html', dashboardcard=card)
                    for card in cards if card.name in CATALOG)
 
+
+def _user_slots_html():
+    """Enveloppes des cartes visibles et autorisées pour l'admin courant."""
+    return _render_card_slots(_visible_cards_for_user())
+
 # La page d'accueil du tableau de bord n'exige que l'authentification (garantie
 # par la garde globale ``/admin`` du point 1.2) : tout admin y accède et n'y voit
 # que les cartes de son ressort. Les sous-routes qui *modifient* la configuration
@@ -101,6 +106,12 @@ def admin():
                             dashboardcards=dashboardcards,
                             can_customize=_can('options'))
 
+# Même garde que /admin : l'authentification globale suffit — chaque admin ne
+# reçoit que les enveloppes des cartes de son ressort.
+@admin_dashboard_bp.route('/admin/dashboard/cards')
+def dashboard_cards():
+    return _user_slots_html(), 200
+
 @admin_dashboard_bp.route('/admin/dashboard/hide', methods=['POST'])
 @require_permission('options')
 def hide_dashboard_card():
@@ -114,6 +125,7 @@ def hide_dashboard_card():
         record_audit(ACTION_UPDATE, "dashboard_card", target_id=card_name,
                      outcome=OUTCOME_SUCCESS, details="visible=False")
         communikation("admin", event="refresh_dashboard_select")
+        communikation("admin", event="refresh_dashboard")
         return '', 200
     else:
         return 'Card non trouvée', 404
@@ -172,6 +184,7 @@ def save_dashboard_order():
     db.session.commit()  # Sauvegarder les modifications dans la base de données
     record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
                  details="réordonnancement")
+    communikation("admin", event="refresh_dashboard")
     return '', 204  # Réponse vide avec succès
 
 # [PT3] Route desactivee le 2026-09-05 : aucune reference dans le depot
@@ -261,10 +274,11 @@ def save_dashboard_configuration():
     record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
                  details=f"config: visibles={','.join(map(str, visible_cards))}")
     communikation("admin", event="refresh_dashboard_select")
+    communikation("admin", event="refresh_dashboard")
     
     # Enveloppes à chargement différé, comme au chargement de la page : chaque
     # carte appelle sa propre route (contenu et permission). Auparavant, cette
     # route reconstruisait à la main le contenu de chaque carte — logique
     # dupliquée, qui avait divergé de celle des routes.
-    html = _render_card_slots(_visible_cards_for_user())
+    html = _user_slots_html()
     return html, 200

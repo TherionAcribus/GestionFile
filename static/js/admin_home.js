@@ -4,6 +4,44 @@
 
 var sortableInstance = null;
 
+function sendOrder() {
+    var order = [];
+    // Enveloppes (.dashboard-card-slot) : présentes même quand la
+    // carte n'est pas encore chargée (squelette) ou a répondu vide
+    // (carte « Alertes » sans alerte).
+    document.querySelectorAll('#sortable-dashboard .dashboard-card-slot').forEach(function (item, index) {
+        var cardId = parseInt(item.getAttribute('data-card-id'), 10);
+        order.push({
+            id: cardId,
+            position: index + 1
+        });
+    });
+
+    fetch('/admin/dashboard/save_order', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order: order })
+    }).then(response => {
+        if (!response.ok) {
+            if (typeof AdminFeedback !== 'undefined') {
+                AdminFeedback.error('Erreur lors de la sauvegarde de l\'ordre des cartes',
+                    { retry: function () { sendOrder(); } });
+            } else {
+                console.error('Erreur lors de la sauvegarde de l\'ordre');
+            }
+        }
+    }).catch(error => {
+        if (typeof AdminFeedback !== 'undefined') {
+            AdminFeedback.error('Erreur de connexion lors de la sauvegarde',
+                { retry: function () { sendOrder(); } });
+        } else {
+            console.error('Erreur réseau:', error);
+        }
+    });
+}
+
 function initializeSortable() {
     var dashboardEl = document.getElementById('sortable-dashboard');
     if (!dashboardEl) return;
@@ -19,33 +57,7 @@ function initializeSortable() {
         chosenClass: 'sortable-chosen',
         dragClass: 'sortable-drag',
         onEnd: function (evt) {
-            var order = [];
-            // Enveloppes (.dashboard-card-slot) : présentes même quand la
-            // carte n'est pas encore chargée (squelette) ou a répondu vide
-            // (carte « Alertes » sans alerte).
-            document.querySelectorAll('#sortable-dashboard .dashboard-card-slot').forEach(function (item, index) {
-                var cardId = parseInt(item.getAttribute('data-card-id'), 10);
-                order.push({
-                    id: cardId,
-                    position: index + 1
-                });
-            });
-
-            fetch('/admin/dashboard/save_order', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ order: order })
-            }).then(response => {
-                if (!response.ok) {
-                    console.error('Erreur lors de la sauvegarde de l\'ordre');
-                    alert('Erreur lors de la sauvegarde de l\'ordre des cartes');
-                }
-            }).catch(error => {
-                console.error('Erreur réseau:', error);
-                alert('Erreur de connexion lors de la sauvegarde');
-            });
+            sendOrder();
         }
     });
 }
@@ -61,18 +73,59 @@ document.body.addEventListener('htmx:afterSwap', function(evt) {
     }
 });
 
+// Rafraîchissement temps réel du tableau de bord (évènement admin
+// 'refresh_dashboard', cf. admin.js) : on récupère les enveloppes du
+// catalogue, puis on réordonne les nœuds existants si seules les positions
+// ont changé — sinon on remplace tout.
+function refresh_dashboard(){
+    fetch('/admin/dashboard/cards', { credentials: 'same-origin' })
+        .then(function (response) {
+            if (!response.ok) { throw new Error('HTTP ' + response.status); }
+            return response.text();
+        })
+        .then(function (html) {
+            var dashboard = document.getElementById('sortable-dashboard');
+            if (!dashboard) { return; }
+            var doc = document.createElement('template');
+            doc.innerHTML = html;
+            var wanted = Array.prototype.map.call(
+                doc.content.querySelectorAll('.dashboard-card-slot'),
+                function (slot) { return slot.getAttribute('data-card-id'); });
+            var current = Array.prototype.map.call(
+                dashboard.querySelectorAll('.dashboard-card-slot'),
+                function (slot) { return slot.getAttribute('data-card-id'); });
+            var sameIds = current.length === wanted.length &&
+                current.slice().sort().join(',') === wanted.slice().sort().join(',');
+            if (!sameIds) {
+                dashboard.innerHTML = html;
+                if (typeof htmx !== 'undefined') { htmx.process(dashboard); }
+                if (typeof initializeSortable === 'function') { initializeSortable(); }
+            } else if (current.join(',') !== wanted.join(',')) {
+                var byId = {};
+                dashboard.querySelectorAll('.dashboard-card-slot').forEach(function (slot) {
+                    byId[slot.getAttribute('data-card-id')] = slot;
+                });
+                wanted.forEach(function (id) { dashboard.appendChild(byId[id]); });
+            }
+            var empty = document.getElementById('dashboard-empty');
+            if (empty) { empty.hidden = wanted.length > 0; }
+        })
+        .catch(function (err) {
+            // Rafraîchissement de fond : pas de toast en cas d'échec réseau.
+            console.warn('Rafraîchissement du tableau de bord :', err);
+        });
+}
+
 // -------- Point 5.3 : squelette + état d'erreur par carte --------
 // Chaque carte est chargée en différé (voir _dashboard_cards.html). Si sa
 // requête échoue (erreur serveur ou réseau), on remplace le squelette par un
 // état d'erreur avec un bouton « Réessayer », sans casser les autres cartes.
 
 function dashboardSkeletonHTML(cardId) {
-    return '<div id="card-' + cardId + '" class="dashboard-card card-skeleton" aria-busy="true">'
-        + '<div class="card"><div class="card-header d-flex justify-content-between align-items-center">'
-        + '<span class="skeleton-bar skeleton-title"></span></div>'
-        + '<div class="card-body"><span class="skeleton-bar"></span>'
-        + '<span class="skeleton-bar"></span>'
-        + '<span class="skeleton-bar skeleton-bar-short"></span></div></div></div>';
+    var tpl = document.getElementById('dashboard-skeleton');
+    var node = tpl.content.firstElementChild.cloneNode(true);
+    node.id = 'card-' + cardId;
+    return node.outerHTML;
 }
 
 function dashboardCardError(wrapper) {
@@ -108,11 +161,21 @@ function dashboardSlotFromEvent(evt) {
     return (t && t.closest) ? t.closest('.dashboard-card-slot') : null;
 }
 
+// Seules les requêtes GET (chargement différé de la carte) basculent le slot
+// en état d'erreur : un POST qui échoue dans le slot (ex. bouton « Masquer »)
+// est déjà couvert par le toast global de admin.js.
+function dashboardRequestIsGet(evt) {
+    var cfg = evt.detail && evt.detail.requestConfig;
+    return cfg && String(cfg.verb).toLowerCase() === 'get';
+}
+
 document.body.addEventListener('htmx:responseError', function(evt) {
+    if (!dashboardRequestIsGet(evt)) return;
     var wrapper = dashboardSlotFromEvent(evt);
     if (wrapper) dashboardCardError(wrapper);
 });
 document.body.addEventListener('htmx:sendError', function(evt) {
+    if (!dashboardRequestIsGet(evt)) return;
     var wrapper = dashboardSlotFromEvent(evt);
     if (wrapper) dashboardCardError(wrapper);
 });

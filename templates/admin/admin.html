@@ -3,6 +3,7 @@
 {% block title %}Tableau de bord{% endblock %}
 
 {% block content %}
+{% from 'admin/_dashboard_cards.html' import skeleton %}
 <div class="dashboard-page">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
         <div>
@@ -36,18 +37,17 @@
     </div>
     {% endif %}
 
+    <template id="dashboard-skeleton">{{ skeleton() }}</template>
     <div id="dashboard">
         <div id="sortable-dashboard" class="dashboard-grid">
             {% for dashboardcard in dashboardcards %}
                 {% include 'admin/dashboard_slot.html' %}
             {% endfor %}
         </div>
-        {% if not dashboardcards %}
-        <div class="text-center text-muted py-5">
+        <div id="dashboard-empty" class="text-center text-muted py-5"{% if dashboardcards %} hidden{% endif %}>
             <i class="bi bi-grid-1x2 fs-2 d-block mb-2" aria-hidden="true"></i>
             Aucune carte affichée.{% if can_customize %} Utilisez « Personnaliser » pour en ajouter.{% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -71,8 +71,11 @@ _ALLOWED_WITHOUT_GUARD = {
     # Page musique : contrôle d'accès *inline* (music_play OU music_options).
     "admin_music",
     # Accueil du tableau de bord : auth-only (garde globale /admin du point 1.2),
-    # accessible à tout admin qui n'y voit que ses cartes.
+    # accessible à tout admin qui n'y voit que ses cartes. /admin/dashboard/cards
+    # (rafraîchissement temps réel des enveloppes) suit la même règle : chaque
+    # admin n'y reçoit que les cartes de son ressort.
     "admin",
+    "dashboard_cards",
     # Parcours de configuration guidée : auth-only (garde globale /admin), le
     # parcours est personnel et ne débloque rien — chaque étape exige sa propre
     # permission, vérifiée via user_has_permission dans onboarding.apply_action

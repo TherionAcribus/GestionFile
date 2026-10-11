@@ -18,6 +18,7 @@ from datetime import datetime
 import json
 
 from pagination import parse_page_params, paginate_query
+from dashboard_catalog import card_name_for_url
 from login_guard import (
     get_shared_throttle,
     ip_key,
@@ -244,7 +245,9 @@ def require_permission_dashboard(resource):
                 app.logger.warning(
                     "Permission '%s' refusée à %s (dashboard)", resource,
                     getattr(current_user, "username", "?"))
-                dashboardcard = DashboardCard.query.filter_by(name=resource).first()
+                name = card_name_for_url(request.path)
+                dashboardcard = (DashboardCard.query.filter_by(name=name).first()
+                                 if name else None)
                 return render_template('/admin/dashboard_base.html',
                                     dashboardcard=dashboardcard,
                                     error_message="Vous n'avez pas les permissions nécessaires pour accéder à cette partie.",

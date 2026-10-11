@@ -82,6 +82,35 @@ def test_macro_defers_until_revealed_and_shows_skeleton():
     assert "data-card-url" in src
 
 
+def test_admin_page_has_shared_skeleton_template():
+    """Le squelette de carte n'existe qu'une fois (macro ``skeleton``) : la
+    page le rend dans un <template> que le JS clone pour les « Réessayer »."""
+    html = _read("templates/admin/admin.html")
+    assert 'id="dashboard-skeleton"' in html
+    assert "import skeleton" in html
+    js = _read("static/js/admin_home.js")
+    assert "dashboard-skeleton" in js
+    assert "skeleton-bar skeleton-title" not in js   # plus de HTML en dur
+
+
+def test_dashboard_js_no_alert():
+    """Les erreurs passent par AdminFeedback (toast + Réessayer), plus par
+    des alert() bloquantes."""
+    for rel in ("static/js/admin_home.js", "static/js/admin_dashboard_select.js"):
+        assert "alert(" not in _read(rel)
+
+
+def test_dashboard_realtime_refresh_wiring():
+    """Propagation temps réel : l'évènement refresh_dashboard recharge les
+    enveloppes via /admin/dashboard/cards, et le gestionnaire protège les
+    modifications non enregistrées (data-dirty / badge)."""
+    admin_js = _read("static/js/admin.js")
+    assert "'refresh_dashboard'" in admin_js
+    assert "/admin/dashboard/cards" in _read("static/js/admin_home.js")
+    assert "data-dirty" in _read("static/js/admin_dashboard_select.js")
+    assert "data-card-manager-dirty" in _read("templates/admin/dashboard_select.html")
+
+
 def test_admin_page_has_per_card_error_state():
     # Le script de la page a ete extrait vers static/js/admin_home.js (point 2).
     src = _read("templates/admin/admin.html") + _read("static/js/admin_home.js")

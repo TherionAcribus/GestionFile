@@ -10,9 +10,12 @@
                 cochez les cartes à afficher. Réglage commun à tous les administrateurs.
             </p>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" data-card-manager-save>
-            <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge text-bg-warning" data-card-manager-dirty hidden>Modifications non enregistrées</span>
+            <button type="button" class="btn btn-primary btn-sm" data-card-manager-save>
+                <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
+            </button>
+        </div>
     </div>
 
     <div id="card-list-sortable" class="card-list">

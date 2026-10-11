@@ -105,6 +105,11 @@ def visible_cards(cards, can):
             if card.visible and can(card_info(card.name).permission)]
 
 
+def card_name_for_url(path):
+    """Nom de la carte dont la route de contenu est ``path`` (None sinon)."""
+    return next((name for name, info in CATALOG.items() if info.data_url == path), None)
+
+
 def missing_cards(existing_names):
     """Cartes du catalogue absentes de la base (à créer), dans l'ordre du catalogue."""
     existing = set(existing_names)

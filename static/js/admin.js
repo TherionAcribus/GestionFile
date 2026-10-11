@@ -141,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Dashboard : sélecteur de cartes et cartes "glanceable".
     AdminRealtime.on(NS_ADMIN, 'refresh_printer_dashboard', function (msg) { refresh_printer_dashboard(msg); }, '#sortable-dashboard');
     AdminRealtime.on(NS_ADMIN, 'refresh_counter_dashboard', function (msg) { refresh_counter_dashboard(msg); }, '#sortable-dashboard');
+    AdminRealtime.on(NS_ADMIN, 'refresh_dashboard', function () { refresh_dashboard(); }, '#sortable-dashboard');
     // Liste des tâches planifiées (page Planification).
     AdminRealtime.on(NS_ADMIN, 'refresh_schedule_tasks_list', function (msg) { refresh_schedule_tasks_list(msg); }, '#div_schedule_tasks_list');
     // Section « Cache des annonces vocales » (même page).
@@ -154,6 +155,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (document.querySelector('#sortable-dashboard')) {
             refresh_counter_dashboard();
             refresh_printer_dashboard();
+            refresh_dashboard();
         }
     });
 
@@ -589,6 +591,9 @@ function refresh_gallery_list(data) {
 // -------------- DASHBOARD --------------
 
 function refresh_dashboard_select(){
+    // On ne détruit pas les modifications en cours d'un admin dans le
+    // gestionnaire de cartes : dernier enregistrement gagnant.
+    if (document.querySelector('#card-list-sortable[data-dirty="1"]')) { return; }
     htmx.trigger('#div_select_dashboard', 'refresh_dashboard_select', {target: "#div_select_dashboard"});
 }
 

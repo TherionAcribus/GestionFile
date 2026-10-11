@@ -26,15 +26,15 @@
      hx-get="{{ url }}"
      hx-trigger="revealed once{% if extra_triggers %}, {{ extra_triggers }}{% endif %}"
      hx-swap="innerHTML">
-    {{ skeleton(dashboardcard) }}
+    {{ skeleton(dashboardcard.id) }}
 </div>
 {% endmacro %}
 
 {# Squelette affiché tant que la carte n'a pas répondu. Il reprend la coquille
    `dashboard-card > card` pour garder la même empreinte (largeur, poignée de
    drag `.card-header`) que la carte réelle qui le remplacera. #}
-{% macro skeleton(dashboardcard) %}
-<div id="card-{{ dashboardcard.id }}" class="dashboard-card size-{{ dashboardcard.size }} card-skeleton" aria-busy="true">
+{% macro skeleton(card_id=None) %}
+<div{% if card_id %} id="card-{{ card_id }}"{% endif %} class="dashboard-card card-skeleton" aria-busy="true">
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="skeleton-bar skeleton-title"></span>
