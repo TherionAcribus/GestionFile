@@ -45,6 +45,10 @@ class CardInfo:
     data_url: str | None = None
     # Évènements HTMX temps réel qui rechargent la carte (en plus de « revealed once »).
     triggers: tuple[str, ...] = ()
+    # Rechargement périodique, pour les cartes sans évènement temps réel ou
+    # dont la source peut se taire (borne injoignable). Onglet masqué : pas de
+    # requête.
+    poll_seconds: int | None = None
     # Réglages éditables dans le gestionnaire (stockés dans card.settings).
     settings: tuple[SettingSpec, ...] = ()
 
@@ -62,11 +66,11 @@ CATALOG = {
     "alerts": CardInfo("Alertes", "bi-exclamation-triangle",
                        "Problèmes de configuration de la borne (n'apparaît que s'il y en a).",
                        "/admin/patient?tab=buttons", "patient",
-                       data_url="/admin/alerts/dashboard"),
+                       data_url="/admin/alerts/dashboard", poll_seconds=120),
     "security": CardInfo("Sécurité", "bi-shield-lock",
                          "Vérifie que le mot de passe administrateur par défaut a été changé.",
                          "/admin/security", "security",
-                         data_url="/admin/security/dashboard"),
+                         data_url="/admin/security/dashboard", poll_seconds=300),
     "queue": CardInfo("File d'attente", "bi-people",
                       "Patients en attente, appelés et au comptoir, en direct.",
                       "/admin/queue", "queue",
@@ -88,24 +92,27 @@ CATALOG = {
     "button": CardInfo("Boutons de la borne", "bi-grid-3x3-gap",
                        "Activer ou désactiver rapidement un bouton de la borne.",
                        "/admin/patient?tab=buttons", "patient", span="wide",
-                       data_url="/admin/button/dashboard"),
+                       data_url="/admin/button/dashboard", poll_seconds=60),
     "printer": CardInfo("Imprimante", "bi-printer",
                         "État de l'imprimante de la borne et derniers messages.",
                         "/admin/patient", "patient",
                         data_url="/admin/printer/dashboard",
-                        triggers=("refresh_printer_dashboard",)),
+                        triggers=("refresh_printer_dashboard",),
+                        poll_seconds=60),
     "player": CardInfo("Musique", "bi-music-note-beamed",
                        "Lecteur Spotify de l'écran d'annonce.",
                        "/admin/music", "music_play",
-                       data_url="/admin/music/dashboard"),
+                       data_url="/admin/music/dashboard", poll_seconds=30),
     "connection": CardInfo("Connexions", "bi-broadcast",
                            "Nombre d'appareils connectés en direct (bornes, écrans, comptoirs…).",
                            "/admin/app/connexion", "app",
-                           data_url="/admin/communication/dashboard"),
+                           data_url="/admin/communication/dashboard",
+                           poll_seconds=60),
     "appschedule": CardInfo("Tâches planifiées", "bi-calendar-check",
                             "Prochaines tâches automatiques et échecs éventuels.",
                             "/admin/database", "schedule",
-                            data_url="/admin/appschedule/dashboard"),
+                            data_url="/admin/appschedule/dashboard",
+                            poll_seconds=60),
 }
 
 
@@ -159,6 +166,12 @@ def validate_settings(name, raw):
             raise ValueError(f"{spec.label} : entre {spec.min} et {spec.max}")
         clean[key] = value
     return clean
+
+
+def default_layout():
+    """Disposition d'usine : ``{name: (visible, position)}`` dans l'ordre du catalogue."""
+    return {name: (info.default_visible, index)
+            for index, (name, info) in enumerate(CATALOG.items(), start=1)}
 
 
 def card_name_for_url(path):

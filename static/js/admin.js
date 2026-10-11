@@ -160,13 +160,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Une borne injoignable n'émet justement plus de statut : le passage en
-    // « offline » doit donc être recalculé localement, sans attendre un event.
-    setInterval(function () {
-        if (document.querySelector('[data-card-url="/admin/printer/dashboard"]')) {
-            refresh_printer_dashboard();
-        }
-    }, 60000);
+    // Une borne injoignable n'émet plus de statut : la carte imprimante se
+    // recharge périodiquement via son `poll_seconds` du catalogue (HTMX),
+    // plus besoin d'un setInterval dédié ici.
 });
 
 

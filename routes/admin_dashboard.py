@@ -4,7 +4,8 @@ from models import DashboardCard, db
 from communication import communikation
 from routes.admin_security import check_default_admin, require_permission, require_permission_api, user_has_permission
 from dashboard_catalog import (CATALOG, card_info, card_settings,
-                               reorder_positions, validate_settings, visible_cards)
+                               default_layout, reorder_positions,
+                               validate_settings, visible_cards)
 from audit_service import record_audit
 from audit_log import ACTION_UPDATE, OUTCOME_SUCCESS
 
@@ -138,6 +139,22 @@ def save_dashboard_order():
                  details="réordonnancement")
     communikation("admin", event="refresh_dashboard")
     return '', 204  # Réponse vide avec succès
+
+
+@admin_dashboard_bp.route('/admin/dashboard/reset', methods=['POST'])
+@require_permission_api('options')
+def reset_dashboard():
+    layout = default_layout()
+    for card in DashboardCard.query.all():
+        if card.name in layout:
+            card.visible, card.position = layout[card.name]
+            card.settings = None
+    db.session.commit()
+    record_audit(ACTION_UPDATE, "dashboard_card", outcome=OUTCOME_SUCCESS,
+                 details="réinitialisation (disposition d'usine)")
+    communikation("admin", event="refresh_dashboard_select")
+    communikation("admin", event="refresh_dashboard")
+    return _user_slots_html(), 200
 
 
 @admin_dashboard_bp.route('/admin/dashboard/settings/<name>', methods=['POST'])

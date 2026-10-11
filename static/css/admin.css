@@ -535,7 +535,8 @@
     color: var(--bs-primary);
 }
 
-.btn-toggle-visibility {
+.btn-toggle-visibility,
+.btn-card-move {
     background: none;
     border: none;
     padding: 0.25rem 0.5rem;
@@ -545,7 +546,8 @@
     transition: color 0.2s;
 }
 
-.btn-toggle-visibility:hover {
+.btn-toggle-visibility:hover,
+.btn-card-move:hover {
     color: var(--bs-primary);
 }
 
@@ -566,6 +568,30 @@
 .card-item-drag {
     opacity: 0.8;
     transform: rotate(2deg);
+}
+
+.dashboard-card-updated {
+    white-space: nowrap;
+}
+
+[data-card-refresh].is-refreshing i {
+    animation: dashboard-spin .8s linear infinite;
+}
+
+@keyframes dashboard-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-card-refresh].is-refreshing i {
+        animation: none;
+    }
+}
+
+@media (max-width: 576px) {
+    .dashboard-card-updated {
+        display: none;
+    }
 }
 
 .card-manager-footer {

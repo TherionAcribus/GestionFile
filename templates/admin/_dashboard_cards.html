@@ -18,14 +18,17 @@
 {% macro card_slot(dashboardcard) %}
 {% set info = dashboard_card_info(dashboardcard.name) if dashboard_card_info is defined else none %}
 {% set url = info.data_url if info else none %}
-{% set extra_triggers = info.triggers | join(', ') if info else '' %}
+{% set trigger_parts = ['revealed once']
+   + (info.triggers | list if info else [])
+   + (["every " ~ info.poll_seconds ~ "s [document.visibilityState === 'visible']"]
+      if info and info.poll_seconds else []) %}
 <div id="card-wrapper-{{ dashboardcard.id }}"
      class="dashboard-card-slot{% if info %} span-{{ info.span }}{% endif %}"
      data-card-id="{{ dashboardcard.id }}"
      data-card-name="{{ dashboardcard.name }}"
      data-card-url="{{ url }}"
      hx-get="{{ url }}"
-     hx-trigger="revealed once{% if extra_triggers %}, {{ extra_triggers }}{% endif %}"
+     hx-trigger="{{ trigger_parts | join(', ') }}"
      hx-swap="innerHTML">
     {{ skeleton(dashboardcard.id) }}
 </div>
@@ -63,6 +66,12 @@
             <i class="bi bi-grip-vertical text-body-tertiary" aria-hidden="true"></i>
             {% if info %}<i class="bi {{ info.icon }}{% if variant %} text-{{ variant }}{% endif %}" aria-hidden="true"></i>{% endif %}
             <h2 class="h6 mb-0 me-auto">{{ label }}{% if badge %} <span class="badge text-bg-{{ variant or 'secondary' }} ms-1">{{ badge }}</span>{% endif %}</h2>
+            <span class="dashboard-card-updated small text-body-tertiary" data-card-updated aria-live="off" hidden></span>
+            <button type="button" class="btn btn-sm btn-link text-body-secondary p-0"
+                    data-card-refresh title="Actualiser cette carte"
+                    aria-label="Actualiser la carte {{ label }}">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+            </button>
             {% if info and info.url %}
             <a href="{{ info.url }}" class="btn btn-sm btn-link p-0 text-decoration-none" aria-label="Ouvrir la page {{ label }}">
                 Ouvrir <i class="bi bi-arrow-right-short" aria-hidden="true"></i>

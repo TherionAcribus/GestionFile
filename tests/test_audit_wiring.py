@@ -102,6 +102,7 @@ _AUDITED = [
     ("routes/admin_announce.py", "announce_save_voice_is_active"),
     ("routes/admin_dashboard.py", "hide_dashboard_card"),
     ("routes/admin_dashboard.py", "save_dashboard_order"),
+    ("routes/admin_dashboard.py", "reset_dashboard"),
     ("routes/admin_dashboard.py", "save_dashboard_card_settings"),
     ("routes/admin_dashboard.py", "save_dashboard_configuration"),
     ("routes/admin_gallery.py", "choose_gallery"),

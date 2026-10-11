@@ -68,9 +68,44 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Réinitialiser Sortable après mise à jour HTMX
 document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.id === 'sortable-dashboard') {
+    var target = evt.detail.target;
+    if (target.id === 'sortable-dashboard') {
         initializeSortable();
+        return;
     }
+    // Rechargement du contenu d'une carte (lazy, polling, Actualiser) :
+    // horodatage « mis à jour il y a… » et fin de l'animation du bouton.
+    var slot = (target && target.closest)
+        ? (target.classList.contains('dashboard-card-slot')
+           ? target : target.closest('.dashboard-card-slot'))
+        : null;
+    if (slot) {
+        slot.setAttribute('data-updated-at', String(Date.now()));
+        var btn = slot.querySelector('[data-card-refresh]');
+        if (btn) { btn.classList.remove('is-refreshing'); }
+        updateCardTimestamps();
+    }
+});
+
+// « Mis à jour il y a… » dans l'en-tête de chaque carte (card_shell).
+function updateCardTimestamps() {
+    document.querySelectorAll('.dashboard-card-slot[data-updated-at]').forEach(function (slot) {
+        var el = slot.querySelector('[data-card-updated]');
+        if (!el) { return; }
+        var age = Math.floor((Date.now() - Number(slot.getAttribute('data-updated-at'))) / 1000);
+        var label;
+        if (age < 10) { label = "à l'instant"; }
+        else if (age < 60) { label = 'il y a ' + age + ' s'; }
+        else if (age < 3600) { label = 'il y a ' + Math.floor(age / 60) + ' min'; }
+        else { label = 'il y a ' + Math.floor(age / 3600) + ' h'; }
+        el.textContent = label;
+        el.hidden = false;
+        el.title = new Date(Number(slot.getAttribute('data-updated-at'))).toLocaleTimeString();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    setInterval(updateCardTimestamps, 15000);
 });
 
 // Rafraîchissement temps réel du tableau de bord (évènement admin
@@ -118,14 +153,17 @@ function refresh_dashboard(){
 
 // Recharge une seule carte (réglages modifiés par un autre admin) : le
 // serveur diffuse 'refresh_dashboard_card' avec data = {name}.
+function reloadDashboardSlot(slot) {
+    htmx.ajax('GET', slot.getAttribute('data-card-url'),
+              { target: slot, swap: 'innerHTML' });
+}
+
 function refresh_dashboard_card(msg) {
     var name = msg && msg.data && msg.data.name;
     if (!name) { return; }
     var slot = document.querySelector(
         '#sortable-dashboard .dashboard-card-slot[data-card-name="' + name + '"]');
-    if (slot) {
-        htmx.ajax('GET', slot.getAttribute('data-card-url'), { target: slot, swap: 'innerHTML' });
-    }
+    if (slot) { reloadDashboardSlot(slot); }
 }
 
 // -------- Point 5.3 : squelette + état d'erreur par carte --------
@@ -155,17 +193,24 @@ function dashboardCardError(wrapper) {
 function dashboardCardRetry(btn) {
     var wrapper = btn.closest('.dashboard-card-slot');
     if (!wrapper) return;
-    var url = wrapper.getAttribute('data-card-url');
     wrapper.innerHTML = dashboardSkeletonHTML(wrapper.getAttribute('data-card-id'));
-    htmx.ajax('GET', url, { target: wrapper, swap: 'innerHTML' });
+    reloadDashboardSlot(wrapper);
 }
 
-// Délégation : le bouton « Réessayer » est injecté dynamiquement — un
-// attribut onclick serait bloqué par la CSP.
+// Délégation : les boutons « Réessayer » et « Actualiser » sont injectés
+// dynamiquement — un attribut onclick serait bloqué par la CSP.
 document.body.addEventListener('click', function (e) {
     var btn = (e.target && e.target.closest)
         ? e.target.closest('[data-card-retry]') : null;
-    if (btn) dashboardCardRetry(btn);
+    if (btn) { dashboardCardRetry(btn); return; }
+    var refresh = (e.target && e.target.closest)
+        ? e.target.closest('[data-card-refresh]') : null;
+    if (refresh) {
+        var slot = refresh.closest('.dashboard-card-slot');
+        if (!slot) { return; }
+        refresh.classList.add('is-refreshing');
+        reloadDashboardSlot(slot);
+    }
 });
 
 function dashboardSlotFromEvent(evt) {

@@ -119,6 +119,33 @@ def test_settings_realtime_wiring():
     assert "data-card-name=" in _read("templates/admin/_dashboard_cards.html")
 
 
+def test_card_shell_has_refresh_and_timestamp():
+    """Chaque carte chargée affiche un bouton « Actualiser » et un horodatage
+    « mis à jour il y a… » ; le polling des cartes sans évènement vient du
+    catalogue (poll_seconds) — plus de setInterval dédié dans admin.js."""
+    assert "data-card-refresh" in _read("templates/admin/_dashboard_cards.html")
+    assert "data-card-updated" in _read("templates/admin/_dashboard_cards.html")
+    js = _read("static/js/admin_home.js")
+    assert "reloadDashboardSlot" in js
+    assert "updateCardTimestamps" in js
+    assert "data-updated-at" in js
+    admin_js = _read("static/js/admin.js")
+    assert admin_js.count("refresh_printer_dashboard()") == 2   # handler + onReconnect
+
+
+def test_manager_keyboard_and_reset():
+    """Gestionnaire : déplacement au clavier (flèches) et bouton
+    « Réinitialiser » confirmé, câblés côté JS."""
+    html = _read("templates/admin/dashboard_select.html")
+    assert 'data-card-move="up"' in html
+    assert 'data-card-move="down"' in html
+    assert "data-card-manager-reset" in html
+    assert "hx-confirm" in html
+    js = _read("static/js/admin_dashboard_select.js")
+    assert "data-card-move" in js
+    assert "data-card-manager-reset" in js
+
+
 def test_admin_page_has_per_card_error_state():
     # Le script de la page a ete extrait vers static/js/admin_home.js (point 2).
     src = _read("templates/admin/admin.html") + _read("static/js/admin_home.js")

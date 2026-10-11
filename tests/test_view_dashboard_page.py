@@ -29,8 +29,9 @@ import routes.admin_dashboard as admin_dashboard
 import routes.admin_queue as admin_queue
 import routes.admin_staff as admin_staff
 from dashboard_catalog import (CATALOG, card_info, card_name_for_url,
-                               card_settings, missing_cards, reorder_positions,
-                               validate_settings, visible_cards)
+                               card_settings, default_layout, missing_cards,
+                               reorder_positions, validate_settings,
+                               visible_cards)
 from dashboard_service import ensure_catalog_cards
 from models import (Activity, Counter, DashboardCard, Language, Patient, Pharmacist,
                     Role, User, db)
@@ -353,6 +354,55 @@ def test_gestionnaire_affiche_les_reglages(client):
     assert 'data-card-settings="queue"' in body
     assert 'name="max_rows"' in body
     assert 'data-card-settings="staff"' not in body
+
+
+def test_default_layout():
+    layout = default_layout()
+    assert layout["today"] == (True, 1)
+    assert layout["player"][0] is False
+    assert sorted(p for _, p in layout.values()) == list(range(1, len(CATALOG) + 1))
+
+
+def test_reset(app, client):
+    with app.app_context():
+        queue = DashboardCard.query.filter_by(name="queue").first()
+        queue.visible = False
+        queue.settings = {"max_rows": 5}
+        queue.position = 42
+        db.session.commit()
+        ensure_catalog_cards()
+    with patch.object(admin_dashboard, "communikation") as mock:
+        response = client.post("/admin/dashboard/reset")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    # Seule « today » est visible par défaut (default_visible) et l'admin du
+    # fixture a la permission 'queue' : c'est elle qui revient dans le HTML.
+    assert 'data-card-url="/admin/today/dashboard"' in body
+    events = [c.kwargs.get("event") for c in mock.call_args_list]
+    assert "refresh_dashboard_select" in events
+    assert "refresh_dashboard" in events
+    with app.app_context():
+        layout = default_layout()
+        cards = {c.name: c for c in DashboardCard.query.all()}
+        assert cards["queue"].visible is False       # default_visible False
+        assert cards["queue"].settings is None
+        assert cards["security"].visible is False
+        assert cards["today"].visible is True
+        for name, card in cards.items():
+            if name in layout:
+                assert card.position == layout[name][1]
+
+
+def test_slot_polling_depuis_le_catalogue(app):
+    with app.test_request_context():
+        ensure_catalog_cards()
+        connection = DashboardCard.query.filter_by(name="connection").first()
+        queue = DashboardCard.query.filter_by(name="queue").first()
+        html_connection = admin_dashboard._render_card_slots([connection])
+        html_queue = admin_dashboard._render_card_slots([queue])
+    assert "every 60s" in html_connection
+    assert "document.visibilityState" in html_connection   # quotes échappées (&#39;)
+    assert "every" not in html_queue
 
 
 def test_nom_de_carte_unique(app):

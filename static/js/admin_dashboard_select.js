@@ -99,6 +99,24 @@ function saveCardConfiguration(btn) {
 // --- Comportements délégués (CSP : pas d'onclick inline) -----------------
 document.addEventListener('click', function (evt) {
     if (!evt.target || !evt.target.closest) { return; }
+    var move = evt.target.closest('[data-card-move]');
+    if (move) {
+        evt.preventDefault();
+        var item = move.closest('.card-item');
+        var moved = false;
+        if (move.getAttribute('data-card-move') === 'up' && item.previousElementSibling) {
+            item.parentNode.insertBefore(item, item.previousElementSibling);
+            moved = true;
+        } else if (move.getAttribute('data-card-move') === 'down' && item.nextElementSibling) {
+            item.parentNode.insertBefore(item.nextElementSibling, item);
+            moved = true;
+        }
+        if (moved) {
+            setDirty(true);
+            move.focus();   // le focus suit le bouton déplacé
+        }
+        return;
+    }
     var toggle = evt.target.closest('.btn-toggle-visibility');
     if (toggle) {
         evt.preventDefault();
@@ -165,6 +183,21 @@ document.addEventListener('submit', function (evt) {
     evt.preventDefault();
     if (!form.reportValidity()) { return; }
     saveCardSettings(form);
+});
+
+// Après « Réinitialiser » (hx-post) : le tableau de bord est remplacé par la
+// réponse ; on purge le badge et on recharge la liste du gestionnaire.
+document.body.addEventListener('htmx:afterRequest', function (evt) {
+    var elt = evt.detail && evt.detail.elt;
+    if (!(elt && elt.hasAttribute && elt.hasAttribute('data-card-manager-reset'))) { return; }
+    if (!evt.detail.successful) { return; }
+    setDirty(false);
+    if (typeof refresh_dashboard_select === 'function') { refresh_dashboard_select(); }
+    var empty = document.getElementById('dashboard-empty');
+    if (empty) {
+        empty.hidden = document.querySelectorAll(
+            '#sortable-dashboard .dashboard-card-slot').length > 0;
+    }
 });
 
 // Le fragment arrive (première ouverture ou refresh_dashboard_select) :
