@@ -22,7 +22,12 @@ _PALETTE_ROLES = (
     {
         "id": "primary",
         "label": "Couleur principale",
-        "description": "Fonds, bandeaux et boutons principaux",
+        "description": "Bandeaux et boutons principaux",
+    },
+    {
+        "id": "surface",
+        "label": "Fond de page et surfaces",
+        "description": "Arrière-plan de la page et zones claires",
     },
     {
         "id": "secondary",
@@ -48,7 +53,7 @@ _MARKER_LABELS = {
 
 def _component(label, zone, selector, *, config=None, css=None, span=12,
                scenarios=None, managed_bool=None, hidden_when=None,
-               layout_controls=None):
+               layout_controls=None, contrast_pairs=None):
     return {
         "label": label,
         "zone": zone,
@@ -61,6 +66,7 @@ def _component(label, zone, selector, *, config=None, css=None, span=12,
         "layout_controls": layout_controls or ["visible", "span", "alignment", "order"],
         "config": config or [],
         "css": css or [],
+        "contrast_pairs": contrast_pairs or [],
     }
 
 
@@ -84,21 +90,26 @@ ADAPTERS = {
         ],
         "components": {
             "title": _component("Titre", "header", "#text_title",
+                contrast_pairs=[("title_font_color", "title_background_color")],
                 config=[{"key": "announce_title", "label": "Texte", "type": "text"}],
                 css=[{"key": "title_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "title_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "title_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+                     {"key": "title_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau", "role": "primary"},
                      {"key": "title_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}]),
+            # Le sous-titre partage le bandeau du titre : le contraste se mesure
+            # contre title_background_color, pas contre une clé propre.
             "subtitle": _component("Sous-titre", "header", "#text_subtitle",
+                contrast_pairs=[("subtitle_font_color", "title_background_color")],
                 config=[{"key": "announce_subtitle", "label": "Texte", "type": "text"}],
                 css=[{"key": "subtitle_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "subtitle_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "subtitle_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "subtitle_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "subtitle_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"}]),
+                     {"key": "subtitle_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"}]),
             "top_message": _component("Message supérieur", "main", "#div_display_text_up",
                 hidden_when={"key": "announce_text_up_patients_display", "values": ["never"]},
+                contrast_pairs=[("text_up_font_color", "text_up_background_color")],
                 config=[{"key": "announce_text_up_patients", "label": "Texte", "type": "text"},
                         {"key": "announce_text_up_patients_display", "label": "Mode d'affichage", "type": "select",
                          "choices": [["always", "Toujours affiché"],
@@ -106,39 +117,42 @@ ADAPTERS = {
                                      ["full", "Affiché si patient(s)"],
                                      ["never", "Jamais affiché"]]}],
                 css=[{"key": "text_up_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "text_up_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "text_up_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "text_up_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "text_up_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "text_up_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"}]),
+                     {"key": "text_up_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "text_up_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
             "calls": _component("Appels en cours", "main", "#div_calling",
                 scenarios=["active", "multiple", "gallery"],
+                contrast_pairs=[("calling_font_color", "calling_background_color")],
                 config=[{"key": "announce_call_text", "label": "Format", "type": "text"}],
                 css=[{"key": "calling_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "calling_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "calling_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "calling_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "calling_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "calling_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"}]),
+                     {"key": "calling_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "calling_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
             "empty_message": _component("Message file vide", "main", "#div_display_text_down",
                 scenarios=["empty"],
                 hidden_when={"key": "announce_text_down_patients_display", "values": ["never"]},
+                contrast_pairs=[("text_down_font_color", "text_down_background_color")],
                 config=[{"key": "announce_text_down_patients", "label": "Texte", "type": "text"},
                         {"key": "announce_text_down_patients_display", "label": "Mode d'affichage", "type": "select",
                          "choices": [["empty", "Affiché si liste vide"],
                                      ["never", "Jamais affiché"]]}],
                 css=[{"key": "text_down_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "text_down_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "text_down_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "text_down_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "text_down_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "text_down_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"}]),
+                     {"key": "text_down_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "text_down_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
             "ongoing": _component("Patients au comptoir", "main", "#div_ongoing",
                 managed_bool="announce_ongoing_display",
+                contrast_pairs=[("ongoing_font_color", "ongoing_background_color")],
                 config=[{"key": "announce_ongoing_display", "label": "Afficher les patients au comptoir", "type": "bool"},
                         {"key": "announce_ongoing_text", "label": "Format", "type": "text"}],
                 css=[{"key": "ongoing_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "ongoing_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "ongoing_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "ongoing_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "ongoing_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "ongoing_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"}]),
+                     {"key": "ongoing_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "ongoing_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
             "gallery": _component("Galerie", "aside", "#div_pub", span=6,
                 scenarios=["gallery"], managed_bool="announce_infos_display",
                 # Réglages auparavant réservés à l'onglet « Galerie » du mode
@@ -158,15 +172,16 @@ ADAPTERS = {
                          "min": 50, "max": 10000}]),
             "next": _component("Prochains patients", "footer", "#div_next_patients",
                 managed_bool="announce_next_patients_display",
+                contrast_pairs=[("next_patients_font_color", "next_patients_background_color")],
                 config=[{"key": "announce_next_patients_display", "label": "Afficher la liste des prochains patients", "type": "bool"},
                         {"key": "announce_next_patients_text", "label": "Texte", "type": "text"},
                         {"key": "announce_next_patients_alignment", "label": "Alignement du texte", "type": "select",
                          "choices": [["center", "Centré"], ["left", "Gauche"]]}],
                 css=[{"key": "next_patients_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "next_patients_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "next_patients_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "next_patients_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "next_patients_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "next_patients_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"}]),
+                     {"key": "next_patients_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "next_patients_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
         },
     },
     "patient": {
@@ -191,15 +206,24 @@ ADAPTERS = {
         "components": {
             "title": _component("Titre", "header", "#div_title_area",
                 layout_controls=["visible"],
+                contrast_pairs=[("patient_title_font_color", "patient_title_background_color")],
                 config=[{"key": "page_patient_title", "label": "Texte", "type": "text"}],
                 css=[{"key": "patient_title_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "patient_title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "patient_title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "patient_title_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "patient_title_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "patient_title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+                     {"key": "patient_title_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "patient_title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau", "role": "primary"},
                      {"key": "patient_title_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}]),
             "buttons": _component("Contenu principal", "main", "#div_buttons_parents",
                 layout_controls=["visible"],
+                # Le texte des boutons ronds s'affiche sous l'image, sur le
+                # fond de page — pas sur le bouton lui-même.
+                contrast_pairs=[("square_button_text_color", "square_button_color"),
+                                ("circle_button_text_color", "patient_secondary_color"),
+                                ("validation_button_text_color", "validation_button_color"),
+                                ("validation_text_font_color", "validation_text_background_color"),
+                                ("confirmation_text_font_color", "confirmation_text_background_color"),
+                                ("scan_explanation_font_color", "scan_explanation_background_color")],
                 config=[{"key": "page_patient_button_shape", "label": "Forme de tous les boutons d’activité", "type": "select",
                          "choices": [["mixed", "Formes actuelles différentes — choisir une forme"],
                                      ["circle", "Boutons ronds"],
@@ -232,29 +256,32 @@ ADAPTERS = {
                 css=[{"key": "circle_button_size", "label": "Bouton rond", "type": "size"},
                      {"key": "square_button_width", "label": "Largeur bouton", "type": "size"},
                      {"key": "square_button_height", "label": "Hauteur bouton", "type": "size"},
-                     {"key": "square_button_color", "label": "Couleur bouton", "type": "color"},
+                     {"key": "square_button_color", "label": "Couleur bouton", "type": "color", "role": "primary"},
                      {"key": "square_button_border_size", "label": "Épaisseur bordure", "type": "size"},
-                     {"key": "square_button_border_color", "label": "Couleur bordure", "type": "color"}]),
+                     {"key": "square_button_border_color", "label": "Couleur bordure", "type": "color", "role": "border"}]),
             "back_button": _component("Bouton Retour", "main",
                 "[data-page-editor-component='back_button']",
                 scenarios=["children"],
                 layout_controls=["visible"],
+                contrast_pairs=[("square_cancel_button_text_color", "square_cancel_button_color")],
                 config=[{"key": "page_patient_interface_children_back", "label": "Texte", "type": "text"}],
                 css=[]),
             "subtitle": _component("Sous-titre standard", "footer", "[data-page-editor-component='subtitle']",
                 layout_controls=["visible"],
                 scenarios=["home", "children", "validation", "conclusion", "print_error", "printing", "print_uncertain", "staff_called"],
+                contrast_pairs=[("subtitle_font_color", "subtitle_background_color")],
                 config=[{"key": "page_patient_subtitle", "label": "Texte du sous-titre", "type": "text"}],
                 css=[{"key": "subtitle_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-                     {"key": "subtitle_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+                     {"key": "subtitle_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "subtitle_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-                     {"key": "subtitle_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-                     {"key": "subtitle_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+                     {"key": "subtitle_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+                     {"key": "subtitle_background_color", "label": "Couleur", "type": "color", "group": "Bandeau", "role": "primary"},
                      {"key": "subtitle_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}]),
             "activity_status": _component("Affichage des activités indisponibles", "footer",
                 "[data-page-editor-component='activity_status']",
                 scenarios=["activity_inactive"],
                 layout_controls=["visible"],
+                contrast_pairs=[("subtitle_no_activity_font_color", "subtitle_no_activity_background_color")],
                 config=[{"key": "page_patient_disable_button", "label": "Griser les boutons indisponibles (sinon les masquer)", "type": "bool",
                          "help": "Activé : le bouton reste visible en grisé. Désactivé : le bouton disparaît et les autres conservent leur présentation normale."},
                         {"key": "page_patient_disable_default_message", "label": "Message affiché après sélection", "type": "text"},
@@ -265,6 +292,7 @@ ADAPTERS = {
                 scenarios=["validation", "conclusion"],
                 managed_bool="page_patient_display_specific_message",
                 layout_controls=["visible"],
+                contrast_pairs=[("subtitle_specific_message_font_color", "subtitle_specific_message_background_color")],
                 config=[{"key": "page_patient_display_specific_message", "label": "Afficher le message spécifique de l'activité", "type": "bool",
                          "help": "Le texte du message se configure sur chaque activité."}],
                 css=[]),
@@ -273,6 +301,7 @@ ADAPTERS = {
             "print_error": _component("Erreur d'impression", "main", "#print_status_overlay",
                 scenarios=["print_error", "printing", "print_uncertain", "staff_called"],
                 layout_controls=["visible"],
+                contrast_pairs=[("print_error_font_color", "print_error_background_color")],
                 config=[{"key": "page_patient_print_fail_behavior", "label": "Comportement en cas d'échec", "type": "select",
                          "choices": [["ask", "Demander au patient"],
                                      ["keep", "Conserver dans la file"],
@@ -321,197 +350,209 @@ ADAPTERS = {
 for index in range(1, 7):
     ADAPTERS["phone"]["components"][f"line{index}"] = _component(
         f"Ligne {index}", "main", f"#phone_line{index}", scenarios=["confirmation"],
+        contrast_pairs=[(f"phone_line{index}_font_color", f"phone_line{index}_background_color")],
         config=[{"key": f"phone_line{index}", "label": "Texte Markdown", "type": "text"}],
         css=[{"key": f"phone_line{index}_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-             {"key": f"phone_line{index}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+             {"key": f"phone_line{index}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
              {"key": f"phone_line{index}_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
              {"key": f"phone_line{index}_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-             {"key": f"phone_line{index}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-             {"key": f"phone_line{index}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"},
+             {"key": f"phone_line{index}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+             {"key": f"phone_line{index}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "surface"},
              {"key": f"phone_line{index}_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
     )
     ADAPTERS["phone"]["components"][f"your_turn_line{index}"] = _component(
         f"Appel — ligne {index}", "main", f"#phone_your_turn_line{index}",
         scenarios=["your-turn"],
         managed_bool="phone_display_your_turn",
+        contrast_pairs=[(f"phone_your_turn_line{index}_font_color",
+                         f"phone_your_turn_line{index}_background_color")],
         config=(
             [{"key": "phone_display_your_turn", "label": "Afficher l'écran « Votre tour »", "type": "bool"}]
             if index == 1 else []
         ) + [{"key": f"phone_your_turn_line{index}", "label": "Texte Markdown", "type": "text"}],
         css=[{"key": f"phone_your_turn_line{index}_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-             {"key": f"phone_your_turn_line{index}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+             {"key": f"phone_your_turn_line{index}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
              {"key": f"phone_your_turn_line{index}_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
              {"key": f"phone_your_turn_line{index}_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-             {"key": f"phone_your_turn_line{index}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-             {"key": f"phone_your_turn_line{index}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"},
+             {"key": f"phone_your_turn_line{index}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+             {"key": f"phone_your_turn_line{index}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "surface"},
              {"key": f"phone_your_turn_line{index}_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
     )
 
 ADAPTERS["phone"]["components"]["title"] = _component(
     "Titre", "header", "#div_title_area",
+    contrast_pairs=[("phone_title_font_color", "phone_title_background_color")],
     config=[{"key": "phone_title", "label": "Texte", "type": "text"},
             {"key": "phone_center", "label": "Centrer le contenu", "type": "bool"}],
     css=[{"key": "phone_title_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
-         {"key": "phone_title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+         {"key": "phone_title_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
          {"key": "phone_title_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
          {"key": "phone_title_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-         {"key": "phone_title_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-         {"key": "phone_title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau"},
+         {"key": "phone_title_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+         {"key": "phone_title_background_color", "label": "Couleur", "type": "color", "group": "Bandeau", "role": "primary"},
          {"key": "phone_title_background_height", "label": "Hauteur", "type": "size", "group": "Bandeau"}],
 )
 ADAPTERS["phone"]["components"]["specific"] = _component(
     "Message spécifique", "footer", "#specific_message",
     managed_bool="phone_display_specific_message",
+    contrast_pairs=[("phone_specific_message_font_color", "phone_specific_message_background_color")],
     config=[{"key": "phone_display_specific_message", "label": "Afficher le message spécifique", "type": "bool"}],
     css=[{"key": "phone_specific_message_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
          {"key": "phone_specific_message_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
-         {"key": "phone_specific_message_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte"},
+         {"key": "phone_specific_message_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
          {"key": "phone_specific_message_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
-         {"key": "phone_specific_message_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte"},
-         {"key": "phone_specific_message_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone"},
+         {"key": "phone_specific_message_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+         {"key": "phone_specific_message_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "surface"},
          {"key": "phone_specific_message_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
 )
 
 
+#: Tuples ``(key, label, type, default, group, role)`` — ``group`` et ``role``
+#: peuvent être ``None``. ``role`` rattache la couleur à un groupe de la
+#: palette ; laisser ``None`` exclut volontairement le champ de la palette
+#: (ex. fonds de texte « transparent » par défaut).
 _ADDITIONAL_CSS_FIELDS = {
     "announce": {"title": [
         # Liseré en bas du bandeau titre : même mécanisme que la borne patient.
-        ("title_bottom_border_size", "Épaisseur liseré bas", "size", "0px", "Liseré en bas"),
-        ("title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas"),
-        ("announce_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
+        ("title_bottom_border_size", "Épaisseur liseré bas", "size", "0px", "Liseré en bas", None),
+        ("title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas", "border"),
+        ("announce_secondary_color", "Fond de page", "color", "#B6F5F5", "Page", "surface"),
     ],
     "subtitle": [
         # Filet séparateur tracé au-dessus du sous-titre, entre le titre et le
         # sous-titre (les deux lignes partagent le même bandeau).
-        ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px", "Liseré en haut"),
-        ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000", "Liseré en haut"),
+        ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px", "Liseré en haut", None),
+        ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000", "Liseré en haut", "border"),
     ],
     "ongoing": [
         # Liseré autour de la zone : nommé « ..._border_* » pour rejoindre le
         # rôle « Couleur des bordures » de la palette et le défaut 0px des
         # thèmes — 0px = pas de liseré affiché.
-        ("ongoing_border_size", "Épaisseur liseré", "size", "0px", "Liseré"),
-        ("ongoing_border_color", "Couleur liseré", "color", "#000000", "Liseré"),
+        ("ongoing_border_size", "Épaisseur liseré", "size", "0px", "Liseré", None),
+        ("ongoing_border_color", "Couleur liseré", "color", "#000000", "Liseré", "border"),
     ],
     "next": [
         # Liseré autour du bandeau des prochains patients (appliqué à
         # #div_footer, qui porte le fond de la zone).
-        ("next_patients_border_size", "Épaisseur liseré", "size", "0px", "Liseré"),
-        ("next_patients_border_color", "Couleur liseré", "color", "#000000", "Liseré"),
+        ("next_patients_border_size", "Épaisseur liseré", "size", "0px", "Liseré", None),
+        ("next_patients_border_color", "Couleur liseré", "color", "#000000", "Liseré", "border"),
     ]},
     "phone": {"title": [
-        ("phone_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
+        ("phone_secondary_color", "Fond de page", "color", "#B6F5F5", "Page", "surface"),
     ]},
     "patient": {
         "title": [
             # Liseré en bas du bandeau titre : nommé « ..._border_* » pour
             # rejoindre le rôle « Couleur des bordures » de la palette et le
             # défaut 0px des thèmes — 0px = pas de liseré affiché.
-            ("patient_title_bottom_border_size", "Épaisseur liseré bas", "size", "0px", "Liseré en bas"),
-            ("patient_title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas"),
+            ("patient_title_bottom_border_size", "Épaisseur liseré bas", "size", "0px", "Liseré en bas", None),
+            ("patient_title_bottom_border_color", "Couleur liseré bas", "color", "#000000", "Liseré en bas", "border"),
         ],
         "buttons": [
-            ("patient_secondary_color", "Fond de page", "color", "#B6F5F5", "Page"),
-            # Contour et fond du TEXTE des boutons (mode avancé uniquement jusqu'ici).
-            ("circle_button_text_border_color", "Contour du texte des boutons ronds", "color", "black"),
-            ("circle_button_text_background_color", "Fond du texte des boutons ronds", "color", "transparent"),
-            ("square_button_text_border_color", "Contour du texte des boutons", "color", "black"),
-            ("square_button_text_background_color", "Fond du texte des boutons", "color", "transparent"),
-            ("validation_button_text_border_color", "Contour du texte des boutons de validation", "color", "black"),
-            ("validation_button_text_background_color", "Fond du texte des boutons de validation", "color", "transparent"),
-            ("square_button_text_color", "Texte des boutons", "color", "#FFFFFF"),
-            ("square_button_text_size", "Taille du texte des boutons", "size", "30px"),
-            ("square_button_text_border_size", "Contour du texte des boutons", "size", "0px"),
-            ("square_button_image_size", "Taille de l'image", "size", "200px"),
-            ("circle_button_color", "Fond des boutons ronds", "color", "#008B8B"),
-            ("circle_button_text_color", "Texte sous les boutons ronds", "color", "#008B8B"),
-            ("circle_button_text_size", "Taille du texte sous les boutons ronds", "size", "30px"),
-            ("circle_button_text_border_size", "Contour du texte sous les boutons ronds", "size", "0px"),
-            ("circle_button_border_size", "Bordure des boutons ronds", "size", "0px"),
-            ("circle_button_border_color", "Couleur bordure des boutons ronds", "color", "#000000"),
-            ("circle_button_image_size", "Taille de l'image des boutons ronds", "size", "200px"),
-            ("validation_button_width", "Largeur des boutons de validation", "size", "500px"),
-            ("validation_button_height", "Hauteur des boutons de validation", "size", "150px"),
-            ("validation_button_color", "Fond des boutons de validation", "color", "#008B8B"),
-            ("validation_button_border_size", "Bordure des boutons de validation", "size", "0px"),
-            ("validation_button_border_color", "Couleur bordure validation", "color", "#000000"),
-            ("validation_button_text_color", "Texte des boutons de validation", "color", "#FFFFFF"),
-            ("validation_button_text_size", "Taille du texte validation", "size", "40px"),
-            ("validation_button_text_border_size", "Contour du texte validation", "size", "0px"),
-            ("validation_button_picture_size", "Taille de l'image validation", "size", "200px"),
-            ("validation_text_font_color", "Texte du numéro", "color", "#008B8B"),
-            ("validation_text_font_size", "Taille du numéro", "size", "50px"),
-            ("validation_text_border_size", "Contour du numéro", "size", "0px"),
-            ("validation_text_border_color", "Couleur contour du numéro", "color", "#000000"),
-            ("validation_text_background_color", "Fond du texte de validation", "color", "#B6F5F5"),
-            ("confirmation_text_font_color", "Texte de confirmation", "color", "#008B8B"),
-            ("confirmation_text_font_size", "Taille de confirmation", "size", "50px"),
-            ("confirmation_text_border_size", "Contour de confirmation", "size", "0px"),
-            ("confirmation_text_border_color", "Couleur contour confirmation", "color", "#000000"),
-            ("confirmation_text_background_color", "Fond de confirmation", "color", "#B6F5F5"),
-            ("scan_explanation_font_color", "Texte des consignes QR", "color", "#008B8B"),
-            ("scan_explanation_font_size", "Taille des consignes QR", "size", "50px"),
-            ("scan_explanation_border_size", "Contour des consignes QR", "size", "0px"),
-            ("scan_explanation_border_color", "Couleur contour des consignes QR", "color", "#000000"),
-            ("scan_explanation_background_color", "Fond des consignes QR", "color", "#B6F5F5"),
+            ("patient_secondary_color", "Fond de page", "color", "#B6F5F5", "Page", "surface"),
+            # Contour et fond du TEXTE des boutons (mode avancé uniquement
+            # jusqu'ici). Les fonds de texte restent hors palette : appliquer
+            # une couleur y poserait un pavé derrière chaque libellé.
+            ("circle_button_text_border_color", "Contour du texte des boutons ronds", "color", "black", None, "border"),
+            ("circle_button_text_background_color", "Fond du texte des boutons ronds", "color", "transparent", None, None),
+            ("square_button_text_border_color", "Contour du texte des boutons", "color", "black", None, "border"),
+            ("square_button_text_background_color", "Fond du texte des boutons", "color", "transparent", None, None),
+            ("validation_button_text_border_color", "Contour du texte des boutons de validation", "color", "black", None, "border"),
+            ("validation_button_text_background_color", "Fond du texte des boutons de validation", "color", "transparent", None, None),
+            ("square_button_text_color", "Texte des boutons", "color", "#FFFFFF", None, "secondary"),
+            ("square_button_text_size", "Taille du texte des boutons", "size", "30px", None, None),
+            ("square_button_text_border_size", "Contour du texte des boutons", "size", "0px", None, None),
+            ("square_button_image_size", "Taille de l'image", "size", "200px", None, None),
+            ("circle_button_color", "Fond des boutons ronds", "color", "#008B8B", None, "primary"),
+            ("circle_button_text_color", "Texte sous les boutons ronds", "color", "#008B8B", None, "secondary"),
+            ("circle_button_text_size", "Taille du texte sous les boutons ronds", "size", "30px", None, None),
+            ("circle_button_text_border_size", "Contour du texte sous les boutons ronds", "size", "0px", None, None),
+            ("circle_button_border_size", "Bordure des boutons ronds", "size", "0px", None, None),
+            ("circle_button_border_color", "Couleur bordure des boutons ronds", "color", "#000000", None, "border"),
+            ("circle_button_image_size", "Taille de l'image des boutons ronds", "size", "200px", None, None),
+            ("validation_button_width", "Largeur des boutons de validation", "size", "500px", None, None),
+            ("validation_button_height", "Hauteur des boutons de validation", "size", "150px", None, None),
+            ("validation_button_color", "Fond des boutons de validation", "color", "#008B8B", None, "primary"),
+            ("validation_button_border_size", "Bordure des boutons de validation", "size", "0px", None, None),
+            ("validation_button_border_color", "Couleur bordure validation", "color", "#000000", None, "border"),
+            ("validation_button_text_color", "Texte des boutons de validation", "color", "#FFFFFF", None, "secondary"),
+            ("validation_button_text_size", "Taille du texte validation", "size", "40px", None, None),
+            ("validation_button_text_border_size", "Contour du texte validation", "size", "0px", None, None),
+            ("validation_button_picture_size", "Taille de l'image validation", "size", "200px", None, None),
+            ("validation_text_font_color", "Texte du numéro", "color", "#008B8B", None, "secondary"),
+            ("validation_text_font_size", "Taille du numéro", "size", "50px", None, None),
+            ("validation_text_border_size", "Contour du numéro", "size", "0px", None, None),
+            ("validation_text_border_color", "Couleur contour du numéro", "color", "#000000", None, "border"),
+            ("validation_text_background_color", "Fond du texte de validation", "color", "#B6F5F5", None, "surface"),
+            ("confirmation_text_font_color", "Texte de confirmation", "color", "#008B8B", None, "secondary"),
+            ("confirmation_text_font_size", "Taille de confirmation", "size", "50px", None, None),
+            ("confirmation_text_border_size", "Contour de confirmation", "size", "0px", None, None),
+            ("confirmation_text_border_color", "Couleur contour confirmation", "color", "#000000", None, "border"),
+            ("confirmation_text_background_color", "Fond de confirmation", "color", "#B6F5F5", None, "surface"),
+            ("scan_explanation_font_color", "Texte des consignes QR", "color", "#008B8B", None, "secondary"),
+            ("scan_explanation_font_size", "Taille des consignes QR", "size", "50px", None, None),
+            ("scan_explanation_border_size", "Contour des consignes QR", "size", "0px", None, None),
+            ("scan_explanation_border_color", "Couleur contour des consignes QR", "color", "#000000", None, "border"),
+            ("scan_explanation_background_color", "Fond des consignes QR", "color", "#B6F5F5", None, "surface"),
         ],
         "subtitle": [
             # Liseré en haut du bandeau de pied de page : appliqué aux trois
             # variantes (standard, activités indisponibles, message spécifique)
             # comme subtitle_background_height, partagé entre elles.
-            ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px", "Liseré en haut"),
-            ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000", "Liseré en haut"),
+            ("subtitle_top_border_size", "Épaisseur liseré haut", "size", "0px", "Liseré en haut", None),
+            ("subtitle_top_border_color", "Couleur liseré haut", "color", "#000000", "Liseré en haut", "border"),
         ],
         "back_button": [
-            ("square_cancel_button_width", "Largeur du bouton retour", "size", "500px"),
-            ("square_cancel_button_height", "Hauteur du bouton retour", "size", "150px"),
-            ("square_cancel_button_color", "Fond du bouton retour", "color", "#008B8B"),
-            ("square_cancel_button_border_size", "Bordure du bouton retour", "size", "0px"),
-            ("square_cancel_button_border_color", "Couleur bordure retour", "color", "#000000"),
-            ("square_cancel_button_text_color", "Texte du bouton retour", "color", "#FFFFFF"),
-            ("square_cancel_button_text_size", "Taille du texte retour", "size", "30px"),
-            ("square_cancel_button_text_border_size", "Contour du texte retour", "size", "0px"),
-            ("square_cancel_button_text_border_color", "Contour du texte du bouton retour", "color", "black"),
-            ("square_cancel_button_text_background_color", "Fond du texte du bouton retour", "color", "transparent"),
-            ("square_cancel_button_image_size", "Taille de l'image du bouton retour", "size", "200px"),
+            ("square_cancel_button_width", "Largeur du bouton retour", "size", "500px", None, None),
+            ("square_cancel_button_height", "Hauteur du bouton retour", "size", "150px", None, None),
+            ("square_cancel_button_color", "Fond du bouton retour", "color", "#008B8B", None, "primary"),
+            ("square_cancel_button_border_size", "Bordure du bouton retour", "size", "0px", None, None),
+            ("square_cancel_button_border_color", "Couleur bordure retour", "color", "#000000", None, "border"),
+            ("square_cancel_button_text_color", "Texte du bouton retour", "color", "#FFFFFF", None, "secondary"),
+            ("square_cancel_button_text_size", "Taille du texte retour", "size", "30px", None, None),
+            ("square_cancel_button_text_border_size", "Contour du texte retour", "size", "0px", None, None),
+            ("square_cancel_button_text_border_color", "Contour du texte du bouton retour", "color", "black", None, "border"),
+            ("square_cancel_button_text_background_color", "Fond du texte du bouton retour", "color", "transparent", None, None),
+            ("square_cancel_button_image_size", "Taille de l'image du bouton retour", "size", "200px", None, None),
         ],
         "print_error": [
-            ("print_error_font_size", "Taille du message", "size", "50px"),
-            ("print_error_font_color", "Couleur du message", "color", "#008B8B"),
-            ("print_error_border_size", "Épaisseur contour", "size", "0px"),
-            ("print_error_border_color", "Couleur contour", "color", "#000000"),
-            ("print_error_background_color", "Fond du message", "color", "#B6F5F5"),
-            ("print_error_number_size", "Taille du numéro", "size", "80px"),
+            ("print_error_font_size", "Taille du message", "size", "50px", None, None),
+            ("print_error_font_color", "Couleur du message", "color", "#008B8B", None, "secondary"),
+            ("print_error_border_size", "Épaisseur contour", "size", "0px", None, None),
+            ("print_error_border_color", "Couleur contour", "color", "#000000", None, "border"),
+            ("print_error_background_color", "Fond du message", "color", "#B6F5F5", None, "surface"),
+            ("print_error_number_size", "Taille du numéro", "size", "80px", None, None),
         ],
         "activity_status": [
-            ("subtitle_no_activity_font_color", "Texte sans activité", "color", "#FFFFFF"),
-            ("subtitle_no_activity_font_size", "Taille sans activité", "size", "40px"),
-            ("subtitle_no_activity_border_size", "Contour sans activité", "size", "0px"),
-            ("subtitle_no_activity_border_color", "Couleur contour sans activité", "color", "#000000"),
-            ("subtitle_no_activity_background_color", "Fond sans activité", "color", "#008B8B"),
+            ("subtitle_no_activity_font_color", "Texte sans activité", "color", "#FFFFFF", None, "secondary"),
+            ("subtitle_no_activity_font_size", "Taille sans activité", "size", "40px", None, None),
+            ("subtitle_no_activity_border_size", "Contour sans activité", "size", "0px", None, None),
+            ("subtitle_no_activity_border_color", "Couleur contour sans activité", "color", "#000000", None, "border"),
+            ("subtitle_no_activity_background_color", "Fond sans activité", "color", "#008B8B", None, "primary"),
         ],
         "specific_message": [
-            ("subtitle_specific_message_font_color", "Texte du message spécifique", "color", "#FFFFFF"),
-            ("subtitle_specific_message_font_size", "Taille du message spécifique", "size", "40px"),
-            ("subtitle_specific_message_border_size", "Contour du message spécifique", "size", "0px"),
-            ("subtitle_specific_message_border_color", "Couleur contour message spécifique", "color", "#000000"),
-            ("subtitle_specific_message_background_color", "Fond du message spécifique", "color", "#008B8B"),
+            ("subtitle_specific_message_font_color", "Texte du message spécifique", "color", "#FFFFFF", None, "secondary"),
+            ("subtitle_specific_message_font_size", "Taille du message spécifique", "size", "40px", None, None),
+            ("subtitle_specific_message_border_size", "Contour du message spécifique", "size", "0px", None, None),
+            ("subtitle_specific_message_border_color", "Couleur contour message spécifique", "color", "#000000", None, "border"),
+            ("subtitle_specific_message_background_color", "Fond du message spécifique", "color", "#008B8B", None, "primary"),
         ],
         "languages": [
-            ("flag_border_size", "Contour des drapeaux", "size", "0px"),
-            ("flag_border_color", "Couleur contour des drapeaux", "color", "#FFFFFF"),
+            ("flag_border_size", "Contour des drapeaux", "size", "0px", None, None),
+            ("flag_border_color", "Couleur contour des drapeaux", "color", "#FFFFFF", None, "border"),
         ],
     },
 }
 
 for _page, _components in _ADDITIONAL_CSS_FIELDS.items():
     for _component_id, _fields in _components.items():
-        for _field_def in _fields:
-            key, label, field_type, default, *rest = _field_def
+        for key, label, field_type, default, group, role in _fields:
             field = {"key": key, "label": label, "type": field_type,
                      "default": default, "optional": True}
-            if rest:
-                field["group"] = rest[0]
+            if group:
+                field["group"] = group
+            if role:
+                field["role"] = role
             ADAPTERS[_page]["components"][_component_id]["css"].append(field)
 
 
@@ -992,26 +1033,17 @@ def _css_field_types(adapter):
 
 
 def _palette_data(adapter):
-    color_keys = {
-        item["key"]
-        for component in adapter["components"].values()
-        for item in component["css"]
-        if item["type"] == "color"
-    }
-    keys_by_role = {
-        "primary": sorted(
-            key for key in color_keys
-            if "background_color" in key or key == "square_button_color"
-        ),
-        "secondary": sorted(
-            key for key in color_keys if "font_color" in key
-        ),
-        "border": sorted(
-            key for key in color_keys if "border_color" in key
-        ),
-    }
+    # Chaque champ couleur porte explicitement son rôle : aucune inférence par
+    # le nom de clé. Les champs sans « role » (ex. les fonds de texte de
+    # bouton, « transparent » par défaut) n'appartiennent à aucun rôle — les
+    # inclure repeindrait un pavé coloré derrière chaque libellé.
+    keys_by_role = {role["id"]: [] for role in _PALETTE_ROLES}
+    for component in adapter["components"].values():
+        for field in component["css"]:
+            if field["type"] == "color" and field.get("role") in keys_by_role:
+                keys_by_role[field["role"]].append(field["key"])
     return [
-        {**role, "keys": keys_by_role[role["id"]]}
+        {**role, "keys": sorted(keys_by_role[role["id"]])}
         for role in _PALETTE_ROLES
         if keys_by_role[role["id"]]
     ]

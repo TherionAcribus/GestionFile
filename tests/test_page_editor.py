@@ -210,25 +210,102 @@ def test_palette_only_groups_registered_color_variables(page):
         if field["type"] == "color"
     }
     palette = public_adapter_data(page)["palette"]
-    assert {role["id"] for role in palette} == {"primary", "secondary", "border"}
-    assert all(role["keys"] for role in palette)
-    assert all(set(role["keys"]) <= registered_colors for role in palette)
+    keys = {role["id"]: set(role["keys"]) for role in palette}
+    assert set(keys) == {"primary", "surface", "secondary", "border"}
+    assert all(keys[role] for role in keys)
+    assert all(keys[role] <= registered_colors for role in keys)
+
+    # Les rôles sont portés par le champ « role » des variables, pas devinés
+    # par le nom de clé : les fonds de page et zones claires relèvent de
+    # « surface », les textes de « secondary », les contours de « border ».
+    assert f"{page}_secondary_color" in keys["surface"]
+    assert all(key.endswith("_border_color") for key in keys["border"])
+    assert all(
+        "font_color" in key or "text_color" in key for key in keys["secondary"]
+    )
+    for component in adapter["components"].values():
+        for field in component["css"]:
+            if field["type"] == "color":
+                assert (field.get("role") or None) == next(
+                    (role for role, role_keys in keys.items() if field["key"] in role_keys),
+                    None,
+                )
+
+
+def test_palette_excludes_transparent_button_text_backgrounds():
+    """Les fonds de texte des boutons patient (``transparent`` par défaut)
+    n'appartiennent à aucun rôle : appliquer la « Couleur principale » y
+    poserait un pavé coloré derrière chaque libellé."""
+    keys = {
+        role["id"]: set(role["keys"])
+        for role in public_adapter_data("patient")["palette"]
+    }
+    for key in (
+        "circle_button_text_background_color",
+        "square_button_text_background_color",
+        "square_cancel_button_text_background_color",
+        "validation_button_text_background_color",
+    ):
+        assert all(key not in role_keys for role_keys in keys.values())
+    # Les vrais fonds de boutons relèvent bien de « primary » et les zones
+    # claires du fond de page de « surface ».
+    assert {
+        "patient_title_background_color",
+        "circle_button_color",
+        "square_button_color",
+        "square_cancel_button_color",
+        "validation_button_color",
+    } <= keys["primary"]
+    assert {
+        "patient_secondary_color",
+        "validation_text_background_color",
+        "confirmation_text_background_color",
+        "scan_explanation_background_color",
+        "print_error_background_color",
+    } <= keys["surface"]
+
+
+@pytest.mark.parametrize("page", ["announce", "patient", "phone"])
+def test_contrast_pairs_reference_declared_color_fields(page):
+    """Chaque paire de contraste pointe vers des champs ``color`` déclarés de
+    la page : une clé de texte et une clé de fond ou de surface."""
+    adapter = ADAPTERS[page]
+    color_fields = {
+        field["key"]
+        for component in adapter["components"].values()
+        for field in component["css"]
+        if field["type"] == "color"
+    }
+    # Une clé de fond est un champ « background » ou une surface/fill de la
+    # palette (rôles « surface » et « primary » couvrent les boutons).
+    fill_keys = {
+        field["key"]
+        for component in adapter["components"].values()
+        for field in component["css"]
+        if field["type"] == "color" and field.get("role") in {"surface", "primary"}
+    }
+    for component in adapter["components"].values():
+        for font_key, background_key in component["contrast_pairs"]:
+            assert font_key in color_fields
+            assert background_key in color_fields
+            assert "font_color" in font_key or "text_color" in font_key
+            assert "background" in background_key or background_key in fill_keys
 
 
 def test_palette_source_contains_only_published_role_values(editor_app):
     app, _ = editor_app
     with app.app_context():
-        primary = next(
-            role for role in public_adapter_data("patient")["palette"]
-            if role["id"] == "primary"
-        )
-        for key in primary["keys"]:
-            app.css_variable_manager.values["patient"][key] = "#123456"
+        palette = public_adapter_data("patient")["palette"]
+        expected = {}
+        for index, role in enumerate(palette):
+            expected[role["id"]] = f"#12345{index}"
+            for key in role["keys"]:
+                app.css_variable_manager.values["patient"][key] = expected[role["id"]]
         source = palette_source_data("patient")
 
-    primary_source = next(role for role in source["roles"] if role["id"] == "primary")
     assert source["page"] == "patient"
-    assert primary_source["values"] == ["#123456"] * len(primary["keys"])
+    for role in source["roles"]:
+        assert role["values"] == [expected[role["id"]]] * len(role["values"])
     assert "config" not in source
 
 

@@ -65,6 +65,9 @@
 
     function colorToHex(value) {
         const raw = String(value || '').trim();
+        // « transparent » / « none » n'ont pas de couleur mesurable : les
+        // convertir en noir créerait un faux positif de contraste.
+        if (raw === 'transparent' || raw === 'none') return null;
         const shortHex = raw.match(/^#?([0-9a-f]{3,4})$/i);
         if (shortHex) {
             return '#' + shortHex[1].slice(0, 3).split('').map(function (part) { return part + part; }).join('').toLowerCase();
@@ -79,8 +82,11 @@
         document.body.appendChild(probe);
         const computed = window.getComputedStyle(probe).color;
         probe.remove();
-        const rgb = computed.match(/^rgba?\(\s*(\d+)\D+(\d+)\D+(\d+)/i);
+        const rgb = computed.match(/^rgba?\(\s*(\d+)\D+(\d+)\D+(\d+)(?:\D+([\d.]+))?/i);
         if (!rgb) return null;
+        // Un rgba() dont l'alpha vaut 0 (couleur entièrement transparente) ne
+        // représente aucune couleur affichée : pas de valeur hexadécimale.
+        if (rgb[4] !== undefined && Number(rgb[4]) === 0) return null;
         return '#' + rgb.slice(1, 4).map(function (part) {
             return Number(part).toString(16).padStart(2, '0');
         }).join('');
@@ -106,28 +112,53 @@
         return (light + 0.05) / (dark + 0.05);
     }
 
-    function componentContrastRatio(definition) {
-        const fontField = definition.css.find(function (field) {
-            return field.type === 'color' && field.key.endsWith('font_color');
+    // Les paires texte/fond à contrôler sont déclarées par le serveur
+    // (component.contrast_pairs) : deviner le premier « font_color » et le
+    // premier « background_color » du composant comparerait des réglages
+    // sans rapport (ex. un texte avec un fond « transparent »).
+    function componentContrastFindings(definition) {
+        const failures = [];
+        (definition.contrast_pairs || []).forEach(function (pair) {
+            const font = colorToHex(payload.css[pair[0]]);
+            const background = colorToHex(payload.css[pair[1]]);
+            if (!font || !background) return;
+            const ratio = contrastRatio(font, background);
+            if (ratio < 3) {
+                failures.push({font: pair[0], background: pair[1], ratio: ratio});
+            }
         });
-        const backgroundField = definition.css.find(function (field) {
-            return field.type === 'color' && field.key.endsWith('background_color');
+        return failures;
+    }
+
+    function cssFieldLabel(definition, key) {
+        // Libellé du champ dans le composant d'abord, puis dans toute la
+        // page : une paire peut croiser le champ d'un composant voisin
+        // (ex. le sous-titre mesuré contre le bandeau du titre).
+        const local = (definition.css || []).find(function (field) {
+            return field.key === key;
         });
-        if (!fontField || !backgroundField) return null;
-        const font = colorToHex(payload.css[fontField.key]);
-        const background = colorToHex(payload.css[backgroundField.key]);
-        if (!font || !background) return null;
-        return contrastRatio(font, background);
+        if (local) return local.label;
+        const componentIds = Object.keys(adapter.components);
+        for (let index = 0; index < componentIds.length; index++) {
+            const field = adapter.components[componentIds[index]].css.find(function (item) {
+                return item.key === key;
+            });
+            if (field) return field.label;
+        }
+        return key;
     }
 
     function appendContrastWarning(container, definition) {
-        const ratio = componentContrastRatio(definition);
-        if (ratio === null || ratio >= 3) return;
-        const warning = document.createElement('div');
-        warning.className = 'alert alert-warning py-2 small';
-        warning.setAttribute('role', 'note');
-        warning.textContent = 'Contraste faible (' + ratio.toFixed(1) + ':1) entre le texte et le fond : illisible à distance.';
-        container.appendChild(warning);
+        componentContrastFindings(definition).forEach(function (failure) {
+            const warning = document.createElement('div');
+            warning.className = 'alert alert-warning py-2 small';
+            warning.setAttribute('role', 'note');
+            warning.textContent = 'Contraste faible (' + failure.ratio.toFixed(1).replace('.', ',')
+                + ':1) entre « ' + cssFieldLabel(definition, failure.font)
+                + ' » et « ' + cssFieldLabel(definition, failure.background)
+                + ' » : illisible à distance.';
+            container.appendChild(warning);
+        });
     }
 
     const ZONE_LABELS = {
@@ -1169,13 +1200,15 @@
         });
         Object.keys(adapter.components).forEach(function (componentId) {
             const definition = adapter.components[componentId];
-            const ratio = componentContrastRatio(definition);
-            if (ratio !== null && ratio < 3) {
+            componentContrastFindings(definition).forEach(function (failure) {
                 findings.push({
                     level: 'warning',
-                    message: 'Contraste faible (' + ratio.toFixed(1) + ':1) sur « ' + definition.label + ' ».',
+                    message: '« ' + definition.label + ' » : contraste faible ('
+                        + failure.ratio.toFixed(1).replace('.', ',') + ':1) entre « '
+                        + cssFieldLabel(definition, failure.font) + ' » et « '
+                        + cssFieldLabel(definition, failure.background) + ' ».',
                 });
-            }
+            });
         });
 
         try {
