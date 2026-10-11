@@ -121,12 +121,10 @@ document.addEventListener('DOMContentLoaded', function () {
     AdminRealtime.on(NS_ADMIN, 'refresh_languages_order', function () { refresh_languages_order(); }, '#order_languages');
     AdminRealtime.on(NS_ADMIN, 'refresh_dashboard_select', function () { refresh_dashboard_select(); }, '#div_select_dashboard');
 
-    // Galerie : liste + affichage d'une nouvelle galerie.
-    AdminRealtime.on(NS_ADMIN, 'refresh_gallery_list', function (msg) { refresh_gallery_list(msg); }, '#galleries_list');
-    AdminRealtime.on(NS_ADMIN, 'display_new_gallery', function (msg) {
-        const nameInput = document.getElementById('name');
-        if (nameInput) { nameInput.value = ''; }
-        display_new_gallery(msg);
+    // Galerie : un autre administrateur a modifié les galeries. L'auteur de
+    // la modification est déjà servi par l'en-tête HX-Trigger de sa réponse.
+    AdminRealtime.on(NS_ADMIN, 'refresh_gallery_list', function () {
+        htmx.trigger(document.body, 'galleryChanged');
     }, '#galleries_list');
 
     // Annonce (onglet audio).
@@ -568,22 +566,6 @@ $(document).ready(function() {
             $(this).closest('select').get(0).dispatchEvent(new Event('change', { bubbles: true }));
         });
     });
-
-// -------------- GALERIES --------------
-
-function display_new_gallery(data) {
-
-    // Construire l'URL de la galerie
-    let url = "/admin/gallery/__NAME__".replace('__NAME__', data.data);
-
-    // Utiliser HTMX pour envoyer une requête GET
-    htmx.ajax('GET', url, { target: '#content' });
-}
-
-
-function refresh_gallery_list(data) {
-    htmx.trigger('#galleries_list', 'refresh_gallery_list', {target: "#galleries_list"});
-}
 
 // -------------- DASHBOARD --------------
 

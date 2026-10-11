@@ -1,5 +1,4 @@
 import os
-import json
 import random
 from flask import Blueprint, render_template, url_for, current_app as app, jsonify, request, redirect
 from sqlalchemy.orm import joinedload
@@ -7,7 +6,7 @@ from models import Patient, Counter, ConfigOption, get_queue_revision, page_edit
 from utils import replace_balise_announces, replace_balise_welcome, get_announce_templates
 from communication import communikation
 from python.engine import get_next_patients_call_numbers
-from image_storage import ALLOWED_IMAGE_EXTENSIONS
+from gallery_library import parse_selection, slideshow_images
 from auth_utils import is_authenticated_request, wants_json_response
 from routes.admin_security import require_permission_api
 from stress_auth import is_authorized_stress_consultation
@@ -183,38 +182,24 @@ def patients_next():
 
 @announce_bp.route('/announce/init_gallery')
 def announce_init_gallery():
-    """ Création de la liste des images pour la galerie"""
-    app.logger.debug("Init gallery")
-    
-    # Récupérer la liste des galeries sélectionnées, si rien on envoie une liste vide
+    """Images du diaporama : celles des galeries cochées dans « Galerie média ».
+
+    Même liste et même ordre que la page d'administration (noyau
+    ``gallery_library``) : galeries par ordre alphabétique, images dans l'ordre
+    rangé par l'administrateur — l'ordre du disque, lui, était arbitraire.
+    """
     config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
-    if config_option:
-        announce_infos_galleries = json.loads(config_option.value_str)
-    else:
-        announce_infos_galleries = []
+    selected = parse_selection(config_option.value_str if config_option else None)
 
-    app.logger.debug("announce_infos_galleries : " + str(announce_infos_galleries))
-    
-    images = []
-    for gallery in announce_infos_galleries:
-        try:
-            image_dir = os.path.join(app.static_folder, "galleries", gallery)
-            images.extend([
-                url_for('static', filename=f"galleries/{gallery}/{image}")
-                for image in os.listdir(image_dir)
-                if "." in image
-                and image.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
-            ])
-        except FileNotFoundError:
-            app.logger.error(f"Gallery {gallery} not found")
+    images = [
+        url_for('static', filename=f"galleries/{gallery}/{image}")
+        for gallery, image in slideshow_images(
+            os.path.join(app.static_folder, "galleries"), selected)
+    ]
 
-
-    # Mélange des images si l'option est active. L'ancien code faisait un
-    # ``sort`` (tri alphabétique) au lieu d'un vrai mélange — le nom de
-    # l'option et son commentaire parlaient bien de « mélange ».
     if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
         random.shuffle(images)
-    
+
     return render_template('announce/gallery.html', images=images,
                             time=app.config['ANNOUNCE_INFOS_DISPLAY_TIME'],
                             announce_infos_transition=app.config['ANNOUNCE_INFOS_TRANSITION'],

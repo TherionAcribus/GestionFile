@@ -98,13 +98,6 @@
     justify-content: space-between;
 }
 
-.galleries_list {
-    display: grid;
-    grid-template-columns: max-content 1fr; /* Première colonne prend la taille du contenu le plus grand */
-    grid-row-gap: 5px;
-    grid-column-gap: 10px;
-}
-
 .admin_css_textbloc {
     display: grid;
     gap: .75rem;

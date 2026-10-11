@@ -1,6 +1,6 @@
 {% extends '/admin/base.html' %}
 
-{% block title %}Galeries{% endblock %}
+{% block title %}Galerie média{% endblock %}
 
 {# CSS spécifique à la galerie : chargé uniquement sur cette page #}
 {% block styles %}
@@ -8,52 +8,100 @@
 {% endblock %}
 
 {% block content %}
-<h3>Galeries</h3>
+<div class="gallery-page">
+    <h2 class="mb-1">Galerie média</h2>
+    <p class="text-muted">
+        Les images rangées ici défilent en <strong>diaporama sur l'écran d'annonce</strong> de la salle d'attente
+        (promotions, conseils, informations pratiques). Regroupez-les en galeries, puis choisissez celles qui
+        sont affichées. Tout changement est appliqué aux écrans <strong>immédiatement</strong>.
+    </p>
 
-<div id="galleries_list"
-    hx-get="/admin/gallery/list"
-    hx-trigger="load, refresh_gallery_list"
-    hx-target="#galleries_list"
-    hx-swap="innerHTML">
+    <section class="admin-setting-card algo-section" aria-labelledby="gallery_list_title">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            <h5 id="gallery_list_title" class="mb-0">Galeries</h5>
+            <button type="button" class="btn btn-primary"
+                    data-bs-toggle="collapse" data-bs-target="#create-gallery-panel"
+                    aria-expanded="false" aria-controls="create-gallery-panel">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Nouvelle galerie
+            </button>
+        </div>
+
+        <div class="collapse" id="create-gallery-panel">
+            <form id="create-gallery-form" class="d-flex flex-wrap align-items-end gap-2 mb-3"
+                  hx-post="{{ url_for('admin_gallery.create_gallery') }}"
+                  hx-target="#content"
+                  hx-swap="innerHTML show:#content:top">
+                <div>
+                    <label for="name" class="form-label">Nom de la galerie</label>
+                    <input type="text" class="form-control" id="name" name="name"
+                           maxlength="{{ name_max }}" required autocomplete="off"
+                           placeholder="Ex. Promotions d'automne"
+                           aria-describedby="gallery_name_help">
+                </div>
+                <button class="btn btn-primary" type="submit">
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Créer
+                </button>
+                <p id="gallery_name_help" class="form-text w-100 mb-0">
+                    Lettres, chiffres, espaces et tirets — {{ name_max }} caractères maximum.
+                </p>
+            </form>
+        </div>
+
+        {# État du diaporama + galeries. Rechargé après chaque modification
+           (en-tête HX-Trigger galleryChanged) et quand un autre administrateur
+           modifie les galeries (WebSocket, relayé par admin.js). #}
+        <div id="galleries_list"
+            hx-get="{{ url_for('admin_gallery.gallery_list') }}"
+            hx-trigger="load, galleryChanged from:body"
+            hx-target="#galleries_list"
+            hx-swap="innerHTML">
+            <p class="text-muted small">Chargement…</p>
+        </div>
+    </section>
+
+    {# Galerie ouverte : images, ajout, rangement. #}
+    <div id="content" aria-live="polite"></div>
+
+    <section class="admin-setting-card algo-section" aria-labelledby="gallery_settings_title">
+        <h5 id="gallery_settings_title"><i class="bi bi-sliders" aria-hidden="true"></i> Réglages du diaporama</h5>
+        <p class="text-muted small mb-2">
+            L'activation du diaporama, la durée d'affichage de chaque image, la transition, le mélange et la
+            taille se règlent avec l'écran d'annonce.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+            {% if user_has_permission(current_user, 'announce') %}
+            <a class="btn btn-outline-primary" href="/admin/announce/gallery#announce-gallery-settings">
+                <i class="bi bi-gear" aria-hidden="true"></i> Régler le diaporama
+            </a>
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-post="/announce/refresh" hx-swap="none"
+                    title="À utiliser seulement si un écran semble figé : les images se mettent à jour toutes seules.">
+                <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Recharger les écrans d'annonce
+            </button>
+            {% else %}
+            <span class="small text-muted">Ces réglages demandent la permission « Écran d'annonce ».</span>
+            {% endif %}
+            <a class="btn btn-outline-secondary" href="/announce" target="_blank" rel="noopener">
+                Voir l'écran <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+            </a>
+        </div>
+    </section>
 </div>
 
-<form id="create-gallery-form" 
-        hx-post="{{ url_for('admin_gallery.create_gallery') }}" 
-        hx-target="#galleries_list" 
-        hx-swap="innerHTML">
-    <div class="mb-3">
-        <label for="name" class="form-label">Nom de la Galerie</label>
-        <input type="text" class="form-control" id="name" name="name" placeholder="Nom de la Galerie">
-    </div>
-    <button class="btn btn-primary" type="submit">Créer une nouvelle galerie</button>
-</form>
-<div id="content"></div>
-
 <!-- Modale pour afficher l'image en grand -->
-<div class="modal fade" id="image-modal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade" id="image-modal" tabindex="-1" aria-labelledby="image-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-body">
-                <img id="modal-image" class="img-fluid" src="" alt="Image en grand">
+            <div class="modal-header">
+                <h5 class="modal-title text-truncate" id="image-modal-title">Image</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            <div class="modal-body text-center">
+                <img id="modal-image" class="img-fluid gallery-modal-image" src="" alt="">
             </div>
         </div>
     </div>
 </div>
-        
-<br>
-<div>
-    <button class="btn btn-danger"
-            hx-get="/announce/refresh"
-            hx-target="#invisible"                    
-            >Relancer la page "Annonce"</button>
-</div>
-
-<!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés -->
-<div id="invisible" style="display:none;"></div>
-
 {% endblock %}
 
 {# Galerie d'images : comportement propre a cette page, extrait de admin.js

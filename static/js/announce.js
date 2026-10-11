@@ -101,6 +101,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
         refresh_page();
     });
 
+    // Images du diaporama modifiées dans « Galerie média » : seul le
+    // diaporama est rechargé (pas la page, pour ne pas couper une annonce).
+    screenSocket.on('refresh_gallery', function() {
+        var pub = document.getElementById('div_pub');
+        if (pub) { htmx.trigger(pub, 'refresh_gallery'); }
+    });
+
     screenSocket.on('add_calling', function(msg) {
         console.log("Received screen message:", msg);
         add_calling(msg);
@@ -646,36 +653,44 @@ remove_text_down();
 
 // --- Carrousel d'informations (fragment announce/gallery.html) -------------
 //
-// Ce code vivait dans le fragment, sous un `htmx:afterSettle` REPOSE a chaque
-// injection : les ecouteurs s'empilaient. Il est ici enregistre une seule fois.
-// Le delai et l'effet de transition, autrefois interpoles par Jinja DANS le
-// script, arrivent par des attributs data-* du conteneur.
-document.addEventListener('htmx:afterSettle', function () {
-    var conteneur = document.querySelector('.swiper[data-swiper-delay]');
-    if (!conteneur) { return; }
-    if (typeof Swiper === 'undefined') {
-        // Librairie non chargée : la galerie reste affichée statique plutôt que
-        // de lever une exception à chaque injection HTMX du fragment.
-        console.warn('Swiper indisponible : carrousel d\'images non initialisé.');
-        return;
-    }
-
-    var delai = Number(conteneur.dataset.swiperDelay || 0) * 1000;
-    var effet = conteneur.dataset.swiperEffect || 'slide';
+// Le delai et l'effet de transition arrivent par des attributs data-* du
+// conteneur (plus aucune valeur Jinja interpolee dans du script).
+//
+// Le carrousel n'est (re)cree QUE lorsque son propre conteneur (#div_pub)
+// vient d'etre recharge. L'ancien ecouteur reagissait a TOUS les echanges
+// HTMX de la page : chaque appel de patient (rafraichissement des « prochains
+// patients ») detruisait le carrousel et le relancait a la premiere image.
+document.addEventListener('htmx:afterSettle', function (evt) {
+    var zone = document.getElementById('div_pub');
+    if (!zone || evt.target !== zone) { return; }
 
     if (window.swiperInstance) {
-        // L'instance existe déjà (le conteneur a été rechargé par HTMX avec
-        // de nouvelles slides). update() seul ne recharge pas les slides du
-        // DOM — il faut détruire et recréer l'instance pour prendre en
-        // compte le nouveau contenu.
+        // update() seul ne relit pas les slides du DOM : on recree l'instance.
         window.swiperInstance.destroy(true, true);
         window.swiperInstance = null;
     }
-    window.swiperInstance = new Swiper('.swiper', {
-        loop: true,
+    var conteneur = zone.querySelector('.swiper[data-swiper-delay]');
+    if (!conteneur) { return; }   // aucune image a afficher
+    if (typeof Swiper === 'undefined') {
+        // Librairie non chargée : la galerie reste affichée statique plutôt que
+        // de lever une exception à chaque injection HTMX du fragment.
+        console.warn("Swiper indisponible : carrousel d'images non initialisé.");
+        return;
+    }
+
+    var delai = Math.max(1, Number(conteneur.dataset.swiperDelay || 0)) * 1000;
+    var effet = conteneur.dataset.swiperEffect || 'slide';
+    var plusieurs = conteneur.querySelectorAll('.swiper-slide').length > 1;
+
+    window.swiperInstance = new Swiper(conteneur, {
+        // Une seule image : ni boucle ni defilement (Swiper les refuse).
+        loop: plusieurs,
+        allowTouchMove: plusieurs,
         effect: effet,
         slidesPerView: 1,
-        pagination: { el: '.swiper-pagination', clickable: true },
-        autoplay: { delay: delai, disableOnInteraction: false }
+        // Fondu enchaine : sans crossFade, l'image precedente reste visible
+        // derriere une image de proportions differentes.
+        fadeEffect: { crossFade: true },
+        autoplay: plusieurs ? { delay: delai, disableOnInteraction: false } : false
     });
 });

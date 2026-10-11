@@ -1,28 +1,60 @@
-{% if images | length == 0 %} 
-    <p>Aucune image dans la galerie.</p> 
+{# Images d'une galerie, dans l'ordre du diaporama. #}
+{% if not images %}
+    <div class="text-center text-muted py-4">
+        <i class="bi bi-image fs-3 d-block mb-2" aria-hidden="true"></i>
+        Aucune image dans cette galerie : ajoutez-en avec le formulaire ci-dessus.
+    </div>
 {% else %}
+    <p class="small text-muted mb-2">
+        {{ images | length }} image{{ 's' if images | length > 1 }}, dans l'ordre du diaporama.
+        {% if images | length > 1 %}Les flèches changent cet ordre (sans effet si « Mélanger les images » est activé).{% endif %}
+    </p>
+    <ol class="gallery-grid list-unstyled mb-0">
     {% for image in images %}
-        <div class="thumbnail">
-            {% if image.thumbnail %}
-                <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/thumbnails/' ~ image.thumbnail) }}"
-                     alt="{{ image['filename'] }}" loading="lazy"
-                     data-full-src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}">
-            {% else %}
-                <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}"
-                     alt="{{ image['filename'] }}" loading="lazy"
-                     data-full-src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image['filename']) }}">
-            {% endif %}
-            <div class="details">
-                <p>{{ image['filename'] }}</p>
-                <p>{{ image['date'] }}</p>
-                <button
-                    class="btn btn-danger"
-                    hx-delete="{{ url_for('admin_gallery.delete_image', gallery=gallery, image=image['filename']) }}"
-                    hx-confirm="Supprimer cette image ?"
-                    hx-target="#image-list" 
-                    hx-swap="innerHTML">Supprimer</button>
+        {% set full_src = url_for('static', filename='galleries/' ~ gallery ~ '/' ~ image.filename) %}
+        {% set move_url = url_for('admin_gallery.move_image', gallery=gallery, image=image.filename) %}
+        <li class="card gallery-image">
+            <button type="button" class="gallery-thumb" data-full-src="{{ full_src }}"
+                    data-label="{{ image.label }}"
+                    aria-label="Agrandir l'image {{ loop.index }} : {{ image.label }}">
+                <img src="{{ url_for('static', filename='galleries/' ~ gallery ~ '/thumbnails/' ~ image.thumbnail)
+                            if image.thumbnail else full_src }}"
+                     alt="" loading="lazy">
+                <span class="gallery-image-rank" aria-hidden="true">{{ loop.index }}</span>
+            </button>
+            <div class="card-body p-2">
+                <p class="gallery-image-label mb-0" title="{{ image.filename }}">{{ image.label }}</p>
+                <p class="small text-muted mb-2">{{ image.size_label }}</p>
+                <div class="d-flex justify-content-between gap-1">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Ordre de l'image {{ loop.index }}">
+                        <button type="button" class="btn btn-outline-secondary"
+                                id="move-up-{{ image.filename }}"
+                                title="Afficher plus tôt" aria-label="Afficher {{ image.label }} plus tôt"
+                                {% if loop.first %}disabled{% endif %}
+                                hx-post="{{ move_url }}" hx-vals='{"direction": "up"}'
+                                hx-target="#image-list" hx-swap="innerHTML">
+                            <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary"
+                                id="move-down-{{ image.filename }}"
+                                title="Afficher plus tard" aria-label="Afficher {{ image.label }} plus tard"
+                                {% if loop.last %}disabled{% endif %}
+                                hx-post="{{ move_url }}" hx-vals='{"direction": "down"}'
+                                hx-target="#image-list" hx-swap="innerHTML">
+                            <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger"
+                            title="Supprimer" aria-label="Supprimer l'image {{ image.label }}"
+                            hx-delete="{{ url_for('admin_gallery.delete_image', gallery=gallery, image=image.filename) }}"
+                            hx-confirm="Supprimer l'image « {{ image.label }} » ?"
+                            hx-target="#image-list"
+                            hx-swap="innerHTML">
+                        <i class="bi bi-trash" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
-        </div>
+        </li>
     {% endfor %}
+    </ol>
 {% endif %}
-

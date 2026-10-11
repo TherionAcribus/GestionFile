@@ -52,6 +52,7 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `add_calling` | `{id, counter_id, text}` | Ajoute une bannière d'appel (animée) |
 | `remove_calling` | `{id}` | Retire une bannière d'appel |
 | `refresh` | `null` | Rechargement complet de la page (changement de config) |
+| `refresh_gallery` | `null` | Recharge le seul diaporama (images ajoutées, retirées, rangées ou galerie (dé)cochée) |
 | `audio` | `string` — URL du fichier son | Joue l'annonce vocale (lecteur web) |
 | `spotify_status` | `bool` | État de lecture Spotify (affichage/ducking) |
 
@@ -127,8 +128,7 @@ Tous ces évènements déclenchent un rafraîchissement HTMX ciblé ; `data` est
 
 `update` (toast : `{toast, success, message}`), `refresh_colors`,
 `refresh_activity_table`, `refresh_button_order`, `refresh_counter_order`,
-`refresh_languages_order`, `refresh_dashboard_select`, `refresh_gallery_list`,
-`display_new_gallery` (`string` — nom), `refresh_sound`,
+`refresh_languages_order`, `refresh_dashboard_select`, `refresh_gallery_list`, `refresh_sound`,
 `audio_test` (`string` — URL), `refresh_printer_dashboard`,
 `refresh_counter_dashboard`, `refresh_schedule_tasks_list`,
 `refresh_announce_cache`,

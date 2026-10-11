@@ -1,25 +1,65 @@
-<div id="gallery-list" class="galleries_list">
-    {% for gallery in galleries %}
-        <div class="gallery_item">
-            <a class="btn btn-primary" href="{{ url_for('admin_gallery.gallery', name=gallery) }}" 
-            hx-get="{{ url_for('admin_gallery.gallery', name=gallery) }}" 
-            hx-target="#content">Visualiser {{ gallery }}
-            </a>
-        </div>
+{# État du diaporama, puis une carte par galerie (aperçu, nombre d'images,
+   interrupteur « Afficher à l'écran »). #}
+<div class="alert alert-{{ summary.level }} d-flex gap-2 align-items-start gallery-status" role="status">
+    <i class="bi {{ summary.icon }} fs-5" aria-hidden="true"></i>
+    <div>
+        <strong>{{ summary.title }}</strong>
+        <div class="small">{{ summary.detail }}</div>
+    </div>
+</div>
 
-        <!-- Pas de macro utilisé car on ne veut pas qu'un True/False -->
-        <div class="switch">
-            <span>Utiliser cette galerie</span>
-            <input id="{{ gallery }}" 
-                type="checkbox"
-                {% if gallery in selected_galleries %}checked{% endif %}
-                hx-post="/admin/gallery/choose_gallery"
-                hx-trigger="change"
-                hx-target="#invisible"
-                hx-vals='{"gallery_name": "{{ gallery }}"}'
-                data-param-checked="#{{gallery}}@checked">
-            <span class="lever"></span>
-        </div>
+{% if not cards %}
+<div class="text-center text-muted py-4">
+    <i class="bi bi-images fs-3 d-block mb-2" aria-hidden="true"></i>
+    Aucune galerie pour l'instant : créez-en une avec « Nouvelle galerie », puis ajoutez-y des images.
+</div>
+{% endif %}
 
-    {% endfor %}
+<div class="gallery-cards">
+{% for card in cards %}
+    <article class="card gallery-card{% if card.selected %} is-shown{% endif %}">
+        <div class="gallery-card-covers" aria-hidden="true">
+            {% for image in card.covers %}
+                <img src="{{ url_for('static', filename='galleries/' ~ card.name ~ '/'
+                                     ~ ('thumbnails/' ~ image.thumbnail if image.thumbnail else image.filename)) }}"
+                     alt="" loading="lazy">
+            {% else %}
+                <span class="gallery-card-empty"><i class="bi bi-image" aria-hidden="true"></i></span>
+            {% endfor %}
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h6 class="mb-0 text-break">{{ card.name }}</h6>
+                {% if card.selected %}
+                    <span class="badge text-bg-success"><i class="bi bi-tv" aria-hidden="true"></i> Dans le diaporama</span>
+                {% endif %}
+            </div>
+            <p class="small text-muted mb-2">
+                {% if card.count %}
+                    {{ card.count }} image{{ 's' if card.count > 1 }} · {{ card.size_label }}
+                {% else %}
+                    Aucune image
+                {% endif %}
+            </p>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="gallery_switch_{{ loop.index }}"
+                       name="checked" value="true"
+                       {% if card.selected %}checked{% endif %}
+                       hx-post="{{ url_for('admin_gallery.choose_gallery') }}"
+                       hx-trigger="change"
+                       hx-target="#galleries_list"
+                       hx-swap="innerHTML"
+                       hx-vals='{{ {"gallery_name": card.name} | tojson }}'>
+                <label class="form-check-label" for="gallery_switch_{{ loop.index }}">Afficher à l'écran</label>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    hx-get="{{ url_for('admin_gallery.gallery', name=card.name) }}"
+                    hx-target="#content"
+                    hx-swap="innerHTML show:#content:top">
+                <i class="bi bi-images" aria-hidden="true"></i> Gérer les images
+            </button>
+        </div>
+    </article>
+{% endfor %}
 </div>

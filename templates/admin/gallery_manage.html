@@ -1,27 +1,78 @@
-<h4>{{ gallery }}</h4>
+{# Une galerie ouverte : ajout d'images, rangement, renommage, suppression. #}
+<section class="admin-setting-card algo-section gallery-manage" aria-labelledby="gallery_manage_title">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <h5 id="gallery_manage_title" class="mb-0 text-break">
+                <i class="bi bi-images" aria-hidden="true"></i> {{ gallery }}
+            </h5>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-bs-toggle="collapse" data-bs-target="#rename-gallery-panel"
+                    aria-expanded="false" aria-controls="rename-gallery-panel">
+                <i class="bi bi-pencil" aria-hidden="true"></i> Renommer
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    hx-delete="{{ url_for('admin_gallery.delete_gallery', name=gallery) }}"
+                    hx-confirm="Supprimer la galerie « {{ gallery }} » et toutes ses images ? Cette action est irréversible."
+                    hx-target="#content"
+                    hx-swap="innerHTML">
+                <i class="bi bi-trash" aria-hidden="true"></i> Supprimer la galerie
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-gallery-close>
+                <i class="bi bi-x-lg" aria-hidden="true"></i> Fermer
+            </button>
+        </div>
+    </div>
 
-<div id="image-list"
-    hx-get="/admin/gallery/images_list/{{ gallery }}"
-    hx-trigger="load"
-    hx-target="#image-list"
-    hx-swap="innerHTML">
-</div>
+    <div class="collapse" id="rename-gallery-panel">
+        <form class="d-flex flex-wrap align-items-end gap-2 mb-3"
+              hx-post="{{ url_for('admin_gallery.rename_gallery', name=gallery) }}"
+              hx-target="#content" hx-swap="innerHTML">
+            <div>
+                <label class="form-label" for="gallery_new_name">Nouveau nom</label>
+                <input type="text" class="form-control" id="gallery_new_name" name="name"
+                       maxlength="{{ name_max }}" required autocomplete="off" value="{{ gallery }}">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer</button>
+            <button type="button" class="btn btn-outline-secondary"
+                    data-bs-toggle="collapse" data-bs-target="#rename-gallery-panel">Annuler</button>
+        </form>
+    </div>
 
+    <form id="gallery-upload-form" class="gallery-dropzone mb-3"
+          hx-post="{{ url_for('admin_gallery.upload_gallery', name=gallery) }}"
+          hx-target="#image-list"
+          hx-swap="innerHTML"
+          hx-encoding="multipart/form-data"
+          hx-indicator="#gallery-upload-progress">
+        <label for="file-input" class="form-label fw-semibold mb-1">
+            <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Ajouter des images
+        </label>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <input id="file-input" class="form-control gallery-file-input" type="file" name="photos"
+                   multiple accept="{{ accept }}" aria-describedby="gallery_upload_help"
+                   data-max-files="{{ max_files }}" data-max-mb="{{ max_mb }}">
+            <button id="upload-button" class="btn btn-primary" disabled type="submit">
+                <i class="bi bi-upload" aria-hidden="true"></i> Mettre en ligne
+            </button>
+            <span id="gallery-upload-progress" class="htmx-indicator small text-muted" role="status">
+                <span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Envoi en cours…
+            </span>
+        </div>
+        <p id="gallery_upload_help" class="form-text mb-0">
+            Choisissez des fichiers ou glissez-les ici. Formats {{ formats }} — {{ max_mb }} Mo par image,
+            {{ max_files }} images par envoi. Préférez des images au format de la zone du diaporama
+            (elles sont affichées en entier, sans être rognées).
+        </p>
+        <p id="gallery-upload-selection" class="small mb-0" aria-live="polite"></p>
+    </form>
 
-<form 
-    hx-post="{{ url_for('admin_gallery.upload_gallery', name=gallery) }}" 
-    hx-target="#image-list"
-    enctype="multipart/form-data">
-    <input id="file-input" type="file" name="photos" multiple>
-    <button id="upload-button" class="btn btn-primary"disabled type="submit">Mettre en ligne</button>
-</form>
-
-<a href="{{ url_for('admin_gallery.delete_gallery', name=gallery) }}" 
-    class="btn btn-danger"
-    hx-delete="{{ url_for('admin_gallery.delete_gallery', name=gallery) }}" 
-    hx-confirm="Supprimer la galerie « {{ gallery }} » et toutes ses images ? Cette action est irréversible."
-    hx-target="#content" 
-    hx-swap="innerHTML">
-        Supprimer cette galerie
-</a>
-
+    <div id="image-list" class="gallery-images"
+        hx-get="{{ url_for('admin_gallery.gallery_images_list', name=gallery) }}"
+        hx-trigger="load"
+        hx-target="#image-list"
+        hx-swap="innerHTML">
+        <p class="text-muted small">Chargement…</p>
+    </div>
+</section>

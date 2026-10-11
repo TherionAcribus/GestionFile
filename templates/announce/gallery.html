@@ -1,15 +1,15 @@
-<!-- Structure de Swiper -->
+{# Diaporama de l'écran d'annonce (Swiper, initialisé par announce.js).
+   Sans image, rien n'est rendu : pas de carrousel vide à initialiser. #}
+{% if images %}
 <div class="swiper" data-swiper-delay="{{ time }}"
      data-swiper-effect="{{announce_infos_transition}}"
      style="width: {{announce_infos_width}}px; height: {{announce_infos_height}}px;">
     <div class="swiper-wrapper">
-        <!-- Images ajoutées dynamiquement -->
-
         {% for image in images %}
         <div class="swiper-slide">
-            <img src="{{ image }}" alt="Slide image" loading="lazy">
+            <img src="{{ image }}" alt="" loading="lazy">
         </div>
         {% endfor %}
     </div>
 </div>
-
+{% endif %}
