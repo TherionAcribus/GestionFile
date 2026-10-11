@@ -980,78 +980,94 @@ def builtin_themes(page):
 
         css[f"{page}_secondary_color"] = background
         if page == "announce":
-            block("title", on_primary, primary, "100px" if large else "90px")
-            css.update(title_background_height="220px" if large else "200px",
+            # Hiérarchie à distance : l'appel domine, le reste l'accompagne.
+            block("title", on_primary, primary, "90px" if large else "80px")
+            css.update(title_background_height="160px" if large else "140px",
                        subtitle_font_color=on_primary,
-                       subtitle_font_size="85px" if large else "75px")
-            block("calling", on_primary, primary, "160px" if large else "140px")
-            block("text_up", text, surface, "90px" if large else "75px")
-            block("text_down", text, surface, "170px" if large else "150px")
-            block("ongoing", text, soft, "90px" if large else "75px")
-            block("next_patients", text, soft, "100px" if large else "90px")
+                       subtitle_font_size="56px" if large else "48px")
+            block("calling", on_primary, primary, "140px" if large else "120px")
+            block("text_up", text, surface, "64px" if large else "56px")
+            block("text_down", text, surface, "96px" if large else "84px")
+            block("ongoing", text, soft, "66px" if large else "56px")
+            block("next_patients", text, soft, "70px" if large else "60px")
         elif page == "patient":
-            block("patient_title", on_primary, primary, "90px" if large else "80px")
-            block("subtitle", on_primary, primary, "70px" if large else "60px")
-            css.update(patient_title_background_height="170px" if large else "150px",
-                       subtitle_background_height="170px" if large else "150px",
+            block("patient_title", on_primary, primary, "72px" if large else "64px")
+            block("subtitle", on_primary, primary, "42px" if large else "38px")
+            css.update(patient_title_background_height="150px" if large else "140px",
+                       subtitle_background_height="125px" if large else "110px",
                        circle_button_size="220px" if large else "200px", circle_button_color=primary,
                        circle_button_text_color=text,
-                       circle_button_text_size="34px" if large else "30px",
-                       circle_button_image_size="220px" if large else "200px",
-                       square_button_width="540px" if large else "500px",
-                       square_button_height="165px" if large else "150px", square_button_color=primary,
+                       circle_button_text_size="36px" if large else "32px",
+                       circle_button_image_size="200px" if large else "180px",
+                       square_button_width="560px" if large else "520px",
+                       square_button_height="175px" if large else "160px", square_button_color=primary,
                        square_button_text_color=on_primary,
-                       square_button_text_size="34px" if large else "30px",
-                       square_button_image_size="200px",
-                       square_cancel_button_width="540px" if large else "500px",
-                       square_cancel_button_height="165px" if large else "150px",
+                       square_button_text_size="42px" if large else "38px",
+                       # Images bornées par la hauteur du bouton : à 200px
+                       # elles débordaient du bouton.
+                       square_button_image_size="120px" if large else "110px",
+                       # « Retour » / « Annuler » : secondaire, donc plus petit
+                       # que les boutons d'activité qu'il chevauchait.
+                       square_cancel_button_width="330px" if large else "300px",
+                       square_cancel_button_height="100px" if large else "90px",
                        square_cancel_button_color=primary, square_cancel_button_text_color=on_primary,
                        square_cancel_button_text_size="34px" if large else "30px",
-                       square_cancel_button_image_size="200px",
+                       square_cancel_button_image_size="62px" if large else "56px",
                        validation_button_color=primary,
                        validation_button_text_color=on_primary,
-                       validation_button_text_size="44px" if large else "40px",
-                       validation_button_width="540px" if large else "500px",
-                       validation_button_height="165px" if large else "150px",
-                       validation_button_picture_size="200px",
-                       validation_text_font_size="56px" if large else "50px",
-                       confirmation_text_font_size="56px" if large else "50px",
-                       scan_explanation_font_size="56px" if large else "50px",
-                       print_error_font_size="56px" if large else "50px",
-                       print_error_number_size="90px" if large else "80px",
-                       subtitle_no_activity_font_size="46px" if large else "40px",
-                       subtitle_specific_message_font_size="46px" if large else "40px",
-                       flag_size="110px" if large else "100px")
+                       validation_button_text_size="38px" if large else "34px",
+                       validation_button_width="560px" if large else "520px",
+                       validation_button_height="120px" if large else "110px",
+                       validation_button_picture_size="62px" if large else "56px",
+                       validation_text_font_size="50px" if large else "44px",
+                       confirmation_text_font_size="50px" if large else "44px",
+                       scan_explanation_font_size="36px" if large else "32px",
+                       print_error_font_size="46px" if large else "40px",
+                       print_error_number_size="104px" if large else "96px",
+                       subtitle_no_activity_font_size="40px" if large else "36px",
+                       subtitle_specific_message_font_size="40px" if large else "36px",
+                       flag_size="80px" if large else "72px")
             # Le texte des boutons n'a pas de fond propre : sans cela, la règle
             # générique (« surface ») poserait un bandeau blanc derrière chaque
             # libellé de bouton en appliquant un thème.
             for prefix in ("circle_button", "square_button", "square_cancel_button", "validation_button"):
                 css[f"{prefix}_text_background_color"] = "transparent"
         else:
-            block("phone_title", on_primary, primary, "24px" if large else "20px")
-            css.update(phone_title_font_weight="800",
-                       phone_title_background_height="14px" if large else "10px")
+            block("phone_title", on_primary, primary, "22px" if large else "20px")
+            css.update(phone_title_font_weight="700",
+                       phone_title_background_height="18px" if large else "16px")
+            # Texte courant par défaut ; les lignes clés sont réglées ensuite.
             for prefix in ("phone_line", "phone_your_turn_line"):
                 for index in range(1, 7):
-                    block(f"{prefix}{index}", text, surface, "34px" if large else "30px")
-                    css[f"{prefix}{index}_background_height"] = "2px"
+                    block(f"{prefix}{index}", text, surface, "20px" if large else "18px")
+                    css[f"{prefix}{index}_background_height"] = "6px"
                     css[f"{prefix}{index}_font_weight"] = "400"
-            for index in (2, 4):
-                css[f"phone_line{index}_font_weight"] = "800"
-            css["phone_line2_font_size"] = "44px" if large else "40px"
-            block("phone_your_turn_line1", on_primary, primary, "44px" if large else "40px")
-            css["phone_your_turn_line1_font_weight"] = "700"
-            block("phone_specific_message", text, soft, "34px" if large else "30px")
-            css["phone_specific_message_background_height"] = "60px" if large else "50px"
+            # Attente : libellé discret, numéro dominant, demande en gras.
+            for index in (1, 3):
+                css[f"phone_line{index}_font_size"] = "22px" if large else "20px"
+            css.update(phone_line2_font_size="72px" if large else "64px",
+                       phone_line2_font_weight="800",
+                       phone_line4_font_size="28px" if large else "26px",
+                       phone_line4_font_weight="700")
+            # Appel : bandeau « votre tour », numéro dominant, consigne.
+            block("phone_your_turn_line1", on_primary, primary, "38px" if large else "34px")
+            css.update(phone_your_turn_line1_font_weight="700",
+                       phone_your_turn_line1_background_height="18px",
+                       phone_your_turn_line2_font_size="72px" if large else "64px",
+                       phone_your_turn_line2_font_weight="800",
+                       phone_your_turn_line3_font_size="26px" if large else "24px",
+                       phone_your_turn_line3_font_weight="600")
+            block("phone_specific_message", text, soft, "20px" if large else "18px")
+            css["phone_specific_message_background_height"] = "54px" if large else "48px"
             # Texte courant : graisse normale (la règle générique des nombres
             # donnerait 600).
             css["phone_specific_message_font_weight"] = "400"
             # Attente, fin de parcours et activité fermée : texte simple sur
             # le fond de page — pas de pavé coloré par défaut.
             for prefix in ("phone_waiting", "phone_journey_end", "phone_closed"):
-                block(prefix, text, "transparent", "34px" if large else "30px")
+                block(prefix, text, "transparent", "24px" if large else "22px")
                 css[f"{prefix}_font_weight"] = "400"
-                css[f"{prefix}_background_height"] = "10px"
+                css[f"{prefix}_background_height"] = "16px"
                 css[f"{prefix}_border_color"] = "#000000"
 
         css.update(overrides.get(page, {}))
@@ -1752,6 +1768,11 @@ def external_changes(page, base, current):
     return changes
 
 
+#: Décalage d'ordre entre deux zones du téléphone (l'ordre d'un composant est
+#: borné à 1000). Repris à l'identique par page_editor_preview.js.
+PHONE_ZONE_ORDER_STEP = 1000
+
+
 def layout_style(page, layout=None, preview=False):
     adapter = ADAPTERS.get(page)
     if adapter is None:
@@ -1789,6 +1810,11 @@ def layout_style(page, layout=None, preview=False):
         except (TypeError, ValueError):
             order = defaults[component_id]["order"]
             span = defaults[component_id]["span"]
+        if page == "phone":
+            # Les zones du téléphone partagent un seul conteneur flex : sans
+            # décalage par zone, le message spécifique (pied, ordre 10)
+            # s'intercalait entre la ligne 1 et la ligne 2 du contenu.
+            order += PHONE_ZONE_ORDER_STEP * adapter["zones"].index(component["zone"])
         alignment = item.get("alignment", "stretch")
         if alignment not in ALIGNMENTS:
             alignment = defaults[component_id]["alignment"]
@@ -1821,6 +1847,9 @@ def layout_style(page, layout=None, preview=False):
         ])
     elif page == "phone":
         rules.append(".container,#div_infos{display:flex;flex-flow:row wrap;align-content:flex-start;align-items:stretch}")
+        # Le contenu suit toujours le titre (zone « header ») et occupe toute
+        # la largeur : sans ordre propre il passait AVANT le titre.
+        rules.append(f"#div_infos{{order:{PHONE_ZONE_ORDER_STEP};flex:1 1 100%;min-width:0}}")
     return Markup("<style data-page-editor-layout>" + "".join(rules) + "</style>")
 
 

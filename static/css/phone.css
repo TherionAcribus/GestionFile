@@ -136,8 +136,23 @@ html {
     -webkit-text-stroke-width: var(--phone_title_border_size);
 }
 
+/* Le titre est un <h1> : Materialize le fige à 4.2rem avec de grandes marges,
+   ce qui ignorait la taille réglée et débordait sur un téléphone. */
 #text_title {
+    font-size: inherit;
+    line-height: 1.2;
+    margin: 0;
+    text-wrap: balance;
     font-weight: var(--phone_title_font_weight);
+}
+
+/* Les lignes sont du Markdown rendu en <p> : la marge par défaut (1em) créait
+   un vide proportionnel à la taille du texte autour du numéro. L'espacement
+   se règle par la « hauteur » de chaque ligne. */
+.phone_line p {
+    margin: .25em 0;
+    line-height: 1.25;
+    text-wrap: balance;
 }
 
 #div_infos {
@@ -312,8 +327,11 @@ html {
     -webkit-text-stroke-width: var(--phone_closed_border_size);
 }
 
+/* Hauteur minimale et non fixe : un message de plus d'une ligne était tronqué. */
 #specific_message {
-    height: var(--phone_specific_message_background_height);
+    min-height: var(--phone_specific_message_background_height);
+    padding: 10px 12px;
+    box-sizing: border-box;
     text-align: center;
     font-size: var(--phone_specific_message_font_size);
     font-weight: var(--phone_specific_message_font_weight);

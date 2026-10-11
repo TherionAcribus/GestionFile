@@ -137,7 +137,13 @@
                 const item = entry[1];
                 element.toggleAttribute('data-page-editor-hidden', !item.visible);
                 if (document.body.dataset.page === 'patient') return;
-                element.style.order = String(item.order);
+                // Téléphone : même décalage par zone que layout_style côté
+                // serveur (PHONE_ZONE_ORDER_STEP), sinon le pied s'intercale
+                // dans le contenu dès que le brouillon est poussé à l'aperçu.
+                const zoneOffset = document.body.dataset.page === 'phone'
+                    ? 1000 * Math.max(0, ['header', 'main', 'footer'].indexOf(item.zone))
+                    : 0;
+                element.style.order = String(Number(item.order) + zoneOffset);
                 element.style.width = ((item.span / 12) * 100).toFixed(4) + '%';
                 element.style.alignSelf = item.alignment === 'left' ? 'flex-start' : (item.alignment === 'right' ? 'flex-end' : item.alignment);
                 element.style.textAlign = item.alignment === 'stretch' ? 'center' : item.alignment;

@@ -258,7 +258,9 @@ html, body {
 .next_patients_label {
     flex-shrink: 0;
     font-weight: bold;
-    margin-right: 10px;
+    /* Proportionnel à la taille du texte : 10px fixes collaient le libellé
+       à la liste dès que la police était grande. */
+    margin-right: .35em;
     font-size: var(--next_patients_font_size);
     color: var(--next_patients_font_color);
     -webkit-text-stroke-color: var(--next_patients_font_border_color);

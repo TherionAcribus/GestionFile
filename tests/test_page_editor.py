@@ -1,4 +1,5 @@
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 
@@ -749,6 +750,22 @@ def test_layout_style_preview_hides_via_toggleable_attribute():
     assert "#text_title{display:none" not in preview_css
     assert "data-page-editor-hidden" in preview_css
     assert "#text_title{display:none!important}" in real_css
+
+
+def test_phone_layout_orders_zones_before_components():
+    """Sur le téléphone, toutes les zones partagent un conteneur flex : le
+    titre précède le contenu et le message spécifique (pied) suit les lignes,
+    alors qu'ils portent le même ordre 10 dans la disposition par défaut."""
+    app = Flask(__name__)
+    with app.app_context():
+        css = str(layout_style("phone", deepcopy(default_layout("phone"))))
+
+    def order_of(selector):
+        return int(re.search(re.escape(selector) + r"\{order:(\d+)", css).group(1))
+
+    assert order_of("#div_title_area") < order_of("#div_infos")
+    assert order_of("#phone_line6") < order_of("#specific_message")
+    assert order_of("#phone_your_turn_line6") < order_of("#specific_message")
 
 
 def test_custom_css_is_replaced_atomically(tmp_path):
