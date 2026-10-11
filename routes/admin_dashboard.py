@@ -73,8 +73,8 @@ def _apply_order(ordered_ids):
 
 
 def _render_card_slots(cards):
-    """Enveloppes à chargement différé des cartes (dashboard_load_*)."""
-    return "".join(render_template(f'admin/dashboard_load_{card.name}.html', dashboardcard=card)
+    """Enveloppes à chargement différé des cartes (dashboard_slot.html)."""
+    return "".join(render_template('admin/dashboard_slot.html', dashboardcard=card)
                    for card in cards if card.name in CATALOG)
 
 # La page d'accueil du tableau de bord n'exige que l'authentification (garantie
@@ -144,8 +144,7 @@ def dashboard_valid_select():
     dashboardcards = DashboardCard.query.filter_by(visible=True).order_by(DashboardCard.position, DashboardCard.id).all()
     html = ""
     for dashboardcard in dashboardcards:
-        template_name = f'admin/dashboard_load_{dashboardcard.name}.html'
-        html += render_template(template_name, dashboardcard=dashboardcard)
+        html += render_template('admin/dashboard_slot.html', dashboardcard=dashboardcard)
     return html, 200
 
 @admin_dashboard_bp.route('/admin/dashboard/display_select', methods=['GET'])

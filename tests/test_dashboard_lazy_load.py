@@ -21,13 +21,9 @@ import os
 import pytest
 
 import scheduler_dashboard
+from dashboard_catalog import CATALOG
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-
-_LOAD_CARDS = [
-    "queue", "counter", "printer", "staff", "button",
-    "player", "connection", "security", "appschedule", "alerts",
-]
 
 
 def _read(rel):
@@ -39,19 +35,39 @@ def _read(rel):
 # Front : chargement différé « à la révélation » (plus au chargement global)
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("name", _LOAD_CARDS)
-def test_load_templates_use_card_slot_macro(name):
-    src = _read(f"templates/admin/dashboard_load_{name}.html")
-    assert "import card_slot" in src, f"{name} devrait passer par le macro card_slot"
-    assert "card_slot(dashboardcard" in src
+def test_catalogue_declare_route_et_declencheurs():
+    """L'URL de contenu et les déclencheurs temps réel de chaque carte sont
+    déclarés dans le catalogue (anciennement en dur dans les 11 gabarits
+    dashboard_load_*.html, supprimés)."""
+    attendu = {
+        "today": ("/admin/today/dashboard",
+                  ("refresh_queue_patient", "refresh_counter_dashboard")),
+        "alerts": ("/admin/alerts/dashboard", ()),
+        "security": ("/admin/security/dashboard", ()),
+        "queue": ("/admin/queue/dashboard", ("refresh_queue_patient",)),
+        "counter": ("/admin/counter/dashboard", ("refresh_counter_dashboard",)),
+        "staff": ("/admin/staff/dashboard", ("refresh_counter_dashboard",)),
+        "button": ("/admin/button/dashboard", ()),
+        "printer": ("/admin/printer/dashboard", ("refresh_printer_dashboard",)),
+        "player": ("/admin/music/dashboard", ()),
+        "connection": ("/admin/communication/dashboard", ()),
+        "appschedule": ("/admin/appschedule/dashboard", ()),
+    }
+    assert set(CATALOG) == set(attendu)
+    for name, info in CATALOG.items():
+        assert info.data_url.startswith("/admin/")
+        assert info.data_url.endswith("/dashboard")
+        assert isinstance(info.triggers, tuple)
+        assert (info.data_url, info.triggers) == attendu[name]
 
 
-@pytest.mark.parametrize("name", _LOAD_CARDS)
-def test_load_templates_no_longer_trigger_on_load(name):
-    """Plus de `hx-trigger="load"` en dur : le déclencheur `revealed` vient du
-    macro, sinon les cartes hors écran émettraient une requête au chargement."""
-    src = _read(f"templates/admin/dashboard_load_{name}.html")
-    assert 'hx-trigger="load' not in src
+def test_slot_template_uses_card_slot_macro():
+    src = _read("templates/admin/dashboard_slot.html")
+    assert "import card_slot" in src
+    assert "card_slot(dashboardcard)" in src
+    # Plus de `hx-trigger="load"` en dur : le déclencheur `revealed` vient du
+    # macro, sinon les cartes hors écran émettraient une requête au chargement.
+    assert 'hx-trigger="load' not in _read("templates/admin/_dashboard_cards.html")
 
 
 def test_macro_defers_until_revealed_and_shows_skeleton():
@@ -110,7 +126,7 @@ def test_save_configuration_returns_lazy_slots_not_rebuilt_cards():
     branche visait un modèle SchedulerLog inexistant) a disparu."""
     src = _read("routes/admin_dashboard.py")
     assert "_render_card_slots(" in src
-    assert "dashboard_load_" in src
+    assert "dashboard_slot.html" in src
     assert "SchedulerLog" not in src
     assert "build_jobs_info(" not in src
 

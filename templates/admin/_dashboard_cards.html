@@ -6,16 +6,19 @@
      entre dans la fenêtre. Les cartes visibles au chargement se chargent tout de
      suite ; celles hors écran ne déclenchent RIEN tant qu'on ne les fait pas
      défiler. `once` évite un rechargement à chaque re-défilement.
-   - `extra_triggers` : évènements HTMX temps réel propres à la carte
-     (ex. `refresh_queue_patient`) — conservés tels quels.
+   - L'URL de contenu (`data_url`) et les évènements HTMX temps réel propres
+     à la carte (`triggers`, ex. `refresh_queue_patient`) viennent du
+     catalogue (dashboard_catalog).
    - En attendant la réponse : un squelette occupe la place (pas de saut de mise
      en page). En cas d'échec réseau/serveur : un état d'erreur avec bouton
      « Réessayer » (voir les gestionnaires htmx:responseError / htmx:sendError et
      dashboardCardRetry dans static/js/admin_home.js).
    - La largeur dans la grille (`span-*`) vient du catalogue (dashboard_catalog). #}
 
-{% macro card_slot(dashboardcard, url, extra_triggers='') %}
+{% macro card_slot(dashboardcard) %}
 {% set info = dashboard_card_info(dashboardcard.name) if dashboard_card_info is defined else none %}
+{% set url = info.data_url if info else none %}
+{% set extra_triggers = info.triggers | join(', ') if info else '' %}
 <div id="card-wrapper-{{ dashboardcard.id }}"
      class="dashboard-card-slot{% if info %} span-{{ info.span }}{% endif %}"
      data-card-id="{{ dashboardcard.id }}"

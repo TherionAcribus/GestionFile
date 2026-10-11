@@ -905,7 +905,7 @@ class DashboardCard(db.Model):
     __tablename__ = 'dashboard_cards'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False)
+    name = db.Column(db.String(50), nullable=False, unique=True)
     visible = db.Column(db.Boolean, default=True)
     position = db.Column(db.Integer, nullable=False)  # Pour gérer l'ordre des cards
     size = db.Column(db.String(20), nullable=False, default='36')  # Taille: 18 (25%), 24 (33%), 36 (50%), 48 (66%)

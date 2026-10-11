@@ -616,12 +616,10 @@ function refresh_printer_dashboard(){
 }
 
 function refresh_counter_dashboard(){
-    var slot = document.querySelector('[data-card-url="/admin/counter/dashboard"]');
-    if (slot) { htmx.trigger(slot, 'refresh_counter_dashboard'); }
-    // Cartes qui dépendent aussi des connexions aux comptoirs.
-    ['/admin/staff/dashboard', '/admin/today/dashboard'].forEach(function (url) {
-        var other = document.querySelector('[data-card-url="' + url + '"]');
-        if (other) { htmx.trigger(other, 'refresh_counter_dashboard'); }
+    // Les cartes concernées sont celles qui déclarent refresh_counter_dashboard
+    // dans leurs `triggers` du catalogue ; htmx.trigger est sans effet ailleurs.
+    document.querySelectorAll('#sortable-dashboard .dashboard-card-slot').forEach(function (slot) {
+        htmx.trigger(slot, 'refresh_counter_dashboard');
     });
 }
 

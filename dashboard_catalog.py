@@ -8,8 +8,9 @@ requise pour la voir, et sa largeur dans la grille.
 La permission est celle de la route de la carte (``require_permission_dashboard``) :
 une carte que l'utilisateur ne peut pas charger n'est plus affichée du tout
 (auparavant : une carte « Erreur de chargement » pour tout admin sans le
-droit correspondant), et le réordonnancement partiel des positions
-(``reorder_positions``).
+droit correspondant), le réordonnancement partiel des positions
+(``reorder_positions``), la route de contenu de chaque carte et ses
+déclencheurs temps réel.
 
 Aucune dépendance Flask/SQLAlchemy.
 """
@@ -30,42 +31,62 @@ class CardInfo:
     span: str = "normal"
     # Carte affichée par défaut lorsqu'elle est ajoutée à une installation.
     default_visible: bool = False
+    # Route qui rend le contenu de la carte (chargement différé HTMX).
+    data_url: str | None = None
+    # Évènements HTMX temps réel qui rechargent la carte (en plus de « revealed once »).
+    triggers: tuple[str, ...] = ()
 
 
 CATALOG = {
     "today": CardInfo("Aujourd'hui", "bi-speedometer2",
                       "Les chiffres clés de la journée : attente, patients servis, comptoirs occupés.",
-                      "/admin/stats", "queue", span="full", default_visible=True),
+                      "/admin/stats", "queue", span="full", default_visible=True,
+                      data_url="/admin/today/dashboard",
+                      triggers=("refresh_queue_patient", "refresh_counter_dashboard")),
     "alerts": CardInfo("Alertes", "bi-exclamation-triangle",
                        "Problèmes de configuration de la borne (n'apparaît que s'il y en a).",
-                       "/admin/patient?tab=buttons", "patient"),
+                       "/admin/patient?tab=buttons", "patient",
+                       data_url="/admin/alerts/dashboard"),
     "security": CardInfo("Sécurité", "bi-shield-lock",
                          "Vérifie que le mot de passe administrateur par défaut a été changé.",
-                         "/admin/security", "security"),
+                         "/admin/security", "security",
+                         data_url="/admin/security/dashboard"),
     "queue": CardInfo("File d'attente", "bi-people",
                       "Patients en attente, appelés et au comptoir, en direct.",
-                      "/admin/queue", "queue"),
+                      "/admin/queue", "queue",
+                      data_url="/admin/queue/dashboard",
+                      triggers=("refresh_queue_patient",)),
     "counter": CardInfo("Comptoirs", "bi-window-stack",
                         "Qui est connecté à quel comptoir, et avec quel patient.",
-                        "/admin/counter", "counter"),
+                        "/admin/counter", "counter",
+                        data_url="/admin/counter/dashboard",
+                        triggers=("refresh_counter_dashboard",)),
     "staff": CardInfo("Équipe", "bi-person-badge",
                       "Membres de l'équipe et comptoir occupé.",
-                      "/admin/staff", "staff"),
+                      "/admin/staff", "staff",
+                      data_url="/admin/staff/dashboard",
+                      triggers=("refresh_counter_dashboard",)),
     "button": CardInfo("Boutons de la borne", "bi-grid-3x3-gap",
                        "Activer ou désactiver rapidement un bouton de la borne.",
-                       "/admin/patient?tab=buttons", "patient", span="wide"),
+                       "/admin/patient?tab=buttons", "patient", span="wide",
+                       data_url="/admin/button/dashboard"),
     "printer": CardInfo("Imprimante", "bi-printer",
                         "État de l'imprimante de la borne et derniers messages.",
-                        "/admin/patient", "patient"),
+                        "/admin/patient", "patient",
+                        data_url="/admin/printer/dashboard",
+                        triggers=("refresh_printer_dashboard",)),
     "player": CardInfo("Musique", "bi-music-note-beamed",
                        "Lecteur Spotify de l'écran d'annonce.",
-                       "/admin/music", "music_play"),
+                       "/admin/music", "music_play",
+                       data_url="/admin/music/dashboard"),
     "connection": CardInfo("Connexions", "bi-broadcast",
                            "Nombre d'appareils connectés en direct (bornes, écrans, comptoirs…).",
-                           "/admin/app/connexion", "app"),
+                           "/admin/app/connexion", "app",
+                           data_url="/admin/communication/dashboard"),
     "appschedule": CardInfo("Tâches planifiées", "bi-calendar-check",
                             "Prochaines tâches automatiques et échecs éventuels.",
-                            "/admin/database", "schedule"),
+                            "/admin/database", "schedule",
+                            data_url="/admin/appschedule/dashboard"),
 }
 
 

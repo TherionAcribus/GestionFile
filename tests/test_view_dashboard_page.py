@@ -191,6 +191,18 @@ def test_reorder_positions_pur():
     assert result == {2: 1, 1: 2}
 
 
+def test_page_admin_rend_les_enveloppes_depuis_le_catalogue(app, client):
+    """Les enveloppes de chargement différé tirent URL et triggers du
+    catalogue (via le gabarit unique dashboard_slot.html)."""
+    with app.test_request_context():
+        admin_dashboard._ensure_catalog_cards()   # crée « today » notamment
+        html = admin_dashboard._render_card_slots(DashboardCard.query.all())
+    assert 'data-card-url="/admin/queue/dashboard"' in html
+    assert 'data-card-url="/admin/counter/dashboard"' in html
+    assert ('hx-trigger="revealed once, refresh_queue_patient, '
+            'refresh_counter_dashboard"') in html   # carte « today »
+
+
 def _card_id(name):
     return DashboardCard.query.filter_by(name=name).first().id
 
@@ -241,6 +253,15 @@ def test_save_configuration_renumerote(client, app):
         cards = DashboardCard.query.order_by(DashboardCard.position, DashboardCard.id).all()
         assert [c.position for c in cards] == [1, 2, 3, 4]
         assert [c.name for c in cards] == ["staff", "counter", "queue", "security"]
+
+
+def test_nom_de_carte_unique(app):
+    from sqlalchemy.exc import IntegrityError
+    with app.app_context():
+        db.session.add(DashboardCard(name="queue", visible=True, position=99, size="36"))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
 
 
 def test_carte_equipe(client):

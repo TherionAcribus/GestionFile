@@ -28,6 +28,8 @@ import re
 
 import pytest
 
+from dashboard_catalog import CATALOG
+
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 
@@ -91,7 +93,9 @@ def test_refresh_counter_dashboard_uses_data_card_url():
     m = re.search(r"function refresh_counter_dashboard\(\)\s*{(.*?)\n}", js, re.DOTALL)
     assert m, "refresh_counter_dashboard() introuvable"
     body = m.group(1)
-    assert 'data-card-url="/admin/counter/dashboard"' in body
+    # L'évènement est émis sur tous les slots : les cartes concernées sont
+    # celles qui déclarent le trigger dans le catalogue.
+    assert '#sortable-dashboard .dashboard-card-slot' in body
     assert '#card-counter' not in body
 
 
@@ -111,7 +115,7 @@ def test_refresh_queue_has_no_console_log():
 
 
 # ---------------------------------------------------------------------------
-# 4. Les templates dashboard_load_*.html passent le bon trigger
+# 4. Le catalogue déclare le bon trigger par carte
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("name,url,trigger", [
@@ -120,12 +124,10 @@ def test_refresh_queue_has_no_console_log():
     ("counter", "/admin/counter/dashboard", "refresh_counter_dashboard"),
 ])
 def test_dashboard_load_template_passes_trigger(name, url, trigger):
-    """Chaque template dashboard_load_*.html doit passer son trigger HTMX
-    au macro card_slot, pour que l'évènement de rafraîchissement déclenche
-    la bonne carte."""
-    src = _read(f"templates/admin/dashboard_load_{name}.html")
-    assert f"'{trigger}'" in src
-    assert url in src
+    """L'URL de contenu et les triggers HTMX de chaque carte viennent du
+    catalogue : l'évènement de rafraîchissement déclenche la bonne carte."""
+    assert CATALOG[name].data_url == url
+    assert trigger in CATALOG[name].triggers
 
 
 # ---------------------------------------------------------------------------
