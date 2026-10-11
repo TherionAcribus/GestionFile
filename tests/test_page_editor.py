@@ -488,6 +488,115 @@ def test_phone_markdown_preview_is_sanitized():
     assert "javascript:" not in html
 
 
+# --- Téléphone : écrans d'attente, de fin de parcours et d'activité fermée ---
+
+def test_phone_adapter_covers_waiting_ended_and_closed_screens():
+    adapter = ADAPTERS["phone"]
+    assert [item["id"] for item in adapter["scenarios"]] == [
+        "waiting", "confirmation", "your-turn", "ended", "closed"]
+    prefixes = {
+        "waiting_text": ("#phone_waiting", "waiting", "phone_waiting"),
+        "journey_end": ("#phone_journey_end", "ended", "phone_journey_end"),
+        "closed": ("#phone_closed", "closed", "phone_closed"),
+    }
+    for component_id, (selector, scenario, prefix) in prefixes.items():
+        component = adapter["components"][component_id]
+        assert component["selector"] == selector
+        assert component["scenarios"] == [scenario]
+        assert component["layout_controls"] == ["visible"]
+        assert {field["key"] for field in component["css"]} == {
+            f"{prefix}_{suffix}" for suffix in (
+                "font_size", "font_color", "font_weight", "border_size",
+                "border_color", "background_color", "background_height")}
+
+
+def test_phone_waiting_and_terminal_keys_validate():
+    """Le payload téléphone complet porte les nouvelles clés de contenu et
+    d'apparence ; les textes d'attente acceptent {N} mais refusent {X}."""
+    payload = make_payload("phone")
+    for key in ("phone_waiting_line1", "phone_waiting_line2",
+                "phone_journey_end_message",
+                "page_patient_disable_default_message"):
+        assert key in payload["config"]
+    for prefix in ("phone_waiting", "phone_journey_end", "phone_closed"):
+        for suffix in ("font_size", "font_color", "font_weight", "border_size",
+                       "border_color", "background_color", "background_height"):
+            assert f"{prefix}_{suffix}" in payload["css"]
+    assert validate_payload("phone", payload) == payload
+
+    payload["config"]["phone_waiting_line1"] = "Numéro {N} à la {P}"
+    assert validate_payload("phone", payload)["config"]["phone_waiting_line1"] \
+        == "Numéro {N} à la {P}"
+    payload["config"]["phone_waiting_line1"] = "Patient {X}"
+    with pytest.raises(ValueError):
+        validate_payload("phone", payload)
+
+
+def test_phone_waiting_lines_resolve_url_number(editor_app):
+    """{N} vient du numéro porté par l'URL (pas d'objet Patient), {P} et les
+    autres balises « welcome » sont résolues comme sur la page."""
+    from routes.patient import _phone_waiting_lines
+
+    app, _ = editor_app
+    with app.app_context():
+        app.config["PHARMACY_NAME"] = "Pharmacie du Centre"
+        app.config["PHONE_WAITING_LINE1"] = "Attente de validation pour {N} — {P}"
+        app.config["PHONE_WAITING_LINE2"] = "Veuillez patienter"
+        line1, line2 = _phone_waiting_lines("A42", "fr")
+    assert line1 == "Attente de validation pour A42 — Pharmacie du Centre"
+    assert line2 == "Veuillez patienter"
+
+
+def test_phone_waiting_lines_use_translation_for_foreign_language(editor_app):
+    from models import Translation
+    from routes.patient import _phone_waiting_lines
+
+    app, _ = editor_app
+    with app.app_context():
+        app.config["PHONE_WAITING_LINE1"] = "Attente {N}"
+        db.session.add(Translation(
+            table_name="ConfigOption", column_name="value_str", row_id=1,
+            key_name="phone_waiting_line1", language_code="en",
+            translated_text="Waiting for {N}"))
+        db.session.commit()
+        line1, _ = _phone_waiting_lines("B7", "en")
+    assert line1 == "Waiting for B7"
+
+
+def test_phone_preview_waiting_ended_and_closed_scenarios(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PHONE_WAITING_LINE1"] = \
+            "En attente de validation pour le numéro {N}"
+        app.config["PHONE_WAITING_LINE2"] = "Veuillez patienter...."
+        app.config["PHONE_JOURNEY_END_MESSAGE"] = "Passage terminé pour {N}"
+        app.config["PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE"] = "Activité fermée"
+
+    waiting = client.get(
+        "/admin/page-editor/phone/preview?scenario=waiting"
+    ).get_data(as_text=True)
+    assert 'id="phone_waiting" data-page-editor-component="waiting_text"' in waiting
+    assert 'data-config-key="phone_waiting_line1"' in waiting
+    assert "En attente de validation pour le numéro 042" in waiting
+    assert "Veuillez patienter...." in waiting
+
+    ended = client.get(
+        "/admin/page-editor/phone/preview?scenario=ended"
+    ).get_data(as_text=True)
+    assert 'id="phone_journey_end" class="text-center" ' \
+           'data-page-editor-component="journey_end"' in ended
+    assert "Passage terminé pour 042" in ended
+
+    closed = client.get(
+        "/admin/page-editor/phone/preview?scenario=closed"
+    ).get_data(as_text=True)
+    assert 'id="phone_closed" class="text-center" ' \
+           'data-page-editor-component="closed"' in closed
+    assert "Activité fermée" in closed
+
+
 def test_layout_rejects_forbidden_zone_and_values():
     payload = make_payload("announce")
     payload["layout"]["title"]["zone"] = "footer"
@@ -837,6 +946,10 @@ def test_builtin_theme_payloads_are_valid_and_have_contrast(page, theme_index):
             background = css["title_background_color"]
         if key == "circle_button_text_color":
             background = css["patient_secondary_color"]
+        if background == "transparent":
+            # Fond transparent : le contraste se mesure contre le fond de
+            # page, qui est ce que le patient voit derrière le texte.
+            background = css[page + "_secondary_color"]
         values = sorted((luminance(foreground), luminance(background)))
         assert (values[1] + 0.05) / (values[0] + 0.05) >= 4.5, (theme["name"], page, key)
     if page == "patient":

@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.36",
+    "version": "0.37",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -128,6 +128,8 @@
             "phone_your_turn_line5":"",
             "phone_your_turn_line6":"",
             "phone_journey_end_message": "Votre passage est terminé. Vous pouvez vous adresser à l'accueil si besoin.",
+            "phone_waiting_line1": "En attente de validation pour le numéro {N}",
+            "phone_waiting_line2": "Veuillez patienter....",
             "security_login_admin": true,
             "security_login_counter": true,
             "security_login_screen": true,

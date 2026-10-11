@@ -1,7 +1,7 @@
 {
     "name": "gf_phone_css_variables",
     "type": "default",
-    "version": "0.11",
+    "version": "0.12",
     "timestamp": "2024-12-10 14:35:26",
     "comments": "Valeurs alignées sur la configuration de production",
     "variables": {
@@ -113,6 +113,27 @@
         "phone_your_turn_line6_background_color": "#FFFFFF",
         "phone_your_turn_line6_background_height": "2px",
         "phone_your_turn_line6_border_color": "#18332F",
-        "phone_your_turn_line6_border_size": "0px"
+        "phone_your_turn_line6_border_size": "0px",
+        "phone_waiting_font_color": "#18332F",
+        "phone_waiting_font_size": "30px",
+        "phone_waiting_font_weight": "400",
+        "phone_waiting_border_size": "0px",
+        "phone_waiting_border_color": "#000000",
+        "phone_waiting_background_color": "transparent",
+        "phone_waiting_background_height": "10px",
+        "phone_journey_end_font_color": "#18332F",
+        "phone_journey_end_font_size": "30px",
+        "phone_journey_end_font_weight": "400",
+        "phone_journey_end_border_size": "0px",
+        "phone_journey_end_border_color": "#000000",
+        "phone_journey_end_background_color": "transparent",
+        "phone_journey_end_background_height": "10px",
+        "phone_closed_font_color": "#18332F",
+        "phone_closed_font_size": "30px",
+        "phone_closed_font_weight": "400",
+        "phone_closed_border_size": "0px",
+        "phone_closed_border_color": "#000000",
+        "phone_closed_background_color": "transparent",
+        "phone_closed_background_height": "10px"
     }
 }

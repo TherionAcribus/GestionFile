@@ -341,6 +341,8 @@ ADAPTERS = {
             {"id": "waiting", "label": "Attente"},
             {"id": "confirmation", "label": "Confirmation"},
             {"id": "your-turn", "label": "Appel du patient"},
+            {"id": "ended", "label": "Parcours terminé"},
+            {"id": "closed", "label": "Activité fermée"},
         ],
         "components": {},
     },
@@ -405,6 +407,30 @@ ADAPTERS["phone"]["components"]["specific"] = _component(
          {"key": "phone_specific_message_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "surface"},
          {"key": "phone_specific_message_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
 )
+
+# Écrans d'attente, de fin de parcours et d'activité fermée : texte simple
+# échappé Jinja (pas de Markdown), même famille de réglages que les lignes.
+for _component_id, _label, _selector, _scenario, _prefix, _config in (
+    ("waiting_text", "Écran d'attente", "#phone_waiting", "waiting", "phone_waiting",
+     [{"key": "phone_waiting_line1", "label": "Première ligne — {N} = numéro d'appel", "type": "text"},
+      {"key": "phone_waiting_line2", "label": "Deuxième ligne", "type": "text"}]),
+    ("journey_end", "Parcours terminé", "#phone_journey_end", "ended", "phone_journey_end",
+     [{"key": "phone_journey_end_message", "label": "Message de fin de parcours — {N} = numéro d'appel", "type": "text"}]),
+    ("closed", "Activité fermée", "#phone_closed", "closed", "phone_closed",
+     [{"key": "page_patient_disable_default_message", "label": "Message par défaut si l'activité n'en définit pas", "type": "text"}]),
+):
+    ADAPTERS["phone"]["components"][_component_id] = _component(
+        _label, "main", _selector, scenarios=[_scenario], layout_controls=["visible"],
+        contrast_pairs=[(f"{_prefix}_font_color", f"{_prefix}_background_color")],
+        config=_config,
+        css=[{"key": f"{_prefix}_font_size", "label": "Taille du texte", "type": "size", "group": "Texte"},
+             {"key": f"{_prefix}_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
+             {"key": f"{_prefix}_font_weight", "label": "Graisse", "type": "number", "group": "Texte"},
+             {"key": f"{_prefix}_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
+             {"key": f"{_prefix}_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
+             {"key": f"{_prefix}_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "surface"},
+             {"key": f"{_prefix}_background_height", "label": "Hauteur", "type": "size", "group": "Zone"}],
+    )
 
 
 #: Tuples ``(key, label, type, default, group, role)`` — ``group`` et ``role``
@@ -965,6 +991,13 @@ def builtin_themes(page):
             # Texte courant : graisse normale (la règle générique des nombres
             # donnerait 600).
             css["phone_specific_message_font_weight"] = "400"
+            # Attente, fin de parcours et activité fermée : texte simple sur
+            # le fond de page — pas de pavé coloré par défaut.
+            for prefix in ("phone_waiting", "phone_journey_end", "phone_closed"):
+                block(prefix, text, "transparent", "34px" if large else "30px")
+                css[f"{prefix}_font_weight"] = "400"
+                css[f"{prefix}_background_height"] = "10px"
+                css[f"{prefix}_border_color"] = "#000000"
 
         css.update(overrides.get(page, {}))
 

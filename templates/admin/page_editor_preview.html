@@ -224,7 +224,11 @@
         {{ page_components.phone_title(preview_config.phone_title, true) }}
         <div id="div_infos"{% if preview_phone_center %} class="text-center"{% endif %}>
             {% if scenario == 'waiting' %}
-                <p>En attente de validation pour le numéro 042</p><p>Veuillez patienter…</p>
+                <div id="phone_waiting" data-page-editor-component="waiting_text"><p data-config-key="phone_waiting_line1">{{ preview_config.phone_waiting_line1 }}</p><p data-config-key="phone_waiting_line2">{{ preview_config.phone_waiting_line2 }}</p></div>
+            {% elif scenario == 'ended' %}
+                <div id="phone_journey_end" class="text-center" data-page-editor-component="journey_end"><p data-config-key="phone_journey_end_message">{{ preview_config.phone_journey_end_message }}</p></div>
+            {% elif scenario == 'closed' %}
+                <div id="phone_closed" class="text-center" data-page-editor-component="closed"><p data-config-key="page_patient_disable_default_message">{{ preview_config.page_patient_disable_default_message }}</p></div>
             {% else %}
                 {{ page_components.phone_lines(
                     phone_your_turn_lines if scenario == 'your-turn' else phone_confirmation_lines,

@@ -697,6 +697,35 @@ def print_abandon():
 
 
 
+#: Textes de repli de l'écran d'attente du téléphone, utilisés si la clé de
+#: configuration n'existe pas encore en base (installation antérieure au
+#: paramètre). Identiques au texte historique codé en dur dans phone.html.
+_PHONE_WAITING_DEFAULTS = {
+    "phone_waiting_line1": "En attente de validation pour le numéro {N}",
+    "phone_waiting_line2": "Veuillez patienter....",
+}
+
+
+def _phone_waiting_lines(patient_id, language_code):
+    """Lignes de l'écran d'attente du téléphone, avant le premier ping.
+
+    {N} est le numéro d'appel porté par l'URL — il n'y a pas encore d'objet
+    Patient sur ce chemin : il est remplacé AVANT ``replace_balise_welcome``,
+    qui vide les marqueurs patient restants."""
+    lines = []
+    for key, default in _PHONE_WAITING_DEFAULTS.items():
+        text = app.config.get(key.upper())
+        if language_code not in (None, "fr"):
+            try:
+                text = get_text_translation(key, language_code)["translation"]
+            except Exception:
+                # Config absente des deux côtés : repli sur le défaut.
+                pass
+        text = (text or default).replace("{N}", str(patient_id))
+        lines.append(replace_balise_welcome(text))
+    return lines
+
+
 def _phone_activity_closed(activity, language_code):
     """Fragment « activité fermée » pour la page téléphone — même message que
     la borne (texte d'indisponibilité de l'activité ou défaut configuré)."""
@@ -898,6 +927,9 @@ def phone_patient(language_code, patient_id, activity_id):
             return render_template('patient/phone_link_invalid.html',
                                    phone_title=phone_title,
                                    language_code=language_code)
+        # Lien de suivi : le numéro affiché est celui réellement attribué.
+        phone_waiting_line1, phone_waiting_line2 = _phone_waiting_lines(
+            patient.call_number, language_code)
         return render_template('/patient/phone.html',
                                 phone_title=phone_title,
                                 patient_id=patient.call_number,
@@ -905,8 +937,12 @@ def phone_patient(language_code, patient_id, activity_id):
                                 journey_id='',
                                 ticket=ticket,
                                 language_code=language_code,
+                                phone_waiting_line1=phone_waiting_line1,
+                                phone_waiting_line2=phone_waiting_line2,
                                 page_revision=page_editor_published_revision("phone"))
 
+    phone_waiting_line1, phone_waiting_line2 = _phone_waiting_lines(
+        patient_id, language_code)
     if request.cookies.get('patient_call_number') != patient_id:
         if request.cookies.get('patient_id') != patient_id:
             response = make_response(render_template('/patient/phone.html',
@@ -916,6 +952,8 @@ def phone_patient(language_code, patient_id, activity_id):
                                                     journey_id=journey_id,
                                                     ticket='',
                                                     language_code=language_code,
+                                                    phone_waiting_line1=phone_waiting_line1,
+                                                    phone_waiting_line2=phone_waiting_line2,
                                                     page_revision=page_editor_published_revision("phone")))
             response.set_cookie('patient_id', "", expires=0)
             response.set_cookie('patient_call_number', "", expires=0)
@@ -928,6 +966,8 @@ def phone_patient(language_code, patient_id, activity_id):
                             journey_id=journey_id,
                             ticket='',
                             language_code=language_code,
+                            phone_waiting_line1=phone_waiting_line1,
+                            phone_waiting_line2=phone_waiting_line2,
                             # Révision publiée : renvoyée dans l'accusé socket
                             # de (re)connexion (accusés « écran » de l'éditeur).
                             page_revision=page_editor_published_revision("phone"))
