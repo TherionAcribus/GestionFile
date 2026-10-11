@@ -1094,8 +1094,19 @@ def _palette_data(adapter):
 
 
 def _normalize_css_value(value, field_type):
-    if isinstance(value, str) and field_type == "color" and re.fullmatch(r"[0-9A-Fa-f]{3,8}", value):
-        return f"#{value}"
+    """Normalise une valeur d'apparence : préfixe ``#`` aux couleurs hex
+    historiques saisies sans lui et passe les hexadécimaux en minuscules.
+
+    La casse compte pour la comparaison de ``payload_diff`` : les thèmes et
+    les palettes écrivent ``#008B8B`` alors que les champs couleur saisissent
+    ``#008b8b`` — sans normalisation, la même couleur ressortait comme un
+    changement.
+    """
+    if isinstance(value, str) and field_type == "color":
+        if re.fullmatch(r"[0-9A-Fa-f]{3,8}", value):
+            value = f"#{value}"
+        if re.fullmatch(r"#[0-9A-Fa-f]{3,8}", value):
+            return value.lower()
     return value
 
 
@@ -1192,6 +1203,38 @@ _ADVANCED_DISABLED_RULES = {
 _ADVANCED_NEVER_RULES = {
     ("announce", "top_message"): ("announce_text_up_patients_display", "L'affichage de ce message est réglé sur « jamais » dans le mode avancé."),
     ("announce", "empty_message"): ("announce_text_down_patients_display", "L'affichage de ce message est réglé sur « jamais » dans le mode avancé."),
+}
+
+#: Variables « parentes » du mode avancé : aucune règle CSS ne les consomme,
+#: mais elles servent d'entrées de cascade dans ``admin_colors.js`` et de
+#: rôles dans la copie de palettes (``COLOR_PAGE_ROLES``). À la publication,
+#: chacune est réalignée sur le représentant choisi ci-dessous — une variable
+#: gérée par l'éditeur qui incarne le même rôle — pour ne pas rester périmée.
+_PARENT_CSS_REPRESENTATIVES = {
+    "announce": {
+        "announce_main_color": "title_background_color",
+        "announce_third_color": "title_font_color",
+        "announce_fourth_color": "ongoing_background_color",
+        "announce_border_color": "title_bottom_border_color",
+    },
+    "patient": {
+        "patient_main_color": "patient_title_background_color",
+        "patient_third_color": "patient_title_font_color",
+        "patient_border_color": "patient_title_border_color",
+        "patient_button_border_color": "square_button_border_color",
+    },
+    "phone": {
+        "phone_main_color": "phone_title_background_color",
+        "phone_third_color": "phone_line1_font_color",
+        "phone_border_color": "phone_title_border_color",
+        "phone_lines_font_size": "phone_line2_font_size",
+        "phone_lines_font_weight": "phone_line2_font_weight",
+        "phone_your_turn_main_color": "phone_your_turn_line2_background_color",
+        "phone_your_turn_third_color": "phone_your_turn_line2_font_color",
+        "phone_your_turn_border_color": "phone_your_turn_line2_border_color",
+        "phone_your_turn_lines_font_size": "phone_your_turn_line2_font_size",
+        "phone_your_turn_lines_font_weight": "phone_your_turn_line2_font_weight",
+    },
 }
 
 
@@ -1322,6 +1365,13 @@ def complete_css(page, css):
                 completed[field["key"]] = _normalize_css_value(
                     published or field.get("default"), field["type"],
                 )
+            else:
+                # Même normalisation qu'à la validation (casse hex…) : un
+                # instantané enregistré avant son introduction ne doit pas
+                # ressortir comme « modifié » dans le diff publié/révision.
+                completed[field["key"]] = _normalize_css_value(
+                    completed[field["key"]], field["type"],
+                )
     return completed
 
 
@@ -1343,6 +1393,18 @@ def _is_button_image_name(value):
 
 def validate_payload(page, payload):
     adapter = ADAPTERS[page]
+    # Libellés « Composant › Champ (clé) » pour les messages d'erreur : la clé
+    # technique reste entre parenthèses (journalisation, tests, support).
+    _field_labels, _field_components = _field_label_maps(adapter)
+
+    def _label(key):
+        label = _field_labels.get(key)
+        if label is None:
+            return key
+        component = _field_components.get(key)
+        human = f"{component} › {label}" if component else label
+        return f"{human} ({key})"
+
     if not isinstance(payload, dict):
         raise ValueError("Le brouillon doit être un objet JSON.")
     if set(payload) != _PAYLOAD_KEYS:
@@ -1377,10 +1439,10 @@ def validate_payload(page, payload):
             raise ValueError("Paramètre de contenu inconnu.")
         if spec.value_type == "value_bool":
             if not isinstance(value, bool):
-                raise ValueError(f"Valeur booléenne invalide pour {key}.")
+                raise ValueError(f"Valeur booléenne invalide pour {_label(key)}.")
         elif spec.value_type == "value_int":
             if not isinstance(value, int) or isinstance(value, bool):
-                raise ValueError(f"Valeur numérique invalide pour {key}.")
+                raise ValueError(f"Valeur numérique invalide pour {_label(key)}.")
             minimum = max((v for v in (config_minimums.get(key), spec.min_value)
                            if v is not None), default=None)
             maximum = min((v for v in (config_maximums.get(key), spec.max_value)
@@ -1389,29 +1451,32 @@ def validate_payload(page, payload):
             # (même atypique) ne doit pas bloquer la publication du reste.
             published = current_app.config.get(spec.config_name)
             if minimum is not None and value < minimum and value != published:
-                raise ValueError(f"Valeur trop petite pour {key} (minimum {minimum}).")
+                raise ValueError(
+                    f"Valeur trop petite pour {_label(key)} (minimum {minimum}).")
             if maximum is not None and value > maximum and value != published:
-                raise ValueError(f"Valeur trop grande pour {key} (maximum {maximum}).")
+                raise ValueError(
+                    f"Valeur trop grande pour {_label(key)} (maximum {maximum}).")
         else:
             # Colonne cible du paramètre : value_str est limitée à 200
             # caractères, seule value_text (textes longs) monte à 6000.
             max_length = 6000 if spec.value_type == "value_text" else 200
             if not isinstance(value, str):
-                raise ValueError(f"Texte invalide pour {key}.")
+                raise ValueError(f"Texte invalide pour {_label(key)}.")
             if len(value) > max_length:
-                raise ValueError(f"Texte trop long pour {key} (maximum {max_length} caractères).")
+                raise ValueError(
+                    f"Texte trop long pour {_label(key)} (maximum {max_length} caractères).")
             if "<" in value or ">" in value:
-                raise ValueError(f"Le HTML n'est pas autorisé pour {key}.")
+                raise ValueError(f"Le HTML n'est pas autorisé pour {_label(key)}.")
             check = validate_config_text(key, value)
             if not check["success"]:
                 raise ValueError(str(check["value"]))
             value = check["value"]
             if config_types.get(key) == "image" and not _is_button_image_name(value):
                 raise ValueError(
-                    f"Image invalide pour {key} : nom de fichier attendu, "
+                    f"Image invalide pour {_label(key)} : nom de fichier attendu, "
                     "sans chemin ni extension non image.")
         if spec.allowed_values is not None and value not in spec.allowed_values:
-            raise ValueError(f"Valeur non autorisée pour {key}.")
+            raise ValueError(f"Valeur non autorisée pour {_label(key)}.")
         normalized_config[key] = value
     for key in allowed_config - set(normalized_config):
         spec = get_spec(key)
@@ -1429,10 +1494,10 @@ def validate_payload(page, payload):
     for key, value in css_values.items():
         value = _normalize_css_value(value, css_types[key])
         if not is_safe_css_value(value):
-            raise ValueError(f"Valeur CSS invalide pour {key}.")
+            raise ValueError(f"Valeur CSS invalide pour {_label(key)}.")
         stripped = value.strip()
         if not _is_valid_css_for_type(stripped, css_types[key]):
-            raise ValueError(f"Valeur CSS inutilisable pour {key}.")
+            raise ValueError(f"Valeur CSS inutilisable pour {_label(key)}.")
         normalized_css[key] = stripped
 
     raw_layout = payload.get("layout")
@@ -1441,21 +1506,22 @@ def validate_payload(page, payload):
     normalized_layout = {}
     for component_id, raw in raw_layout.items():
         component = adapter["components"][component_id]
+        component_label = f"{component['label']} ({component_id})"
         if not isinstance(raw, dict) or set(raw) != _LAYOUT_KEYS:
             raise ValueError("Structure de composant invalide.")
         zone = raw.get("zone")
         if zone not in component["zones"]:
-            raise ValueError(f"Zone invalide pour {component_id}.")
+            raise ValueError(f"Zone invalide pour {component_label}.")
         order = raw.get("order")
         span = raw.get("span")
         visible = raw.get("visible")
         alignment = raw.get("alignment")
         if not isinstance(order, int) or not 0 <= order <= 1000:
-            raise ValueError(f"Ordre invalide pour {component_id}.")
+            raise ValueError(f"Ordre invalide pour {component_label}.")
         if not isinstance(span, int) or not 1 <= span <= 12:
-            raise ValueError(f"Largeur invalide pour {component_id}.")
+            raise ValueError(f"Largeur invalide pour {component_label}.")
         if not isinstance(visible, bool) or alignment not in ALIGNMENTS:
-            raise ValueError(f"Présentation invalide pour {component_id}.")
+            raise ValueError(f"Présentation invalide pour {component_label}.")
         normalized_layout[component_id] = {
             "zone": zone,
             "order": order,

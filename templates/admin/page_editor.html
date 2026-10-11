@@ -47,9 +47,16 @@
                     <label class="form-label mb-1" for="editor-viewport">Format</label>
                     <select id="editor-viewport" class="form-select form-select-sm"></select>
                 </div>
-                <div class="form-check ms-2 mt-3">
-                    <input class="form-check-input" type="checkbox" id="editor-real-size">
-                    <label class="form-check-label" for="editor-real-size">Taille réelle</label>
+                <div>
+                    <label class="form-label mb-1" for="editor-zoom">Zoom</label>
+                    <select id="editor-zoom" class="form-select form-select-sm">
+                        <option value="fit" selected>Ajuster</option>
+                        <option value="0.5">50 %</option>
+                        <option value="0.75">75 %</option>
+                        <option value="1">100 %</option>
+                        <option value="1.25">125 %</option>
+                        <option value="1.5">150 %</option>
+                    </select>
                 </div>
                 <button id="editor-themes" class="btn btn-sm btn-outline-secondary ms-auto" type="button">Thèmes</button>
                 <button id="editor-screens" class="btn btn-sm btn-outline-secondary" type="button">Écrans</button>

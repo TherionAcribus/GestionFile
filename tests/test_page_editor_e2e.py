@@ -106,8 +106,9 @@ def test_edit_resize_scenario_undo_and_keyboard_move(admin_page: Page):
     admin_page.locator("#editor-undo").click()
     textarea = admin_page.locator("#editor-config-announce_title")
     textarea.fill(original)
-    admin_page.once("dialog", lambda dialog: dialog.accept())
     admin_page.locator("#editor-discard").click()
+    admin_page.locator(".page-editor-dialog").get_by_role(
+        "button", name="Abandonner").click()
 
 
 def test_copy_published_palette_stays_in_visual_draft(admin_page: Page):

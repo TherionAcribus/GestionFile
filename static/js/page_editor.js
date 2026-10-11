@@ -24,7 +24,7 @@
     const historyButton = document.getElementById('editor-history-toggle');
     const historyPanel = document.getElementById('editor-history');
     const revisionsContainer = document.getElementById('editor-revisions');
-    const realSizeToggle = document.getElementById('editor-real-size');
+    const zoomSelect = document.getElementById('editor-zoom');
     const topToolbar = document.querySelector('.page-editor-toolbar');
 
     // L'aperçu est épinglé sous la barre d'outils : l'offset suit sa hauteur
@@ -285,7 +285,7 @@
         autosaveTimer = setTimeout(function () {
             autosaveTimer = null;
             if (dirty && !saving) {
-                saveDraft().catch(function (error) {
+                saveDraft(true).catch(function (error) {
                     setStatus(error.message, error.status === 409 ? 'warning' : 'danger');
                 });
             }
@@ -1106,16 +1106,17 @@
     function resizePreview() {
         const viewport = adapter.viewports.find(function (item) { return item.id === viewportSelect.value; }) || adapter.viewports[0];
         const availableWidth = Math.max(280, previewShell.clientWidth - 32);
-        const scale = realSizeToggle && realSizeToggle.checked
-            ? 1
-            : Math.min(1, availableWidth / viewport.width);
+        const zoom = zoomSelect ? zoomSelect.value : 'fit';
+        const scale = zoom === 'fit'
+            ? Math.min(1, availableWidth / viewport.width)
+            : Number(zoom);
         preview.width = String(viewport.width);
         preview.height = String(viewport.height);
         preview.style.transform = 'translateX(-50%) scale(' + scale + ')';
         previewShell.style.height = Math.ceil(viewport.height * scale + 32) + 'px';
     }
 
-    function renderRevisions(revisions) {
+    function renderRevisions(revisions, publishedRevision) {
         revisionsContainer.replaceChildren();
         if (!revisions.length) {
             revisionsContainer.textContent = 'Aucune publication enregistrée.';
@@ -1129,15 +1130,43 @@
             const label = document.createElement('span');
             const date = revision.created_at ? new Date(revision.created_at).toLocaleString('fr-FR') : '';
             label.textContent = 'Révision ' + revision.revision + ' · ' + date + (revision.author ? ' · ' + revision.author : '');
+            if (revision.revision === publishedRevision) {
+                const badge = document.createElement('span');
+                badge.className = 'badge text-bg-success ms-2';
+                badge.textContent = 'actuelle';
+                label.appendChild(badge);
+            }
+            const actions = document.createElement('div');
+            actions.className = 'btn-group btn-group-sm';
+            const compareButton = document.createElement('button');
+            compareButton.type = 'button';
+            compareButton.className = 'btn btn-outline-secondary';
+            compareButton.textContent = 'Comparer';
+            compareButton.addEventListener('click', function () { compareRevision(revision.revision); });
             const button = document.createElement('button');
             button.type = 'button';
-            button.className = 'btn btn-sm btn-outline-primary';
+            button.className = 'btn btn-outline-primary';
             button.textContent = 'Restaurer';
             button.addEventListener('click', function () { restoreRevision(revision.revision); });
-            item.append(label, button);
+            actions.append(compareButton, button);
+            item.append(label, actions);
             list.appendChild(item);
         });
         revisionsContainer.appendChild(list);
+    }
+
+    async function compareRevision(revision) {
+        try {
+            const diff = await requestJSON('/admin/page-editor/' + encodeURIComponent(page)
+                + '/revisions/' + revision + '/diff');
+            await openDialog({
+                title: 'Révision ' + revision + ' — différences avec la version publiée',
+                body: buildDiffList(diff),
+                actions: [{label: 'Fermer', className: 'btn btn-secondary', value: true, autofocus: true}],
+            });
+        } catch (error) {
+            setStatus(error.message, 'danger');
+        }
     }
 
     // Le brouillon est partagé entre administrateurs : nommer son dernier
@@ -1236,7 +1265,7 @@
             populateSelectors();
             renderPalette();
             renderInspector();
-            renderRevisions(state.revisions || []);
+            renderRevisions(state.revisions || [], state.published_revision);
             loadPreview();
             applyButton.disabled = state.published_revision < 1;
             updateButtons();
@@ -1256,7 +1285,7 @@
         }
     }
 
-    async function saveDraft() {
+    async function saveDraft(auto) {
         // Une sauvegarde en cours ne doit pas être lancée en double ni
         // écraser la saisie faite pendant la requête : on mémorise l'état
         // envoyé et on ne remplace le document local que s'il n'a pas bougé.
@@ -1270,7 +1299,9 @@
         try {
             const data = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/draft', {
                 method: 'PUT',
-                body: JSON.stringify({draft_version: draftVersion, payload: payload})
+                // « auto » (autosave) n'écrit pas de ligne d'audit : sinon
+                // chaque pause de ~3 s en saisie en produirait une.
+                body: JSON.stringify({draft_version: draftVersion, payload: payload, auto: auto === true})
             });
             draftVersion = data.draft_version;
             hasDraft = true;
@@ -1524,7 +1555,13 @@
                 resolve(result);
             }
             function onKey(event) {
-                if (event.key === 'Escape') close(null);
+                // Ne ferme que le dialogue empilé au-dessus : sinon Échap
+                // dans une confirmation ouverte par-dessus « Thèmes »
+                // fermerait les deux d'un coup.
+                if (event.key !== 'Escape') return;
+                const backdrops = document.querySelectorAll('.page-editor-dialog-backdrop');
+                if (backdrops[backdrops.length - 1] !== backdrop) return;
+                close(null);
             }
             closeButton.addEventListener('click', function () { close(null); });
             backdrop.addEventListener('mousedown', function (event) {
@@ -1538,6 +1575,23 @@
             // boîte « Thèmes » qui applique/supprime puis se ferme d'elle-même).
             backdrop.closeDialog = close;
             focusTarget.focus();
+        });
+    }
+
+    // Remplace la boîte de confirmation native du navigateur : celle-ci
+    // reprend le style de l'éditeur. ``openDialog`` ne résout ``true`` que
+    // via le bouton de confirmation — fermer (Échap, croix, « Annuler »)
+    // répond ``null``.
+    function confirmDialog(title, message, confirmLabel, danger) {
+        const body = document.createElement('p');
+        body.textContent = message;
+        return openDialog({
+            title: title,
+            body: body,
+            actions: [
+                {label: 'Annuler', className: 'btn btn-outline-secondary', value: null},
+                {label: confirmLabel, className: 'btn ' + (danger ? 'btn-danger' : 'btn-primary'), value: true, autofocus: true},
+            ],
         });
     }
 
@@ -1858,7 +1912,9 @@
             showThemes();
         } catch (error) {
             if (error.status === 409) {
-                if (window.confirm('Un thème porte déjà ce nom : le remplacer par le brouillon courant ?')) {
+                if (await confirmDialog('Remplacer le thème',
+                    'Un thème porte déjà ce nom : le remplacer par le brouillon courant ?',
+                    'Remplacer', true)) {
                     return saveTheme(name, description, true);
                 }
                 return;
@@ -1868,7 +1924,8 @@
     }
 
     async function deleteTheme(theme) {
-        if (!window.confirm('Supprimer le thème « ' + theme.name + ' » ?')) return;
+        if (!await confirmDialog('Supprimer le thème',
+            'Supprimer le thème « ' + theme.name + ' » ?', 'Supprimer', true)) return;
         try {
             await requestJSON(
                 '/admin/page-editor/' + encodeURIComponent(page) + '/themes/' + theme.id,
@@ -1882,16 +1939,18 @@
         }
     }
 
-    function applyTheme(theme, sections) {
+    async function applyTheme(theme, sections) {
         sections = Object.assign({}, sections, {content: !theme.builtin && sections.content});
         if (!sections.appearance && !sections.layout && !sections.content) {
             setStatus('Cochez au moins une section à appliquer.', 'warning');
             return;
         }
-        if ((dirty || sections.content) && !window.confirm(
+        if ((dirty || sections.content) && !await confirmDialog(
+            'Appliquer le thème',
             'Appliquer « ' + theme.name + ' » remplacera les sections sélectionnées du travail courant.'
             + (sections.content ? ' Les textes seront également remplacés.' : ' Vos textes sont conservés.')
-            + ' Vous pourrez annuler cette action.'
+            + ' Vous pourrez annuler cette action.',
+            'Appliquer'
         )) return;
         const applied = [];
         mutate(function () {
@@ -2048,7 +2107,7 @@
         const question = hasDraft
             ? 'Supprimer le brouillon partagé et revenir à la version publiée ?'
             : 'Abandonner les modifications non enregistrées ?';
-        if (!window.confirm(question)) return;
+        if (!await confirmDialog('Annuler les changements', question, 'Abandonner', true)) return;
         try {
             if (hasDraft) {
                 await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/draft', {
@@ -2067,7 +2126,7 @@
         const warning = hasDraft || dirty
             ? 'Le brouillon actuel sera remplacé par la révision ' + revision + '. Continuer ?'
             : 'Charger la révision ' + revision + ' dans le brouillon ?';
-        if (!window.confirm(warning)) return;
+        if (!await confirmDialog('Restaurer une révision', warning, 'Restaurer', hasDraft || dirty)) return;
         try {
             const result = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/revisions/' + revision + '/restore', {
                 method: 'POST',
@@ -2109,7 +2168,8 @@
     if (themesButton) themesButton.addEventListener('click', showThemes);
     discardButton.addEventListener('click', discard);
     applyButton.addEventListener('click', async function () {
-        if (!window.confirm('Recharger maintenant les écrans connectés en service ?')) return;
+        if (!await confirmDialog('Appliquer/recharger les écrans',
+            'Recharger maintenant les écrans connectés en service ?', 'Recharger')) return;
         try {
             await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/apply', {method: 'POST', body: '{}'});
             setStatus('Ordre de rechargement envoyé aux écrans connectés.', 'success');
@@ -2127,7 +2187,7 @@
         loadPreview();
     });
     viewportSelect.addEventListener('change', resizePreview);
-    if (realSizeToggle) realSizeToggle.addEventListener('change', resizePreview);
+    if (zoomSelect) zoomSelect.addEventListener('change', resizePreview);
     preview.addEventListener('load', function () { resizePreview(); pushPayloadToPreview(); });
     window.addEventListener('resize', resizePreview);
     window.addEventListener('message', function (event) {

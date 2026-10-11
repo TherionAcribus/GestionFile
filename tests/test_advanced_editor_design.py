@@ -100,3 +100,27 @@ def test_editor_span_label_tracks_slider_in_real_time():
     source = _read("static/js/page_editor.js")
     assert "querySelector('.form-label')" in source
     assert "'Largeur (' + span.value + '/12)'" in source
+
+
+def test_editor_history_compares_revisions_and_marks_published():
+    """Chaque révision propose « Comparer » (diff publié → révision servi par
+    la route dédiée) et la révision en service porte le badge « actuelle »."""
+    source = _read("static/js/page_editor.js")
+    assert "renderRevisions(state.revisions || [], state.published_revision)" in source
+    assert "'/revisions/' + revision + '/diff'" in source
+    assert "badge.textContent = 'actuelle'" in source
+    assert "compareRevision(revision.revision)" in source
+
+
+def test_editor_confirmations_use_dialogs_and_zoom_is_a_select():
+    """Plus de boîte de confirmation native : ``confirmDialog`` (bâti sur
+    ``openDialog``) couvre tous les sites ; le zoom de l'aperçu est un
+    select, pas la case « Taille réelle »."""
+    source = _read("static/js/page_editor.js")
+    assert "function confirmDialog(" in source
+    assert "window.confirm" not in source
+    assert "realSizeToggle" not in source
+    assert "editor-zoom" in source
+    html = _read("templates/admin/page_editor.html")
+    assert 'id="editor-zoom"' in html
+    assert 'id="editor-real-size"' not in html

@@ -13,6 +13,8 @@ from models import (
 )
 from page_editor import (
     ADAPTERS,
+    _PARENT_CSS_REPRESENTATIVES,
+    _normalize_css_value,
     complete_css,
     complete_layout,
     current_payload,
@@ -67,7 +69,7 @@ def make_payload(page):
                 config[field["key"]] = "Texte de démonstration"
         for field in component["css"]:
             css[field["key"]] = (
-                "#008B8B" if field["type"] == "color"
+                "#008b8b" if field["type"] == "color"
                 else "400" if field["type"] == "number"
                 else "32px"
             )
@@ -81,6 +83,22 @@ def make_payload(page):
     }
     payload["base_hash"] = payload_hash(payload)
     return payload
+
+
+def _normalized_css(page, css):
+    """Variables d'apparence passées par la normalisation de
+    ``validate_payload`` (préfixe ``#``, casse hex en minuscules) — pour
+    fusionner dans un payload de test un instantané de thème écrit en
+    majuscules, comme le ferait une sauvegarde de brouillon."""
+    field_types = {
+        field["key"]: field["type"]
+        for component in ADAPTERS[page]["components"].values()
+        for field in component["css"]
+    }
+    return {
+        key: _normalize_css_value(value, field_types[key])
+        for key, value in css.items()
+    }
 
 
 class DummyCssVariableManager:
@@ -481,7 +499,15 @@ def test_legacy_hex_color_is_normalized():
     payload = make_payload("announce")
     payload["css"]["calling_background_color"] = "008B8B"
     normalized = validate_payload("announce", payload)
-    assert normalized["css"]["calling_background_color"] == "#008B8B"
+    assert normalized["css"]["calling_background_color"] == "#008b8b"
+
+    # La casse hexadécimale est normalisée : une couleur saisie en
+    # majuscules et la même en minuscules ne doivent pas ressortir comme
+    # un changement dans le diff.
+    payload = make_payload("announce")
+    payload["css"]["calling_background_color"] = "#008B8B"
+    normalized = validate_payload("announce", payload)
+    assert normalized["css"]["calling_background_color"] == "#008b8b"
 
 def test_phone_markdown_preview_is_sanitized():
     html = _render_phone_markdown({
@@ -918,7 +944,7 @@ def test_builtin_theme_payloads_are_valid_and_have_contrast(page, theme_index):
     payload = make_payload(page)
     original_config = deepcopy(payload["config"])
     original_hash = payload["base_hash"]
-    payload["css"].update(theme["snapshot"]["css"])
+    payload["css"].update(_normalized_css(page, theme["snapshot"]["css"]))
     for component_id, values in theme["snapshot"]["layout"].items():
         payload["layout"][component_id].update(values)
     assert validate_payload(page, payload) == payload
@@ -969,7 +995,7 @@ def test_builtin_theme_can_be_saved_and_published_without_changing_content(edito
     initial = client.get(f"/admin/page-editor/{page}/state").get_json()["published"]
     theme = client.get(f"/admin/page-editor/{page}/themes").get_json()["builtins"][4]
     working = deepcopy(initial)
-    working["css"].update(theme["snapshot"]["css"])
+    working["css"].update(_normalized_css(page, theme["snapshot"]["css"]))
     for component_id, layout in theme["snapshot"]["layout"].items():
         working["layout"][component_id].update(layout)
     saved = client.put(f"/admin/page-editor/{page}/draft", json={"draft_version": 0, "payload": working})
@@ -1069,6 +1095,10 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                     page.locator("#editor-theme-section-layout").uncheck()
                     page.locator("#editor-theme-section-content").check()
                     row.locator(".btn-primary").click()
+                    # « Contenu » coché : la confirmation s'ouvre par-dessus
+                    # la boîte « Thèmes » (plus de boîte native).
+                    page.locator(".page-editor-dialog").last.get_by_role(
+                        "button", name="Appliquer").click()
                     playwright.expect(page.locator(".page-editor-dialog")).to_have_count(0)
                     applied = working()
                     assert applied["config"] == baseline["config"]
@@ -1102,6 +1132,8 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                 playwright.expect(row.locator(".btn-primary")).to_be_disabled()
                 page.locator("#editor-theme-section-layout").check()
                 row.locator(".btn-primary").click()
+                page.locator(".page-editor-dialog").last.get_by_role(
+                    "button", name="Appliquer").click()
                 assert working()["css"] == baseline["css"]
                 assert working()["config"] == baseline["config"]
                 if page_key == "announce":
@@ -1714,6 +1746,65 @@ def test_publish_restore_and_revision_retention(editor_app):
     with app.app_context():
         assert ConfigOption.query.filter_by(config_key="announce_title").one().value_str == "Titre 2"
         assert PageEditorRevision.query.filter_by(page_key="announce").count() == 10
+
+
+def test_revision_diff_compares_published_to_snapshot(editor_app):
+    """``GET /revisions/<n>/diff`` rend « publié → révision », soit ce qu'une
+    restauration changerait — le contenu du bouton « Comparer »."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+
+    payload = make_payload("announce")
+    payload["config"]["announce_title"] = "Titre de la révision 1"
+    payload["base_hash"] = payload_hash(make_payload("announce"))
+    saved = _save_first_draft(client, payload).get_json()
+    published = client.post("/admin/page-editor/announce/publish",
+                            json={"draft_version": saved["draft_version"]})
+    assert published.status_code == 200
+
+    # Comme le vrai client : le brouillon repart du document publié.
+    second = client.get("/admin/page-editor/announce/state").get_json()["published"]
+    second["config"]["announce_title"] = "Titre de la révision 2"
+    saved = client.put("/admin/page-editor/announce/draft",
+                       json={"draft_version": published.get_json()["draft_version"],
+                             "payload": second})
+    assert saved.status_code == 200
+    published = client.post("/admin/page-editor/announce/publish",
+                            json={"draft_version": saved.get_json()["draft_version"]})
+    assert published.status_code == 200
+
+    response = client.get("/admin/page-editor/announce/revisions/1/diff")
+    assert response.status_code == 200
+    diff = response.get_json()
+    assert diff["identical"] is False
+    title_change = next(
+        change for change in diff["changes"] if change["key"] == "announce_title")
+    assert title_change["component"] == "Titre"
+    # Restaurer la révision 1 remettrait l'ancien titre à la place du publié.
+    assert title_change["old"] == "Titre de la révision 2"
+    assert title_change["new"] == "Titre de la révision 1"
+
+    identical = client.get("/admin/page-editor/announce/revisions/2/diff")
+    assert identical.status_code == 200
+    assert identical.get_json()["identical"] is True
+
+
+def test_revision_diff_unknown_and_permissions(editor_app):
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    assert app.test_client().get(
+        "/admin/page-editor/announce/revisions/1/diff").status_code == 401
+
+    unknown = client.get("/admin/page-editor/announce/revisions/42/diff")
+    assert unknown.status_code == 404
+    assert unknown.get_json()["error"] == "Révision inconnue."
+
+    with app.app_context():
+        role = Role.query.filter_by(name="page-editor").one()
+        role.admin_announce = False
+        db.session.commit()
+    assert client.get(
+        "/admin/page-editor/announce/revisions/1/diff").status_code == 403
 
 
 def test_restore_preserves_shared_draft_and_detects_conflict(editor_app):
@@ -2576,3 +2667,186 @@ def test_default_css_variables_json_match_officine_theme(page, filename):
         assert variables.get(key) == str(expected), (
             f"{filename}: {key} = {variables.get(key)!r}, "
             f"attendu {expected!r} (thème Officine)")
+
+
+# --- Fiabilité : libellés d'erreur, casse hex, audit, thèmes ----------------
+
+
+def test_validation_errors_use_field_labels():
+    """Les erreurs de validation citent le libellé affiché dans l'inspecteur
+    (« Composant › Champ ») en conservant la clé technique entre
+    parenthèses pour la journalisation et le support."""
+    payload = make_payload("announce")
+    payload["css"]["title_font_color"] = "banane"
+    with pytest.raises(ValueError) as excinfo:
+        validate_payload("announce", payload)
+    message = str(excinfo.value)
+    assert "Titre › Couleur du texte" in message
+    assert "title_font_color" in message
+
+    payload = make_payload("announce")
+    payload["config"]["announce_infos_display_time"] = 0
+    with pytest.raises(ValueError) as excinfo:
+        validate_payload("announce", payload)
+    message = str(excinfo.value)
+    assert "Galerie › Durée d'affichage de chaque image (secondes)" in message
+    assert "announce_infos_display_time" in message
+
+    # Clé inconnue de l'adaptateur : repli sur la clé brute.
+    payload = make_payload("announce")
+    payload["config"]["announce_infos_width"] = 49
+    with pytest.raises(ValueError) as excinfo:
+        validate_payload("announce", payload)
+    assert "Galerie › Largeur de la galerie (px) (announce_infos_width)" in \
+        str(excinfo.value)
+
+
+def test_payload_diff_ignores_hex_color_case(editor_app):
+    """« #008B8B » publié (thème, palette) et « #008b8b » dans le brouillon
+    sont la même couleur : la normalisation de la casse empêche le faux
+    positif dans le diff."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        app.css_variable_manager.values["announce"]["title_font_color"] = "#008B8B"
+
+    working = make_payload("announce")
+    working["css"]["title_font_color"] = "#008b8b"
+    diff = client.post(
+        "/admin/page-editor/announce/diff", json={"payload": working}
+    ).get_json()
+    assert diff["identical"] is True
+    assert diff["counts"] == {"config": 0, "css": 0, "layout": 0}
+    assert diff["changes"] == []
+
+    # Une couleur réellement différente ressort toujours, valeur normalisée.
+    working["css"]["title_font_color"] = "#AA11BB"
+    diff = client.post(
+        "/admin/page-editor/announce/diff", json={"payload": working}
+    ).get_json()
+    assert diff["counts"]["css"] == 1
+    change = diff["changes"][0]
+    assert change["old"] == "#008b8b" and change["new"] == "#aa11bb"
+
+
+def test_publish_syncs_parent_css_variables(editor_app):
+    """À la publication, les variables « parentes » du mode avancé (entrées
+    de cascade d'admin_colors.js, rôles de la copie de palettes — aucune
+    règle CSS ne les consomme) sont réalignées sur la variable de l'éditeur
+    qui incarne le rôle, dans la même transaction."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    for page, parents in _PARENT_CSS_REPRESENTATIVES.items():
+        css_types = {
+            field["key"]: field["type"]
+            for component in ADAPTERS[page]["components"].values()
+            for field in component["css"]
+        }
+        # Chaque représentant cité doit être un champ css de l'adaptateur.
+        assert set(parents.values()) <= set(css_types)
+
+        payload = make_payload(page)
+        expected = {}
+        for index, (parent, child) in enumerate(parents.items()):
+            field_type = css_types[child]
+            value = (
+                f"#1a2b{index:x}c" if field_type == "color"
+                else "37px" if field_type == "size"
+                else "750"
+            )
+            payload["css"][child] = value
+            expected[parent] = value
+        payload["base_hash"] = payload_hash(make_payload(page))
+        saved = client.put(
+            f"/admin/page-editor/{page}/draft",
+            json={"draft_version": 0, "payload": payload},
+        )
+        assert saved.status_code == 200
+        published = client.post(
+            f"/admin/page-editor/{page}/publish",
+            json={"draft_version": saved.get_json()["draft_version"]},
+        )
+        assert published.status_code == 200
+        source = ADAPTERS[page]["css_source"]
+        for parent, value in expected.items():
+            assert app.css_variable_manager.values[source][parent] == value
+
+
+def test_save_draft_records_audit(editor_app):
+    """PUT /draft journalise l'enregistrement comme les autres routes de
+    l'éditeur (publish/delete/rebase)."""
+    from models import AuditLog
+
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    payload = make_payload("announce")
+    response = client.put(
+        "/admin/page-editor/announce/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        entry = AuditLog.query.filter_by(
+            resource="page_design_draft", action="update").one()
+        assert entry.target == "announce"
+        assert entry.outcome == "success"
+        assert entry.details == "save"
+        assert entry.username == "editor"
+
+
+def test_theme_name_unique_in_database(editor_app):
+    """L'unicité (page_key, name) est portée par le modèle et la base : un
+    doublon inséré en contournant la route lève IntegrityError."""
+    from sqlalchemy import UniqueConstraint
+    from sqlalchemy.exc import IntegrityError
+
+    constraints = [
+        arg for arg in PageEditorTheme.__table_args__
+        if isinstance(arg, UniqueConstraint)
+    ]
+    assert any(
+        {column.name for column in constraint.columns} == {"page_key", "name"}
+        for constraint in constraints
+    )
+
+    app, _ = editor_app
+    with app.app_context():
+        db.session.add(PageEditorTheme(
+            page_key="announce", name="Doublon", snapshot_json={}))
+        db.session.commit()
+        db.session.add(PageEditorTheme(
+            page_key="announce", name="Doublon", snapshot_json={}))
+        with pytest.raises(IntegrityError):
+            db.session.commit()
+        db.session.rollback()
+
+
+def test_theme_overwrite_keeps_original_author(editor_app):
+    """Un écrasement met à jour l'instantané et sa date mais conserve
+    l'auteur d'origine du thème."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        role = Role.query.filter_by(name="page-editor").one()
+        other = User(username="relecteur", password="unused", active=True)
+        other.roles.append(role)
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+    second = app.test_client()
+    with second.session_transaction() as session:
+        session["_user_id"] = str(other_id)
+        session["_fresh"] = True
+
+    payload = make_payload("announce")
+    saved = client.post("/admin/page-editor/announce/themes", json={
+        "name": "Saisons", "payload": payload})
+    assert saved.status_code == 200
+    theme_id = saved.get_json()["theme"]["id"]
+
+    overwritten = second.post("/admin/page-editor/announce/themes", json={
+        "name": "Saisons", "payload": payload, "overwrite": True})
+    assert overwritten.status_code == 200
+    theme = overwritten.get_json()["theme"]
+    assert theme["id"] == theme_id
+    assert theme["author"] == "editor"

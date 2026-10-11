@@ -7,9 +7,17 @@ import markdown2
 import bleach
 from flask import Blueprint, abort, current_app, jsonify, render_template, request
 from flask_security import current_user
+from sqlalchemy.exc import IntegrityError
 
 import config_sync
-from audit_log import ACTION_CREATE, ACTION_DELETE, ACTION_RESTORE, ACTION_UPDATE, OUTCOME_FAILURE
+from audit_log import (
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_RESTORE,
+    ACTION_UPDATE,
+    OUTCOME_FAILURE,
+    OUTCOME_SUCCESS,
+)
 from audit_service import record_audit
 from communication import communikation
 from config import time_tz
@@ -28,6 +36,7 @@ from models import (
 from page_editor import (
     ADAPTERS,
     SCHEMA_VERSION,
+    _PARENT_CSS_REPRESENTATIVES,
     advanced_disabled_components,
     builtin_themes,
     complete_config,
@@ -379,6 +388,16 @@ def _publish(page, adapter, state, payload, *, require_base_match):
     css_manager = current_app.css_variable_manager
     for key, value in normalized["css"].items():
         css_manager.stage_variable(adapter["css_source"], key, value)
+    # Variables « parentes » du mode avancé (announce_main_color…) : aucune
+    # règle CSS ne les consomme, mais elles servent d'entrées de cascade dans
+    # admin_colors.js et de rôles à la copie de palettes. On les réaligne sur
+    # leur représentant publié — même transaction que le reste du brouillon.
+    staged_parents = {}
+    for parent, child in _PARENT_CSS_REPRESENTATIVES.get(page, {}).items():
+        if child in normalized["css"]:
+            staged_parents[parent] = normalized["css"][child]
+            css_manager.stage_variable(
+                adapter["css_source"], parent, normalized["css"][child])
 
     normalized["base_hash"] = payload_hash(normalized)
     revision_number = state.published_revision + 1
@@ -418,6 +437,9 @@ def _publish(page, adapter, state, payload, *, require_base_match):
             current_app.config[get_spec(key).config_name] = value
         current_app.config[adapter["config_name"]] = deepcopy(normalized["layout"])
         for key, value in normalized["css"].items():
+            css_manager.set_cached_variable(adapter["css_source"], key, value)
+        # Même rafraîchissement pour les variables parentes réalignées.
+        for key, value in staged_parents.items():
             css_manager.set_cached_variable(adapter["css_source"], key, value)
         current_app.css_manager.generate_css(
             css_manager.get_all_variables(adapter["css_source"]),
@@ -492,6 +514,11 @@ def save_draft(page):
         state_row.draft_updated_by_id = current_user.id
         state_row.draft_updated_at = datetime.now(time_tz)
         db.session.commit()
+        if not body.get("auto"):
+            # L'autosave (toutes les ~3 s en saisie) ne doit pas saturer le
+            # journal : seules les demandes explicites sont tracées.
+            record_audit(ACTION_UPDATE, "page_design_draft", target_id=page,
+                         outcome=OUTCOME_SUCCESS, details="save")
         return jsonify({
             "success": True,
             "draft": normalized,
@@ -844,17 +871,24 @@ def save_theme(page):
         if theme is not None and not body.get("overwrite"):
             return jsonify({"error": "Un thème porte déjà ce nom.", "exists": True}), 409
         if theme is None:
-            theme = PageEditorTheme(page_key=page, name=name)
+            theme = PageEditorTheme(
+                page_key=page, name=name, created_by_id=current_user.id)
             db.session.add(theme)
+        # Un écrasement met à jour l'instantané et sa date mais conserve
+        # l'auteur d'origine (created_by_id / created_at intacts).
         theme.description = description
         theme.snapshot_json = normalized
-        theme.created_by_id = current_user.id
         theme.created_at = theme.created_at or datetime.now(time_tz)
         theme.updated_at = datetime.now(time_tz)
         db.session.commit()
         record_audit(ACTION_CREATE, "page_design_theme", target_id=page,
                      details=f"theme={name}")
         return jsonify({"success": True, "theme": _theme_document(page, theme)})
+    except IntegrityError:
+        # Course entre deux enregistrements du même nom : la contrainte
+        # UNIQUE(page_key, name) tranche — même réponse qu'au contrôle amont.
+        db.session.rollback()
+        return jsonify({"error": "Un thème porte déjà ce nom.", "exists": True}), 409
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Enregistrement du thème impossible (%s)", page)
@@ -926,6 +960,24 @@ def restore(page, revision):
         record_audit(ACTION_RESTORE, "page_design", target_id=page,
                      outcome=OUTCOME_FAILURE)
         return jsonify({"error": "Restauration impossible."}), 500
+
+
+@admin_page_editor_bp.get("/admin/page-editor/<page>/revisions/<int:revision>/diff")
+def revision_diff(page, revision):
+    """Différences libellées entre la version publiée et une ancienne
+    révision (« publié → révision »), soit ce qu'une restauration
+    changerait. Le client les affiche via le bouton « Comparer » de
+    l'historique."""
+    adapter, refusal = _page_context(page, api=True)
+    if refusal is not None:
+        return refusal
+    source = PageEditorRevision.query.filter_by(
+        page_key=page, revision=revision
+    ).first()
+    if source is None:
+        return jsonify({"error": "Révision inconnue."}), 404
+    return jsonify(payload_diff(
+        page, _complete_payload(page, deepcopy(source.snapshot_json))))
 
 
 @admin_page_editor_bp.get("/admin/page-editor/<page>/screens")
