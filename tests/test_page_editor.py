@@ -7,7 +7,10 @@ from flask import Flask
 from flask_login import LoginManager
 
 from css_manager import CSSManager
-from models import Activity, ActivitySchedule, Button, ConfigOption, PageEditorRevision, PageEditorState, Role, User, db
+from models import (
+    Activity, ActivitySchedule, Button, ConfigOption, PageEditorRevision,
+    PageEditorState, PageEditorTheme, Role, User, db,
+)
 from page_editor import (
     ADAPTERS,
     complete_css,
@@ -1818,6 +1821,34 @@ def test_publish_accepts_draft_predating_print_error_component(editor_app):
         layout = app.config["PAGE_PATIENT_LAYOUT"]
         assert layout["print_error"]["zone"] == "main"
         assert app.css_variable_manager.values["patient"]["print_error_font_size"]
+
+
+def test_theme_snapshot_is_completed_with_current_components_and_keys(editor_app):
+    """Un thème enregistré avant l'apparition d'un composant ou d'un réglage
+    est servi complété : l'appliquer dans l'éditeur ne doit pas produire un
+    brouillon refusé à la sauvegarde (« structure incomplète »)."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        db.session.add(PageEditorTheme(
+            page_key="patient", name="Ancien thème",
+            snapshot_json=_legacy_patient_draft(),
+        ))
+        db.session.commit()
+
+    themes = client.get("/admin/page-editor/patient/themes").get_json()["themes"]
+    snapshot = themes[0]["snapshot"]
+    assert snapshot["layout"]["print_error"]["zone"] == "main"
+    assert "print_error_font_size" in snapshot["css"]
+    assert "page_patient_interface_print_failed" in snapshot["config"]
+    assert validate_payload("patient", snapshot)
+
+    # La complétion porte sur la réponse : l'instantané stocké n'est pas
+    # réécrit (il garde la trace de ce qui était réellement enregistré).
+    with app.app_context():
+        stored = PageEditorTheme.query.filter_by(
+            page_key="patient", name="Ancien thème").one()
+        assert "print_error" not in stored.snapshot_json["layout"]
 
 
 def test_preview_home_renders_real_buttons(editor_app):

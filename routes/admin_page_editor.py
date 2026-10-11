@@ -652,14 +652,17 @@ def publish(page):
         return jsonify({"error": "Publication impossible."}), 500
 
 
-def _theme_document(theme):
+def _theme_document(page, theme):
     return {
         "id": theme.id,
         "name": theme.name,
         "description": theme.description or "",
         "updated_at": theme.updated_at.isoformat() if theme.updated_at else None,
         "author": theme.created_by.username if theme.created_by else None,
-        "snapshot": deepcopy(theme.snapshot_json),
+        # Les instantanés enregistrés avant l'apparition d'un réglage ou d'un
+        # composant sont complétés comme les brouillons : appliqués tels
+        # quels, ils produiraient un payload refusé à la sauvegarde.
+        "snapshot": _complete_payload(page, deepcopy(theme.snapshot_json)),
     }
 
 
@@ -673,7 +676,7 @@ def list_themes(page):
         .order_by(PageEditorTheme.name)
         .all()
     )
-    return jsonify({"themes": [_theme_document(theme) for theme in themes],
+    return jsonify({"themes": [_theme_document(page, theme) for theme in themes],
                     "builtins": builtin_themes(page)})
 
 
@@ -712,7 +715,7 @@ def save_theme(page):
         db.session.commit()
         record_audit(ACTION_CREATE, "page_design_theme", target_id=page,
                      details=f"theme={name}")
-        return jsonify({"success": True, "theme": _theme_document(theme)})
+        return jsonify({"success": True, "theme": _theme_document(page, theme)})
     except Exception:
         db.session.rollback()
         current_app.logger.exception("Enregistrement du thème impossible (%s)", page)

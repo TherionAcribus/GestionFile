@@ -63,6 +63,17 @@
         return JSON.stringify({layout: value.layout, config: value.config, css: value.css});
     }
 
+    // Thème ou copie locale enregistrés avant un retrait de réglage : seules
+    // les clés encore connues de la cible sont reprises — une clé disparue
+    // depuis serait refusée à la sauvegarde (« paramètre/variable inconnu »).
+    function applyKnownKeys(target, source) {
+        Object.keys(source || {}).forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(target, key)) {
+                target[key] = clone(source[key]);
+            }
+        });
+    }
+
     function colorToHex(value) {
         const raw = String(value || '').trim();
         // « transparent » / « none » n'ont pas de couleur mesurable : les
@@ -1011,7 +1022,24 @@
         restoreButton.className = 'btn btn-sm btn-warning ms-2';
         restoreButton.textContent = 'Restaurer';
         restoreButton.addEventListener('click', function () {
-            payload = clone(backup.payload);
+            // La copie est reconstruite sur la version publiée : les réglages
+            // apparus depuis son enregistrement prennent la valeur publiée et
+            // ceux retirés depuis sont éliminés — sinon la sauvegarde du
+            // brouillon restauré serait refusée par la validation.
+            const restored = clone(published);
+            // L'empreinte reste celle de la copie : la détection d'un
+            // changement en mode avancé à la publication est inchangée.
+            restored.base_hash = backup.payload.base_hash;
+            const backupLayout = backup.payload.layout || {};
+            Object.keys(restored.layout).forEach(function (componentId) {
+                if (backupLayout[componentId]) {
+                    applyKnownKeys(restored.layout[componentId], backupLayout[componentId]);
+                }
+            });
+            ['config', 'css'].forEach(function (section) {
+                applyKnownKeys(restored[section], backup.payload[section]);
+            });
+            payload = restored;
             dirty = true;
             rerenderAll();
             pushPayloadToPreview();
@@ -1698,21 +1726,23 @@
         const applied = [];
         mutate(function () {
             if (sections.appearance) {
-                Object.assign(payload.css, clone(theme.snapshot.css));
+                applyKnownKeys(payload.css, theme.snapshot.css);
                 applied.push('apparence');
             }
             if (sections.layout) {
-                if (theme.builtin) {
-                    Object.entries(theme.snapshot.layout).forEach(function (entry) {
-                        Object.assign(payload.layout[entry[0]], clone(entry[1]));
-                    });
-                } else {
-                    payload.layout = clone(theme.snapshot.layout);
-                }
+                // Jamais de remplacement en bloc : un composant absent du
+                // thème (ajouté après son enregistrement) garde sa valeur
+                // courante, sinon le layout sauvegardé serait incomplet.
+                const snapshotLayout = theme.snapshot.layout || {};
+                Object.keys(payload.layout).forEach(function (componentId) {
+                    if (snapshotLayout[componentId]) {
+                        applyKnownKeys(payload.layout[componentId], snapshotLayout[componentId]);
+                    }
+                });
                 applied.push('disposition');
             }
             if (sections.content) {
-                Object.assign(payload.config, clone(theme.snapshot.config));
+                applyKnownKeys(payload.config, theme.snapshot.config);
                 applied.push('contenu');
             }
         });
