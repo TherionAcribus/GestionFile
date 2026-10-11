@@ -200,6 +200,7 @@ def app(tmp_path):
     # Miniature factice : Pillow n'est pas requis par la suite de référence.
     with patch.object(admin_gallery, "communikation", fake_communikation), \
             patch.object(admin_gallery, "generate_thumbnail", lambda data: b"mini"), \
+            patch.object(admin_gallery, "optimize_for_screen", lambda data, ext: None), \
             patch("ui_feedback.communikation", lambda *a, **k: None):
         yield app
 
@@ -322,6 +323,55 @@ def test_ajout_d_images(app, client):
     client.post("/admin/gallery/choose_gallery", data={"gallery_name": "Promo", "checked": "true"})
     _upload(client, "Promo", ("deux.png", _png(2)))
     assert len(_images(app, "Promo")) == 2 and _screen_refreshes(app) == 2
+
+
+def test_grande_image_reduite_a_l_envoi(app, client):
+    _create(client, "Promo")
+    with patch.object(admin_gallery, "optimize_for_screen",
+                      lambda data, ext: b"reduite" if data == _png(3) else None):
+        _upload(client, "Promo", ("grande.png", _png(3)), ("petite.png", _png(4)))
+    grande, petite = sorted(_images(app, "Promo"))
+    assert _dir(app, "Promo", grande).read_bytes() == b"reduite"
+    assert _dir(app, "Promo", petite).read_bytes() == _png(4)
+    # Le nom garde l'empreinte de l'originale : la renvoyer ne crée pas de doublon.
+    _upload(client, "Promo", ("grande.png", _png(3)))
+    assert len(_images(app, "Promo")) == 2
+
+
+def _photo(size, fmt="JPEG", orientation=None):
+    from PIL import Image
+    img = Image.effect_noise(size, 60).convert("RGB")
+    buf = io.BytesIO()
+    if orientation:
+        exif = Image.Exif()
+        exif[0x0112] = orientation
+        img.save(buf, format=fmt, quality=95, exif=exif)
+    else:
+        img.save(buf, format=fmt, quality=95)
+    return buf.getvalue()
+
+
+def test_reduction_pour_l_ecran():
+    pytest.importorskip("PIL")
+    from PIL import Image
+    from image_storage import SCREEN_MAX_SIDE, optimize_for_screen
+
+    original = _photo((4000, 3000))
+    reduced = optimize_for_screen(original, "jpg")
+    assert reduced is not None and len(reduced) < len(original)
+    assert Image.open(io.BytesIO(reduced)).size == (SCREEN_MAX_SIDE, SCREEN_MAX_SIDE * 3 // 4)
+
+    # Photo prise téléphone tourné : l'orientation est appliquée aux pixels.
+    turned = optimize_for_screen(_photo((4000, 3000), orientation=6), "jpg")
+    assert Image.open(io.BytesIO(turned)).size == (SCREEN_MAX_SIDE * 3 // 4, SCREEN_MAX_SIDE)
+
+    png = optimize_for_screen(_photo((3000, 3000), fmt="PNG"), "png")
+    assert Image.open(io.BytesIO(png)).format == "PNG"
+
+    # Rien à gagner : image déjà assez petite, GIF, contenu illisible.
+    assert optimize_for_screen(_photo((1200, 800)), "jpg") is None
+    assert optimize_for_screen(_photo((4000, 3000)), "gif") is None
+    assert optimize_for_screen(b"pas une image", "jpg") is None
 
 
 def test_ajout_refuse(app, client):
@@ -460,6 +510,16 @@ def test_page_et_scripts():
 
     script = _read("static/js/admin_gallery.js")
     assert "Modal.getOrCreateInstance" in script and "Modal.getInstance" not in script
+
+
+def test_ecran_sans_image_les_appels_prennent_toute_la_largeur():
+    assert "{% if gallery_empty %} gallery-empty{% endif %}" in _read("templates/announce/announce.html")
+    assert "gallery_empty=" in _read("routes/announce.py")
+    css = _read("static/css/display.css")
+    assert "#div_center_divided.gallery-empty {" in css
+    assert "#div_center_divided.gallery-empty > #div_pub {" in css
+    # Tenu à jour sans recharger la page, quand la galerie se vide ou se remplit.
+    assert "classList.toggle('gallery-empty', !conteneur)" in _read("static/js/announce.js")
 
 
 def test_le_diaporama_n_est_relance_que_par_son_propre_rechargement():

@@ -97,6 +97,17 @@ html, body {
     grid-template-columns: 1fr 1fr; /* Deux colonnes de taille égale */
 }
 
+/* Diaporama activé mais sans image à montrer : les appels reprennent toute
+   la largeur au lieu de laisser une moitié d'écran vide. Classe posée au
+   rendu puis tenue à jour par announce.js. */
+#div_center_divided.gallery-empty {
+    grid-template-columns: 1fr;
+}
+
+#div_center_divided.gallery-empty > #div_pub {
+    display: none;
+}
+
 #div_center_not_divided {
     grid-template-columns: 1fr; /* Une seule colonne */
 }

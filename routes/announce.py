@@ -67,6 +67,9 @@ def display():
     return render_template('/announce/announce.html',
                             #current_patients=current_patients,
                             announce_infos_display= app.config['ANNOUNCE_INFOS_DISPLAY'],
+                            # Diaporama activé mais sans image : l'écran ne réserve
+                            # pas une moitié vide (announce.js tient cet état à jour).
+                            gallery_empty=bool(app.config['ANNOUNCE_INFOS_DISPLAY']) and not _slideshow_urls(),
                             # Textes « welcome » : les balises {P} {D} {H} sont
                             # résolues au rendu (le titre par défaut contient {P}).
                             announce_title=replace_balise_welcome(app.config['ANNOUNCE_TITLE']),
@@ -180,6 +183,17 @@ def patients_next():
                            announce_next_patients_alignment=announce_next_patients_alignment,
                            next_patients=next_patients)
 
+def _slideshow_urls():
+    """Adresses des images du diaporama, dans l'ordre de la « Galerie média »."""
+    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
+    selected = parse_selection(config_option.value_str if config_option else None)
+    return [
+        url_for('static', filename=f"galleries/{gallery}/{image}")
+        for gallery, image in slideshow_images(
+            os.path.join(app.static_folder, "galleries"), selected)
+    ]
+
+
 @announce_bp.route('/announce/init_gallery')
 def announce_init_gallery():
     """Images du diaporama : celles des galeries cochées dans « Galerie média ».
@@ -188,14 +202,7 @@ def announce_init_gallery():
     ``gallery_library``) : galeries par ordre alphabétique, images dans l'ordre
     rangé par l'administrateur — l'ordre du disque, lui, était arbitraire.
     """
-    config_option = ConfigOption.query.filter_by(config_key="announce_infos_gallery").first()
-    selected = parse_selection(config_option.value_str if config_option else None)
-
-    images = [
-        url_for('static', filename=f"galleries/{gallery}/{image}")
-        for gallery, image in slideshow_images(
-            os.path.join(app.static_folder, "galleries"), selected)
-    ]
+    images = _slideshow_urls()
 
     if app.config.get("ANNOUNCE_INFOS_MIX_FOLDERS", False):
         random.shuffle(images)

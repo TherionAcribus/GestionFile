@@ -670,7 +670,9 @@ document.addEventListener('htmx:afterSettle', function (evt) {
         window.swiperInstance = null;
     }
     var conteneur = zone.querySelector('.swiper[data-swiper-delay]');
-    if (!conteneur) { return; }   // aucune image a afficher
+    // Sans image, la zone est masquee et les appels prennent toute la largeur.
+    if (zone.parentElement) { zone.parentElement.classList.toggle('gallery-empty', !conteneur); }
+    if (!conteneur) { return; }
     if (typeof Swiper === 'undefined') {
         // Librairie non chargée : la galerie reste affichée statique plutôt que
         // de lever une exception à chaque injection HTMX du fragment.

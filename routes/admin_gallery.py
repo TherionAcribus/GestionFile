@@ -41,9 +41,11 @@ from image_storage import (
     ALLOWED_IMAGE_EXTENSIONS,
     MAX_IMAGE_BYTES,
     MAX_IMAGES_PER_UPLOAD,
+    SCREEN_MAX_SIDE,
     THUMBNAIL_DIR,
     accept_image_upload,
     generate_thumbnail,
+    optimize_for_screen,
     thumbnail_filename,
 )
 from models import ConfigOption, db
@@ -202,6 +204,7 @@ def _render_manage(name):
         formats=", ".join(sorted(ext.upper() for ext in ALLOWED_IMAGE_EXTENSIONS - {"jpeg"})),
         max_mb=MAX_IMAGE_BYTES // (1024 * 1024),
         max_files=MAX_IMAGES_PER_UPLOAD,
+        max_side=SCREEN_MAX_SIDE,
     )
 
 
@@ -389,6 +392,7 @@ def upload_gallery(name):
 
     present = {content_digest(img["filename"]) for img in list_images(gallery_dir)}
     saved = 0
+    resized = 0
     duplicates = 0
     skipped: list[str] = []
     thumb_dir = gallery_dir / THUMBNAIL_DIR
@@ -403,17 +407,26 @@ def upload_gallery(name):
             continue
         present.add(digest)
         stored = stored_image_name(file.filename, result["filename"])
-        (gallery_dir / stored).write_bytes(result["data"])
-        # Miniature pour l'administration (évite de charger l'originale, qui
-        # peut peser plusieurs Mo). En cas d'échec, elle sera retentée à
-        # l'affichage, et l'originale sert de repli.
-        thumb_data = generate_thumbnail(result["data"])
+        # Image plus grande que nécessaire pour un écran : on enregistre une
+        # version réduite. Le nom garde l'empreinte de l'originale, pour que
+        # le même fichier renvoyé plus tard soit reconnu comme doublon.
+        data = optimize_for_screen(result["data"], result["ext"])
+        if data is None:
+            data = result["data"]
+        else:
+            resized += 1
+        (gallery_dir / stored).write_bytes(data)
+        # Miniature pour l'administration (évite de charger l'image entière).
+        # En cas d'échec, elle sera retentée à l'affichage.
+        thumb_data = generate_thumbnail(data)
         if thumb_data is not None:
             thumb_dir.mkdir(parents=True, exist_ok=True)
             (thumb_dir / thumbnail_filename(stored)).write_bytes(thumb_data)
         saved += 1
 
     parts = [f"{saved} image(s) ajoutée(s)"]
+    if resized:
+        parts.append(f"{resized} réduite(s) à la taille de l'écran")
     if duplicates:
         parts.append(f"{duplicates} déjà présente(s)")
     if skipped:

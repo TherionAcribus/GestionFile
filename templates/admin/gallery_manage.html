@@ -62,8 +62,8 @@
         </div>
         <p id="gallery_upload_help" class="form-text mb-0">
             Choisissez des fichiers ou glissez-les ici. Formats {{ formats }} — {{ max_mb }} Mo par image,
-            {{ max_files }} images par envoi. Préférez des images au format de la zone du diaporama
-            (elles sont affichées en entier, sans être rognées).
+            {{ max_files }} images par envoi. Les images sont affichées en entier, sans être rognées ;
+            celles de plus de {{ max_side }} px sont réduites automatiquement pour ne pas ralentir l'écran.
         </p>
         <p id="gallery-upload-selection" class="small mb-0" aria-live="polite"></p>
     </form>

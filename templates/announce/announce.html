@@ -46,7 +46,7 @@
            sans surveillance, un affichage périmé ne doit pas rester muet. #}
         <div id="sync_status" hidden role="alert"></div>
 
-        <div class="div_center"
+        <div class="div_center{% if gallery_empty %} gallery-empty{% endif %}"
             {% if announce_infos_display %} id = "div_center_divided" {% else %} id="div_center_not_divided" {% endif %}>
             <div id="left_side">                
 

@@ -63,6 +63,12 @@ MAX_IMAGES_PER_UPLOAD = 50
 # suffit pour une prévisualisation nette tout en divisant le poids par ~10.
 THUMBNAIL_MAX_SIZE = (300, 300)
 
+# Plus grand côté conservé pour une image du diaporama. Une photo de téléphone
+# (4000 px et plus, plusieurs Mo) est inutilement lourde pour un écran
+# d'annonce : 2560 px couvre un téléviseur 4K dont le diaporama occupe la
+# moitié, avec de la marge.
+SCREEN_MAX_SIDE = 2560
+
 # Préfixe des noms de miniatures : ``thumb_<nom_original>``.
 THUMBNAIL_PREFIX = "thumb_"
 
@@ -211,6 +217,51 @@ def generate_thumbnail(
     except Exception:
         # Image corrompue ou format non géré par Pillow : repli sur l'originale.
         return None
+
+
+def optimize_for_screen(
+    data: bytes,
+    ext: str,
+    *,
+    max_side: int = SCREEN_MAX_SIDE,
+) -> Optional[bytes]:
+    """Réduit une image trop grande pour l'écran d'annonce.
+
+    Renvoie les octets de la version réduite (même format, proportions
+    conservées, orientation de l'appareil photo appliquée), ou ``None`` quand
+    il n'y a rien à gagner : image déjà assez petite, GIF (l'animation serait
+    perdue), résultat plus lourd que l'original, Pillow absent ou image
+    illisible. L'appelant garde alors l'original tel quel.
+    """
+    if ext == "gif":
+        return None
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        return None
+
+    try:
+        img = Image.open(io.BytesIO(data))
+        if max(img.size) <= max_side:
+            return None
+        # Les photos de téléphone portent leur orientation dans les
+        # métadonnées, perdues au réenregistrement : on l'applique aux pixels.
+        img = ImageOps.exif_transpose(img)
+        img.thumbnail((max_side, max_side))
+        buf = io.BytesIO()
+        if ext == "jpg":
+            if img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            img.save(buf, format="JPEG", quality=88, optimize=True)
+        elif ext == "webp":
+            img.save(buf, format="WEBP", quality=88)
+        else:
+            img.save(buf, format="PNG", optimize=True)
+    except Exception:
+        # Image corrompue ou trop grande pour Pillow : on garde l'originale.
+        return None
+    optimized = buf.getvalue()
+    return optimized if len(optimized) < len(data) else None
 
 
 def thumbnail_filename(original: str) -> str:

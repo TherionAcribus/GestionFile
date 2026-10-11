@@ -268,14 +268,15 @@ def slideshow_summary(*, display_enabled: bool, selected_count: int,
         return {
             "level": "warning", "icon": "bi-exclamation-triangle",
             "title": "Aucune galerie n'est affichée.",
-            "detail": "La zone du diaporama reste vide à l'écran : cochez « Afficher à l'écran » "
-                      "sur au moins une galerie.",
+            "detail": "L'écran consacre toute sa largeur aux appels. Cochez « Afficher à "
+                      "l'écran » sur au moins une galerie pour lancer le diaporama.",
         }
     if image_count == 0:
         return {
             "level": "warning", "icon": "bi-exclamation-triangle",
             "title": "Les galeries affichées ne contiennent aucune image.",
-            "detail": "La zone du diaporama reste vide à l'écran : ajoutez des images.",
+            "detail": "L'écran consacre toute sa largeur aux appels. Ajoutez des images "
+                      "pour lancer le diaporama.",
         }
     if image_count == 1:
         return {
