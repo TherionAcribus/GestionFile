@@ -141,6 +141,14 @@ def test_balise_validators_have_letters():
     assert reg.BALISE_LETTERS["after_call"] == "PDHANMC"
 
 
+def test_phone_your_turn_lines_accept_counter_balise():
+    """L'écran « votre tour » du téléphone s'affiche après l'appel : {C} y est
+    autorisé, contrairement aux lignes d'attente affichées avant l'appel."""
+    for index in range(1, 7):
+        assert reg.get_spec(f"phone_your_turn_line{index}").validator == "after_call"
+        assert reg.get_spec(f"phone_line{index}").validator == "before_call"
+
+
 # ---------------------------------------------------------------------------
 # 2. Contrôle d'accès réel
 # ---------------------------------------------------------------------------

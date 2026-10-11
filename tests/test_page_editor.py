@@ -1459,7 +1459,7 @@ def test_factory_payload_normalizes_factory_css_values():
     payload = factory_payload("announce")
     assert payload["css"]["title_background_color"] == "#176b52"
     assert payload["css"]["announce_secondary_color"] == "#f5f8f7"
-    assert payload["config"]["announce_title"] == "Bienvenue à la pharmacie {P}"
+    assert payload["config"]["announce_title"] == "Bienvenue à la {P}"
     assert payload["config"]["announce_ongoing_display"] is True
 
 
@@ -1478,7 +1478,7 @@ def test_state_exposes_factory_defaults(editor_app):
     assert document["defaults"]["layout"] == default_layout("announce")
     assert document["defaults"]["css"]["title_background_color"] == "#176b52"
     assert document["defaults"]["config"]["announce_title"] == \
-        "Bienvenue à la pharmacie {P}"
+        "Bienvenue à la {P}"
 
 
 def test_theme_import_of_partial_snapshot_is_completed(editor_app):

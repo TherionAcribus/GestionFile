@@ -289,6 +289,10 @@ _AFTER_CALL_KEYS = {
     "announce_call_text",
     "announce_ongoing_text",
     "announce_next_patients_text",
+    # Écran « votre tour » du téléphone : affiché une fois le patient appelé,
+    # le comptoir ({C}) et le membre d'équipe ({M}) sont donc connus.
+    "phone_your_turn_line1", "phone_your_turn_line2", "phone_your_turn_line3",
+    "phone_your_turn_line4", "phone_your_turn_line5", "phone_your_turn_line6",
 }
 
 _BEFORE_CALL_KEYS = {
@@ -307,8 +311,6 @@ _BEFORE_CALL_KEYS = {
     "phone_title",
     "phone_line1", "phone_line2", "phone_line3",
     "phone_line4", "phone_line5", "phone_line6",
-    "phone_your_turn_line1", "phone_your_turn_line2", "phone_your_turn_line3",
-    "phone_your_turn_line4", "phone_your_turn_line5", "phone_your_turn_line6",
     # Message « parcours terminé » du téléphone : {N} reste autorisé.
     "phone_journey_end_message",
     # Écran d'attente du téléphone : {N} est le numéro d'appel résolu depuis

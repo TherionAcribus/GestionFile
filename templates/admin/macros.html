@@ -221,6 +221,11 @@
 {{ textbloc_with_balises(key, value, label, balises_after_call, "after_call") }}
 {% endmacro %}
 
+{# Macro pour bloc after_call pour le web dans le cadre #}
+{% macro textbloc_after_call_web(key, value, label) %}
+{{ textbloc_with_balises(key, value, label, balises_after_call, "after_call", display_balises_web=True) }}
+{% endmacro %}
+
 {# Macro pour bloc welcome #}
 {% macro textbloc_welcome(key, value, label) %}
 {{ textbloc_with_balises(key, value, label, balises_welcome, "welcome") }}
