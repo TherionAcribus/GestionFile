@@ -429,6 +429,69 @@ def test_hash_only_covers_managed_payload_fields():
     assert payload_hash(payload) != original
 
 
+@pytest.mark.parametrize(
+    ("page", "key"),
+    [
+        ("announce", "announce_title"),
+        ("patient", "page_patient_title"),
+        ("phone", "phone_line1"),
+    ],
+)
+def test_text_fields_are_bounded_by_their_storage_column(page, key):
+    """Les clés texte de l'éditeur vivent toutes en ``value_str``
+    (``String(200)``) : une limite de 6000 caractères passait la validation
+    puis la publication échouait sur MySQL strict."""
+    payload = make_payload(page)
+    payload["config"][key] = "a" * 200
+    assert validate_payload(page, payload)["config"][key] == "a" * 200
+
+    payload = make_payload(page)
+    payload["config"][key] = "a" * 201
+    with pytest.raises(ValueError, match="maximum 200"):
+        validate_payload(page, payload)
+
+
+@pytest.mark.parametrize(
+    ("page", "key", "value", "ok"),
+    [
+        ("announce", "announce_infos_display_time", 0, False),
+        ("announce", "announce_infos_display_time", 3600, True),
+        ("announce", "announce_infos_display_time", 3601, False),
+        ("announce", "announce_infos_width", 49, False),
+        ("announce", "announce_infos_width", 50, True),
+        ("announce", "announce_infos_width", 10001, False),
+        ("patient", "page_patient_end_timer", -1, False),
+        ("patient", "page_patient_end_timer", 0, True),
+        ("patient", "page_patient_timer_activity_inactive", -1, False),
+        ("patient", "page_patient_print_fail_abandon_timer", -1, False),
+    ],
+)
+def test_int_fields_are_bounded_by_field_and_registry_limits(page, key, value, ok):
+    """Les champs numériques respectent les bornes « min »/« max » de
+    l'adaptateur croisées avec celles du registre (délais ≥ 0, dimensions
+    de galerie bornées)."""
+    payload = make_payload(page)
+    payload["config"][key] = value
+    if ok:
+        assert validate_payload(page, payload)["config"][key] == value
+    else:
+        with pytest.raises(ValueError, match="trop"):
+            validate_payload(page, payload)
+
+
+def test_public_adapter_data_exposes_field_limits():
+    """Les bornes remontent côté client : ``max_length`` des zones de texte
+    et ``min``/``max`` des champs numériques de l'inspecteur."""
+    components = public_adapter_data("announce")["components"]
+    title = {field["key"]: field for field in components["title"]["config"]}
+    gallery = {field["key"]: field for field in components["gallery"]["config"]}
+    assert title["announce_title"]["max_length"] == 200
+    assert gallery["announce_infos_width"]["min"] == 50
+    assert gallery["announce_infos_width"]["max"] == 10000
+    assert gallery["announce_infos_display_time"]["min"] == 1
+    assert gallery["announce_infos_display_time"]["max"] == 3600
+
+
 def test_current_payload_merges_legacy_or_partial_layout():
     app = Flask("legacy-layout")
     app.config["PAGE_EDITOR_ENABLED_PAGES"] = "announce"

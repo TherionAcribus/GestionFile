@@ -792,14 +792,22 @@
                     control.className = 'form-control';
                     control.step = '1';
                     if (field.min != null) control.min = String(field.min);
+                    if (field.max != null) control.max = String(field.max);
                     control.value = payload.config[field.key] == null ? 0 : payload.config[field.key];
                     bindValue(control, function (element) {
-                        setConfigValue(field.key, Number.parseInt(element.value, 10) || 0);
+                        let parsed = Number.parseInt(element.value, 10);
+                        if (Number.isNaN(parsed)) parsed = field.min != null ? field.min : 0;
+                        if (field.min != null) parsed = Math.max(field.min, parsed);
+                        if (field.max != null) parsed = Math.min(field.max, parsed);
+                        setConfigValue(field.key, parsed);
                     });
                 } else {
                     control = document.createElement('textarea');
                     control.className = 'form-control';
                     control.rows = 3;
+                    // Bloque la saisie au-delà de la limite serveur (colonne
+                    // de la clé : 200 ou 6000 caractères).
+                    if (field.max_length != null) control.maxLength = field.max_length;
                     control.value = payload.config[field.key] == null ? '' : payload.config[field.key];
                     bindValue(control, function (element) { setConfigValue(field.key, element.value); });
                 }

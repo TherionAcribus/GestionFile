@@ -145,15 +145,17 @@ ADAPTERS = {
                 # avancé. Le choix des images se fait dans « Galerie média ».
                 config=[{"key": "announce_infos_display", "label": "Afficher", "type": "bool"},
                         {"key": "announce_infos_display_time", "label": "Durée d'affichage de chaque image (secondes)",
-                         "type": "int", "min": 1,
+                         "type": "int", "min": 1, "max": 3600,
                          "help": "Les images se choisissent dans la page « Galerie média »."},
                         {"key": "announce_infos_transition", "label": "Transition entre les images", "type": "select",
                          "choices": [["slide", "Glissement"], ["fade", "Fondu"], ["cube", "Cube"],
                                      ["coverflow", "Carrousel 3D"], ["flip", "Retournement"], ["cards", "Cartes"]]},
                         {"key": "announce_infos_mix_folders", "label": "Mélanger les images", "type": "bool"},
-                        {"key": "announce_infos_width", "label": "Largeur de la galerie (px)", "type": "int", "min": 50,
+                        {"key": "announce_infos_width", "label": "Largeur de la galerie (px)", "type": "int",
+                         "min": 50, "max": 10000,
                          "help": "Taille et transition s'appliquent sur l'écran après publication."},
-                        {"key": "announce_infos_height", "label": "Hauteur de la galerie (px)", "type": "int", "min": 50}]),
+                        {"key": "announce_infos_height", "label": "Hauteur de la galerie (px)", "type": "int",
+                         "min": 50, "max": 10000}]),
             "next": _component("Prochains patients", "footer", "#div_next_patients",
                 managed_bool="announce_next_patients_display",
                 config=[{"key": "announce_next_patients_display", "label": "Afficher la liste des prochains patients", "type": "bool"},
@@ -210,7 +212,7 @@ ADAPTERS = {
                         {"key": "page_patient_display_scan_explanation", "label": "Afficher les explications pour scanner le QR-Code", "type": "bool"},
                         {"key": "page_patient_print_after_scan", "label": "Page de réimpression après « Scan »", "type": "bool"},
                         {"key": "page_patient_print_after_print", "label": "Page de réimpression après « Print »", "type": "bool"},
-                        {"key": "page_patient_end_timer", "label": "Délai avant retour à l'accueil (s)", "type": "int"},
+                        {"key": "page_patient_end_timer", "label": "Délai avant retour à l'accueil (s)", "type": "int", "min": 0},
                         # Écran de validation (après le choix d'une activité) et
                         # message de confirmation : auparavant réservés au mode
                         # avancé.
@@ -256,7 +258,7 @@ ADAPTERS = {
                 config=[{"key": "page_patient_disable_button", "label": "Griser les boutons indisponibles (sinon les masquer)", "type": "bool",
                          "help": "Activé : le bouton reste visible en grisé. Désactivé : le bouton disparaît et les autres conservent leur présentation normale."},
                         {"key": "page_patient_disable_default_message", "label": "Message affiché après sélection", "type": "text"},
-                        {"key": "page_patient_timer_activity_inactive", "label": "Durée d'affichage du message (s)", "type": "int"}],
+                        {"key": "page_patient_timer_activity_inactive", "label": "Durée d'affichage du message (s)", "type": "int", "min": 0}],
                 css=[]),
             "specific_message": _component("Message spécifique d’activité", "footer",
                 "[data-page-editor-component='specific_message']",
@@ -277,7 +279,7 @@ ADAPTERS = {
                                      ["cancel", "Annuler l'inscription"]]},
                         {"key": "page_patient_print_fail_show_retry", "label": "Afficher le bouton « Réessayer » (mode Demander)", "type": "bool"},
                         {"key": "page_patient_print_fail_show_staff", "label": "Afficher le bouton « Appeler le personnel » (mode Demander)", "type": "bool"},
-                        {"key": "page_patient_print_fail_abandon_timer", "label": "Retour auto à l'accueil si aucun choix (s, 0 = jamais)", "type": "int"},
+                        {"key": "page_patient_print_fail_abandon_timer", "label": "Retour auto à l'accueil si aucun choix (s, 0 = jamais)", "type": "int", "min": 0},
                         {"key": "page_patient_interface_printing", "label": "Message « impression en cours »", "type": "text"},
                         {"key": "page_patient_interface_print_failed", "label": "Message d'échec (mode Demander)", "type": "text"},
                         {"key": "page_patient_interface_no_ticket", "label": "Message si le patient est conservé (mode Conserver)", "type": "text"},
@@ -1264,11 +1266,15 @@ def validate_payload(page, payload):
     # brouillons) sont complétées avec la configuration publiée.
     if not isinstance(config_values, dict) or not set(config_values) <= allowed_config:
         raise ValueError("Paramètre de contenu inconnu.")
-    # Bornes basses déclarées sur les champs (« min ») : une largeur de
-    # galerie nulle ou négative ne doit pas pouvoir être publiée.
+    # Bornes déclarées sur les champs (« min » / « max »), croisées avec
+    # spec.min_value / spec.max_value du registre : une largeur de galerie
+    # nulle ou un délai négatif ne doit pas pouvoir être publié.
     config_minimums = {field["key"]: field["min"]
                        for component in adapter["components"].values()
                        for field in component["config"] if field.get("min") is not None}
+    config_maximums = {field["key"]: field["max"]
+                       for component in adapter["components"].values()
+                       for field in component["config"] if field.get("max") is not None}
     normalized_config = {}
     for key, value in config_values.items():
         spec = get_spec(key)
@@ -1280,15 +1286,25 @@ def validate_payload(page, payload):
         elif spec.value_type == "value_int":
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError(f"Valeur numérique invalide pour {key}.")
-            minimum = config_minimums.get(key)
+            minimum = max((v for v in (config_minimums.get(key), spec.min_value)
+                           if v is not None), default=None)
+            maximum = min((v for v in (config_maximums.get(key), spec.max_value)
+                           if v is not None), default=None)
             # Seulement pour une valeur modifiée : une valeur déjà publiée
             # (même atypique) ne doit pas bloquer la publication du reste.
-            if (minimum is not None and value < minimum
-                    and value != current_app.config.get(spec.config_name)):
+            published = current_app.config.get(spec.config_name)
+            if minimum is not None and value < minimum and value != published:
                 raise ValueError(f"Valeur trop petite pour {key} (minimum {minimum}).")
+            if maximum is not None and value > maximum and value != published:
+                raise ValueError(f"Valeur trop grande pour {key} (maximum {maximum}).")
         else:
-            if not isinstance(value, str) or len(value) > 6000:
+            # Colonne cible du paramètre : value_str est limitée à 200
+            # caractères, seule value_text (textes longs) monte à 6000.
+            max_length = 6000 if spec.value_type == "value_text" else 200
+            if not isinstance(value, str):
                 raise ValueError(f"Texte invalide pour {key}.")
+            if len(value) > max_length:
+                raise ValueError(f"Texte trop long pour {key} (maximum {max_length} caractères).")
             if "<" in value or ">" in value:
                 raise ValueError(f"Le HTML n'est pas autorisé pour {key}.")
             check = validate_config_text(key, value)
@@ -1518,6 +1534,9 @@ def public_adapter_data(page):
     for component in components.values():
         for field in component["config"]:
             spec = get_spec(field["key"])
+            # Limite de saisie côté client, alignée sur la validation du
+            # brouillon (colonne value_str = 200, value_text = 6000).
+            field["max_length"] = 6000 if spec and spec.value_type == "value_text" else 200
             letters = BALISE_LETTERS.get(spec.validator, "") if spec else ""
             if letters:
                 field["markers"] = [
