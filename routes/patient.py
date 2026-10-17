@@ -123,7 +123,8 @@ def patient_right_page():
                             max_length=max_length,
                             journey_id=journey_id,
                             empty_parent_ids=empty_parent_ids,
-                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel)
+                            page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
+                            circle_image_above=app.config.get('PAGE_PATIENT_CIRCLE_IMAGE_ABOVE', True))
     
     subtitle_content = render_template(
         'patient/patient_default_subtitle.html', 
@@ -212,6 +213,7 @@ def display_children_buttons_for_right_page(request):
                             button_translations=button_translations,
                             page_patient_interface_children_back=page_patient_interface_children_back,
                             max_length=max_length,
+                            circle_image_above=app.config.get('PAGE_PATIENT_CIRCLE_IMAGE_ABOVE', True),
                             # L'intention de parcours suit la navigation dans
                             # les sous-boutons : l'inscription finale reste
                             # dédupliquée sur la même clé.

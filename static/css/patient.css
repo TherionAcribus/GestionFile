@@ -133,6 +133,9 @@ html, body {
     align-items: center;
     background-color: var(--patient_secondary_color);
     color: var(--circle_button_text_color);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .div_validation_buttons{
@@ -208,15 +211,28 @@ html, body {
 }
 
 .div_circle_buttons {
-    width: var(--circle_button_size);  
+    /* flex:1 + min-height:0 laissent le cercle se réduire quand la cellule de
+       grille est plus petite que la taille configurée : le bouton reste dans
+       la zone centrale au lieu de déborder sur le titre ou le pied de page. */
+    flex: 1 1 auto;
+    min-height: 0;
     height: var(--circle_button_size);
-    margin: 10px;
+    max-height: var(--circle_button_size);
+    aspect-ratio: 1 / 1;
+    width: auto;
+    max-width: 100%;
+    margin: 0 10px;
     border-radius: 50%;
     box-shadow: 5px 5px 5px #888888;
     text-align: center;
     border-color: var(--circle_button_border_color);
     border-width: var(--circle_button_border_size);
     border-style: solid;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: scale 0.2s ease, box-shadow 0.2s ease;
 }
 
 .div_square_bloc_activity {
@@ -324,10 +340,31 @@ html, body {
 }
 
 .img_btn {
-    height: var(--circle_button_image_size);
-    width: var(--circle_button_image_size);
+    /* ~93 % du cercle (ratio des réglages par défaut), plafonné à la taille
+       configurée : l'image suit le cercle quand celui-ci est réduit. */
+    height: 93%;
+    width: 93%;
+    max-height: var(--circle_button_image_size);
+    max-width: var(--circle_button_image_size);
     object-fit: contain;
     border-radius: 50%;
+}
+
+/* Mode « image au-dessus » (page_patient_circle_image_above) : l'image est
+   agrandie et déborde au-dessus du cercle, comme sur l'ancienne borne.
+   Le padding réserve la place du débordement pour qu'elle ne soit pas rognée
+   en haut de la zone des boutons. */
+.div_bloc_activity.img_above {
+    padding-top: calc(var(--circle_button_size) * 0.4);
+}
+
+.div_bloc_activity.img_above .img_btn {
+    height: 140%;
+    width: 140%;
+    max-height: none;
+    max-width: none;
+    border-radius: 0;
+    transform: translateY(-25%);
 }
 
 .img_square_button {
@@ -349,8 +386,15 @@ html, body {
     text-align: center;
     font-size: var(--circle_button_text_size);
     font-weight: bold;
+    min-height: 0;
     -webkit-text-stroke-color: var(--circle_button_text_border_color);
     -webkit-text-stroke-width: var(--circle_button_text_border_size);
+}
+
+/* La marge par défaut des <p> (~1em haut/bas) ajoutait jusqu'à ~60 px sous
+   chaque bouton rond et contribuait au débordement vertical. */
+.div_text_button p {
+    margin: 0.2em 0;
 }
 
 .div_text_button_active{

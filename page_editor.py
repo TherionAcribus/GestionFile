@@ -249,6 +249,10 @@ ADAPTERS = {
                                      ["circle", "Boutons ronds"],
                                      ["square", "Boutons rectangulaires"]],
                          "help": "Le choix sera appliqué à tous les boutons lors de la publication. Le mode avancé permet ensuite de les différencier."},
+                        {"key": "page_patient_circle_image_above", "label": "Image débordant au-dessus du bouton", "type": "bool",
+                         "group": "Boutons d'activité",
+                         "help": "Boutons ronds : l'image est agrandie et déborde au-dessus du cercle, comme sur l'ancienne présentation. Sinon elle reste contenue dans le cercle.",
+                         "visible_when": {"key": "page_patient_button_shape", "values": ["circle", "mixed"]}},
                         {"key": "page_patient_qrcode_display", "label": "Afficher le QR code", "type": "bool",
                          "group": "QR code et scan",
                          "help": "Ce réglage est partagé avec l’onglet QR code du mode avancé."},
@@ -642,6 +646,7 @@ for _page, _components in _ADDITIONAL_CSS_FIELDS.items():
 # rétrocompatible tout en ne présentant que les réglages utiles au scénario.
 _PATIENT_CONFIG_SCENARIOS = {
     "page_patient_button_shape": ["home"],
+    "page_patient_circle_image_above": ["home", "children"],
     "page_patient_direct_print": ["home", "validation"],
     "page_patient_qrcode_display": ["validation", "conclusion"],
     "page_patient_qrcode_web_page": ["validation", "conclusion"],

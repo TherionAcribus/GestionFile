@@ -105,6 +105,17 @@
             try { values = JSON.parse(element.dataset.configHideValues); } catch (error) { values = []; }
             markHidden(element, values.includes(payload.config[element.dataset.configDisplayKey]));
         });
+        // Classes pilotées par un booléen, au format « cle:classe » — ex.
+        // l'image débordant au-dessus des boutons ronds de la borne patient.
+        document.querySelectorAll('[data-config-bool-class]').forEach(function (element) {
+            const spec = String(element.dataset.configBoolClass || '');
+            const separator = spec.indexOf(':');
+            if (separator === -1) return;
+            element.classList.toggle(
+                spec.slice(separator + 1),
+                Boolean(payload.config[spec.slice(0, separator)])
+            );
+        });
         document.querySelectorAll('[data-hide-empty]').forEach(function (element) {
             const value = payload.config[element.dataset.configKey];
             markHidden(element, !String(value == null ? '' : value).trim());

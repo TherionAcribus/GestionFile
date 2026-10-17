@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.37",
+    "version": "0.38",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -63,6 +63,7 @@
             "music_spotify_key": "your spotify key",
             "page_patient_disable_button": true,
             "page_patient_button_shape": "square",
+            "page_patient_circle_image_above": true,
             "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",
             "page_patient_title": "Bienvenue à la {P}",
             "page_patient_subtitle": "Touchez le motif de votre visite pour prendre un numéro.",

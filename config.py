@@ -147,6 +147,9 @@ class Config:
     # Choix initial de l'éditeur visuel. La valeur ``mixed`` sera enregistrée
     # automatiquement dès que le mode avancé différencie les boutons.
     PAGE_PATIENT_BUTTON_SHAPE = "square"
+    # Boutons ronds : image agrandie débordant au-dessus du cercle
+    # (présentation historique). False = image contenue dans le cercle.
+    PAGE_PATIENT_CIRCLE_IMAGE_ABOVE = True
     PAGE_PATIENT_INTERFACE_CHILDREN_BACK = "Retour"
 
     # Définir les valeurs par défaut ici

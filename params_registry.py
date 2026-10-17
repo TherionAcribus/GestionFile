@@ -102,6 +102,7 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
     "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
     "page_patient_button_shape": ("PAGE_PATIENT_BUTTON_SHAPE", "value_str"),
+    "page_patient_circle_image_above": ("PAGE_PATIENT_CIRCLE_IMAGE_ABOVE", "value_bool"),
     "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
     "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
     "page_patient_subtitle": ("PAGE_PATIENT_SUBTITLE", "value_str"),
