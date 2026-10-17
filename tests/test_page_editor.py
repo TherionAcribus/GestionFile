@@ -1477,7 +1477,7 @@ def test_factory_payload_normalizes_factory_css_values():
     assert payload["css"]["title_background_color"] == "#176b52"
     assert payload["css"]["announce_secondary_color"] == "#f5f8f7"
     assert payload["config"]["announce_title"] == "Bienvenue à la {P}"
-    assert payload["config"]["announce_ongoing_display"] is True
+    assert payload["config"]["announce_ongoing_display"] is False
 
 
 def test_factory_payload_marks_missing_config_keys_none():

@@ -39,7 +39,7 @@
             "announce_text_down_patients": "Prenez un ticket à la borne, nous vous appellerons ici.",
             "announce_text_down_patients_display": "empty",
             "announce_call_text": "{N} → Comptoir {C}",
-            "announce_ongoing_display": true,
+            "announce_ongoing_display": false,
             "announce_ongoing_text": "Comptoir {C} : {N}",
             "announce_next_patients_display": true,
             "announce_next_patients_text": "Prochains patients :",

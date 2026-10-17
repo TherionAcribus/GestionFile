@@ -771,7 +771,7 @@ def preview(page):
         # L'aperçu reflète le brouillon, pas la configuration publiée : les
         # options d'affichage se pilotent désormais depuis l'éditeur.
         announce_flags = {
-            "ongoing": bool(payload["config"].get("announce_ongoing_display", True)),
+            "ongoing": bool(payload["config"].get("announce_ongoing_display", False)),
             "next": bool(payload["config"].get("announce_next_patients_display", True)),
             "text_up": payload["config"].get("announce_text_up_patients_display") != "never",
             "text_down": payload["config"].get("announce_text_down_patients_display") != "never",
