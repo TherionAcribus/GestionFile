@@ -59,6 +59,12 @@
     let paletteSources = [];
     let disabledComponents = {};
     let previewLanguages = [];
+    // État ouvert/fermé des sections de l'inspecteur, conservé entre les
+    // re-rendus : à chaque modification l'inspecteur est reconstruit et
+    // sans cette mémoire les sections retomberaient sur leur état
+    // initial — « Apparence » se refermerait sous les doigts à chaque
+    // saisie.
+    const fieldsetOpen = {};
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value));
@@ -472,7 +478,11 @@
     function addFieldset(titleText) {
         const details = document.createElement('details');
         details.className = 'page-editor-fieldset';
-        details.open = titleText !== 'Apparence';
+        details.open = titleText in fieldsetOpen
+            ? fieldsetOpen[titleText] : titleText !== 'Apparence';
+        details.addEventListener('toggle', function () {
+            fieldsetOpen[titleText] = details.open;
+        });
         const summary = document.createElement('summary');
         summary.textContent = titleText;
         const body = document.createElement('div');
