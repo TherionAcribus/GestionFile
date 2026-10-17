@@ -452,6 +452,32 @@
     width: 1.5rem;
 }
 
+.page-editor-theme-call-styles {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 .25rem;
+    margin: .5rem 0 0;
+}
+
+.page-editor-theme-call-styles > span {
+    margin-right: .5rem;
+}
+
+.page-editor-theme-call-styles .form-check-label {
+    align-items: center;
+    display: inline-flex;
+    gap: .35rem;
+}
+
+.page-editor-theme-call-chip {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .25rem;
+    display: inline-block;
+    height: 1rem;
+    width: 1rem;
+}
+
 .page-editor-theme-item {
     align-items: center;
     flex-wrap: wrap;

@@ -21,9 +21,9 @@
     --text_up_font_border_color: #18332F;
     --calling_font_size: 120px;
     --calling_font_color: #FFFFFF;
-    --calling_font_border_size: 0px;
+    --calling_font_border_size: 5px;
     --calling_font_border_color: #18332F;
-    --calling_background_color: #176B52;
+    --calling_background_color: #1C8465;
     --text_down_background_color: #FFFFFF;
     --text_down_font_color: #18332F;
     --text_down_font_size: 84px;

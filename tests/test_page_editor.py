@@ -237,7 +237,8 @@ def test_palette_only_groups_registered_color_variables(page):
     }
     palette = public_adapter_data(page)["palette"]
     keys = {role["id"]: set(role["keys"]) for role in palette}
-    assert set(keys) == {"primary", "surface", "secondary", "border"}
+    assert set(keys) <= {"primary", "surface", "secondary", "border", "accent"}
+    assert {"primary", "surface", "secondary", "border"} <= set(keys)
     assert all(keys[role] for role in keys)
     assert all(keys[role] <= registered_colors for role in keys)
 
@@ -1006,6 +1007,60 @@ def test_builtin_theme_payloads_are_valid_and_have_contrast(page, theme_index):
         assert "#div_center_divided{grid-template-columns:1fr}" in layout_style(page, payload["layout"])
 
 
+def test_builtin_announce_themes_set_calls_apart_from_title():
+    """Les appels en cours ont leur propre couleur d'accent : avec le fond
+    du bandeau titre, ils se confondaient avec le titre et le sous-titre."""
+    from page_editor import builtin_themes
+
+    for theme in builtin_themes("announce"):
+        css = theme["snapshot"]["css"]
+        assert css["calling_background_color"] != css["title_background_color"], theme["name"]
+        assert css["calling_background_color"] in theme["colors"], theme["name"]
+
+
+def _contrast(first, second):
+    def luminance(color):
+        rgb = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+        channels = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in rgb]
+        return sum(value * weight for value, weight in zip(channels, (0.2126, 0.7152, 0.0722)))
+    low, high = sorted((luminance(first), luminance(second)))
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_builtin_announce_themes_offer_discreet_and_vivid_calls():
+    """Chaque thème d'annonce (sauf Classique, reproduction exacte) propose
+    deux styles d'appel : la teinte discrète de la palette, présélectionnée
+    et identique à l'instantané, et une couleur complémentaire bien visible.
+    Les deux restent lisibles et se distinguent du bandeau titre."""
+    from page_editor import builtin_themes
+
+    for theme in builtin_themes("announce"):
+        if theme["id"] == "builtin-classique":
+            assert "call_styles" not in theme
+            continue
+        styles = {style["id"]: style["css"] for style in theme["call_styles"]}
+        assert list(styles) == ["discreet", "vivid"], theme["name"]
+        assert theme["default_call_style"] == "discreet"
+        css = theme["snapshot"]["css"]
+        assert styles["discreet"] == {key: css[key] for key in styles["discreet"]}
+        assert styles["vivid"]["calling_background_color"] != styles["discreet"]["calling_background_color"]
+        for style in styles.values():
+            assert set(style) == {"calling_background_color", "calling_font_color", "calling_font_border_size"}
+            # Contour foncé uniquement autour d'un texte blanc.
+            white = style["calling_font_color"].upper() == "#FFFFFF"
+            assert style["calling_font_border_size"] == ("5px" if white else "0px"), theme["name"]
+            assert css["calling_font_border_color"] == theme["colors"][2], theme["name"]
+            assert style["calling_background_color"] != css["title_background_color"], theme["name"]
+            assert _contrast(style["calling_font_color"], style["calling_background_color"]) >= 4.5, theme["name"]
+
+
+@pytest.mark.parametrize("page", ["patient", "phone"])
+def test_call_styles_are_announce_only(page):
+    from page_editor import builtin_themes
+
+    assert all("call_styles" not in theme for theme in builtin_themes(page))
+
+
 @pytest.mark.parametrize("page", list(ADAPTERS))
 def test_builtin_theme_can_be_saved_and_published_without_changing_content(editor_app, page):
     app, _ = editor_app
@@ -1109,7 +1164,7 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                     page.locator("#editor-themes").click()
                     row = page.locator(f"[data-theme-id='{theme['id']}']")
                     playwright.expect(row.locator(".btn-outline-danger")).to_have_count(0)
-                    playwright.expect(row.locator(".page-editor-theme-swatches span")).to_have_count(5)
+                    playwright.expect(row.locator(".page-editor-theme-swatches span")).to_have_count(6)
                     page.locator("#editor-theme-section-layout").uncheck()
                     page.locator("#editor-theme-section-content").check()
                     row.locator(".btn-primary").click()

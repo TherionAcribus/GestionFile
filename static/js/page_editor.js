@@ -1930,8 +1930,9 @@
                 theme.author || '', theme.description || '',
             ].filter(Boolean).join(' · ');
             info.append(name, meta);
+            let swatches = null;
             if (theme.colors) {
-                const swatches = document.createElement('div');
+                swatches = document.createElement('div');
                 swatches.className = 'page-editor-theme-swatches';
                 swatches.setAttribute('aria-label', 'Palette : ' + theme.colors.join(', '));
                 theme.colors.forEach(function (color) {
@@ -1942,6 +1943,58 @@
                     swatches.appendChild(swatch);
                 });
                 info.appendChild(swatches);
+            }
+            // Choix « Appels » (thèmes d'annonce) : teinte discrète ou couleur
+            // complémentaire. La dernière pastille montre l'accent retenu.
+            let selectedCallStyle = null;
+            if (theme.call_styles) {
+                const showAccent = function (style) {
+                    const accentSwatch = swatches && swatches.lastElementChild;
+                    if (!accentSwatch) return;
+                    accentSwatch.style.backgroundColor = style.css.calling_background_color;
+                    accentSwatch.title = style.css.calling_background_color;
+                };
+                const group = document.createElement('div');
+                group.className = 'page-editor-theme-call-styles';
+                group.setAttribute('role', 'radiogroup');
+                const legend = document.createElement('span');
+                legend.id = 'theme-call-styles-' + theme.id;
+                legend.textContent = 'Appels :';
+                group.setAttribute('aria-labelledby', legend.id);
+                group.appendChild(legend);
+                theme.call_styles.forEach(function (style) {
+                    const inputId = 'theme-call-style-' + theme.id + '-' + style.id;
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.className = 'form-check-input';
+                    radio.name = 'theme-call-style-' + theme.id;
+                    radio.id = inputId;
+                    radio.value = style.id;
+                    radio.checked = style.id === theme.default_call_style;
+                    const label = document.createElement('label');
+                    label.className = 'form-check-label';
+                    label.htmlFor = inputId;
+                    const chip = document.createElement('span');
+                    chip.className = 'page-editor-theme-call-chip';
+                    chip.style.backgroundColor = style.css.calling_background_color;
+                    chip.setAttribute('aria-hidden', 'true');
+                    label.append(chip, style.label);
+                    label.title = style.css.calling_background_color;
+                    radio.addEventListener('change', function () {
+                        if (!radio.checked) return;
+                        selectedCallStyle = style;
+                        showAccent(style);
+                    });
+                    const option = document.createElement('div');
+                    option.className = 'form-check form-check-inline';
+                    option.append(radio, label);
+                    group.appendChild(option);
+                    if (radio.checked) {
+                        selectedCallStyle = style;
+                        showAccent(style);
+                    }
+                });
+                info.appendChild(group);
             }
             const actions = document.createElement('div');
             actions.className = 'page-editor-theme-actions';
@@ -1959,7 +2012,12 @@
             });
             updateAvailability();
             applyButton.addEventListener('click', function () {
-                applyTheme(theme, {
+                const applied = selectedCallStyle
+                    ? Object.assign({}, theme, {snapshot: Object.assign({}, theme.snapshot, {
+                        css: Object.assign({}, theme.snapshot.css, selectedCallStyle.css),
+                    })})
+                    : theme;
+                applyTheme(applied, {
                     appearance: sectionChecks.appearance.checked,
                     layout: sectionChecks.layout.checked,
                     content: !theme.builtin && sectionChecks.content.checked,

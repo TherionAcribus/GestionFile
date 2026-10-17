@@ -44,6 +44,11 @@ _PALETTE_ROLES = (
         "label": "Couleur des bordures",
         "description": "Contours et séparateurs de la page",
     },
+    {
+        "id": "accent",
+        "label": "Couleur d’accent (appels)",
+        "description": "Fond des appels en cours, distinct du bandeau",
+    },
 )
 _MARKER_LABELS = {
     "P": ("Pharmacie", "Nom de la pharmacie"),
@@ -134,7 +139,7 @@ ADAPTERS = {
                      {"key": "calling_font_color", "label": "Couleur du texte", "type": "color", "group": "Texte", "role": "secondary"},
                      {"key": "calling_font_border_size", "label": "Épaisseur contour texte", "type": "size", "group": "Texte"},
                      {"key": "calling_font_border_color", "label": "Couleur contour texte", "type": "color", "group": "Texte", "role": "border"},
-                     {"key": "calling_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "primary"}]),
+                     {"key": "calling_background_color", "label": "Couleur de fond", "type": "color", "group": "Zone", "role": "accent"}]),
             "empty_message": _component("Message file vide", "main", "#div_display_text_down",
                 scenarios=["empty"],
                 hidden_when={"key": "announce_text_down_patients_display", "values": ["never"]},
@@ -705,20 +710,64 @@ for _field in ADAPTERS["patient"]["components"]["print_error"]["config"]:
     _field["scenarios"] = _PRINT_ERROR_FIELD_SCENARIOS[_field["key"]]
 
 
+#: Palette : fond, surface, texte, principale, douce, texte sur principale,
+#: accent, texte sur accent. L'accent colore les appels en cours : une teinte
+#: proche de la principale mais distincte du bandeau, avec un texte qui garde
+#: un contraste d'au moins 4,5:1 (Ardoise : menthe plus soutenue, la
+#: principale étant déjà très claire).
 _BUILTIN_THEMES = (
     ("officine", "Officine", "Clair et rassurant — recommandé pour commencer.",
-     ("#F5F8F7", "#FFFFFF", "#18332F", "#176B52", "#E5F2EC", "#FFFFFF")),
+     ("#F5F8F7", "#FFFFFF", "#18332F", "#176B52", "#E5F2EC", "#FFFFFF", "#1C8465", "#FFFFFF")),
     ("lisibilite", "Lisibilité renforcée", "Textes agrandis ; galerie masquée sur l’affichage si vous appliquez la disposition.",
-     ("#FFFFFF", "#FFFFFF", "#111827", "#123B63", "#FFF1B8", "#FFFFFF")),
+     ("#FFFFFF", "#FFFFFF", "#111827", "#123B63", "#FFF1B8", "#FFFFFF", "#1E62A4", "#FFFFFF")),
     ("sauge-lin", "Sauge & Lin", "Des tons naturels et chaleureux, sans sacrifier la lisibilité.",
-     ("#FAF7F0", "#FFFEFA", "#29372F", "#365C46", "#E8EDE3", "#FFFFFF")),
+     ("#FAF7F0", "#FFFEFA", "#29372F", "#365C46", "#E8EDE3", "#FFFFFF", "#497C5E", "#FFFFFF")),
     ("bleu-horizon", "Bleu Horizon", "Une présentation claire et structurée, dans des tons bleus.",
-     ("#F3F6FA", "#FFFFFF", "#172B4D", "#245EA8", "#E7EFFA", "#FFFFFF")),
+     ("#F3F6FA", "#FFFFFF", "#172B4D", "#245EA8", "#E7EFFA", "#FFFFFF", "#2D75D2", "#FFFFFF")),
     ("ardoise", "Ardoise", "Variante sombre — à tester sur place selon l’éclairage et les reflets.",
-     ("#17212B", "#243342", "#F3F6FA", "#7EDDB5", "#243342", "#17212B")),
+     ("#17212B", "#243342", "#F3F6FA", "#7EDDB5", "#243342", "#17212B", "#33C286", "#17212B")),
     ("classique", "Classique", "Reprend les réglages actuels de l’installation — grands textes blancs sur bandeaux vert canard.",
-     ("#B6F5F5", "#008B8B", "#FFFFFF", "#006666", "#5FB4B4", "#FFFFFF")),
+     ("#B6F5F5", "#008B8B", "#FFFFFF", "#006666", "#5FB4B4", "#FFFFFF", "#008B8B", "#FFFFFF")),
 )
+
+#: Second style d'appel proposé sur l'écran d'annonce : une couleur
+#: complémentaire de la principale, plus visible de loin que la teinte
+#: « discrète » de la palette (texte ≥ 4,5:1). Un thème absent d'ici (Classique,
+#: reproduction exacte d'une configuration) n'offre pas le choix.
+_BUILTIN_VIVID_ACCENTS = {
+    "officine": ("#B9D44A", "#18332F"),  # vert anis, texte foncé du thème
+    "lisibilite": ("#FFD24D", "#111827"),
+    "sauge-lin": ("#A4502E", "#FFFFFF"),
+    "bleu-horizon": ("#C2410C", "#FFFFFF"),
+    "ardoise": ("#F2B84B", "#17212B"),
+}
+
+#: Style d'appel présélectionné par thème (« discreet » si absent).
+_BUILTIN_DEFAULT_CALL_STYLE = {}
+
+
+def _call_outline(foreground):
+    """Contour des numéros appelés : 5px (couleur de texte foncée du thème)
+    détoure un texte blanc, plus net de loin et sous les reflets ; un texte
+    foncé n'en a pas besoin — le contour l'empâterait."""
+    return "5px" if foreground.upper() == "#FFFFFF" else "0px"
+
+
+def _call_styles(slug, accent, on_accent):
+    """Choix « Appels » d'un thème d'annonce : discret (accent de la palette,
+    celui de l'instantané) ou bien visible (couleur complémentaire)."""
+    vivid = _BUILTIN_VIVID_ACCENTS.get(slug)
+    if vivid is None:
+        return None
+    return [
+        {"id": "discreet", "label": "Discrets",
+         "css": {"calling_background_color": accent, "calling_font_color": on_accent,
+                 "calling_font_border_size": _call_outline(on_accent)}},
+        {"id": "vivid", "label": "Bien visibles",
+         "css": {"calling_background_color": vivid[0], "calling_font_color": vivid[1],
+                 "calling_font_border_size": _call_outline(vivid[1])}},
+    ]
+
 
 #: Surcharges exactes du thème « Classique », page par page : il reproduit la
 #: configuration réellement en service, contrairement aux autres thèmes dont
@@ -963,7 +1012,7 @@ def builtin_themes(page):
         overrides = _BUILTIN_CSS_OVERRIDES.get(slug, {})
         if slug in _BUILTIN_CSS_OVERRIDES and page not in overrides:
             continue
-        background, surface, text, primary, soft, on_primary = colors
+        background, surface, text, primary, soft, on_primary, accent, on_accent = colors
         large = slug == "lisibilite"
         css = {}
         for key, field_type in _css_field_types(ADAPTERS[page]).items():
@@ -985,7 +1034,8 @@ def builtin_themes(page):
             css.update(title_background_height="160px" if large else "140px",
                        subtitle_font_color=on_primary,
                        subtitle_font_size="56px" if large else "48px")
-            block("calling", on_primary, primary, "140px" if large else "120px")
+            block("calling", on_accent, accent, "140px" if large else "120px")
+            css["calling_font_border_size"] = _call_outline(on_accent)
             block("text_up", text, surface, "64px" if large else "56px")
             block("text_down", text, surface, "96px" if large else "84px")
             block("ongoing", text, soft, "66px" if large else "56px")
@@ -1078,12 +1128,19 @@ def builtin_themes(page):
             item.update(span=12, alignment="center")
         if page == "announce" and large:
             layout["gallery"]["visible"] = False
-        themes.append({
+        theme = {
             "id": f"builtin-{slug}", "page": page, "name": name, "description": description,
             "builtin": True, "recommended": slug == "officine",
-            "colors": list(colors[:5]),
+            "colors": list(colors[:5]) + [colors[6]],
             "snapshot": {"css": css, "layout": layout, "config": {}},
-        })
+        }
+        call_styles = _call_styles(slug, accent, on_accent) if page == "announce" else None
+        if call_styles:
+            default_style = _BUILTIN_DEFAULT_CALL_STYLE.get(slug, "discreet")
+            theme["call_styles"] = call_styles
+            theme["default_call_style"] = default_style
+            css.update(next(style["css"] for style in call_styles if style["id"] == default_style))
+        themes.append(theme)
     return themes
 
 
