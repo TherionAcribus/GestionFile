@@ -560,6 +560,134 @@
         return wrapper;
     }
 
+    const SIZE_UNITS = ['px', '%', 'em', 'rem', 'vh', 'vw', 'pt'];
+    // Mêmes unités que la validation serveur (_CSS_SIZE_RE) : une valeur
+    // qui s'y conforme est découpée en nombre + unité ; les autres
+    // (calc(), var(), mots-clés…) gardent le champ texte libre.
+    const SIZE_VALUE_RE = /^(-?\d+(?:\.\d+)?)(px|em|rem|%|vh|vw|vmin|vmax|pt|pc|cm|mm|in|ch|ex|lh|rlh)?$/i;
+
+    // Bouton −/+ accolé à un champ numérique. Chaque clic applique le pas
+    // (Maj+clic : ×10), borne sur min/max si le champ en déclare, puis
+    // rejoue la séquence input→change attendue par bindValue : aperçu en
+    // direct et une étape d'annulation par clic. L'id dérivé du champ
+    // permet au focus de suivre le bouton recréé au re-rendu de
+    // l'inspecteur.
+    function stepperButton(input, delta, label) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-outline-secondary page-editor-stepper-btn';
+        button.id = input.id + (delta < 0 ? '-minus' : '-plus');
+        button.setAttribute('aria-label', label);
+        button.title = 'Maj+clic : ±' + Math.abs(delta) * 10;
+        const icon = document.createElement('i');
+        icon.className = 'bi ' + (delta < 0 ? 'bi-dash' : 'bi-plus');
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        button.addEventListener('click', function (event) {
+            const step = Math.abs(delta) * (event.shiftKey ? 10 : 1);
+            const direction = delta < 0 ? -1 : 1;
+            const base = parseFloat(input.value) || 0;
+            // Une valeur « hors pas » (750 avec un pas de 100) s'aligne
+            // d'abord sur le pas avant d'avancer : + rend 800, pas 850.
+            let next = direction > 0
+                ? Math.floor(base / step) * step + step
+                : Math.ceil(base / step) * step - step;
+            if (input.min !== '') next = Math.max(parseFloat(input.min), next);
+            if (input.max !== '') next = Math.min(parseFloat(input.max), next);
+            input.value = String(Math.round(next * 1000) / 1000);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+        });
+        return button;
+    }
+
+    // Champ « taille » : la valeur stockée garde son unité (« 32px »), mais
+    // l'édition la découpe — nombre au clavier, boutons −/+ et unité en
+    // sélecteur. Fini de retaper « px » à chaque ajustement ou de casser
+    // l'aperçu en l'effaçant. Une valeur non découpable renvoie ``null``
+    // pour laisser le site appelant poser le champ texte libre.
+    function createSizeControl(id, value, apply) {
+        const trimmed = String(value == null ? '' : value).trim();
+        const match = trimmed === '' ? ['', '', ''] : trimmed.match(SIZE_VALUE_RE);
+        if (!match) return null;
+
+        const group = document.createElement('div');
+        group.className = 'input-group page-editor-stepper';
+
+        const number = document.createElement('input');
+        number.type = 'number';
+        number.className = 'form-control';
+        number.id = id;
+        number.step = '1';
+        number.value = match[1];
+        group.dataset.labelFor = number.id;
+
+        const unitValue = (match[2] || 'px').toLowerCase();
+        const unit = document.createElement('select');
+        unit.className = 'form-select page-editor-stepper-unit';
+        unit.id = id + '-unit';
+        unit.setAttribute('aria-label', 'Unité');
+        const units = SIZE_UNITS.includes(unitValue)
+            ? SIZE_UNITS : SIZE_UNITS.concat(unitValue);
+        units.forEach(function (item) {
+            const option = document.createElement('option');
+            option.value = item;
+            option.textContent = item;
+            unit.appendChild(option);
+        });
+        unit.value = unitValue;
+
+        const commit = function () {
+            // parseFloat normalise les écritures exotiques acceptées par
+            // les champs number (« 1e3 », « 32.50 ») avant de recoller
+            // l'unité : la valeur enregistrée reste du CSS lisible.
+            const parsed = parseFloat(number.value);
+            apply(Number.isNaN(parsed) ? '' : String(parsed) + unit.value);
+        };
+        bindValue(number, commit);
+        bindValue(unit, commit);
+
+        group.append(
+            stepperButton(number, -1, 'Diminuer'),
+            number,
+            stepperButton(number, 1, 'Augmenter'),
+            unit);
+        return group;
+    }
+
+    // Champ « nombre » (graisse…) : même découpage que les tailles, sans
+    // l'unité ; le pas vient du champ (« step: 100 » pour la graisse).
+    // Une valeur non numérique (mot-clé « bold ») renvoie ``null``.
+    function createNumberControl(id, value, step, apply) {
+        const trimmed = String(value == null ? '' : value).trim();
+        if (trimmed !== '' && !/^-?\d+(?:\.\d+)?$/.test(trimmed)) return null;
+
+        const group = document.createElement('div');
+        group.className = 'input-group page-editor-stepper';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'form-control';
+        input.id = id;
+        // Bornes de la validation serveur (_is_css_number : 1…1000). Le
+        // pas du champ (``step``) ne pilote que les boutons −/+ : posé
+        // sur l'input il décalerait les valeurs permises à partir de
+        // ``min`` (min=1, pas=100 → 1, 101, 201… au lieu de centaines).
+        input.min = '1';
+        input.max = '1000';
+        input.value = trimmed;
+        group.dataset.labelFor = input.id;
+        bindValue(input, function () {
+            const parsed = parseFloat(input.value);
+            apply(Number.isNaN(parsed) ? '' : String(parsed));
+        });
+        group.append(
+            stepperButton(input, -step, 'Diminuer'),
+            input,
+            stepperButton(input, step, 'Augmenter'));
+        return group;
+    }
+
     const BUTTONS_IMAGE_PREFIX = '/static/images/buttons/';
 
     // Champ « image » : choix d'un fichier existant de
@@ -1081,19 +1209,24 @@
                         if (field.max != null) parsed = Math.min(field.max, parsed);
                         setConfigValue(field.key, parsed);
                     });
+                    // Boutons −/+ autour du champ ; l'unité (« s », « px »)
+                    // reste suffixée en input-group plutôt que répétée
+                    // dans le libellé.
+                    control.id = 'editor-config-' + field.key + '-value';
+                    const intGroup = document.createElement('div');
+                    intGroup.className = 'input-group page-editor-stepper';
+                    intGroup.dataset.labelFor = control.id;
+                    intGroup.append(
+                        stepperButton(control, -1, 'Diminuer'),
+                        control,
+                        stepperButton(control, 1, 'Augmenter'));
                     if (field.unit) {
-                        // L'unité (« s », « px ») est suffixée au champ en
-                        // input-group plutôt que répétée dans le libellé.
-                        const unitGroup = document.createElement('div');
-                        unitGroup.className = 'input-group';
-                        control.id = 'editor-config-' + field.key + '-value';
-                        unitGroup.dataset.labelFor = control.id;
                         const suffix = document.createElement('span');
                         suffix.className = 'input-group-text';
                         suffix.textContent = field.unit;
-                        unitGroup.append(control, suffix);
-                        control = unitGroup;
+                        intGroup.appendChild(suffix);
                     }
+                    control = intGroup;
                 } else if (field.type === 'image') {
                     control = createImageControl(
                         'editor-config-' + field.key,
@@ -1146,20 +1279,34 @@
                     }
                 }
                 let control;
+                const applyCss = function (value) { payload.css[field.key] = value; };
                 if (field.type === 'color') {
                     control = createColorControl(
                         'editor-css-' + field.key,
                         payload.css[field.key],
-                        function (element) { payload.css[field.key] = element.value; }
+                        function (element) { applyCss(element.value); }
                     );
                 } else {
-                    control = document.createElement('input');
-                    control.type = 'text';
-                    control.className = 'form-control';
-                    control.id = 'editor-css-' + field.key;
-                    control.value = payload.css[field.key] || '';
-                    control.placeholder = field.type === 'number' ? '400' : '32px';
-                    bindValue(control, function (element) { payload.css[field.key] = element.value; });
+                    if (field.type === 'size') {
+                        control = createSizeControl(
+                            'editor-css-' + field.key, payload.css[field.key], applyCss);
+                    } else if (field.type === 'number') {
+                        control = createNumberControl(
+                            'editor-css-' + field.key, payload.css[field.key],
+                            field.step || 1, applyCss);
+                    }
+                    if (!control) {
+                        // Type inconnu ou valeur non découpable (calc(),
+                        // var(), mot-clé…) : le champ texte libre reste
+                        // disponible, comme avant.
+                        control = document.createElement('input');
+                        control.type = 'text';
+                        control.className = 'form-control';
+                        control.id = 'editor-css-' + field.key;
+                        control.value = payload.css[field.key] || '';
+                        control.placeholder = field.type === 'number' ? '400' : '32px';
+                        bindValue(control, function (element) { applyCss(element.value); });
+                    }
                 }
                 appearanceFields.appendChild(formGroup(
                     field.label, control, factoryResetButton('css', field.key)));

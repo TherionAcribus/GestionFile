@@ -206,6 +206,23 @@
     text-transform: uppercase;
 }
 
+/* Champs « taille » et « nombre » : la valeur se règle au clavier ou par
+   boutons −/+, l'unité se choisit dans un sélecteur qui garde la largeur
+   de son contenu au lieu d'occuper toute la ligne (input-group). */
+.page-editor-stepper > .btn {
+    padding-left: .55rem;
+    padding-right: .55rem;
+}
+
+.page-editor-stepper > .form-control {
+    text-align: right;
+}
+
+.page-editor-stepper-unit {
+    flex: 0 0 auto;
+    width: auto;
+}
+
 .page-editor-palette-card {
     background: var(--bs-tertiary-bg);
     border: 1px solid var(--bs-border-color);
