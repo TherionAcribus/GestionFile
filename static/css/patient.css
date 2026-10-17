@@ -1,10 +1,10 @@
 :root {
     --patient_button_border_color: #000000;
-    --circle_button_size: 150px;
+    --circle_button_size: 230px;
     --circle_button_color: darkcyan;
     --circle_button_border_size: 0px;
     --circle_button_border_color: black;
-    --circle_button_image_size: 140px;
+    --circle_button_image_size: 215px;
     --circle_button_text_size: 24px;
     --circle_button_text_color: darkcyan;
     --circle_button_text_border_size: 0px;
@@ -200,7 +200,14 @@ html, body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    /* Ancré en bas : l'étiquette reste toujours entièrement dans la cellule,
+       collée au bas de la zone centrale. Quand la place manque, le débordement
+       part vers le haut (là où l'image déborde déjà en mode « image au-dessus »)
+       au lieu de passer sous le pied de page. */
+    justify-content: flex-end;
+    /* Petite respiration entre l'étiquette et le bandeau de pied de page. */
+    padding-bottom: min(10px, 1vh);
+    box-sizing: border-box;
 }
 
 .div_square_bloc_activity{
@@ -351,16 +358,22 @@ html, body {
 }
 
 /* Mode « image au-dessus » (page_patient_circle_image_above) : l'image est
-   agrandie et déborde au-dessus du cercle, comme sur l'ancienne borne.
-   Le padding réserve la place du débordement pour qu'elle ne soit pas rognée
-   en haut de la zone des boutons. */
-.div_bloc_activity.img_above {
-    padding-top: calc(var(--circle_button_size) * 0.4);
+   décalée vers le haut et déborde au-dessus du cercle, comme sur l'ancienne
+   borne. Le pseudo-élément réserve la place du débordement au-dessus du cercle ;
+   rétractable (flex-shrink élevé), il cède sa place au cercle quand la cellule
+   manque de hauteur — contrairement à un padding qui rognait le cercle. */
+.div_bloc_activity.img_above::before {
+    content: "";
+    flex: 0 10 calc(var(--circle_button_image_size) * 0.4);
+    min-height: 0;
 }
 
+/* La taille de l'image est indépendante du cercle (circle_button_image_size) ;
+   plafonnée à 140 % du cercle réellement affiché pour que le débordement reste
+   raisonnable quand le cercle a été réduit faute de place. */
 .div_bloc_activity.img_above .img_btn {
-    height: 140%;
-    width: 140%;
+    height: min(var(--circle_button_image_size), 140%);
+    width: min(var(--circle_button_image_size), 140%);
     max-height: none;
     max-width: none;
     border-radius: 0;
@@ -386,7 +399,10 @@ html, body {
     text-align: center;
     font-size: var(--circle_button_text_size);
     font-weight: bold;
-    min-height: 0;
+    /* flex:0 0 auto — l'étiquette ne rétrécit jamais : quand la place manque,
+       c'est le cercle (flex:1) qui absorbe la compression. Sans cela le <p>
+       débordait de son conteneur réduit et était rogné en bas de la zone. */
+    flex: 0 0 auto;
     -webkit-text-stroke-color: var(--circle_button_text_border_color);
     -webkit-text-stroke-width: var(--circle_button_text_border_size);
 }
