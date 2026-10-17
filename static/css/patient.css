@@ -223,20 +223,21 @@ html, body {
     width: var(--square_button_width);  
     height: var(--square_button_height);
     margin: 10px;    
-    border-radius: 5%;
+    border-radius: 14px;
     border-color: var(--square_button_border_color);
     border-width: var(--square_button_border_size);
     border-style: solid;
-    box-shadow: 5px 5px 5px #888888;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
+    transition: scale 0.2s ease, box-shadow 0.2s ease;
 }
 
 
 .div_square_bloc_activity:hover {
-    box-shadow: 0px 0px 0px #888888;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     scale: 0.95;
 }
 
@@ -245,19 +246,20 @@ html, body {
     height: var(--square_cancel_button_height);
     background-color: var(--square_cancel_button_color);
     margin: 10px;    
-    border-radius: 5%;
+    border-radius: 14px;
     border-color: var(--square_cancel_button_border_color);
     border-width: var(--square_cancel_button_border_size);
     border-style: solid;
-    box-shadow: 5px 5px 5px #888888;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
+    transition: scale 0.2s ease, box-shadow 0.2s ease;
 }
 
 .div_square_bloc_cancel:hover {
-    box-shadow: 0px 0px 0px #888888;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     scale: 0.95;
 }
 
@@ -410,8 +412,8 @@ html, body {
     background-color:var(--validation_button_color);
     height: min(var(--validation_button_height), 9vh);
     width: min(var(--validation_button_width), 42vw);
-    border-radius: 5%;
-    box-shadow: 5px 5px 5px #888888;
+    border-radius: 14px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
     color: var(--validation_button_text_color);
     text-align: center;
     margin: min(12px, 1.5vh);
@@ -420,6 +422,7 @@ html, body {
     border-color: var(--validation_button_border_color);
     border-width: var(--validation_button_border_size);
     border-style: solid;
+    transition: scale 0.2s ease, box-shadow 0.2s ease;
 }
 
 .div_validation_one_button_with_img{
@@ -429,8 +432,8 @@ html, body {
     background-color:var(--validation_button_color);
     height: min(var(--validation_button_height), 9vh);
     width: min(var(--validation_button_width), 42vw);
-    border-radius: 5%;
-    box-shadow: 5px 5px 5px #888888;
+    border-radius: 14px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
     color: var(--validation_button_text_color);
     text-align: center;
     margin: min(12px, 1.5vh);
@@ -439,6 +442,7 @@ html, body {
     border-color: var(--validation_button_border_color);
     border-width: var(--validation_button_border_size);
     border-style: solid;
+    transition: scale 0.2s ease, box-shadow 0.2s ease;
 }
 
 .img_for_div_validation {
