@@ -1616,7 +1616,11 @@
     }
 
     function journeyText(text) {
-        return String(text || '').replace(/\{([a-z_]+)\}/g, function (match, name) {
+        return String(text || '').replace(/\{(=?)([a-z_]+)\}/g, function (match, isConfig, name) {
+            if (isConfig) {
+                const configured = payload.config[name];
+                return configured == null ? '' : String(configured);
+            }
             const value = journeyFacts[name];
             if (Array.isArray(value)) {
                 return value.map(function (item) { return '« ' + item + ' »'; }).join(', ');
@@ -1998,10 +2002,26 @@
         // au-dessus de l'aperçu plutôt que de laisser croire qu'il s'affiche.
         const previewed = journeyAllSteps().find(function (step) { return step.scenario === scenarioSelect.value; });
         const previewedStatus = previewed ? journeyStatus(previewed) : null;
+        const exitRule = previewed
+            ? (previewed.exit || []).find(function (rule) { return journeyCondition(rule.when); })
+            : null;
+        journeySkipped.replaceChildren();
         if (previewedStatus && previewedStatus.state === 'hidden') {
             journeySkipped.hidden = false;
+            journeySkipped.className = 'alert alert-secondary py-2 small mb-2';
             journeySkipped.textContent = 'Avec les réglages actuels, le patient ne voit pas cet écran. '
                 + previewedStatus.text + ' L’aperçu reste disponible pour préparer ses textes.';
+        } else if (exitRule) {
+            // Ce que l'aperçu ne peut pas montrer : quand et comment la borne
+            // quitte l'écran (délais, suite donnée), valeurs du brouillon.
+            journeySkipped.hidden = false;
+            journeySkipped.className = 'alert alert-info py-2 small mb-2 page-editor-journey-exit';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-stopwatch me-1';
+            icon.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('strong');
+            label.textContent = 'Sur la borne : ';
+            journeySkipped.append(icon, label, document.createTextNode(journeyText(exitRule.text)));
         } else {
             journeySkipped.hidden = true;
         }

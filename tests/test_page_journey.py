@@ -238,11 +238,53 @@ def test_print_error_warns_when_only_back_button_remains(changes, warned):
         assert "Conserver dans la file" in active[0]["text"]
 
 
+def test_exit_rules_are_complete_and_reference_known_settings():
+    """Chaque liste ``exit`` se termine par un repli et ses ``{=clé}``
+    désignent des réglages de la page."""
+    import re
+
+    fields = _patient_fields()
+    for step in iter_steps(PATIENT_JOURNEY):
+        rules = step.get("exit", [])
+        if not rules:
+            continue
+        assert "when" not in rules[-1], step["id"]
+        for rule in rules:
+            for key in re.findall(r"\{=([a-z_]+)\}", rule["text"]):
+                assert key in fields, (step["id"], key)
+
+
+@pytest.mark.parametrize(("step_id", "changes", "expected"), [
+    ("print_uncertain", {"page_patient_print_uncertain_timer": 15,
+                         "page_patient_print_uncertain_timeout_action": "received"},
+     "après 15 s ; ticket considéré comme reçu"),
+    ("print_uncertain", {"page_patient_print_uncertain_timer": 20,
+                         "page_patient_print_uncertain_timeout_action": "staff"},
+     "après 20 s ; l’inscription reste en attente"),
+    ("print_error", {"page_patient_print_fail_behavior": "ask",
+                     "page_patient_print_fail_abandon_timer": 0},
+     "Pas de retour automatique"),
+    ("print_error", {"page_patient_print_fail_behavior": "ask",
+                     "page_patient_print_fail_abandon_timer": 45},
+     "après 45 s ; l’inscription est annulée"),
+    ("print_error", {"page_patient_print_fail_behavior": "keep", "page_patient_end_timer": 7},
+     "après 7 s ; le patient reste inscrit"),
+    ("print_error", {"page_patient_print_fail_behavior": "cancel", "page_patient_end_timer": 7},
+     "après 7 s ; l’inscription est annulée"),
+    ("staff_called", {"page_patient_end_timer": 9}, "après 9 s"),
+])
+def test_exit_text_follows_settings(step_id, changes, expected):
+    from page_journey import step_exit
+
+    step = next(step for step in iter_steps(PATIENT_JOURNEY) if step["id"] == step_id)
+    assert expected in step_exit(step, {**_factory_config(), **changes})
+
+
 def test_editor_js_mirrors_condition_language():
     """Le navigateur évalue la même définition : les opérateurs reconnus par
     page_journey.evaluate doivent l'être aussi par page_editor.js."""
     source = (ROOT / "static/js/page_editor.js").read_text(encoding="utf-8")
     for fragment in ("condition.all", "condition.any", "condition.not",
                      "condition.fact", "condition.config", "journey_facts",
-                     "adapter.journey"):
+                     "adapter.journey", "(=?)([a-z_]+)", "previewed.exit"):
         assert fragment in source

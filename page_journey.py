@@ -12,6 +12,11 @@ navigateur (``public_journey``), qui l'évalue en direct sur le brouillon avec
 le même petit langage de conditions que ``evaluate`` ci-dessous (miroir
 testé côté Python). Module pur : aucune dépendance Flask/SQLAlchemy.
 
+Textes : ``{fait}`` insère un fait serveur, ``{=clé}`` la valeur du
+brouillon (ex. ``{=page_patient_end_timer}``). ``exit`` décrit, par règles
+comme ``status``, quand et comment la borne quitte l'écran (affiché dans
+l'éditeur au-dessus de l'aperçu, jamais sur la borne).
+
 Conditions
     ``None``                    toujours vraie
     ``{"config": k, "is": v}``  valeur du brouillon égale à ``v`` (ou dans
@@ -113,6 +118,7 @@ PATIENT_JOURNEY = {
                          "label": "Durée d’affichage du message",
                          "enabled_when": _is("page_patient_disable_button")},
                     ],
+                    "exit": [{"text": "Le message reste affiché {=page_patient_timer_activity_inactive} s, puis l’accueil revient."}],
                     "actions": [
                         {"id": "inactive_back", "label": "Revenir à l’accueil", "target": "home"},
                     ],
@@ -190,6 +196,7 @@ PATIENT_JOURNEY = {
             ],
             "fixed": "Obligatoire",
             "fixed_help": "Cet écran ne peut pas être masqué : il s’affiche pendant l’impression du ticket, le temps que l’imprimante confirme.",
+            "exit": [{"text": "Affiché le temps que l’imprimante confirme, puis conclusion — ou écran d’incident si l’impression échoue."}],
             "actions": [
                 {"id": "print_ok", "label": "Ticket imprimé", "target": "conclusion",
                  "icon": "bi-check-circle"},
@@ -220,6 +227,15 @@ PATIENT_JOURNEY = {
                          "help": "L’inscription en attente est alors annulée.",
                          "enabled_when": _ASK},
                     ],
+                    "exit": [
+                        {"when": {"all": [_ASK, _is("page_patient_print_fail_abandon_timer", 0)]},
+                         "text": "Pas de retour automatique : l’écran attend un choix du patient."},
+                        {"when": _ASK,
+                         "text": "Sans choix du patient, retour à l’accueil après {=page_patient_print_fail_abandon_timer} s ; l’inscription est annulée."},
+                        {"when": _is("page_patient_print_fail_behavior", "keep"),
+                         "text": "Retour à l’accueil après {=page_patient_end_timer} s ; le patient reste inscrit et sera appelé."},
+                        {"text": "Retour à l’accueil après {=page_patient_end_timer} s ; l’inscription est annulée."},
+                    ],
                     "warnings": [
                         # Seul « Retour » reste : le patient lit son numéro
                         # mais l'inscription en attente n'est jamais activée.
@@ -249,6 +265,11 @@ PATIENT_JOURNEY = {
                     "role": "L’imprimante n’a pas confirmé : le patient indique s’il a reçu son ticket.",
                     "status": [{"state": CONDITIONAL, "text": "Seulement si l’imprimante ne peut pas confirmer l’impression."}],
                     "fixed": "Toujours prévu : sans réponse de l’imprimante, seul le patient sait si le ticket est sorti.",
+                    "exit": [
+                        {"when": _is("page_patient_print_uncertain_timeout_action", "staff"),
+                         "text": "Sans réponse, retour à l’accueil après {=page_patient_print_uncertain_timer} s ; l’inscription reste en attente, le comptoir vérifie."},
+                        {"text": "Sans réponse, retour à l’accueil après {=page_patient_print_uncertain_timer} s ; ticket considéré comme reçu, le patient entre dans la file."},
+                    ],
                     "choices": [
                         {"key": "page_patient_print_uncertain_timer",
                          "label": "Délai laissé au patient pour répondre",
@@ -286,6 +307,7 @@ PATIENT_JOURNEY = {
                         {"state": CONDITIONAL,
                          "text": "Après « Appeler le personnel », proposé en cas d’impression en échec ou incertaine."},
                     ],
+                    "exit": [{"text": "Retour à l’accueil après {=page_patient_end_timer} s ; le patient est dans la file."}],
                     "toggle": {"key": "page_patient_print_fail_show_staff",
                                "label": "Proposer « Appeler le personnel » en cas de problème d’impression",
                                "help": "Le personnel reçoit une alerte sur le comptoir, et le patient voit cet écran de confirmation."},
@@ -305,6 +327,7 @@ PATIENT_JOURNEY = {
                  "text": "Sautée : la borne revient à l’accueil dès que le ticket est imprimé ou l’inscription par QR code validée."},
                 {"state": SHOWN, "text": "Toujours affichée en fin de parcours."},
             ],
+            "exit": [{"text": "Retour à l’accueil après {=page_patient_end_timer} s, ou dès que le patient touche le bouton de retour."}],
             "toggle": {"key": "page_patient_display_conclusion",
                        "label": "Afficher l’écran de conclusion",
                        "help": "Décoché : retour immédiat à l’accueil après une inscription réussie. Les messages d’incident d’impression (échec, ticket incertain, personnel prévenu) restent affichés."},
@@ -335,7 +358,7 @@ PATIENT_JOURNEY = {
 
 JOURNEYS = {"patient": PATIENT_JOURNEY}
 
-_PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
+_PLACEHOLDER_RE = re.compile(r"\{(=?)([a-z_]+)\}")
 
 
 def evaluate(condition, config, facts=None):
@@ -358,9 +381,12 @@ def evaluate(condition, config, facts=None):
     return value == expected
 
 
-def _fill(text, facts):
+def _fill(text, facts, config=None):
     def replace(match):
-        value = facts.get(match.group(1))
+        if match.group(1):
+            value = (config or {}).get(match.group(2))
+            return "" if value is None else str(value)
+        value = facts.get(match.group(2))
         if isinstance(value, (list, tuple)):
             return ", ".join(f"« {item} »" for item in value)
         return "" if value is None else str(value)
@@ -372,8 +398,17 @@ def step_status(step, config, facts=None):
     facts = facts or {}
     for rule in step["status"]:
         if evaluate(rule.get("when"), config, facts):
-            return rule["state"], _fill(rule["text"], facts)
+            return rule["state"], _fill(rule["text"], facts, config)
     return HIDDEN, ""
+
+
+def step_exit(step, config, facts=None):
+    """Comment la borne quitte l'écran (première règle ``exit`` vérifiée),
+    ou ``None`` si l'étape n'en décrit pas."""
+    for rule in step.get("exit", []):
+        if evaluate(rule.get("when"), config, facts):
+            return _fill(rule["text"], facts or {}, config)
+    return None
 
 
 def journey_overview(page, config, facts=None):

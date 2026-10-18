@@ -133,14 +133,21 @@
                         <div id="print_status_message" class="div_text_summary">
                             <p class="text_summary" data-config-key="page_patient_interface_print_uncertain" data-number-styled>{{ preview_config.page_patient_interface_print_uncertain }}</p>
                         </div>
+                        <p class="print_status_number" data-print-error-number-for="page_patient_interface_print_uncertain"
+                           {% if '{n}' in (payload.config.page_patient_interface_print_uncertain or '')|lower %}data-config-hidden{% endif %}>{{ preview_tokens['{N}'] }}</p>
                         <div id="print_status_buttons" class="div_validation_buttons">
                             <div class="div_validation_one_button"><p class="validation_button" data-config-key="page_patient_interface_ticket_received">{{ preview_config.page_patient_interface_ticket_received }}</p></div>
                             <div class="div_validation_one_button"><p class="validation_button" data-config-key="page_patient_interface_ticket_missing">{{ preview_config.page_patient_interface_ticket_missing }}</p></div>
+                            <div class="div_validation_one_button" data-config-bool="page_patient_print_fail_show_staff" {% if not payload.config.page_patient_print_fail_show_staff %}data-config-hidden{% endif %}>
+                                <p class="validation_button" data-config-key="page_patient_interface_call_staff">{{ preview_config.page_patient_interface_call_staff }}</p>
+                            </div>
                         </div>
                         {% elif scenario == 'staff_called' %}
                         <div id="print_status_message" class="div_text_summary">
                             <p class="text_summary" data-config-key="page_patient_interface_staff_called" data-number-styled>{{ preview_config.page_patient_interface_staff_called }}</p>
                         </div>
+                        <p class="print_status_number" data-print-error-number-for="page_patient_interface_staff_called"
+                           {% if '{n}' in (payload.config.page_patient_interface_staff_called or '')|lower %}data-config-hidden{% endif %}>{{ preview_tokens['{N}'] }}</p>
                         {% else %}
                         <div id="print_status_message" class="div_text_summary">
                             <p class="text_summary" data-config-key="page_patient_interface_print_failed" data-number-styled
@@ -171,6 +178,11 @@
                             </div>
                             <div class="div_validation_one_button" data-config-bool="page_patient_print_fail_show_staff" {% if not payload.config.page_patient_print_fail_show_staff %}data-config-hidden{% endif %}>
                                 <p class="validation_button" data-config-key="page_patient_interface_call_staff">{{ preview_config.page_patient_interface_call_staff }}</p>
+                            </div>
+                            {# Sans aucun choix, la borne propose seulement « Retour ». #}
+                            <div class="div_validation_one_button" data-config-hide-if-any="page_patient_print_fail_show_retry,page_patient_print_fail_show_staff"
+                                 {% if payload.config.page_patient_print_fail_show_retry or payload.config.page_patient_print_fail_show_staff %}data-config-hidden{% endif %}>
+                                <p class="validation_button" data-config-key="page_patient_interface_done_back">{{ preview_config.page_patient_interface_done_back }}</p>
                             </div>
                         </div>
                         {% endif %}

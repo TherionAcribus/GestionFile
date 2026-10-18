@@ -96,6 +96,12 @@
             const keys = element.dataset.configAnyBool.split(',').map(function (key) { return key.trim(); });
             markHidden(element, !keys.some(function (key) { return Boolean(payload.config[key]); }));
         });
+        // Masqué dès qu'un des booléens est vrai (ex. « Retour », proposé
+        // seulement quand ni « Réessayer » ni « Appeler le personnel » ne le sont).
+        document.querySelectorAll('[data-config-hide-if-any]').forEach(function (element) {
+            const keys = element.dataset.configHideIfAny.split(',').map(function (key) { return key.trim(); });
+            markHidden(element, keys.some(function (key) { return Boolean(payload.config[key]); }));
+        });
         document.querySelectorAll('[data-config-all-bool]').forEach(function (element) {
             const keys = element.dataset.configAllBool.split(',').map(function (key) { return key.trim(); });
             markHidden(element, !keys.every(function (key) { return Boolean(payload.config[key]); }));

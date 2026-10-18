@@ -3247,6 +3247,8 @@ def test_patient_journey_browser_flow(editor_app):
         _add_parent_with_children("circle", "circle")
         app.config["PAGE_PATIENT_DIRECT_PRINT"] = False
         app.config["PAGE_PATIENT_DISPLAY_CONCLUSION"] = True
+        app.config["PAGE_PATIENT_PRINT_UNCERTAIN_TIMER"] = 15
+        app.config["PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION"] = "received"
     client = authenticated_client(editor_app)
     server = make_server("127.0.0.1", 0, app)
     thread = Thread(target=server.serve_forever, daemon=True)
@@ -3377,6 +3379,20 @@ def test_patient_journey_browser_flow(editor_app):
                 playwright.expect(page.locator("#editor-simulation-result")).to_contain_text(
                     "l’écran « Conclusion » est masqué")
                 page.get_by_role("tab", name="Parcours").click()
+
+                # Bandeau « Sur la borne » : délai et suite donnée, valeurs du
+                # brouillon en direct.
+                page.locator("[data-journey-step='print_uncertain']").click()
+                exit_note = page.locator("#editor-journey-skipped")
+                playwright.expect(exit_note).to_contain_text("Sur la borne")
+                playwright.expect(exit_note).to_contain_text("ticket considéré comme reçu")
+                timer = page.locator("#editor-journey-page_patient_print_uncertain_timer")
+                timer.fill("20")
+                timer.press("Tab")
+                playwright.expect(exit_note).to_contain_text("après 20 s")
+                page.locator("#editor-journey-page_patient_print_uncertain_timeout_action").select_option("staff")
+                playwright.expect(exit_note).to_contain_text("le comptoir vérifie")
+
                 page.locator("[data-journey-step='staff_called']").click()
 
                 # Raccourci vers un composant de l'écran.
@@ -3435,6 +3451,41 @@ def test_print_error_preview_renders_overlay(editor_app):
     assert 'data-config-key="page_patient_interface_print_failed" data-number-styled' in preview
     assert 'data-print-error-number-for="page_patient_interface_print_failed"' in preview
     assert 'data-config-key="page_patient_interface_retry"' in preview
+    # Sans « Réessayer » ni « Appeler le personnel », la borne propose
+    # seulement le bouton de retour (libellé « Terminer ») : l'aperçu aussi.
+    back = preview.split('data-config-hide-if-any="page_patient_print_fail_show_retry,page_patient_print_fail_show_staff"', 1)[1]
+    assert 'data-config-key="page_patient_interface_done_back"' in back.split("</div>", 1)[0]
+    # Les annotations de délai vivent dans l'éditeur, pas dans l'écran.
+    assert "page-editor-flow-note" not in preview
+
+
+def test_uncertain_and_staff_called_previews_match_kiosk(editor_app):
+    """« Impression incertaine » : bouton « Appeler le personnel » piloté
+    par son réglage et numéro en grand ; « Personnel appelé » : numéro en
+    grand — comme bigNumberHtml sur la borne."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF"] = False
+
+    uncertain = client.get(
+        "/admin/page-editor/patient/preview?scenario=print_uncertain"
+    ).get_data(as_text=True)
+    staff_button = uncertain.split('data-config-bool="page_patient_print_fail_show_staff"', 1)[1]
+    assert staff_button.split(">", 1)[0].strip() == "data-config-hidden"
+    assert 'data-config-key="page_patient_interface_call_staff"' in staff_button.split("</div>", 1)[0]
+    assert 'data-print-error-number-for="page_patient_interface_print_uncertain"' in uncertain
+
+    staff_called = client.get(
+        "/admin/page-editor/patient/preview?scenario=staff_called"
+    ).get_data(as_text=True)
+    assert 'data-print-error-number-for="page_patient_interface_staff_called"' in staff_called
+
+
+def test_preview_script_hides_back_button_when_a_choice_exists():
+    source = (Path(__file__).resolve().parents[1] / "static/js/page_editor_preview.js").read_text(encoding="utf-8")
+    assert "[data-config-hide-if-any]" in source
 
 
 def test_patient_layout_uses_fixed_three_row_grid_without_forcing_overlay():
