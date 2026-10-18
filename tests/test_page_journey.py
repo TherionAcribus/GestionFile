@@ -61,6 +61,34 @@ def test_journey_definition_matches_patient_adapter():
     assert {step["scenario"] for step in iter_steps(PATIENT_JOURNEY)} == scenarios
 
 
+def test_simulation_graph_is_complete_and_uses_known_steps():
+    """Chaque écran simulable offre une issue et toutes les transitions
+    pointent vers une étape déclarée du parcours."""
+    steps = {step["id"]: step for step in iter_steps(PATIENT_JOURNEY)}
+    action_ids = set()
+    for step in steps.values():
+        assert step.get("actions"), step["id"]
+        for action in step["actions"]:
+            assert action["id"] not in action_ids
+            action_ids.add(action["id"])
+            assert ("target" in action) != ("finish" in action), action
+            if "target" in action:
+                assert action["target"] in steps, action
+
+    configurations = [
+        (_factory_config(), {"children_parents": ["Tests"]}),
+        ({**_factory_config(), "page_patient_direct_print": True,
+          "page_patient_display_conclusion": False}, {"children_parents": []}),
+        ({**_factory_config(), "page_patient_print_fail_behavior": "ask",
+          "page_patient_print_fail_show_retry": False,
+          "page_patient_print_fail_show_staff": False}, {"children_parents": []}),
+    ]
+    for config, facts in configurations:
+        for step in steps.values():
+            assert any(evaluate(action.get("when"), config, facts)
+                       for action in step["actions"]), step["id"]
+
+
 def test_public_journey_completes_choices_from_component_fields():
     journey = public_journey("patient", _patient_fields())
     choices = {

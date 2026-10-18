@@ -3207,6 +3207,14 @@ def test_patient_state_serves_journey_and_grouping_facts(editor_app):
     assert state["journey_facts"] == {"children_parents": ["Tests"]}
     steps = [step["id"] for step in state["adapter"]["journey"]["steps"]]
     assert steps == ["home", "children", "validation", "printing", "conclusion"]
+    home_actions = state["adapter"]["journey"]["steps"][0]["actions"]
+    assert {action["id"] for action in home_actions} == {
+        "choose_activity", "choose_direct", "choose_group", "inactive",
+    }
+    printing = state["adapter"]["journey"]["steps"][3]
+    assert [action["target"] for action in printing["actions"]] == [
+        "conclusion", "print_error", "print_uncertain",
+    ]
 
     announce = client.get("/admin/page-editor/announce/state").get_json()
     assert announce["adapter"]["journey"] is None
@@ -3261,8 +3269,8 @@ def test_patient_journey_browser_flow(editor_app):
                 playwright.expect(page.locator("#editor-scenario-field")).to_be_hidden()
 
                 # Les trois espaces ne cumulent plus leurs outils : Design
-                # rend la palette et le scénario, Simulation ne garde que
-                # l'aperçu, puis Parcours restaure la frise et son contexte.
+                # rend la palette et le scénario, Simulation pilote l'aperçu
+                # depuis un chemin interactif, puis Parcours restaure la frise.
                 page.get_by_role("tab", name="Design des écrans").click()
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("data-editor-mode", "design")
                 playwright.expect(page.locator("#editor-components-panel")).to_be_visible()
@@ -3273,6 +3281,30 @@ def test_patient_journey_browser_flow(editor_app):
                 playwright.expect(page.locator("#editor-components-panel")).to_be_hidden()
                 playwright.expect(page.locator("#editor-inspector-panel")).to_be_hidden()
                 playwright.expect(page.locator("#editor-simulation-intro")).to_be_visible()
+                playwright.expect(page.locator("#editor-scenario-field")).to_be_hidden()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Accueil")
+
+                # Chemin avec sous-activité puis incident d'impression : les
+                # actions suivent la configuration réelle et chaque écran
+                # commande le scénario de l'aperçu.
+                page.locator("[data-simulation-action='choose_group']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Sous-activités")
+                playwright.expect(page.locator("#editor-scenario")).to_have_value("children")
+                page.locator("[data-simulation-action='choose_child']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Validation")
+                page.locator("[data-simulation-action='print']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Impression")
+                page.locator("[data-simulation-action='print_uncertain']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Impression incertaine")
+                page.locator("[data-simulation-action='ticket_missing']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Erreur d’impression")
+                page.locator("[data-simulation-action='ask_back']").click()
+                playwright.expect(page.locator("#editor-simulation-result")).to_contain_text(
+                    "abandonnée après l’échec d’impression")
+                playwright.expect(page.locator("#editor-simulation-trail li")).to_have_count(6)
+                page.locator("#editor-simulation-reset").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Accueil")
+                playwright.expect(page.locator("#editor-simulation-trail li")).to_have_count(1)
                 page.get_by_role("tab", name="Parcours").click()
                 journey = page.locator("#editor-journey")
                 playwright.expect(journey).to_be_visible()
@@ -3319,6 +3351,22 @@ def test_patient_journey_browser_flow(editor_app):
                 # Étape non masquable : raison affichée, pas d'interrupteur.
                 playwright.expect(page.locator("#editor-journey-toggle-home")).to_have_count(0)
                 playwright.expect(page.locator("#editor-journey-path li").first).to_contain_text("Obligatoire")
+
+                # Les écrans masqués sont réellement sautés dans le moteur :
+                # impression directe puis retour à l'accueil sans conclusion.
+                page.get_by_role("tab", name="Simulation").click()
+                page.locator("#editor-simulation-reset").click()
+                page.locator("[data-simulation-action='choose_group']").click()
+                page.locator("[data-simulation-action='choose_child']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Impression")
+                playwright.expect(page.locator("#editor-simulation-trail")).to_contain_text(
+                    "sans passer par : Validation")
+                page.locator("[data-simulation-action='print_ok']").click()
+                playwright.expect(page.locator("#editor-simulation-step")).to_have_text("Accueil")
+                playwright.expect(page.locator("#editor-simulation-result")).to_contain_text(
+                    "l’écran « Conclusion » est masqué")
+                page.get_by_role("tab", name="Parcours").click()
+                page.locator("[data-journey-step='staff_called']").click()
 
                 # Raccourci vers un composant de l'écran.
                 page.locator("#editor-inspector").get_by_role("button", name="Erreur d'impression").click()

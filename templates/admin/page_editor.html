@@ -72,9 +72,37 @@
                     </p>
                 </div>
             </section>
-            <p id="editor-simulation-intro" class="page-editor-simulation-intro" hidden>
-                Choisissez un écran pour le tester en grand. Cliquez sur un élément de l’aperçu pour ouvrir directement son design.
-            </p>
+            <section id="editor-simulation-panel" class="page-editor-simulation" aria-labelledby="editor-simulation-title" hidden>
+                <div class="page-editor-simulation-heading">
+                    <div>
+                        <h3 id="editor-simulation-title" class="h5 mb-1">Simulation du parcours</h3>
+                        <p id="editor-simulation-intro" class="small text-muted mb-0">
+                            Test sans effet réel : aucune inscription ni impression n’est déclenchée.
+                        </p>
+                    </div>
+                    <button id="editor-simulation-reset" class="btn btn-sm btn-outline-primary" type="button">
+                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Recommencer
+                    </button>
+                </div>
+                <div class="page-editor-simulation-body">
+                    <div class="page-editor-simulation-current">
+                        <p id="editor-simulation-kicker" class="small text-uppercase text-muted mb-1"></p>
+                        <div class="d-flex align-items-start gap-2">
+                            <i id="editor-simulation-icon" class="bi bi-window page-editor-simulation-icon" aria-hidden="true"></i>
+                            <div>
+                                <h4 id="editor-simulation-step" class="h6 mb-1"></h4>
+                                <p id="editor-simulation-role" class="small mb-0"></p>
+                            </div>
+                        </div>
+                        <div id="editor-simulation-result" class="alert alert-success py-2 mt-3 mb-0" role="status" hidden></div>
+                        <div id="editor-simulation-actions" class="page-editor-simulation-actions mt-3"></div>
+                    </div>
+                    <div class="page-editor-simulation-trace">
+                        <h4 class="h6">Chemin testé</h4>
+                        <ol id="editor-simulation-trail" class="page-editor-simulation-trail"></ol>
+                    </div>
+                </div>
+            </section>
             <div id="editor-preview-controls" class="d-flex flex-wrap align-items-end gap-2 mb-2">
                 <div id="editor-scenario-field">
                     <label class="form-label mb-1" for="editor-scenario">Scénario</label>

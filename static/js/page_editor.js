@@ -42,7 +42,15 @@
     const inspectorClose = document.getElementById('editor-inspector-close');
     const inspectorBackdrop = document.getElementById('editor-inspector-backdrop');
     const scenarioField = document.getElementById('editor-scenario-field');
-    const simulationIntro = document.getElementById('editor-simulation-intro');
+    const simulationPanel = document.getElementById('editor-simulation-panel');
+    const simulationReset = document.getElementById('editor-simulation-reset');
+    const simulationKicker = document.getElementById('editor-simulation-kicker');
+    const simulationIcon = document.getElementById('editor-simulation-icon');
+    const simulationStepLabel = document.getElementById('editor-simulation-step');
+    const simulationRole = document.getElementById('editor-simulation-role');
+    const simulationResult = document.getElementById('editor-simulation-result');
+    const simulationActions = document.getElementById('editor-simulation-actions');
+    const simulationTrail = document.getElementById('editor-simulation-trail');
     const compactInspectorMedia = window.matchMedia('(max-width: 1199px)');
 
     // L'aperçu est épinglé sous la barre d'outils : l'offset suit sa hauteur
@@ -84,6 +92,9 @@
     let journeyContextStep = null;
     let editorMode = 'design';
     let inspectorReturnFocus = null;
+    let simulationStepId = null;
+    let simulationHistory = [];
+    let simulationOutcome = null;
     // État ouvert/fermé des sections de l'inspecteur, conservé entre les
     // re-rendus : à chaque modification l'inspecteur est reconstruit et
     // sans cette mémoire les sections retomberaient sur leur état
@@ -221,7 +232,7 @@
     const MODE_HELP = {
         journey: 'Configurez l’ordre, les conditions et les incidents du parcours. Sélectionnez une étape pour afficher ses règles.',
         design: 'Modifiez la disposition, les textes et l’apparence des composants de l’écran courant.',
-        simulation: 'Testez chaque écran en grand. Un clic dans l’aperçu ouvre le composant correspondant dans le mode Design.',
+        simulation: 'Jouez un parcours complet, choisissez ses embranchements et déclenchez les incidents à tester.',
     };
 
     function journeyStepForScenario() {
@@ -287,8 +298,8 @@
         root.dataset.editorMode = editorMode;
         modesNavigation.hidden = !hasJourney;
         componentsPanel.hidden = hasJourney && editorMode !== 'design';
-        scenarioField.hidden = hasJourney && editorMode === 'journey';
-        simulationIntro.hidden = !hasJourney || editorMode !== 'simulation';
+        scenarioField.hidden = hasJourney && editorMode !== 'design';
+        simulationPanel.hidden = !hasJourney || editorMode !== 'simulation';
         modeButtons.forEach(function (button) {
             const active = button.dataset.editorMode === editorMode;
             button.setAttribute('aria-selected', active ? 'true' : 'false');
@@ -327,6 +338,7 @@
             if (context) journeyContextStep = context.id;
             selectedStep = null;
             selectedComponent = null;
+            ensureSimulationState();
         }
 
         editorMode = nextMode;
@@ -399,6 +411,7 @@
             renderPalette();
             renderInspector();
             renderJourney();
+            renderSimulation();
         } finally {
             rendering = false;
         }
@@ -1595,6 +1608,172 @@
 
     function journeyStep(stepId) {
         return journeyAllSteps().find(function (step) { return step.id === stepId; }) || null;
+    }
+
+    function simulationStartStep() {
+        if (!journey) return null;
+        return journey.steps.find(function (step) {
+            return journeyStatus(step).state !== 'hidden';
+        }) || journey.steps[0] || null;
+    }
+
+    function resetSimulation(options) {
+        options = options || {};
+        const previousScenario = scenarioSelect.value;
+        const start = simulationStartStep();
+        simulationStepId = start ? start.id : null;
+        simulationHistory = start ? [{stepId: start.id, label: start.label, via: null}] : [];
+        simulationOutcome = null;
+        if (start) scenarioSelect.value = start.scenario;
+        if (options.render !== false) rerenderAll();
+        if (options.preview !== false) {
+            if (start && previousScenario !== start.scenario) loadPreview();
+            else pushPayloadToPreview();
+        }
+    }
+
+    function ensureSimulationState() {
+        if (!journey || !payload) return;
+        const current = journeyStep(simulationStepId);
+        if (!current || journeyStatus(current).state === 'hidden') {
+            resetSimulation({render: false, preview: false});
+        } else {
+            scenarioSelect.value = current.scenario;
+        }
+    }
+
+    function resolveSimulationTarget(targetId) {
+        const requested = journeyStep(targetId);
+        if (!requested) return {step: null, skipped: []};
+        if (requested.parent || journeyStatus(requested).state !== 'hidden') {
+            return {step: requested, skipped: []};
+        }
+        const index = journey.steps.findIndex(function (step) { return step.id === requested.id; });
+        const skipped = [];
+        for (let cursor = index; cursor < journey.steps.length; cursor += 1) {
+            const candidate = journey.steps[cursor];
+            if (journeyStatus(candidate).state !== 'hidden') return {step: candidate, skipped: skipped};
+            skipped.push(candidate.label);
+        }
+        return {step: null, skipped: skipped};
+    }
+
+    function runSimulationAction(action) {
+        const previousScenario = scenarioSelect.value;
+        if (action.finish) {
+            simulationOutcome = journeyText(action.finish);
+        } else {
+            const resolved = resolveSimulationTarget(action.target);
+            if (resolved.step) {
+                simulationStepId = resolved.step.id;
+                scenarioSelect.value = resolved.step.scenario;
+                simulationOutcome = null;
+                let via = journeyText(action.label);
+                if (resolved.skipped.length) {
+                    via += ' · sans passer par : ' + resolved.skipped.join(', ');
+                }
+                simulationHistory.push({stepId: resolved.step.id, label: resolved.step.label, via: via});
+            } else {
+                const home = journeyStep('home') || simulationStartStep();
+                simulationStepId = home ? home.id : null;
+                if (home) {
+                    scenarioSelect.value = home.scenario;
+                    simulationHistory.push({stepId: home.id, label: 'Retour à l’accueil', via: journeyText(action.label)});
+                }
+                if (resolved.skipped.length === 1) {
+                    simulationOutcome = 'Parcours terminé : l’écran « ' + resolved.skipped[0]
+                        + ' » est masqué, retour immédiat à l’accueil.';
+                } else if (resolved.skipped.length > 1) {
+                    simulationOutcome = 'Parcours terminé : les écrans « '
+                        + resolved.skipped.join(' », « ') + ' » sont masqués, retour immédiat à l’accueil.';
+                } else {
+                    simulationOutcome = 'Parcours terminé.';
+                }
+            }
+        }
+        rerenderAll();
+        if (scenarioSelect.value !== previousScenario) loadPreview();
+        else pushPayloadToPreview();
+    }
+
+    function simulationActionButton(action) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        const tone = action.tone || 'primary';
+        button.className = 'btn ' + (tone === 'primary' ? 'btn-primary' : 'btn-outline-' + tone);
+        button.dataset.simulationAction = action.id;
+        if (action.icon) {
+            const icon = document.createElement('i');
+            icon.className = 'bi ' + action.icon;
+            icon.setAttribute('aria-hidden', 'true');
+            button.appendChild(icon);
+        }
+        button.appendChild(document.createTextNode((action.icon ? ' ' : '') + journeyText(action.label)));
+        button.addEventListener('click', function () { runSimulationAction(action); });
+        return button;
+    }
+
+    function renderSimulation() {
+        if (!simulationPanel) return;
+        simulationPanel.hidden = !journey || editorMode !== 'simulation';
+        if (simulationPanel.hidden || !payload) return;
+        ensureSimulationState();
+        const step = journeyStep(simulationStepId);
+        if (!step) return;
+
+        const mainIndex = journey.steps.findIndex(function (candidate) { return candidate.id === step.id; });
+        simulationKicker.textContent = step.parent
+            ? 'Incident ou écran annexe'
+            : 'Étape ' + (mainIndex + 1) + ' sur ' + journey.steps.length;
+        simulationIcon.className = 'bi ' + (step.icon || 'bi-window') + ' page-editor-simulation-icon';
+        simulationStepLabel.textContent = step.label;
+        simulationRole.textContent = step.role || '';
+        simulationResult.hidden = !simulationOutcome;
+        simulationResult.textContent = simulationOutcome || '';
+
+        simulationTrail.replaceChildren();
+        simulationHistory.forEach(function (entry, index) {
+            const item = document.createElement('li');
+            item.className = 'page-editor-simulation-trail-item';
+            if (index === simulationHistory.length - 1) item.setAttribute('aria-current', 'step');
+            const marker = document.createElement('span');
+            marker.className = 'page-editor-simulation-trail-marker';
+            marker.textContent = String(index + 1);
+            const content = document.createElement('span');
+            const label = document.createElement('strong');
+            label.textContent = entry.label;
+            content.appendChild(label);
+            if (entry.via) {
+                const via = document.createElement('small');
+                via.textContent = entry.via;
+                content.appendChild(via);
+            }
+            item.append(marker, content);
+            simulationTrail.appendChild(item);
+        });
+
+        simulationActions.replaceChildren();
+        if (simulationOutcome) {
+            const restart = document.createElement('button');
+            restart.type = 'button';
+            restart.className = 'btn btn-primary';
+            restart.innerHTML = '<i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Recommencer un test';
+            restart.addEventListener('click', function () { resetSimulation(); });
+            simulationActions.appendChild(restart);
+            return;
+        }
+        const availableActions = (step.actions || []).filter(function (action) {
+            return journeyCondition(action.when);
+        });
+        availableActions.forEach(function (action) {
+            simulationActions.appendChild(simulationActionButton(action));
+        });
+        if (!availableActions.length) {
+            const empty = document.createElement('p');
+            empty.className = 'alert alert-warning py-2 mb-0';
+            empty.textContent = 'Aucune action n’est disponible avec les réglages actuels.';
+            simulationActions.appendChild(empty);
+        }
     }
 
     const JOURNEY_STATE_LABELS = {
@@ -3482,6 +3661,7 @@
             setEditorMode(modeButtons[targetIndex].dataset.editorMode, {focus: true});
         });
     });
+    simulationReset.addEventListener('click', function () { resetSimulation(); });
     inspectorToggle.addEventListener('click', function () { openInspectorDrawer(inspectorToggle); });
     inspectorClose.addEventListener('click', function () { closeInspectorDrawer(true); });
     inspectorBackdrop.addEventListener('click', function () { closeInspectorDrawer(true); });
