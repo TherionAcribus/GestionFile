@@ -303,6 +303,20 @@
     } else {
       throughput.textContent = ""; throughput.classList.add("d-none");
     }
+    // Bilan de fin de test : patients confirmés par le serveur comparés à la base.
+    const reliability = $("business-reliability");
+    if (business.reliability_detail) {
+      const reliabilityTone = ["success", "warning", "danger"].includes(business.reliability_tone) ?
+        business.reliability_tone : "secondary";
+      $("business-reliability-badge").className = `badge me-1 text-bg-${reliabilityTone}`;
+      $("business-reliability-badge").textContent =
+        reliabilityTone === "danger" ? "Données perdues" :
+        reliabilityTone === "success" ? "Données intactes" : "Données à vérifier";
+      $("business-reliability-detail").textContent = business.reliability_detail;
+      reliability.classList.remove("d-none");
+    } else {
+      $("business-reliability-detail").textContent = ""; reliability.classList.add("d-none");
+    }
     $("business-caveat").textContent = business.caveat || "";
     $("result-requests").textContent = number(summary.total_requests, 0);
     $("result-errors").textContent = `${number(summary.total_errors, 0)} (${number(summary.error_rate, 1)} %)`;

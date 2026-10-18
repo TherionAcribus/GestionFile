@@ -12,6 +12,7 @@ from sqlalchemy import or_
 
 from config import time_tz
 from models import db, Patient, StressTestLease, StressTestRun, StressTestSample
+from stress_reconciliation import reconciliation_message
 
 
 ACTIVE_STATES = frozenset({'queued', 'preparing', 'running', 'stopping'})
@@ -46,6 +47,10 @@ def run_result_message(run):
     """Explication courte, directement affichable, du resultat d'un test."""
     if run.stop_reason:
         return STOP_REASON_LABELS.get(run.stop_reason, run.stop_reason)
+    reconciliation = (run.summary or {}).get('reconciliation') or {}
+    if run.state in TERMINAL_STATES and reconciliation.get('lost'):
+        return ("Des patients de test confirmés par le serveur ont été perdus "
+                'ou sont revenus à un état antérieur.')
     if run.state == 'completed':
         if run.verdict == 'successful':
             return 'Le test est allé au terme prévu sans dépasser les seuils.'
@@ -116,10 +121,19 @@ def business_interpretation(run, reference_patients=10):
             journeys_per_minute = completed_journeys / duration * 60
 
     partial = run.state == 'aborted' and run.stop_reason == 'user_stop'
+    reliability_tone, reliability_detail = reconciliation_message(
+        summary.get('reconciliation'))
     if run.state in ACTIVE_STATES:
         grade, tone = 'Test en cours', 'info'
         headline = 'Les résultats sont encore provisoires.'
         conclusion = 'Attendez la fin du test avant d’évaluer la capacité.'
+    elif reliability_tone == 'danger':
+        # Prime sur tout le reste, y compris un arret manuel : une ecriture
+        # confirmee puis perdue n'est jamais un « resultat partiel ».
+        grade, tone = 'Données perdues', 'danger'
+        headline = (f'Le serveur a perdu des données confirmées sous la charge '
+                    f'de {load_label}.')
+        conclusion = reliability_detail
     elif partial:
         grade, tone = 'Résultat partiel', 'warning'
         headline = "Aucun problème majeur détecté avant l'arrêt manuel."
@@ -170,6 +184,8 @@ def business_interpretation(run, reference_patients=10):
         'capacity_validated': bool(
             run.state == 'completed' and run.verdict == 'successful'),
         'partial': partial, 'caveat': caveat,
+        'reliability_tone': reliability_tone,
+        'reliability_detail': reliability_detail,
     }
 
 PROFILES = {

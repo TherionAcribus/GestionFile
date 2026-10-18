@@ -259,6 +259,25 @@ def _csv_response(run):
                          business.get('journeys_per_minute', '')])
     writer.writerow(['Precaution de lecture', business.get('caveat', '')])
     writer.writerow([])
+    reconciliation = summary.get('reconciliation')
+    if reconciliation:
+        writer.writerow(['FIABILITE DES DONNEES'])
+        writer.writerow(['Bilan', business.get('reliability_detail', '')])
+        writer.writerow(['Patients confirmes par le serveur',
+                         reconciliation.get('acknowledged_patients', '')])
+        writer.writerow(['Patients relus en base',
+                         reconciliation.get('stored_patients', '')])
+        writer.writerow(['Dans l etat attendu', reconciliation.get('consistent', '')])
+        writer.writerow(['Absents de la base', reconciliation.get('missing', '')])
+        writer.writerow(['Revenus a un etat anterieur',
+                         reconciliation.get('regressed', '')])
+        writer.writerow(['Action appliquee sans reponse recue',
+                         reconciliation.get('ahead', '')])
+        writer.writerow(['Creation appliquee sans reponse recue',
+                         reconciliation.get('unacknowledged', '')])
+        writer.writerow(['Creations refusees ou en erreur',
+                         reconciliation.get('create_failures', '')])
+        writer.writerow([])
     writer.writerow(['RESUME'])
     writer.writerow(['Requetes totales', summary.get('total_requests', '')])
     writer.writerow(['Requetes reussies', summary.get('successful_requests', '')])

@@ -24,10 +24,11 @@ from locust import HttpUser, between, task
 from locust.env import Environment
 
 from config import Config  # noqa: E402
-from models import StressTestRun, StressTestSample, db  # noqa: E402
+from models import Patient, StressTestRun, StressTestSample, db  # noqa: E402
 from stress_auth import RUNNER_SECRET_HEADER, signed_headers  # noqa: E402
 from stress_fixtures import (cleanup_all_incomplete_runs, cleanup_fixtures,
                              prepare_fixtures)  # noqa: E402
+from stress_reconciliation import JourneyLedger, reconcile  # noqa: E402
 from stress_testing import (claim_lease, heartbeat_lease,
                             mark_stale_runs_interrupted,
                             purge_old_runs, release_lease, StopThresholds,
@@ -46,6 +47,10 @@ db.init_app(app)
 RUNNER_ID = f'{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}'
 SECRET = os.getenv('STRESS_RUNNER_SECRET', '')
 STOP_DRAIN_SECONDS = 5
+JOURNEY_SCENARIOS = frozenset({'kiosk', 'queue_counter', 'mixed'})
+# Etats confirmes par le serveur pendant le test courant, compares a la base
+# en fin de test (voir stress_reconciliation).
+LEDGER = JourneyLedger()
 
 
 class GestionFileUser(HttpUser):
@@ -82,12 +87,22 @@ class GestionFileUser(HttpUser):
         with self.client.post(path, name='/stress/journey/create', headers=headers,
                               json={'action': 'create'}, catch_response=True) as response:
             if response.status_code != 201:
+                LEDGER.create_failed()
                 response.failure(f'creation synthetic patient: HTTP {response.status_code}')
                 return
-            patient_id = response.json().get('patient_id')
+            body = _json_body(response)
+            patient_id = body.get('patient_id')
+            if patient_id is None:
+                LEDGER.create_failed()
+                response.failure('creation synthetic patient: identifiant absent')
+                return
+            LEDGER.created(patient_id, body.get('status'))
         for action in ('call', 'serve', 'complete'):
-            self.client.post(path, name=f'/stress/journey/{action}', headers=headers,
-                             json={'action': action, 'patient_id': patient_id})
+            response = self.client.post(
+                path, name=f'/stress/journey/{action}', headers=headers,
+                json={'action': action, 'patient_id': patient_id})
+            if response.status_code == 200:
+                LEDGER.acknowledge(patient_id, _json_body(response).get('status'))
 
     def realtime(self):
         handshake = f'/socket.io/?EIO=4&transport=polling&t={time.time_ns()}'
@@ -124,6 +139,31 @@ class GestionFileUser(HttpUser):
                 self.journey()
             else:
                 self.realtime()
+
+
+def _json_body(response):
+    try:
+        body = response.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _reconcile_journeys(run):
+    """Compare les etats confirmes pendant le test aux lignes en base.
+
+    Appele apres l'arret des utilisateurs et avant le nettoyage des fixtures.
+    """
+    if run.mode != 'staging' or run.scenario not in JOURNEY_SCENARIOS:
+        return None
+    # Termine la transaction en cours : sous REPEATABLE READ (MySQL), une
+    # lecture dans une transaction ouverte plus tot ne verrait pas les
+    # derniers commits du serveur web.
+    db.session.commit()
+    stored = dict(db.session.query(Patient.id, Patient.status).filter(
+        Patient.journey_id.like(f'stress:{run.uuid}:%')).all())
+    return reconcile(LEDGER.acknowledged, stored,
+                     create_failures=LEDGER.create_failures)
 
 
 def _internal_metrics(target):
@@ -220,8 +260,15 @@ def _final_summary(run, environment, samples):
         'max_memory_bytes': max((s.web_memory_bytes or 0 for s in samples), default=0),
         'endpoints': _endpoint_summary(environment),
     }
+    reconciliation = _reconcile_journeys(run)
+    if reconciliation is not None:
+        summary['reconciliation'] = reconciliation
     p95 = summary['p95_ms'] or 0
-    if error_rate > 5 or p95 > 3000:
+    # Une ecriture confirmee puis perdue est plus grave qu'une lenteur : le
+    # test echoue quel que soit le niveau de performance.
+    if reconciliation and reconciliation['lost']:
+        verdict = 'failed'
+    elif error_rate > 5 or p95 > 3000:
         verdict = 'failed'
     elif error_rate > 1 or p95 > 1500:
         verdict = 'degraded'
@@ -238,6 +285,7 @@ def execute_run(run):
     GestionFileUser.scenario = run.scenario
     GestionFileUser.run_uuid = run.uuid
     GestionFileUser.runner_secret = SECRET
+    LEDGER.reset()
     environment = Environment(user_classes=[GestionFileUser])
     runner = environment.create_local_runner()
     hard_stop = threading.Timer(
