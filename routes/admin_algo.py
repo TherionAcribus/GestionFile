@@ -3,7 +3,8 @@ from datetime import datetime
 
 import config_sync
 from flask import Blueprint, render_template, request, current_app as app
-from models import AlgoRule, Activity, ConfigOption, Patient, db, bump_queue_revision, DAY_ABBREVIATIONS, DAY_NAMES_FR
+from communication import communikation
+from models import AlgoRule, Activity, ConfigOption, Patient, db, DAY_ABBREVIATIONS, DAY_NAMES_FR
 from algo_explain import STATE_ACTIVE, rule_state, summarize_rule
 from config import time_tz
 from routes.admin_security import require_permission
@@ -191,7 +192,7 @@ def toggle_activation():
         return display_toast(success=False, message="La mise à jour a échoué.")
 
     app.config['ALGO_IS_ACTIVATED'] = is_activated
-    bump_queue_revision()  # l'activation change l'ordre affiché : invalide le cache
+    _broadcast_queue_order_changed()  # l'activation change l'ordre affiché : invalide le cache
     record_audit(ACTION_UPDATE, "config", target_id="algo_activate",
                  outcome=OUTCOME_SUCCESS, details=f"value={is_activated}")
 
@@ -232,6 +233,22 @@ def add_rule_form():
                            days=DAY_NAMES_FR.items())
 
 
+def _broadcast_queue_order_changed():
+    """L'ordre de la file depend de l'algorithme : diffuse la liste a jour.
+
+    Auparavant, un simple ``bump_queue_revision()`` invalidait le cache
+    « prochains patients » SANS rien diffuser : la diffusion suivante arrivait
+    avec deux crans d'avance et l'App comptoir y voyait un evenement manque
+    (faux « trou de revision » et resynchronisation inutile). ``communikation``
+    incremente la revision ET envoie la liste, dans l'ordre que l'algorithme
+    vient de changer.
+    """
+    try:
+        communikation("update_patient")
+    except Exception:
+        app.logger.exception("Diffusion de la file apres changement d'algorithme impossible")
+
+
 # enregistre la regledans la Bdd
 @admin_algo_bp.route('/admin/algo/add_new_rule', methods=['POST'])
 @require_permission('algo')
@@ -247,7 +264,7 @@ def add_new_rule():
         db.session.commit()
         # L'ordre affiché dépend des règles : invalide le cache « prochains
         # patients » immédiatement plutôt que d'attendre la prochaine mutation.
-        bump_queue_revision()
+        _broadcast_queue_order_changed()
 
         record_audit(ACTION_CREATE, "algo_rule", target_id=new_rule.id,
                      outcome=OUTCOME_SUCCESS, details=f"name={new_rule.name}")
@@ -286,7 +303,7 @@ def delete_algo(algo_id):
 
         db.session.delete(rule)
         db.session.commit()
-        bump_queue_revision()  # invalide le cache « prochains patients »
+        _broadcast_queue_order_changed()  # invalide le cache « prochains patients »
 
         record_audit(ACTION_DELETE, "algo_rule", target_id=algo_id,
                      outcome=OUTCOME_SUCCESS)
@@ -324,7 +341,7 @@ def update_algo_rule(rule_id):
 
             db.session.commit()
             # Les règles modifiées changent l'ordre affiché : invalide le cache.
-            bump_queue_revision()
+            _broadcast_queue_order_changed()
             record_audit(ACTION_UPDATE, "algo_rule", target_id=rule_id,
                          outcome=OUTCOME_SUCCESS, details=f"name={rule.name}")
 

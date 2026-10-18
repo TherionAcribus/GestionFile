@@ -462,6 +462,70 @@
     } catch (exception) { error(exception.message); }
   });
 
+  // --- Temps réel des comptoirs en service (rapports des App comptoir) ---
+  const HEALTH_STATUS = {
+    ok: ["success", "Normal"], watch: ["warning", "À surveiller"], issue: ["danger", "Pertes répétées"]
+  };
+
+  function cell(text, className) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (className) td.className = className;
+    return td;
+  }
+
+  function hours(value) {
+    if (value == null) return "—";
+    return value < 1 ? `${number(value * 60, 0)} min` : `${number(value, 1)} h`;
+  }
+
+  async function loadRealtimeHealth() {
+    const days = $("realtime-health-days").value;
+    const body = $("realtime-health-body");
+    const message = $("realtime-health-message");
+    try {
+      const data = await api(`/admin/performance/api/realtime_health?days=${encodeURIComponent(days)}`);
+      const tone = ["success", "warning", "danger", "secondary"].includes(data.tone) ? data.tone : "secondary";
+      message.className = `alert alert-${tone} mb-3`;
+      message.textContent = data.message || "";
+      const rows = (data.counters || []).map((counter) => {
+        const tr = document.createElement("tr");
+        const [statusTone, statusLabel] = HEALTH_STATUS[counter.status] || ["secondary", counter.status];
+        const name = cell(counter.counter_name || `Comptoir n°${counter.counter_id}`);
+        if (counter.app_version) name.title = `App ${counter.app_version}`;
+        const status = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = `badge text-bg-${statusTone}`;
+        badge.textContent = statusLabel;
+        status.appendChild(badge);
+        tr.append(name, status,
+          cell(number(counter.events, 0)),
+          cell(`${number(counter.missed_events, 0)} (${number(counter.loss_percent, 2)} %)`,
+            counter.missed_events ? "text-danger fw-semibold" : ""),
+          cell(counter.gaps_per_hour == null ? "—" : number(counter.gaps_per_hour, 2)),
+          cell(number(counter.reconnect_gaps, 0)),
+          cell(number(counter.stale_events, 0)),
+          cell(number(counter.disconnects, 0)),
+          cell(hours(counter.connected_hours)),
+          cell(counter.last_report_at ? new Date(counter.last_report_at).toLocaleString("fr-FR") : "—"));
+        return tr;
+      });
+      if (!rows.length) {
+        const tr = document.createElement("tr");
+        const td = cell("Aucun rapport sur la période.", "text-muted");
+        td.colSpan = 10; tr.appendChild(td); rows.push(tr);
+      }
+      body.replaceChildren(...rows);
+    } catch (exception) {
+      message.className = "alert alert-danger mb-3";
+      message.textContent = `Mesures des comptoirs indisponibles : ${exception.message}`;
+    }
+  }
+
+  $("realtime-health-days").addEventListener("change", loadRealtimeHealth);
+  $("realtime-health-refresh").addEventListener("click", loadRealtimeHealth);
+  loadRealtimeHealth();
+
   ["profile", "scenario", "users", "spawn-rate", "duration"].forEach((id) =>
     $(id).addEventListener("change", updateEstimate));
   $("confirmation").addEventListener("input", updateLaunch);

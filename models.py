@@ -1488,6 +1488,36 @@ class StressTestSample(db.Model):
     )
 
 
+class CounterRealtimeHealth(db.Model):
+    """Sante du temps reel observee par une App comptoir, agregee par heure.
+
+    Une ligne au plus par comptoir et par heure (heure locale, naive). Les
+    App envoient leurs compteurs toutes les 5 minutes ; voir
+    counter_realtime_health pour la signification de chaque champ.
+    """
+
+    __tablename__ = 'counter_realtime_health'
+    id = db.Column(db.Integer, primary_key=True)
+    counter_id = db.Column(db.Integer, db.ForeignKey(
+        'counter.id', name='fk_counter_rt_health_counter', ondelete='CASCADE'),
+        nullable=False)
+    hour = db.Column(db.DateTime, nullable=False, index=True)
+    events = db.Column(db.Integer, nullable=False, default=0)
+    gaps = db.Column(db.Integer, nullable=False, default=0)
+    missed_events = db.Column(db.Integer, nullable=False, default=0)
+    reconnect_gaps = db.Column(db.Integer, nullable=False, default=0)
+    stale_events = db.Column(db.Integer, nullable=False, default=0)
+    disconnects = db.Column(db.Integer, nullable=False, default=0)
+    connected_seconds = db.Column(db.Integer, nullable=False, default=0)
+    reports = db.Column(db.Integer, nullable=False, default=0)
+    app_version = db.Column(db.String(40), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('counter_id', 'hour', name='uq_counter_rt_health_hour'),
+    )
+
+
 class StressTestLease(db.Model):
     """Bail singleton : un seul runner et au plus un test actif."""
 

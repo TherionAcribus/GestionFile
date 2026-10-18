@@ -168,6 +168,34 @@
       </div>
     </div>
   </section>
+
+  <section class="card shadow-sm mt-4" id="realtime-health-section" aria-labelledby="realtime-health-title">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <h2 class="h5 mb-0" id="realtime-health-title">Temps réel des comptoirs en service</h2>
+        <small class="text-muted">Mesuré en continu par les App comptoir, hors test de charge.</small>
+      </div>
+      <div class="d-flex gap-2 align-items-center">
+        <label class="form-label mb-0 small" for="realtime-health-days">Période</label>
+        <select class="form-select form-select-sm w-auto" id="realtime-health-days">
+          <option value="1">24 heures</option>
+          <option value="7">7 jours</option>
+          <option value="30">30 jours</option>
+        </select>
+        <button class="btn btn-sm btn-outline-secondary" id="realtime-health-refresh" type="button" title="Actualiser" aria-label="Actualiser les mesures des comptoirs"><i class="bi bi-arrow-clockwise"></i></button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-secondary mb-3" id="realtime-health-message" role="status">Chargement…</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead><tr><th>Comptoir</th><th>État</th><th>Événements reçus</th><th>Perdus en ligne</th><th>Trous / heure connectée</th><th>Après reconnexion</th><th>Doublons ou désordre</th><th>Coupures</th><th>Temps connecté</th><th>Dernier rapport</th></tr></thead>
+          <tbody id="realtime-health-body"></tbody>
+        </table>
+      </div>
+      <p class="small text-muted mb-0">« Perdus en ligne » : événements manqués alors que la connexion était établie (rattrapés automatiquement par une resynchronisation). « Après reconnexion » : trous attendus, expliqués par une coupure.</p>
+    </div>
+  </section>
 </div>
 {% endblock %}
 

@@ -12,7 +12,9 @@ from queue_explain import TERMINAL_STATUSES
 from services import calling_service, call_auto_validation
 from services.queue_service import record_patient_step
 from transactions import atomic
-from auth_utils import require_app_token_or_login, require_counter_access
+from auth_utils import require_app_token, require_app_token_or_login, require_counter_access
+from counter_realtime_health import ReportError, parse_report
+from services import counter_realtime_health_service
 from routes.admin_security import require_permission
 
 counter_bp = Blueprint('counter', __name__)
@@ -213,6 +215,25 @@ def app_is_patient_on_counter(counter_id):
         return jsonify(patient.to_dict()), 200
     else:
         return jsonify({"id": None, "counter_id": counter_id}), 200   
+
+
+@counter_bp.route('/api/counter/<int:counter_id>/realtime_health', methods=['POST'])
+@require_app_token
+def api_counter_realtime_health(counter_id):
+    """ Rapport périodique de l'App comptoir sur la livraison temps réel :
+    événements reçus, trous de révision, coupures, temps connecté (voir
+    counter_realtime_health). Réservé au jeton applicatif : une session
+    navigateur ne doit pas pouvoir alimenter ces mesures. """
+    try:
+        # L'App envoie ses POST en formulaire (comme la messagerie) ; le JSON
+        # reste accepté pour les autres clients.
+        report = parse_report(request.get_json(silent=True)
+                              or request.form.to_dict())
+    except ReportError as exc:
+        return jsonify({"error": exc.code}), 400
+    if not counter_realtime_health_service.record_report(counter_id, report):
+        return jsonify({"error": "unknown_counter"}), 404
+    return jsonify({"status": "recorded"})
 
 
 @counter_bp.route('/api/counter/<int:counter_id>/state', methods=['GET'])

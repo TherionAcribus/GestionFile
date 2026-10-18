@@ -21,6 +21,8 @@ from routes.admin_security import require_permission, require_permission_api
 from stress_auth import RUNNER_SECRET_HEADER, runner_secret_valid
 from stress_fixtures import (cleanup_fixtures, create_synthetic_patient,
                              prepare_fixtures)
+from counter_realtime_health import normalize_period, summary_message
+from services import counter_realtime_health_service
 from stress_realtime import PROBE_EVENT, PROBE_STREAM, build_probe
 from stress_testing import (ACTIVE_STATES, PROFILES, SCENARIOS,
                             StressValidationError, application_version,
@@ -121,6 +123,16 @@ def capabilities():
                    launch_allowed=enabled and mode != 'disabled',
                    same_host_warning=True,
                    confirmation='LANCER LE TEST')
+
+
+@admin_performance_bp.route('/admin/performance/api/realtime_health')
+@require_permission_api('performance')
+def realtime_health():
+    """Santé du temps réel vue par les comptoirs en service (production)."""
+    days = normalize_period(request.args.get('days'))
+    summary = counter_realtime_health_service.load_summary(days)
+    tone, message = summary_message(summary, days)
+    return jsonify(days=days, tone=tone, message=message, **summary)
 
 
 @admin_performance_bp.route('/admin/performance/api/runs', methods=['GET'])

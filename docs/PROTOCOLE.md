@@ -23,6 +23,19 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 - `revision` : entier monotone de `queue_revision`, présent uniquement sur les
   évènements de mutation de la file (`update`, `update_patient_list`). Sert à
   écarter les doublons et à détecter un trou → resynchronisation.
+  **Invariant** : seule `communikation("update_patient")` incrémente la
+  révision, et elle diffuse aussitôt. Un incrément sans diffusion ferait voir
+  aux comptoirs un faux trou (verrouillé par
+  `tests/test_counter_realtime_health.py`).
+
+## Mesure en service
+
+Chaque App comptoir compte ce qu'elle observe — évènements reçus, trous de
+révision (connexion établie, ou juste après une reconnexion), doublons, coupures,
+temps connecté — et l'envoie toutes les 5 minutes en
+`POST /api/counter/<id>/realtime_health` (jeton applicatif). Le serveur agrège
+par comptoir et par heure (30 jours) ; la page **Tests de performance** affiche
+la section « Temps réel des comptoirs en service ».
 
 ## Namespaces
 
