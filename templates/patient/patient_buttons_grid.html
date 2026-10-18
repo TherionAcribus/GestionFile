@@ -1,13 +1,23 @@
 {% if buttons|length > max_length %}
     {% set half_length = (buttons|length // 2) + (buttons|length % 2) %}
+    {% set second_row = buttons|length - half_length %}
+    {# Grille en double résolution : 2 colonnes par bouton de la rangée la
+       plus longue, chaque cellule en occupe 2. La seconde rangée décale
+       ses cellules d'une demi-colonne quand elle compte moins de boutons :
+       les boutons se placent en quinconce entre ceux du dessus (dé à 5)
+       plutôt que tassés au centre ; à nombre égal elles restent alignées. #}
+    {% set grid_columns = 2 * half_length %}
+    {% set second_row_offset = half_length - second_row %}
     <div class="outer-grid-container">
-        <div class="inner-grid-container" style="grid-template-columns: repeat({{ half_length }}, 1fr);">
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ grid_columns }}, 1fr);">
             {% for button in buttons[:half_length] %}
+                {% set grid_pos = "grid-column: " ~ (2 * loop.index - 1) ~ " / span 2" %}
                 {% include "patient/button_by_shape.html" %}
             {% endfor %}
         </div>
-        <div class="inner-grid-container" style="grid-template-columns: repeat({{ buttons|length - half_length }}, 1fr);">
+        <div class="inner-grid-container" style="grid-template-columns: repeat({{ grid_columns }}, 1fr);">
             {% for button in buttons[half_length:] %}
+                {% set grid_pos = "grid-column: " ~ (second_row_offset + 2 * loop.index - 1) ~ " / span 2" %}
                 {% include "patient/button_by_shape.html" %}
             {% endfor %}
         </div>

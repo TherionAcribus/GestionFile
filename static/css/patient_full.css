@@ -23,6 +23,12 @@
 
 .inner-grid-container {
     display: grid;
+    /* Pleine largeur : sans cela justify-items:center du conteneur
+       dimensionnait la rangée en fit-content — colonnes réduites au
+       contenu, boutons tassés au centre (libellés courts) et colonnes
+       de largeurs différentes entre les deux rangées (désalignement). */
+    justify-self: stretch;
+    width: 100%;
     grid-auto-rows: minmax(0, 1fr);
     /* Espace latéral généreux entre cellules : les cercles ne doivent pas
        se toucher visuellement quand les libellés sont courts. */

@@ -365,7 +365,10 @@ html, body {
    manque de hauteur — contrairement à un padding qui rognait le cercle. */
 .div_bloc_activity.img_above::before {
     content: "";
-    flex: 0 10 calc(var(--circle_button_image_size) * 0.4);
+    /* Réserve exactement le débordement de l'image (translateY -25%) :
+       plus et il crée du vide en haut de cellule, moins et l'image est
+       rognée au bord de la zone quand la place manque. */
+    flex: 0 10 calc(var(--circle_button_image_size) * 0.25);
     min-height: 0;
 }
 
@@ -426,6 +429,13 @@ html, body {
 .div_bloc_activity > .div_text_button {
     align-self: stretch;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    /* Le texte est centré dans l'emplacement réservé : pour un libellé
+       d'une ligne, l'espace inutilisé se répartit de part et d'autre au
+       lieu de s'accumuler sous le texte — les marges optiques en haut
+       (débordement de l'image) et en bas de cellule restent homogènes. */
+    justify-content: center;
     line-height: 1.2;
     margin-top: 0.4em;
     min-height: 2.8em;

@@ -10,6 +10,7 @@
    identique partout et les cercles d'une rangée restent alignés. #}
 {% set image_above = circle_image_above is not defined or circle_image_above is not sameas(false) %}
 <div class="grid-item div_bloc_activity {% if image_above %} img_above {% endif %} {% if is_empty_parent %} div_button_disabled {% endif %}" id="{{ button.activity.name | replace(' ', '_') }}{% if preview_variant is defined %}_circle{% endif %}"
+                {% if grid_pos is defined %}style="{{ grid_pos }}"{% endif %}
                 data-config-bool-class="page_patient_circle_image_above:img_above"
                 {% if preview_is_inactive %}data-preview-inactive-button data-config-bool="page_patient_disable_button" {% if not preview_show_inactive %}data-config-hidden{% endif %}{% endif %}
                 {% if not is_empty_parent %}

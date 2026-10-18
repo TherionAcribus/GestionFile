@@ -1660,6 +1660,95 @@ def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app):
         server.server_close()
 
 
+def _measure_circle_rows(editor_app, labels):
+    """Ouvre l'aperçu « Accueil » avec des boutons ronds ``labels`` et
+    renvoie, par rangée de la variante cercle, les centres horizontaux
+    des cercles. Lance un serveur éphémère et Playwright."""
+    from threading import Thread
+
+    from werkzeug.serving import make_server
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "circle"
+        activity = Activity(name="Accueil quinconce", letter="Q")
+        db.session.add(activity)
+        db.session.add_all([
+            Button(
+                label=label, activity=activity,
+                is_present=True, is_active=True,
+                shape="circle", sort_order=index,
+            )
+            for index, label in enumerate(labels, start=1)
+        ])
+        db.session.commit()
+    client = authenticated_client(editor_app)
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with playwright.sync_playwright() as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1280, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                page.goto(f"{url}/admin/page-editor/patient")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+
+                page.locator("#editor-scenario").select_option("home")
+                rows = page.frame_locator("#editor-preview").locator(
+                    ".page-editor-button-shape-preview:visible .inner-grid-container"
+                )
+                playwright.expect(rows).to_have_count(2)
+                return rows.evaluate_all("""rows => rows.map(row =>
+                    [...row.querySelectorAll('.div_circle_buttons')].map(
+                        circle => circle.getBoundingClientRect().left
+                                + circle.getBoundingClientRect().width / 2
+                    )
+                )""")
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+@pytest.mark.e2e
+def test_patient_circle_button_equal_rows_stay_aligned(editor_app):
+    """Régression : deux rangées de même longueur partagent les mêmes
+    colonnes — chaque bouton du bas est exactement sous celui du haut
+    (la grille ne doit pas se dimensionner en fit-content)."""
+    centers = _measure_circle_rows(
+        editor_app,
+        ["Ordonnance", "Conseil", "Retrait", "Vaccination", "Test", "Certificat"],
+    )
+    top, bottom = centers
+    assert len(top) == len(bottom) == 3
+    for above, below in zip(top, bottom):
+        assert abs(above - below) <= 2
+
+
+@pytest.mark.e2e
+def test_patient_circle_button_shorter_second_row_staggers(editor_app):
+    """Régression : une seconde rangée plus courte se place en quinconce
+    — chaque bouton du bas centré sous l'espace entre deux boutons du
+    haut — au lieu d'être tassée au centre."""
+    centers = _measure_circle_rows(
+        editor_app,
+        ["Ordonnance", "Conseil", "Retrait", "Vaccination", "Prioritaire"],
+    )
+    top, bottom = centers
+    assert len(top) == 3 and len(bottom) == 2
+    for index, below in enumerate(bottom):
+        midpoint = (top[index] + top[index + 1]) / 2
+        assert abs(below - midpoint) <= 5
+
+
 def test_builtin_theme_snapshots_are_independent():
     from page_editor import builtin_themes
 
