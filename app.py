@@ -124,9 +124,15 @@ def load_configuration(app):
     app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "keep")
     app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", False)
     app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", False)
+    # Mode « ask » sans choix (délai écoulé ou bouton de retour) : « keep »
+    # garde le patient dans la file sans ticket — il a vu son numéro à l'écran
+    # et croit être inscrit ; « cancel » annule l'inscription en attente.
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", "keep")
     # Délai (s) avant retour automatique à l'accueil sur l'écran d'échec en mode
     # 'ask' si le patient ne choisit rien (garde-fou anti-blocage borne). 0 = jamais.
-    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60)
+    # Court : le patient suivant ne doit pas toucher « Réessayer » et
+    # imprimer le ticket du précédent.
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 15)
     # « Impression incertaine » sans réponse : le patient est le plus souvent
     # reparti avec son ticket — il est conservé dans la file par défaut. Délai
     # court : le patient suivant ne doit pas trouver ces boutons (incompris,

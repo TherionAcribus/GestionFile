@@ -595,7 +595,7 @@ def confirm_print():
         'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", False)),
         # Garde-fou anti-blocage : délai (s) avant retour auto à l'accueil si le
         # patient ne choisit rien. 0 = jamais.
-        'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))
+        'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 15))
     }), 200
 
 
@@ -705,9 +705,15 @@ def print_call_staff():
 
 @patient_bp.route('/patient/print_abandon', methods=['POST'])
 def print_abandon():
-    """ Abandon de l'écran d'échec (mode 'ask') : le patient n'a rien choisi et
-    le garde-fou anti-blocage a expiré. On annule l'inscription pending (elle
-    n'entre pas dans la file) avant de renvoyer la borne à l'accueil. Idempotente."""
+    """ Abandon de l'écran d'échec (mode 'ask') : le patient n'a rien choisi
+    (délai écoulé) ou a touché le bouton de retour. Suite donnée selon
+    PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION :
+
+    - « keep » (défaut) : il a vu son numéro et se croit inscrit -> il entre
+      dans la file sans ticket, le comptoir est prévenu ;
+    - « cancel » : l'inscription pending est annulée (n'entre pas en file).
+
+    Idempotente, et exclusive avec un confirm_print concurrent."""
     data = request.get_json(silent=True) or request.form
     print_job_id = data.get('print_job_id')
     if not print_job_id:
@@ -716,6 +722,19 @@ def print_abandon():
     patient = Patient.query.filter_by(print_job_id=print_job_id).first()
     if patient is None:
         return jsonify({'status': 'expired'}), 410
+
+    if app.config.get("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", "keep") == "keep":
+        if _activate_and_notify(patient):
+            try:
+                send_app_notification(origin="printer_error", data={
+                    "message": (f"Patient {patient.call_number} reparti sans choisir après un échec "
+                                "d'impression : il a été ajouté à la file sans ticket."),
+                })
+            except Exception as e:
+                app.logger.error(f"Alerte personnel (abandon conservé) impossible: {e}")
+            return jsonify({'status': 'activated_no_ticket',
+                            'call_number': patient.call_number}), 200
+        return _confirm_print_resolved_response(patient)
 
     # Même libération de journey_id que la branche 'cancel' de confirm_print
     # : le parcours annulé ne doit pas bloquer un nouveau scan du même QR.

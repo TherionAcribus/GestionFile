@@ -203,6 +203,9 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_print_fail_show_retry": ("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", "value_bool"),
     "page_patient_print_fail_show_staff": ("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", "value_bool"),
     "page_patient_print_fail_abandon_timer": ("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", "value_int"),
+    # Mode « Demander » sans choix du patient (délai écoulé ou « Terminer ») :
+    # il a vu son numéro, il est conservé par défaut.
+    "page_patient_print_fail_timeout_action": ("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", "value_str"),
     # Écran « Impression incertaine » : délai sans réponse du patient et suite
     # donnée (le patient est très souvent déjà parti avec son ticket).
     "page_patient_print_uncertain_timer": ("PAGE_PATIENT_PRINT_UNCERTAIN_TIMER", "value_int"),
@@ -444,6 +447,7 @@ _ENUM_VALUES: dict[str, frozenset[str]] = {
     # « received » : ticket présumé reçu (inscription conservée) ; « staff » :
     # l'inscription reste en attente, le personnel vérifie.
     "page_patient_print_uncertain_timeout_action": frozenset({"received", "staff"}),
+    "page_patient_print_fail_timeout_action": frozenset({"keep", "cancel"}),
     # Valeur de synchronisation de l'éditeur visuel. ``mixed`` signifie que le
     # mode avancé conserve des formes différentes bouton par bouton.
     "page_patient_button_shape": frozenset({"mixed", "circle", "square"}),

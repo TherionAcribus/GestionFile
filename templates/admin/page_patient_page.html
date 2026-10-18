@@ -81,6 +81,25 @@
 {{ macros.textbloc_int("page_patient_print_fail_abandon_timer", page_patient_print_fail_abandon_timer,
                 "Mode « Demander » : délai en s avant retour auto à l'accueil si le patient ne choisit rien (0 = jamais)") }}
 
+<div class="mb-3">
+    <label for="page_patient_print_fail_timeout_action" class="form-label">
+        Mode « Demander » : si le patient ne choisit rien (délai écoulé ou bouton de retour)
+    </label>
+    <select id="page_patient_print_fail_timeout_action" class="form-select"
+            hx-post="/admin/update_input"
+            hx-target="#invisible"
+            hx-trigger="change"
+            hx-vals='{"key": "page_patient_print_fail_timeout_action"}'
+            data-param-value="#page_patient_print_fail_timeout_action">
+        <option value="keep" {% if page_patient_print_fail_timeout_action != 'cancel' %}selected{% endif %}>
+            Conserver : il a vu son numéro, il entre dans la file sans ticket (le comptoir est prévenu)
+        </option>
+        <option value="cancel" {% if page_patient_print_fail_timeout_action == 'cancel' %}selected{% endif %}>
+            Annuler l'inscription
+        </option>
+    </select>
+</div>
+
 <h5>Impression incertaine</h5>
 <p class="small text-muted">L'imprimante n'a pas confirmé : le patient indique s'il a reçu son ticket. Beaucoup repartent sans toucher l'écran.</p>
 

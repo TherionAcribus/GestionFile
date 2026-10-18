@@ -220,7 +220,12 @@ def test_staff_button_offered_on_both_print_incident_screens():
 
 @pytest.mark.parametrize(("changes", "warned"), [
     ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": False,
-      "page_patient_print_fail_show_staff": False}, True),
+      "page_patient_print_fail_show_staff": False,
+      "page_patient_print_fail_timeout_action": "cancel"}, True),
+    # « Terminer » conserve le patient : plus de piège.
+    ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": False,
+      "page_patient_print_fail_show_staff": False,
+      "page_patient_print_fail_timeout_action": "keep"}, False),
     ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": True,
       "page_patient_print_fail_show_staff": False}, False),
     ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": False,
@@ -232,10 +237,21 @@ def test_staff_button_offered_on_both_print_incident_screens():
 def test_print_error_warns_when_only_back_button_remains(changes, warned):
     step = next(step for step in iter_steps(PATIENT_JOURNEY) if step["id"] == "print_error")
     config = {**_factory_config(), **changes}
-    active = [w for w in step["warnings"] if evaluate(w["when"], config)]
+    active = [w for w in step["warnings"] if evaluate(w["when"], config)
+              and "Terminer" in w["text"]]
     assert bool(active) is warned
     if warned:
-        assert "Conserver dans la file" in active[0]["text"]
+        assert "Conserver" in active[0]["text"]
+
+
+@pytest.mark.parametrize(("timer", "warned"), [(0, True), (15, False)])
+def test_print_error_warns_when_screen_never_times_out(timer, warned):
+    step = next(step for step in iter_steps(PATIENT_JOURNEY) if step["id"] == "print_error")
+    config = {**_factory_config(), "page_patient_print_fail_behavior": "ask",
+              "page_patient_print_fail_abandon_timer": timer}
+    active = [w for w in step["warnings"] if evaluate(w["when"], config)
+              and "indéfiniment" in w["text"]]
+    assert bool(active) is warned
 
 
 def test_exit_rules_are_complete_and_reference_known_settings():
@@ -265,8 +281,12 @@ def test_exit_rules_are_complete_and_reference_known_settings():
                      "page_patient_print_fail_abandon_timer": 0},
      "Pas de retour automatique"),
     ("print_error", {"page_patient_print_fail_behavior": "ask",
-                     "page_patient_print_fail_abandon_timer": 45},
+                     "page_patient_print_fail_abandon_timer": 45,
+                     "page_patient_print_fail_timeout_action": "cancel"},
      "après 45 s ; l’inscription est annulée"),
+    ("print_error", {"page_patient_print_fail_behavior": "ask",
+                     "page_patient_print_fail_abandon_timer": 15},
+     "après 15 s ; il reste inscrit sans ticket"),
     ("print_error", {"page_patient_print_fail_behavior": "keep", "page_patient_end_timer": 7},
      "après 7 s ; le patient reste inscrit"),
     ("print_error", {"page_patient_print_fail_behavior": "cancel", "page_patient_end_timer": 7},

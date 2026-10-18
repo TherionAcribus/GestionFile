@@ -939,10 +939,12 @@ function handlePrintConfirmation(printData, printJobId, data) {
                 buttons.push({ label: L.call_staff, onClick: function() { clearAbandonTimer(); callStaffFlow(printJobId); } });
             }
             if (buttons.length === 0) {
+                // Le patient a vu son numéro : « Terminer » applique la même
+                // suite que le délai écoulé (conservé ou annulé, réglage
+                // serveur) au lieu de laisser l'inscription expirer.
                 buttons.push({ label: L.back, onClick: function() {
                     clearAbandonTimer();
-                    finishPrintFlow(printJobId);
-                    conclusionTimer().goHome();
+                    abandonFlow(printJobId);
                 } });
             }
             renderPrintOverlay(bigNumberHtml(L.print_failed, data.call_number), buttons);

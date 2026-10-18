@@ -161,6 +161,65 @@ def test_resultat_inconnu_est_propage_et_tranche_par_le_patient():
     assert "goHome" in incertain
 
 
+def test_abandon_par_defaut_conserve_le_patient(client, application, monkeypatch):
+    """Mode « Demander » sans choix (délai écoulé ou « Terminer ») : le
+    patient a vu son numéro, il entre dans la file sans ticket et le
+    comptoir reçoit un message explicite (réglage par défaut « keep »)."""
+    import routes.patient as patient_routes
+
+    application.config.pop("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", None)
+    messages = []
+    monkeypatch.setattr(
+        patient_routes, "send_app_notification",
+        lambda origin, data: messages.append((origin, data)))
+    _pending_patient(application)
+
+    r = client.post("/patient/print_abandon", json={"print_job_id": "job-1"})
+
+    assert r.get_json()["status"] == "activated_no_ticket"
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-1").one().status == "standing"
+    alertes = [data["message"] for origin, data in messages if origin == "printer_error"]
+    assert len(alertes) == 1 and "sans ticket" in alertes[0]
+
+    # Rejeu : idempotent, pas de seconde alerte ni de changement d'état.
+    r = client.post("/patient/print_abandon", json={"print_job_id": "job-1"})
+    assert r.get_json()["status"] == "activated"
+    assert len([1 for origin, _ in messages if origin == "printer_error"]) == 1
+
+
+def test_abandon_en_mode_annuler_annule(client, application):
+    application.config["PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION"] = "cancel"
+    _pending_patient(application)
+
+    r = client.post("/patient/print_abandon", json={"print_job_id": "job-1"})
+
+    assert r.get_json()["status"] == "cancelled"
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-1").one().status == "print_failed"
+
+
+def test_bouton_terminer_applique_la_meme_suite_que_le_delai():
+    """Sans aucun choix proposé, « Terminer » passe par abandonFlow (règle
+    serveur conserver/annuler) au lieu de laisser l'inscription expirer."""
+    corps = _corps_fonction(_lire("static/js/patients.js"), "handlePrintConfirmation")
+    demander = corps[corps.index("case 'ask'"):]
+    bouton = demander[demander.index("buttons.length === 0"):demander.index("renderPrintOverlay")]
+    assert "abandonFlow(printJobId)" in bouton
+    assert "goHome" not in bouton
+
+
+def test_defauts_abandon_courts_et_conservateurs():
+    import json
+
+    source = _lire("app.py")
+    assert 'setdefault("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 15)' in source
+    assert 'setdefault("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", "keep")' in source
+    usine = json.loads(_lire("static/json/default_config.json"))["configurations"]
+    assert usine["page_patient_print_fail_abandon_timer"] == 15
+    assert usine["page_patient_print_fail_timeout_action"] == "keep"
+
+
 def test_abandon_ne_laisse_pas_les_boutons_de_reessai_actifs():
     """Pendant le POST d'abandon, l'écran ne doit plus permettre un clic
     « Réessayer » qui imprimerait un ticket pour une inscription annulée."""
@@ -671,8 +730,9 @@ def test_appel_personnel_sur_inscription_expiree_est_confirme(client, applicatio
 
 
 def test_abandon_puis_succes_tardif_ne_ressuscite_pas(client, application):
-    """Abandon tranché d'abord, succès tardif ensuite : 'cancelled', pas
-    de résurrection — un seul des deux peut gagner."""
+    """Abandon tranché d'abord (mode « Annuler »), succès tardif ensuite :
+    'cancelled', pas de résurrection — un seul des deux peut gagner."""
+    application.config["PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION"] = "cancel"
     _pending_patient(application)
 
     client.post("/patient/print_abandon", json={"print_job_id": "job-1"})

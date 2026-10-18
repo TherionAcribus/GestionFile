@@ -224,14 +224,20 @@ PATIENT_JOURNEY = {
                          "help": "Utile dans une grande officine : le comptoir reçoit une alerte. Dans une petite, l’équipe voit directement le patient. Réglage commun aux écrans « Erreur d’impression » (mode Demander) et « Impression incertaine »."},
                         {"key": "page_patient_print_fail_abandon_timer",
                          "label": "Retour à l’accueil si le patient ne choisit rien (0 = jamais)",
-                         "help": "L’inscription en attente est alors annulée.",
+                         "help": "Gardez-le court (15 s conseillées) : le patient suivant ne doit pas toucher « Réessayer » et imprimer le ticket du précédent.",
+                         "enabled_when": _ASK},
+                        {"key": "page_patient_print_fail_timeout_action",
+                         "label": "Si le patient ne choisit rien",
+                         "help": "Délai écoulé ou bouton « Terminer ». « Conserver » : il a vu son numéro, il entre dans la file sans ticket et le comptoir est prévenu. « Annuler » : l’inscription en attente est annulée.",
                          "enabled_when": _ASK},
                     ],
                     "exit": [
                         {"when": {"all": [_ASK, _is("page_patient_print_fail_abandon_timer", 0)]},
                          "text": "Pas de retour automatique : l’écran attend un choix du patient."},
-                        {"when": _ASK,
+                        {"when": {"all": [_ASK, _is("page_patient_print_fail_timeout_action", "cancel")]},
                          "text": "Sans choix du patient, retour à l’accueil après {=page_patient_print_fail_abandon_timer} s ; l’inscription est annulée."},
+                        {"when": _ASK,
+                         "text": "Sans choix du patient, retour à l’accueil après {=page_patient_print_fail_abandon_timer} s ; il reste inscrit sans ticket et le comptoir est prévenu."},
                         {"when": _is("page_patient_print_fail_behavior", "keep"),
                          "text": "Retour à l’accueil après {=page_patient_end_timer} s ; le patient reste inscrit et sera appelé."},
                         {"text": "Retour à l’accueil après {=page_patient_end_timer} s ; l’inscription est annulée."},
@@ -239,8 +245,11 @@ PATIENT_JOURNEY = {
                     "warnings": [
                         # Seul « Retour » reste : le patient lit son numéro
                         # mais l'inscription en attente n'est jamais activée.
-                        {"when": {"all": [_ASK, _not(_RETRY), _not(_STAFF)]},
-                         "text": "Sans « Réessayer » ni « Appeler le personnel », le patient n’a qu’un bouton « Retour » : il voit son numéro mais n’est pas inscrit. Choisissez plutôt « Conserver dans la file » : il garde son numéro et sera appelé."},
+                        {"when": {"all": [_ASK, _not(_RETRY), _not(_STAFF),
+                                          _is("page_patient_print_fail_timeout_action", "cancel")]},
+                         "text": "Sans « Réessayer » ni « Appeler le personnel », le patient n’a qu’un bouton « Terminer » : il voit son numéro mais son inscription est annulée. Choisissez plutôt « Conserver » quand il ne choisit rien, ou le comportement « Conserver dans la file »."},
+                        {"when": {"all": [_ASK, _is("page_patient_print_fail_abandon_timer", 0)]},
+                         "text": "Sans délai, l’écran attend indéfiniment un choix : le patient suivant risque de toucher « Réessayer » et d’imprimer le ticket du précédent."},
                     ],
                     "actions": [
                         {"id": "retry", "label": "Réessayer", "target": "printing",

@@ -429,8 +429,11 @@ def test_confirm_print_cancel_notifie(client, application, monkeypatch):
 
 
 def test_print_abandon_notifie(client, application, monkeypatch):
+    """Abandon en mode « Annuler » : le téléphone qui suivait l'inscription
+    est prévenu de la clôture."""
     import routes.patient as patient_module
     captures = _capture_clotures(monkeypatch, patient_module)
+    application.config["PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION"] = "cancel"
 
     _base(application)
     _patient(application, status="pending", print_job_id="job-10")
