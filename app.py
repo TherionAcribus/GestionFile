@@ -227,6 +227,22 @@ def _is_app_role(*roles):
     return APP_ROLE == "all" or APP_ROLE in roles
 
 
+def _is_reloader_watcher(debug):
+    """Vrai dans le processus SURVEILLANT du rechargement automatique.
+
+    En debug, ``socketio.run`` (eventlet) passe par le reloader de Werkzeug :
+    le processus lancé par ``python app.py`` ne sert aucune requête, il relance
+    un processus enfant (``WERKZEUG_RUN_MAIN=true``) à chaque modification de
+    fichier. Tout ce qu'il démarrait avant ``socketio.run`` tournait donc EN
+    DOUBLE avec l'enfant : tâches de démarrage (dont la remise à zéro des
+    comptoirs), ordonnanceur actif (chaque tâche planifiée exécutée deux fois)
+    et sonde du test de charge. Seul l'enfant doit faire ce travail.
+    """
+    return (__name__ == "__main__" and bool(debug)
+            and APP_ROLE in {"all", "web"}
+            and os.environ.get("WERKZEUG_RUN_MAIN") != "true")
+
+
 def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_cleanup: bool):
     if run_bootstrap:
         init_database(database, db)
@@ -347,7 +363,10 @@ def create_app(config_class=Config):
 
     # Appeler explicitement des fonctions de démarrage dans le contexte de l'application
     with app.app_context():
-        if not SKIP_STARTUP_HOOKS:
+        if _is_reloader_watcher(app.debug):
+            app.logger.info("Processus de rechargement automatique (debug) : "
+                            "tâches de démarrage laissées au processus servi")
+        elif not SKIP_STARTUP_HOOKS:
             start_fonctions(
                 app,
                 run_bootstrap=_is_app_role("scheduler", "init"),
@@ -935,6 +954,10 @@ if __name__ == "__main__":
                     tm.sleep(60)
             except KeyboardInterrupt:
                 app.logger.info("Scheduler process interrupted, shutting down.")
+        elif _is_reloader_watcher(app.debug):
+            # Surveillant du rechargement : aucun ordonnanceur ni sonde ici,
+            # le processus enfant relancé par socketio.run s'en charge.
+            socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)  # nosec B104 -- écoute LAN requise (bornes/comptoirs)
         else:
             if APP_ROLE == "web":
                 start_scheduler(active=False)
