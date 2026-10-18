@@ -24,7 +24,10 @@
 .inner-grid-container {
     display: grid;
     grid-auto-rows: minmax(0, 1fr);
-    gap: 10px;
+    /* Espace latéral généreux entre cellules : les cercles ne doivent pas
+       se toucher visuellement quand les libellés sont courts. */
+    column-gap: 22px;
+    row-gap: 12px;
     justify-items: center; /* Center the items */
     align-items: center;
     height: 100%;
@@ -41,7 +44,13 @@
     min-width: 0;
 }
 
+/* justify-self:stretch aussi : sinon la cellule se dimensionne en
+   max-content (justify-items:center pour centrer les boutons carrés à
+   largeur fixe) et un libellé long l'élargit au-delà de sa colonne —
+   les cellules voisines se chevauchaient. Étirée, elle contraint le
+   libellé à s'enrouler dans la colonne. */
 .inner-grid-container > .div_bloc_activity {
     align-self: stretch;
+    justify-self: stretch;
 }
 

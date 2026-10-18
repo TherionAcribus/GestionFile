@@ -1509,6 +1509,10 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
     _preview_ready_app(app)
     with app.app_context():
         app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "circle"
+        # Le mode « image au-dessus » réserve de la place en haut de cellule
+        # (débordement de l'image) : désactivé ici pour mesurer le centrage
+        # strict du groupe cercle + étiquette.
+        app.config["PAGE_PATIENT_CIRCLE_IMAGE_ABOVE"] = False
         parent_activity = Activity(name="Parent centré", letter="P")
         child_activity = Activity(name="Enfant centré", letter="E")
         parent = Button(
@@ -1565,6 +1569,89 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
                     # de la cellule décale le bas d'environ 10 px).
                     assert above > 0 and below > 0
                     assert abs(above - below) <= 15
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+@pytest.mark.e2e
+def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app):
+    """Régression : les étiquettes s'enroulent dans leur colonne (pas de
+    chevauchement entre boutons voisins) et tous les cercles d'une rangée
+    restent alignés verticalement, que le libellé fasse une ou deux
+    lignes."""
+    from threading import Thread
+
+    from werkzeug.serving import make_server
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "circle"
+        parent_activity = Activity(name="Parent espacement", letter="P")
+        child_activity = Activity(name="Enfant espacement", letter="E")
+        parent = Button(
+            label="Parent E2E", activity=parent_activity, is_parent=True,
+            is_present=True, is_active=True, shape="circle", sort_order=1,
+        )
+        db.session.add_all([parent_activity, child_activity, parent])
+        db.session.add_all([
+            Button(
+                label=label, activity=child_activity,
+                parent_button=parent, is_present=True, is_active=True,
+                shape="circle", sort_order=index,
+            )
+            for index, label in enumerate(
+                ["Oui", "Attestation de présence", "Non", "Demande de conseil"],
+                start=1,
+            )
+        ])
+        db.session.commit()
+    client = authenticated_client(editor_app)
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with playwright.sync_playwright() as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1280, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                page.goto(f"{url}/admin/page-editor/patient")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+
+                page.locator("#editor-scenario").select_option("children")
+                cells = page.frame_locator("#editor-preview").locator(
+                    ".page-editor-button-shape-preview:visible .div_bloc_activity"
+                )
+                playwright.expect(cells).to_have_count(4)
+
+                boxes = cells.evaluate_all("""cells => cells.map(cell => {
+                    const box = cell.getBoundingClientRect();
+                    const circle = cell.querySelector('.div_circle_buttons').getBoundingClientRect();
+                    const label = cell.querySelector('.div_text_button').getBoundingClientRect();
+                    return {
+                        cellLeft: box.left, cellRight: box.right,
+                        circleTop: circle.top,
+                        labelLeft: label.left, labelRight: label.right,
+                    };
+                })""")
+                # Tous les cercles de la rangée partagent la même hauteur :
+                # un emplacement constant est réservé à l'étiquette, que le
+                # texte fasse une ou deux lignes.
+                tops = [box["circleTop"] for box in boxes]
+                assert max(tops) - min(tops) <= 2
+                for box in boxes:
+                    # L'étiquette reste contenue dans sa colonne : elle ne
+                    # déborde plus sur les boutons voisins.
+                    assert box["labelLeft"] >= box["cellLeft"] - 1
+                    assert box["labelRight"] <= box["cellRight"] + 1
             finally:
                 browser.close()
     finally:

@@ -414,6 +414,25 @@ html, body {
     margin: 0.2em 0;
 }
 
+/* Espacement homogène entre boutons ronds :
+   - l'étiquette occupe toute la largeur de la cellule : le texte s'enroule
+     dans sa colonne au lieu de déborder sur les boutons voisins ;
+   - un emplacement constant (≈ 2 lignes) est réservé sous chaque cercle :
+     la hauteur du bouton ne dépend plus de la longueur du texte et tous
+     les cercles d'une rangée restent alignés ; un libellé plus long
+     agrandit la cellule sans être tronqué ;
+   - la marge haute donne une respiration identique entre cercle et
+     étiquette. */
+.div_bloc_activity > .div_text_button {
+    align-self: stretch;
+    min-width: 0;
+    line-height: 1.2;
+    margin-top: 0.4em;
+    min-height: 2.8em;
+    overflow-wrap: break-word;
+    hyphens: auto;
+}
+
 .div_text_button_active{
     color: var(--circle_button_text_color)
 }
