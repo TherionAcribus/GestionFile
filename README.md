@@ -80,6 +80,18 @@ Le mode `production` n'autorise que le profil de verification (3 utilisateurs,
 30 secondes, consultation sans ecriture). Le service `stress-runner` ne publie
 aucun port ; les resultats sont conserves 30 jours.
 
+En preproduction, le rapport ajoute deux bilans de fiabilite :
+
+- **Donnees** : chaque patient de test confirme par le serveur est relu en
+  base en fin de test ; une ecriture confirmee puis perdue fait echouer le test.
+- **Temps reel** : quelques ecouteurs Socket.IO (`STRESS_REALTIME_LISTENERS`,
+  3 par defaut) restent connectes pendant le test. Le serveur web emet une
+  sonde par action de parcours et le planificateur une par seconde ; le
+  rapport compte les evenements non recus et indique le relais actif
+  (RabbitMQ ou aucun). Des sondes du planificateur jamais recues signifient
+  qu'un processus `scheduler` separe ne peut joindre aucun client : activer
+  RabbitMQ. Lancer le meme test avec et sans RabbitMQ permet de comparer.
+
 La publication ne recharge jamais automatiquement les écrans en service :
 l’action **Appliquer/recharger les écrans** reste explicite.
 

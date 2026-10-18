@@ -20,6 +20,7 @@ from flask_socketio import join_room, leave_room, rooms
 
 from auth_utils import is_authenticated_request, is_admin_session, is_kiosk_patient_session, is_socket_connection_authorized, check_patient_phone_token
 from extensions import socketio
+from stress_realtime import PROBE_NAMESPACE
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,29 @@ def phone_editor_ack(data):
 _handlers_simples("/socket_app_counter", "SECURITY_LOGIN_COUNTER", "App comptoir")
 _handlers_simples("/socket_app_screen", "SECURITY_LOGIN_SCREEN", "App ecran")
 _handlers_simples("/socket_counter", "SECURITY_LOGIN_COUNTER", "comptoir")
+
+
+# --- Sondes du test de charge -------------------------------------------------
+# Namespace interne, hors NAMESPACES (jamais proposé comme destination dans
+# l'administration) : seuls les écouteurs du runner, porteurs du secret
+# interne, s'y connectent, et uniquement quand le serveur est en mode
+# préproduction. Voir stress_realtime.
+
+def _stress_probe_authorized():
+    from stress_auth import RUNNER_SECRET_HEADER, runner_secret_valid
+    mode = str(current_app.config.get("STRESS_TEST_MODE", "disabled")).lower()
+    return mode == "staging" and runner_secret_valid(
+        request.headers.get(RUNNER_SECRET_HEADER))
+
+
+@socketio.on("connect", namespace=PROBE_NAMESPACE)
+def connect_stress_probe():
+    if not _stress_probe_authorized():
+        current_app.logger.warning(
+            "Connexion Socket.IO refusee sur /socket_stress (secret runner absent "
+            "ou mode non preproduction).")
+        return False
+    logger.info("Ecouteur du test de charge connecte")
 
 
 def _socket_patient_authorized(flag_active):

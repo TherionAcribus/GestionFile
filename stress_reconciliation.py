@@ -40,15 +40,21 @@ class JourneyLedger:
 
     def reset(self):
         self.acknowledged: dict[int, str] = {}
+        # Actions confirmees ``(patient_id, action)`` : chacune doit avoir
+        # produit une sonde temps reel (voir stress_realtime).
+        self.confirmed_actions: set[tuple[int, str]] = set()
         self.create_failures = 0
 
     def created(self, patient_id, status='standing'):
         self.acknowledged[int(patient_id)] = status or 'standing'
+        self.confirmed_actions.add((int(patient_id), 'create'))
 
-    def acknowledge(self, patient_id, status):
+    def acknowledge(self, patient_id, status, action=None):
         if patient_id is None or status not in _RANK:
             return
         self.acknowledged[int(patient_id)] = status
+        if action:
+            self.confirmed_actions.add((int(patient_id), action))
 
     def create_failed(self):
         self.create_failures += 1

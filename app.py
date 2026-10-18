@@ -47,7 +47,7 @@ from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
 from routes.admin_onboarding import admin_onboarding_bp
 from routes.admin_performance import admin_performance_bp
-from scheduler_functions import clear_old_patients_table, reconcile_scheduled_jobs
+from scheduler_functions import clear_old_patients_table, ensure_stress_probe_job, reconcile_scheduled_jobs
 from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
@@ -887,6 +887,16 @@ def _reconcile_scheduler_jobs():
         app.logger.error("Réconciliation des jobs planifiés impossible : %s", e)
 
 
+def _ensure_stress_probe():
+    """Sonde temps reel du test de charge, dans les processus qui executent
+    les taches (jamais en role web, ou l'ordonnanceur est en pause)."""
+    try:
+        if ensure_stress_probe_job(app) == 'added':
+            app.logger.info("Sonde temps reel du test de charge planifiee")
+    except Exception as e:
+        app.logger.error("Sonde temps reel du test de charge impossible : %s", e)
+
+
 # Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
 # NOTE : doit rester AVANT le bloc __main__ — socketio.run() bloque et tout code
 # placé après ne s'exécuterait jamais quand on lance `python app.py`.
@@ -913,6 +923,7 @@ if __name__ == "__main__":
             start_scheduler(active=True)
             app.logger.info("Scheduler started in active mode (APP_ROLE=scheduler)")
             _reconcile_scheduler_jobs()
+            _ensure_stress_probe()
             # Ce process ne sert aucune connexion WebSocket (pas de socketio.run()),
             # mais s'il partage un message_queue (START_RABBITMQ) avec les process
             # "web", les communikation()/socketio.emit() appelés depuis les tâches
@@ -932,6 +943,7 @@ if __name__ == "__main__":
                 start_scheduler(active=True)
                 app.logger.info("Scheduler started in active mode (APP_ROLE=all)")
                 _reconcile_scheduler_jobs()
+                _ensure_stress_probe()
 
             #eventlet.wsgi.server(eventlet.listen(('0.0.0.0', server_port)), app)
             socketio.run(app, host='0.0.0.0', port=server_port, debug=app.debug)  # nosec B104 -- écoute LAN requise (bornes/comptoirs)

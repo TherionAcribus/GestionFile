@@ -13,7 +13,7 @@ from services.queue_service import (
 )
 from app_holder import AppHolder
 from config import time_tz
-from communication import communikation
+from communication import communikation, communication_websocket
 from queue_explain import STATS_EXCLUDED_STATUSES
 import config_sync
 
@@ -24,6 +24,10 @@ HEARTBEAT_JOB_ID = "Scheduler Heartbeat"
 CLEAR_PATIENT_TABLE_JOB_ID = "Clear Patient Table"
 CLEAR_ANNOUNCE_CALLS_JOB_ID = "Clear Announce Calls"
 CALL_AUTO_VALIDATION_JOB_ID = "Automatic Call Validation"
+STRESS_PROBE_JOB_ID = "Stress Realtime Probe"
+# Magasin en memoire, propre au processus planificateur : la sonde ne doit
+# jamais etre persistee dans le jobstore partage ni s'executer ailleurs.
+STRESS_PROBE_JOBSTORE = "volatile"
 
 
 def _refresh_config(app):
@@ -650,6 +654,73 @@ def ensure_scheduler_heartbeat_job():
 
 def scheduler_heartbeat_job():
     """No-op volontaire : cf. ``ensure_scheduler_heartbeat_job``."""
+
+
+def ensure_stress_probe_job(app):
+    """Planifie la sonde temps reel du test de charge (preproduction seule).
+
+    A appeler uniquement dans un processus qui EXECUTE les taches (roles
+    ``scheduler`` et ``all``). Une sonde par seconde, et seulement pendant un
+    test en cours : en dehors, la tache se limite a une requete indexee.
+    """
+    if str(app.config.get("STRESS_TEST_MODE", "disabled")).lower() != "staging":
+        return "disabled"
+    from apscheduler.jobstores.memory import MemoryJobStore
+    try:
+        scheduler.add_jobstore(MemoryJobStore(), alias=STRESS_PROBE_JOBSTORE)
+    except ValueError:
+        pass  # Magasin deja ajoute (appel repete).
+    scheduler.add_job(
+        id=STRESS_PROBE_JOB_ID,
+        func=stress_probe_job,
+        trigger="interval",
+        seconds=1,
+        jobstore=STRESS_PROBE_JOBSTORE,
+        replace_existing=True,
+        misfire_grace_time=2,
+        coalesce=True,
+        max_instances=1,
+    )
+    return "added"
+
+
+def stress_probe_job():
+    app = AppHolder.get_app()
+    with app.app_context():
+        emit_stress_probe()
+
+
+def emit_stress_probe():
+    """Emet une sonde numerotee pour le test en cours et compte l'envoi.
+
+    Le numero repart du compteur en base (et non d'un etat memoire) : un
+    redemarrage du planificateur pendant le test ne recompte pas. L'emission
+    precede l'ecriture du compteur : toute sonde comptee a bien ete emise.
+    """
+    from models import StressTestRun
+    from stress_realtime import PROBE_EVENT, PROBE_SCENARIOS, PROBE_STREAM, build_probe
+    try:
+        run = StressTestRun.query.with_entities(
+            StressTestRun.id, StressTestRun.uuid,
+            StressTestRun.scheduler_probes_sent,
+        ).filter(StressTestRun.state == "running",
+                 StressTestRun.mode == "staging",
+                 StressTestRun.scenario.in_(PROBE_SCENARIOS)).first()
+        if run is None:
+            db.session.rollback()
+            return None
+        seq = (run.scheduler_probes_sent or 0) + 1
+        communication_websocket(
+            PROBE_STREAM, build_probe(run.uuid, "scheduler", seq=seq),
+            event=PROBE_EVENT)
+        StressTestRun.query.filter_by(id=run.id).update(
+            {"scheduler_probes_sent": seq}, synchronize_session=False)
+        db.session.commit()
+        return seq
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Sonde temps reel du test de charge en echec")
+        return None
 
 
 def reconcile_scheduled_jobs():

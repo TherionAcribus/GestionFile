@@ -21,6 +21,7 @@ from routes.admin_security import require_permission, require_permission_api
 from stress_auth import RUNNER_SECRET_HEADER, runner_secret_valid
 from stress_fixtures import (cleanup_fixtures, create_synthetic_patient,
                              prepare_fixtures)
+from stress_realtime import PROBE_EVENT, PROBE_STREAM, build_probe
 from stress_testing import (ACTIVE_STATES, PROFILES, SCENARIOS,
                             StressValidationError, application_version,
                             compare_summaries, config_fingerprint,
@@ -278,6 +279,29 @@ def _csv_response(run):
         writer.writerow(['Creations refusees ou en erreur',
                          reconciliation.get('create_failures', '')])
         writer.writerow([])
+    realtime = summary.get('realtime')
+    if realtime:
+        web = realtime.get('web') or {}
+        scheduler = realtime.get('scheduler') or {}
+        latency = realtime.get('latency_ms') or {}
+        writer.writerow(['TEMPS REEL'])
+        writer.writerow(['Bilan', business.get('realtime_detail', '')])
+        writer.writerow(['Relais Socket.IO', realtime.get('relay') or 'inconnu'])
+        writer.writerow(['Ecouteurs connectes', realtime.get('listeners_connected', ''),
+                         'sur', realtime.get('listeners', '')])
+        writer.writerow(['Coupures d ecouteur', realtime.get('disconnects', '')])
+        writer.writerow(['Evenements web attendus (par ecouteur)', web.get('expected', '')])
+        writer.writerow(['Receptions web manquees', web.get('lost', '')])
+        writer.writerow(['Receptions web manquees (%)', web.get('loss_percent', '')])
+        writer.writerow(['Doublons recus', web.get('duplicates', '')])
+        writer.writerow(['Sondes planificateur emises', scheduler.get('sent', '')])
+        writer.writerow(['Sondes planificateur recues (min / max)',
+                         scheduler.get('received_min', ''), scheduler.get('received_max', '')])
+        writer.writerow(['Etat planificateur', scheduler.get('status', '')])
+        writer.writerow(['Delai p50 (ms)', latency.get('p50', '')])
+        writer.writerow(['Delai p95 (ms)', latency.get('p95', '')])
+        writer.writerow(['Delai maximal (ms)', latency.get('max', '')])
+        writer.writerow([])
     writer.writerow(['RESUME'])
     writer.writerow(['Requetes totales', summary.get('total_requests', '')])
     writer.writerow(['Requetes reussies', summary.get('successful_requests', '')])
@@ -389,6 +413,31 @@ def _memory_limit():
     return None
 
 
+def _realtime_relay():
+    """Relais Socket.IO reellement actif dans ce processus.
+
+    Lu sur le gestionnaire de clients et non sur la configuration : activer
+    RabbitMQ dans l'administration ne prend effet qu'apres redemarrage.
+    """
+    try:
+        from extensions import socketio
+        name = type(socketio.server.manager).__name__
+    except AttributeError:
+        return None
+    return {'BaseManager': 'none', 'KombuManager': 'rabbitmq'}.get(
+        name, name.lower())
+
+
+def _emit_journey_probe(run, patient_id, action):
+    """Sonde temps reel d'une action confirmee, par le chemin de diffusion
+    habituel (communication_websocket, donc relais RabbitMQ s'il est actif).
+    Emise AVANT la reponse HTTP : toute action acquittee doit avoir sa sonde."""
+    from communication import communication_websocket
+    communication_websocket(
+        PROBE_STREAM, build_probe(run.uuid, 'web', patient_id=patient_id,
+                                  action=action), event=PROBE_EVENT)
+
+
 @admin_performance_bp.route('/internal/stress/metrics')
 @_internal_only
 def internal_metrics():
@@ -427,6 +476,7 @@ def internal_metrics():
                    memory_limit_bytes=_memory_limit(),
                    threads=threading.active_count(), pool_checked_out=checked_out,
                    socket_connections=socket_count,
+                   realtime_relay=_realtime_relay(),
                    db_connections=db_connections, db_activity=db_activity)
 
 
@@ -451,6 +501,7 @@ def internal_journey(run_uuid):
     action = (request.get_json(silent=True) or {}).get('action', 'create')
     if action == 'create':
         patient = create_synthetic_patient(run)
+        _emit_journey_probe(run, patient.id, 'create')
         return jsonify(patient_id=patient.id, status=patient.status), 201
     patient_id = (request.get_json(silent=True) or {}).get('patient_id')
     from models import Patient
@@ -463,9 +514,7 @@ def internal_journey(run_uuid):
         return jsonify(error='invalid_action'), 400
     row.status = states[action]
     db.session.commit()
-    try:
-        from extensions import socketio
-        socketio.emit('refresh', {'source': 'stress', 'run': run.uuid})
-    except Exception:
-        current_app.logger.debug('Emission stress Socket.IO indisponible', exc_info=True)
+    # Remplace l'ancien emit 'refresh' sur le namespace « / », qu'aucun client
+    # n'ecoutait : la sonde est mesuree par les ecouteurs du runner.
+    _emit_journey_probe(run, row.id, action)
     return jsonify(patient_id=row.id, status=row.status)

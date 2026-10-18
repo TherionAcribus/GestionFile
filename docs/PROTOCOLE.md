@@ -36,6 +36,7 @@ Tous les messages émis via `communication_websocket()` ont la forme :
 | `/socket_app_screen` | `SECURITY_LOGIN_SCREEN` | *réservé — aucune App écran n'existe dans le dépôt* |
 | `/socket_counter` | `SECURITY_LOGIN_COUNTER` | comptoir web (`counter.js`) |
 | `/socket_phone` | cookies signés (`patient_token`) | page téléphone (`phone.js`) |
+| `/socket_stress` | secret runner (`X-Stress-Runner-Secret`) + `STRESS_TEST_MODE=staging` | écouteurs du test de charge (`stress_runner.py`) — interne, hors liste d'administration |
 
 ## Évènements par namespace
 

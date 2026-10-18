@@ -1431,6 +1431,11 @@ class StressTestRun(db.Model):
     summary = db.Column(db.JSON, nullable=False, default=dict)
     error_message = db.Column(db.String(500), nullable=True)
     fixture_ids = db.Column(db.JSON, nullable=False, default=dict)
+    # Sondes temps reel emises par le processus planificateur pendant le test
+    # (stress_realtime) : seul ce compteur distingue « planificateur muet » de
+    # « evenements emis mais jamais arrives ».
+    scheduler_probes_sent = db.Column(db.Integer, nullable=False, default=0,
+                                      server_default='0')
 
     requested_by = db.relationship('User', backref=db.backref('stress_test_runs', lazy=True))
     samples = db.relationship(

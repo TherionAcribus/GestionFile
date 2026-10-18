@@ -19,6 +19,7 @@ import uuid
 
 import gevent
 import requests
+import socketio as socketio_client
 from flask import Flask
 from locust import HttpUser, between, task
 from locust.env import Environment
@@ -28,6 +29,8 @@ from models import Patient, StressTestRun, StressTestSample, db  # noqa: E402
 from stress_auth import RUNNER_SECRET_HEADER, signed_headers  # noqa: E402
 from stress_fixtures import (cleanup_all_incomplete_runs, cleanup_fixtures,
                              prepare_fixtures)  # noqa: E402
+from stress_realtime import (PROBE_EVENT, PROBE_NAMESPACE, PROBE_SCENARIOS,
+                             ListenerRecord, analyze_realtime)  # noqa: E402
 from stress_reconciliation import JourneyLedger, reconcile  # noqa: E402
 from stress_testing import (claim_lease, heartbeat_lease,
                             mark_stale_runs_interrupted,
@@ -51,6 +54,12 @@ JOURNEY_SCENARIOS = frozenset({'kiosk', 'queue_counter', 'mixed'})
 # Etats confirmes par le serveur pendant le test courant, compares a la base
 # en fin de test (voir stress_reconciliation).
 LEDGER = JourneyLedger()
+# Ecouteurs Socket.IO connectes pendant tout le test (voir stress_realtime).
+# Peu nombreux : ils mesurent la livraison, pas la charge.
+REALTIME_LISTENERS = max(1, min(10, int(os.getenv('STRESS_REALTIME_LISTENERS', '3'))))
+# Delai laisse aux derniers evenements pour arriver apres l'arret des
+# utilisateurs, relais RabbitMQ compris.
+REALTIME_SETTLE_SECONDS = 3
 
 
 class GestionFileUser(HttpUser):
@@ -102,7 +111,8 @@ class GestionFileUser(HttpUser):
                 path, name=f'/stress/journey/{action}', headers=headers,
                 json={'action': action, 'patient_id': patient_id})
             if response.status_code == 200:
-                LEDGER.acknowledge(patient_id, _json_body(response).get('status'))
+                LEDGER.acknowledge(patient_id, _json_body(response).get('status'),
+                                   action=action)
 
     def realtime(self):
         handshake = f'/socket.io/?EIO=4&transport=polling&t={time.time_ns()}'
@@ -164,6 +174,74 @@ def _reconcile_journeys(run):
         Patient.journey_id.like(f'stress:{run.uuid}:%')).all())
     return reconcile(LEDGER.acknowledged, stored,
                      create_failures=LEDGER.create_failures)
+
+
+class _RealtimeListener:
+    """Client Socket.IO du runner sur le namespace des sondes.
+
+    Reconnexion automatique comme un vrai client : les evenements emis
+    pendant une coupure sont perdus pour lui, et comptes comme tels.
+    """
+
+    def __init__(self, index, run_uuid):
+        self.record = ListenerRecord(index)
+        self.client = socketio_client.Client(
+            reconnection=True, reconnection_delay=0.5, reconnection_delay_max=2,
+            logger=False, engineio_logger=False)
+        record = self.record
+        self.client.on('connect', record.on_connect, namespace=PROBE_NAMESPACE)
+        self.client.on('disconnect', record.on_disconnect, namespace=PROBE_NAMESPACE)
+        self.client.on(PROBE_EVENT,
+                       lambda payload: record.on_probe(payload, run_uuid),
+                       namespace=PROBE_NAMESPACE)
+
+    def start(self, target, secret):
+        try:
+            self.client.connect(
+                target, namespaces=[PROBE_NAMESPACE],
+                headers={RUNNER_SECRET_HEADER: secret}, wait_timeout=5)
+        except socketio_client.exceptions.ConnectionError as exc:
+            self.record.connect_error = ' '.join(str(exc).split())[:120]
+
+    def stop(self):
+        self.record.closing = True
+        try:
+            self.client.disconnect()
+        except Exception:
+            app.logger.debug('Fermeture ecouteur temps reel', exc_info=True)
+
+
+def _start_listeners(run):
+    if run.mode != 'staging' or run.scenario not in PROBE_SCENARIOS:
+        return []
+    listeners = [_RealtimeListener(index, run.uuid)
+                 for index in range(REALTIME_LISTENERS)]
+    for listener in listeners:
+        listener.start(run.target_url, SECRET)
+    return listeners
+
+
+def _stop_listeners(listeners):
+    for listener in listeners:
+        listener.stop()
+
+
+def _measure_realtime(run, listeners, relay):
+    """Compare les sondes attendues a celles recues, puis ferme l'ecoute.
+
+    Le compteur du planificateur est lu AVANT le delai de stabilisation :
+    seules les sondes deja emises a cet instant sont attendues.
+    """
+    if not listeners:
+        return None
+    db.session.commit()  # transaction fraiche (REPEATABLE READ)
+    scheduler_sent = db.session.query(StressTestRun.scheduler_probes_sent).filter_by(
+        id=run.id).scalar()
+    gevent.sleep(REALTIME_SETTLE_SECONDS)
+    _stop_listeners(listeners)
+    return analyze_realtime(
+        LEDGER.confirmed_actions, [listener.record for listener in listeners],
+        scheduler_sent=scheduler_sent, relay=relay)
 
 
 def _internal_metrics(target):
@@ -237,7 +315,7 @@ def _store_sample(run, environment, elapsed, metrics):
     return sample
 
 
-def _final_summary(run, environment, samples):
+def _final_summary(run, environment, samples, listeners=(), relay=None):
     total = environment.stats.total
     request_count = total.num_requests
     failure_count = total.num_failures
@@ -263,6 +341,9 @@ def _final_summary(run, environment, samples):
     reconciliation = _reconcile_journeys(run)
     if reconciliation is not None:
         summary['reconciliation'] = reconciliation
+    realtime = _measure_realtime(run, listeners, relay)
+    if realtime is not None:
+        summary['realtime'] = realtime
     p95 = summary['p95_ms'] or 0
     # Une ecriture confirmee puis perdue est plus grave qu'une lenteur : le
     # test echoue quel que soit le niveau de performance.
@@ -274,6 +355,10 @@ def _final_summary(run, environment, samples):
         verdict = 'degraded'
     else:
         verdict = 'successful'
+    # Les clients ont un rattrapage (revision de file) : un evenement perdu
+    # degrade le resultat sans le faire echouer.
+    if verdict == 'successful' and realtime and realtime['status'] == 'lost':
+        verdict = 'degraded'
     run.summary = summary
     run.verdict = verdict
     return verdict
@@ -293,12 +378,17 @@ def execute_run(run):
     hard_stop.daemon = True
     hard_stop.start()
     samples = []
+    listeners = []
+    relay = None
     auto_reason = None
     try:
         transition_run(run, 'preparing')
         db.session.commit()
         if run.mode == 'staging':
             prepare_fixtures(run)
+        # Ecoute ouverte avant le premier utilisateur : aucune sonde ne peut
+        # partir avant que les ecouteurs soient connectes.
+        listeners = _start_listeners(run)
         transition_run(run, 'running')
         db.session.commit()
         runner.start(user_count=int(params['users']),
@@ -316,6 +406,7 @@ def execute_run(run):
                 auto_reason = 'lease_lost'
                 break
             metrics = _internal_metrics(run.target_url)
+            relay = metrics.get('realtime_relay') or relay
             sample = _store_sample(run, environment, int(tick - start), metrics)
             samples.append(sample)
             after_ramp = tick - start > ramp_seconds
@@ -334,7 +425,7 @@ def execute_run(run):
         deadline = time.monotonic() + STOP_DRAIN_SECONDS
         while environment.runner.user_count and time.monotonic() < deadline:
             gevent.sleep(.1)
-        _final_summary(run, environment, samples)
+        _final_summary(run, environment, samples, listeners, relay)
         if run.state == 'stopping' or auto_reason:
             transition_run(run, 'aborted', reason=auto_reason or 'user_stop',
                            verdict='failed' if auto_reason != 'user_stop' else run.verdict)
@@ -354,6 +445,7 @@ def execute_run(run):
         app.logger.exception('Echec du test de charge %s', run.uuid)
     finally:
         hard_stop.cancel()
+        _stop_listeners(listeners)
         try:
             fresh = StressTestRun.query.filter_by(id=run.id).first()
             if fresh and fresh.fixture_ids:

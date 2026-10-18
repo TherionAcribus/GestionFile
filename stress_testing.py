@@ -12,6 +12,7 @@ from sqlalchemy import or_
 
 from config import time_tz
 from models import db, Patient, StressTestLease, StressTestRun, StressTestSample
+from stress_realtime import realtime_message
 from stress_reconciliation import reconciliation_message
 
 
@@ -55,6 +56,9 @@ def run_result_message(run):
         if run.verdict == 'successful':
             return 'Le test est allé au terme prévu sans dépasser les seuils.'
         if run.verdict == 'degraded':
+            if ((run.summary or {}).get('realtime') or {}).get('status') == 'lost':
+                return ('Le test est allé au terme prévu, mais des événements '
+                        'temps réel ne sont pas arrivés aux clients.')
             return 'Le test est allé au terme prévu, mais les performances sont dégradées.'
         return 'Le test est allé au terme prévu, mais les seuils de qualité sont dépassés.'
     if run.state in ACTIVE_STATES:
@@ -123,6 +127,7 @@ def business_interpretation(run, reference_patients=10):
     partial = run.state == 'aborted' and run.stop_reason == 'user_stop'
     reliability_tone, reliability_detail = reconciliation_message(
         summary.get('reconciliation'))
+    realtime_tone, realtime_detail = realtime_message(summary.get('realtime'))
     if run.state in ACTIVE_STATES:
         grade, tone = 'Test en cours', 'info'
         headline = 'Les résultats sont encore provisoires.'
@@ -134,6 +139,11 @@ def business_interpretation(run, reference_patients=10):
         headline = (f'Le serveur a perdu des données confirmées sous la charge '
                     f'de {load_label}.')
         conclusion = reliability_detail
+    elif realtime_tone == 'danger' and run.verdict == 'degraded':
+        grade, tone = 'Temps réel à fiabiliser', 'warning'
+        headline = (f'Le serveur a tenu la charge de {load_label}, mais des mises '
+                    'à jour temps réel se sont perdues.')
+        conclusion = realtime_detail
     elif partial:
         grade, tone = 'Résultat partiel', 'warning'
         headline = "Aucun problème majeur détecté avant l'arrêt manuel."
@@ -186,6 +196,8 @@ def business_interpretation(run, reference_patients=10):
         'partial': partial, 'caveat': caveat,
         'reliability_tone': reliability_tone,
         'reliability_detail': reliability_detail,
+        'realtime_tone': realtime_tone,
+        'realtime_detail': realtime_detail,
     }
 
 PROFILES = {
@@ -429,13 +441,31 @@ def serialize_run(run: StressTestRun, *, detail=False, reference_patients=None):
     return data
 
 
+# Mesures temps reel imbriquees dans le resume : comparer deux tests, l'un
+# avec RabbitMQ et l'autre sans, est l'usage principal de ce bilan.
+REALTIME_COMPARE_METRICS = {
+    'realtime_loss_percent': ('realtime', 'web', 'loss_percent'),
+    'realtime_p95_ms': ('realtime', 'latency_ms', 'p95'),
+    'scheduler_probes_lost': ('realtime', 'scheduler', 'lost'),
+}
+
+
+def _summary_metric(run, metric):
+    value = run.summary or {}
+    for key in REALTIME_COMPARE_METRICS.get(metric, (metric,)):
+        value = value.get(key) if isinstance(value, dict) else None
+    return value
+
+
 def compare_summaries(left: StressTestRun, right: StressTestRun):
-    metrics = ('average_rps', 'p95_ms', 'p99_ms', 'error_rate',
-               'max_cpu_percent', 'max_memory_bytes')
+    metrics = ['average_rps', 'p95_ms', 'p99_ms', 'error_rate',
+               'max_cpu_percent', 'max_memory_bytes']
+    if any((run.summary or {}).get('realtime') for run in (left, right)):
+        metrics.extend(REALTIME_COMPARE_METRICS)
     result = {}
     for metric in metrics:
-        lv = (left.summary or {}).get(metric)
-        rv = (right.summary or {}).get(metric)
+        lv = _summary_metric(left, metric)
+        rv = _summary_metric(right, metric)
         absolute = rv - lv if isinstance(lv, (int, float)) and isinstance(rv, (int, float)) else None
         percent = (absolute / lv * 100) if absolute is not None and lv else None
         result[metric] = {'left': lv, 'right': rv, 'absolute': absolute,

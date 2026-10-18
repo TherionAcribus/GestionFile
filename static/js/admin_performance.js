@@ -10,7 +10,10 @@
   const METRIC_LABELS = {
     average_rps: "Débit moyen (req/s)", p95_ms: "Latence p95 (ms)",
     p99_ms: "Latence p99 (ms)", error_rate: "Taux d'erreur (%)",
-    max_cpu_percent: "CPU maximal (%)", max_memory_bytes: "Mémoire maximale (octets)"
+    max_cpu_percent: "CPU maximal (%)", max_memory_bytes: "Mémoire maximale (octets)",
+    realtime_loss_percent: "Temps réel : réceptions manquées (%)",
+    realtime_p95_ms: "Temps réel : délai p95 (ms)",
+    scheduler_probes_lost: "Planificateur : sondes perdues"
   };
   let capabilities = null;
   let currentRun = null;
@@ -316,6 +319,21 @@
       reliability.classList.remove("d-none");
     } else {
       $("business-reliability-detail").textContent = ""; reliability.classList.add("d-none");
+    }
+    // Livraison des événements temps réel aux écouteurs du runner.
+    const realtimeLine = $("business-realtime");
+    if (business.realtime_detail) {
+      const realtimeTone = ["success", "warning", "danger"].includes(business.realtime_tone) ?
+        business.realtime_tone : "secondary";
+      const relay = (summary.realtime || {}).relay;
+      const relayLabel = relay === "rabbitmq" ? "relais RabbitMQ" :
+        relay === "none" ? "sans relais" : relay ? `relais ${relay}` : "relais inconnu";
+      $("business-realtime-badge").className = `badge me-1 text-bg-${realtimeTone}`;
+      $("business-realtime-badge").textContent = `Temps réel · ${relayLabel}`;
+      $("business-realtime-detail").textContent = business.realtime_detail;
+      realtimeLine.classList.remove("d-none");
+    } else {
+      $("business-realtime-detail").textContent = ""; realtimeLine.classList.add("d-none");
     }
     $("business-caveat").textContent = business.caveat || "";
     $("result-requests").textContent = number(summary.total_requests, 0);

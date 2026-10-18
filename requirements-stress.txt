@@ -1,1 +1,4 @@
 locust==2.31.6
+# Ecouteurs temps reel du runner (stress_realtime) : transport WebSocket,
+# comme les comptoirs. Sans lui, python-socketio se rabat sur le long-polling.
+websocket-client==1.8.0
