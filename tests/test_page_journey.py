@@ -287,11 +287,15 @@ def test_exit_rules_are_complete_and_reference_known_settings():
     ("print_error", {"page_patient_print_fail_behavior": "ask",
                      "page_patient_print_fail_abandon_timer": 15},
      "après 15 s ; il reste inscrit sans ticket"),
-    ("print_error", {"page_patient_print_fail_behavior": "keep", "page_patient_end_timer": 7},
-     "après 7 s ; le patient reste inscrit"),
-    ("print_error", {"page_patient_print_fail_behavior": "cancel", "page_patient_end_timer": 7},
-     "après 7 s ; l’inscription est annulée"),
-    ("staff_called", {"page_patient_end_timer": 9}, "après 9 s"),
+    # Messages sans choix : délai propre, indépendant de la conclusion.
+    ("print_error", {"page_patient_print_fail_behavior": "keep", "page_patient_end_timer": 3,
+                     "page_patient_print_message_timer": 7},
+     "après 7 s (décompte affiché) ; le patient reste inscrit"),
+    ("print_error", {"page_patient_print_fail_behavior": "cancel", "page_patient_end_timer": 3,
+                     "page_patient_print_message_timer": 7},
+     "après 7 s (décompte affiché) ; l’inscription est annulée"),
+    ("staff_called", {"page_patient_end_timer": 3, "page_patient_print_message_timer": 9},
+     "après 9 s"),
 ])
 def test_exit_text_follows_settings(step_id, changes, expected):
     from page_journey import step_exit

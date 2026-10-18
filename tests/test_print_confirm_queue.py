@@ -220,6 +220,36 @@ def test_defauts_abandon_courts_et_conservateurs():
     assert usine["page_patient_print_fail_timeout_action"] == "keep"
 
 
+def test_messages_sans_choix_ont_leur_propre_decompte():
+    """Conserver, Annuler, Personnel appelé et les messages « adressez-vous
+    au personnel » utilisent le délai des messages (avec jauge), pas celui
+    de la conclusion ; seul le succès garde le minuteur de conclusion."""
+    source = _lire("static/js/patients.js")
+    gestion = _corps_fonction(source, "handlePrintConfirmation")
+    for case in ("case 'activated_no_ticket'", "case 'cancelled'", "default:"):
+        bloc = gestion[gestion.index(case):]
+        bloc = bloc[:bloc.index("break;")] if "break;" in bloc else bloc
+        assert "startMessageTimer()" in bloc, case
+        assert "conclusionTimer().start()" not in bloc, case
+    succes = gestion[gestion.index("case 'activated'"):gestion.index("case 'activated_no_ticket'")]
+    assert "conclusionTimer().start()" in succes
+    assert "startMessageTimer()" in _corps_fonction(source, "callStaffFlow")
+    assert "startMessageTimer()" in _corps_fonction(source, "confirmPrintResult")
+    minuteur = _corps_fonction(source, "startMessageTimer")
+    assert "dataset.messageTimer" in minuteur
+    # Écran quitté entre-temps (bouton de retour) : pas de second retour.
+    assert "document.body.contains(overlay)" in minuteur
+    assert "clearMessageTimer()" in _corps_fonction(source, "renderPrintOverlay")
+
+
+def test_defaut_duree_des_messages():
+    import json
+
+    assert 'setdefault("PAGE_PATIENT_PRINT_MESSAGE_TIMER", 10)' in _lire("app.py")
+    usine = json.loads(_lire("static/json/default_config.json"))["configurations"]
+    assert usine["page_patient_print_message_timer"] == 10
+
+
 def test_abandon_ne_laisse_pas_les_boutons_de_reessai_actifs():
     """Pendant le POST d'abandon, l'écran ne doit plus permettre un clic
     « Réessayer » qui imprimerait un ticket pour une inscription annulée."""

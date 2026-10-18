@@ -923,6 +923,7 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
                         page_patient_confirmation_message=page_patient_confirmation_message,
                         page_patient_end_timer=app.config["PAGE_PATIENT_END_TIMER"],
                         page_patient_display_conclusion=app.config.get("PAGE_PATIENT_DISPLAY_CONCLUSION", True),
+                        page_patient_print_message_timer=int(app.config.get("PAGE_PATIENT_PRINT_MESSAGE_TIMER", 10)),
                         page_patient_display_qrcode=app.config["PAGE_PATIENT_QRCODE_DISPLAY"],
                         page_patient_interface_done_print=choose_text_translation("page_patient_interface_done_print"),
                         page_patient_interface_done_extend=choose_text_translation("page_patient_interface_done_extend"),

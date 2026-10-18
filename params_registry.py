@@ -206,6 +206,9 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     # Mode « Demander » sans choix du patient (délai écoulé ou « Terminer ») :
     # il a vu son numéro, il est conservé par défaut.
     "page_patient_print_fail_timeout_action": ("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", "value_str"),
+    # Durée des messages d'incident sans choix (Conserver, Annuler, Personnel
+    # appelé) : indépendante de la Conclusion, décompte affiché sur la borne.
+    "page_patient_print_message_timer": ("PAGE_PATIENT_PRINT_MESSAGE_TIMER", "value_int"),
     # Écran « Impression incertaine » : délai sans réponse du patient et suite
     # donnée (le patient est très souvent déjà parti avec son ticket).
     "page_patient_print_uncertain_timer": ("PAGE_PATIENT_PRINT_UNCERTAIN_TIMER", "value_int"),
@@ -358,6 +361,8 @@ _INT_RANGES = {
     "call_auto_validation_extension_seconds": (10, 600),
     # Jamais « 0 = jamais » : la borne ne doit pas rester bloquée sur cet écran.
     "page_patient_print_uncertain_timer": (5, 600),
+    # Le patient doit pouvoir lire (et noter) son numéro.
+    "page_patient_print_message_timer": (3, 120),
 }
 
 

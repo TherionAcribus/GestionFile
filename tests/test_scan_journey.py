@@ -647,6 +647,19 @@ def test_conclusion_desactivee_masque_la_confirmation(client, application):
     assert "display: none" not in normal
 
 
+def test_conclusion_transmet_la_duree_des_messages_d_incident(client, application):
+    """Les messages sans choix (Conserver, Annuler, Personnel appelé) ont
+    leur propre durée, posée sur l'overlay avec sa jauge de décompte."""
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+    application.config["PAGE_PATIENT_PRINT_MESSAGE_TIMER"] = 12
+
+    html = client.get(f"/patient/conclusion_page/{nouveau_id}").get_data(as_text=True)
+
+    overlay = html.split('id="print_status_overlay"', 1)[1].split(">", 1)[0]
+    assert 'data-message-timer="12"' in overlay
+    assert 'id="print_status_timer" class="print_status_timer" hidden' in html
+
+
 def test_scripts_conclusion_respectent_le_saut():
     """Le saut ne concerne que le succès : patient_conclusion.js expose le
     drapeau et repart sans minuteur ; patients.js ne réaffiche pas la

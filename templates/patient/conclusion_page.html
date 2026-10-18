@@ -75,9 +75,13 @@
   <!-- Overlay d'état d'impression (impression en cours / échec + choix).
        Affiché/masqué et rempli par patients.js (runPrintFlow). -->
   <div id="print_status_overlay" data-page-editor-component="print_error"
+       data-message-timer="{{ page_patient_print_message_timer | default('') }}"
        style="display:none;">
       <div id="print_status_message" class="div_text_summary"></div>
       <div id="print_status_buttons" class="div_validation_buttons"></div>
+      {# Décompte des messages sans choix (Conserver, Annuler, Personnel
+         appelé) : rempli par patients.js (startMessageTimer). #}
+      <div id="print_status_timer" class="print_status_timer" hidden><div class="print_status_timer_bar"></div></div>
   </div>
 
 </div>

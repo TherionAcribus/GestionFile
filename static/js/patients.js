@@ -653,7 +653,52 @@ function setPrintOverlay(visible) {
 
 // Rend le contenu de l'overlay : un message HTML + une liste de boutons
 // [{label, onClick}]. Chaque bouton reprend le style des boutons de validation.
+// Messages d'incident sans choix (Conserver, Annuler, Personnel appelé…) :
+// délai propre (data-message-timer, réglage « Durée d'affichage des messages
+// d'incident ») avec décompte visible, au lieu du délai de la conclusion — le
+// patient doit avoir le temps de noter son numéro.
+var _messageTimeout = null;
+
+function clearMessageTimer() {
+    if (_messageTimeout) {
+        clearTimeout(_messageTimeout);
+        _messageTimeout = null;
+    }
+    var gauge = document.getElementById('print_status_timer');
+    if (gauge) gauge.hidden = true;
+}
+
+function startMessageTimer() {
+    clearMessageTimer();
+    var overlay = document.getElementById('print_status_overlay');
+    var seconds = parseInt(overlay && overlay.dataset.messageTimer, 10);
+    if (!(seconds > 0)) {
+        // Gabarit sans le réglage (ancienne page en cache) : délai historique.
+        conclusionTimer().start();
+        return;
+    }
+    var gauge = document.getElementById('print_status_timer');
+    var bar = gauge && gauge.firstElementChild;
+    if (gauge && bar) {
+        gauge.hidden = false;
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+        void bar.offsetWidth; // repart de 100 % avant d'animer
+        bar.style.transition = 'width ' + seconds + 's linear';
+        bar.style.width = '0%';
+    }
+    _messageTimeout = setTimeout(function() {
+        _messageTimeout = null;
+        // Écran déjà quitté (bouton de retour) : ne pas renvoyer à l'accueil
+        // le patient suivant en pleine saisie.
+        if (overlay && document.body.contains(overlay)) {
+            conclusionTimer().goHome();
+        }
+    }, seconds * 1000);
+}
+
 function renderPrintOverlay(messageHtml, buttons) {
+    clearMessageTimer();
     var msg = document.getElementById('print_status_message');
     var btns = document.getElementById('print_status_buttons');
     if (msg) msg.innerHTML = messageHtml;
@@ -751,7 +796,7 @@ function confirmPrintResult(printJobId, result, printData) {
                         conclusionTimer().goHome();
                     } }
                 ]);
-                conclusionTimer().start();
+                startMessageTimer();
             }, PRINT_CONFIRM_FALLBACK_MS);
         });
 }
@@ -868,13 +913,13 @@ function handlePrintConfirmation(printData, printJobId, data) {
             // Conservé (mode keep) : numéro en grand + retour auto.
             finishPrintFlow(printJobId);
             renderPrintOverlay(bigNumberHtml(L.no_ticket, data.call_number), []);
-            conclusionTimer().start();
+            startMessageTimer();
             break;
         case 'cancelled':
             // Annulé (mode cancel) : pas de confirmation normale + retour auto.
             finishPrintFlow(printJobId);
             renderPrintOverlay(messageHtml(L.print_failed_staff, data.call_number), []);
-            conclusionTimer().start();
+            startMessageTimer();
             break;
         case 'uncertain':
             // La borne ne sait pas si le ticket est sorti : jamais de succès
@@ -961,7 +1006,7 @@ function handlePrintConfirmation(printData, printJobId, data) {
             renderPrintOverlay(messageHtml(L.print_failed_staff), [
                 { label: L.back, onClick: function() { conclusionTimer().goHome(); } }
             ]);
-            conclusionTimer().start();
+            startMessageTimer();
     }
 }
 
@@ -973,7 +1018,7 @@ function callStaffFlow(printJobId) {
             if (data && data.staff_called) {
                 finishPrintFlow(printJobId);
                 renderPrintOverlay(bigNumberHtml(L.staff_called, data.call_number), []);
-                conclusionTimer().start();
+                startMessageTimer();
             } else {
                 // Réponse sans confirmation (expired, état déjà tranché…) :
                 // on n'annonce PAS un appel qui n'a pas eu lieu.

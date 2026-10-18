@@ -217,6 +217,10 @@ PATIENT_JOURNEY = {
                     "choices": [
                         {"key": "page_patient_print_fail_behavior",
                          "help": "Demander : le patient choisit (réessayer, appeler le personnel). Conserver : il reste inscrit sans ticket et note son numéro. Annuler : l’inscription est annulée."},
+                        {"key": "page_patient_print_message_timer",
+                         "label": "Durée d’affichage du message",
+                         "help": "Modes Conserver et Annuler : le temps de lire le message et de noter son numéro, avec un décompte affiché. Indépendant de l’écran de conclusion.",
+                         "enabled_when": _not(_ASK)},
                         {"key": "page_patient_print_fail_show_retry", "label": "Proposer « Réessayer »",
                          "enabled_when": _ASK},
                         {"key": "page_patient_print_fail_show_staff",
@@ -239,8 +243,8 @@ PATIENT_JOURNEY = {
                         {"when": _ASK,
                          "text": "Sans choix du patient, retour à l’accueil après {=page_patient_print_fail_abandon_timer} s ; il reste inscrit sans ticket et le comptoir est prévenu."},
                         {"when": _is("page_patient_print_fail_behavior", "keep"),
-                         "text": "Retour à l’accueil après {=page_patient_end_timer} s ; le patient reste inscrit et sera appelé."},
-                        {"text": "Retour à l’accueil après {=page_patient_end_timer} s ; l’inscription est annulée."},
+                         "text": "Retour à l’accueil après {=page_patient_print_message_timer} s (décompte affiché) ; le patient reste inscrit et sera appelé."},
+                        {"text": "Retour à l’accueil après {=page_patient_print_message_timer} s (décompte affiché) ; l’inscription est annulée."},
                     ],
                     "warnings": [
                         # Seul « Retour » reste : le patient lit son numéro
@@ -316,7 +320,12 @@ PATIENT_JOURNEY = {
                         {"state": CONDITIONAL,
                          "text": "Après « Appeler le personnel », proposé en cas d’impression en échec ou incertaine."},
                     ],
-                    "exit": [{"text": "Retour à l’accueil après {=page_patient_end_timer} s ; le patient est dans la file."}],
+                    "exit": [{"text": "Retour à l’accueil après {=page_patient_print_message_timer} s (décompte affiché) ; le patient est dans la file."}],
+                    "choices": [
+                        {"key": "page_patient_print_message_timer",
+                         "label": "Durée d’affichage du message",
+                         "help": "Le temps de noter son numéro, avec un décompte affiché. Commune aux messages « Conserver » et « Annuler » de l’écran d’erreur."},
+                    ],
                     "toggle": {"key": "page_patient_print_fail_show_staff",
                                "label": "Proposer « Appeler le personnel » en cas de problème d’impression",
                                "help": "Le personnel reçoit une alerte sur le comptoir, et le patient voit cet écran de confirmation."},

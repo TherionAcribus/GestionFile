@@ -112,6 +112,7 @@ def admin_patient(tab=None):
                             page_patient_print_fail_show_staff = app.config.get('PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF', False),
                             page_patient_print_fail_abandon_timer = app.config.get('PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER', 15),
                             page_patient_print_fail_timeout_action = app.config.get('PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION', 'keep'),
+                            page_patient_print_message_timer = app.config.get('PAGE_PATIENT_PRINT_MESSAGE_TIMER', 10),
                             page_patient_print_uncertain_timer = app.config.get('PAGE_PATIENT_PRINT_UNCERTAIN_TIMER', 15),
                             page_patient_print_uncertain_timeout_action = app.config.get('PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION', 'received'),
                             page_patient_interface_printing = app.config.get('PAGE_PATIENT_INTERFACE_PRINTING', ''),

@@ -691,6 +691,9 @@ def test_text_fields_are_bounded_by_their_storage_column(page, key):
         ("patient", "page_patient_print_uncertain_timer", 0, False),
         ("patient", "page_patient_print_uncertain_timer", 5, True),
         ("patient", "page_patient_print_uncertain_timer", 601, False),
+        ("patient", "page_patient_print_message_timer", 2, False),
+        ("patient", "page_patient_print_message_timer", 3, True),
+        ("patient", "page_patient_print_message_timer", 121, False),
     ],
 )
 def test_int_fields_are_bounded_by_field_and_registry_limits(page, key, value, ok):

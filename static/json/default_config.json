@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.43",
+    "version": "0.44",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -84,6 +84,7 @@
             "page_patient_print_fail_show_staff": false,
             "page_patient_print_fail_abandon_timer": 15,
             "page_patient_print_fail_timeout_action": "keep",
+            "page_patient_print_message_timer": 10,
             "page_patient_display_button_scan": true,
             "page_patient_display_scan_explanation": true,
             "page_patient_display_specific_message": true,

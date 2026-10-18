@@ -128,6 +128,9 @@ def load_configuration(app):
     # garde le patient dans la file sans ticket — il a vu son numéro à l'écran
     # et croit être inscrit ; « cancel » annule l'inscription en attente.
     app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_TIMEOUT_ACTION", "keep")
+    # Messages d'incident sans choix (Conserver / Annuler / Personnel appelé) :
+    # le temps de noter son numéro, sans rallonger la Conclusion.
+    app.config.setdefault("PAGE_PATIENT_PRINT_MESSAGE_TIMER", 10)
     # Délai (s) avant retour automatique à l'accueil sur l'écran d'échec en mode
     # 'ask' si le patient ne choisit rien (garde-fou anti-blocage borne). 0 = jamais.
     # Court : le patient suivant ne doit pas toucher « Réessayer » et

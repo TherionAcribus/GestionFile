@@ -148,6 +148,7 @@
                         </div>
                         <p class="print_status_number" data-print-error-number-for="page_patient_interface_staff_called"
                            {% if '{n}' in (payload.config.page_patient_interface_staff_called or '')|lower %}data-config-hidden{% endif %}>{{ preview_tokens['{N}'] }}</p>
+                        <div class="print_status_timer"><div class="print_status_timer_bar"></div></div>
                         {% else %}
                         <div id="print_status_message" class="div_text_summary">
                             <p class="text_summary" data-config-key="page_patient_interface_print_failed" data-number-styled
@@ -185,6 +186,9 @@
                                 <p class="validation_button" data-config-key="page_patient_interface_done_back">{{ preview_config.page_patient_interface_done_back }}</p>
                             </div>
                         </div>
+                        {# Décompte des messages sans choix (Conserver / Annuler). #}
+                        <div class="print_status_timer" data-config-display-key="page_patient_print_fail_behavior" data-config-hide-values='["ask"]'
+                             {% if payload.config.page_patient_print_fail_behavior == 'ask' %}data-config-hidden{% endif %}><div class="print_status_timer_bar"></div></div>
                         {% endif %}
                     </div>
                 </div>

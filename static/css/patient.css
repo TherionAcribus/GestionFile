@@ -604,6 +604,24 @@ html, body {
     margin-left: 0;
 }
 
+/* Décompte des messages d'incident sans choix : même aspect que la jauge de
+   la conclusion (#timer_gauge), sous le message. */
+.print_status_timer {
+    background-color: #e0e0e0;
+    /* Dans l'overlay en colonne flexible, la jauge ne doit pas être écrasée
+       quand le message et le numéro occupent la hauteur. */
+    flex-shrink: 0;
+    height: 20px;
+    overflow: hidden;
+    width: min(100%, 900px);
+}
+
+.print_status_timer_bar {
+    background-color: #76c7c0;
+    height: 100%;
+    width: 100%;
+}
+
 .print_status_number {
     font-size: min(var(--print_error_number_size), 10vh);
     font-weight: bold;
