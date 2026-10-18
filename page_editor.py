@@ -307,7 +307,7 @@ ADAPTERS = {
                         {"key": "page_patient_end_timer", "label": "Délai avant retour à l'accueil", "type": "int", "min": 0,
                          "unit": "s", "group": "Conclusion et délais"}],
                 css=[{"key": "circle_button_size", "label": "Bouton rond", "type": "size"},
-                     {"key": "circle_button_image_size", "label": "Image bouton rond", "type": "size", "default": "215px"},
+                     {"key": "circle_button_image_size", "label": "Image bouton rond", "type": "size", "default": "160px"},
                      {"key": "square_button_width", "label": "Largeur bouton", "type": "size"},
                      {"key": "square_button_height", "label": "Hauteur bouton", "type": "size"},
                      {"key": "square_button_image_size", "label": "Image bouton", "type": "size", "default": "110px"},
@@ -1047,13 +1047,13 @@ def builtin_themes(page):
             block("next_patients", text, soft, "70px" if large else "60px")
         elif page == "patient":
             block("patient_title", on_primary, primary, "72px" if large else "64px")
-            block("subtitle", on_primary, primary, "42px" if large else "38px")
-            css.update(patient_title_background_height="150px" if large else "140px",
-                       subtitle_background_height="125px" if large else "110px",
-                       circle_button_size="250px" if large else "230px", circle_button_color=primary,
+            block("subtitle", on_primary, primary, "37px" if large else "33px")
+            css.update(patient_title_background_height="130px" if large else "120px",
+                       subtitle_background_height="115px" if large else "100px",
+                       circle_button_size="170px" if large else "150px", circle_button_color=primary,
                        circle_button_text_color=text,
                        circle_button_text_size="36px" if large else "32px",
-                       circle_button_image_size="235px" if large else "215px",
+                       circle_button_image_size="180px" if large else "160px",
                        square_button_width="560px" if large else "520px",
                        square_button_height="175px" if large else "160px", square_button_color=primary,
                        square_button_text_color=on_primary,

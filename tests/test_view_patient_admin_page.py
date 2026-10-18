@@ -35,11 +35,11 @@ def test_editeur_borne_active_par_defaut():
     assert {"announce", "patient"} <= pages
 
 
-def test_boutons_patient_rectangulaires_par_defaut():
+def test_boutons_patient_ronds_par_defaut():
     defaults = json.loads(_read("static/json/default_config.json"))
-    assert defaults["configurations"]["page_patient_button_shape"] == "square"
+    assert defaults["configurations"]["page_patient_button_shape"] == "circle"
     assert defaults["configurations"]["page_patient_interface_children_back"] == "Retour"
-    assert Config.PAGE_PATIENT_BUTTON_SHAPE == "square"
+    assert Config.PAGE_PATIENT_BUTTON_SHAPE == "circle"
     assert Config.PAGE_PATIENT_INTERFACE_CHILDREN_BACK == "Retour"
 
 
