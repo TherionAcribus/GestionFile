@@ -92,6 +92,11 @@ _ALLOWED_WITHOUT_GUARD = {
     # puis à nouveau par la page de destination.
     "onboarding_page",
     "onboarding_action",
+    # Index de la recherche globale (routes/admin_search.py) : ouvert à tout
+    # compte admin authentifié, en lecture seule ; chaque entrée est filtrée par
+    # user_has_permission avant envoi (admin_search.visible_entries + éléments
+    # vivants gardés un par un) et la page de destination revérifie son droit.
+    "search_index",
 }
 
 

@@ -80,16 +80,30 @@
             {# ---------------------------------------------------------------- #}
 
             {# Bouton hamburger (mobile uniquement, < md) #}
-            <button class="btn btn-outline-secondary d-md-none m-2"
-                    type="button" data-bs-toggle="collapse"
-                    data-bs-target="#sidebarMenu" aria-expanded="false"
-                    aria-controls="sidebarMenu" aria-label="Afficher le menu">
-                <i class="bi bi-list"></i> Menu
-            </button>
+            <div class="d-md-none d-flex gap-2 m-2">
+                <button class="btn btn-outline-secondary"
+                        type="button" data-bs-toggle="collapse"
+                        data-bs-target="#sidebarMenu" aria-expanded="false"
+                        aria-controls="sidebarMenu" aria-label="Afficher le menu">
+                    <i class="bi bi-list"></i> Menu
+                </button>
+                <button class="btn btn-outline-secondary" type="button" data-admin-search-open>
+                    <i class="bi bi-search" aria-hidden="true"></i> Rechercher
+                </button>
+            </div>
 
             <!-- Sidebar structure -->
             <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-secondary-subtle sidebar collapse">
                 <div class="position-sticky pt-3">
+                    {# Recherche globale (admin_search.js) : ouvre la palette ;
+                       raccourcis Ctrl+K et « / ». #}
+                    <button type="button" class="admin-search-trigger d-none d-md-flex"
+                            data-admin-search-open aria-keyshortcuts="Control+K"
+                            title="Rechercher une page, un réglage, une activité… (Ctrl+K)">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <span class="flex-grow-1 text-start">Rechercher…</span>
+                        <kbd aria-hidden="true">Ctrl K</kbd>
+                    </button>
                     <ul class="nav flex-column">
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path == '/admin' else '' }}"
@@ -356,6 +370,41 @@
 
     {{ macros.modal_delete() }}
 
+    {# Palette de recherche globale (admin_search.js) : combobox + listbox
+       ARIA ; résultats filtrés par permission côté serveur. Sans « fade » :
+       l'ouverture est synchrone, le champ reçoit donc la frappe qui suit
+       immédiatement Ctrl+K (avec l'animation, ces lettres étaient perdues). #}
+    <div class="modal" id="admin-search-modal" tabindex="-1"
+         aria-labelledby="admin-search-label" aria-hidden="true">
+        <div class="modal-dialog modal-lg admin-search-dialog">
+            <div class="modal-content">
+                <div class="modal-header admin-search-header">
+                    <label id="admin-search-label" for="admin-search-input" class="visually-hidden">
+                        Rechercher dans l'administration
+                    </label>
+                    <i class="bi bi-search text-muted" aria-hidden="true"></i>
+                    <input type="search" id="admin-search-input" class="form-control admin-search-input"
+                           placeholder="Rechercher une page, un réglage, une activité, un comptoir…"
+                           autocomplete="off" spellcheck="false"
+                           role="combobox" aria-autocomplete="list" aria-expanded="false"
+                           aria-controls="admin-search-results">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <ul id="admin-search-results" class="admin-search-results" role="listbox"
+                        aria-label="Résultats de la recherche"></ul>
+                    <p id="admin-search-status" class="admin-search-status" role="status" aria-live="polite"></p>
+                </div>
+                <div class="modal-footer admin-search-footer">
+                    <span><kbd>↑</kbd> <kbd>↓</kbd> parcourir</span>
+                    <span><kbd>Entrée</kbd> ouvrir</span>
+                    <span><kbd>Ctrl</kbd>+<kbd>Entrée</kbd> nouvel onglet</span>
+                    <span><kbd>Échap</kbd> fermer</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Voie de garage pour les retours htmx qui ne doivent pas être affichés-->
     <div id="invisible" style="display:none;"></div>
 
@@ -433,6 +482,9 @@
         sur les pages de configuration. Avertit l'utilisateur avant de quitter
         la page UNIQUEMENT s'il y a des changements en attente (point 6). #}
     <script defer src="{{ url_for('static', filename='js/admin_unsaved_changes.js') }}"></script>
+    {#  admin_search.js : recherche globale (Ctrl+K) et saut direct vers un
+        élément (#focus=<id>). Après bootstrap.bundle (Modal, Tab, Collapse). #}
+    <script defer src="{{ url_for('static', filename='js/admin_search.js') }}"></script>
 
     {# Scripts spécifiques à la page (Chart.js/stats, audio, galerie…).
        Placés après les scripts communs : s'ils sont en `defer`, ils

@@ -47,6 +47,7 @@ from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
 from routes.admin_onboarding import admin_onboarding_bp
 from routes.admin_performance import admin_performance_bp
+from routes.admin_search import admin_search_bp
 from scheduler_functions import clear_old_patients_table, reconcile_scheduled_jobs, start_stress_probe_loop
 from bdd import init_database
 from config import Config
@@ -407,6 +408,7 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_page_editor_bp, url_prefix='')
     app.register_blueprint(admin_onboarding_bp, url_prefix='')
     app.register_blueprint(admin_performance_bp, url_prefix='')
+    app.register_blueprint(admin_search_bp, url_prefix='')
 
     # Une signature de stress valide est marquee dans g pour permettre aux
     # integrations externes de se neutraliser sans modifier la logique metier.
