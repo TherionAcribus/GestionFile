@@ -160,11 +160,12 @@ def test_sidebar_has_administration_group():
     assert "Administration" in src
 
 
-def test_sidebar_renamed_admin_to_preferences():
-    """L'ancien libellé 'Admin' doit devenir plus explicite."""
+def test_sidebar_sans_preferences_d_administration():
+    """La palette de l'administration a rejoint « Application » : plus
+    d'entrée de menu dédiée (ni l'ancien libellé nu « Admin »)."""
     src = _read("templates/admin/base.html")
-    assert "Préférences d'administration" in src
-    # L'ancien libellé bare "Admin" ne doit plus être un libellé de lien.
+    assert "Préférences d'administration" not in src
+    assert "/admin/admin_options" not in src
     assert ">Admin<" not in src
 
 

@@ -1,4 +1,5 @@
 import io
+import os
 import re
 import socket
 import time
@@ -43,6 +44,13 @@ NAMESPACE_LABELS = {
     "/socket_phone": "Téléphones des patients",
 }
 
+def list_admin_themes():
+    """Noms des palettes Bootswatch disponibles (static/css/themes/*.css)."""
+    themes_path = os.path.join(app.static_folder, 'css/themes')
+    return sorted(os.path.splitext(f)[0] for f in os.listdir(themes_path)
+                  if f.endswith('.css'))
+
+
 @admin_app_bp.route('/admin/app')
 @admin_app_bp.route('/admin/app/<tab>')
 @require_permission('app')
@@ -73,6 +81,8 @@ def admin_app(tab=None):
                             numbering_by_activity = app.config["NUMBERING_BY_ACTIVITY"], 
                             announce_sound = app.config["ANNOUNCE_SOUND"],
                             pharmacy_name = app.config["PHARMACY_NAME"],
+                            admin_colors=app.config.get("ADMIN_COLORS", "lumen"),
+                            themes=list_admin_themes(),
                             mail_server = app.config["MAIL_SERVER"],
                             mail_port=app.config["MAIL_PORT"],
                             mail_username=app.config["MAIL_USERNAME"],

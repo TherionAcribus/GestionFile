@@ -1,9 +1,9 @@
 :root {
-    --circle_button_size: 150px;
+    --circle_button_size: 230px;
     --circle_button_color: #176B52;
     --circle_button_border_size: 0px;
     --circle_button_border_color: #18332F;
-    --circle_button_image_size: 160px;
+    --circle_button_image_size: 215px;
     --circle_button_text_size: 32px;
     --circle_button_text_color: #18332F;
     --circle_button_text_border_size: 0px;
@@ -43,18 +43,14 @@
     --patient_title_font_color: #FFFFFF;
     --patient_title_border_size: 0px;
     --patient_title_border_color: #18332F;
-    --patient_title_bottom_border_size: 0px;
-    --patient_title_bottom_border_color: #18332F;
     --patient_title_background_color: #176B52;
     --patient_title_background_height: 140px;
-    --subtitle_font_size: 33px;
+    --subtitle_font_size: 38px;
     --subtitle_font_color: #FFFFFF;
     --subtitle_border_size: 0px;
     --subtitle_border_color: #18332F;
-    --subtitle_top_border_size: 0px;
-    --subtitle_top_border_color: #18332F;
     --subtitle_background_color: #176B52;
-    --subtitle_background_height: 100px;
+    --subtitle_background_height: 110px;
     --subtitle_no_activity_font_size: 36px;
     --subtitle_no_activity_font_color: #18332F;
     --subtitle_no_activity_border_size: 0px;
@@ -97,4 +93,8 @@
     --print_error_border_color: #18332F;
     --print_error_background_color: #FFFFFF;
     --print_error_number_size: 96px;
+    --patient_title_bottom_border_size: 0px;
+    --patient_title_bottom_border_color: #18332F;
+    --subtitle_top_border_size: 0px;
+    --subtitle_top_border_color: #18332F;
 }

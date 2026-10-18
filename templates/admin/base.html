@@ -308,15 +308,6 @@
                             </a>
                         </li>
                         {% endif %}
-                        {% if user_has_permission(current_user, 'options') %}
-                        <li class="nav-item">
-                            <a class="nav-link {{ 'active' if request.path.startswith('/admin/admin_options') else '' }}"
-                               {{ 'aria-current="page"' if request.path.startswith('/admin/admin_options') else '' }}
-                               href="/admin/admin_options">
-                                <i class="bi bi-sliders"></i> Préférences d'administration
-                            </a>
-                        </li>
-                        {% endif %}
                         {% if user_has_permission(current_user, 'security') %}
                         <li class="nav-item">
                             <a class="nav-link {{ 'active' if request.path.startswith('/admin/security') else '' }}"

@@ -24,6 +24,7 @@ from flask_login import LoginManager
 from werkzeug.security import generate_password_hash
 
 import routes.admin_app as admin_app
+from routes.admin_options import admin_options_bp
 from call_numbering import next_category_call_number
 from models import Role, User, db
 
@@ -90,6 +91,7 @@ def app(tmp_path):
         return user if user and user.active else None
 
     app.register_blueprint(admin_app.admin_app_bp)
+    app.register_blueprint(admin_options_bp)
     app.add_url_rule("/login", endpoint="security.login", view_func=lambda: "")
 
     def test_login(username="admin"):
@@ -134,6 +136,27 @@ def test_onglet_demande(client, url, expected):
         client.get(url)
     assert captured["active_tab"] == expected
     assert ("/socket_patient", "Bornes patient") in captured["namespaces"]
+
+
+def test_palette_admin_dans_application(client, app):
+    """La palette de l'administration est réglée dans Application › Général."""
+    app.config["ADMIN_COLORS"] = "darkly"
+    captured = {}
+    with patch.object(admin_app, "render_template",
+                      lambda tpl, **kw: captured.update(kw) or ""):
+        client.get("/admin/app")
+    assert captured["admin_colors"] == "darkly"
+    assert captured["themes"] == sorted(captured["themes"])
+    assert {"lumen", "darkly"} <= set(captured["themes"])
+    general = _read("templates/admin/app_general.html")
+    assert 'id="admin_colors"' in general
+    assert '"key": "admin_colors"' in general
+
+
+def test_ancienne_page_preferences_redirige(client):
+    resp = client.get("/admin/admin_options")
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/admin/app")
 
 
 def test_connexions_lisibles(client):

@@ -492,10 +492,8 @@ def _permission_for(key: str) -> str:
         return "patient"
     if key == "counter_order":
         return "counter"
-    if key == "admin_colors":
-        return "options"
     # network_adress, pharmacy_name, start_rabbitmq, numbering_by_activity,
-    # mail_* : page « Application ».
+    # mail_*, admin_colors : page « Application ».
     return "app"
 
 

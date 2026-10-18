@@ -9,6 +9,23 @@
     {{ macros.textarea_full("pharmacy_name", pharmacy_name, "Nom affiché") }}
 </section>
 
+<section class="admin-setting-card algo-section" aria-labelledby="app_admin_colors_title">
+    <h5 id="app_admin_colors_title"><i class="bi bi-palette" aria-hidden="true"></i> Couleurs de l'administration</h5>
+    <p class="text-muted small mb-2">Palette des pages d'administration, pour tous les comptes. Les écrans patients ne sont pas concernés.</p>
+    <label class="form-label" for="admin_colors">Palette de couleurs</label>
+    <select class="form-select"
+            id="admin_colors"
+            hx-post="/admin/update_select"
+            hx-target="#invisible"
+            hx-vals='{"key": "admin_colors"}'
+            data-param-value="#admin_colors">
+        {% for theme in themes %}
+        <option value="{{ theme }}" {{ 'selected' if admin_colors == theme else '' }}>{{ theme.capitalize() }}</option>
+        {% endfor %}
+    </select>
+    <p class="form-text mb-0">Palettes issues de <a href="https://bootswatch.com/" target="_blank" rel="noopener">Bootswatch</a>.</p>
+</section>
+
 <section class="admin-setting-card algo-section" aria-labelledby="app_numbering_title">
     <h5 id="app_numbering_title"><i class="bi bi-123" aria-hidden="true"></i> Numérotation des tickets</h5>
     {{ macros.switch("numbering_by_activity",

@@ -10,14 +10,10 @@
     --title_font_size: 80px;
     --title_font_border_size: 0px;
     --title_font_border_color: #18332F;
-    --title_bottom_border_size: 0px;
-    --title_bottom_border_color: #18332F;
     --subtitle_font_color: #FFFFFF;
     --subtitle_font_size: 48px;
     --subtitle_font_border_size: 0px;
     --subtitle_font_border_color: #18332F;
-    --subtitle_top_border_size: 0px;
-    --subtitle_top_border_color: #18332F;
     --text_up_background_color: #FFFFFF;
     --text_up_font_color: #18332F;
     --text_up_font_size: 56px;
@@ -38,13 +34,17 @@
     --ongoing_font_size: 56px;
     --ongoing_font_border_size: 0px;
     --ongoing_font_border_color: #18332F;
-    --ongoing_border_size: 0px;
-    --ongoing_border_color: #18332F;
     --next_patients_font_color: #18332F;
     --next_patients_font_size: 60px;
     --next_patients_font_border_size: 0px;
     --next_patients_font_border_color: #18332F;
+    --next_patients_background_color: #E5F2EC;
+    --ongoing_border_size: 0px;
+    --ongoing_border_color: #18332F;
+    --title_bottom_border_size: 0px;
+    --title_bottom_border_color: #18332F;
     --next_patients_border_size: 0px;
     --next_patients_border_color: #18332F;
-    --next_patients_background_color: #E5F2EC;
+    --subtitle_top_border_size: 0px;
+    --subtitle_top_border_color: #18332F;
 }

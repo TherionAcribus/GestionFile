@@ -107,7 +107,7 @@ def test_stress_reference_patient_peak_is_bounded_and_administrable():
     ("algo_activate", "algo"),
     ("announce_title", "announce"),
     ("counter_order", "counter"),
-    ("admin_colors", "options"),
+    ("admin_colors", "app"),
     ("music_spotify", "music_options"),
     ("phone_line1", "phone"),
     ("page_patient_title", "patient"),

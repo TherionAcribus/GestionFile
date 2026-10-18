@@ -52,7 +52,6 @@ PAGES_ADMIN = [
     "/admin/translations",
     "/admin/phone",
     "/admin/database",
-    "/admin/admin_options",
     "/admin/info",
 ]
 
