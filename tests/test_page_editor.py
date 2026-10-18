@@ -1819,8 +1819,12 @@ def test_factory_payload_marks_missing_config_keys_none():
     """Un réglage géré absent du JSON d'usine vaut ``None`` : le client
     n'affiche alors aucun bouton « reprendre la valeur d'usine »."""
     payload = factory_payload("patient")
-    assert "page_patient_print_fail_behavior" in payload["config"]
-    assert payload["config"]["page_patient_print_fail_behavior"] is None
+    assert "page_patient_print_fail_abandon_timer" in payload["config"]
+    assert payload["config"]["page_patient_print_fail_abandon_timer"] is None
+    # Les choix d'échec d'impression, eux, ont une valeur d'usine.
+    assert payload["config"]["page_patient_print_fail_behavior"] == "keep"
+    assert payload["config"]["page_patient_print_fail_show_retry"] is False
+    assert payload["config"]["page_patient_print_fail_show_staff"] is False
 
 
 def test_state_exposes_factory_defaults(editor_app):

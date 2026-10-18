@@ -56,6 +56,8 @@ _SCAN_ROUTE = {"all": [
 ]}
 _ASK = _is("page_patient_print_fail_behavior", "ask")
 _CONCLUSION = _is("page_patient_display_conclusion")
+_RETRY = _is("page_patient_print_fail_show_retry")
+_STAFF = _is("page_patient_print_fail_show_staff")
 
 
 #: Parcours de la borne patient. ``scenario`` renvoie aux scénarios d'aperçu
@@ -178,10 +180,19 @@ PATIENT_JOURNEY = {
                          "help": "Demander : le patient choisit (réessayer, appeler le personnel). Conserver : il reste inscrit sans ticket et note son numéro. Annuler : l’inscription est annulée."},
                         {"key": "page_patient_print_fail_show_retry", "label": "Proposer « Réessayer »",
                          "enabled_when": _ASK},
+                        {"key": "page_patient_print_fail_show_staff",
+                         "label": "Proposer « Appeler le personnel »",
+                         "help": "Utile dans une grande officine : le comptoir reçoit une alerte. Dans une petite, l’équipe voit directement le patient. Réglage commun aux écrans « Erreur d’impression » (mode Demander) et « Impression incertaine »."},
                         {"key": "page_patient_print_fail_abandon_timer",
                          "label": "Retour à l’accueil si le patient ne choisit rien (0 = jamais)",
                          "help": "L’inscription en attente est alors annulée.",
                          "enabled_when": _ASK},
+                    ],
+                    "warnings": [
+                        # Seul « Retour » reste : le patient lit son numéro
+                        # mais l'inscription en attente n'est jamais activée.
+                        {"when": {"all": [_ASK, _not(_RETRY), _not(_STAFF)]},
+                         "text": "Sans « Réessayer » ni « Appeler le personnel », le patient n’a qu’un bouton « Retour » : il voit son numéro mais n’est pas inscrit. Choisissez plutôt « Conserver dans la file » : il garde son numéro et sera appelé."},
                     ],
                     "components": ["print_error"],
                 },
@@ -198,6 +209,9 @@ PATIENT_JOURNEY = {
                         {"key": "page_patient_print_uncertain_timeout_action",
                          "label": "Si le patient ne répond pas",
                          "help": "« Ticket reçu » : il entre dans la file (cas le plus probable) et le comptoir est prévenu. « Personnel » : l’inscription reste en attente puis expire ; le comptoir, alerté, vérifie."},
+                        {"key": "page_patient_print_fail_show_staff",
+                         "label": "Proposer « Appeler le personnel »",
+                         "help": "Utile dans une grande officine : le comptoir reçoit une alerte. Dans une petite, l’équipe voit directement le patient. Réglage commun aux écrans « Erreur d’impression » (mode Demander) et « Impression incertaine »."},
                     ],
                     "components": ["print_error"],
                 },

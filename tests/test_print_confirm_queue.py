@@ -342,9 +342,41 @@ def test_confirm_print_idempotent_apres_annulation(client, application):
     assert r2.get_json()["status"] == "cancelled"
 
 
+def test_echec_par_defaut_conserve_le_patient_sans_bouton(client, application):
+    """Défaut « Conserver dans la file », boutons décochés : aucun choix à
+    comprendre, le patient est inscrit et note son numéro."""
+    for key in ("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY",
+                "PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF"):
+        application.config.pop(key, None)
+    _pending_patient(application)
+
+    r = client.post("/patient/confirm_print",
+                    json={"print_job_id": "job-1", "success": False})
+
+    assert r.get_json()["status"] == "activated_no_ticket"
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-1").one().status == "standing"
+
+
+def test_defauts_echec_impression_dans_app_et_json():
+    """Mêmes défauts pour une installation neuve (JSON d'usine) et pour une
+    ancienne sans ligne en base (app.config.setdefault)."""
+    import json
+
+    source = _lire("app.py")
+    assert 'setdefault("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "keep")' in source
+    assert 'setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", False)' in source
+    assert 'setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", False)' in source
+    usine = json.loads(_lire("static/json/default_config.json"))["configurations"]
+    assert usine["page_patient_print_fail_behavior"] == "keep"
+    assert usine["page_patient_print_fail_show_retry"] is False
+    assert usine["page_patient_print_fail_show_staff"] is False
+
+
 def test_confirm_print_ask_reste_idempotent(client, application):
-    """Échec + comportement 'ask' (défaut) : le patient reste pending et le
-    réessai renvoie les mêmes options de décision."""
+    """Échec + comportement 'ask' : le patient reste pending et le réessai
+    renvoie les mêmes options de décision."""
+    application.config["PAGE_PATIENT_PRINT_FAIL_BEHAVIOR"] = "ask"
     _pending_patient(application)
 
     for _ in range(2):

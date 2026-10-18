@@ -449,7 +449,7 @@ def _uncertain_response(patient):
     return jsonify({
         'status': 'uncertain',
         'call_number': patient.call_number,
-        'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
+        'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", False)),
         'abandon_timer': timeout,
         'timeout': timeout,
         'timeout_action': app.config.get("PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION", "received"),
@@ -551,7 +551,7 @@ def confirm_print():
 
     # Échec d'impression : comportement piloté par la configuration Admin
     # (onglet Page Patient). 'cancel' | 'keep' | 'ask'.
-    behavior = app.config.get("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "ask")
+    behavior = app.config.get("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "keep")
     # 'busy' signifie « cet appel n'a pas atteint le matériel » — pas un
     # échec d'impression. Garde-fou pour les clients anciens/incomplets :
     # même s'il arrive encore ici, il ne doit jamais déclencher 'cancel'.
@@ -591,8 +591,8 @@ def confirm_print():
     return jsonify({
         'status': 'ask',
         'call_number': patient.call_number,
-        'show_retry': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", True)),
-        'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
+        'show_retry': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", False)),
+        'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", False)),
         # Garde-fou anti-blocage : délai (s) avant retour auto à l'accueil si le
         # patient ne choisit rien. 0 = jamais.
         'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))

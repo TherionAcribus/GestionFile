@@ -118,9 +118,12 @@ def load_configuration(app):
     # onglet Page Patient). Défauts appliqués si aucune ligne ConfigOption
     # n'existe encore (installation neuve). 'ask' : proposer Réessayer / Appeler
     # le personnel. 'keep' : garder le patient dans la file. 'cancel' : annuler.
-    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "ask")
-    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", True)
-    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)
+    # Défaut « keep » sans boutons : aucun choix à comprendre pour le patient,
+    # il note son numéro et sera appelé (le comptoir reçoit l'alerte). Les
+    # boutons servent surtout aux grandes officines (mode « ask »).
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_BEHAVIOR", "keep")
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", False)
+    app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", False)
     # Délai (s) avant retour automatique à l'accueil sur l'écran d'échec en mode
     # 'ask' si le patient ne choisit rien (garde-fou anti-blocage borne). 0 = jamais.
     app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60)

@@ -180,6 +180,36 @@ def test_scan_warning_and_disabled_choices():
     assert not any(evaluate(w["when"], config) for w in validation["warnings"])
 
 
+def test_staff_button_offered_on_both_print_incident_screens():
+    """« Appeler le personnel » se règle depuis les écrans où il apparaît,
+    pas seulement depuis « Personnel appelé »."""
+    steps = {step["id"]: step for step in iter_steps(PATIENT_JOURNEY)}
+    for step_id in ("print_error", "print_uncertain"):
+        keys = [choice["key"] for choice in steps[step_id]["choices"]]
+        assert "page_patient_print_fail_show_staff" in keys, step_id
+    assert steps["staff_called"]["toggle"]["key"] == "page_patient_print_fail_show_staff"
+
+
+@pytest.mark.parametrize(("changes", "warned"), [
+    ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": False,
+      "page_patient_print_fail_show_staff": False}, True),
+    ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": True,
+      "page_patient_print_fail_show_staff": False}, False),
+    ({"page_patient_print_fail_behavior": "ask", "page_patient_print_fail_show_retry": False,
+      "page_patient_print_fail_show_staff": True}, False),
+    # Petite officine : « Conserver » sans aucun bouton est cohérent.
+    ({"page_patient_print_fail_behavior": "keep", "page_patient_print_fail_show_retry": False,
+      "page_patient_print_fail_show_staff": False}, False),
+])
+def test_print_error_warns_when_only_back_button_remains(changes, warned):
+    step = next(step for step in iter_steps(PATIENT_JOURNEY) if step["id"] == "print_error")
+    config = {**_factory_config(), **changes}
+    active = [w for w in step["warnings"] if evaluate(w["when"], config)]
+    assert bool(active) is warned
+    if warned:
+        assert "Conserver dans la file" in active[0]["text"]
+
+
 def test_editor_js_mirrors_condition_language():
     """Le navigateur évalue la même définition : les opérateurs reconnus par
     page_journey.evaluate doivent l'être aussi par page_editor.js."""

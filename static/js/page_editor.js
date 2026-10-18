@@ -1614,7 +1614,7 @@
                 const checked = control.checked;
                 mutate(function () {
                     payload.config[choice.key] = choice.invert ? !checked : checked;
-                }, 'Parcours modifié : « ' + choice.label + ' » ' + (checked ? 'activé.' : 'désactivé.'));
+                }, 'Parcours modifié : ' + choice.label + (checked ? ' — activé.' : ' — désactivé.'));
                 // L'inspecteur vient d'être reconstruit : le focus revient
                 // sur le même interrupteur pour la navigation au clavier.
                 const again = document.getElementById(id);
@@ -1659,7 +1659,7 @@
                     if (choice.max != null) value = Math.min(choice.max, value);
                 }
                 mutate(function () { payload.config[choice.key] = value; },
-                    'Parcours modifié : « ' + choice.label + ' ».');
+                    'Parcours modifié : ' + choice.label + '.');
                 const again = document.getElementById(id);
                 if (again) again.focus();
             });
