@@ -7,6 +7,14 @@
 
 .outer-grid-container {
     display: grid;
+    /* Marge haute/basse : les cellules s'étiraient jusqu'aux bords de la
+       zone et les boutons de la rangée du haut touchaient le titre —
+       d'autant plus visible avec les images qui débordent au-dessus du
+       cercle. En haut, la marge couvre le débordement maximal de l'image
+       (25 % de sa taille) quand la réserve interne s'est compressée :
+       l'image n'atteint jamais le bandeau titre. Les rangées
+       minmax(0,1fr) absorbent la place prise. */
+    padding: min(45px, 6vh) 0 min(20px, 2.5vh);
     grid-template-columns: 1fr;
     /* Une ou deux lignes (selon le nombre de boutons) se partagent la hauteur
        disponible : le contenu ne déborde plus sur le titre ni le pied de page. */

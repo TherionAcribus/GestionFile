@@ -1048,7 +1048,7 @@ def builtin_themes(page):
         elif page == "patient":
             block("patient_title", on_primary, primary, "72px" if large else "64px")
             block("subtitle", on_primary, primary, "37px" if large else "33px")
-            css.update(patient_title_background_height="130px" if large else "120px",
+            css.update(patient_title_background_height="150px" if large else "140px",
                        subtitle_background_height="115px" if large else "100px",
                        circle_button_size="170px" if large else "150px", circle_button_color=primary,
                        circle_button_text_color=text,

@@ -365,10 +365,12 @@ html, body {
    manque de hauteur — contrairement à un padding qui rognait le cercle. */
 .div_bloc_activity.img_above::before {
     content: "";
-    /* Réserve exactement le débordement de l'image (translateY -25%) :
-       plus et il crée du vide en haut de cellule, moins et l'image est
-       rognée au bord de la zone quand la place manque. */
-    flex: 0 10 calc(var(--circle_button_image_size) * 0.25);
+    /* Réserve le débordement de l'image (translateY -25%) — flex-shrink:0 :
+       elle ne cède jamais sa place. Quand la cellule manque de hauteur,
+       c'est le cercle (flex:1, min-height:0) qui compresse ; un spacer
+       rétractable laissait le cercle remonter en haut de cellule et
+       l'image repassait sous le bandeau titre. */
+    flex: 0 0 calc(var(--circle_button_image_size) * 0.25);
     min-height: 0;
 }
 
@@ -437,7 +439,7 @@ html, body {
        (débordement de l'image) et en bas de cellule restent homogènes. */
     justify-content: center;
     line-height: 1.2;
-    margin-top: 0.4em;
+    margin-top: 0.2em;
     min-height: 2.8em;
     overflow-wrap: break-word;
     hyphens: auto;
