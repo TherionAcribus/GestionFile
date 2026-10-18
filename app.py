@@ -124,6 +124,12 @@ def load_configuration(app):
     # Délai (s) avant retour automatique à l'accueil sur l'écran d'échec en mode
     # 'ask' si le patient ne choisit rien (garde-fou anti-blocage borne). 0 = jamais.
     app.config.setdefault("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60)
+    # « Impression incertaine » sans réponse : le patient est le plus souvent
+    # reparti avec son ticket — il est conservé dans la file par défaut. Délai
+    # court : le patient suivant ne doit pas trouver ces boutons (incompris,
+    # et « Je n'ai pas de ticket » relançait une impression en double).
+    app.config.setdefault("PAGE_PATIENT_PRINT_UNCERTAIN_TIMER", 15)
+    app.config.setdefault("PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION", "received")
     # Libellés patient du flux d'impression (traduisibles : FR = app.config,
     # autres langues via la table Translation avec repli FR).
     app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINTING", "Impression en cours…")

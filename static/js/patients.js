@@ -756,6 +756,30 @@ function confirmPrintResult(printJobId, result, printData) {
         });
 }
 
+// « Impression incertaine » restée sans réponse avec le réglage « ticket
+// présumé reçu » : l'acquittement passe par la même file durable que les
+// autres (retenté jusqu'à réponse), mais la borne revient tout de suite à
+// l'accueil — le patient est parti, aucune confirmation à lui montrer.
+function presumeTicketReceived(printJobId, printData) {
+    var result = {
+        success: true,
+        code: 'ticket_presumed',
+        message: 'Pas de réponse du patient : ticket présumé reçu'
+    };
+    recordPrintAttemptResult(printJobId, result);
+    var queued = enqueuePrintConfirmation(printJobId, result, printData);
+    postPrintConfirmation(printJobId, result)
+        .then(function() {
+            dequeuePrintConfirmation(printJobId, queued && queued.queueId);
+        })
+        .catch(function(err) {
+            console.error('confirm_print injoignable — acquittement présumé conservé en file locale', err);
+            schedulePrintDrain();
+        });
+    finishPrintFlow(printJobId);
+    conclusionTimer().goHome();
+}
+
 function _runPrintAttempt(printData, printJobId, busyAttempts) {
     return sendPrintTicket(printData, printJobId)
         .then(function(result) {
@@ -880,18 +904,24 @@ function handlePrintConfirmation(printData, printJobId, data) {
             }
             renderPrintOverlay(bigNumberHtml(L.print_uncertain, data.call_number), uncertainButtons);
 
-            // Garde-fou d'affichage : sans choix, on revient à l'accueil
-            // SANS appeler print_abandon. Un résultat incertain ne doit jamais
-            // annuler automatiquement l'inscription : le ticket est peut-être
-            // sorti. Le pending sera expiré par son TTL et pourra toujours
-            // être réconcilié si l'acquittement devient explicite.
+            // Sans réponse dans le délai, on revient à l'accueil SANS jamais
+            // annuler l'inscription (le ticket est peut-être sorti) :
+            //   - « received » (défaut) : le patient est très probablement
+            //     reparti avec son ticket -> impression confirmée (présumée) ;
+            //   - « staff » : l'inscription reste en attente puis expire, le
+            //     personnel (déjà alerté) vérifie.
             clearAbandonTimer();
-            var uncertainAbandon = parseInt(data.abandon_timer, 10);
-            if (uncertainAbandon > 0) {
+            var uncertainTimeout = parseInt(data.timeout != null ? data.timeout : data.abandon_timer, 10);
+            if (uncertainTimeout > 0) {
                 _askAbandonTimeout = setTimeout(function() {
-                    finishPrintFlow(printJobId);
-                    conclusionTimer().goHome();
-                }, uncertainAbandon * 1000);
+                    _askAbandonTimeout = null;
+                    if (data.timeout_action === 'received') {
+                        presumeTicketReceived(printJobId, printData);
+                    } else {
+                        finishPrintFlow(printJobId);
+                        conclusionTimer().goHome();
+                    }
+                }, uncertainTimeout * 1000);
             }
             break;
         case 'ask':

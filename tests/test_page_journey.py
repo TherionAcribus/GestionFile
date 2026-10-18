@@ -153,6 +153,14 @@ def test_factory_config_shows_conclusion():
     assert _factory_config()["page_patient_display_conclusion"] is True
 
 
+def test_factory_uncertain_timeout_is_short():
+    """Valeur d'usine courte : le patient suivant ne doit pas se retrouver
+    devant « J'ai récupéré mon ticket / Je n'ai pas de ticket »."""
+    config = _factory_config()
+    assert config["page_patient_print_uncertain_timer"] == 15
+    assert config["page_patient_print_uncertain_timeout_action"] == "received"
+
+
 def test_children_step_hidden_without_grouping_button():
     overview = journey_overview("patient", _factory_config(), {"children_parents": []})
     assert overview["children"][0] == HIDDEN

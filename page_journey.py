@@ -180,6 +180,7 @@ PATIENT_JOURNEY = {
                          "enabled_when": _ASK},
                         {"key": "page_patient_print_fail_abandon_timer",
                          "label": "Retour à l’accueil si le patient ne choisit rien (0 = jamais)",
+                         "help": "L’inscription en attente est alors annulée.",
                          "enabled_when": _ASK},
                     ],
                     "components": ["print_error"],
@@ -190,6 +191,14 @@ PATIENT_JOURNEY = {
                     "role": "L’imprimante n’a pas confirmé : le patient indique s’il a reçu son ticket.",
                     "status": [{"state": CONDITIONAL, "text": "Seulement si l’imprimante ne peut pas confirmer l’impression."}],
                     "fixed": "Toujours prévu : sans réponse de l’imprimante, seul le patient sait si le ticket est sorti.",
+                    "choices": [
+                        {"key": "page_patient_print_uncertain_timer",
+                         "label": "Délai laissé au patient pour répondre",
+                         "help": "Beaucoup de patients repartent avec leur ticket sans toucher l’écran : passé ce délai, la borne revient à l’accueil. Gardez-le court (15 s conseillées) pour que le patient suivant ne trouve pas ces boutons et ne relance pas l’impression d’un ticket en double."},
+                        {"key": "page_patient_print_uncertain_timeout_action",
+                         "label": "Si le patient ne répond pas",
+                         "help": "« Ticket reçu » : il entre dans la file (cas le plus probable) et le comptoir est prévenu. « Personnel » : l’inscription reste en attente puis expire ; le comptoir, alerté, vérifie."},
+                    ],
                     "components": ["print_error"],
                 },
                 {

@@ -431,6 +431,43 @@ def _alert_staff_print_failure(patient, code, message, maybe_printed=False):
         app.logger.error(f"Journalisation dashboard imprimante impossible: {e}")
 
 
+#: Code envoyé par la borne quand le patient n'a pas répondu à l'écran
+#: « Impression incertaine » et que le réglage présume le ticket reçu.
+TICKET_PRESUMED_CODE = "ticket_presumed"
+
+
+def _uncertain_response(patient):
+    """Réponse « résultat d'impression incertain » : le patient tranche.
+
+    ``timeout``/``timeout_action`` : sans réponse dans le délai, la borne
+    revient à l'accueil et, si ``received``, confirme l'impression
+    (TICKET_PRESUMED_CODE) — le patient est le plus souvent reparti avec son
+    ticket ; ``staff`` laisse l'inscription en attente (expiration) pour
+    vérification par le personnel, déjà alerté. ``abandon_timer`` reste
+    envoyé pour une borne qui n'aurait pas encore le nouveau script."""
+    timeout = int(app.config.get("PAGE_PATIENT_PRINT_UNCERTAIN_TIMER", 15))
+    return jsonify({
+        'status': 'uncertain',
+        'call_number': patient.call_number,
+        'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
+        'abandon_timer': timeout,
+        'timeout': timeout,
+        'timeout_action': app.config.get("PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION", "received"),
+    }), 200
+
+
+def _notify_presumed_ticket(patient):
+    """Prévient le comptoir qu'un patient est entré en file sans avoir
+    confirmé son ticket (« Impression incertaine » restée sans réponse)."""
+    try:
+        send_app_notification(origin="printer_error", data={
+            "message": (f"Patient {patient.call_number} parti sans répondre après une impression "
+                        "incertaine : ticket présumé reçu, il a été ajouté à la file."),
+        })
+    except Exception as e:
+        app.logger.error(f"Alerte personnel (ticket présumé) impossible: {e}")
+
+
 @patient_bp.route('/patient/confirm_print', methods=['POST'])
 def confirm_print():
     """ Confirme au serveur le résultat de l'impression locale d'un ticket.
@@ -484,6 +521,8 @@ def confirm_print():
                     "Réconciliation impression tardive : le patient %s entre en file",
                     patient.id)
                 _after_activation(patient)
+                if code == TICKET_PRESUMED_CODE:
+                    _notify_presumed_ticket(patient)
             if patient.status == 'standing':
                 return jsonify({
                     'status': 'activated',
@@ -496,12 +535,7 @@ def confirm_print():
             # s'il a le ticket ; sa réponse « oui » pourra réconcilier la
             # même journée, « non » laissera l'inscription expirée.
             _alert_staff_print_failure(patient, code, message, True)
-            return jsonify({
-                'status': 'uncertain',
-                'call_number': patient.call_number,
-                'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
-                'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))
-            }), 200
+            return _uncertain_response(patient)
         return jsonify({'status': 'expired'}), 410
 
     # Déjà confirmé : idempotence (renvoi réseau, réessai de la file locale
@@ -511,7 +545,8 @@ def confirm_print():
         return _confirm_print_resolved_response(patient)
 
     if success:
-        _activate_and_notify(patient)
+        if _activate_and_notify(patient) and code == TICKET_PRESUMED_CODE:
+            _notify_presumed_ticket(patient)
         return _confirm_print_resolved_response(patient)
 
     # Échec d'impression : comportement piloté par la configuration Admin
@@ -527,12 +562,7 @@ def confirm_print():
         # Résultat matériel ambigu (ex. USB coupé après l'envoi du contenu ou
         # pendant la coupe) : ne jamais trancher automatiquement. Le patient
         # indique ce qu'il voit, ou appelle le personnel.
-        return jsonify({
-            'status': 'uncertain',
-            'call_number': patient.call_number,
-            'show_staff': bool(app.config.get("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", True)),
-            'abandon_timer': int(app.config.get("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", 60))
-        }), 200
+        return _uncertain_response(patient)
 
     if behavior == "keep":
         # On conserve le patient dans la file malgré l'absence de ticket.

@@ -203,6 +203,10 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_print_fail_show_retry": ("PAGE_PATIENT_PRINT_FAIL_SHOW_RETRY", "value_bool"),
     "page_patient_print_fail_show_staff": ("PAGE_PATIENT_PRINT_FAIL_SHOW_STAFF", "value_bool"),
     "page_patient_print_fail_abandon_timer": ("PAGE_PATIENT_PRINT_FAIL_ABANDON_TIMER", "value_int"),
+    # Écran « Impression incertaine » : délai sans réponse du patient et suite
+    # donnée (le patient est très souvent déjà parti avec son ticket).
+    "page_patient_print_uncertain_timer": ("PAGE_PATIENT_PRINT_UNCERTAIN_TIMER", "value_int"),
+    "page_patient_print_uncertain_timeout_action": ("PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION", "value_str"),
     "page_patient_interface_printing": ("PAGE_PATIENT_INTERFACE_PRINTING", "value_str"),
     "page_patient_interface_print_failed": ("PAGE_PATIENT_INTERFACE_PRINT_FAILED", "value_str"),
     "page_patient_interface_retry": ("PAGE_PATIENT_INTERFACE_RETRY", "value_str"),
@@ -349,6 +353,8 @@ _INT_RANGES = {
     "call_auto_validation_warning_seconds": (10, 600),
     "call_auto_validation_grace_seconds": (10, 300),
     "call_auto_validation_extension_seconds": (10, 600),
+    # Jamais « 0 = jamais » : la borne ne doit pas rester bloquée sur cet écran.
+    "page_patient_print_uncertain_timer": (5, 600),
 }
 
 
@@ -435,6 +441,9 @@ _ENUM_VALUES: dict[str, frozenset[str]] = {
     "music_announce_action": frozenset({"pause", "down", "nothing"}),
     # Modifié via update_input (select à hx-post="/admin/update_input").
     "page_patient_print_fail_behavior": frozenset({"ask", "keep", "cancel"}),
+    # « received » : ticket présumé reçu (inscription conservée) ; « staff » :
+    # l'inscription reste en attente, le personnel vérifie.
+    "page_patient_print_uncertain_timeout_action": frozenset({"received", "staff"}),
     # Valeur de synchronisation de l'éditeur visuel. ``mixed`` signifie que le
     # mode avancé conserve des formes différentes bouton par bouton.
     "page_patient_button_shape": frozenset({"mixed", "circle", "square"}),

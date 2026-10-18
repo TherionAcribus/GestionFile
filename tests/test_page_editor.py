@@ -686,6 +686,10 @@ def test_text_fields_are_bounded_by_their_storage_column(page, key):
         ("patient", "page_patient_end_timer", 0, True),
         ("patient", "page_patient_timer_activity_inactive", -1, False),
         ("patient", "page_patient_print_fail_abandon_timer", -1, False),
+        # « Impression incertaine » : jamais « 0 = jamais » (borne bloquée).
+        ("patient", "page_patient_print_uncertain_timer", 0, False),
+        ("patient", "page_patient_print_uncertain_timer", 5, True),
+        ("patient", "page_patient_print_uncertain_timer", 601, False),
     ],
 )
 def test_int_fields_are_bounded_by_field_and_registry_limits(page, key, value, ok):

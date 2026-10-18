@@ -81,6 +81,31 @@
 {{ macros.textbloc_int("page_patient_print_fail_abandon_timer", page_patient_print_fail_abandon_timer,
                 "Mode « Demander » : délai en s avant retour auto à l'accueil si le patient ne choisit rien (0 = jamais)") }}
 
+<h5>Impression incertaine</h5>
+<p class="small text-muted">L'imprimante n'a pas confirmé : le patient indique s'il a reçu son ticket. Beaucoup repartent sans toucher l'écran.</p>
+
+{{ macros.textbloc_int("page_patient_print_uncertain_timer", page_patient_print_uncertain_timer,
+                "Délai en s laissé au patient pour répondre (5 à 600)") }}
+
+<div class="mb-3">
+    <label for="page_patient_print_uncertain_timeout_action" class="form-label">
+        Si le patient ne répond pas dans ce délai :
+    </label>
+    <select id="page_patient_print_uncertain_timeout_action" class="form-select"
+            hx-post="/admin/update_input"
+            hx-target="#invisible"
+            hx-trigger="change"
+            hx-vals='{"key": "page_patient_print_uncertain_timeout_action"}'
+            data-param-value="#page_patient_print_uncertain_timeout_action">
+        <option value="received" {% if page_patient_print_uncertain_timeout_action == 'received' %}selected{% endif %}>
+            Considérer le ticket comme reçu : le patient entre dans la file (le comptoir est prévenu)
+        </option>
+        <option value="staff" {% if page_patient_print_uncertain_timeout_action == 'staff' %}selected{% endif %}>
+            Laisser le personnel vérifier : l'inscription reste en attente puis expire
+        </option>
+    </select>
+</div>
+
 
 <div class="accordion" id="accordionPrintFailTexts">
     <div class="accordion-item">

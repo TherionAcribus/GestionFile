@@ -152,8 +152,9 @@ def test_resultat_inconnu_est_propage_et_tranche_par_le_patient():
     assert "ticket_missing" in corps
     assert "callStaffFlow" in corps
     incertain = corps[corps.index("case 'uncertain'"):corps.index("case 'ask'")]
-    assert "uncertainAbandon" in incertain
-    assert "abandon_timer" in incertain
+    assert "uncertainTimeout" in incertain
+    assert "data.timeout" in incertain
+    assert "abandon_timer" in incertain  # repli : ancienne réponse serveur
     # Le garde-fou incertain ramène à l'accueil sans annuler : le ticket est
     # peut-être sorti.
     assert "abandonFlow" not in incertain
@@ -391,9 +392,72 @@ def test_resultat_incertain_ne_peut_pas_annuler_en_mode_cancel(client, applicati
     assert r.status_code == 200
     donnees = r.get_json()
     assert donnees["status"] == "uncertain"
-    assert donnees["abandon_timer"] == 60
+    # Délai propre à l'écran « incertain » (15 s par défaut : le patient
+    # suivant ne doit pas tomber sur ces choix), aussi publié sous l'ancien
+    # nom pour une borne pas encore mise à jour.
+    assert donnees["timeout"] == 15
+    assert donnees["abandon_timer"] == 15
+    assert donnees["timeout_action"] == "received"
     with application.app_context():
         assert Patient.query.filter_by(print_job_id="job-1").one().status == "pending"
+
+
+def test_resultat_incertain_transmet_le_reglage_sans_reponse(client, application):
+    application.config["PAGE_PATIENT_PRINT_UNCERTAIN_TIMER"] = 45
+    application.config["PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION"] = "staff"
+    _pending_patient(application)
+
+    donnees = client.post("/patient/confirm_print", json={
+        "print_job_id": "job-1", "success": False,
+        "code": "error_print", "maybe_printed": True}).get_json()
+
+    assert donnees["timeout"] == 45
+    assert donnees["timeout_action"] == "staff"
+
+
+def test_ticket_presume_recu_entre_en_file_et_previent_le_comptoir(
+        client, application, monkeypatch):
+    """Patient parti sans répondre à « Impression incertaine » (réglage
+    « ticket reçu ») : la borne confirme avec le code ticket_presumed ; il
+    entre en file et le comptoir reçoit un message explicite."""
+    import routes.patient as patient_routes
+
+    messages = []
+    monkeypatch.setattr(
+        patient_routes, "send_app_notification",
+        lambda origin, data: messages.append((origin, data)))
+    _pending_patient(application)
+
+    r = client.post("/patient/confirm_print", json={
+        "print_job_id": "job-1", "success": True, "code": "ticket_presumed",
+        "message": "Pas de réponse du patient : ticket présumé reçu"})
+
+    assert r.get_json()["status"] == "activated"
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-1").one().status == "standing"
+    presumed = [data["message"] for origin, data in messages if origin == "printer_error"]
+    assert len(presumed) == 1
+    assert "présumé reçu" in presumed[0]
+
+    # Rejeu de la file locale : idempotent, pas de seconde alerte.
+    client.post("/patient/confirm_print", json={
+        "print_job_id": "job-1", "success": True, "code": "ticket_presumed"})
+    assert len([1 for origin, _ in messages if origin == "printer_error"]) == 1
+
+
+def test_borne_presume_le_ticket_via_la_file_durable():
+    """Sans réponse et réglage « received » : acquittement enfilé AVANT le
+    POST (comme toute confirmation) puis retour immédiat à l'accueil."""
+    source = _lire("static/js/patients.js")
+    corps = _corps_fonction(source, "presumeTicketReceived")
+    assert "'ticket_presumed'" in corps
+    assert corps.index("enqueuePrintConfirmation") < corps.index("postPrintConfirmation")
+    assert "schedulePrintDrain" in corps
+    assert "goHome" in corps
+    gestion = _corps_fonction(source, "handlePrintConfirmation")
+    incertain = gestion[gestion.index("case 'uncertain'"):gestion.index("case 'ask'")]
+    assert "data.timeout_action === 'received'" in incertain
+    assert "presumeTicketReceived" in incertain
 
 
 def test_resultat_incertain_puis_ticket_recu_active(client, application):

@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.40",
+    "version": "0.41",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -77,6 +77,8 @@
             "page_patient_qrcode_display_specific_message": true,
             "page_patient_end_timer": 5,
             "page_patient_display_conclusion": true,
+            "page_patient_print_uncertain_timer": 15,
+            "page_patient_print_uncertain_timeout_action": "received",
             "page_patient_display_button_scan": true,
             "page_patient_display_scan_explanation": true,
             "page_patient_display_specific_message": true,
