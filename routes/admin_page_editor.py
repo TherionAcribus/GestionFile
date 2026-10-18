@@ -19,6 +19,7 @@ from audit_log import (
     OUTCOME_SUCCESS,
 )
 from audit_service import record_audit
+from button_shapes import CHILDREN_SHAPE_KEY, HOME_SHAPE_KEY, SHAPES, shape_modes
 from communication import communikation
 from config import time_tz
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
@@ -52,6 +53,7 @@ from page_editor import (
     payload_diff,
     payload_hash,
     public_adapter_data,
+    register_published_config_reader,
     validate_payload,
 )
 from params_registry import (
@@ -68,6 +70,22 @@ from utils import (
 
 
 admin_page_editor_bp = Blueprint("admin_page_editor", __name__)
+
+
+def _patient_button_shapes(fallbacks):
+    """Formes publiées des boutons patient : celles des boutons eux-mêmes.
+
+    ``page_patient_button_shape`` / ``..._children_...`` ne sont qu'un reflet
+    de ``Button.shape`` ; lire les boutons garde l'éditeur juste même quand le
+    reflet est absent ou en retard (installation mise à jour, restauration de
+    sauvegarde, import de boutons)."""
+    return shape_modes(
+        db.session.query(Button.parent_button_id, Button.shape).all(),
+        fallbacks=fallbacks,
+    )
+
+
+register_published_config_reader("patient", _patient_button_shapes)
 
 _DEFAULT_PREVIEW_TOKENS = {
     "{P}": "Pharmacie Démonstration",
@@ -347,6 +365,25 @@ def _revision_document(revision):
     }
 
 
+def _journey_facts(page):
+    """Faits de la frise « parcours » qui ne dépendent pas du brouillon mais
+    des données (cf. page_journey) : les boutons de regroupement affichés
+    qui ont au moins une sous-activité affichée."""
+    if page != "patient":
+        return {}
+    parents = (
+        Button.query.filter_by(parent_button_id=None, is_parent=True, is_present=True)
+        .order_by(Button.sort_order, Button.id)
+        .all()
+    )
+    return {
+        "children_parents": [
+            parent.label for parent in parents
+            if any(child.is_present for child in parent.dependent_buttons)
+        ],
+    }
+
+
 def _state_document(page, adapter):
     state = PageEditorState.query.filter_by(page_key=page).first()
     published = current_payload(page)
@@ -365,6 +402,7 @@ def _state_document(page, adapter):
     )
     return {
         "adapter": public_adapter_data(page),
+        "journey_facts": _journey_facts(page),
         "published": published,
         # Valeurs d'usine (JSON de ``static/json``) : référence des boutons
         # « reprendre la valeur d'usine » de l'inspecteur.
@@ -450,14 +488,16 @@ def _publish(page, adapter, state, payload, *, require_base_match):
     for key, value in normalized["config"].items():
         _stage_config(key, value)
     if page == "patient":
-        button_shape = normalized["config"].get("page_patient_button_shape")
-        if button_shape in {"circle", "square"}:
-            # Modification groupée et transactionnelle : le brouillon ne
-            # touche pas aux boutons avant « Publier ». Le mode avancé pourra
-            # ensuite les différencier à nouveau.
-            Button.query.update(
-                {Button.shape: button_shape}, synchronize_session="fetch"
-            )
+        # Modification groupée et transactionnelle : le brouillon ne touche
+        # pas aux boutons avant « Publier ». Accueil et sous-activités ont
+        # chacun leur forme ; le mode avancé pourra ensuite les différencier.
+        for key, level in ((HOME_SHAPE_KEY, Button.parent_button_id.is_(None)),
+                           (CHILDREN_SHAPE_KEY, Button.parent_button_id.isnot(None))):
+            button_shape = normalized["config"].get(key)
+            if button_shape in SHAPES:
+                Button.query.filter(level).update(
+                    {Button.shape: button_shape}, synchronize_session="fetch"
+                )
     _stage_config(adapter["layout_key"], normalized["layout"])
 
     css_manager = current_app.css_variable_manager

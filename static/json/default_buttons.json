@@ -10,7 +10,7 @@
             "by_user": false,
             "code": "ORDO",
             "is_parent": false,
-            "label": "Ordonnance / Conseil",
+            "label": "Ordonnance",
             "label_en": "None",
             "is_active": true,
             "is_present": true,
@@ -157,6 +157,23 @@
             "sort_order": 10,
             "activity_id": 3,
             "parent_button_id": 6
+        },
+        {
+            "id": 11,
+            "by_user": false,
+            "code": "SANSORDO",
+            "is_parent": false,
+            "label": "Sans ordonnance",
+            "label_en": null,
+            "is_active": true,
+            "is_present": true,
+            "shape": "circle",
+            "image_url": "sirop.png",
+            "background_color": null,
+            "text_color": null,
+            "sort_order": 6,
+            "activity_id": 8,
+            "parent_button_id": null
         }
     ]
 }

@@ -5,7 +5,7 @@
         ('square', 2, '["mixed","circle"]')
     ] %}
         <div class="page-editor-button-shape-preview"
-             data-config-display-key="page_patient_button_shape"
+             data-config-display-key="{{ preview_shape_key | default('page_patient_button_shape') }}"
              data-config-hide-values='{{ hidden_values }}'
              {% if preview_button_shape != shape_mode %}data-config-hidden{% endif %}>
             {% with preview_layout_shape=shape_mode, max_length=shape_max_length %}

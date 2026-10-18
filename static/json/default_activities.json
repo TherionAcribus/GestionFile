@@ -72,14 +72,25 @@
                 "is_staff": false,
                 "staff_id": ""
             },
-            {   
+            {
                 "id": 7,
                 "name": "vaccination",
                 "letter": "V",
                 "schedule": 1,
                 "inactivity_message": "",
                 "specific_message": "",
-                "notification": false, 
+                "notification": false,
+                "is_staff": false,
+                "staff_id": ""
+            },
+            {
+                "id": 8,
+                "name": "sans ordonnance",
+                "letter": "S",
+                "schedule": 1,
+                "inactivity_message": "",
+                "specific_message": "",
+                "notification": false,
                 "is_staff": false,
                 "staff_id": ""
             }

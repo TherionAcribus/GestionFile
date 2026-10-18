@@ -16,6 +16,7 @@ from page_editor import (
     ADAPTERS,
     _PARENT_CSS_REPRESENTATIVES,
     _normalize_css_value,
+    complete_config,
     complete_css,
     complete_layout,
     current_payload,
@@ -1289,17 +1290,38 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                     )).to_have_count(1)
                     assert_patient_center_fits()
 
+                    # Sous-activités : forme propre, indépendante de l'accueil
+                    # (resté en rectangles ci-dessus).
                     page.locator("#editor-scenario").select_option("children")
                     page.locator("[data-component-id='buttons']").click()
                     playwright.expect(page.locator(
                         "#editor-config-page_patient_button_shape"
                     )).to_have_count(0)
+                    children_shape_select = page.locator(
+                        "#editor-config-page_patient_children_button_shape"
+                    )
+                    playwright.expect(children_shape_select).to_have_value("circle")
+                    playwright.expect(page.locator(
+                        "#editor-css-circle_button_size"
+                    )).to_have_count(1)
                     playwright.expect(page.locator(
                         "#editor-css-square_button_width"
                     )).to_have_count(0)
+                    preview_frame = page.frame_locator("#editor-preview")
+                    playwright.expect(preview_frame.locator(
+                        ".page-editor-button-shape-preview:visible .div_circle_buttons"
+                    )).to_have_count(1)
+                    children_shape_select.select_option("square")
+                    playwright.expect(page.locator(
+                        "#editor-css-square_button_width"
+                    )).to_have_count(1)
                     playwright.expect(page.locator(
                         "#editor-css-circle_button_size"
                     )).to_have_count(0)
+                    playwright.expect(preview_frame.locator(
+                        ".page-editor-button-shape-preview:visible .div_square_bloc_activity"
+                    )).to_have_count(1)
+                    children_shape_select.select_option("circle")
                     page.locator("[data-component-id='back_button']").click()
                     back_text = page.locator(
                         "#editor-config-page_patient_interface_children_back"
@@ -2799,6 +2821,7 @@ def test_patient_adapter_limits_layout_controls_and_filters_fields_by_scenario()
     assert fields["page_patient_confirmation_message"] == ["conclusion"]
     assert fields["page_patient_qrcode_display"] == ["validation", "conclusion"]
     assert fields["page_patient_button_shape"] == ["home"]
+    assert fields["page_patient_children_button_shape"] == ["children"]
     shape_field = next(
         field for field in adapter["components"]["buttons"]["config"]
         if field["key"] == "page_patient_button_shape"
@@ -2812,14 +2835,19 @@ def test_patient_adapter_limits_layout_controls_and_filters_fields_by_scenario()
         field["key"]: field
         for field in adapter["components"]["buttons"]["css"]
     }
+    # Les tailles/couleurs des formes sont communes aux deux niveaux ; la
+    # forme qui les conditionne dépend du scénario.
+    by_scenario = {"children": "page_patient_children_button_shape"}
     assert css_fields["circle_button_size"]["visible_when"] == {
-        "key": "page_patient_button_shape", "values": ["circle"]
+        "key": "page_patient_button_shape", "values": ["circle"],
+        "key_by_scenario": by_scenario,
     }
-    assert css_fields["circle_button_size"]["scenarios"] == ["home"]
+    assert css_fields["circle_button_size"]["scenarios"] == ["home", "children"]
     assert css_fields["square_button_width"]["visible_when"] == {
-        "key": "page_patient_button_shape", "values": ["square"]
+        "key": "page_patient_button_shape", "values": ["square"],
+        "key_by_scenario": by_scenario,
     }
-    assert css_fields["square_button_width"]["scenarios"] == ["home"]
+    assert css_fields["square_button_width"]["scenarios"] == ["home", "children"]
     assert not any(key.startswith("square_cancel_") for key in css_fields)
     back_button = adapter["components"]["back_button"]
     assert back_button["label"] == "Bouton Retour"
@@ -2990,6 +3018,291 @@ def test_advanced_button_changes_switch_shape_selector_to_mixed(editor_app):
         assert ConfigOption.query.filter_by(
             config_key="page_patient_button_shape"
         ).one().value_str == "circle"
+
+
+def _add_parent_with_children(home_shape, children_shape):
+    """Un bouton d'accueil simple, un bouton parent et deux sous-activités."""
+    activities = [Activity(name=name, letter=name[0]) for name in
+                  ("Ordonnances", "Tests", "Angine", "Cystite")]
+    single = Button(label="Ordonnances", activity=activities[0], is_present=True,
+                    is_active=True, shape=home_shape, sort_order=1)
+    parent = Button(label="Tests", activity=activities[1], is_parent=True,
+                    is_present=True, is_active=True, shape=home_shape, sort_order=2)
+    children = [
+        Button(label=label, activity=activity, parent_button=parent,
+               is_present=True, is_active=True, shape=children_shape,
+               sort_order=index)
+        for index, (label, activity) in enumerate(
+            (("Angine", activities[2]), ("Cystite", activities[3])), start=1)
+    ]
+    db.session.add_all([*activities, single, parent, *children])
+    db.session.commit()
+    return single, parent, children
+
+
+def test_button_shape_modes_split_home_and_children_levels():
+    from button_shapes import shape_mode, shape_modes
+
+    assert shape_mode(["circle", "circle"]) == "circle"
+    assert shape_mode(["circle", "square"]) == "mixed"
+    # Niveau sans bouton : la valeur enregistrée est conservée.
+    assert shape_mode([], fallback="square") == "square"
+    assert shape_mode([None, "inconnue"], fallback=None) is None
+    assert shape_modes(
+        [(None, "square"), (None, "square"), (6, "circle"), (6, "circle")]
+    ) == {"page_patient_button_shape": "square",
+          "page_patient_children_button_shape": "circle"}
+    assert shape_modes(
+        [(None, "circle")], fallbacks={"page_patient_children_button_shape": "square"}
+    )["page_patient_children_button_shape"] == "square"
+
+
+def test_publish_applies_home_and_children_shapes_separately(editor_app):
+    """Accueil en rectangles, sous-activités en ronds : chaque réglage ne
+    modifie que les boutons de son niveau."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        _add_parent_with_children("circle", "circle")
+        payload = current_payload("patient")
+        payload["config"]["page_patient_button_shape"] = "square"
+        payload["config"]["page_patient_children_button_shape"] = "circle"
+        payload["base_hash"] = payload_hash(current_payload("patient"))
+
+    saved = client.put(
+        "/admin/page-editor/patient/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    assert saved.status_code == 200
+    published = client.post(
+        "/admin/page-editor/patient/publish",
+        json={"draft_version": saved.get_json()["draft_version"]},
+    )
+    assert published.status_code == 200
+    with app.app_context():
+        shapes = {
+            (button.parent_button_id is None, button.shape)
+            for button in Button.query.all()
+        }
+        assert shapes == {(True, "square"), (False, "circle")}
+        assert ConfigOption.query.filter_by(
+            config_key="page_patient_children_button_shape"
+        ).one().value_str == "circle"
+        reloaded = current_payload("patient")["config"]
+        assert reloaded["page_patient_button_shape"] == "square"
+        assert reloaded["page_patient_children_button_shape"] == "circle"
+
+
+def test_publish_keeps_mixed_children_shapes_untouched(editor_app):
+    """Changer la forme de l'accueil ne réaligne plus les sous-activités que
+    le mode avancé a différenciées."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        _, _, children = _add_parent_with_children("circle", "circle")
+        children[1].shape = "square"
+        db.session.commit()
+        payload = current_payload("patient")
+        assert payload["config"]["page_patient_children_button_shape"] == "mixed"
+        payload["config"]["page_patient_button_shape"] = "square"
+        payload["base_hash"] = payload_hash(current_payload("patient"))
+
+    saved = client.put(
+        "/admin/page-editor/patient/draft",
+        json={"draft_version": 0, "payload": payload},
+    )
+    published = client.post(
+        "/admin/page-editor/patient/publish",
+        json={"draft_version": saved.get_json()["draft_version"]},
+    )
+    assert published.status_code == 200
+    with app.app_context():
+        assert sorted(
+            button.shape for button in Button.query.filter(
+                Button.parent_button_id.isnot(None))
+        ) == ["circle", "square"]
+        assert {
+            button.shape for button in Button.query.filter(
+                Button.parent_button_id.is_(None))
+        } == {"square"}
+
+
+def test_published_shapes_follow_buttons_when_stored_reflection_is_stale(editor_app):
+    """Installation mise à jour : la ligne « sous-activités » n'existe pas
+    encore (défaut « circle ») alors que les sous-boutons sont rectangulaires.
+    L'éditeur doit afficher la forme réelle, sinon publier les convertirait."""
+    app, _ = editor_app
+    with app.app_context():
+        _add_parent_with_children("circle", "square")
+        app.config["PAGE_PATIENT_CHILDREN_BUTTON_SHAPE"] = "circle"
+        config = current_payload("patient")["config"]
+        assert config["page_patient_button_shape"] == "circle"
+        assert config["page_patient_children_button_shape"] == "square"
+        completed = complete_config("patient", {})
+        assert completed["page_patient_children_button_shape"] == "square"
+
+
+def test_advanced_button_changes_sync_children_shape_separately(editor_app):
+    app, _ = editor_app
+    with app.app_context():
+        _, _, children = _add_parent_with_children("circle", "square")
+        _sync_patient_button_shape_mode()
+        db.session.commit()
+        assert app.config["PAGE_PATIENT_BUTTON_SHAPE"] == "circle"
+        assert app.config["PAGE_PATIENT_CHILDREN_BUTTON_SHAPE"] == "square"
+
+        children[0].shape = "circle"
+        _sync_patient_button_shape_mode()
+        db.session.commit()
+        assert app.config["PAGE_PATIENT_BUTTON_SHAPE"] == "circle"
+        assert app.config["PAGE_PATIENT_CHILDREN_BUTTON_SHAPE"] == "mixed"
+        assert ConfigOption.query.filter_by(
+            config_key="page_patient_children_button_shape"
+        ).one().value_str == "mixed"
+
+
+def test_children_preview_follows_children_shape_setting(editor_app):
+    """L'aperçu « Sous-activités » bascule sur le réglage dédié, l'accueil
+    garde le sien."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    _preview_ready_app(app)
+    with app.app_context():
+        _add_parent_with_children("square", "circle")
+
+    children_preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=children"
+    ).get_data(as_text=True)
+    assert 'data-config-display-key="page_patient_children_button_shape"' in children_preview
+    assert 'data-config-display-key="page_patient_button_shape"' not in children_preview
+
+    home_preview = client.get(
+        "/admin/page-editor/patient/preview?scenario=home"
+    ).get_data(as_text=True)
+    assert 'data-config-display-key="page_patient_button_shape"' in home_preview
+    assert 'data-config-display-key="page_patient_children_button_shape"' not in home_preview
+
+
+def test_patient_state_serves_journey_and_grouping_facts(editor_app):
+    """La frise « parcours » reçoit sa définition et les boutons de
+    regroupement réels (affichés, avec une sous-activité affichée)."""
+    app, _ = editor_app
+    client = authenticated_client(editor_app)
+    with app.app_context():
+        _, parent, children = _add_parent_with_children("circle", "circle")
+        empty_parent = Button(label="Vide", is_parent=True, is_present=True,
+                              is_active=True, shape="circle", sort_order=3)
+        db.session.add(empty_parent)
+        db.session.commit()
+
+    state = client.get("/admin/page-editor/patient/state").get_json()
+    assert state["journey_facts"] == {"children_parents": ["Tests"]}
+    steps = [step["id"] for step in state["adapter"]["journey"]["steps"]]
+    assert steps == ["home", "children", "validation", "printing", "conclusion"]
+
+    announce = client.get("/admin/page-editor/announce/state").get_json()
+    assert announce["adapter"]["journey"] is None
+    assert announce["journey_facts"] == {}
+
+
+@pytest.mark.e2e
+def test_patient_journey_browser_flow(editor_app):
+    """Frise du parcours : clic sur une étape → aperçu du scénario et
+    réglages ; « sauter » la validation met à jour badge, résumé et
+    bandeau d'aperçu, et l'écriture va dans le brouillon."""
+    from threading import Thread
+
+    from jinja2 import FileSystemLoader
+    from werkzeug.serving import make_server
+
+    from page_editor import preview_vars_style
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    root = Path(__file__).resolve().parents[1]
+    app.static_folder = str(root / "static")
+    app.jinja_loader = FileSystemLoader(root / "templates")
+    app.jinja_env.globals.update(
+        csrf_token=lambda: "test", get_css_url=lambda mode=None: "/static/css/patient.css",
+        page_layout_style=layout_style, preview_vars_style=preview_vars_style,
+        user_has_permission=lambda *args, **kwargs: True, page_editor_enabled=lambda page: True,
+    )
+    with app.app_context():
+        _add_parent_with_children("circle", "circle")
+        app.config["PAGE_PATIENT_DIRECT_PRINT"] = False
+        app.config["PAGE_PATIENT_DISPLAY_CONCLUSION"] = True
+    client = authenticated_client(editor_app)
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with playwright.sync_playwright() as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1440, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.goto(f"{url}/admin/page-editor/patient")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                journey = page.locator("#editor-journey")
+                playwright.expect(journey).to_be_visible()
+                playwright.expect(page.locator("#editor-journey-summary")).to_contain_text(
+                    "Accueil → Sous-activités (selon le cas) → Validation")
+
+                validation = page.locator("[data-journey-step='validation']")
+                playwright.expect(validation).to_have_attribute("data-journey-state", "shown")
+                validation.click()
+                playwright.expect(page.locator("#editor-scenario")).to_have_value("validation")
+                playwright.expect(validation).to_have_attribute("aria-pressed", "true")
+                playwright.expect(page.locator("#editor-inspector")).to_contain_text("Étape 3 · Validation")
+                toggle = page.locator("#editor-journey-page_patient_direct_print")
+                playwright.expect(toggle).to_be_checked()
+                scan = page.locator("#editor-journey-page_patient_display_button_scan")
+                playwright.expect(scan).to_be_enabled()
+
+                toggle.uncheck()
+                playwright.expect(validation).to_have_attribute("data-journey-state", "hidden")
+                playwright.expect(validation).to_contain_text("Sautée")
+                playwright.expect(page.locator("#editor-journey-skipped")).to_be_visible()
+                playwright.expect(scan).to_be_disabled()
+                playwright.expect(page.locator("#editor-journey-summary")).not_to_contain_text("Validation")
+                assert page.evaluate(
+                    "JSON.parse(localStorage.getItem('page-editor-backup-patient')).payload.config.page_patient_direct_print"
+                ) is True
+
+                # Écran annexe : « Personnel appelé » disparaît si le bouton
+                # n'est plus proposé.
+                page.locator("[data-journey-step='staff_called']").click()
+                playwright.expect(page.locator("#editor-scenario")).to_have_value("staff_called")
+                page.locator("#editor-journey-page_patient_print_fail_show_staff").uncheck()
+                playwright.expect(page.locator("[data-journey-step='staff_called']")).to_contain_text("Jamais")
+
+                # Interrupteur « Afficher » de la frise : masque la conclusion.
+                conclusion = page.locator("[data-journey-step='conclusion']")
+                playwright.expect(conclusion).to_have_attribute("data-journey-state", "shown")
+                page.locator("#editor-journey-toggle-conclusion").uncheck()
+                playwright.expect(conclusion).to_have_attribute("data-journey-state", "hidden")
+                playwright.expect(page.locator("#editor-journey-summary")).not_to_contain_text("Conclusion")
+                assert page.evaluate(
+                    "JSON.parse(localStorage.getItem('page-editor-backup-patient')).payload.config.page_patient_display_conclusion"
+                ) is False
+                # Étape non masquable : raison affichée, pas d'interrupteur.
+                playwright.expect(page.locator("#editor-journey-toggle-home")).to_have_count(0)
+                playwright.expect(page.locator("#editor-journey-path li").first).to_contain_text("Obligatoire")
+
+                # Raccourci vers un composant de l'écran.
+                page.locator("#editor-inspector").get_by_role("button", name="Erreur d'impression").click()
+                playwright.expect(page.locator("[data-component-id='print_error']")).to_have_attribute("aria-pressed", "true")
+                playwright.expect(page.locator("[data-journey-step='staff_called']")).to_have_attribute("aria-pressed", "false")
+                assert errors == []
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
 
 
 def test_print_error_preview_renders_overlay(editor_app):

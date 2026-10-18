@@ -527,3 +527,282 @@
         grid-column: auto;
     }
 }
+
+/* Frise « Parcours du patient » (borne) : une étape par écran, reliées par
+   des flèches ; les écrans annexes (erreur d'impression…) pendent sous leur
+   étape. L'état se lit par la bordure ET par un badge texte — jamais par la
+   seule couleur. Couleurs Bootstrap « subtle » : suivent le mode sombre. */
+.page-editor-journey {
+    border-bottom: 1px solid var(--bs-border-color);
+    padding-bottom: .75rem;
+}
+
+.page-editor-journey-summary {
+    color: var(--bs-secondary-color);
+    font-size: .8rem;
+}
+
+.page-editor-journey-summary strong {
+    color: var(--bs-body-color);
+}
+
+.page-editor-journey-path {
+    display: flex;
+    gap: 1.1rem;
+    list-style: none;
+    margin: 0;
+    overflow-x: auto;
+    padding: .2rem .2rem .3rem;
+}
+
+.page-editor-journey-step {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-width: min-content;
+    position: relative;
+}
+
+.page-editor-journey-step > .page-editor-journey-button {
+    flex: 1 1 auto;
+}
+
+.page-editor-journey-step:not(:last-child)::after {
+    color: var(--bs-secondary-color);
+    content: "\2192";
+    font-size: 1rem;
+    position: absolute;
+    right: -.95rem;
+    top: calc(50% - .85rem);
+    transform: translateY(-50%);
+}
+
+.page-editor-journey-branch-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem 1.25rem;
+    margin-top: .4rem;
+}
+
+.page-editor-journey-branch-group {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+}
+
+.page-editor-journey-branch-caption {
+    color: var(--bs-secondary-color);
+    font-size: .75rem;
+}
+
+.page-editor-journey-branches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.page-editor-journey-button {
+    align-items: center;
+    background: var(--bs-body-bg);
+    border: 2px solid var(--bs-border-color);
+    border-radius: .5rem;
+    color: var(--bs-body-color);
+    display: flex;
+    font-size: .8rem;
+    gap: .3rem;
+    justify-content: center;
+    line-height: 1.2;
+    padding: .35rem .45rem;
+    width: 100%;
+}
+
+.page-editor-journey-path .page-editor-journey-button {
+    flex-direction: column;
+    gap: .15rem;
+}
+
+.page-editor-journey-head {
+    align-items: center;
+    display: flex;
+    gap: .3rem;
+}
+
+.page-editor-journey-number {
+    align-items: center;
+    background: var(--bs-secondary-bg);
+    border-radius: 50%;
+    display: inline-flex;
+    font-size: .7rem;
+    font-weight: 700;
+    height: 1.3rem;
+    justify-content: center;
+    width: 1.3rem;
+}
+
+.page-editor-journey-button[aria-pressed="true"] .page-editor-journey-number {
+    background: var(--bs-primary);
+    color: #fff;
+}
+
+.page-editor-journey-path .page-editor-journey-label {
+    text-align: center;
+}
+
+.page-editor-journey-branches .page-editor-journey-button {
+    white-space: nowrap;
+    border-radius: 1rem;
+    border-width: 1px;
+    font-size: .75rem;
+    padding: .15rem .55rem;
+}
+
+.page-editor-journey-footer {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem 1rem;
+    justify-content: space-between;
+    margin-top: .5rem;
+}
+
+.page-editor-journey-legend {
+    color: var(--bs-secondary-color);
+    display: flex;
+    font-size: .75rem;
+    gap: .75rem;
+}
+
+.page-editor-journey-state-icon {
+    font-size: .8em;
+}
+
+.is-shown .page-editor-journey-state-icon {
+    color: var(--bs-success);
+}
+
+.is-conditional .page-editor-journey-state-icon {
+    color: var(--bs-warning-text-emphasis);
+}
+
+.is-hidden .page-editor-journey-state-icon {
+    color: var(--bs-secondary-color);
+}
+
+.page-editor-journey-button:hover {
+    background: var(--bs-tertiary-bg);
+}
+
+.page-editor-journey-button:focus-visible {
+    outline: 3px solid rgba(var(--bs-primary-rgb), .5);
+    outline-offset: 2px;
+}
+
+.page-editor-journey-button.is-shown {
+    border-color: var(--bs-success-border-subtle);
+}
+
+.page-editor-journey-button.is-conditional {
+    border-color: var(--bs-warning-border-subtle);
+    border-style: dashed;
+}
+
+.page-editor-journey-button.is-hidden {
+    border-style: dotted;
+    color: var(--bs-secondary-color);
+}
+
+.page-editor-journey-button.is-hidden .page-editor-journey-label {
+    text-decoration: line-through;
+}
+
+.page-editor-journey-button.is-previewed {
+    background: var(--bs-primary-bg-subtle);
+}
+
+.page-editor-journey-button[aria-pressed="true"] {
+    border-color: var(--bs-primary);
+    border-style: solid;
+    box-shadow: 0 0 0 .15rem rgba(var(--bs-primary-rgb), .2);
+}
+
+.page-editor-journey-label {
+    font-weight: 600;
+}
+
+.page-editor-journey-state.is-shown {
+    background: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text-emphasis);
+}
+
+.page-editor-journey-state.is-conditional {
+    background: var(--bs-warning-bg-subtle);
+    color: var(--bs-warning-text-emphasis);
+}
+
+.page-editor-journey-state.is-hidden {
+    background: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}
+
+.page-editor-journey-state {
+    border-radius: .375rem;
+    display: flex;
+    font-size: .85rem;
+    gap: .5rem;
+    margin-bottom: .75rem;
+    padding: .5rem .65rem;
+}
+
+.page-editor-journey-choice.is-disabled .form-check-label,
+.page-editor-journey-choice.is-disabled .form-label {
+    color: var(--bs-secondary-color);
+}
+
+/* Sous chaque étape de la frise : interrupteur « Afficher » ou raison pour
+   laquelle l'étape ne se masque pas. */
+.page-editor-journey-visibility {
+    align-items: center;
+    color: var(--bs-secondary-color);
+    display: flex;
+    font-size: .72rem;
+    gap: .3rem;
+    justify-content: center;
+    margin: .3rem 0 0;
+    min-height: 1.4rem;
+    text-align: center;
+}
+
+.page-editor-journey-visibility.form-switch {
+    padding-left: 0;
+}
+
+.page-editor-journey-visibility.form-switch .form-check-input {
+    cursor: pointer;
+    float: none;
+    margin: 0;
+}
+
+.page-editor-journey-visibility .form-check-label {
+    color: var(--bs-body-color);
+    cursor: pointer;
+}
+
+.page-editor-journey-toggle-box {
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .375rem;
+    margin-bottom: .75rem;
+    padding: .6rem .65rem .1rem;
+}
+
+.page-editor-journey-toggle-box .form-check {
+    padding-left: 2.6em;
+}
+
+.page-editor-journey-toggle-box .form-check-label {
+    font-weight: 600;
+}

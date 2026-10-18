@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.38",
+    "version": "0.40",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -63,6 +63,7 @@
             "music_spotify_key": "your spotify key",
             "page_patient_disable_button": true,
             "page_patient_button_shape": "circle",
+            "page_patient_children_button_shape": "circle",
             "page_patient_circle_image_above": true,
             "page_patient_disable_default_message": "Cette activité est momentanément indisponible. Adressez-vous à notre équipe pour plus d'informations.",
             "page_patient_title": "Bienvenue à la {P}",
@@ -75,6 +76,7 @@
             "page_patient_qrcode_data": "Numéro d'appel : {N}",
             "page_patient_qrcode_display_specific_message": true,
             "page_patient_end_timer": 5,
+            "page_patient_display_conclusion": true,
             "page_patient_display_button_scan": true,
             "page_patient_display_scan_explanation": true,
             "page_patient_display_specific_message": true,

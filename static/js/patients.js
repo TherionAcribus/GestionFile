@@ -829,10 +829,16 @@ function handlePrintConfirmation(printData, printJobId, data) {
     switch (data && data.status) {
         case 'activated':
         case 'standing': // réponse perdue puis retentée : déjà en file côté serveur
-            // Succès : confirmation normale + (re)démarrage du minuteur.
+            // Succès : confirmation normale + (re)démarrage du minuteur — ou
+            // retour direct à l'accueil si l'écran de conclusion est désactivé
+            // (l'overlay reste en place jusque-là : pas de confirmation fugace).
             finishPrintFlow(printJobId);
-            setPrintOverlay(false);
-            conclusionTimer().start();
+            if (conclusionTimer().skip) {
+                conclusionTimer().goHome();
+            } else {
+                setPrintOverlay(false);
+                conclusionTimer().start();
+            }
             break;
         case 'activated_no_ticket':
             // Conservé (mode keep) : numéro en grand + retour auto.

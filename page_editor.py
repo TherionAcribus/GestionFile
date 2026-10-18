@@ -10,7 +10,9 @@ from copy import deepcopy
 from flask import current_app
 from markupsafe import Markup
 
+from button_shapes import CHILDREN_SHAPE_KEY, HOME_SHAPE_KEY
 from image_storage import ALLOWED_IMAGE_EXTENSIONS
+from page_journey import public_journey
 from params_registry import BALISE_LETTERS, get_spec
 from utils import validate_config_text
 from variables import is_safe_css_value
@@ -78,6 +80,18 @@ def _component(label, zone, selector, *, config=None, css=None, span=12,
         "css": css or [],
         "contrast_pairs": contrast_pairs or [],
     }
+
+
+_BUTTON_SHAPE_CHOICES = [["mixed", "Formes actuelles différentes — choisir une forme"],
+                         ["circle", "Boutons ronds"],
+                         ["square", "Boutons rectangulaires"]]
+
+
+def _shape_condition(values):
+    """Condition d'affichage liée à la forme des boutons du scénario : celle
+    de l'accueil par défaut, celle des sous-activités dans « children »."""
+    return {"key": HOME_SHAPE_KEY, "values": values,
+            "key_by_scenario": {"children": CHILDREN_SHAPE_KEY}}
 
 
 ADAPTERS = {
@@ -243,16 +257,18 @@ ADAPTERS = {
                 # la liste n'affecte que l'affichage, pas le payload — les
                 # groupes restent contigus pour n'afficher chaque titre
                 # qu'une fois.
-                config=[{"key": "page_patient_button_shape", "label": "Forme de tous les boutons d’activité", "type": "select",
+                config=[{"key": "page_patient_button_shape", "label": "Forme des boutons de l’accueil", "type": "select",
                          "group": "Boutons d'activité",
-                         "choices": [["mixed", "Formes actuelles différentes — choisir une forme"],
-                                     ["circle", "Boutons ronds"],
-                                     ["square", "Boutons rectangulaires"]],
-                         "help": "Le choix sera appliqué à tous les boutons lors de la publication. Le mode avancé permet ensuite de les différencier."},
+                         "choices": _BUTTON_SHAPE_CHOICES,
+                         "help": "Appliquée à tous les boutons de l’accueil lors de la publication. Les boutons de sous-activités ont leur propre réglage (scénario « Sous-activités »). Le mode avancé permet ensuite de les différencier."},
+                        {"key": "page_patient_children_button_shape", "label": "Forme des boutons de sous-activités", "type": "select",
+                         "group": "Boutons d'activité",
+                         "choices": _BUTTON_SHAPE_CHOICES,
+                         "help": "Appliquée lors de la publication aux boutons affichés après le choix d’un bouton parent. Les tailles et couleurs des boutons ronds ou rectangulaires sont communes avec l’accueil."},
                         {"key": "page_patient_circle_image_above", "label": "Image débordant au-dessus du bouton", "type": "bool",
                          "group": "Boutons d'activité",
-                         "help": "Boutons ronds : l'image est agrandie et déborde au-dessus du cercle, comme sur l'ancienne présentation. Sinon elle reste contenue dans le cercle.",
-                         "visible_when": {"key": "page_patient_button_shape", "values": ["circle", "mixed"]}},
+                         "help": "Boutons ronds : l'image est agrandie et déborde au-dessus du cercle, comme sur l'ancienne présentation. Sinon elle reste contenue dans le cercle. Réglage commun à l’accueil et aux sous-activités.",
+                         "visible_when": _shape_condition(["circle", "mixed"])},
                         {"key": "page_patient_qrcode_display", "label": "Afficher le QR code", "type": "bool",
                          "group": "QR code et scan",
                          "help": "Ce réglage est partagé avec l’onglet QR code du mode avancé."},
@@ -296,6 +312,9 @@ ADAPTERS = {
                          "group": "Écran de validation"},
                         {"key": "page_patient_button_cancel_picture", "label": "Image du bouton « Annuler »", "type": "image",
                          "group": "Écran de validation"},
+                        {"key": "page_patient_display_conclusion", "label": "Afficher l'écran de conclusion", "type": "bool",
+                         "group": "Conclusion et délais",
+                         "help": "Décoché : retour à l'accueil dès que le ticket est imprimé ou l'inscription par QR code validée. Les messages d'incident d'impression restent affichés."},
                         {"key": "page_patient_confirmation_message", "label": "Message de confirmation (après inscription)", "type": "text",
                          "group": "Conclusion et délais"},
                         {"key": "page_patient_interface_done_print", "label": "Conclusion : bouton « Imprimer »", "type": "text",
@@ -646,6 +665,7 @@ for _page, _components in _ADDITIONAL_CSS_FIELDS.items():
 # rétrocompatible tout en ne présentant que les réglages utiles au scénario.
 _PATIENT_CONFIG_SCENARIOS = {
     "page_patient_button_shape": ["home"],
+    "page_patient_children_button_shape": ["children"],
     "page_patient_circle_image_above": ["home", "children"],
     "page_patient_direct_print": ["home", "validation"],
     "page_patient_qrcode_display": ["validation", "conclusion"],
@@ -657,6 +677,7 @@ _PATIENT_CONFIG_SCENARIOS = {
     "page_patient_print_after_scan": ["conclusion"],
     "page_patient_print_after_print": ["conclusion"],
     "page_patient_end_timer": ["conclusion"],
+    "page_patient_display_conclusion": ["conclusion"],
     "page_patient_validation_message": ["validation"],
     "page_patient_interface_validate_print": ["validation"],
     "page_patient_button_print_ticket_display_picture": ["validation"],
@@ -679,15 +700,11 @@ for _field in ADAPTERS["patient"]["components"]["buttons"]["css"]:
     if _key == "patient_secondary_color":
         _field["scenarios"] = ["home", "validation", "conclusion", "print_error"]
     elif _key.startswith("circle_"):
-        _field["scenarios"] = ["home"]
-        _field["visible_when"] = {
-            "key": "page_patient_button_shape", "values": ["circle"]
-        }
+        _field["scenarios"] = ["home", "children"]
+        _field["visible_when"] = _shape_condition(["circle"])
     elif _key.startswith("square_button_"):
-        _field["scenarios"] = ["home"]
-        _field["visible_when"] = {
-            "key": "page_patient_button_shape", "values": ["square"]
-        }
+        _field["scenarios"] = ["home", "children"]
+        _field["visible_when"] = _shape_condition(["square"])
     elif _key.startswith("validation_button_"):
         _field["scenarios"] = ["validation", "conclusion", "print_error"]
     elif _key.startswith("validation_text_") or _key.startswith("scan_explanation_"):
@@ -1384,12 +1401,35 @@ def advanced_disabled_components(page):
     }
 
 
+#: Lecteurs de valeurs publiées propres à une page : ``page -> fonction``
+#: renvoyant ``{clé: valeur}``. Ils priment sur ``app.config`` quand la
+#: vérité est ailleurs — ex. la forme des boutons patient, enregistrée bouton
+#: par bouton (cf. routes.admin_page_editor). Enregistrés par la couche
+#: routes : ce module reste sans dépendance aux modèles.
+_PUBLISHED_CONFIG_READERS = {}
+
+
+def register_published_config_reader(page, reader):
+    _PUBLISHED_CONFIG_READERS[page] = reader
+
+
+def _published_config(page, keys):
+    values = {}
+    for key in keys:
+        spec = get_spec(key)
+        values[key] = current_app.config.get(spec.config_name) if spec else None
+    reader = _PUBLISHED_CONFIG_READERS.get(page)
+    if reader is not None and keys:
+        values.update({
+            key: value for key, value in reader(values).items()
+            if key in values and value is not None
+        })
+    return values
+
+
 def current_payload(page):
     adapter = ADAPTERS[page]
-    config_values = {}
-    for key in _managed_keys(adapter, "config"):
-        spec = get_spec(key)
-        config_values[key] = current_app.config.get(spec.config_name) if spec else None
+    config_values = _published_config(page, _managed_keys(adapter, "config"))
     css_values = {
         field["key"]: _normalize_css_value(
             current_app.css_variable_manager.get_variable(adapter["css_source"], field["key"]) or field.get("default"),
@@ -1505,9 +1545,8 @@ def complete_config(page, config):
     valeur actuellement publiée. Les brouillons enregistrés avant l'ajout
     d'un réglage dans l'éditeur ne contiennent pas encore la clé."""
     completed = dict(config) if isinstance(config, dict) else {}
-    for key in _managed_keys(ADAPTERS[page], "config") - set(completed):
-        spec = get_spec(key)
-        completed[key] = current_app.config.get(spec.config_name) if spec else None
+    completed.update(_published_config(
+        page, _managed_keys(ADAPTERS[page], "config") - set(completed)))
     return completed
 
 
@@ -1961,4 +2000,10 @@ def public_adapter_data(page):
         "components": components,
         "palette": _palette_data(adapter),
         "default_layout": default_layout(page),
+        # Frise « parcours » (borne patient) : None pour les autres pages.
+        "journey": public_journey(page, {
+            field["key"]: field
+            for component in components.values()
+            for field in component["config"]
+        }),
     }

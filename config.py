@@ -147,10 +147,15 @@ class Config:
     # Choix initial de l'éditeur visuel. La valeur ``mixed`` sera enregistrée
     # automatiquement dès que le mode avancé différencie les boutons.
     PAGE_PATIENT_BUTTON_SHAPE = "circle"
+    # Même réglage pour les boutons de sous-activités (après un bouton parent).
+    PAGE_PATIENT_CHILDREN_BUTTON_SHAPE = "circle"
     # Boutons ronds : image agrandie débordant au-dessus du cercle
     # (présentation historique). False = image contenue dans le cercle.
     PAGE_PATIENT_CIRCLE_IMAGE_ABOVE = True
     PAGE_PATIENT_INTERFACE_CHILDREN_BACK = "Retour"
+    # Écran de conclusion après une inscription réussie. False : retour
+    # immédiat à l'accueil (les écrans d'incident d'impression restent).
+    PAGE_PATIENT_DISPLAY_CONCLUSION = True
 
     # Définir les valeurs par défaut ici
     database = os.getenv('DATABASE_TYPE', 'mysql')  # Assurez-vous que la valeur est définie correctement

@@ -13,6 +13,10 @@ var cancelBtn = document.getElementById('cancel_btn');
 // interpolee par Jinja directement dans ce script, ce qui l'empechait de
 // vivre dans un fichier.
 var timerDuration = Number((timerGauge && timerGauge.dataset.duration) || 0); // secondes
+// Écran de conclusion désactivé (réglage « Afficher l'écran de conclusion ») :
+// retour à l'accueil dès l'inscription réussie. Les écrans d'incident
+// d'impression gardent, eux, le minuteur normal.
+var skipConclusion = !!(timerGauge && timerGauge.dataset.skipConclusion === 'true');
 var startTime;
 var remainingTime = timerDuration * 1000; // Convert to milliseconds
 var animationFrame;
@@ -85,7 +89,8 @@ cancelBtn.addEventListener('click', function() {
 window.__conclusionTimer = {
     start: function() { resetTimer(); },
     stop: stopTimer,
-    goHome: goToCancelPatient
+    goHome: goToCancelPatient,
+    skip: skipConclusion
 };
 
 // Démarrage du minuteur : SAUF si une impression est en attente de
@@ -97,7 +102,12 @@ window.__conclusionTimer = {
         && pd.getAttribute('print-ticket') !== 'False'
         && pd.getAttribute('data-print-job-id');
     if (!printPending) {
-        startTimer();
+        if (skipConclusion) {
+            // Laisse htmx terminer le rendu du fragment avant de repartir.
+            setTimeout(goToCancelPatient, 0);
+        } else {
+            startTimer();
+        }
     }
 })();
 

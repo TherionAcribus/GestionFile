@@ -28,6 +28,11 @@
     const revisionsContainer = document.getElementById('editor-revisions');
     const zoomSelect = document.getElementById('editor-zoom');
     const topToolbar = document.querySelector('.page-editor-toolbar');
+    const journeySection = document.getElementById('editor-journey');
+    const journeyPath = document.getElementById('editor-journey-path');
+    const journeySummary = document.getElementById('editor-journey-summary');
+    const journeyBranches = document.getElementById('editor-journey-branches');
+    const journeySkipped = document.getElementById('editor-journey-skipped');
 
     // L'aperçu est épinglé sous la barre d'outils : l'offset suit sa hauteur
     // réelle (les boutons peuvent s'étaler sur plusieurs lignes selon la
@@ -59,6 +64,12 @@
     let paletteSources = [];
     let disabledComponents = {};
     let previewLanguages = [];
+    // Frise « parcours » (borne patient, cf. page_journey.py) : définition
+    // déclarative servie par /state, faits calculés côté serveur, et étape
+    // dont l'inspecteur affiche les réglages (exclusive d'un composant).
+    let journey = null;
+    let journeyFacts = {};
+    let selectedStep = null;
     // État ouvert/fermé des sections de l'inspecteur, conservé entre les
     // re-rendus : à chaque modification l'inspecteur est reconstruit et
     // sans cette mémoire les sections retomberaient sur leur état
@@ -247,6 +258,7 @@
         try {
             renderPalette();
             renderInspector();
+            renderJourney();
         } finally {
             rendering = false;
         }
@@ -1000,6 +1012,10 @@
 
     function renderInspector() {
         inspector.replaceChildren();
+        if (selectedStep && journeyStep(selectedStep)) {
+            renderJourneyInspector(journeyStep(selectedStep));
+            return;
+        }
         if (!selectedComponent || !adapter.components[selectedComponent]) {
             renderPagePalette();
             const empty = document.createElement('p');
@@ -1152,9 +1168,12 @@
         const fieldIsRelevant = function (field) {
             if (field.scenarios && !field.scenarios.includes(scenarioSelect.value)) return false;
             if (field.visible_when) {
-                return (field.visible_when.values || []).includes(
-                    payload.config[field.visible_when.key]
-                );
+                // ``key_by_scenario`` : la clé qui conditionne le champ peut
+                // dépendre du scénario (forme des boutons de l'accueil ou des
+                // sous-activités).
+                const byScenario = field.visible_when.key_by_scenario || {};
+                const key = byScenario[scenarioSelect.value] || field.visible_when.key;
+                return (field.visible_when.values || []).includes(payload.config[key]);
             }
             return true;
         };
@@ -1331,8 +1350,447 @@
 
     function selectComponent(componentId) {
         selectedComponent = componentId;
+        selectedStep = null;
         rerenderAll();
         pushPayloadToPreview();
+    }
+
+    // --- Parcours patient -------------------------------------------------
+    // Miroir de page_journey.evaluate : même langage de conditions.
+    function journeyCondition(condition) {
+        if (!condition) return true;
+        if (condition.all) return condition.all.every(journeyCondition);
+        if (condition.any) return condition.any.some(journeyCondition);
+        if (condition.not) return !journeyCondition(condition.not);
+        if (condition.fact) {
+            const fact = journeyFacts[condition.fact];
+            return Array.isArray(fact) ? fact.length > 0 : Boolean(fact);
+        }
+        const expected = Object.prototype.hasOwnProperty.call(condition, 'is') ? condition.is : true;
+        const value = payload.config[condition.config];
+        return Array.isArray(expected) ? expected.includes(value) : value === expected;
+    }
+
+    function journeyText(text) {
+        return String(text || '').replace(/\{([a-z_]+)\}/g, function (match, name) {
+            const value = journeyFacts[name];
+            if (Array.isArray(value)) {
+                return value.map(function (item) { return '« ' + item + ' »'; }).join(', ');
+            }
+            return value == null ? '' : String(value);
+        });
+    }
+
+    function journeyStatus(step) {
+        const rule = (step.status || []).find(function (item) { return journeyCondition(item.when); });
+        return rule ? {state: rule.state, text: journeyText(rule.text)} : {state: 'hidden', text: ''};
+    }
+
+    function journeyAllSteps() {
+        if (!journey) return [];
+        const all = [];
+        journey.steps.forEach(function (step, index) {
+            all.push(Object.assign({number: index + 1, parent: null}, step));
+            (step.branches || []).forEach(function (branch) {
+                all.push(Object.assign({number: null, parent: step.id}, branch));
+            });
+        });
+        return all;
+    }
+
+    function journeyStep(stepId) {
+        return journeyAllSteps().find(function (step) { return step.id === stepId; }) || null;
+    }
+
+    const JOURNEY_STATE_LABELS = {
+        shown: 'Toujours',
+        conditional: 'Selon le cas',
+        hidden: 'Jamais'
+    };
+
+    function journeyStateLabel(step, state) {
+        // Une étape principale absente est « sautée » : le patient passe à
+        // la suivante ; un écran annexe ne s'affiche simplement « jamais ».
+        if (state === 'hidden' && !step.parent) return 'Sautée';
+        return JOURNEY_STATE_LABELS[state] || state;
+    }
+
+    function selectJourneyStep(stepId) {
+        const step = journeyStep(stepId);
+        if (!step) return;
+        selectedStep = stepId;
+        selectedComponent = null;
+        const changedScenario = scenarioSelect.value !== step.scenario;
+        scenarioSelect.value = step.scenario;
+        rerenderAll();
+        if (changedScenario) loadPreview();
+        else pushPayloadToPreview();
+        const current = journeyPath.querySelector('[data-journey-step="' + stepId + '"]');
+        if (current) current.focus();
+    }
+
+    const JOURNEY_STATE_ICONS = {
+        shown: 'bi-check-circle-fill',
+        conditional: 'bi-signpost-split',
+        hidden: 'bi-slash-circle'
+    };
+
+    function journeyStateIcon(state) {
+        const icon = document.createElement('i');
+        icon.className = 'bi ' + (JOURNEY_STATE_ICONS[state] || 'bi-circle') + ' page-editor-journey-state-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        return icon;
+    }
+
+    // Bouton d'étape compact : icône de l'écran, libellé, icône d'état. Le
+    // libellé barré et la forme de l'icône portent l'état (pas la seule
+    // couleur) ; l'explication est au survol et pour les lecteurs d'écran.
+    function journeyButton(step, status) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'page-editor-journey-button is-' + status.state;
+        button.dataset.journeyStep = step.id;
+        button.dataset.journeyState = status.state;
+        button.setAttribute('aria-pressed', selectedStep === step.id ? 'true' : 'false');
+        if (scenarioSelect.value === step.scenario) button.classList.add('is-previewed');
+        // Le texte commence souvent déjà par l'état (« Sautée : … ») : pas
+        // de répétition dans l'infobulle ni pour les lecteurs d'écran.
+        const stateLabel = journeyStateLabel(step, status.state);
+        const explanation = status.text.indexOf(stateLabel) === 0
+            ? status.text : stateLabel + ' : ' + status.text;
+        button.title = explanation;
+        const label = document.createElement('span');
+        label.className = 'page-editor-journey-label';
+        label.textContent = step.label;
+        const detail = document.createElement('span');
+        detail.className = 'visually-hidden';
+        detail.textContent = ' — ' + explanation;
+        if (step.number) {
+            // Étape principale, façon « stepper » : pastille numérotée et
+            // icône d'état sur une ligne, libellé dessous (tient dans une
+            // colonne étroite sans chevaucher les flèches).
+            const head = document.createElement('span');
+            head.className = 'page-editor-journey-head';
+            const number = document.createElement('span');
+            number.className = 'page-editor-journey-number';
+            number.textContent = String(step.number);
+            head.append(number, journeyStateIcon(status.state));
+            button.append(head, label, detail);
+        } else {
+            const icon = document.createElement('i');
+            icon.className = 'bi ' + (step.icon || 'bi-window') + ' page-editor-journey-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            button.append(icon, label, journeyStateIcon(status.state), detail);
+        }
+        button.addEventListener('click', function () { selectJourneyStep(step.id); });
+        return button;
+    }
+
+    function journeyToggleChecked(toggle) {
+        const value = Boolean(payload.config[toggle.key]);
+        return toggle.invert ? !value : value;
+    }
+
+    function setJourneyToggle(step, checked, focusId) {
+        const toggle = step.toggle;
+        mutate(function () {
+            payload.config[toggle.key] = toggle.invert ? !checked : checked;
+        }, (checked ? 'Étape affichée : ' : 'Étape masquée : ') + step.label + '.');
+        // La frise et l'inspecteur viennent d'être reconstruits : le focus
+        // revient sur le même interrupteur (navigation au clavier).
+        const again = document.getElementById(focusId);
+        if (again) again.focus();
+    }
+
+    // Sous une étape de la frise : interrupteur « Afficher » si l'étape peut
+    // être masquée, sinon la raison courte (« Obligatoire »…).
+    function journeyStepVisibility(step) {
+        const row = document.createElement('div');
+        row.className = 'page-editor-journey-visibility';
+        if (step.toggle) {
+            const id = 'editor-journey-toggle-' + step.id;
+            row.classList.add('form-check', 'form-switch');
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'form-check-input';
+            input.setAttribute('role', 'switch');
+            input.id = id;
+            input.checked = journeyToggleChecked(step.toggle);
+            input.setAttribute('aria-label', 'Afficher l’étape « ' + step.label + ' »');
+            input.title = step.toggle.help || step.toggle.label;
+            input.addEventListener('change', function () { setJourneyToggle(step, input.checked, id); });
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = id;
+            label.setAttribute('aria-hidden', 'true');
+            label.textContent = 'Afficher';
+            row.append(input, label);
+        } else if (step.fixed) {
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-lock';
+            icon.setAttribute('aria-hidden', 'true');
+            const text = document.createElement('span');
+            text.textContent = step.fixed;
+            row.append(icon, text);
+        }
+        return row;
+    }
+
+    function renderJourney() {
+        if (!journeySection) return;
+        if (!journey) {
+            journeySection.hidden = true;
+            journeySkipped.hidden = true;
+            return;
+        }
+        journeySection.hidden = false;
+        document.getElementById('editor-journey-title').textContent = journey.title;
+        document.getElementById('editor-journey-intro').textContent = journey.intro;
+        journeyPath.replaceChildren();
+        journeyBranches.replaceChildren();
+        const route = [];
+        journey.steps.forEach(function (step, index) {
+            const status = journeyStatus(step);
+            const item = document.createElement('li');
+            item.className = 'page-editor-journey-step is-' + status.state;
+            item.appendChild(journeyButton(Object.assign({number: index + 1, parent: null}, step), status));
+            item.appendChild(journeyStepVisibility(step));
+            journeyPath.appendChild(item);
+            if (status.state !== 'hidden') {
+                route.push(step.label + (status.state === 'conditional' ? ' (selon le cas)' : ''));
+            }
+            if ((step.branches || []).length) {
+                const group = document.createElement('div');
+                group.className = 'page-editor-journey-branch-group';
+                const caption = document.createElement('span');
+                caption.className = 'page-editor-journey-branch-caption';
+                caption.textContent = (step.branches_label || step.label) + ' :';
+                const list = document.createElement('ul');
+                list.className = 'page-editor-journey-branches';
+                list.setAttribute('aria-label', 'Écrans annexes — ' + (step.branches_label || step.label));
+                step.branches.forEach(function (branch) {
+                    const branchItem = document.createElement('li');
+                    branchItem.appendChild(journeyButton(
+                        Object.assign({number: null, parent: step.id}, branch), journeyStatus(branch)));
+                    list.appendChild(branchItem);
+                });
+                group.append(caption, list);
+                journeyBranches.appendChild(group);
+            }
+        });
+        const summaryLabel = document.createElement('strong');
+        summaryLabel.textContent = 'Parcours actuel : ';
+        journeySummary.replaceChildren(summaryLabel, document.createTextNode(route.join(' → ')));
+
+        // Écran prévisualisé que le patient ne verra jamais : on le dit
+        // au-dessus de l'aperçu plutôt que de laisser croire qu'il s'affiche.
+        const previewed = journeyAllSteps().find(function (step) { return step.scenario === scenarioSelect.value; });
+        const previewedStatus = previewed ? journeyStatus(previewed) : null;
+        if (previewedStatus && previewedStatus.state === 'hidden') {
+            journeySkipped.hidden = false;
+            journeySkipped.textContent = 'Avec les réglages actuels, le patient ne voit pas cet écran. '
+                + previewedStatus.text + ' L’aperçu reste disponible pour préparer ses textes.';
+        } else {
+            journeySkipped.hidden = true;
+        }
+    }
+
+    function journeyChoiceControl(choice, enabled) {
+        const id = 'editor-journey-' + choice.key;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'mb-3 page-editor-journey-choice' + (enabled ? '' : ' is-disabled');
+        const describe = [];
+        let control;
+        if (choice.type === 'bool') {
+            wrapper.classList.add('form-check', 'form-switch');
+            control = document.createElement('input');
+            control.type = 'checkbox';
+            control.setAttribute('role', 'switch');
+            control.className = 'form-check-input';
+            control.id = id;
+            const value = Boolean(payload.config[choice.key]);
+            control.checked = choice.invert ? !value : value;
+            control.addEventListener('change', function () {
+                const checked = control.checked;
+                mutate(function () {
+                    payload.config[choice.key] = choice.invert ? !checked : checked;
+                }, 'Parcours modifié : « ' + choice.label + ' » ' + (checked ? 'activé.' : 'désactivé.'));
+                // L'inspecteur vient d'être reconstruit : le focus revient
+                // sur le même interrupteur pour la navigation au clavier.
+                const again = document.getElementById(id);
+                if (again) again.focus();
+            });
+            const label = document.createElement('label');
+            label.className = 'form-check-label';
+            label.htmlFor = id;
+            label.textContent = choice.label;
+            wrapper.append(control, label);
+        } else {
+            const label = document.createElement('label');
+            label.className = 'form-label';
+            label.htmlFor = id;
+            label.textContent = choice.label;
+            if (choice.type === 'select') {
+                control = document.createElement('select');
+                control.className = 'form-select form-select-sm';
+                (choice.choices || []).forEach(function (option) {
+                    const element = document.createElement('option');
+                    element.value = option[0];
+                    element.textContent = option[1];
+                    control.appendChild(element);
+                });
+                control.value = payload.config[choice.key] == null ? '' : payload.config[choice.key];
+            } else {
+                control = document.createElement('input');
+                control.type = 'number';
+                control.step = '1';
+                control.className = 'form-control form-control-sm';
+                if (choice.min != null) control.min = String(choice.min);
+                if (choice.max != null) control.max = String(choice.max);
+                control.value = payload.config[choice.key] == null ? 0 : payload.config[choice.key];
+            }
+            control.id = id;
+            control.addEventListener('change', function () {
+                let value = control.value;
+                if (choice.type === 'int') {
+                    value = Number.parseInt(value, 10);
+                    if (Number.isNaN(value)) value = choice.min != null ? choice.min : 0;
+                    if (choice.min != null) value = Math.max(choice.min, value);
+                    if (choice.max != null) value = Math.min(choice.max, value);
+                }
+                mutate(function () { payload.config[choice.key] = value; },
+                    'Parcours modifié : « ' + choice.label + ' ».');
+                const again = document.getElementById(id);
+                if (again) again.focus();
+            });
+            if (choice.unit) {
+                const group = document.createElement('div');
+                group.className = 'input-group input-group-sm';
+                const suffix = document.createElement('span');
+                suffix.className = 'input-group-text';
+                suffix.textContent = choice.unit;
+                group.append(control, suffix);
+                wrapper.append(label, group);
+            } else {
+                wrapper.append(label, control);
+            }
+        }
+        control.disabled = !enabled;
+        if (choice.help) {
+            const help = document.createElement('div');
+            help.className = 'form-text';
+            help.id = id + '-help';
+            help.textContent = choice.help;
+            describe.push(help.id);
+            wrapper.appendChild(help);
+        }
+        if (!enabled) {
+            const note = document.createElement('div');
+            note.className = 'form-text fst-italic';
+            note.id = id + '-disabled';
+            note.textContent = 'Sans effet avec les réglages ci-dessus.';
+            describe.push(note.id);
+            wrapper.appendChild(note);
+        }
+        if (describe.length) control.setAttribute('aria-describedby', describe.join(' '));
+        return wrapper;
+    }
+
+    function renderJourneyInspector(step) {
+        const status = journeyStatus(step);
+        const heading = document.createElement('p');
+        heading.className = 'fw-semibold mb-1';
+        heading.textContent = (step.number ? 'Étape ' + step.number + ' · ' : 'Écran annexe · ') + step.label;
+        const role = document.createElement('p');
+        role.className = 'small text-muted';
+        role.textContent = step.role;
+        const state = document.createElement('div');
+        state.className = 'page-editor-journey-state is-' + status.state;
+        state.setAttribute('role', 'status');
+        const stateIcon = document.createElement('i');
+        stateIcon.className = 'bi ' + ({shown: 'bi-check-circle', conditional: 'bi-signpost-split', hidden: 'bi-eye-slash'}[status.state] || 'bi-info-circle');
+        stateIcon.setAttribute('aria-hidden', 'true');
+        const stateText = document.createElement('span');
+        stateText.textContent = status.text;
+        state.append(stateIcon, stateText);
+        inspector.append(heading, role, state);
+
+        if (step.toggle) {
+            const box = document.createElement('div');
+            box.className = 'page-editor-journey-toggle-box';
+            const control = journeyChoiceControl(step.toggle, true);
+            // Même réglage que l'interrupteur de la frise : un seul chemin
+            // d'écriture (setJourneyToggle) et un message d'état explicite.
+            const input = control.querySelector('input');
+            const replacement = input.cloneNode(true);
+            replacement.checked = journeyToggleChecked(step.toggle);
+            replacement.addEventListener('change', function () {
+                setJourneyToggle(step, replacement.checked, replacement.id);
+            });
+            input.replaceWith(replacement);
+            box.appendChild(control);
+            inspector.appendChild(box);
+        } else if (step.fixed) {
+            const fixed = document.createElement('p');
+            fixed.className = 'small text-muted page-editor-journey-fixed';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-lock me-1';
+            icon.setAttribute('aria-hidden', 'true');
+            fixed.append(icon, document.createTextNode(step.fixed_help || step.fixed));
+            inspector.appendChild(fixed);
+        }
+
+        (step.warnings || []).filter(function (warning) { return journeyCondition(warning.when); })
+            .forEach(function (warning) {
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-warning py-2 small';
+                alert.setAttribute('role', 'alert');
+                alert.textContent = warning.text;
+                inspector.appendChild(alert);
+            });
+
+        if ((step.choices || []).length) {
+            const title = document.createElement('p');
+            title.className = 'page-editor-fieldgroup mt-3';
+            title.textContent = 'Ce que voit le patient';
+            inspector.appendChild(title);
+            step.choices.forEach(function (choice) {
+                inspector.appendChild(journeyChoiceControl(choice, journeyCondition(choice.enabled_when)));
+            });
+        }
+        if (step.note) {
+            const note = document.createElement('p');
+            note.className = 'small';
+            note.textContent = step.note;
+            inspector.appendChild(note);
+        }
+        if (step.link) {
+            const link = document.createElement('a');
+            link.className = 'btn btn-sm btn-outline-secondary mb-3';
+            link.href = step.link.href;
+            link.textContent = step.link.label;
+            inspector.appendChild(link);
+        }
+
+        const components = (step.components || []).filter(function (componentId) {
+            return adapter.components[componentId];
+        });
+        if (components.length) {
+            const title = document.createElement('p');
+            title.className = 'page-editor-fieldgroup mt-3';
+            title.textContent = 'Textes et apparence de cet écran';
+            const list = document.createElement('div');
+            list.className = 'd-flex flex-wrap gap-2';
+            components.forEach(function (componentId) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-sm btn-outline-primary';
+                button.textContent = adapter.components[componentId].label;
+                button.addEventListener('click', function () { selectComponent(componentId); });
+                list.appendChild(button);
+            });
+            inspector.append(title, list);
+        }
     }
 
     function moveSelected(direction) {
@@ -1535,6 +1993,9 @@
         try {
             const state = await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/state');
             adapter = state.adapter;
+            journey = adapter.journey || null;
+            journeyFacts = state.journey_facts || {};
+            if (selectedStep && !journeyStep(selectedStep)) selectedStep = null;
             paletteSources = state.palette_sources || [];
             disabledComponents = state.disabled_components || {};
             previewLanguages = state.languages || [];
@@ -1546,10 +2007,12 @@
             dirty = false;
             undoStack = [];
             redoStack = [];
-            selectedComponent = selectedComponent && adapter.components[selectedComponent] ? selectedComponent : Object.keys(adapter.components)[0];
+            if (selectedStep) selectedComponent = null;
+            else selectedComponent = selectedComponent && adapter.components[selectedComponent] ? selectedComponent : Object.keys(adapter.components)[0];
             populateSelectors();
             renderPalette();
             renderInspector();
+            renderJourney();
             renderRevisions(state.revisions || [], state.published_revision);
             loadPreview();
             applyButton.disabled = state.published_revision < 1;
@@ -2786,6 +3249,12 @@
         historyButton.setAttribute('aria-expanded', historyPanel.hidden ? 'false' : 'true');
     });
     scenarioSelect.addEventListener('change', function () {
+        // L'inspecteur d'étape suit le scénario choisi à la main.
+        if (selectedStep) {
+            const match = journeyAllSteps().find(function (step) { return step.scenario === scenarioSelect.value; });
+            selectedStep = match ? match.id : null;
+            if (!selectedStep && !selectedComponent) selectedComponent = Object.keys(adapter.components)[0];
+        }
         rerenderAll();
         loadPreview();
     });

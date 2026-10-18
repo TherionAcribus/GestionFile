@@ -79,9 +79,11 @@
                             Aucune activité n’est indisponible ou programmée pour le devenir pour l’instant : un bouton est grisé uniquement comme exemple de présentation.
                         </div>
                     {% endif %}
-                    {% set chosen_button_shape = payload.config.page_patient_button_shape %}
+                    {# Les sous-activités ont leur propre forme (cf. button_shapes). #}
+                    {% set preview_shape_key = 'page_patient_children_button_shape' if preview_buttons_children else 'page_patient_button_shape' %}
+                    {% set chosen_button_shape = payload.config[preview_shape_key] %}
                     {% set chosen_max_length = 2 if chosen_button_shape == 'square' else (4 if chosen_button_shape == 'circle' else preview_buttons_max_length) %}
-                    {% with buttons=preview_buttons, max_length=chosen_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, preview_inactive_mode=preview_inactive_mode, preview_inactive_button_ids=preview_inactive_button_ids, preview_show_inactive=payload.config.page_patient_disable_button, page_editor_preview=true, preview_button_shape=chosen_button_shape, page_patient_interface_children_back=preview_config.page_patient_interface_children_back, button_translations=preview_button_translations, circle_image_above=payload.config.page_patient_circle_image_above %}
+                    {% with buttons=preview_buttons, max_length=chosen_max_length, empty_parent_ids=preview_empty_parent_ids, children=preview_buttons_children, preview_inactive_mode=preview_inactive_mode, preview_inactive_button_ids=preview_inactive_button_ids, preview_show_inactive=payload.config.page_patient_disable_button, page_editor_preview=true, preview_button_shape=chosen_button_shape, preview_shape_key=preview_shape_key, page_patient_interface_children_back=preview_config.page_patient_interface_children_back, button_translations=preview_button_translations, circle_image_above=payload.config.page_patient_circle_image_above %}
                         {% include 'patient/patient_buttons_left.html' %}
                     {% endwith %}
                 {% else %}

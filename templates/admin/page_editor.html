@@ -38,6 +38,22 @@
         </aside>
 
         <section class="page-editor-canvas" aria-labelledby="preview-title">
+            {# Frise « parcours » (borne patient) : remplie par page_editor.js
+               à partir de adapter.journey ; masquée pour les autres pages. #}
+            <section id="editor-journey" class="page-editor-journey mb-3" aria-labelledby="editor-journey-title" hidden>
+                <h3 id="editor-journey-title" class="h6 mb-1"></h3>
+                <p id="editor-journey-intro" class="small text-muted mb-2"></p>
+                <ol id="editor-journey-path" class="page-editor-journey-path"></ol>
+                <div id="editor-journey-branches" class="page-editor-journey-branch-row"></div>
+                <div class="page-editor-journey-footer">
+                    <p id="editor-journey-summary" class="page-editor-journey-summary mb-0" aria-live="polite"></p>
+                    <p class="page-editor-journey-legend mb-0" aria-hidden="true">
+                        <span class="is-shown"><i class="bi bi-check-circle-fill page-editor-journey-state-icon"></i> toujours</span>
+                        <span class="is-conditional"><i class="bi bi-signpost-split page-editor-journey-state-icon"></i> selon le cas</span>
+                        <span class="is-hidden"><i class="bi bi-slash-circle page-editor-journey-state-icon"></i> jamais</span>
+                    </p>
+                </div>
+            </section>
             <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
                 <div>
                     <label class="form-label mb-1" for="editor-scenario">Scénario</label>
@@ -67,6 +83,7 @@
                 <button id="editor-history-toggle" class="btn btn-sm btn-outline-secondary" type="button" aria-expanded="false" aria-controls="editor-history">Historique</button>
             </div>
             <h3 id="preview-title" class="visually-hidden">Prévisualisation</h3>
+            <div id="editor-journey-skipped" class="alert alert-secondary py-2 small mb-2" role="note" hidden></div>
             <div id="editor-preview-shell" class="page-editor-preview-shell">
                 <iframe id="editor-preview" title="Prévisualisation de la page" sandbox="allow-scripts allow-same-origin"></iframe>
             </div>

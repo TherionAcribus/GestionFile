@@ -6,6 +6,7 @@ import re
 import uuid
 
 import config_sync
+from button_shapes import SHAPE_KEYS, shape_modes
 from flask import Blueprint, request, render_template, redirect, jsonify, session, current_app as app, make_response
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
@@ -13,6 +14,7 @@ from models import (
     PRINTER_HEARTBEAT_CODE,
 )
 from diagnostics import collect_patient_page_alerts
+from params_registry import get_spec
 from python.engine import get_futur_patient, qr_code_data_uri
 from utils import (
     escpos_to_preview_lines,
@@ -39,26 +41,33 @@ admin_patient_bp = Blueprint('admin_patient', __name__)
 
 
 def _sync_patient_button_shape_mode():
-    """Reflète les formes bouton par bouton dans le sélecteur global.
+    """Reflète les formes bouton par bouton dans les sélecteurs globaux.
 
     Le mode avancé reste libre : dès que les formes divergent, l'éditeur
     visuel affiche « formes différentes » au lieu de réappliquer silencieusement
-    son dernier choix global.
+    son dernier choix global. Accueil et sous-activités sont suivis séparément
+    (cf. button_shapes).
     """
     db.session.flush()
-    shapes = {
-        shape for (shape,) in db.session.query(Button.shape).distinct().all()
-        if shape in {"circle", "square"}
+    options = {
+        option.config_key: option
+        for option in ConfigOption.query.filter(
+            ConfigOption.config_key.in_(SHAPE_KEYS)
+        ).all()
     }
-    mode = next(iter(shapes)) if len(shapes) == 1 else "mixed"
-    option = ConfigOption.query.filter_by(
-        config_key="page_patient_button_shape"
-    ).first()
-    if option is None:
-        option = ConfigOption(config_key="page_patient_button_shape")
-        db.session.add(option)
-    option.value_str = mode
-    app.config["PAGE_PATIENT_BUTTON_SHAPE"] = mode
+    modes = shape_modes(
+        db.session.query(Button.parent_button_id, Button.shape).all(),
+        fallbacks={key: option.value_str for key, option in options.items()},
+    )
+    for key, mode in modes.items():
+        if mode is None:
+            continue
+        option = options.get(key)
+        if option is None:
+            option = ConfigOption(config_key=key)
+            db.session.add(option)
+        option.value_str = mode
+        app.config[get_spec(key).config_name] = mode
     config_sync.bump_generation(db=db, ConfigOption=ConfigOption)
 
 

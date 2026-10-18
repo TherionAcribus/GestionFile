@@ -102,6 +102,7 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "music_spotify_key": ("MUSIC_SPOTIFY_KEY", "value_str"),
     "page_patient_disable_button": ("PAGE_PATIENT_DISABLE_BUTTON", "value_bool"),
     "page_patient_button_shape": ("PAGE_PATIENT_BUTTON_SHAPE", "value_str"),
+    "page_patient_children_button_shape": ("PAGE_PATIENT_CHILDREN_BUTTON_SHAPE", "value_str"),
     "page_patient_circle_image_above": ("PAGE_PATIENT_CIRCLE_IMAGE_ABOVE", "value_bool"),
     "page_patient_disable_default_message": ("PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE", "value_str"),
     "page_patient_title": ("PAGE_PATIENT_TITLE", "value_str"),
@@ -116,6 +117,7 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
     "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
     "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
+    "page_patient_display_conclusion": ("PAGE_PATIENT_DISPLAY_CONCLUSION", "value_bool"),
     "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
     "page_patient_direct_print": ("PAGE_PATIENT_DIRECT_PRINT", "value_bool"),
     "page_patient_display_translations": ("PAGE_PATIENT_DISPLAY_TRANSLATIONS", "value_bool"),
@@ -436,6 +438,8 @@ _ENUM_VALUES: dict[str, frozenset[str]] = {
     # Valeur de synchronisation de l'éditeur visuel. ``mixed`` signifie que le
     # mode avancé conserve des formes différentes bouton par bouton.
     "page_patient_button_shape": frozenset({"mixed", "circle", "square"}),
+    # Idem pour les boutons de sous-activités (boutons ayant un parent).
+    "page_patient_children_button_shape": frozenset({"mixed", "circle", "square"}),
 }
 
 

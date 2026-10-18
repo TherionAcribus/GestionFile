@@ -1,8 +1,11 @@
 <div id="div_conclusion" class="div_summary">
 
   <!-- Contenu de confirmation "normal" : masqué pendant l'impression et en cas
-       d'échec (l'overlay #print_status_overlay prend le relais). -->
-  <div id="conclusion_normal">
+       d'échec (l'overlay #print_status_overlay prend le relais). Écran de
+       conclusion désactivé : jamais affiché, la borne revient à l'accueil
+       dès l'inscription réussie (drapeau data-skip-conclusion du minuteur). -->
+  <div id="conclusion_normal"
+       {% if not page_editor_preview and page_patient_display_conclusion is defined and not page_patient_display_conclusion %}style="display: none;"{% endif %}>
 
     <div id="conclusion_text" class="div_text_summary">
         <p class="text_summary" data-config-key="page_patient_confirmation_message">
@@ -60,7 +63,8 @@
     </div>
 
     <div id="timer_container">
-        <div id="timer_gauge" data-duration="{{page_patient_end_timer}}"></div>
+        <div id="timer_gauge" data-duration="{{page_patient_end_timer}}"
+             data-skip-conclusion="{{ 'true' if page_patient_display_conclusion is defined and not page_patient_display_conclusion else 'false' }}"></div>
         {% if page_editor_preview %}
         <span class="page-editor-timer-label">Retour automatique : <span data-config-key="page_patient_end_timer">{{ page_patient_end_timer }}</span> s</span>
         {% endif %}

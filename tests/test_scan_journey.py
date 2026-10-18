@@ -626,6 +626,44 @@ def test_conclusion_page_route_par_patient_id(client, application):
     assert "ANCIENNE" not in html
 
 
+def test_conclusion_desactivee_masque_la_confirmation(client, application):
+    """« Afficher l'écran de conclusion » décoché : la confirmation n'est
+    jamais rendue visible et le script repart à l'accueil (drapeau
+    data-skip-conclusion) ; l'overlay d'impression reste disponible pour les
+    incidents."""
+    _vieux_id, nouveau_id = _deux_patients_meme_numero(application)
+
+    application.config["PAGE_PATIENT_DISPLAY_CONCLUSION"] = False
+    html = client.get(f"/patient/conclusion_page/{nouveau_id}").get_data(as_text=True)
+    assert 'data-skip-conclusion="true"' in html
+    normal = html.split('id="conclusion_normal"', 1)[1].split(">", 1)[0]
+    assert 'style="display: none;"' in normal
+    assert 'id="print_status_overlay"' in html
+
+    application.config["PAGE_PATIENT_DISPLAY_CONCLUSION"] = True
+    html = client.get(f"/patient/conclusion_page/{nouveau_id}").get_data(as_text=True)
+    assert 'data-skip-conclusion="false"' in html
+    normal = html.split('id="conclusion_normal"', 1)[1].split(">", 1)[0]
+    assert "display: none" not in normal
+
+
+def test_scripts_conclusion_respectent_le_saut():
+    """Le saut ne concerne que le succès : patient_conclusion.js expose le
+    drapeau et repart sans minuteur ; patients.js ne réaffiche pas la
+    confirmation après une impression réussie quand il est posé."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    conclusion = (root / "static/js/patient_conclusion.js").read_text(encoding="utf-8")
+    assert "dataset.skipConclusion === 'true'" in conclusion
+    assert "skip: skipConclusion" in conclusion
+    assert "setTimeout(goToCancelPatient, 0)" in conclusion
+    patients = (root / "static/js/patients.js").read_text(encoding="utf-8")
+    success = patients.split("case 'activated':", 1)[1].split("break;", 1)[0]
+    assert "conclusionTimer().skip" in success
+    assert "conclusionTimer().goHome()" in success
+
+
 # --- 6. Libellés d'impression : {N} réservé à la borne ------------------------
 
 def test_conclusion_print_labels_gardent_n_resolvent_les_autres_balises(
