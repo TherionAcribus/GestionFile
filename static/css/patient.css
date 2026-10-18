@@ -200,11 +200,12 @@ html, body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* Ancré en bas : l'étiquette reste toujours entièrement dans la cellule,
-       collée au bas de la zone centrale. Quand la place manque, le débordement
-       part vers le haut (là où l'image déborde déjà en mode « image au-dessus »)
-       au lieu de passer sous le pied de page. */
-    justify-content: flex-end;
+    /* Groupe cercle + étiquette centré dans la cellule. Quand la place
+       manque, la chaîne de rétrécissement (espace réservé « image
+       au-dessus » puis cercle, min-height:0) absorbe le manque : la
+       cellule devrait être plus courte que l'étiquette seule pour que
+       celle-ci déborde sous le pied de page — impossible sur la borne. */
+    justify-content: center;
     /* Petite respiration entre l'étiquette et le bandeau de pied de page. */
     padding-bottom: min(10px, 1vh);
     box-sizing: border-box;

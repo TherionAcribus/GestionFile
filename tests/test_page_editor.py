@@ -1495,6 +1495,84 @@ def test_editor_enables_advanced_disabled_next_patients(editor_app):
         server.server_close()
 
 
+@pytest.mark.e2e
+def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
+    """Régression : une seule ligne de boutons ronds doit rester centrée
+    verticalement dans la zone centrale (constaté sur « Sous-activités »),
+    au lieu d'être ancrée en bas."""
+    from threading import Thread
+
+    from werkzeug.serving import make_server
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "circle"
+        parent_activity = Activity(name="Parent centré", letter="P")
+        child_activity = Activity(name="Enfant centré", letter="E")
+        parent = Button(
+            label="Parent E2E", activity=parent_activity, is_parent=True,
+            is_present=True, is_active=True, shape="circle", sort_order=1,
+        )
+        db.session.add_all([parent_activity, child_activity, parent])
+        db.session.add_all([
+            Button(
+                label=f"Sous-bouton {index}", activity=child_activity,
+                parent_button=parent, is_present=True, is_active=True,
+                shape="circle", sort_order=index,
+            )
+            for index in (1, 2)
+        ])
+        db.session.commit()
+    client = authenticated_client(editor_app)
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with playwright.sync_playwright() as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1280, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                page.goto(f"{url}/admin/page-editor/patient")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+
+                page.locator("#editor-scenario").select_option("children")
+                cells = page.frame_locator("#editor-preview").locator(
+                    ".page-editor-button-shape-preview:visible .div_bloc_activity"
+                )
+                playwright.expect(cells).to_have_count(2)
+
+                gaps = cells.evaluate_all("""cells => cells.map(cell => {
+                    const box = cell.getBoundingClientRect();
+                    const circle = cell.querySelector('.div_circle_buttons').getBoundingClientRect();
+                    const label = cell.querySelector('.div_text_button').getBoundingClientRect();
+                    return {
+                        cellTop: box.top,
+                        cellBottom: box.bottom,
+                        top: circle.top,
+                        bottom: label.bottom,
+                    };
+                })""")
+                for gap in gaps:
+                    above = gap["top"] - gap["cellTop"]
+                    below = gap["cellBottom"] - gap["bottom"]
+                    # Centré : les marges au-dessus et en dessous du groupe
+                    # cercle + étiquette sont équivalentes (le padding-bottom
+                    # de la cellule décale le bas d'environ 10 px).
+                    assert above > 0 and below > 0
+                    assert abs(above - below) <= 15
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
 def test_builtin_theme_snapshots_are_independent():
     from page_editor import builtin_themes
 
