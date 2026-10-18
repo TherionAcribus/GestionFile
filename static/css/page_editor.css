@@ -12,11 +12,53 @@
     gap: .5rem;
 }
 
+.page-editor-modes {
+    align-items: center;
+    background: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: .65rem .75rem;
+}
+
+.page-editor-modes .btn {
+    white-space: nowrap;
+}
+
+.page-editor-modes .btn i {
+    margin-right: .25rem;
+}
+
+#editor-mode-help {
+    flex: 1 1 24rem;
+    text-align: right;
+}
+
 .page-editor-grid {
     display: grid;
     grid-template-columns: minmax(210px, 1fr) minmax(420px, 3fr) minmax(250px, 1.2fr);
     gap: 1rem;
     align-items: start;
+}
+
+#page-editor[data-editor-mode="journey"] .page-editor-grid {
+    grid-template-columns: minmax(560px, 3fr) minmax(280px, 1.1fr);
+}
+
+#page-editor[data-editor-mode="simulation"] .page-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#page-editor[data-editor-mode="simulation"] .page-editor-canvas {
+    margin-inline: auto;
+    max-width: 1200px;
+    width: 100%;
+}
+
+#page-editor[data-editor-mode="simulation"] .page-editor-preview-shell {
+    min-height: 650px;
 }
 
 /* Aperçu épinglé : la colonne centrale reste sous la barre d'outils pendant
@@ -35,7 +77,7 @@
 }
 
 @media (min-width: 1200px) {
-    .page-editor-grid > aside:last-child {
+    .page-editor-inspector-panel {
         max-height: calc(100vh - var(--page-editor-toolbar-height, 6rem) - .5rem);
         overflow-y: auto;
         position: sticky;
@@ -54,6 +96,63 @@
 
 .page-editor-zone {
     margin-bottom: 1rem;
+}
+
+.page-editor-component-context,
+.page-editor-inspector-context {
+    align-items: flex-start;
+    background: var(--bs-primary-bg-subtle);
+    border: 1px solid var(--bs-primary-border-subtle);
+    border-radius: .5rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    padding: .65rem;
+}
+
+.page-editor-component-context strong,
+.page-editor-component-context span {
+    display: block;
+}
+
+.page-editor-component-context span,
+.page-editor-inspector-context > span {
+    color: var(--bs-secondary-color);
+    font-size: .8rem;
+}
+
+.page-editor-inspector-context {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+.page-editor-inspector-context .btn-link {
+    font-size: .75rem;
+    padding: 0;
+}
+
+.page-editor-inspector-heading {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: .75rem;
+}
+
+.page-editor-inspector-close,
+.page-editor-inspector-toggle,
+.page-editor-inspector-backdrop {
+    display: none;
+}
+
+.page-editor-simulation-intro {
+    background: var(--bs-primary-bg-subtle);
+    border-left: .25rem solid var(--bs-primary);
+    border-radius: .35rem;
+    color: var(--bs-body-color);
+    margin-bottom: .75rem;
+    padding: .65rem .75rem;
 }
 
 .page-editor-zone h4 {
@@ -513,8 +612,57 @@
         grid-template-columns: minmax(190px, 1fr) minmax(400px, 2fr);
     }
 
-    .page-editor-grid > aside:last-child {
-        grid-column: 1 / -1;
+    #page-editor[data-editor-mode="journey"] .page-editor-grid,
+    #page-editor[data-editor-mode="simulation"] .page-editor-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .page-editor-inspector-panel {
+        border-radius: .5rem 0 0 .5rem;
+        bottom: 0;
+        box-shadow: -.5rem 0 2rem rgba(0, 0, 0, .2);
+        max-height: none;
+        overflow-y: auto;
+        position: fixed;
+        right: 0;
+        top: var(--page-editor-toolbar-height, 6rem);
+        transform: translateX(105%);
+        transition: transform .2s ease;
+        width: min(30rem, calc(100vw - 1rem));
+        z-index: 1060;
+    }
+
+    #page-editor[data-inspector-open="true"] .page-editor-inspector-panel {
+        transform: translateX(0);
+    }
+
+    .page-editor-inspector-close {
+        display: inline-flex;
+    }
+
+    .page-editor-inspector-toggle {
+        bottom: 1rem;
+        box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .25);
+        display: inline-flex;
+        gap: .35rem;
+        position: fixed;
+        right: 1rem;
+        z-index: 1045;
+    }
+
+    .page-editor-inspector-backdrop {
+        background: rgba(0, 0, 0, .35);
+        border: 0;
+        display: block;
+        inset: 0;
+        padding: 0;
+        position: fixed;
+        z-index: 1050;
+    }
+
+    .page-editor-inspector-toggle[hidden],
+    .page-editor-inspector-backdrop[hidden] {
+        display: none;
     }
 }
 
@@ -523,8 +671,43 @@
         grid-template-columns: 1fr;
     }
 
-    .page-editor-grid > aside:last-child {
-        grid-column: auto;
+    .page-editor-modes {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .page-editor-modes .btn-group {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .page-editor-modes .btn {
+        border-radius: .25rem !important;
+        text-align: left;
+    }
+
+    #editor-mode-help {
+        flex: 0 0 auto;
+        text-align: left;
+    }
+
+    .page-editor-inspector-panel {
+        border-radius: .75rem .75rem 0 0;
+        left: 0;
+        max-height: min(78vh, calc(100vh - 2rem));
+        top: auto;
+        transform: translateY(105%);
+        width: 100%;
+    }
+
+    #page-editor[data-inspector-open="true"] .page-editor-inspector-panel {
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page-editor-inspector-panel {
+        transition: none;
     }
 }
 
@@ -533,8 +716,10 @@
    étape. L'état se lit par la bordure ET par un badge texte — jamais par la
    seule couleur. Couleurs Bootstrap « subtle » : suivent le mode sombre. */
 .page-editor-journey {
-    border-bottom: 1px solid var(--bs-border-color);
-    padding-bottom: .75rem;
+    background: color-mix(in srgb, var(--bs-primary) 3%, var(--bs-body-bg));
+    border: 1px solid var(--bs-border-color);
+    border-radius: .5rem;
+    padding: .85rem;
 }
 
 .page-editor-journey-summary {
@@ -657,7 +842,8 @@
     border-radius: 1rem;
     border-width: 1px;
     font-size: .75rem;
-    padding: .15rem .55rem;
+    min-height: 2rem;
+    padding: .3rem .6rem;
 }
 
 .page-editor-journey-footer {

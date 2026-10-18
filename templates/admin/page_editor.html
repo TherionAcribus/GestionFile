@@ -30,8 +30,26 @@
 
     <div id="editor-status" class="alert alert-light py-2" role="status" aria-live="polite">Chargement de l’éditeur…</div>
 
+    <nav id="editor-modes" class="page-editor-modes mb-3" aria-label="Espace de travail" hidden>
+        <div class="btn-group" role="tablist" aria-label="Mode de l’éditeur">
+            <button id="editor-mode-journey" class="btn btn-outline-primary" type="button"
+                    role="tab" data-editor-mode="journey" aria-selected="false">
+                <i class="bi bi-signpost-split" aria-hidden="true"></i> Parcours
+            </button>
+            <button id="editor-mode-design" class="btn btn-outline-primary" type="button"
+                    role="tab" data-editor-mode="design" aria-selected="false">
+                <i class="bi bi-palette" aria-hidden="true"></i> Design des écrans
+            </button>
+            <button id="editor-mode-simulation" class="btn btn-outline-primary" type="button"
+                    role="tab" data-editor-mode="simulation" aria-selected="false">
+                <i class="bi bi-play-circle" aria-hidden="true"></i> Simulation
+            </button>
+        </div>
+        <p id="editor-mode-help" class="small text-muted mb-0"></p>
+    </nav>
+
     <div class="page-editor-grid">
-        <aside class="page-editor-panel" aria-labelledby="components-title">
+        <aside id="editor-components-panel" class="page-editor-panel page-editor-components-panel" aria-labelledby="components-title">
             <h3 id="components-title" class="h5">Composants</h3>
             <p class="small text-muted">Déplacez les blocs ou utilisez les boutons de l’inspecteur.</p>
             <div id="editor-zones"></div>
@@ -54,8 +72,11 @@
                     </p>
                 </div>
             </section>
-            <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
-                <div>
+            <p id="editor-simulation-intro" class="page-editor-simulation-intro" hidden>
+                Choisissez un écran pour le tester en grand. Cliquez sur un élément de l’aperçu pour ouvrir directement son design.
+            </p>
+            <div id="editor-preview-controls" class="d-flex flex-wrap align-items-end gap-2 mb-2">
+                <div id="editor-scenario-field">
                     <label class="form-label mb-1" for="editor-scenario">Scénario</label>
                     <select id="editor-scenario" class="form-select form-select-sm"></select>
                 </div>
@@ -93,11 +114,23 @@
             </section>
         </section>
 
-        <aside class="page-editor-panel" aria-labelledby="inspector-title">
-            <h3 id="inspector-title" class="h5">Propriétés</h3>
+        <aside id="editor-inspector-panel" class="page-editor-panel page-editor-inspector-panel" aria-labelledby="inspector-title">
+            <div class="page-editor-inspector-heading">
+                <h3 id="inspector-title" class="h5 mb-0">Propriétés</h3>
+                <button id="editor-inspector-close" class="btn btn-sm btn-outline-secondary page-editor-inspector-close"
+                        type="button" aria-label="Fermer les propriétés">
+                    <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </button>
+            </div>
             <div id="editor-inspector" class="text-muted">Sélectionnez un composant.</div>
         </aside>
     </div>
+    <button id="editor-inspector-toggle" class="btn btn-primary page-editor-inspector-toggle" type="button"
+            aria-controls="editor-inspector-panel" aria-expanded="false" hidden>
+        <i class="bi bi-sliders" aria-hidden="true"></i> Réglages
+    </button>
+    <button id="editor-inspector-backdrop" class="page-editor-inspector-backdrop" type="button"
+            aria-label="Fermer les propriétés" tabindex="-1" hidden></button>
 </main>
 {% endblock %}
 

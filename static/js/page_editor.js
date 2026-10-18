@@ -33,6 +33,17 @@
     const journeySummary = document.getElementById('editor-journey-summary');
     const journeyBranches = document.getElementById('editor-journey-branches');
     const journeySkipped = document.getElementById('editor-journey-skipped');
+    const modesNavigation = document.getElementById('editor-modes');
+    const modeHelp = document.getElementById('editor-mode-help');
+    const modeButtons = Array.from(document.querySelectorAll('[data-editor-mode]'));
+    const componentsPanel = document.getElementById('editor-components-panel');
+    const inspectorPanel = document.getElementById('editor-inspector-panel');
+    const inspectorToggle = document.getElementById('editor-inspector-toggle');
+    const inspectorClose = document.getElementById('editor-inspector-close');
+    const inspectorBackdrop = document.getElementById('editor-inspector-backdrop');
+    const scenarioField = document.getElementById('editor-scenario-field');
+    const simulationIntro = document.getElementById('editor-simulation-intro');
+    const compactInspectorMedia = window.matchMedia('(max-width: 1199px)');
 
     // L'aperçu est épinglé sous la barre d'outils : l'offset suit sa hauteur
     // réelle (les boutons peuvent s'étaler sur plusieurs lignes selon la
@@ -70,6 +81,9 @@
     let journey = null;
     let journeyFacts = {};
     let selectedStep = null;
+    let journeyContextStep = null;
+    let editorMode = 'design';
+    let inspectorReturnFocus = null;
     // État ouvert/fermé des sections de l'inspecteur, conservé entre les
     // re-rendus : à chaque modification l'inspecteur est reconstruit et
     // sans cette mémoire les sections retomberaient sur leur état
@@ -204,6 +218,132 @@
 
     const ALIGNMENT_LABELS = {stretch: 'Étendre', left: 'Gauche', center: 'Centre', right: 'Droite'};
 
+    const MODE_HELP = {
+        journey: 'Configurez l’ordre, les conditions et les incidents du parcours. Sélectionnez une étape pour afficher ses règles.',
+        design: 'Modifiez la disposition, les textes et l’apparence des composants de l’écran courant.',
+        simulation: 'Testez chaque écran en grand. Un clic dans l’aperçu ouvre le composant correspondant dans le mode Design.',
+    };
+
+    function journeyStepForScenario() {
+        if (!journey) return null;
+        return journeyAllSteps().find(function (step) {
+            return step.scenario === scenarioSelect.value;
+        }) || journey.steps[0] || null;
+    }
+
+    function componentBelongsToStep(componentId, step) {
+        const component = adapter && adapter.components[componentId];
+        return Boolean(component && (!step || !component.scenarios
+            || component.scenarios.includes(step.scenario)));
+    }
+
+    function syncInspectorPresentation() {
+        const available = !(journey && editorMode === 'simulation');
+        inspectorPanel.hidden = !available;
+        if (!available) {
+            root.dataset.inspectorOpen = 'false';
+            inspectorToggle.hidden = true;
+            inspectorBackdrop.hidden = true;
+            inspectorPanel.inert = true;
+            inspectorPanel.setAttribute('aria-hidden', 'true');
+            return;
+        }
+        if (compactInspectorMedia.matches) {
+            const open = root.dataset.inspectorOpen === 'true';
+            inspectorToggle.hidden = false;
+            inspectorToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            inspectorBackdrop.hidden = !open;
+            inspectorPanel.inert = !open;
+            inspectorPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        } else {
+            root.dataset.inspectorOpen = 'false';
+            inspectorToggle.hidden = true;
+            inspectorToggle.setAttribute('aria-expanded', 'false');
+            inspectorBackdrop.hidden = true;
+            inspectorPanel.inert = false;
+            inspectorPanel.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function openInspectorDrawer(trigger) {
+        if (!compactInspectorMedia.matches || (journey && editorMode === 'simulation')) return;
+        inspectorReturnFocus = trigger || document.activeElement;
+        root.dataset.inspectorOpen = 'true';
+        syncInspectorPresentation();
+        window.requestAnimationFrame(function () { inspectorClose.focus(); });
+    }
+
+    function closeInspectorDrawer(restoreFocus) {
+        const target = inspectorReturnFocus;
+        root.dataset.inspectorOpen = 'false';
+        inspectorReturnFocus = null;
+        syncInspectorPresentation();
+        if (restoreFocus && target && document.contains(target)) target.focus();
+    }
+
+    function syncEditorModeChrome() {
+        const hasJourney = Boolean(journey);
+        if (!hasJourney) editorMode = 'design';
+        root.dataset.editorMode = editorMode;
+        modesNavigation.hidden = !hasJourney;
+        componentsPanel.hidden = hasJourney && editorMode !== 'design';
+        scenarioField.hidden = hasJourney && editorMode === 'journey';
+        simulationIntro.hidden = !hasJourney || editorMode !== 'simulation';
+        modeButtons.forEach(function (button) {
+            const active = button.dataset.editorMode === editorMode;
+            button.setAttribute('aria-selected', active ? 'true' : 'false');
+            button.classList.toggle('btn-primary', active);
+            button.classList.toggle('btn-outline-primary', !active);
+            button.tabIndex = active ? 0 : -1;
+        });
+        if (modeHelp) modeHelp.textContent = MODE_HELP[editorMode] || '';
+        syncInspectorPresentation();
+    }
+
+    function setEditorMode(nextMode, options) {
+        options = options || {};
+        if (!journey) nextMode = 'design';
+        if (!['journey', 'design', 'simulation'].includes(nextMode)) return;
+        const previousScenario = scenarioSelect.value;
+
+        if (nextMode === 'journey') {
+            const context = journeyStep(journeyContextStep) || journeyStep(selectedStep) || journeyStepForScenario();
+            selectedStep = context ? context.id : null;
+            journeyContextStep = selectedStep;
+            selectedComponent = null;
+            if (context) scenarioSelect.value = context.scenario;
+        } else if (nextMode === 'design') {
+            const context = journeyStep(selectedStep) || journeyStep(journeyContextStep) || journeyStepForScenario();
+            if (context) journeyContextStep = context.id;
+            selectedStep = null;
+            if (!selectedComponent || !componentBelongsToStep(selectedComponent, context)) {
+                selectedComponent = context && Object.keys(adapter.components).find(function (componentId) {
+                    return componentBelongsToStep(componentId, context);
+                });
+            }
+            if (!selectedComponent) selectedComponent = Object.keys(adapter.components)[0];
+        } else {
+            const context = journeyStep(selectedStep) || journeyStep(journeyContextStep) || journeyStepForScenario();
+            if (context) journeyContextStep = context.id;
+            selectedStep = null;
+            selectedComponent = null;
+        }
+
+        editorMode = nextMode;
+        try { localStorage.setItem('page-editor-mode-' + page, editorMode); } catch (error) {}
+        closeInspectorDrawer(false);
+        syncEditorModeChrome();
+        rerenderAll();
+        if (options.reloadPreview === true || scenarioSelect.value !== previousScenario) loadPreview();
+        else pushPayloadToPreview();
+        if (options.focus) {
+            const activeButton = modeButtons.find(function (button) {
+                return button.dataset.editorMode === editorMode;
+            });
+            if (activeButton) activeButton.focus();
+        }
+    }
+
     const backupKey = 'page-editor-backup-' + page;
 
     function persistBackup() {
@@ -322,6 +462,35 @@
     function renderPalette() {
         destroySortables();
         zonesContainer.replaceChildren();
+        const contextStep = editorMode === 'design' ? journeyStep(journeyContextStep) : null;
+        if (contextStep) {
+            const context = document.createElement('div');
+            context.className = 'page-editor-component-context';
+            const copy = document.createElement('div');
+            const label = document.createElement('strong');
+            label.textContent = 'Écran : ' + contextStep.label;
+            const hint = document.createElement('span');
+            hint.textContent = 'Composants utilisés dans ce scénario.';
+            copy.append(label, hint);
+            const actions = document.createElement('div');
+            actions.className = 'd-flex flex-wrap gap-1';
+            const back = document.createElement('button');
+            back.type = 'button';
+            back.className = 'btn btn-sm btn-primary';
+            back.textContent = 'Retour au parcours';
+            back.addEventListener('click', function () { setEditorMode('journey'); });
+            const all = document.createElement('button');
+            all.type = 'button';
+            all.className = 'btn btn-sm btn-outline-secondary';
+            all.textContent = 'Tous les composants';
+            all.addEventListener('click', function () {
+                journeyContextStep = null;
+                rerenderAll();
+            });
+            actions.append(back, all);
+            context.append(copy, actions);
+            zonesContainer.appendChild(context);
+        }
         adapter.zones.forEach(function (zone) {
             const section = document.createElement('section');
             section.className = 'page-editor-zone';
@@ -331,10 +500,14 @@
             list.className = 'page-editor-component-list';
             list.dataset.zone = zone;
             const componentIds = Object.keys(adapter.components).filter(function (componentId) {
-                return payload.layout[componentId].zone === zone;
+                const component = adapter.components[componentId];
+                const inContext = !contextStep || !component.scenarios
+                    || component.scenarios.includes(contextStep.scenario);
+                return payload.layout[componentId].zone === zone && inContext;
             }).sort(function (left, right) {
                 return payload.layout[left].order - payload.layout[right].order;
             });
+            if (!componentIds.length) return;
             componentIds.forEach(function (componentId) {
                 const component = adapter.components[componentId];
                 const disabledReason = managedDisabledReason(componentId, component);
@@ -361,13 +534,13 @@
                     badge.setAttribute('aria-hidden', 'true');
                     button.appendChild(badge);
                 }
-                button.addEventListener('click', function () { selectComponent(componentId); });
+                button.addEventListener('click', function () { selectComponent(componentId, button); });
                 list.appendChild(button);
             });
             section.append(title, list);
             zonesContainer.appendChild(section);
 
-            sortableInstances.push(new Sortable(list, {
+            if (!contextStep) sortableInstances.push(new Sortable(list, {
                 group: 'page-editor-components',
                 animation: 150,
                 draggable: '.page-editor-component',
@@ -1027,8 +1200,22 @@
         const definition = adapter.components[selectedComponent];
         const layout = payload.layout[selectedComponent];
         const layoutControls = definition.layout_controls || ['visible', 'span', 'alignment', 'order'];
-        const heading = document.createElement('p');
-        heading.className = 'fw-semibold';
+        const contextStep = editorMode === 'design' ? journeyStep(journeyContextStep) : null;
+        if (contextStep) {
+            const context = document.createElement('div');
+            context.className = 'page-editor-inspector-context';
+            const text = document.createElement('span');
+            text.textContent = 'Écran · ' + contextStep.label;
+            const back = document.createElement('button');
+            back.type = 'button';
+            back.className = 'btn btn-sm btn-link';
+            back.textContent = 'Retour au parcours';
+            back.addEventListener('click', function () { setEditorMode('journey'); });
+            context.append(text, back);
+            inspector.appendChild(context);
+        }
+        const heading = document.createElement('h4');
+        heading.className = 'h6 fw-semibold';
         heading.textContent = definition.label;
         inspector.appendChild(heading);
 
@@ -1348,11 +1535,19 @@
         renderPagePalette();
     }
 
-    function selectComponent(componentId) {
+    function selectComponent(componentId, trigger) {
+        const context = journeyStepForScenario();
+        if (journey && context) journeyContextStep = context.id;
         selectedComponent = componentId;
         selectedStep = null;
-        rerenderAll();
-        pushPayloadToPreview();
+        if (journey && editorMode !== 'design') {
+            setEditorMode('design', {reloadPreview: false});
+        } else {
+            rerenderAll();
+            pushPayloadToPreview();
+        }
+        const current = zonesContainer.querySelector('[data-component-id="' + componentId + '"]');
+        openInspectorDrawer(current || trigger);
     }
 
     // --- Parcours patient -------------------------------------------------
@@ -1419,6 +1614,7 @@
         const step = journeyStep(stepId);
         if (!step) return;
         selectedStep = stepId;
+        journeyContextStep = stepId;
         selectedComponent = null;
         const changedScenario = scenarioSelect.value !== step.scenario;
         scenarioSelect.value = step.scenario;
@@ -1426,7 +1622,8 @@
         if (changedScenario) loadPreview();
         else pushPayloadToPreview();
         const current = journeyPath.querySelector('[data-journey-step="' + stepId + '"]');
-        if (current) current.focus();
+        if (compactInspectorMedia.matches) openInspectorDrawer(current);
+        else if (current) current.focus();
     }
 
     const JOURNEY_STATE_ICONS = {
@@ -1538,7 +1735,7 @@
 
     function renderJourney() {
         if (!journeySection) return;
-        if (!journey) {
+        if (!journey || editorMode !== 'journey') {
             journeySection.hidden = true;
             journeySkipped.hidden = true;
             return;
@@ -1698,8 +1895,8 @@
 
     function renderJourneyInspector(step) {
         const status = journeyStatus(step);
-        const heading = document.createElement('p');
-        heading.className = 'fw-semibold mb-1';
+        const heading = document.createElement('h4');
+        heading.className = 'h6 fw-semibold mb-1';
         heading.textContent = (step.number ? 'Étape ' + step.number + ' · ' : 'Écran annexe · ') + step.label;
         const role = document.createElement('p');
         role.className = 'small text-muted';
@@ -1996,6 +2193,14 @@
             journey = adapter.journey || null;
             journeyFacts = state.journey_facts || {};
             if (selectedStep && !journeyStep(selectedStep)) selectedStep = null;
+            if (journeyContextStep && !journeyStep(journeyContextStep)) journeyContextStep = null;
+            if (root.dataset.modeReady !== 'true') {
+                let storedMode = null;
+                try { storedMode = localStorage.getItem('page-editor-mode-' + page); } catch (error) {}
+                editorMode = journey && ['journey', 'design', 'simulation'].includes(storedMode)
+                    ? storedMode : (journey ? 'journey' : 'design');
+                root.dataset.modeReady = 'true';
+            }
             paletteSources = state.palette_sources || [];
             disabledComponents = state.disabled_components || {};
             previewLanguages = state.languages || [];
@@ -2007,12 +2212,26 @@
             dirty = false;
             undoStack = [];
             redoStack = [];
-            if (selectedStep) selectedComponent = null;
-            else selectedComponent = selectedComponent && adapter.components[selectedComponent] ? selectedComponent : Object.keys(adapter.components)[0];
             populateSelectors();
-            renderPalette();
-            renderInspector();
-            renderJourney();
+            if (journey && editorMode === 'journey') {
+                const context = journeyStep(selectedStep) || journeyStep(journeyContextStep) || journeyStepForScenario();
+                selectedStep = context ? context.id : null;
+                journeyContextStep = selectedStep;
+                selectedComponent = null;
+            } else if (journey && editorMode === 'simulation') {
+                selectedStep = null;
+                selectedComponent = null;
+            } else {
+                selectedStep = null;
+                const context = journeyStep(journeyContextStep);
+                if (!selectedComponent || !componentBelongsToStep(selectedComponent, context)) {
+                    selectedComponent = Object.keys(adapter.components).find(function (componentId) {
+                        return componentBelongsToStep(componentId, context);
+                    }) || Object.keys(adapter.components)[0];
+                }
+            }
+            syncEditorModeChrome();
+            rerenderAll();
             renderRevisions(state.revisions || [], state.published_revision);
             loadPreview();
             applyButton.disabled = state.published_revision < 1;
@@ -3248,12 +3467,37 @@
         historyPanel.hidden = !historyPanel.hidden;
         historyButton.setAttribute('aria-expanded', historyPanel.hidden ? 'false' : 'true');
     });
+    modeButtons.forEach(function (button, index) {
+        button.addEventListener('click', function () {
+            setEditorMode(button.dataset.editorMode, {focus: true});
+        });
+        button.addEventListener('keydown', function (event) {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            let targetIndex = index;
+            if (event.key === 'ArrowLeft') targetIndex = (index - 1 + modeButtons.length) % modeButtons.length;
+            if (event.key === 'ArrowRight') targetIndex = (index + 1) % modeButtons.length;
+            if (event.key === 'Home') targetIndex = 0;
+            if (event.key === 'End') targetIndex = modeButtons.length - 1;
+            setEditorMode(modeButtons[targetIndex].dataset.editorMode, {focus: true});
+        });
+    });
+    inspectorToggle.addEventListener('click', function () { openInspectorDrawer(inspectorToggle); });
+    inspectorClose.addEventListener('click', function () { closeInspectorDrawer(true); });
+    inspectorBackdrop.addEventListener('click', function () { closeInspectorDrawer(true); });
+    compactInspectorMedia.addEventListener('change', function () { closeInspectorDrawer(false); });
     scenarioSelect.addEventListener('change', function () {
-        // L'inspecteur d'étape suit le scénario choisi à la main.
-        if (selectedStep) {
-            const match = journeyAllSteps().find(function (step) { return step.scenario === scenarioSelect.value; });
+        const match = journeyAllSteps().find(function (step) { return step.scenario === scenarioSelect.value; });
+        if (journey && editorMode === 'journey') {
             selectedStep = match ? match.id : null;
-            if (!selectedStep && !selectedComponent) selectedComponent = Object.keys(adapter.components)[0];
+            journeyContextStep = selectedStep;
+        } else if (journey && match) {
+            journeyContextStep = match.id;
+            if (editorMode === 'design' && !componentBelongsToStep(selectedComponent, match)) {
+                selectedComponent = Object.keys(adapter.components).find(function (componentId) {
+                    return componentBelongsToStep(componentId, match);
+                }) || Object.keys(adapter.components)[0];
+            }
         }
         rerenderAll();
         loadPreview();
@@ -3267,6 +3511,34 @@
         if (event.origin !== window.location.origin || !event.data) return;
         if (event.data.type === 'page-editor:ready') pushPayloadToPreview();
         if (event.data.type === 'page-editor:selected' && adapter.components[event.data.componentId]) selectComponent(event.data.componentId);
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && root.dataset.inspectorOpen === 'true') {
+            event.preventDefault();
+            closeInspectorDrawer(true);
+            return;
+        }
+        if (event.key === 'Tab' && root.dataset.inspectorOpen === 'true') {
+            const focusable = Array.from(inspectorPanel.querySelectorAll(
+                'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), '
+                + 'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter(function (element) {
+                return !element.hidden && element.getAttribute('aria-hidden') !== 'true';
+            });
+            if (!focusable.length) {
+                event.preventDefault();
+                return;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
     });
     window.addEventListener('beforeunload', function (event) {
         if (!dirty && !saving) return;

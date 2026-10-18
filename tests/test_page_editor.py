@@ -3255,6 +3255,25 @@ def test_patient_journey_browser_flow(editor_app):
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.goto(f"{url}/admin/page-editor/patient")
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                playwright.expect(page.locator("#editor-modes")).to_be_visible()
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("data-editor-mode", "journey")
+                playwright.expect(page.locator("#editor-components-panel")).to_be_hidden()
+                playwright.expect(page.locator("#editor-scenario-field")).to_be_hidden()
+
+                # Les trois espaces ne cumulent plus leurs outils : Design
+                # rend la palette et le scénario, Simulation ne garde que
+                # l'aperçu, puis Parcours restaure la frise et son contexte.
+                page.get_by_role("tab", name="Design des écrans").click()
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("data-editor-mode", "design")
+                playwright.expect(page.locator("#editor-components-panel")).to_be_visible()
+                playwright.expect(page.locator("#editor-scenario-field")).to_be_visible()
+                playwright.expect(page.locator("#editor-journey")).to_be_hidden()
+                page.get_by_role("tab", name="Simulation").click()
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("data-editor-mode", "simulation")
+                playwright.expect(page.locator("#editor-components-panel")).to_be_hidden()
+                playwright.expect(page.locator("#editor-inspector-panel")).to_be_hidden()
+                playwright.expect(page.locator("#editor-simulation-intro")).to_be_visible()
+                page.get_by_role("tab", name="Parcours").click()
                 journey = page.locator("#editor-journey")
                 playwright.expect(journey).to_be_visible()
                 playwright.expect(page.locator("#editor-journey-summary")).to_contain_text(
@@ -3303,8 +3322,22 @@ def test_patient_journey_browser_flow(editor_app):
 
                 # Raccourci vers un composant de l'écran.
                 page.locator("#editor-inspector").get_by_role("button", name="Erreur d'impression").click()
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("data-editor-mode", "design")
+                playwright.expect(page.locator(".page-editor-component-context")).to_contain_text(
+                    "Écran : Personnel appelé")
                 playwright.expect(page.locator("[data-component-id='print_error']")).to_have_attribute("aria-pressed", "true")
-                playwright.expect(page.locator("[data-journey-step='staff_called']")).to_have_attribute("aria-pressed", "false")
+                playwright.expect(page.locator("#editor-journey")).to_be_hidden()
+
+                # Sous 1200 px l'inspecteur est un tiroir : la sélection d'une
+                # étape l'ouvre, il se ferme sans laisser ses champs au clavier.
+                page.set_viewport_size({"width": 1024, "height": 800})
+                page.get_by_role("tab", name="Parcours").click()
+                page.locator("[data-journey-step='validation']").click()
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("data-inspector-open", "true")
+                playwright.expect(page.locator("#editor-inspector-panel")).to_have_attribute("aria-hidden", "false")
+                page.locator("#editor-inspector-close").click()
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("data-inspector-open", "false")
+                playwright.expect(page.locator("#editor-inspector-panel")).to_have_attribute("aria-hidden", "true")
                 assert errors == []
             finally:
                 browser.close()
