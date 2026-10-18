@@ -8,23 +8,61 @@
 
 {% block content %}
 <main id="page-editor" data-page="{{ page }}" aria-busy="true">
-    <div class="page-editor-toolbar d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-        <div>
+    <div class="page-editor-toolbar mb-3">
+        <div class="page-editor-toolbar-heading">
+            <div>
             <h2 class="mb-1">{{ page_label }}</h2>
             <div class="btn-group btn-group-sm" role="group" aria-label="Mode d’édition">
                 <a class="btn btn-primary active" aria-current="page" href="{{ url_for('admin_page_editor.editor', page=page) }}">Éditeur visuel</a>
                 {% set advanced_urls = {'announce': '/admin/announce', 'patient': '/admin/patient', 'phone': '/admin/phone'} %}
                 <a class="btn btn-outline-primary" href="{{ advanced_urls[page] }}">Mode avancé</a>
             </div>
+            </div>
+            <button id="editor-actions-toggle" class="btn btn-sm btn-outline-secondary page-editor-actions-toggle"
+                    type="button" aria-expanded="false" aria-controls="editor-actions">
+                <i class="bi bi-sliders" aria-hidden="true"></i> Actions
+            </button>
         </div>
-        <div class="page-editor-actions" role="toolbar" aria-label="Actions du brouillon">
-            <button id="editor-undo" class="btn btn-outline-secondary" type="button" disabled><i class="bi bi-arrow-counterclockwise"></i> Annuler</button>
-            <button id="editor-redo" class="btn btn-outline-secondary" type="button" disabled><i class="bi bi-arrow-clockwise"></i> Rétablir</button>
-            <button id="editor-discard" class="btn btn-outline-danger" type="button">Annuler les changements</button>
-            <button id="editor-diff" class="btn btn-outline-secondary" type="button">Comparer</button>
-            <button id="editor-save" class="btn btn-outline-primary" type="button">Enregistrer le brouillon</button>
-            <button id="editor-publish" class="btn btn-success" type="button">Publier</button>
-            <button id="editor-apply" class="btn btn-warning" type="button" disabled>Appliquer/recharger les écrans</button>
+        <div id="editor-actions" class="page-editor-actions">
+            <div class="page-editor-secondary-actions" role="toolbar" aria-label="Outils d’édition">
+                <div class="btn-group" role="group" aria-label="Historique des modifications">
+                    <button id="editor-undo" class="btn btn-sm btn-outline-secondary" type="button"
+                            aria-label="Annuler la dernière modification" title="Annuler la dernière modification" disabled>
+                        <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+                    </button>
+                    <button id="editor-redo" class="btn btn-sm btn-outline-secondary" type="button"
+                            aria-label="Rétablir la modification" title="Rétablir la modification" disabled>
+                        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <button id="editor-diff" class="btn btn-sm btn-outline-secondary" type="button">
+                    <i class="bi bi-file-diff" aria-hidden="true"></i> Comparer
+                </button>
+                <button id="editor-discard" class="btn btn-sm btn-link text-danger" type="button">
+                    <i class="bi bi-trash3" aria-hidden="true"></i> Abandonner
+                </button>
+            </div>
+            <ol class="page-editor-workflow" aria-label="Mise en service des modifications">
+                <li id="editor-workflow-draft" class="page-editor-workflow-step" data-state="idle">
+                    <span class="page-editor-workflow-label">1 · Brouillon</span>
+                    <button id="editor-save" class="btn btn-sm btn-outline-primary" type="button">
+                        <i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Enregistrer
+                    </button>
+                    <small id="editor-workflow-draft-status">À jour</small>
+                </li>
+                <li class="page-editor-workflow-arrow" aria-hidden="true"><i class="bi bi-chevron-right"></i></li>
+                <li id="editor-workflow-publish" class="page-editor-workflow-step" data-state="idle">
+                    <span class="page-editor-workflow-label">2 · Publication</span>
+                    <button id="editor-publish" class="btn btn-sm btn-success" type="button">Publier</button>
+                    <small id="editor-workflow-publish-status">Version publiée</small>
+                </li>
+                <li class="page-editor-workflow-arrow" aria-hidden="true"><i class="bi bi-chevron-right"></i></li>
+                <li id="editor-workflow-apply" class="page-editor-workflow-step" data-state="idle">
+                    <span class="page-editor-workflow-label">3 · Écrans</span>
+                    <button id="editor-apply" class="btn btn-sm btn-warning" type="button" disabled>Appliquer</button>
+                    <small id="editor-workflow-apply-status">Aucune publication</small>
+                </li>
+            </ol>
         </div>
     </div>
 

@@ -21,6 +21,14 @@
     const discardButton = document.getElementById('editor-discard');
     const diffButton = document.getElementById('editor-diff');
     const applyButton = document.getElementById('editor-apply');
+    const actionsPanel = document.getElementById('editor-actions');
+    const actionsToggle = document.getElementById('editor-actions-toggle');
+    const workflowDraft = document.getElementById('editor-workflow-draft');
+    const workflowPublish = document.getElementById('editor-workflow-publish');
+    const workflowApply = document.getElementById('editor-workflow-apply');
+    const workflowDraftStatus = document.getElementById('editor-workflow-draft-status');
+    const workflowPublishStatus = document.getElementById('editor-workflow-publish-status');
+    const workflowApplyStatus = document.getElementById('editor-workflow-apply-status');
     const themesButton = document.getElementById('editor-themes');
     const screensButton = document.getElementById('editor-screens');
     const historyButton = document.getElementById('editor-history-toggle');
@@ -52,6 +60,7 @@
     const simulationActions = document.getElementById('editor-simulation-actions');
     const simulationTrail = document.getElementById('editor-simulation-trail');
     const compactInspectorMedia = window.matchMedia('(max-width: 1199px)');
+    const compactActionsMedia = window.matchMedia('(max-width: 767px)');
 
     // L'aperçu est épinglé sous la barre d'outils : l'offset suit sa hauteur
     // réelle (les boutons peuvent s'étaler sur plusieurs lignes selon la
@@ -59,6 +68,17 @@
     function syncStickyOffset() {
         if (!topToolbar) return;
         root.style.setProperty('--page-editor-toolbar-height', (topToolbar.offsetHeight + 8) + 'px');
+    }
+
+    function syncActionsPresentation() {
+        if (compactActionsMedia.matches) {
+            const open = root.dataset.actionsOpen === 'true';
+            actionsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            actionsPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        } else {
+            actionsToggle.setAttribute('aria-expanded', 'false');
+            actionsPanel.removeAttribute('aria-hidden');
+        }
     }
     syncStickyOffset();
     window.addEventListener('resize', syncStickyOffset);
@@ -76,6 +96,8 @@
     let saving = false;
     let saveQueued = false;
     let autosaveTimer = null;
+    let publishedRevision = 0;
+    let appliedRevision = null;
     let selectedComponent = null;
     let undoStack = [];
     let redoStack = [];
@@ -95,6 +117,8 @@
     let simulationStepId = null;
     let simulationHistory = [];
     let simulationOutcome = null;
+    root.dataset.actionsOpen = 'false';
+    syncActionsPresentation();
     // État ouvert/fermé des sections de l'inspecteur, conservé entre les
     // re-rendus : à chaque modification l'inspecteur est reconstruit et
     // sans cette mémoire les sections retomberaient sur leur état
@@ -433,7 +457,19 @@
         saveButton.disabled = !dirty || saving;
         publishButton.disabled = saving || (!dirty && !hasDraft);
         discardButton.disabled = saving;
+        applyButton.disabled = saving || publishedRevision < 1;
         root.dataset.dirty = dirty ? 'true' : 'false';
+
+        workflowDraft.dataset.state = dirty ? 'ready' : (hasDraft ? 'complete' : 'idle');
+        workflowDraftStatus.textContent = saving ? 'Enregistrement…'
+            : (dirty ? 'Modifications à enregistrer' : (hasDraft ? 'Brouillon enregistré' : 'À jour'));
+        workflowPublish.dataset.state = dirty || hasDraft ? 'ready' : 'complete';
+        workflowPublishStatus.textContent = dirty ? 'Enregistrer avant publication'
+            : (hasDraft ? 'Prêt à publier' : 'Version publiée');
+        workflowApply.dataset.state = publishedRevision < 1 ? 'idle'
+            : (appliedRevision === publishedRevision ? 'complete' : 'ready');
+        workflowApplyStatus.textContent = publishedRevision < 1 ? 'Aucune publication'
+            : (appliedRevision === publishedRevision ? 'Ordre envoyé' : 'Révision ' + publishedRevision + ' disponible');
     }
 
     function mutate(change, message) {
@@ -2383,6 +2419,9 @@
             paletteSources = state.palette_sources || [];
             disabledComponents = state.disabled_components || {};
             previewLanguages = state.languages || [];
+            const nextPublishedRevision = Number(state.published_revision) || 0;
+            if (publishedRevision && nextPublishedRevision !== publishedRevision) appliedRevision = null;
+            publishedRevision = nextPublishedRevision;
             published = clone(state.published);
             defaults = state.defaults || null;
             hasDraft = Boolean(state.draft);
@@ -2413,7 +2452,6 @@
             rerenderAll();
             renderRevisions(state.revisions || [], state.published_revision);
             loadPreview();
-            applyButton.disabled = state.published_revision < 1;
             updateButtons();
             if (message) {
                 setStatus(message, hasDraft ? 'info' : 'light');
@@ -3636,6 +3674,8 @@
             'Recharger maintenant les écrans connectés en service ?', 'Recharger')) return;
         try {
             await requestJSON('/admin/page-editor/' + encodeURIComponent(page) + '/apply', {method: 'POST', body: '{}'});
+            appliedRevision = publishedRevision;
+            updateButtons();
             setStatus('Ordre de rechargement envoyé aux écrans connectés.', 'success');
             await watchScreenAcks();
         } catch (error) {
@@ -3645,6 +3685,16 @@
     historyButton.addEventListener('click', function () {
         historyPanel.hidden = !historyPanel.hidden;
         historyButton.setAttribute('aria-expanded', historyPanel.hidden ? 'false' : 'true');
+    });
+    actionsToggle.addEventListener('click', function () {
+        const open = root.dataset.actionsOpen !== 'true';
+        root.dataset.actionsOpen = open ? 'true' : 'false';
+        syncActionsPresentation();
+        window.requestAnimationFrame(syncStickyOffset);
+    });
+    compactActionsMedia.addEventListener('change', function () {
+        syncActionsPresentation();
+        window.requestAnimationFrame(syncStickyOffset);
     });
     modeButtons.forEach(function (button, index) {
         button.addEventListener('click', function () {

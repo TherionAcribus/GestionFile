@@ -3267,6 +3267,11 @@ def test_patient_journey_browser_flow(editor_app):
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("data-editor-mode", "journey")
                 playwright.expect(page.locator("#editor-components-panel")).to_be_hidden()
                 playwright.expect(page.locator("#editor-scenario-field")).to_be_hidden()
+                playwright.expect(page.locator("#editor-actions")).to_be_visible()
+                playwright.expect(page.locator("#editor-workflow-publish")).to_have_attribute(
+                    "data-state", "complete")
+                playwright.expect(page.locator("#editor-workflow-publish-status")).to_have_text(
+                    "Version publiée")
 
                 # Les trois espaces ne cumulent plus leurs outils : Design
                 # rend la palette et le scénario, Simulation pilote l'aperçu
@@ -3323,6 +3328,12 @@ def test_patient_journey_browser_flow(editor_app):
                 playwright.expect(scan).to_be_enabled()
 
                 toggle.uncheck()
+                playwright.expect(page.locator("#editor-workflow-draft")).to_have_attribute(
+                    "data-state", "ready")
+                playwright.expect(page.locator("#editor-workflow-draft-status")).to_have_text(
+                    "Modifications à enregistrer")
+                playwright.expect(page.locator("#editor-workflow-publish-status")).to_have_text(
+                    "Enregistrer avant publication")
                 playwright.expect(validation).to_have_attribute("data-journey-state", "hidden")
                 playwright.expect(validation).to_contain_text("Sautée")
                 playwright.expect(page.locator("#editor-journey-skipped")).to_be_visible()
@@ -3386,6 +3397,20 @@ def test_patient_journey_browser_flow(editor_app):
                 page.locator("#editor-inspector-close").click()
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("data-inspector-open", "false")
                 playwright.expect(page.locator("#editor-inspector-panel")).to_have_attribute("aria-hidden", "true")
+
+                # Le téléphone reste un accès de dépannage : les commandes
+                # sont repliées par défaut et la barre ne monopolise pas la
+                # hauteur de l'écran, mais toutes les actions restent accessibles.
+                page.set_viewport_size({"width": 390, "height": 844})
+                playwright.expect(page.locator("#editor-actions-toggle")).to_be_visible()
+                playwright.expect(page.locator("#editor-actions")).to_be_hidden()
+                playwright.expect(page.locator("#editor-actions")).to_have_attribute("aria-hidden", "true")
+                assert page.locator(".page-editor-toolbar").evaluate(
+                    "element => getComputedStyle(element).position") == "static"
+                page.locator("#editor-actions-toggle").click()
+                playwright.expect(page.locator("#editor-actions")).to_be_visible()
+                playwright.expect(page.locator("#editor-actions")).to_have_attribute("aria-hidden", "false")
+                playwright.expect(page.locator("#editor-workflow-draft")).to_be_visible()
                 assert errors == []
             finally:
                 browser.close()
