@@ -47,7 +47,7 @@ from routes.admin_config import admin_config_bp
 from routes.admin_page_editor import admin_page_editor_bp
 from routes.admin_onboarding import admin_onboarding_bp
 from routes.admin_performance import admin_performance_bp
-from scheduler_functions import clear_old_patients_table, ensure_stress_probe_job, reconcile_scheduled_jobs
+from scheduler_functions import clear_old_patients_table, reconcile_scheduled_jobs, start_stress_probe_loop
 from bdd import init_database
 from config import Config
 from variables import MultiCssVariableManager
@@ -891,8 +891,8 @@ def _ensure_stress_probe():
     """Sonde temps reel du test de charge, dans les processus qui executent
     les taches (jamais en role web, ou l'ordonnanceur est en pause)."""
     try:
-        if ensure_stress_probe_job(app) == 'added':
-            app.logger.info("Sonde temps reel du test de charge planifiee")
+        if start_stress_probe_loop(app) == 'started':
+            app.logger.info("Sonde temps reel du test de charge demarree")
     except Exception as e:
         app.logger.error("Sonde temps reel du test de charge impossible : %s", e)
 

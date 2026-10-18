@@ -24,10 +24,15 @@ HEARTBEAT_JOB_ID = "Scheduler Heartbeat"
 CLEAR_PATIENT_TABLE_JOB_ID = "Clear Patient Table"
 CLEAR_ANNOUNCE_CALLS_JOB_ID = "Clear Announce Calls"
 CALL_AUTO_VALIDATION_JOB_ID = "Automatic Call Validation"
-STRESS_PROBE_JOB_ID = "Stress Realtime Probe"
-# Magasin en memoire, propre au processus planificateur : la sonde ne doit
-# jamais etre persistee dans le jobstore partage ni s'executer ailleurs.
-STRESS_PROBE_JOBSTORE = "volatile"
+# Sonde temps reel du test de charge : boucle dediee (pas une tache
+# APScheduler, qui journaliserait chaque execution en INFO). Rythme adaptatif :
+# une requete legere toutes les 5 s hors test, une sonde par seconde pendant.
+STRESS_PROBE_IDLE_SECONDS = 5
+STRESS_PROBE_ACTIVE_SECONDS = 1
+_stress_probe_thread = None
+# Une erreur persistante (migration non appliquee, base indisponible) n'est
+# journalisee en ERROR qu'une fois, puis en DEBUG jusqu'au prochain succes.
+_stress_probe_failing = False
 
 
 def _refresh_config(app):
@@ -656,38 +661,39 @@ def scheduler_heartbeat_job():
     """No-op volontaire : cf. ``ensure_scheduler_heartbeat_job``."""
 
 
-def ensure_stress_probe_job(app):
-    """Planifie la sonde temps reel du test de charge (preproduction seule).
+def start_stress_probe_loop(app):
+    """Demarre la sonde temps reel du test de charge (preproduction seule).
 
     A appeler uniquement dans un processus qui EXECUTE les taches (roles
-    ``scheduler`` et ``all``). Une sonde par seconde, et seulement pendant un
-    test en cours : en dehors, la tache se limite a une requete indexee.
+    ``scheduler`` et ``all``). Fil demon, silencieux hors erreur ; idempotent.
     """
+    global _stress_probe_thread
     if str(app.config.get("STRESS_TEST_MODE", "disabled")).lower() != "staging":
         return "disabled"
-    from apscheduler.jobstores.memory import MemoryJobStore
-    try:
-        scheduler.add_jobstore(MemoryJobStore(), alias=STRESS_PROBE_JOBSTORE)
-    except ValueError:
-        pass  # Magasin deja ajoute (appel repete).
-    scheduler.add_job(
-        id=STRESS_PROBE_JOB_ID,
-        func=stress_probe_job,
-        trigger="interval",
-        seconds=1,
-        jobstore=STRESS_PROBE_JOBSTORE,
-        replace_existing=True,
-        misfire_grace_time=2,
-        coalesce=True,
-        max_instances=1,
-    )
-    return "added"
+    if _stress_probe_thread is not None and _stress_probe_thread.is_alive():
+        return "unchanged"
+    import threading
+    _stress_probe_thread = threading.Thread(
+        target=_stress_probe_loop, args=(app,), name="stress-probe", daemon=True)
+    _stress_probe_thread.start()
+    return "started"
 
 
-def stress_probe_job():
-    app = AppHolder.get_app()
+def stress_probe_tick(app):
+    """Une iteration : emet si un test tourne. Renvoie le delai avant la suivante."""
     with app.app_context():
-        emit_stress_probe()
+        seq = emit_stress_probe()
+    return STRESS_PROBE_ACTIVE_SECONDS if seq else STRESS_PROBE_IDLE_SECONDS
+
+
+def _stress_probe_loop(app):
+    while True:
+        try:
+            delay = stress_probe_tick(app)
+        except Exception:  # le fil ne doit jamais mourir en silence
+            app.logger.debug("Iteration de la sonde temps reel en echec", exc_info=True)
+            delay = STRESS_PROBE_IDLE_SECONDS
+        time.sleep(delay)
 
 
 def emit_stress_probe():
@@ -697,6 +703,7 @@ def emit_stress_probe():
     redemarrage du planificateur pendant le test ne recompte pas. L'emission
     precede l'ecriture du compteur : toute sonde comptee a bien ete emise.
     """
+    global _stress_probe_failing
     from models import StressTestRun
     from stress_realtime import PROBE_EVENT, PROBE_SCENARIOS, PROBE_STREAM, build_probe
     try:
@@ -706,6 +713,7 @@ def emit_stress_probe():
         ).filter(StressTestRun.state == "running",
                  StressTestRun.mode == "staging",
                  StressTestRun.scenario.in_(PROBE_SCENARIOS)).first()
+        _stress_probe_failing = False
         if run is None:
             db.session.rollback()
             return None
@@ -719,7 +727,15 @@ def emit_stress_probe():
         return seq
     except Exception:
         db.session.rollback()
-        current_app.logger.exception("Sonde temps reel du test de charge en echec")
+        if _stress_probe_failing:
+            current_app.logger.debug(
+                "Sonde temps reel du test de charge toujours en echec", exc_info=True)
+        else:
+            _stress_probe_failing = True
+            current_app.logger.exception(
+                "Sonde temps reel du test de charge en echec (base migree ? "
+                "`python manage.py migrate`). Erreurs suivantes en DEBUG "
+                "jusqu'au retour a la normale.")
         return None
 
 

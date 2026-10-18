@@ -263,27 +263,36 @@ def test_scheduler_probe_ignores_non_probe_scenarios(app, monkeypatch):
     assert scheduler_functions.emit_stress_probe() is None
 
 
-def test_probe_job_is_volatile_and_staging_only(app):
+def test_probe_loop_is_staging_only_and_paced_by_activity(app, monkeypatch):
+    import threading
+
     import scheduler_functions as sf
-    from extensions import scheduler
+    monkeypatch.setattr(sf, 'communication_websocket', lambda *a, **kw: None)
+    # Hors test : une verification toutes les 5 s ; pendant : une sonde/s.
+    assert sf.stress_probe_tick(app) == sf.STRESS_PROBE_IDLE_SECONDS == 5
+    _stored_run()
+    assert sf.stress_probe_tick(app) == sf.STRESS_PROBE_ACTIVE_SECONDS == 1
+
+    release = threading.Event()
+    monkeypatch.setattr(sf, '_stress_probe_thread', None)
+    monkeypatch.setattr(sf, '_stress_probe_loop', lambda _app: release.wait(5))
     app.config['STRESS_TEST_MODE'] = 'production'
-    assert sf.ensure_stress_probe_job(app) == 'disabled'
+    assert sf.start_stress_probe_loop(app) == 'disabled'
     app.config['STRESS_TEST_MODE'] = 'staging'
     try:
-        assert sf.ensure_stress_probe_job(app) == 'added'
-        assert sf.ensure_stress_probe_job(app) == 'added'  # idempotent
-        job = scheduler.get_job(sf.STRESS_PROBE_JOB_ID, sf.STRESS_PROBE_JOBSTORE)
-        assert job is not None
-        assert job.trigger.interval.total_seconds() == 1
+        assert sf.start_stress_probe_loop(app) == 'started'
+        assert sf.start_stress_probe_loop(app) == 'unchanged'
+        assert sf._stress_probe_thread.daemon is True
     finally:
-        try:
-            scheduler.remove_job(sf.STRESS_PROBE_JOB_ID, sf.STRESS_PROBE_JOBSTORE)
-        except Exception:
-            pass
-        try:
-            scheduler.remove_jobstore(sf.STRESS_PROBE_JOBSTORE)
-        except Exception:
-            pass
+        release.set()
+        sf._stress_probe_thread.join(timeout=2)
+
+
+def test_probe_loop_is_not_an_apscheduler_job():
+    # Une tache APScheduler a 1 s journalisait deux lignes INFO par seconde.
+    import scheduler_functions as sf
+    assert not hasattr(sf, 'ensure_stress_probe_job')
+    assert 'stress' not in str(sf.reconcile_scheduled_jobs.__doc__).lower()
 
 
 # --- Bout en bout runner (necessite Locust/Gevent, image stress-runner) -------
@@ -399,3 +408,24 @@ def test_comparison_includes_realtime_only_when_measured():
     plain = compare_summaries(_run(summary={'average_rps': 1}),
                               _run(summary={'average_rps': 2}))
     assert 'realtime_loss_percent' not in plain
+
+
+def test_persistent_probe_failure_is_logged_once_then_rearmed(app, monkeypatch, caplog):
+    import logging
+
+    import scheduler_functions
+    monkeypatch.setattr(scheduler_functions, '_stress_probe_failing', False)
+    monkeypatch.setattr(scheduler_functions, 'communication_websocket',
+                        lambda *a, **kw: None)
+    db.drop_all()  # schema absent : comme une migration non appliquee
+    with caplog.at_level(logging.DEBUG):
+        for _ in range(3):
+            assert scheduler_functions.emit_stress_probe() is None
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1 and 'manage.py migrate' in errors[0].getMessage()
+    db.create_all()
+    db.session.add(User(username='admin', password='x', fs_uniquifier='rt2', active=True))
+    db.session.commit()
+    _stored_run()
+    assert scheduler_functions.emit_stress_probe() == 1
+    assert scheduler_functions._stress_probe_failing is False
