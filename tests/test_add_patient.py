@@ -3,7 +3,9 @@
 # -> exclu de la suite par defaut (voir pytest.ini). Lancer : pytest -m e2e
 import pytest
 
-pytestmark = pytest.mark.e2e
+# live_server : inscrit de vrais patients sur la borne ciblée -> ignoré
+# sans E2E_BASE_URL explicite (voir conftest.py).
+pytestmark = [pytest.mark.e2e, pytest.mark.live_server]
 
 pytest.importorskip('playwright.sync_api', reason='playwright non installe')
 
@@ -28,6 +30,8 @@ Test affichage intermédiaire (activité)
 # Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
 
+BASE_URL = os.getenv("E2E_BASE_URL", "").strip().rstrip("/")
+
 @pytest.fixture(scope="session")
 def browser(playwright):
     """Lancer un navigateur une seule fois pour tous les tests."""
@@ -41,7 +45,7 @@ def page(browser):
     page = browser.new_page()
 
     # Se connecter une seule fois
-    page.goto("http://127.0.0.1:5000/patient")
+    page.goto(f"{BASE_URL}/patient")
 
     # Attendre que le formulaire de login soit présent
     page.wait_for_selector('input[name="username"]')
@@ -54,7 +58,7 @@ def page(browser):
     page.click('input[type="submit"][value="Login"]')
 
     # Vérifier si la redirection vers /patient a eu lieu
-    page.wait_for_url("http://127.0.0.1:5000/patient")
+    page.wait_for_url(f"{BASE_URL}/patient")
 
     yield page  # La page est maintenant prête à être utilisée pour tous les tests
 

@@ -17,6 +17,14 @@ Deux roles, qui evitent chacun une bidouille repetee dans les fichiers de test :
    demarrage). On utilise ``setdefault`` : une valeur posee explicitement par
    l'appelant reste prioritaire, ce qui permet de lancer volontairement une
    suite d'integration complete.
+
+3. **Serveur reel en opt-in.** Les tests marques ``live_server`` pilotent un
+   serveur deja demarre (connexion admin, brouillons, publications,
+   inscriptions a la borne). Ils sont ignores tant que ``E2E_BASE_URL`` n'est
+   pas definie : un ``pytest -m e2e`` lance alors qu'un serveur de
+   developpement tourne ne doit jamais modifier cette installation. Pour les
+   lancer : ``E2E_BASE_URL=http://127.0.0.1:5000 pytest -m live_server``
+   (de preference contre une base de test).
 """
 
 import os
@@ -33,3 +41,22 @@ os.environ.setdefault("SKIP_STARTUP_HOOKS", "1")
 # n'ouvre aucun acces -- les tests qui verifient l'authentification posent leur
 # propre secret.
 os.environ.setdefault("APP_SECRET", "secret-de-test-non-production-ne-pas-reutiliser")
+
+
+def live_server_url():
+    """Adresse du serveur cible des tests ``live_server`` (sans « / »
+    final), ou chaîne vide si elle n'a pas été fournie explicitement."""
+    return os.environ.get("E2E_BASE_URL", "").strip().rstrip("/")
+
+
+def pytest_collection_modifyitems(config, items):
+    import pytest
+
+    if live_server_url():
+        return
+    skip = pytest.mark.skip(
+        reason="serveur réel : définir E2E_BASE_URL pour lancer ce test "
+               "(il modifie l'installation ciblée)")
+    for item in items:
+        if "live_server" in item.keywords:
+            item.add_marker(skip)

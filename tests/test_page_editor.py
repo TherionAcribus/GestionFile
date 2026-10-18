@@ -1,5 +1,6 @@
 import json
 import re
+from contextlib import nullcontext
 from copy import deepcopy
 from pathlib import Path
 
@@ -1102,9 +1103,18 @@ def test_old_theme_css_still_validates(page):
         validate_payload(page, payload)
 
 
+@pytest.fixture
+def playwright_driver(request):
+    """Instance Playwright de la session (fixture ``playwright`` de
+    pytest-playwright). Démarrer un second ``sync_playwright()`` échoue dès
+    qu'un autre module l'utilise déjà (« Sync API inside the asyncio loop ») :
+    ces tests ne passaient alors que lancés seuls."""
+    return request.getfixturevalue("playwright")
+
+
 @pytest.mark.e2e
 @pytest.mark.parametrize("page_key", list(ADAPTERS))
-def test_builtin_themes_browser_flow(editor_app, page_key):
+def test_builtin_themes_browser_flow(editor_app, page_key, playwright_driver):
     from threading import Thread
 
     from jinja2 import FileSystemLoader
@@ -1150,7 +1160,7 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     try:
-        with playwright.sync_playwright() as driver:
+        with nullcontext(playwright_driver) as driver:
             browser = driver.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -1161,9 +1171,32 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                 page.on("dialog", lambda dialog: dialog.accept())
                 page.goto(f"{url}/admin/page-editor/{page_key}")
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                if page_key == "patient":
+                    # La borne s'ouvre en mode « Parcours » : composants et
+                    # scénarios d'aperçu vivent dans « Design des écrans ».
+                    page.locator("#editor-mode-design").click()
 
                 def working():
                     return page.evaluate("key => JSON.parse(localStorage.getItem('page-editor-backup-' + key)).payload", page_key)
+
+                def confirm_theme_if_asked():
+                    """Un thème intégré n'écrase jamais les textes (« Contenu »
+                    est ignoré) : la confirmation ne s'ouvre que si le
+                    brouillon a des changements non enregistrés — ce qui
+                    dépend de la sauvegarde automatique (3 s). On attend donc
+                    l'une des deux issues : confirmation ouverte par-dessus
+                    « Thèmes », ou boîte « Thèmes » refermée."""
+                    page.wait_for_function("""() => {
+                        const dialogs = document.querySelectorAll('.page-editor-dialog');
+                        if (!dialogs.length) return true;
+                        return Array.from(dialogs[dialogs.length - 1].querySelectorAll('button'))
+                            .some(button => button.textContent.trim() === 'Appliquer'
+                                && !button.hasAttribute('aria-label'));
+                    }""")
+                    if page.locator(".page-editor-dialog").count():
+                        page.locator(".page-editor-dialog").last.get_by_role(
+                            "button", name="Appliquer", exact=True).click()
+                    playwright.expect(page.locator(".page-editor-dialog")).to_have_count(0)
 
                 for theme in theme_data:
                     page.locator("#editor-themes").click()
@@ -1173,11 +1206,7 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                     page.locator("#editor-theme-section-layout").uncheck()
                     page.locator("#editor-theme-section-content").check()
                     row.locator(".btn-primary").click()
-                    # « Contenu » coché : la confirmation s'ouvre par-dessus
-                    # la boîte « Thèmes » (plus de boîte native).
-                    page.locator(".page-editor-dialog").last.get_by_role(
-                        "button", name="Appliquer").click()
-                    playwright.expect(page.locator(".page-editor-dialog")).to_have_count(0)
+                    confirm_theme_if_asked()
                     applied = working()
                     assert applied["config"] == baseline["config"]
                     assert applied["layout"] == baseline["layout"]
@@ -1210,8 +1239,7 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
                 playwright.expect(row.locator(".btn-primary")).to_be_disabled()
                 page.locator("#editor-theme-section-layout").check()
                 row.locator(".btn-primary").click()
-                page.locator(".page-editor-dialog").last.get_by_role(
-                    "button", name="Appliquer").click()
+                confirm_theme_if_asked()
                 assert working()["css"] == baseline["css"]
                 assert working()["config"] == baseline["config"]
                 if page_key == "announce":
@@ -1469,7 +1497,7 @@ def test_builtin_themes_browser_flow(editor_app, page_key):
 
 
 @pytest.mark.e2e
-def test_editor_enables_advanced_disabled_next_patients(editor_app):
+def test_editor_enables_advanced_disabled_next_patients(editor_app, playwright_driver):
     """Parcours réel : « Prochains patients » désactivé dans la configuration
     reste sélectionnable, sa case « Afficher » apparaît dans l'inspecteur et
     la cocher le réaffiche dans l'aperçu."""
@@ -1488,7 +1516,7 @@ def test_editor_enables_advanced_disabled_next_patients(editor_app):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     try:
-        with playwright.sync_playwright() as driver:
+        with nullcontext(playwright_driver) as driver:
             browser = driver.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -1522,7 +1550,7 @@ def test_editor_enables_advanced_disabled_next_patients(editor_app):
 
 
 @pytest.mark.e2e
-def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
+def test_patient_single_circle_button_row_stays_vertically_centered(editor_app, playwright_driver):
     """Régression : une seule ligne de boutons ronds doit rester centrée
     verticalement dans la zone centrale (constaté sur « Sous-activités »),
     au lieu d'être ancrée en bas."""
@@ -1561,7 +1589,7 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     try:
-        with playwright.sync_playwright() as driver:
+        with nullcontext(playwright_driver) as driver:
             browser = driver.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -1569,6 +1597,7 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
                 page = context.new_page()
                 page.goto(f"{url}/admin/page-editor/patient")
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                page.locator("#editor-mode-design").click()
 
                 page.locator("#editor-scenario").select_option("children")
                 cells = page.frame_locator("#editor-preview").locator(
@@ -1604,7 +1633,7 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app):
 
 
 @pytest.mark.e2e
-def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app):
+def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app, playwright_driver):
     """Régression : les étiquettes s'enroulent dans leur colonne (pas de
     chevauchement entre boutons voisins) et tous les cercles d'une rangée
     restent alignés verticalement, que le libellé fasse une ou deux
@@ -1643,7 +1672,7 @@ def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     try:
-        with playwright.sync_playwright() as driver:
+        with nullcontext(playwright_driver) as driver:
             browser = driver.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -1651,6 +1680,7 @@ def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app):
                 page = context.new_page()
                 page.goto(f"{url}/admin/page-editor/patient")
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                page.locator("#editor-mode-design").click()
 
                 page.locator("#editor-scenario").select_option("children")
                 cells = page.frame_locator("#editor-preview").locator(
@@ -1686,7 +1716,7 @@ def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app):
         server.server_close()
 
 
-def _measure_circle_rows(editor_app, labels):
+def _measure_circle_rows(editor_app, labels, playwright_driver):
     """Ouvre l'aperçu « Accueil » avec des boutons ronds ``labels`` et
     renvoie, par rangée de la variante cercle, les centres horizontaux
     des cercles. Lance un serveur éphémère et Playwright."""
@@ -1716,7 +1746,7 @@ def _measure_circle_rows(editor_app, labels):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     try:
-        with playwright.sync_playwright() as driver:
+        with nullcontext(playwright_driver) as driver:
             browser = driver.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -1724,6 +1754,7 @@ def _measure_circle_rows(editor_app, labels):
                 page = context.new_page()
                 page.goto(f"{url}/admin/page-editor/patient")
                 playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                page.locator("#editor-mode-design").click()
 
                 page.locator("#editor-scenario").select_option("home")
                 rows = page.frame_locator("#editor-preview").locator(
@@ -1745,13 +1776,14 @@ def _measure_circle_rows(editor_app, labels):
 
 
 @pytest.mark.e2e
-def test_patient_circle_button_equal_rows_stay_aligned(editor_app):
+def test_patient_circle_button_equal_rows_stay_aligned(editor_app, playwright_driver):
     """Régression : deux rangées de même longueur partagent les mêmes
     colonnes — chaque bouton du bas est exactement sous celui du haut
     (la grille ne doit pas se dimensionner en fit-content)."""
     centers = _measure_circle_rows(
         editor_app,
         ["Ordonnance", "Conseil", "Retrait", "Vaccination", "Test", "Certificat"],
+        playwright_driver,
     )
     top, bottom = centers
     assert len(top) == len(bottom) == 3
@@ -1760,13 +1792,14 @@ def test_patient_circle_button_equal_rows_stay_aligned(editor_app):
 
 
 @pytest.mark.e2e
-def test_patient_circle_button_shorter_second_row_staggers(editor_app):
+def test_patient_circle_button_shorter_second_row_staggers(editor_app, playwright_driver):
     """Régression : une seconde rangée plus courte se place en quinconce
     — chaque bouton du bas centré sous l'espace entre deux boutons du
     haut — au lieu d'être tassée au centre."""
     centers = _measure_circle_rows(
         editor_app,
         ["Ordonnance", "Conseil", "Retrait", "Vaccination", "Prioritaire"],
+        playwright_driver,
     )
     top, bottom = centers
     assert len(top) == 3 and len(bottom) == 2
@@ -3222,7 +3255,7 @@ def test_patient_state_serves_journey_and_grouping_facts(editor_app):
 
 
 @pytest.mark.e2e
-def test_patient_journey_browser_flow(editor_app):
+def test_patient_journey_browser_flow(editor_app, playwright_driver):
     """Frise du parcours : clic sur une étape → aperçu du scénario et
     réglages ; « sauter » la validation met à jour badge, résumé et
     bandeau d'aperçu, et l'écriture va dans le brouillon."""
@@ -3255,7 +3288,7 @@ def test_patient_journey_browser_flow(editor_app):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     try:
-        with playwright.sync_playwright() as driver:
+        with nullcontext(playwright_driver) as driver:
             browser = driver.chromium.launch(headless=True)
             try:
                 context = browser.new_context(viewport={"width": 1440, "height": 900})

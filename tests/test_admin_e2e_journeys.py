@@ -10,7 +10,7 @@
 # attendu apres les corrections.
 #
 # Prerequis :
-#   - Serveur demarre sur http://127.0.0.1:5000
+#   - Serveur demarre, adresse dans E2E_BASE_URL (sinon tests ignores)
 #   - MySQL configure (variables d'environnement .env)
 #   - Playwright installe : pip install playwright && playwright install chromium
 #   - Compte admin avec permission 'app' (admin/admin par defaut)
@@ -19,14 +19,15 @@
 
 import pytest
 
-pytestmark = pytest.mark.e2e
+# live_server : ignoré sans E2E_BASE_URL explicite (voir conftest.py).
+pytestmark = [pytest.mark.e2e, pytest.mark.live_server]
 
 pytest.importorskip('playwright.sync_api', reason='playwright non installe')
 
 from playwright.sync_api import Page, expect
 import os
 
-BASE_URL = os.getenv("E2E_BASE_URL", "http://127.0.0.1:5000")
+BASE_URL = os.getenv("E2E_BASE_URL", "").strip().rstrip("/")
 
 
 # ---------------------------------------------------------------------------

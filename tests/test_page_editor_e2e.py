@@ -11,13 +11,14 @@ from pathlib import Path
 import pytest
 
 
-pytestmark = pytest.mark.e2e
+# live_server : ignoré sans E2E_BASE_URL explicite (voir conftest.py).
+pytestmark = [pytest.mark.e2e, pytest.mark.live_server]
 pytest.importorskip("playwright.sync_api", reason="playwright non installé")
 
 from playwright.sync_api import Page, expect
 
 
-BASE_URL = os.getenv("E2E_BASE_URL", "http://127.0.0.1:5000")
+BASE_URL = os.getenv("E2E_BASE_URL", "").strip().rstrip("/")
 
 
 @pytest.fixture(scope="session")

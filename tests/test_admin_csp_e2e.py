@@ -13,7 +13,7 @@
 # rapportée.
 #
 # Prérequis identiques à test_admin_e2e_journeys.py :
-#   - Serveur démarré sur http://127.0.0.1:5000
+#   - Serveur démarré, adresse dans E2E_BASE_URL (sinon tests ignorés)
 #   - MySQL configuré, compte admin/admin avec toutes les permissions
 #   - Playwright : pip install playwright && playwright install chromium
 #
@@ -23,13 +23,14 @@ import os
 
 import pytest
 
-pytestmark = pytest.mark.e2e
+# live_server : ignoré sans E2E_BASE_URL explicite (voir conftest.py).
+pytestmark = [pytest.mark.e2e, pytest.mark.live_server]
 
 pytest.importorskip('playwright.sync_api', reason='playwright non installé')
 
 from playwright.sync_api import Page
 
-BASE_URL = os.getenv("E2E_BASE_URL", "http://127.0.0.1:5000")
+BASE_URL = os.getenv("E2E_BASE_URL", "").strip().rstrip("/")
 
 # Pages admin à couvrir : chacune utilise htmx et charge les scripts
 # externalisés. Une violation sur l'une d'elles fait échouer le test.
