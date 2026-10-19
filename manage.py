@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -108,15 +109,109 @@ def migrate() -> None:
             _release_mysql_lock(lock_conn)
 
 
+def _say(message: str = "") -> None:
+    """Sortie destinée à l'opérateur du terminal (commandes de secours).
+
+    Volontairement PAS app.logger : le mot de passe temporaire affiché ne doit
+    jamais atterrir dans les journaux du conteneur. Les actions elles-mêmes
+    sont journalisées (sans secret) par record_audit.
+    """
+    sys.stdout.write(message + "\n")
+    sys.stdout.flush()
+
+
+def _print_accounts() -> None:
+    from services.account_recovery_service import list_accounts
+
+    accounts = list_accounts()
+    if not accounts:
+        _say("Aucun compte n'existe.")
+        return
+    _say("Comptes existants :")
+    for user in accounts:
+        roles = ", ".join(r.name for r in user.roles) or "aucun rôle"
+        state = "" if user.active else " (désactivé)"
+        _say(f"  - {user.username}{state} — {roles}")
+
+
+def list_users() -> int:
+    """Liste les comptes (aide à choisir celui à réinitialiser)."""
+    _ensure_env("SKIP_STARTUP_HOOKS", "1")
+    _ensure_env("SKIP_EVENTLET_PATCH", "1")
+    from app import app  # pylint: disable=import-error
+
+    with app.app_context():
+        _print_accounts()
+    return 0
+
+
+def reset_password(username: str | None, password: str | None, make_admin: bool) -> int:
+    """Commande de secours : mot de passe perdu (account_recovery.py).
+
+    À lancer dans le conteneur « web » (Coolify : onglet Terminal) :
+        python manage.py reset-password admin
+    """
+    _ensure_env("SKIP_STARTUP_HOOKS", "1")
+    _ensure_env("SKIP_EVENTLET_PATCH", "1")
+    from app import app  # pylint: disable=import-error
+    from services.account_recovery_service import (
+        UnknownUserError,
+        WeakPasswordError,
+        reset_password_from_cli,
+    )
+
+    with app.app_context():
+        if not username:
+            _say("Indiquez le compte à réinitialiser : python manage.py reset-password <identifiant>")
+            _print_accounts()
+            return 2
+        try:
+            new_password, created = reset_password_from_cli(
+                username, password=password, make_admin=make_admin)
+        except UnknownUserError:
+            _say(f"Le compte {username!r} n'existe pas.")
+            _print_accounts()
+            _say("Pour créer ce compte avec tous les droits : ajoutez --admin")
+            return 1
+        except WeakPasswordError as exc:
+            _say(f"Mot de passe refusé : {exc}")
+            return 1
+
+    _say()
+    _say(f"Compte {username!r} {'créé' if created else 'réinitialisé'}"
+          f"{' avec le rôle admin' if make_admin else ''}.")
+    if password:
+        _say("Mot de passe : celui que vous avez indiqué.")
+    else:
+        _say(f"Mot de passe temporaire : {new_password}")
+    _say("Il devra être changé à la prochaine connexion. Les sessions ouvertes "
+          "de ce compte sont déconnectées.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="manage.py")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("migrate", help="Bootstrap/upgrade database schema safely.")
+    sub.add_parser("list-users", help="Liste les comptes utilisateurs.")
+    reset = sub.add_parser(
+        "reset-password",
+        help="Mot de passe perdu : pose un mot de passe temporaire sur un compte.")
+    reset.add_argument("username", nargs="?", help="Identifiant du compte (ex. admin).")
+    reset.add_argument("--password", help="Mot de passe à poser (sinon un mot de passe "
+                                          "temporaire est généré et affiché).")
+    reset.add_argument("--admin", action="store_true",
+                       help="Réactive le compte et lui rend le rôle admin "
+                            "(le crée s'il n'existe pas).")
     args = parser.parse_args(argv)
 
     if args.cmd == "migrate":
         migrate()
         return 0
+    if args.cmd == "list-users":
+        return list_users()
+    if args.cmd == "reset-password":
+        return reset_password(args.username, args.password, args.admin)
 
     parser.error(f"Unknown command: {args.cmd}")
     return 2

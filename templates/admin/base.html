@@ -127,6 +127,15 @@
                                 {% endif %}
                             </a>
                         </li>
+                        {% if current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path == '/admin/account/password' else '' }}"
+                               {{ 'aria-current="page"' if request.path == '/admin/account/password' else '' }}
+                               href="/admin/account/password">
+                                <i class="bi bi-key" aria-hidden="true"></i> Mon mot de passe
+                            </a>
+                        </li>
+                        {% endif %}
                         <li class="nav-item">
                             <hr class="dropdown-divider">
                         </li>
@@ -361,6 +370,18 @@
                    fixtures où le blueprint n'est pas enregistré. #}
                 {% set onboarding_panel = onboarding_panel_context() if onboarding_panel_context is defined else none %}
                 {% include 'admin/_onboarding_panel.html' %}
+                {# Récupération de compte : ADMIN_RESET_PASSWORD doit être vidée
+                   une fois l'accès retrouvé (sinon elle resterait lisible dans
+                   la configuration du déploiement). #}
+                {% if account_reset_env_set is defined and account_reset_env_set()
+                      and user_has_permission(current_user, 'security') %}
+                <div class="alert alert-warning mt-3" role="alert">
+                    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                    La variable <code>ADMIN_RESET_PASSWORD</code> est encore renseignée dans la
+                    configuration du serveur (Coolify › Environment Variables). Elle a servi à
+                    retrouver l'accès : <strong>videz-la</strong>, puis redéployez.
+                </div>
+                {% endif %}
                 {% block content %}
                 <!-- Content specific to each page -->
                 {% endblock %}

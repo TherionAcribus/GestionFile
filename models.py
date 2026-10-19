@@ -104,6 +104,14 @@ class User(db.Model, UserMixin):
     active = db.Column(db.Boolean())
     fs_uniquifier = db.Column(db.String(255), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     confirmed_at = db.Column(db.DateTime())
+    # Récupération de compte (account_recovery.py) : mot de passe temporaire
+    # posé par un admin, la commande de secours ou ADMIN_RESET_PASSWORD — à
+    # changer avant d'accéder au reste de l'administration.
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False,
+                                     server_default=db.false())
+    # Empreinte de la dernière valeur d'ADMIN_RESET_PASSWORD appliquée à ce
+    # compte : empêche de la réappliquer à chaque redémarrage.
+    env_reset_marker = db.Column(db.String(64), nullable=True)
     roles = db.relationship('Role', secondary='roles_users', backref=db.backref('users', lazy='dynamic'))
 
     def verify_password(self, password):

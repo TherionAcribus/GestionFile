@@ -140,6 +140,8 @@ CATALOG = (
        "base de données purge archives volumes taille", "bi-database"),
     _e(KIND_PAGE, P_SECURITY, "/admin/security", "security_view", "Administration",
        "utilisateurs comptes rôles mots de passe droits", "bi-shield-lock"),
+    _e(KIND_PAGE, "Mon mot de passe", "/admin/account/password", ANY, "Mon compte",
+       "changer mon mot de passe compte personnel identifiant", "bi-key"),
     _e(KIND_PAGE, "Configuration guidée", "/admin/onboarding", ANY, "Aide",
        "aide démarrage premier lancement assistant tutoriel parcours",
        "bi-compass"),

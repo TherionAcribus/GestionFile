@@ -64,6 +64,10 @@ _ALLOWED_WITHOUT_GUARD = {
     # Authentification : doivent rester publiques.
     "login",
     "logout",
+    # « Mon mot de passe » : auth-only (garde globale /admin) — chaque
+    # utilisateur connecté change SON mot de passe, quel que soit son rôle ;
+    # c'est aussi la seule page ouverte tant qu'un mot de passe est temporaire.
+    "account_password",
     # Sert un fichier audio statique à l'écran d'annonce (public, comme /static).
     "serve_sound",
     # Message d'erreur statique d'auth Spotify (aucune donnée).

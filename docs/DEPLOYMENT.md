@@ -85,6 +85,7 @@ obligatoire à saisir :
 |---|---|---|
 | `ADMIN_INITIAL_PASSWORD` | **Oui** — le déploiement est bloqué sans elle | Mot de passe du premier compte admin (>= 10 car., politique interne) |
 | `ADMIN_USERNAME` | Non | Identifiant du premier admin (défaut : `admin`) |
+| `ADMIN_RESET_PASSWORD` | Non — **vide** en temps normal | Récupération d'accès : appliquée une fois au compte `ADMIN_USERNAME` (réactivé, rôle admin, mot de passe à changer). Voir INSTALLATION_COOLIFY.md › « Mot de passe administrateur perdu » ; alternative terminal : `python manage.py reset-password <identifiant>` |
 | `APP_SECRET` | Non (auto-généré) | Secret partagé avec les clients (App comptoir, borne, imprimante). Dans Coolify, il s'appelle **`SERVICE_BASE64_64_GFAPPSECRET`** (renommé `APP_SECRET` dans les conteneurs) ; **notez sa valeur**, vous la saisirez dans chaque client |
 | `SECRET_KEY`, `SECURITY_PASSWORD_SALT` | Non (auto-générés) | Secrets Flask — ne pas saisir, laisser Coolify générer |
 | `BASE32_KEY` | Non (auto-générée) | Clé de chiffrement Fernet des clés de service — auto-générée |
@@ -188,6 +189,7 @@ le déploiement sans exploration préalable.
 | `Dockerfile` + `docker-entrypoint.sh` | Image ; l'entrypoint resseed les médias par défaut dans les volumes vides (idempotent, jamais d'écrasement) |
 | `manage.py` (`migrate`) | Bootstrap base vide (`create_all` + `stamp head`) ou `alembic upgrade` ; verrou MySQL `GET_LOCK` contre les migrations concurrentes |
 | `app.py` (`APP_ROLE`) | Rôles `init` / `web` / `scheduler` ; les hooks de bootstrap ne tournent que dans `scheduler`/`init` |
+| `services/account_recovery_service.py` (`apply_env_reset`, `reset_password_from_cli`) | Récupération d'accès sans e-mail : `ADMIN_RESET_PASSWORD` (une fois par valeur, empreinte sur le compte) et `manage.py reset-password` ; mot de passe temporaire ⇒ seule la page « Mon mot de passe » est accessible |
 | `routes/admin_security.py` (`create_default_user`) | Premier admin via `ADMIN_USERNAME`/`ADMIN_INITIAL_PASSWORD` ; mot de passe aléatoire + log si absent ; `RuntimeError` si le mot de passe fourni est invalide |
 | `.env.example` | Catalogue des variables et valeurs par défaut |
 | `docs/SECURITY.md`, `docs/PROTOCOLE.md` | Invariants CSRF / tokens / namespaces Socket.IO |

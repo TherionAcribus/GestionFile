@@ -37,6 +37,10 @@
                     <input id="new_password2" type="password" class="validate"> 
                     <label for="new_password2">Password</label>
                     <div class="form-text">Au moins 10 caractères.</div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input" type="checkbox" id="new_must_change" checked>
+                        <label class="form-check-label" for="new_must_change">À changer à la 1re connexion</label>
+                    </div>
                 </div>
             </td>
             
@@ -48,6 +52,7 @@
                     data-param-email="#new_email"
                     data-param-password1="#new_password1"
                     data-param-password2="#new_password2"
+                    data-param-must_change="#new_must_change@checked"
                     data-params-fn="userRoles"
                     data-params-scope="#new_user_form">
                     Enregistrer

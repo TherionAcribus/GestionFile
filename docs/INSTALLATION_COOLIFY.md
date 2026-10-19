@@ -180,6 +180,7 @@ Ouvrez la section **Environment Variables** de la ressource.
 | Variable | Défaut | Quand la modifier |
 |---|---|---|
 | `ADMIN_USERNAME` | `admin` | Choisir un autre identifiant pour le premier admin |
+| `ADMIN_RESET_PASSWORD` | vide | **Laisser vide.** Ne sert qu'à retrouver l'accès si le mot de passe admin est perdu (voir [Mot de passe administrateur perdu](#mot-de-passe-administrateur-perdu)) |
 | `APP_SECRET` | auto-généré | Secret partagé avec les clients (comptoir, borne, imprimante). Dans Coolify, il s'appelle **`SERVICE_BASE64_64_GFAPPSECRET`** : le Compose le renomme `APP_SECRET` à l'intérieur des conteneurs. **Notez sa valeur** : vous la saisirez dans chaque client |
 | `COOKIE_SECURE` | `1` | Ne mettre `0` que pour un test local sans HTTPS |
 | `PAGE_EDITOR_ENABLED_PAGES` | `announce,patient,phone` | Pages ouvertes à l'éditeur visuel (retirer une page pour n'y garder que le mode avancé) |
@@ -248,9 +249,12 @@ statut « exited (0) » signifie **succès**, pas un crash.
 1. Ouvrez `https://votre-domaine.fr/admin_security/login`.
 2. Connectez-vous avec `ADMIN_USERNAME` (défaut `admin`) et le mot de passe
    `ADMIN_INITIAL_PASSWORD` saisi à l'étape 3.
-3. **Changez immédiatement le mot de passe** dans l'administration
-   (onglet Sécurité).
-4. Configurez : nom de la pharmacie, comptoirs, activités, horaires.
+3. **Changez immédiatement le mot de passe** : menu **Mon mot de passe**.
+   (`ADMIN_INITIAL_PASSWORD` ne sert qu'à la création du premier compte :
+   la modifier ensuite dans Coolify ne change plus rien.)
+4. Conseillé : créez un **second compte administrateur** (onglet Sécurité),
+   pour qu'un oubli de mot de passe se règle sans toucher au serveur.
+5. Configurez : nom de la pharmacie, comptoirs, activités, horaires.
 
 ---
 
@@ -309,6 +313,51 @@ complet valide que l'installation fonctionne réellement.
 
 Onglet **Logs** de chaque service. Pour un problème de démarrage, regardez
 dans l'ordre : `init` (migrations/bootstrap), puis `web`, puis `scheduler`.
+
+### Mot de passe administrateur perdu
+
+Du plus simple au plus technique :
+
+**1. Un autre administrateur existe** — il ouvre *Administration › Sécurité*,
+bouton **Mot de passe** sur votre ligne, saisit un mot de passe temporaire
+(case « L'obliger à choisir son propre mot de passe » cochée) et vous le
+communique. À la connexion, l'application vous demande d'en choisir un nouveau.
+
+**2. Vous êtes le seul administrateur — par une variable Coolify** (aucune
+commande à taper) :
+
+1. **Environment Variables** → `ADMIN_RESET_PASSWORD` = un mot de passe
+   temporaire (≥ 10 caractères) → **Save** ;
+2. **Redeploy** ;
+3. connectez-vous avec `ADMIN_USERNAME` (défaut `admin`) et ce mot de passe
+   temporaire : l'application vous demande aussitôt d'en choisir un nouveau ;
+4. **revenez vider `ADMIN_RESET_PASSWORD`** puis Redeploy. Tant qu'elle reste
+   renseignée, un bandeau orange le rappelle dans l'administration.
+
+La variable n'est appliquée **qu'une fois** par valeur : un redémarrage ne
+réécrase pas le mot de passe que vous avez choisi. Le compte visé est aussi
+réactivé et reçoit le rôle `admin` (il est recréé s'il avait été supprimé).
+Si la valeur est trop courte, elle est ignorée : le message est dans les logs
+du service `init`.
+
+**3. Par le terminal** (pour la personne qui gère le serveur) : onglet
+**Terminal** de Coolify, conteneur `web`, puis :
+
+```sh
+python manage.py list-users              # voir les comptes existants
+python manage.py reset-password admin    # affiche un mot de passe temporaire
+python manage.py reset-password admin --admin   # + réactive et rend le rôle admin
+```
+
+Le mot de passe temporaire affiché est à changer à la première connexion ;
+les sessions ouvertes de ce compte sont déconnectées. Hors Coolify :
+`docker compose exec web python manage.py reset-password admin`.
+
+:::note Trop de tentatives
+Après plusieurs mots de passe erronés, la connexion est temporairement
+bloquée (quelques minutes). Une réinitialisation ne lève pas ce délai :
+attendez-le, ou redémarrez le service `web`.
+:::
 
 ### Sauvegardes
 
@@ -377,6 +426,8 @@ suppression de volume.
 |---|---|---|
 | `fatal: Remote branch main not found` au clonage | Coolify clone `main` par défaut ; ce dépôt utilise `master` | **Configuration > Git Source** → Branch = `master` |
 | Le bouton Deploy est bloqué / variable requise | `ADMIN_INITIAL_PASSWORD` vide | Renseignez-la dans Environment Variables |
+| Mot de passe admin perdu | — | Voir [Mot de passe administrateur perdu](#mot-de-passe-administrateur-perdu) |
+| `ADMIN_RESET_PASSWORD` sans effet | Valeur < 10 caractères ou trop courante (logs `init` : « ignorée ») ; ou déjà appliquée avec cette valeur | Choisir une autre valeur conforme puis **Redeploy** |
 | `init` échoue : `ADMIN_INITIAL_PASSWORD invalide` | Mot de passe trop faible ou égal à l'identifiant | Choisissez un mot de passe conforme (≥ 10 car.) puis **Redeploy** |
 | `init` échoue sur les migrations | MySQL pas prêt, ou `MYSQL_PASSWORD` modifié **après** le premier déploiement | Ne jamais changer `MYSQL_PASSWORD` sur une base existante ; lire les logs `init` |
 | `web` en échec / unhealthy | Dépendance injoignable ou `APP_SECRET` absent | Consulter `https://domaine/readyz` puis les logs `web` |

@@ -33,6 +33,8 @@ from login_audit import (
     OUTCOME_BLOCKED,
 )
 from password_policy import validate_password
+from account_recovery import is_allowed_while_must_change
+from services.account_recovery_service import set_user_password
 from audit_service import record_audit
 from audit_log import (
     ACTION_CREATE,
@@ -125,6 +127,18 @@ def user_has_permission(user, resource):
 def _role_grants_security_access(role):
     """Vrai si le rôle accorde une capacité Sécurité (n'importe quel niveau)."""
     return any(getattr(role, f, False) for f in _SENSITIVE_ROLE_FIELDS)
+
+
+def _form_flag(name, *, default, data=None):
+    """Case à cocher transmise par htmx_params (``"true"``/``"false"``).
+
+    Absente : ``default`` (anciens formulaires, appels sans le champ).
+    """
+    data = request.form if data is None else data
+    raw = data.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ('true', '1', 'on', 'yes')
 
 
 def _user_is_security_sensitive(user):
@@ -422,7 +436,10 @@ def add_new_user():
         user = User(
             username=username,
             email=email,
-            active=True
+            active=True,
+            # Mot de passe choisi par l'administrateur : à remplacer par la
+            # personne à sa première connexion (case cochée par défaut).
+            must_change_password=_form_flag('must_change', default=True, data=data),
         )
         user.set_password(password1)
         user.roles = list(roles)
@@ -752,6 +769,11 @@ def login():
             except Exception:
                 next_url = app.config.get("SECURITY_POST_LOGIN_VIEW", "/admin")
 
+        # Mot de passe temporaire (réinitialisé par un admin, la commande de
+        # secours ou ADMIN_RESET_PASSWORD) : il doit être remplacé d'abord.
+        if user.must_change_password:
+            return redirect(url_for('admin_security.account_password'))
+
         display_toast(success=True, message=f"Bienvenue {user.username} !")
         return redirect(next_url)
 
@@ -796,6 +818,88 @@ class ExtendedLoginForm(FlaskForm):
         app.logger.info(f"Validation OK pour username: {self.username.data}")
         return True
     
+@admin_security_bp.route('/admin/account/password', methods=['GET', 'POST'])
+def account_password():
+    """« Mon mot de passe » : tout utilisateur connecté change le sien.
+
+    Sans permission particulière (la zone /admin exige déjà une session). Si
+    le mot de passe actuel est temporaire (``must_change_password``), c'est la
+    seule page accessible de l'administration ; l'ancien mot de passe n'est
+    alors pas redemandé (il vient d'être saisi à la connexion).
+    """
+    if not current_user.is_authenticated:
+        return redirect(url_for('admin_security.login', next=request.url))
+
+    # Objet réel, pas le proxy : login_user(proxy) ferait pointer current_user
+    # sur lui-même (récursion infinie).
+    user = current_user._get_current_object()
+    must_change = bool(user.must_change_password)
+    errors = []
+
+    if request.method == 'POST':
+        current_password = request.form.get('current_password') or ''
+        password1 = request.form.get('password1') or ''
+        password2 = request.form.get('password2') or ''
+
+        if not must_change and not user.verify_password(current_password):
+            errors.append("Le mot de passe actuel est incorrect.")
+        if password1 != password2:
+            errors.append("Les deux nouveaux mots de passe ne correspondent pas.")
+        errors.extend(validate_password(password1, username=user.username))
+        if not errors and user.verify_password(password1):
+            errors.append("Choisissez un mot de passe différent de l'actuel.")
+
+        if errors:
+            record_audit(ACTION_UPDATE, "password", target_id=user.id,
+                         outcome=OUTCOME_FAILURE, details="via=self")
+        else:
+            try:
+                set_user_password(user, password1, must_change=False)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Échec du changement de son mot de passe")
+                errors.append("Le changement a échoué, réessayez.")
+            else:
+                # Les autres sessions sont révoquées ; celle-ci est ré-émise
+                # avec le nouvel identifiant (cf. update_password).
+                flask_login.login_user(user)
+                record_audit(ACTION_UPDATE, "password", target_id=user.id,
+                             outcome=OUTCOME_SUCCESS,
+                             details=f"via=self username={user.username}")
+                # Redirection (pas de re-POST au rafraîchissement) vers la
+                # même page, qui affiche la confirmation. Pas de display_toast :
+                # il diffuse à toutes les sessions admin connectées.
+                return redirect(url_for('admin_security.account_password', done=1))
+
+    done = (request.method == 'GET' and request.args.get('done') == '1'
+            and not must_change)
+    return render_template('admin/account_password.html',
+                           must_change=must_change, errors=errors, done=done), (400 if errors else 200)
+
+
+def password_change_required_response():
+    """Réponse de la garde « mot de passe temporaire » (app.py).
+
+    Navigation : redirection vers « Mon mot de passe ». Requête HTMX : en-tête
+    HX-Redirect (une redirection 302 serait suivie en silence et injectée dans
+    la cible). Client JSON : 403 explicite.
+    """
+    target = url_for('admin_security.account_password')
+    if request.headers.get('HX-Request'):
+        return "", 204, {"HX-Redirect": target}
+    if request.is_json or request.accept_mimetypes.best == 'application/json':
+        return jsonify({"error": "password_change_required", "redirect": target}), 403
+    return redirect(target)
+
+
+def must_change_password_blocks(endpoint):
+    """Vrai si l'utilisateur courant doit d'abord changer son mot de passe."""
+    return (current_user.is_authenticated
+            and bool(getattr(current_user, 'must_change_password', False))
+            and not is_allowed_while_must_change(endpoint))
+
+
 @admin_security_bp.route('/admin/logout_all', methods=['POST'])
 @require_permission('security_grant')
 def logout_all():
@@ -1172,7 +1276,8 @@ def change_password_form(user_id):
             display_toast(success=False, message="Utilisateur non trouvé")
             return ""
 
-        return render_template('admin/security_change_password.html', user_id=user_id)
+        return render_template('admin/security_change_password.html', user_id=user_id,
+                               is_self=current_user.is_authenticated and current_user.id == user.id)
 
     except Exception as e:
         app.logger.exception("Echec de l'affichage du formulaire de mot de passe")
@@ -1215,12 +1320,17 @@ def update_password(user_id):
             display_toast(success=False, message=" ".join(policy_problems))
             return "", 204
 
-        user.set_password(password1)
+        # Mot de passe posé pour quelqu'un d'autre = temporaire par défaut : la
+        # personne devra le remplacer à sa prochaine connexion (case cochée
+        # dans le formulaire). Son propre mot de passe n'est jamais temporaire.
+        is_self = current_user.is_authenticated and current_user.id == user.id
+        must_change = (not is_self) and _form_flag('must_change', default=True)
+
         # Révocation des sessions du compte : le cookie de session et le cookie
-        # « se souvenir de moi » encodent fs_uniquifier — le renouveler invalide
-        # tous les cookies émis avant le changement (un cookie volé devient
-        # inutilisable).
-        user.fs_uniquifier = str(uuid.uuid4())
+        # « se souvenir de moi » encodent fs_uniquifier — le renouveler (dans
+        # set_user_password) invalide tous les cookies émis avant le changement
+        # (un cookie volé devient inutilisable).
+        set_user_password(user, password1, must_change=must_change)
         db.session.commit()
 
         # Cas particulier : l'admin change SON PROPRE mot de passe. Sa session
@@ -1230,14 +1340,16 @@ def update_password(user_id):
         # flask_login.login_user suffit : flask_security.login_user referait
         # toute la chaîne d'authentification (2FA, fraîcheur), hors de propos
         # pour une simple ré-émission d'identifiant de session.
-        if current_user.is_authenticated and current_user.id == user.id:
+        if is_self:
             flask_login.login_user(user)
 
         # Le mot de passe lui-même n'est JAMAIS journalisé, seulement le fait
         # qu'il a été changé et sur quel compte.
         record_audit(ACTION_UPDATE, "password", target_id=user_id, outcome=OUTCOME_SUCCESS,
-                     details=f"username={user.username}")
-        display_toast(success=True, message="Mot de passe mis à jour avec succès")
+                     details=f"username={user.username} must_change={must_change}")
+        display_toast(success=True, message=(
+            "Mot de passe mis à jour : il devra être changé à la prochaine connexion"
+            if must_change else "Mot de passe mis à jour avec succès"))
         return display_security_table()
 
     except Exception as e:

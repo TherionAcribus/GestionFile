@@ -8,6 +8,8 @@
 # Variables à saisir dans Coolify (Environment Variables de la ressource) :
 #   - ADMIN_INITIAL_PASSWORD : OBLIGATOIRE (mot de passe du 1er admin ; le
 #     déploiement est bloqué tant qu'elle est vide).
+#   - ADMIN_RESET_PASSWORD : facultative, VIDE en temps normal. Sert à
+#     retrouver l'accès si le mot de passe admin est perdu (appliquée une fois).
 #   - Domaine : pas une variable ici — il se configure dans le champ
 #     « Domains » du service web, sous la forme https://mon-domaine.fr:5000
 #     (le suffixe indique le port interne du conteneur au proxy Coolify).
@@ -127,6 +129,9 @@ services:
       APP_ROLE: init
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?}
+      # Mot de passe admin perdu : renseigner, redéployer, se connecter, puis
+      # VIDER (appliquée une seule fois ; voir docs/INSTALLATION_COOLIFY.md).
+      ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-}
     depends_on:
       mysql:
         condition: service_healthy
@@ -146,6 +151,8 @@ services:
       # généré et non connu de l'opérateur).
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?}
+      # Lue ici seulement pour afficher le bandeau « videz cette variable ».
+      ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-}
     depends_on:
       init:
         condition: service_completed_successfully

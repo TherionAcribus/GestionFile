@@ -72,6 +72,8 @@ from routes.admin_translation import admin_translation_bp
 from routes.admin_options import admin_options_bp
 from routes.admin_schedule import admin_schedule_bp
 from routes.admin_security import admin_security_bp, create_default_user, create_default_role, create_default_roles, require_permission
+from routes.admin_security import must_change_password_blocks, password_change_required_response
+from services.account_recovery_service import apply_env_reset, env_reset_still_set
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -252,6 +254,7 @@ def start_fonctions(app, *, run_bootstrap: bool, run_runtime: bool, run_startup_
         create_default_role()  # Toujours créer le rôle admin s'il n'existe pas
         create_default_roles()  # Rôles de base (idempotent, jamais réécrits)
         create_default_user()  # Crée l'utilisateur admin seulement s'il n'y a pas d'utilisateurs
+        apply_env_reset()  # ADMIN_RESET_PASSWORD : récupération de l'accès admin (une fois)
 
         init_days_of_week_db_from_json()
         init_activity_schedules_db_from_json()
@@ -576,6 +579,10 @@ def require_login_for_admin():
         # Authentification OBLIGATOIRE et inconditionnelle pour toute l'admin.
         if not current_user.is_authenticated:
             return _deny_unauthenticated_access()
+        # Mot de passe temporaire (account_recovery.py) : seule la page « Mon
+        # mot de passe » reste accessible tant qu'il n'est pas remplacé.
+        if must_change_password_blocks(request.endpoint):
+            return password_change_required_response()
     elif request.path.startswith('/spotify'):
         # Point 1.4 : les routes /spotify/* (lecteur + OAuth) sont hors du préfixe
         # /admin. Elles exigent chacune une permission via @require_permission,
@@ -930,6 +937,8 @@ def inject_user():
         page_layout_style=layout_style,
         preview_vars_style=preview_vars_style,
         page_editor_enabled=lambda page: page in enabled_pages(),
+        # Bandeau « videz ADMIN_RESET_PASSWORD » (admin/base.html).
+        account_reset_env_set=env_reset_still_set,
     )
 
 
