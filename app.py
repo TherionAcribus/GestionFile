@@ -87,6 +87,7 @@ from routes.home import home_bp
 from python.engine import engine_bp
 from params_registry import CONFIG_MAPPINGS
 from config_loader import load_config_options
+from ui_feedback import attach_admin_feedback
 import config_sync
 
 database = os.getenv("DATABASE_TYPE", getattr(Config, "database", "mysql"))
@@ -735,27 +736,16 @@ def _attach_admin_feedback(response):
     Si un ``display_toast`` a été émis pendant la requête, on ajoute son
     résultat (succès + message) dans l'en-tête ``HX-Trigger`` de la réponse.
     Le client (AdminFeedback) écoute l'évènement ``adminFeedback`` et l'annonce
-    dans une zone ``aria-live``. La sauvegarde est ainsi confirmée par la
-    réponse HTTP, indépendamment de la diffusion WebSocket.
-    """
-    feedback = g.pop('_admin_feedback', None) if has_request_context() else None
-    if feedback is None:
-        return response
+    dans une zone ``aria-live`` — ou affiche le toast visible quand la charge
+    porte ``toast: true`` (action non diffusée par WebSocket, ex. le parcours
+    de configuration guidé). La sauvegarde est ainsi confirmée par la réponse
+    HTTP, indépendamment de la diffusion WebSocket.
 
-    trigger = {'adminFeedback': feedback}
-    existing = response.headers.get('HX-Trigger')
-    if existing:
-        # Fusionne sans écraser un HX-Trigger déjà présent.
-        try:
-            merged = json.loads(existing)
-            if not isinstance(merged, dict):
-                raise ValueError
-        except (ValueError, TypeError):
-            merged = {existing: {}}
-        merged.update(trigger)
-        trigger = merged
-    response.headers['HX-Trigger'] = json.dumps(trigger)
-    return response
+    La transformation est dans ``ui_feedback.attach_admin_feedback`` pour être
+    testable sur une application isolée ; l'enregistrement ``after_request``
+    reste ici car il porte sur l'application entière.
+    """
+    return attach_admin_feedback(response)
 
 
 @app.after_request

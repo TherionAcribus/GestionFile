@@ -13,6 +13,7 @@ Pas de SQLALCHEMY_BINDS : le bind resterait dans les métadonnées de l'extensio
 ``db`` partagée entre fichiers de test (cf. tests/test_admin_bootstrap.py).
 """
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -23,6 +24,7 @@ from werkzeug.security import generate_password_hash
 
 import onboarding as ob
 import routes.admin_onboarding as admin_onboarding
+import ui_feedback
 from models import Activity, AdminOnboardingState, Pharmacist, Role, User, db
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
@@ -59,6 +61,10 @@ def app(tmp_path):
 
     app.register_blueprint(admin_onboarding.admin_onboarding_bp)
     app.add_url_rule("/login", endpoint="security.login", view_func=lambda: "")
+    # Acquittement HTTP : app.py enregistre attach_admin_feedback en
+    # after_request sur l'application réelle — même branchement ici pour que
+    # l'en-tête HX-Trigger (adminFeedback) soit produit comme en production.
+    app.after_request(ui_feedback.attach_admin_feedback)
 
     with app.app_context():
         db.create_all()
@@ -258,6 +264,28 @@ def test_dismiss_et_finish(app, client):
     _post(client, action="start")
     _post(client, action="finish")
     assert _state(app).status == "completed"
+
+
+def test_actions_ne_diffusent_pas_aux_autres_admins(app, client):
+    """Le guide est strictement par utilisateur : ses toasts ne partent pas
+    par WebSocket vers TOUS les administrateurs connectés (broadcast=False,
+    succès comme erreur de validation). L'auteur garde un retour visible :
+    l'acquittement HX-Trigger porte ``adminFeedback`` avec ``toast: true`` —
+    le client l'affiche alors lui-même (handler adminFeedback d'admin.js)."""
+    with patch("ui_feedback.communikation") as mock_comm:
+        response = _post(client, action="start")
+        erreur = _post(client, action="hack")
+    mock_comm.assert_not_called()
+    assert response.status_code == 303
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert trigger["adminFeedback"]["toast"] is True
+    assert trigger["adminFeedback"]["success"] is True
+    assert trigger["adminFeedback"]["message"] == \
+        "Parcours de configuration démarré."
+    assert erreur.status_code == 400
+    err_trigger = json.loads(erreur.headers["HX-Trigger"])
+    assert err_trigger["adminFeedback"]["toast"] is True
+    assert err_trigger["adminFeedback"]["success"] is False
 
 
 def test_conflit_de_version(app, client):

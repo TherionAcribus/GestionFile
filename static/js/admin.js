@@ -443,12 +443,19 @@ function setupHttpFeedback() {
 
     // Acquittement HTTP autoritatif porté par l'en-tête HX-Trigger. Correct
     // même quand la route renvoie 204 sur un échec de validation : le drapeau
-    // `success` provient du serveur, pas du seul statut HTTP. Annonce aria-live
-    // uniquement (le toast visible est déjà fourni par le WebSocket).
+    // `success` provient du serveur, pas du seul statut HTTP. Quand le serveur
+    // n'a pas diffusé par WebSocket (`toast: true`, actions strictement
+    // personnelles comme le parcours guidé), on affiche ici le toast visible ;
+    // sinon le WebSocket s'en charge déjà et on se limite à l'annonce aria-live.
     body.addEventListener('adminFeedback', function (evt) {
         const d = evt.detail || {};
-        if (d.success) AdminFeedback.announceSuccess(d.message || 'Enregistré.');
-        else AdminFeedback.announceError(d.message || "Échec de l'enregistrement.");
+        if (d.toast === true) {
+            AdminFeedback.toast(d.message, d.success === true);
+        } else if (d.success) {
+            AdminFeedback.announceSuccess(d.message || 'Enregistré.');
+        } else {
+            AdminFeedback.announceError(d.message || "Échec de l'enregistrement.");
+        }
     });
 
     // Erreur applicative (4xx/5xx) : toast visible + nouvelle tentative.

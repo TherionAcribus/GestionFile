@@ -240,8 +240,10 @@ def onboarding_page():
 
 
 def _error(status, message):
-    """Réponse d'erreur uniforme (JSON ; le toast part quand même via l'event admin)."""
-    display_toast(success=False, message=message)
+    """Réponse d'erreur uniforme (JSON ; pas de diffusion aux autres admins :
+    l'acquittement — toast inclus — part par l'en-tête HX-Trigger au seul
+    auteur de la requête)."""
+    display_toast(success=False, message=message, broadcast=False)
     return jsonify({"error": message}), status
 
 
@@ -360,6 +362,9 @@ def onboarding_action():
                  outcome=OUTCOME_SUCCESS,
                  details=f"action={action} step={step_id or '-'} status={state.status}")
 
-    display_toast(success=True, message=_TOAST_MESSAGES[action])
+    # Le parcours est strictement par utilisateur : pas de toast chez les
+    # autres administrateurs (broadcast=False -> retour HX-Trigger seul).
+    display_toast(success=True, message=_TOAST_MESSAGES[action],
+                  broadcast=False)
     return _respond(state, action, origin, step_id,
                     _redirect_for(action, state, origin))
