@@ -348,8 +348,15 @@ def display_security_table():
         search_columns=[User.username, User.email],
     )
     roles = Role.query.all()
+    # Dernier compte actif capable d'administrer la sécurité : ni
+    # désactivable ni supprimable. Le serveur le refuse déjà (invariant
+    # « dernier accès Sécurité ») ; l'IHM le montre avant le clic au lieu
+    # d'un interrupteur qui semble marcher puis reste faussement décoché.
+    capable = _security_capable_active_users()
+    last_capable_ids = {capable[0].id} if len(capable) == 1 else set()
     return render_template('admin/security_htmx_table.html', users=pager.items,
-                           pager=pager, params=params, roles=roles)
+                           pager=pager, params=params, roles=roles,
+                           last_capable_ids=last_capable_ids)
 
 # affiche le formulaire pour ajouter un utilisateur
 @admin_security_bp.route('/admin/security/add_user_form')

@@ -1112,3 +1112,32 @@ def test_boutons_d_ajout_conditionnes_par_niveau():
         "templates/admin/security_user.html")
     assert "user_has_permission(current_user, 'security_grant')" in _read(
         "templates/admin/security_roles.html")
+
+
+# ---------------------------------------------------------------------------
+# Dernier administrateur : l'IHM le protège avant le clic (le serveur refuse
+# déjà, cf. test_user_update_desactiver_le_dernier_capable_refuse).
+# ---------------------------------------------------------------------------
+
+def _row(html, user_id):
+    start = html.index(f'id="user-active-{user_id}"')
+    return html[html.rfind("<tr", 0, start):html.index("</tr>", start)]
+
+
+def test_table_verrouille_le_dernier_administrateur(client, app):
+    root_id = _user_id(app, "root")
+    row = _row(client.get("/admin/security/table").get_data(as_text=True), root_id)
+    switch = row[row.index(f'id="user-active-{root_id}"'):].split(">", 1)[0]
+    assert "disabled" in switch
+    assert "Dernier administrateur" in row
+    assert f"/admin/security/confirm_delete_user/{root_id}" not in row
+
+
+def test_table_deverrouille_quand_un_second_admin_existe(client, app):
+    _add_user(app, "second", _role_id(app, "admin"))
+    root_id = _user_id(app, "root")
+    row = _row(client.get("/admin/security/table").get_data(as_text=True), root_id)
+    switch = row[row.index(f'id="user-active-{root_id}"'):].split(">", 1)[0]
+    assert "disabled" not in switch
+    assert "Dernier administrateur" not in row
+    assert f"/admin/security/confirm_delete_user/{root_id}" in row
