@@ -251,7 +251,9 @@ def test_normalisation_sans_accents():
 @pytest.fixture()
 def app(tmp_path):
     import routes.admin_search as admin_search_route
-    from models import Activity, Counter, Pharmacist, Role, User, db
+    from datetime import time
+
+    from models import Activity, AlgoRule, Counter, Language, Pharmacist, Role, User, db
 
     app = Flask(__name__, root_path=str(SERVEUR_DIR))
     app.config.update(
@@ -272,15 +274,19 @@ def app(tmp_path):
     with app.app_context():
         db.create_all()
         full = Role(name="admin", admin_security=True, admin_app=True, admin_activity=True,
-                    admin_staff=True, admin_counter=True, admin_patient=True)
+                    admin_staff=True, admin_counter=True, admin_patient=True,
+                    admin_algo=True, admin_translation=True)
         kiosk = Role(name="borne", admin_patient=True)
         alice = User(username="alice", email="a@a.a", password=generate_password_hash("x"), active=True)
         alice.roles.append(full)
         bob = User(username="bob", email="b@b.b", password=generate_password_hash("x"), active=True)
         bob.roles.append(kiosk)
+        vaccination = Activity(name="Vaccination", letter="V")
         db.session.add_all([
-            full, kiosk, alice, bob,
-            Activity(name="Vaccination", letter="V"),
+            full, kiosk, alice, bob, vaccination,
+            AlgoRule(name="Urgences d'abord", activity=vaccination,
+                     start_time=time(8), end_time=time(20)),
+            Language(code="en", name="Anglais", translation="English"),
             Activity(name="Demande Dr Martin", letter="M", is_staff=True),
             Counter(name="Comptoir 1", sort_order=1),
             Pharmacist(name="Claire Dupont", initials="CD"),
@@ -320,6 +326,9 @@ def test_route_admin_complet(app):
     assert by_title["Comptoir 1"]["url"].startswith("/admin/counter#focus=edit_counter_")
     assert by_title["Claire Dupont"]["url"].startswith("/admin/staff#focus=edit_staff_")
     assert "bob" in by_title  # comptes visibles avec la permission Sécurité
+    assert by_title["Urgences d'abord"]["url"].startswith("/admin/algo#focus=rule_edit_")
+    assert by_title["Anglais"]["url"].startswith("/admin/translations#focus=name-")
+    assert by_title["borne"]["url"].startswith("/admin/security?tab=roles#focus=role-item-")
     assert "Sauvegardes" in by_title and "Serveur SMTP" in by_title
     for entry in entries:
         assert "permission" not in entry
@@ -333,7 +342,8 @@ def test_route_filtre_selon_les_droits(app):
     assert "Borne patient" in titles and "Largeur d'impression du ticket" in titles
     assert not urls & {"/admin/security", "/admin/app", "/admin/activity", "/admin/counter",
                        "/admin/staff", "/admin/queue"}
-    assert not titles & {"Vaccination", "Comptoir 1", "Claire Dupont", "alice", "bob"}
+    assert not titles & {"Vaccination", "Comptoir 1", "Claire Dupont", "alice", "bob",
+                         "Urgences d'abord", "Anglais", "admin", "borne"}
 
 
 def test_route_resiste_a_une_base_en_erreur(app):
@@ -341,7 +351,25 @@ def test_route_resiste_a_une_base_en_erreur(app):
         broken.query.order_by.side_effect = RuntimeError("base indisponible")
         response = _client_as(app, "alice").get("/admin/search/index")
     assert response.status_code == 200
-    assert any(e["title"] == "Sauvegardes" for e in response.get_json()["entries"])
+    titles = {e["title"] for e in response.get_json()["entries"]}
+    # Seule la source en erreur manque : pages, réglages et autres éléments restent.
+    assert "Sauvegardes" in titles and "Comptoir 1" in titles and "Anglais" in titles
+    assert "Vaccination" not in titles
+
+
+@pytest.mark.parametrize("template, anchor", [
+    ("activity_htmx_table.html", 'id="edit_{{ p }}"'),
+    ("counter_htmx_table.html", 'id="edit_counter_{{ counter.id }}"'),
+    ("staff_htmx_table.html", 'id="edit_staff_{{ member.id }}"'),
+    ("algo_htmx_table.html", 'id="rule_edit_{{ rule.id }}"'),
+    ("translations_languages_htmx_table.html", 'id="name-{{ language.id }}"'),
+    ("security_htmx_role_table.html", 'id="role-item-{{ role.id }}"'),
+    ("security_htmx_table.html", 'id="user-{{ user.id }}"'),
+])
+def test_ancres_des_elements_vivants_rendues(template, anchor):
+    """Les repères construits par routes/admin_search.py existent dans les
+    gabarits qui affichent ces éléments (sinon le saut direct tombe à vide)."""
+    assert anchor in _read(ADMIN_TEMPLATES / template)
 
 
 # ---------------------------------------------------------------------------

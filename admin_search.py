@@ -3,7 +3,8 @@
 Module **pur** : aucune dépendance Flask ni base de données. Il décrit tout ce
 qu'un administrateur peut chercher et la destination de chaque résultat ; la
 route ``/admin/search/index`` (``routes/admin_search.py``) y ajoute les éléments
-vivants (activités, comptoirs, équipe, comptes) puis filtre par permission.
+vivants (activités, comptoirs, équipe, règles, langues, rôles, comptes) puis
+filtre par permission.
 
 Trois sources :
 
