@@ -269,6 +269,25 @@ def _redirect_for(action, state, origin):
     return None
 
 
+def _fragment_for(origin, state, step_id):
+    """Fragment de la zone d'origine re-rendu avec l'état (frais) donné.
+
+    ``state`` est la ligne ORM à jour ; ``step_id`` sert uniquement au panneau
+    (étape postée, repli étape courante) — ``_panel_dict`` renvoie None pour
+    une étape inconnue/interdite, le fragment est alors vide.
+    """
+    if origin == "checklist":
+        return render_template('admin/_onboarding_checklist.html', **_page_context(state))
+    if origin == "home":
+        return render_template('admin/_onboarding_home.html',
+                               onboarding_home=onboarding_home_context())
+    # Fragment « panneau » : la requête porte sur /admin/onboarding/action,
+    # l'étape affichée vient du step_id posté (repli : étape courante) —
+    # jamais de request.path, jamais d'étape arbitraire non validée.
+    panel = _panel_dict(step_id or (state.current_step if state else None), state)
+    return render_template('admin/_onboarding_panel.html', onboarding_panel=panel)
+
+
 def _respond(state, action, origin, step_id, next_url):
     """Forme de la réponse : HTMX (fragment ou HX-Redirect), JSON ou navigation."""
     if request.headers.get("HX-Request"):
@@ -276,16 +295,7 @@ def _respond(state, action, origin, step_id, next_url):
             response = current_app.response_class("")
             response.headers["HX-Redirect"] = next_url
             return response
-        if origin == "checklist":
-            return render_template('admin/_onboarding_checklist.html', **_page_context(state))
-        if origin == "home":
-            return render_template('admin/_onboarding_home.html',
-                                   onboarding_home=onboarding_home_context())
-        # Fragment « panneau » : la requête porte sur /admin/onboarding/action,
-        # l'étape affichée vient du step_id posté (repli : étape courante) —
-        # jamais de request.path, jamais d'étape arbitraire non validée.
-        panel = _panel_dict(step_id or state.current_step, state)
-        return render_template('admin/_onboarding_panel.html', onboarding_panel=panel)
+        return _fragment_for(origin, state, step_id)
     if request.is_json:
         return jsonify({
             "ok": True,
@@ -331,6 +341,15 @@ def onboarding_action():
     # Conflit de versions : deux onglets ont écrit — refus propre plutôt qu'une
     # progression perdue silencieusement.
     if state is not None and version is not None and version != state.version:
+        if request.headers.get("HX-Request"):
+            # HTMX ne swappe pas les 4xx : plutôt qu'un 409 (toast « Réessayer »
+            # qui reposterait la même version périmée en boucle), on re-rend le
+            # fragment d'origine avec l'état à jour — statut 200, formulaires
+            # synchronisés sur la nouvelle version, action rejouable.
+            display_toast(success=False, broadcast=False,
+                          message="Une autre fenêtre a modifié le parcours — "
+                                  "l'affichage a été actualisé. Réessayez si besoin.")
+            return _fragment_for(origin, state, step_id)
         return jsonify({"error": "Conflit de version", "version": state.version}), 409
 
     snapshot = {
@@ -356,6 +375,14 @@ def onboarding_action():
         # Deux démarrages simultanés sur un compte sans ligne : la contrainte
         # unique user_id tranche — le perdant reçoit un conflit à rejouer.
         db.session.rollback()
+        if request.headers.get("HX-Request"):
+            # Même choix que le conflit de version : on synchronise la vue du
+            # perdant sur la ligne du gagnant (fragment 200) plutôt qu'un 409
+            # que HTMX ne swapperait pas.
+            display_toast(success=False, broadcast=False,
+                          message="Deux démarrages simultanés — le parcours "
+                                  "a été synchronisé.")
+            return _fragment_for(origin, _state_for(current_user), step_id)
         return jsonify({"error": "Conflit d'écriture", "version": None}), 409
 
     record_audit(ACTION_UPDATE, "admin_onboarding", target_id=state.id,

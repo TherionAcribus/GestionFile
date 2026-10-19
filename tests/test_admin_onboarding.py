@@ -300,6 +300,51 @@ def test_conflit_de_version(app, client):
     assert _post_json(client, {"action": "verify", "step_id": "pharmacy", "version": 1}).status_code == 409
 
 
+def test_conflit_de_version_htmx_checklist(app, client):
+    """En HTMX, un conflit de version ne renvoie pas 409 (que HTMX ne swapperait
+    pas — le toast « Réessayer » reposterait la même version périmée en boucle)
+    mais le fragment d'origine re-rendu avec l'état à jour : statut 200,
+    formulaires synchronisés sur la nouvelle version, action rejouable.
+    Le toast d'avertissement part par HX-Trigger seul (pas de diffusion)."""
+    htmx = {"HX-Request": "true"}
+    _post(client, action="start")  # version 1
+    with patch("ui_feedback.communikation") as mock_comm:
+        response = _post(client, headers=htmx, action="verify",
+                         step_id="security", origin="checklist", version="0")
+    mock_comm.assert_not_called()
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "onboarding-checklist-slot" in body
+    assert 'name="version" value="1"' in body  # formulaires re-synchronisés
+    trigger = json.loads(response.headers["HX-Trigger"])
+    assert trigger["adminFeedback"]["toast"] is True
+    assert trigger["adminFeedback"]["success"] is False
+    # L'action re-postée avec la version fraîche est acceptée.
+    assert _post_json(client, {"action": "verify", "step_id": "security",
+                               "version": 1}).status_code == 200
+
+
+def test_conflit_de_version_htmx_panneau(app, client):
+    """Même chemin depuis l'encart : le fragment panneau est re-rendu (étape
+    postée valide -> carte avec la version à jour ; étape inconnue -> slot
+    vide)."""
+    htmx = {"HX-Request": "true"}
+    _post(client, action="start")  # version 1, étape courante = security
+    response = _post(client, headers=htmx, action="verify",
+                     step_id="security", origin="panel", version="0")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "onboarding-panel-slot" in body
+    assert 'name="version" value="1"' in body
+    # Étape postée inconnue : _panel_dict renvoie None, le slot reste vide.
+    response = _post(client, headers=htmx, action="verify",
+                     step_id="nope", origin="panel", version="0")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "onboarding-panel-slot" in body
+    assert 'name="version"' not in body
+
+
 def test_deux_comptes_independants(app, client):
     _post(client, action="start")
     bob = _login(app, app.test_client(), "bob")
