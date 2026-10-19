@@ -115,6 +115,8 @@
             "mail_default_sender": "",
             "mail_use_tls": true,
             "mail_use_ssl": false,
+            "mail_password_reset": true,
+            "mail_link_base_url": "",
             "phone_center": true,
             "phone_title": "Bienvenue à la {P}",
             "phone_line1": "Votre numéro",

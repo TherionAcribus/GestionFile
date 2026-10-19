@@ -8,7 +8,6 @@ from functools import wraps
 from sqlalchemy.orm import selectinload
 from models import db, Role, User, DashboardCard
 from permissions_registry import PERMISSIONS, PERMISSION_FIELDS, permissions_by_category
-from flask_mailman import EmailMessage
 from flask_security import login_user
 from wtforms import StringField, PasswordField, HiddenField, BooleanField
 from flask_wtf import FlaskForm
@@ -672,33 +671,8 @@ def confirm_delete_role(role_id):
 # exclusivement par la route POST protégée ``delete_user2``.
 
 
-# Fonction utilitaire (PAS une route) : l'envoi d'e-mail de test est déclenché
-# par la route POST protégée ``/admin/app/mail/test`` (require_permission_api).
-# L'ancienne route GET ``/send_test_email`` a été retirée : signature invalide
-# comme vue (argument positionnel sans convertisseur d'URL) et déclenchement
-# d'envoi d'e-mail sans authentification.
-def send_test_email(mail_adress):
-    """Envoie un e-mail de test à l'adresse indiquée.
-
-    Retourne ``(True, None)`` en cas de succès, ``(False, message)`` en cas
-    d'échec. Le message est sûr pour l'affichage (aucun détail technique).
-    """
-    app.logger.info("Envoi d'un email de test")
-    app.logger.debug('mail_adress %s', mail_adress)
-    try:
-        msg = EmailMessage(
-            subject="Test Email",
-            body="This is a test email sent from Flask-Mailman.",
-            to=[mail_adress],
-        )
-        app.logger.debug('message %s', msg)
-        msg.send()
-        return True, None
-    except Exception as e:
-        # Point 4 (audit Admin) : capturer l'erreur SMTP au lieu de laisser
-        # propager une 500. Journaliser le détail, renvoyer un message générique.
-        app.logger.error("Échec d'envoi d'email de test : %s", e)
-        return False, "L'envoi de l'email a échoué. Vérifiez la configuration SMTP."
+# L'envoi d'e-mails (dont l'e-mail de test, route POST /admin/app/mail/test)
+# passe par services/mail_service.send_email, qui lit les réglages courants.
 
 
 def is_safe_url(target):
@@ -820,7 +794,7 @@ class ExtendedLoginForm(FlaskForm):
     
 @admin_security_bp.route('/admin/account/password', methods=['GET', 'POST'])
 def account_password():
-    """« Mon mot de passe » : tout utilisateur connecté change le sien.
+    """« Mon compte » : tout utilisateur connecté change son mot de passe.
 
     Sans permission particulière (la zone /admin exige déjà une session). Si
     le mot de passe actuel est temporaire (``must_change_password``), c'est la
@@ -874,8 +848,60 @@ def account_password():
 
     done = (request.method == 'GET' and request.args.get('done') == '1'
             and not must_change)
-    return render_template('admin/account_password.html',
-                           must_change=must_change, errors=errors, done=done), (400 if errors else 200)
+    email_done = request.method == 'GET' and request.args.get('email') == 'done'
+    return _render_account_page(user, errors=errors, done=done, email_done=email_done)
+
+
+def _render_account_page(user, *, errors=(), done=False, email_errors=(), email_done=False):
+    from mail_settings import is_valid_email
+    from routes.password_reset import reset_by_email_available
+    status = 400 if (errors or email_errors) else 200
+    return render_template(
+        'admin/account_password.html',
+        must_change=bool(user.must_change_password), errors=list(errors), done=done,
+        email_errors=list(email_errors), email_done=email_done,
+        current_email=user.email if is_valid_email(user.email or "") else "",
+        reset_by_email=reset_by_email_available(),
+    ), status
+
+
+@admin_security_bp.route('/admin/account/email', methods=['POST'])
+def account_email():
+    """« Mon compte » : adresse e-mail utilisée par « Mot de passe oublié ».
+
+    Le mot de passe actuel est exigé : une session laissée ouverte ne doit pas
+    suffire à détourner la récupération du compte.
+    """
+    from sqlalchemy import func
+    from mail_settings import is_valid_email
+
+    user = current_user._get_current_object()
+    email = (request.form.get('email') or '').strip()
+    errors = []
+    if email and not is_valid_email(email):
+        errors.append("L'adresse e-mail n'est pas valide.")
+    if not user.verify_password(request.form.get('current_password') or ''):
+        errors.append("Le mot de passe actuel est incorrect.")
+    if not errors and email:
+        taken = User.query.filter(func.lower(User.email) == email.lower(),
+                                  User.id != user.id).first()
+        if taken:
+            errors.append("Cette adresse est déjà utilisée par un autre compte.")
+    if errors:
+        record_audit(ACTION_UPDATE, "user", target_id=user.id, outcome=OUTCOME_FAILURE,
+                     details="via=self email")
+        return _render_account_page(user, email_errors=errors)
+
+    try:
+        user.email = email or None
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        app.logger.exception("Échec du changement de son adresse e-mail")
+        return _render_account_page(user, email_errors=["Le changement a échoué, réessayez."])
+    record_audit(ACTION_UPDATE, "user", target_id=user.id, outcome=OUTCOME_SUCCESS,
+                 details="via=self email " + ("définie" if email else "retirée"))
+    return redirect(url_for('admin_security.account_password', email='done'))
 
 
 def password_change_required_response():
@@ -1391,7 +1417,9 @@ def create_default_user():
 
         # Création de l'utilisateur admin
         admin_user = User(
-            email=username,
+            # Pas d'adresse factice (l'identifiant n'en est pas une) : chacun
+            # renseigne la sienne dans « Mon compte » pour « Mot de passe oublié ».
+            email=None,
             username=username,
             active=True,
             confirmed_at=datetime.now()

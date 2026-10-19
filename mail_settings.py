@@ -1,0 +1,299 @@
+"""Réglages d'envoi d'e-mails (SMTP) — noyau pur, sans Flask.
+
+Objectif : qu'une personne aux connaissances informatiques moyennes arrive à
+configurer l'envoi sans connaître SMTP.
+
+- ``PROVIDERS`` : préréglages des messageries courantes (serveur, port,
+  sécurité, conseil) ; ``guess_provider`` le devine depuis l'adresse ;
+- une seule notion de « sécurité » (``starttls`` / ``ssl`` / ``none``) au lieu
+  de deux interrupteurs TLS et SSL qui pouvaient être cochés ensemble ;
+- ``validate_mail_form`` contrôle un formulaire complet avant test ou
+  enregistrement ;
+- ``explain_smtp_error`` traduit une exception d'envoi en message clair, avec
+  le conseil qui débloque le plus souvent la situation.
+"""
+
+from __future__ import annotations
+
+import re
+import smtplib
+import socket
+import ssl
+from dataclasses import dataclass
+
+SECURITY_STARTTLS = "starttls"
+SECURITY_SSL = "ssl"
+SECURITY_NONE = "none"
+SECURITY_MODES = (SECURITY_STARTTLS, SECURITY_SSL, SECURITY_NONE)
+
+DEFAULT_PORTS = {SECURITY_STARTTLS: 587, SECURITY_SSL: 465, SECURITY_NONE: 25}
+
+# Délai maximal d'une connexion SMTP : sans lui, un port filtré bloquait la
+# requête (et le worker) jusqu'au délai TCP du système.
+SMTP_TIMEOUT_SECONDS = 10
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$")
+
+
+@dataclass(frozen=True)
+class Provider:
+    id: str
+    label: str
+    host: str
+    port: int
+    security: str
+    hint: str = ""
+    domains: tuple = ()
+
+
+_APP_PASSWORD_HINT = (
+    "Utilisez un « mot de passe d'application » et non votre mot de passe habituel "
+    "(il se crée dans les réglages de sécurité du compte, validation en deux étapes activée)."
+)
+
+PROVIDERS = (
+    Provider("gmail", "Gmail", "smtp.gmail.com", 587, SECURITY_STARTTLS,
+             "Gmail exige un mot de passe d'application : compte Google › Sécurité › "
+             "Validation en deux étapes › Mots de passe des applications.",
+             ("gmail.com", "googlemail.com")),
+    Provider("outlook", "Outlook.com / Hotmail", "smtp-mail.outlook.com", 587, SECURITY_STARTTLS,
+             "Microsoft restreint de plus en plus l'envoi par mot de passe : si le test "
+             "échoue, préférez un service d'envoi comme Brevo.",
+             ("outlook.com", "outlook.fr", "hotmail.com", "hotmail.fr", "live.com", "live.fr",
+              "msn.com")),
+    Provider("office365", "Microsoft 365 (professionnel)", "smtp.office365.com", 587,
+             SECURITY_STARTTLS,
+             "L'envoi SMTP doit être autorisé pour ce compte par l'administrateur Microsoft 365."),
+    Provider("ovh", "OVH (messagerie de votre domaine)", "ssl0.ovh.net", 465, SECURITY_SSL,
+             "Identifiant : l'adresse e-mail complète."),
+    Provider("orange", "Orange / Wanadoo", "smtp.orange.fr", 465, SECURITY_SSL,
+             "Identifiant : l'adresse e-mail complète.",
+             ("orange.fr", "wanadoo.fr")),
+    Provider("free", "Free", "smtp.free.fr", 465, SECURITY_SSL,
+             "L'envoi SMTP doit être activé dans l'espace abonné de la messagerie Free.",
+             ("free.fr",)),
+    Provider("sfr", "SFR", "smtp.sfr.fr", 465, SECURITY_SSL, "",
+             ("sfr.fr", "neuf.fr")),
+    Provider("laposte", "La Poste", "smtp.laposte.net", 465, SECURITY_SSL, "",
+             ("laposte.net",)),
+    Provider("infomaniak", "Infomaniak", "mail.infomaniak.com", 587, SECURITY_STARTTLS,
+             "Identifiant : l'adresse e-mail complète."),
+    Provider("ionos", "IONOS", "smtp.ionos.fr", 587, SECURITY_STARTTLS,
+             "Identifiant : l'adresse e-mail complète."),
+    Provider("brevo", "Brevo (service d'envoi, gratuit jusqu'à 300 e-mails/jour)",
+             "smtp-relay.brevo.com", 587, SECURITY_STARTTLS,
+             "Identifiant et clé SMTP : Brevo › SMTP et API › SMTP. L'adresse d'expéditeur "
+             "doit être validée dans Brevo."),
+)
+
+_BY_ID = {p.id: p for p in PROVIDERS}
+
+
+def provider_by_id(provider_id):
+    return _BY_ID.get(provider_id)
+
+
+def provider_for_host(host):
+    """Préréglage correspondant à un serveur déjà saisi (pour l'afficher)."""
+    host = (host or "").strip().lower()
+    return next((p for p in PROVIDERS if p.host == host), None)
+
+
+def guess_provider(address):
+    """Préréglage déduit du domaine d'une adresse e-mail (ou None)."""
+    address = (address or "").strip().lower()
+    if "@" not in address:
+        return None
+    domain = address.rsplit("@", 1)[1]
+    return next((p for p in PROVIDERS if domain in p.domains), None)
+
+
+def providers_payload():
+    """Préréglages sérialisables (attribut data-* lu par admin_mail.js)."""
+    return [
+        {"id": p.id, "label": p.label, "host": p.host, "port": p.port,
+         "security": p.security, "hint": p.hint, "domains": list(p.domains)}
+        for p in PROVIDERS
+    ]
+
+
+def security_mode(use_tls, use_ssl):
+    """Mode unique à partir des deux booléens historiques."""
+    if use_ssl and not use_tls:
+        return SECURITY_SSL
+    if use_tls:
+        return SECURITY_STARTTLS
+    return SECURITY_NONE
+
+
+def security_flags(mode):
+    """``(use_tls, use_ssl)`` pour un mode — jamais les deux à la fois."""
+    return mode == SECURITY_STARTTLS, mode == SECURITY_SSL
+
+
+def is_valid_email(address):
+    return bool(address) and bool(EMAIL_RE.match(address.strip()))
+
+
+@dataclass(frozen=True)
+class MailSettings:
+    host: str
+    port: int
+    security: str
+    username: str
+    password: str
+    sender: str
+
+    @property
+    def use_tls(self):
+        return security_flags(self.security)[0]
+
+    @property
+    def use_ssl(self):
+        return security_flags(self.security)[1]
+
+
+def _as_port(value):
+    try:
+        port = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
+
+
+def settings_from_config(config):
+    """Réglages courants (app.config), ou None si l'envoi n'est pas configuré."""
+    host = (config.get("MAIL_SERVER") or "").strip()
+    if not host:
+        return None
+    security = security_mode(config.get("MAIL_USE_TLS"), config.get("MAIL_USE_SSL"))
+    username = (config.get("MAIL_USERNAME") or "").strip()
+    sender = (config.get("MAIL_DEFAULT_SENDER") or "").strip()
+    if not sender and is_valid_email(username):
+        sender = username
+    return MailSettings(
+        host=host,
+        port=_as_port(config.get("MAIL_PORT")) or DEFAULT_PORTS[security],
+        security=security,
+        username=username,
+        password=config.get("MAIL_PASSWORD") or "",
+        sender=sender,
+    )
+
+
+def is_configured(config):
+    """Vrai si un serveur ET une adresse d'expéditeur sont connus."""
+    settings = settings_from_config(config)
+    return settings is not None and is_valid_email(settings.sender)
+
+
+def validate_mail_form(data, *, stored_password=""):
+    """Contrôle un formulaire complet. Renvoie ``(MailSettings | None, erreurs)``.
+
+    Mot de passe vide = conserver celui qui est enregistré (champ secret).
+    """
+    errors = []
+    host = (data.get("host") or "").strip().lower()
+    if host.startswith(("smtp://", "smtps://", "http://", "https://")):
+        host = host.split("://", 1)[1].rstrip("/")
+    if not host:
+        errors.append("Indiquez le serveur d'envoi (ex. smtp.gmail.com).")
+    elif not _HOST_RE.match(host):
+        errors.append("Le nom du serveur n'est pas valide (lettres, chiffres, points et tirets).")
+
+    security = (data.get("security") or "").strip().lower()
+    if security not in SECURITY_MODES:
+        errors.append("Choisissez le type de sécurité de la connexion.")
+        security = SECURITY_STARTTLS
+
+    raw_port = (str(data.get("port") or "")).strip()
+    port = _as_port(raw_port) if raw_port else DEFAULT_PORTS[security]
+    if port is None:
+        errors.append("Le port doit être un nombre entre 1 et 65535.")
+
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not password.strip():
+        password = stored_password or ""
+    if username and not password:
+        errors.append("Indiquez le mot de passe du compte d'envoi.")
+
+    sender = (data.get("sender") or "").strip()
+    if not sender and is_valid_email(username):
+        sender = username
+    if not is_valid_email(sender):
+        errors.append("Indiquez une adresse d'expéditeur valide (ex. pharmacie@exemple.fr).")
+
+    if errors:
+        return None, errors
+    return MailSettings(host=host, port=port, security=security, username=username,
+                        password=password, sender=sender), []
+
+
+def _server_detail(exc):
+    """Réponse du serveur distant (code + texte), sûre à afficher à l'admin."""
+    code = getattr(exc, "smtp_code", None)
+    message = getattr(exc, "smtp_error", b"")
+    if isinstance(message, bytes):
+        message = message.decode("utf-8", "replace")
+    message = " ".join(str(message).split())[:200]
+    if code and message:
+        return f"{code} {message}"
+    return message or ""
+
+
+def explain_smtp_error(exc, settings=None):
+    """Message clair (français) pour un échec d'envoi, avec un conseil."""
+    provider = provider_for_host(settings.host) if settings else None
+    hint = provider.hint if provider else ""
+
+    if isinstance(exc, smtplib.SMTPAuthenticationError):
+        message = "Le serveur refuse l'identifiant ou le mot de passe."
+        if not hint:
+            hint = _APP_PASSWORD_HINT
+    elif isinstance(exc, smtplib.SMTPSenderRefused):
+        message = "Le serveur refuse l'adresse d'expéditeur."
+        hint = "Utilisez la même adresse que l'identifiant du compte (ou une adresse validée chez votre fournisseur)."
+    elif isinstance(exc, smtplib.SMTPRecipientsRefused):
+        message = "Le serveur refuse l'adresse du destinataire."
+        hint = "Vérifiez l'adresse saisie."
+    elif isinstance(exc, smtplib.SMTPNotSupportedError):
+        message = "Le serveur ne propose pas la sécurité STARTTLS."
+        hint = "Essayez « SSL » avec le port 465."
+    elif isinstance(exc, smtplib.SMTPServerDisconnected):
+        message = "Le serveur a coupé la connexion."
+        hint = "Souvent une sécurité qui ne correspond pas au port : 587 → STARTTLS, 465 → SSL."
+    elif isinstance(exc, ssl.SSLError):
+        text = str(exc).lower()
+        if "certificate" in text:
+            message = "Le certificat de sécurité du serveur n'est pas valide."
+            hint = "Vérifiez le nom exact du serveur fourni par votre messagerie."
+        else:
+            message = "La connexion sécurisée a échoué."
+            hint = "La sécurité ne correspond pas au port : 587 → STARTTLS, 465 → SSL."
+    elif isinstance(exc, socket.gaierror):
+        message = "Serveur introuvable."
+        hint = "Vérifiez l'orthographe du nom du serveur."
+    elif isinstance(exc, ConnectionRefusedError):
+        message = "Le serveur refuse la connexion sur ce port."
+        hint = "Vérifiez le port : 587 (STARTTLS) ou 465 (SSL) en général."
+    elif isinstance(exc, (TimeoutError, socket.timeout)):
+        message = "Le serveur ne répond pas."
+        hint = ("Le port est peut-être bloqué par l'hébergeur de ce serveur (fréquent pour 25 "
+                "et 465) : essayez le port 587 avec STARTTLS, ou demandez le déblocage.")
+    elif isinstance(exc, smtplib.SMTPException):
+        message = "Le serveur d'envoi a refusé le message."
+    elif isinstance(exc, OSError):
+        message = "Impossible de joindre le serveur d'envoi."
+        hint = hint or "Vérifiez le serveur et le port."
+    else:
+        message = "L'envoi a échoué."
+
+    detail = _server_detail(exc)
+    parts = [message]
+    if hint:
+        parts.append(hint)
+    if detail:
+        parts.append(f"Réponse du serveur : {detail}")
+    return " ".join(parts)

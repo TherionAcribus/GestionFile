@@ -197,10 +197,13 @@ def test_preview_backup_defaults_excluded_secrets_empty():
 # 5. Régression statique : plus de valeur secrète exposée
 # ---------------------------------------------------------------------------
 
-def test_mail_template_uses_secret_macro():
+def test_mail_template_never_renders_the_password():
+    # Formulaire unique de l'onglet E-mails : le champ mot de passe est
+    # toujours vide (seul l'état « enregistré / non défini » est affiché).
     html = _read("templates/admin/app_mail.html")
-    assert "secret_full(\"mail_password\"" in html
-    # L'ancienne forme qui rendait la valeur ne doit plus exister.
+    assert 'name="password" value=""' in html
+    assert "mail_password_set" in html
+    assert "{{ mail_password }}" not in html
     assert "textarea_full(\"mail_password\"" not in html
 
 

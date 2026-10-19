@@ -157,6 +157,11 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "mail_default_sender": ("MAIL_DEFAULT_SENDER", "value_str"),
     "mail_use_tls": ("MAIL_USE_TLS", "value_bool"),
     "mail_use_ssl": ("MAIL_USE_SSL", "value_bool"),
+    # « Mot de passe oublié » par e-mail (routes/password_reset.py) et adresse
+    # publique utilisée dans ses liens (jamais l'en-tête Host d'une requête
+    # anonyme : empoisonnement de lien).
+    "mail_password_reset": ("MAIL_PASSWORD_RESET", "value_bool"),
+    "mail_link_base_url": ("MAIL_LINK_BASE_URL", "value_str"),
     "phone_center": ("PHONE_CENTER", "value_bool"),
     "phone_title": ("PHONE_TITLE", "value_str"),
     "phone_line1": ("PHONE_LINE1", "value_str"),

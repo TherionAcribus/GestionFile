@@ -314,9 +314,34 @@ complet valide que l'installation fonctionne réellement.
 Onglet **Logs** de chaque service. Pour un problème de démarrage, regardez
 dans l'ordre : `init` (migrations/bootstrap), puis `web`, puis `scheduler`.
 
+### Envoi d'e-mails (facultatif)
+
+Sert uniquement au lien **« Mot de passe oublié »** de la page de connexion.
+*Administration › Application › E-mails* :
+
+1. saisissez l'adresse d'envoi : pour Gmail, Outlook, Orange, Free, SFR,
+   La Poste, le serveur se remplit tout seul (sinon choisissez votre
+   messagerie dans la liste, ou « Autre ») ;
+2. identifiant et mot de passe du compte. **Gmail et Outlook exigent un
+   « mot de passe d'application »**, pas le mot de passe habituel ;
+3. **Tester** (avec les valeurs saisies, même non enregistrées) : en cas
+   d'échec, le message explique la cause probable ;
+4. **Enregistrer**.
+
+Chaque utilisateur renseigne ensuite son adresse dans **Mon compte**.
+L'onglet E-mails liste les comptes qui n'en ont pas.
+
+Si le serveur ne répond pas : certains hébergeurs bloquent les ports 25 et
+465 en sortie. Préférez 587 (STARTTLS), ou un service d'envoi comme Brevo
+(gratuit jusqu'à 300 e-mails par jour).
+
 ### Mot de passe administrateur perdu
 
 Du plus simple au plus technique :
+
+**0. Votre compte a une adresse e-mail et l'envoi est configuré** — page de
+connexion › **Mot de passe oublié ?**, saisissez votre identifiant : vous
+recevez un lien valable une heure, utilisable une seule fois.
 
 **1. Un autre administrateur existe** — il ouvre *Administration › Sécurité*,
 bouton **Mot de passe** sur votre ligne, saisit un mot de passe temporaire

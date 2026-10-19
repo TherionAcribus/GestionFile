@@ -1,0 +1,5 @@
+{# Résultat d'un test ou d'un enregistrement de l'onglet E-mails (fragment HTMX). #}
+<div class="alert {{ 'alert-success' if success else 'alert-danger' }} small mb-0" role="{{ 'status' if success else 'alert' }}">
+    <i class="bi {{ 'bi-check-circle' if success else 'bi-exclamation-triangle' }}" aria-hidden="true"></i>
+    {{ message }}
+</div>

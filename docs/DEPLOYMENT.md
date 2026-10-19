@@ -189,6 +189,7 @@ le déploiement sans exploration préalable.
 | `Dockerfile` + `docker-entrypoint.sh` | Image ; l'entrypoint resseed les médias par défaut dans les volumes vides (idempotent, jamais d'écrasement) |
 | `manage.py` (`migrate`) | Bootstrap base vide (`create_all` + `stamp head`) ou `alembic upgrade` ; verrou MySQL `GET_LOCK` contre les migrations concurrentes |
 | `app.py` (`APP_ROLE`) | Rôles `init` / `web` / `scheduler` ; les hooks de bootstrap ne tournent que dans `scheduler`/`init` |
+| `routes/password_reset.py`, `services/mail_service.py`, `mail_settings.py` | « Mot de passe oublié » par e-mail : lien signé (1 h, usage unique via empreinte du hash), réponse identique compte connu/inconnu, envoi en tâche de fond, demandes limitées ; lien bâti sur `MAIL_LINK_BASE_URL` (jamais l'en-tête Host). L'envoi lit les réglages courants à chaque message (avant : figés à `localhost:25` par `mail.init_app`) |
 | `services/account_recovery_service.py` (`apply_env_reset`, `reset_password_from_cli`) | Récupération d'accès sans e-mail : `ADMIN_RESET_PASSWORD` (une fois par valeur, empreinte sur le compte) et `manage.py reset-password` ; mot de passe temporaire ⇒ seule la page « Mon mot de passe » est accessible |
 | `routes/admin_security.py` (`create_default_user`) | Premier admin via `ADMIN_USERNAME`/`ADMIN_INITIAL_PASSWORD` ; mot de passe aléatoire + log si absent ; `RuntimeError` si le mot de passe fourni est invalide |
 | `.env.example` | Catalogue des variables et valeurs par défaut |

@@ -5,6 +5,9 @@
 </head>
 <body>
     <h1>Connexion</h1>
+    {% if request.args.get('reset') == 'done' %}
+    <p role="status"><strong>Votre mot de passe a été changé.</strong> Connectez-vous avec le nouveau.</p>
+    {% endif %}
     <form method="POST" action="{{ url_for('admin_security.login') }}">
         {{ form.hidden_tag() }}
         {{ form.next }}
@@ -30,13 +33,8 @@
             <input type="submit" value="Login">
         </div>
     </form>
-    {# Récupération de compte (account_recovery.py) : message identique pour
-       tous, il ne révèle rien sur l'existence d'un compte. #}
-    <details>
-        <summary>Mot de passe oublié ?</summary>
-        <p>Demandez à un administrateur de le réinitialiser (Administration › Sécurité › Mot de passe).</p>
-        <p>Vous êtes le seul administrateur ? La personne qui gère le serveur (Coolify) peut
-           rétablir l'accès : voir « Mot de passe administrateur perdu » dans le guide d'installation.</p>
-    </details>
+    {# Récupération de compte : la page /forgot_password propose le lien par
+       e-mail (s'il est configuré) et les autres solutions. #}
+    <p><a href="/forgot_password">Mot de passe oublié ?</a></p>
 </body>
 </html>

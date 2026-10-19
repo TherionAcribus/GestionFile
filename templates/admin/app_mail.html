@@ -1,61 +1,150 @@
-{# Onglet « E-mails ». Honnêteté sur l'usage : aucune fonction n'envoie
-   encore d'e-mail automatiquement — la configuration sert à préparer et à
-   vérifier l'envoi (e-mail de test). #}
+{# Onglet « E-mails » (mail_settings.py, routes admin_app.admin_app_mail_*).
+   Un seul formulaire : l'adresse d'envoi suffit souvent (le fournisseur est
+   deviné et préremplit le serveur), on TESTE avec les valeurs saisies, puis on
+   enregistre tout d'un coup. Comportement : static/js/admin_mail.js. #}
 <div class="alert alert-light border small">
     <i class="bi bi-info-circle" aria-hidden="true"></i>
-    Paramètres du serveur d'envoi (SMTP) de votre messagerie. Pour l'instant, seul l'<strong>e-mail de test</strong>
-    ci-dessous les utilise : aucune fonction n'envoie encore d'e-mail automatiquement.
+    L'envoi d'e-mails sert au lien <strong>« Mot de passe oublié »</strong> de la page de connexion.
+    Sans lui, un mot de passe perdu se règle par un autre administrateur
+    (Sécurité › Mot de passe).
 </div>
 
 <section class="admin-setting-card algo-section app-mail-settings" aria-labelledby="mail_server_title">
-    <h5 id="mail_server_title">Serveur d'envoi</h5>
-    <details class="small mb-3">
-        <summary>Valeurs courantes (Gmail, Outlook, OVH…)</summary>
-        <table class="table table-sm mt-2 mb-0">
-            <thead><tr><th>Fournisseur</th><th>Serveur</th><th>Port</th><th>Sécurité</th></tr></thead>
-            <tbody>
-                <tr><td>Gmail</td><td><code>smtp.gmail.com</code></td><td>587</td><td>TLS <span class="text-muted">(mot de passe d'application requis)</span></td></tr>
-                <tr><td>Outlook / Office 365</td><td><code>smtp.office365.com</code></td><td>587</td><td>TLS</td></tr>
-                <tr><td>OVH</td><td><code>ssl0.ovh.net</code></td><td>465</td><td>SSL</td></tr>
-            </tbody>
-        </table>
-    </details>
+    <h5 id="mail_server_title"><i class="bi bi-envelope" aria-hidden="true"></i> Compte d'envoi</h5>
+    <p class="small mb-3">
+        {% if mail_configured %}
+        <span class="badge text-bg-success">Configuré</span> Envoi depuis <strong>{{ mail_default_sender }}</strong>.
+        {% else %}
+        <span class="badge text-bg-secondary">Non configuré</span> Aucun e-mail ne peut être envoyé.
+        {% endif %}
+    </p>
 
-    {{ macros.textarea_full("mail_server", mail_server, "Serveur SMTP") }}
-    {{ macros.textbloc_int("mail_port", mail_port, "Port (587 pour TLS, 465 pour SSL)") }}
-
-    <fieldset class="mb-3">
-        <legend class="form-label fs-6 mb-1">Sécurité de la connexion — une seule des deux</legend>
-        {{ macros.switch("mail_use_tls", mail_use_tls, "TLS (STARTTLS, port 587 en général)") }}
-        {{ macros.switch("mail_use_ssl", mail_use_ssl, "SSL (port 465 en général)") }}
-        <div class="alert alert-danger small mt-2 mb-0 mail-tls-ssl-conflict" role="alert">
-            <i class="bi bi-exclamation-octagon" aria-hidden="true"></i>
-            TLS et SSL sont activés en même temps : l'envoi échouera. Gardez-en un seul.
+    <form id="mail-settings-form" autocomplete="off"
+          data-providers="{{ mail_providers | tojson | forceescape }}">
+        <div class="mb-3">
+            <label for="mail_default_sender" class="form-label">Adresse e-mail d'envoi (expéditeur)</label>
+            <input type="email" class="form-control" id="mail_default_sender" name="sender"
+                   value="{{ mail_default_sender }}" placeholder="pharmacie@exemple.fr"
+                   aria-describedby="mail_sender_help">
+            <div class="form-text" id="mail_sender_help">
+                L'adresse qui apparaîtra comme expéditeur. Pour Gmail, Orange, Free… le reste se remplit tout seul.
+            </div>
         </div>
-    </fieldset>
 
-    {{ macros.textarea_full("mail_username", mail_username, "Identifiant (souvent l'adresse e-mail)") }}
-    {{ macros.secret_full("mail_password", mail_password_set, "Mot de passe") }}
-    {{ macros.textarea_full("mail_default_sender", mail_default_sender, "Adresse d'expéditeur affichée") }}
+        <div class="mb-3">
+            <label for="mail_provider" class="form-label">Votre messagerie</label>
+            <select class="form-select" id="mail_provider" aria-describedby="mail_provider_hint">
+                <option value="" {% if not mail_provider %}selected{% endif %}>— Choisir —</option>
+                {% for p in mail_providers %}
+                <option value="{{ p.id }}" {% if mail_provider == p.id %}selected{% endif %}>{{ p.label }}</option>
+                {% endfor %}
+                <option value="other" {% if mail_provider == 'other' %}selected{% endif %}>Autre (réglages fournis par votre messagerie)</option>
+            </select>
+            <div class="form-text" id="mail_provider_hint" aria-live="polite"></div>
+        </div>
+
+        <div class="mb-3">
+            <label for="mail_username" class="form-label">Identifiant</label>
+            <input type="text" class="form-control" id="mail_username" name="username"
+                   value="{{ mail_username }}" autocomplete="off" aria-describedby="mail_username_help">
+            <div class="form-text" id="mail_username_help">Le plus souvent, l'adresse e-mail elle-même.</div>
+        </div>
+
+        <div class="mb-3">
+            <label for="mail_password" class="form-label">Mot de passe</label>
+            <div class="input-group">
+                <input type="password" class="form-control" id="mail_password" name="password" value=""
+                       autocomplete="new-password" aria-describedby="mail_password_help"
+                       placeholder="{% if mail_password_set %}•••••••• (enregistré — laisser vide pour le conserver){% else %}Non défini{% endif %}">
+                <button type="button" class="btn btn-outline-secondary" data-toggle-password="#mail_password" aria-label="Afficher le mot de passe"><i class="bi bi-eye"></i></button>
+            </div>
+            <div class="form-text" id="mail_password_help">
+                Jamais réaffiché ni inclus dans les sauvegardes.
+                Gmail et Outlook demandent un « mot de passe d'application » (voir le conseil ci-dessus).
+            </div>
+        </div>
+
+        <details class="mb-3" id="mail_server_details" {% if mail_provider == 'other' %}open{% endif %}>
+            <summary>Réglages du serveur <span class="text-muted small">(remplis automatiquement)</span></summary>
+            <div class="row g-2 mt-1">
+                <div class="col-sm-6">
+                    <label for="mail_server" class="form-label">Serveur SMTP</label>
+                    <input type="text" class="form-control" id="mail_server" name="host"
+                           value="{{ mail_server }}" placeholder="smtp.exemple.fr">
+                </div>
+                <div class="col-sm-3">
+                    <label for="mail_security" class="form-label">Sécurité</label>
+                    <select class="form-select" id="mail_security" name="security">
+                        <option value="starttls" {% if mail_security == 'starttls' %}selected{% endif %}>STARTTLS</option>
+                        <option value="ssl" {% if mail_security == 'ssl' %}selected{% endif %}>SSL</option>
+                        <option value="none" {% if mail_security == 'none' %}selected{% endif %}>Aucune</option>
+                    </select>
+                </div>
+                <div class="col-sm-3">
+                    <label for="mail_port" class="form-label">Port</label>
+                    <input type="number" class="form-control" id="mail_port" name="port"
+                           value="{{ mail_port }}" min="1" max="65535" placeholder="587">
+                </div>
+            </div>
+            <div class="form-text">En général : 587 avec STARTTLS, ou 465 avec SSL.</div>
+
+            <div class="mt-3">
+                <label for="mail_link_base_url" class="form-label">Adresse de l'administration dans les liens envoyés</label>
+                <input type="url" class="form-control" id="mail_link_base_url" name="link_base_url"
+                       value="{{ mail_link_base_url }}" placeholder="https://file.ma-pharmacie.fr"
+                       aria-describedby="mail_link_base_url_help">
+                <div class="form-text" id="mail_link_base_url_help">
+                    Préremplie avec l'adresse que vous utilisez en ce moment. Les liens « Mot de passe oublié »
+                    pointeront toujours vers elle.
+                </div>
+            </div>
+        </details>
+
+        <div class="row g-2 align-items-end">
+            <div class="col-sm">
+                <label for="mail_adress" class="form-label">Envoyer un e-mail de test à</label>
+                <input type="email" class="form-control" id="mail_adress" name="mail_adress"
+                       value="{{ current_user.email if current_user.email and '@' in current_user.email else '' }}"
+                       placeholder="vous@exemple.fr" autocomplete="email">
+            </div>
+            <div class="col-sm-auto d-flex gap-2">
+                <button type="button" class="btn btn-outline-primary"
+                        hx-post="/admin/app/mail/test"
+                        hx-include="#mail-settings-form"
+                        hx-target="#mail-result"
+                        hx-disabled-elt="this"
+                        data-feedback-skip>
+                    <i class="bi bi-send" aria-hidden="true"></i> Tester
+                </button>
+                <button type="button" class="btn btn-success"
+                        hx-post="/admin/app/mail/save"
+                        hx-include="#mail-settings-form"
+                        hx-target="#mail-result"
+                        hx-disabled-elt="this"
+                        data-feedback-skip>
+                    <i class="bi bi-check-lg" aria-hidden="true"></i> Enregistrer
+                </button>
+            </div>
+        </div>
+        <div class="form-text">Le test utilise les valeurs ci-dessus, même non enregistrées.</div>
+    </form>
+
+    <div id="mail-result" class="mt-3" aria-live="polite"></div>
 </section>
 
-<section class="admin-setting-card algo-section" aria-labelledby="mail_test_title">
-    <h5 id="mail_test_title"><i class="bi bi-send" aria-hidden="true"></i> Vérifier l'envoi</h5>
-    <p class="text-muted small">Envoie un e-mail de test avec les réglages enregistrés (un envoi par minute au maximum).</p>
-    <form id="mail-test-form" class="row g-2 align-items-end">
-        <div class="col-sm-auto">
-            <label for="mail_adress" class="form-label">Envoyer à</label>
-            <input type="email" class="form-control" id="mail_adress" name="mail_adress" value=""
-                   placeholder="vous@exemple.fr" autocomplete="email">
-        </div>
-        <div class="col-sm-auto">
-            <button type="button" class="btn btn-success"
-                    hx-post="/admin/app/mail/test"
-                    hx-target="#invisible"
-                    hx-include="closest form"
-                    hx-disabled-elt="this">
-                <i class="bi bi-send" aria-hidden="true"></i> Envoyer un e-mail de test
-            </button>
-        </div>
-    </form>
+<section class="admin-setting-card algo-section" aria-labelledby="mail_reset_title">
+    <h5 id="mail_reset_title"><i class="bi bi-key" aria-hidden="true"></i> Mot de passe oublié par e-mail</h5>
+    {{ macros.switch("mail_password_reset", mail_password_reset, "Proposer « Mot de passe oublié » sur la page de connexion") }}
+    <p class="small text-muted mt-2 mb-2">
+        La personne reçoit un lien valable une heure, utilisable une seule fois.
+        {% if not mail_configured %}<strong>Inactif tant que l'envoi n'est pas configuré.</strong>{% endif %}
+    </p>
+    {% if mail_accounts_without_email %}
+    <div class="alert alert-warning small mb-0" role="note">
+        <i class="bi bi-person-exclamation" aria-hidden="true"></i>
+        {{ mail_accounts_without_email | length }} compte(s) sans adresse e-mail ne pourront pas utiliser ce lien :
+        <strong>{{ mail_accounts_without_email | join(', ') }}</strong>.
+        Chacun peut ajouter la sienne dans « Mon compte », ou un administrateur dans Sécurité › Utilisateurs.
+    </div>
+    {% endif %}
 </section>

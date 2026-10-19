@@ -74,6 +74,7 @@ from routes.admin_schedule import admin_schedule_bp
 from routes.admin_security import admin_security_bp, create_default_user, create_default_role, create_default_roles, require_permission
 from routes.admin_security import must_change_password_blocks, password_change_required_response
 from services.account_recovery_service import apply_env_reset, env_reset_still_set
+from routes.password_reset import password_reset_bp
 from routes.admin_music import admin_music_bp
 from routes.admin_dashboard import admin_dashboard_bp
 from routes.admin_app import admin_app_bp
@@ -412,6 +413,7 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_onboarding_bp, url_prefix='')
     app.register_blueprint(admin_performance_bp, url_prefix='')
     app.register_blueprint(admin_search_bp, url_prefix='')
+    app.register_blueprint(password_reset_bp, url_prefix='')
 
     # Une signature de stress valide est marquee dans g pour permettre aux
     # integrations externes de se neutraliser sans modifier la logique metier.

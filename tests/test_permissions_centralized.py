@@ -68,6 +68,9 @@ _ALLOWED_WITHOUT_GUARD = {
     # utilisateur connecté change SON mot de passe, quel que soit son rôle ;
     # c'est aussi la seule page ouverte tant qu'un mot de passe est temporaire.
     "account_password",
+    # « Mon compte » › adresse e-mail : même règle (auth-only, son propre
+    # compte, mot de passe actuel exigé).
+    "account_email",
     # Sert un fichier audio statique à l'écran d'annonce (public, comme /static).
     "serve_sound",
     # Message d'erreur statique d'auth Spotify (aucune donnée).
@@ -169,12 +172,12 @@ def test_broken_dangerous_routes_are_no_longer_exposed():
     source = _read("routes/admin_security.py")
     # check_default_admin : renvoyait un booléen (vue invalide) et divulguait le
     # compte par défaut ; send_test_email : signature invalide + envoi d'e-mail
-    # non authentifié. Les deux sont désormais de simples fonctions utilitaires
-    # (plus aucune ``@..._bp.route`` déclarée pour elles).
+    # non authentifié. check_default_admin reste un utilitaire ; send_test_email
+    # a disparu (l'envoi passe par services/mail_service.send_email).
     assert not re.search(r"@\w+\.route\(\s*['\"]/admin/check_default_admin['\"]", source)
     assert not re.search(r"@\w+\.route\(\s*['\"]/send_test_email['\"]", source)
     assert "def check_default_admin(" in source  # conservée comme utilitaire
-    assert "def send_test_email(" in source
+    assert "def send_test_email(" not in source
 
 
 def test_css_routes_in_app_are_permissioned():

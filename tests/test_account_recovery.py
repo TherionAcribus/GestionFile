@@ -579,3 +579,68 @@ def test_lien_mon_mot_de_passe_et_bandeau_dans_base():
 def test_aide_mot_de_passe_oublie_sur_la_connexion():
     login = _read("templates/security/login.html")
     assert "Mot de passe oublié" in login
+
+
+# ---------------------------------------------------------------------------
+# 5. « Mon compte » : adresse e-mail (lien « Mot de passe oublié »)
+# ---------------------------------------------------------------------------
+
+def _email(app, username):
+    with app.app_context():
+        return User.query.filter_by(username=username).first().email
+
+
+def test_mon_compte_affiche_la_section_email(app):
+    html = _client_for(app, "bob").get("/admin/account/password").get_data(as_text=True)
+    assert "Mon compte" in html
+    assert 'action="/admin/account/email"' in html
+
+
+def test_section_email_masquee_pendant_le_changement_obligatoire(app):
+    _set_must_change(app, "bob")
+    html = _client_for(app, "bob").get("/admin/account/password").get_data(as_text=True)
+    assert 'action="/admin/account/email"' not in html
+    # Et la route elle-même reste fermée par la garde.
+    resp = _client_for(app, "bob").post("/admin/account/email",
+                                        data={"email": "b@x.fr", "current_password": _BOB_PWD})
+    assert resp.status_code == 302
+    assert _email(app, "bob") is None
+
+
+def test_email_exige_le_mot_de_passe_actuel(app):
+    client = _client_for(app, "bob")
+    resp = client.post("/admin/account/email", data={"email": "bob@x.fr", "current_password": "faux"})
+    assert resp.status_code == 400
+    assert _email(app, "bob") is None
+    resp = client.post("/admin/account/email", data={"email": "bob@x.fr", "current_password": _BOB_PWD})
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/admin/account/password?email=done")
+    assert _email(app, "bob") == "bob@x.fr"
+    assert "Adresse e-mail enregistrée" in client.get(
+        "/admin/account/password?email=done").get_data(as_text=True)
+
+
+def test_email_invalide_ou_deja_pris(app):
+    client = _client_for(app, "bob")
+    resp = client.post("/admin/account/email", data={"email": "pas-une-adresse",
+                                                     "current_password": _BOB_PWD})
+    assert "pas valide" in resp.get_data(as_text=True)
+    resp = client.post("/admin/account/email", data={"email": "ROOT@example.test",
+                                                     "current_password": _BOB_PWD})
+    assert resp.status_code == 400
+    assert "déjà utilisée" in resp.get_data(as_text=True)
+    assert _email(app, "bob") is None
+
+
+def test_email_retire(app):
+    client = _client_for(app, "root")
+    client.post("/admin/account/email", data={"email": "", "current_password": _ROOT_PWD})
+    assert _email(app, "root") is None
+
+
+def test_bootstrap_sans_adresse_factice():
+    source = _read("routes/admin_security.py")
+    m = re.search(r"def create_default_user\(\):(.*?)(?:\n\n\n|\Z)", source, re.DOTALL)
+    assert m, "create_default_user introuvable"
+    assert "email=None" in m.group(1)
+    assert "email=username" not in m.group(1)

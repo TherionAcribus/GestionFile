@@ -60,12 +60,13 @@ def test_gabarits_general_et_mail():
     avance = general.split("Avancé : relais entre processus", 1)[1]
     assert "Redémarrage requis" in avance and "start_rabbitmq" in avance
     assert "Redémarrage requis" not in general.split("Avancé : relais entre processus", 1)[0]
+    # Onglet E-mails : détail dans test_admin_test_email.py. La sécurité est un
+    # choix unique (l'ancien double interrupteur TLS + SSL pouvait être
+    # coché deux fois) et le mot de passe n'est jamais réaffiché.
     mail = _read("templates/admin/app_mail.html")
-    assert 'secret_full("mail_password"' in mail
-    assert "mail-tls-ssl-conflict" in mail
+    assert 'name="security"' in mail
+    assert 'name="password" value=""' in mail
     assert "e-mail de test" in mail
-    css = _read("static/css/admin.css")
-    assert ":has(#mail_use_tls:checked):has(#mail_use_ssl:checked)" in css
 
 
 # --- Routes ---------------------------------------------------------------------

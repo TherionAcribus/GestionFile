@@ -1,179 +1,278 @@
-"""Point 4 (audit Admin) — Test email : validation, throttling, audit, erreurs SMTP.
+"""Onglet Application › E-mails : envoi, test avant enregistrement, enregistrement.
 
-Quatre problèmes corrigés :
+Historique : l'envoi passait par flask-mailman configuré lors de
+``mail.init_app`` — AVANT le chargement des réglages depuis la base. Les
+e-mails partaient donc vers ``localhost:25`` quels que soient les réglages
+saisis. ``services/mail_service.send_email`` construit désormais la connexion
+à chaque envoi depuis les réglages courants (ou ceux du formulaire de test),
+avec un délai maximal.
 
-1. **Pas de validation d'email** : n'importe quelle chaîne était acceptée et
-   transmise à Flask-Mailman, pouvant provoquer une erreur SMTP non gérée.
-   Désormais une regex simple valide le format avant l'envoi.
-
-2. **Pas de throttling** : la route pouvait être appelée en boucle pour spammer
-   ou utiliser le serveur comme relais SMTP. Désormais 1 test/min/user.
-
-3. **Pas d'audit** : l'envoi d'e-mail de test n'était pas journalisé dans
-   l'audit. Désormais ``record_audit`` est appelé en succès ET en échec.
-
-4. **Exception SMTP non gérée** : ``send_test_email`` laissait propager
-   l'exception → HTTP 500. Désormais elle capture, journalise et retourne
-   ``(False, message_générique)``.
-
-Vérifications statiques (on lit le source, comme les autres tests de
-régression statique de ce dépôt).
+Application Flask minimale + SQLite (patron de ``test_view_app_page.py``).
 """
 
-import os
-import re
+import smtplib
+from pathlib import Path
 
 import pytest
+from flask import Flask, jsonify
+from flask_login import LoginManager, login_user
+from werkzeug.security import generate_password_hash
 
-_SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+import routes.admin_app as admin_app
+from extensions import mail
+from models import ConfigOption, Role, User, db
+from config_sync import CONFIG_GENERATION_KEY
+from params_registry import PARAM_REGISTRY
+from services import mail_service
+
+SERVEUR_DIR = Path(__file__).resolve().parents[1]
 
 
 def _read(rel):
-    with open(os.path.join(_SERVEUR, rel), encoding="utf-8") as fh:
-        return fh.read()
+    return (SERVEUR_DIR / rel).read_text(encoding="utf-8")
 
 
-def _extract_func(source, func_name):
-    pattern = rf"def {func_name}\([^)]*\):(.*?)(?=^(?:def |@|\Z))"
-    m = re.search(pattern, source, re.DOTALL | re.MULTILINE)
-    if not m:
-        pytest.fail(f"Fonction {func_name} introuvable")
-    return m.group(1)
+class _Connections(list):
+    """Connexions ouvertes pendant le test ; ``state['error']`` simule un échec."""
+
+    def __init__(self):
+        super().__init__()
+        self.state = {"error": None}
 
 
-# ---------------------------------------------------------------------------
-# 1. Validation de l'email
-# ---------------------------------------------------------------------------
+class _FakeConnection:
+    """Connexion SMTP factice : mémorise les messages ou lève ``error``."""
 
-def test_admin_app_mail_test_validates_email():
-    """La route doit valider le format de l'email avant l'envoi."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    assert "_EMAIL_RE" in body or "re.match" in body or "re.fullmatch" in body
+    def __init__(self, error=None, **kwargs):
+        self.kwargs = kwargs
+        self.error = error
+        self.sent = []
 
-
-def test_admin_app_has_email_regex():
-    """Une regex d'email doit être définie dans admin_app.py."""
-    source = _read("routes/admin_app.py")
-    assert "_EMAIL_RE" in source
-    assert "re.compile" in source
+    def send_messages(self, messages):
+        if self.error:
+            raise self.error
+        self.sent.extend(messages)
+        return len(messages)
 
 
-def test_admin_app_mail_test_rejects_empty():
-    """Une adresse vide doit être rejetée avec un message clair."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    assert "not mail_adress" in body or "not mail_adress.strip()" in body
+@pytest.fixture()
+def connections(monkeypatch):
+    """Capture chaque connexion ouverte par send_email (ses réglages)."""
+    made = _Connections()
+
+    def fake_get_connection(backend=None, fail_silently=False, **kwargs):
+        conn = _FakeConnection(error=made.state["error"], **kwargs)
+        made.append(conn)
+        return conn
+
+    monkeypatch.setattr(mail, "get_connection", fake_get_connection)
+    return made
 
 
-# ---------------------------------------------------------------------------
-# 2. Throttling
-# ---------------------------------------------------------------------------
+@pytest.fixture()
+def app(tmp_path, monkeypatch):
+    app = Flask(__name__, root_path=str(SERVEUR_DIR))
+    app.config.update(
+        SECRET_KEY="test",
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        TESTING=True,
+        PHARMACY_NAME="Pharmacie Test",
+        MAIL_SERVER="smtp.enregistre.fr", MAIL_PORT=465, MAIL_USE_TLS=False, MAIL_USE_SSL=True,
+        MAIL_USERNAME="file@enregistre.fr", MAIL_PASSWORD="secret-enregistre",
+        MAIL_DEFAULT_SENDER="file@enregistre.fr",
+    )
+    db.init_app(app)
+    mail.init_app(app)
+    login_manager = LoginManager(app)
 
-def test_admin_app_mail_test_has_throttling():
-    """La route doit limiter la fréquence d'envoi (throttling)."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    assert "_email_test_last_sent" in body or "cooldown" in body.lower()
-    assert "throttl" in body.lower() or "_email_test_last_sent" in body
+    @login_manager.user_loader
+    def load_user(user_id):
+        user = User.query.filter_by(fs_uniquifier=user_id).first()
+        return user if user and user.active else None
 
+    app.register_blueprint(admin_app.admin_app_bp)
+    app.add_url_rule("/login", endpoint="security.login", view_func=lambda: "")
 
-def test_admin_app_has_cooldown_constant():
-    """Une constante de cooldown doit être définie."""
-    source = _read("routes/admin_app.py")
-    assert "_EMAIL_TEST_COOLDOWN" in source
-    # Doit être un nombre positif (en secondes).
-    m = re.search(r"_EMAIL_TEST_COOLDOWN\s*=\s*(\d+(?:\.\d+)?)", source)
-    assert m, "_EMAIL_TEST_COOLDOWN doit être un nombre"
-    cooldown = float(m.group(1))
-    assert cooldown > 0, "Le cooldown doit être positif"
+    def test_login(username="admin"):
+        login_user(User.query.filter_by(username=username).first())
+        return jsonify(authenticated=True)
 
+    app.add_url_rule("/_test/login/<username>", view_func=test_login, methods=["POST"])
+    monkeypatch.setattr(admin_app, "record_audit", lambda *a, **k: None)
+    admin_app._email_test_last_sent.clear()
 
-def test_admin_app_throttle_returns_message():
-    """En cas de throttle, un message doit être renvoyé (pas un 500)."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    assert "patienter" in body.lower() or "attendre" in body.lower()
-
-
-# ---------------------------------------------------------------------------
-# 3. Audit log
-# ---------------------------------------------------------------------------
-
-def test_admin_app_mail_test_calls_record_audit():
-    """La route doit appeler record_audit pour tracer l'envoi."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    assert "record_audit" in body
-
-
-def test_admin_app_mail_test_audits_success_and_failure():
-    """L'audit doit être fait en succès ET en échec."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    assert "OUTCOME_SUCCESS" in body
-    assert "OUTCOME_FAILURE" in body
-
-
-def test_admin_app_imports_audit():
-    """admin_app.py doit importer record_audit et les constantes d'audit."""
-    source = _read("routes/admin_app.py")
-    assert "record_audit" in source
-    assert "OUTCOME_SUCCESS" in source
-    assert "OUTCOME_FAILURE" in source
+    with app.app_context():
+        db.create_all()
+        admin = User(username="admin", email="admin@enregistre.fr",
+                     password=generate_password_hash("x"), active=True)
+        admin.roles.append(Role(name="admin", admin_app=True))
+        noperm = User(username="noperm", password=generate_password_hash("x"), active=True)
+        noperm.roles.append(Role(name="comptoir", admin_queue=True))
+        db.session.add_all([admin, noperm])
+        db.session.commit()
+    yield app
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
 
 
-# ---------------------------------------------------------------------------
-# 4. send_test_email capture les exceptions SMTP
-# ---------------------------------------------------------------------------
-
-def test_send_test_email_returns_tuple():
-    """send_test_email doit retourner (bool, message) au lieu de juste bool."""
-    source = _read("routes/admin_security.py")
-    body = _extract_func(source, "send_test_email")
-    # Doit retourner un tuple (True/False, message)
-    assert "return True, None" in body or "return True," in body
-    assert "return False," in body
+@pytest.fixture()
+def client(app):
+    c = app.test_client()
+    c.post("/_test/login/admin")
+    return c
 
 
-def test_send_test_email_catches_exceptions():
-    """send_test_email doit capturer les exceptions SMTP au lieu de les
-    laisser propager (ce qui produirait un 500)."""
-    source = _read("routes/admin_security.py")
-    body = _extract_func(source, "send_test_email")
-    assert "try" in body
-    assert "except" in body
-    assert "logger.error" in body or "logger.warning" in body
+_FORM = {"sender": "pharmacie@gmail.com", "host": "smtp.gmail.com", "port": "587",
+         "security": "starttls", "username": "pharmacie@gmail.com", "password": "app-pass",
+         "link_base_url": "https://file.pharmacie.fr/admin/app", "mail_adress": "moi@exemple.fr"}
 
 
-def test_send_test_email_no_str_e_to_client():
-    """Le message d'erreur renvoyé ne doit pas contenir str(e)."""
-    source = _read("routes/admin_security.py")
-    body = _extract_func(source, "send_test_email")
-    # Vérifier que str(e) n'est pas dans un return.
-    returns = re.findall(r'return.*', body)
-    for ret in returns:
-        assert "str(e)" not in ret, (
-            "send_test_email ne doit pas renvoyer str(e) au client"
-        )
+# --- send_email : réglages courants, délai, erreurs expliquées -------------------
+
+def test_envoi_utilise_les_reglages_courants(app, connections):
+    with app.app_context():
+        app.config["MAIL_SERVER"] = "smtp.modifie.fr"  # changé APRÈS init_app
+        ok, error = mail_service.send_email("dest@x.fr", "Sujet", "Corps")
+    assert (ok, error) == (True, None)
+    (conn,) = connections
+    assert conn.kwargs["host"] == "smtp.modifie.fr"
+    assert conn.kwargs["port"] == 465
+    assert conn.kwargs["use_ssl"] is True and conn.kwargs["use_tls"] is False
+    assert conn.kwargs["password"] == "secret-enregistre"
+    assert conn.kwargs["timeout"] == 10
+    (message,) = conn.sent
+    assert message.from_email == "file@enregistre.fr"
+    assert message.to == ["dest@x.fr"]
 
 
-def test_send_test_email_has_generic_error_message():
-    """Le message d'erreur doit être générique (vérifier la configuration SMTP)."""
-    source = _read("routes/admin_security.py")
-    body = _extract_func(source, "send_test_email")
-    assert "SMTP" in body or "configuration" in body.lower()
+def test_envoi_non_configure(app, connections):
+    with app.app_context():
+        app.config["MAIL_SERVER"] = ""
+        ok, error = mail_service.send_email("dest@x.fr", "S", "C")
+    assert ok is False and "pas configuré" in error
+    assert connections == []
 
 
-# ---------------------------------------------------------------------------
-# 5. La route gère le nouveau retour tuple de send_test_email
-# ---------------------------------------------------------------------------
+def test_envoi_en_echec_message_clair(app, connections):
+    connections.state["error"] = smtplib.SMTPAuthenticationError(535, b"bad credentials")
+    with app.app_context():
+        ok, error = mail_service.send_email("dest@x.fr", "S", "C")
+    assert ok is False
+    assert "identifiant ou le mot de passe" in error
+    assert "secret-enregistre" not in error
 
-def test_admin_app_mail_test_unpacks_tuple():
-    """La route doit déballer le tuple (success, error_msg) retourné par
-    send_test_email."""
-    source = _read("routes/admin_app.py")
-    body = _extract_func(source, "admin_app_mail_test")
-    # L'ancien code faisait `if send_test_email(mail_adress):`
-    # Le nouveau doit faire `success, error_msg = send_test_email(...)`
-    assert "success, " in body or "success," in body
+
+# --- Test avant enregistrement ---------------------------------------------------
+
+def test_test_utilise_les_valeurs_du_formulaire(client, connections, app):
+    resp = client.post("/admin/app/mail/test", data=_FORM)
+    html = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "E-mail envoyé à moi@exemple.fr" in html and "alert-success" in html
+    (conn,) = connections
+    assert conn.kwargs["host"] == "smtp.gmail.com"
+    assert conn.kwargs["use_tls"] is True and conn.kwargs["use_ssl"] is False
+    assert conn.sent[0].from_email == "pharmacie@gmail.com"
+    # Rien n'est enregistré par un test.
+    assert app.config["MAIL_SERVER"] == "smtp.enregistre.fr"
+
+
+def test_test_mot_de_passe_vide_reprend_celui_enregistre(client, connections):
+    client.post("/admin/app/mail/test", data={**_FORM, "password": ""})
+    assert connections[0].kwargs["password"] == "secret-enregistre"
+
+
+def test_test_explique_l_echec(client, connections):
+    connections.state["error"] = smtplib.SMTPAuthenticationError(535, b"5.7.8 not accepted")
+    html = client.post("/admin/app/mail/test", data=_FORM).get_data(as_text=True)
+    assert "alert-danger" in html
+    assert "mot de passe d&#39;application" in html or "mot de passe d'application" in html
+
+
+@pytest.mark.parametrize("override,fragment", [
+    ({"mail_adress": ""}, "Indiquez l&#39;adresse"),
+    ({"mail_adress": "pas-une-adresse"}, "destination n&#39;est pas valide"),
+    ({"host": ""}, "Indiquez le serveur"),
+])
+def test_test_refuse_un_formulaire_incomplet(client, connections, override, fragment):
+    html = client.post("/admin/app/mail/test", data={**_FORM, **override}).get_data(as_text=True)
+    assert fragment in html
+    assert connections == []
+
+
+def test_test_limite_dans_le_temps(client, connections):
+    client.post("/admin/app/mail/test", data=_FORM)
+    html = client.post("/admin/app/mail/test", data=_FORM).get_data(as_text=True)
+    assert "Patientez" in html
+    assert len(connections) == 1
+
+
+def test_permission_app_requise(app, connections):
+    c = app.test_client()
+    c.post("/_test/login/noperm")
+    assert c.post("/admin/app/mail/test", data=_FORM).status_code == 403
+    assert c.post("/admin/app/mail/save", data=_FORM).status_code == 403
+
+
+# --- Enregistrement groupé -------------------------------------------------------
+
+def _options(app):
+    with app.app_context():
+        return {o.config_key: o for o in ConfigOption.query.all()}
+
+
+def test_enregistrement_ecrit_tout_en_une_fois(client, app):
+    html = client.post("/admin/app/mail/save", data=_FORM).get_data(as_text=True)
+    assert "Réglages enregistrés" in html
+    opts = _options(app)
+    assert opts["mail_server"].value_str == "smtp.gmail.com"
+    assert opts["mail_port"].value_int == 587
+    assert opts["mail_use_tls"].value_bool is True
+    assert opts["mail_use_ssl"].value_bool is False
+    assert opts["mail_password"].value_str == "app-pass"
+    assert opts["mail_default_sender"].value_str == "pharmacie@gmail.com"
+    # Adresse des liens réduite à schéma + hôte.
+    assert opts["mail_link_base_url"].value_str == "https://file.pharmacie.fr"
+    # Génération incrémentée : les autres processus rechargent la config.
+    assert opts[CONFIG_GENERATION_KEY].value_int >= 1
+    assert app.config["MAIL_SERVER"] == "smtp.gmail.com"
+    assert app.config["MAIL_USE_SSL"] is False
+
+
+def test_enregistrement_conserve_le_mot_de_passe_si_vide(client, app):
+    client.post("/admin/app/mail/save", data={**_FORM, "password": ""})
+    assert "mail_password" not in _options(app)
+    assert app.config["MAIL_PASSWORD"] == "secret-enregistre"
+
+
+def test_enregistrement_refuse_une_adresse_de_lien_invalide(client, app):
+    html = client.post("/admin/app/mail/save",
+                       data={**_FORM, "link_base_url": "javascript:alert(1)"}).get_data(as_text=True)
+    assert "http:// ou https://" in html
+    assert "mail_server" not in _options(app)
+
+
+def test_enregistrement_refuse_un_formulaire_invalide(client, app):
+    html = client.post("/admin/app/mail/save", data={**_FORM, "port": "0"}).get_data(as_text=True)
+    assert "port" in html
+    assert _options(app) == {}
+
+
+# --- Registre et gabarit ---------------------------------------------------------
+
+def test_nouvelles_cles_au_registre():
+    assert PARAM_REGISTRY["mail_password_reset"].value_type == "value_bool"
+    assert PARAM_REGISTRY["mail_password_reset"].permission == "app"
+    assert PARAM_REGISTRY["mail_link_base_url"].config_name == "MAIL_LINK_BASE_URL"
+
+
+def test_gabarit_un_seul_formulaire():
+    tpl = _read("templates/admin/app_mail.html")
+    assert 'id="mail-settings-form"' in tpl
+    assert 'hx-post="/admin/app/mail/test"' in tpl and 'hx-post="/admin/app/mail/save"' in tpl
+    assert tpl.count('hx-include="#mail-settings-form"') == 2
+    assert 'name="security"' in tpl and 'mail_use_ssl' not in tpl  # plus de double interrupteur
+    assert 'macros.switch("mail_password_reset"' in tpl
+    assert "admin_mail.js" in _read("templates/admin/app.html")
