@@ -31,7 +31,9 @@ from sqlalchemy.exc import IntegrityError
 import onboarding as ob
 from audit_log import ACTION_UPDATE, OUTCOME_SUCCESS
 from audit_service import record_audit
-from models import AdminOnboardingState, Pharmacist, db
+from models import (
+    Activity, AdminOnboardingState, Button, Counter, Pharmacist, User, db,
+)
 from routes.admin_security import user_has_permission
 from ui_feedback import display_toast
 
@@ -94,43 +96,156 @@ def _tokens(text):
 
 
 def _names(members, limit=6):
-    """Liste courte de noms pour les signalements (tronquée au-delà du seuil)."""
-    names = ", ".join(m.name for m in members[:limit])
+    """Liste courte de noms pour les signalements (tronquée au-delà du seuil).
+
+    Les éléments listés exposent ``name`` (Pharmacist, Activity) ou ``label``
+    (Button).
+    """
+    names = ", ".join(getattr(m, "name", None) or m.label
+                      for m in members[:limit])
     if len(members) > limit:
         names += "…"
     return names
 
 
-def _step_notices(step_id):
-    """Signalements factuels par étape (lecture seule, jamais d'exception).
+def _notices_security():
+    """Étape Sécurité : comptes encore dotés d'un mot de passe temporaire."""
+    count = User.query.filter_by(must_change_password=True).count()
+    if count:
+        return [
+            f"{count} compte(s) ont encore un mot de passe temporaire à "
+            "changer — faites-le avant la mise en service."
+        ]
+    return []
 
-    Sur l'étape Équipe : les comptes ressemblant à des exemples (restes d'une
+
+def _notices_pharmacy():
+    """Étape Pharmacie : nom et adresse réseau utilisés côté patient
+    (tickets, écrans, QR codes de suivi)."""
+    notices = []
+    if not current_app.config.get("PHARMACY_NAME"):
+        notices.append(
+            "Le nom de la pharmacie n'est pas renseigné — il apparaît sur "
+            "les tickets et les écrans."
+        )
+    if not current_app.config.get("NETWORK_ADRESS"):
+        notices.append(
+            "L'adresse réseau n'est pas renseignée : si la borne patient "
+            "tourne sur ce serveur, les QR codes de suivi ne fonctionneront "
+            "pas sur les téléphones."
+        )
+    return notices
+
+
+def _notices_activities():
+    """Étape Activités : catalogue vide et activités sans collaborateur
+    compétent (personne ne pourra appeler leurs patients)."""
+    notices = []
+    if Activity.query.count() == 0:
+        notices.append(
+            "Aucune activité définie : la borne patient n'aura rien à "
+            "proposer."
+        )
+        return notices
+    without_staff = (Activity.query.outerjoin(Activity.pharmacists)
+                     .filter(Pharmacist.id.is_(None))
+                     .order_by(Activity.name).all())
+    if without_staff:
+        notices.append(
+            f"{len(without_staff)} activité(s) sans collaborateur compétent "
+            f"({_names(without_staff)}) : personne ne pourra appeler leurs "
+            "patients."
+        )
+    return notices
+
+
+def _notices_staff():
+    """Étape Équipe : les comptes ressemblant à des exemples (restes d'une
     installation de test) et les membres sans compétences — ils pourront se
-    connecter à un comptoir mais n'appelleront aucun patient.
+    connecter à un comptoir mais n'appelleront aucun patient."""
+    notices = []
+    members = Pharmacist.query.order_by(Pharmacist.name).all()
+    examples = [m for m in members
+                if any(token.startswith(_EXAMPLE_MARKERS)
+                       for token in _tokens(m.name))]
+    if examples:
+        notices.append(
+            f"{len(examples)} membre(s) ressemblant à des exemples : "
+            f"{_names(examples)}. Supprimez-les si ce sont des restes de test."
+        )
+    without_skills = [m for m in members if not m.activities]
+    if without_skills:
+        notices.append(
+            f"{len(without_skills)} membre(s) sans compétences : "
+            f"{_names(without_skills)}. Ils ne pourront appeler aucun "
+            "patient — cochez leurs activités si ces comptes sont réels."
+        )
+    return notices
+
+
+def _notices_counters():
+    """Étape Comptoirs : sans comptoir configuré, aucun appel possible."""
+    if Counter.query.count() == 0:
+        return [
+            "Aucun comptoir configuré : personne ne pourra appeler de "
+            "patient."
+        ]
+    return []
+
+
+def _notices_patient():
+    """Étape Borne patient : boutons affichés sans effet (ni activité ni
+    sous-menu — ils ne créeront aucun ticket) et activités non reliées à un
+    bouton de la borne, donc inaccessibles aux patients."""
+    notices = []
+    orphans = (Button.query
+               .filter(Button.is_present.is_(True),
+                       Button.is_active.is_(True),
+                       Button.activity_id.is_(None),
+                       db.or_(Button.is_parent.is_(False),
+                              Button.is_parent.is_(None)))
+               .order_by(Button.label).all())
+    if orphans:
+        notices.append(
+            f"{len(orphans)} bouton(s) affiché(s) sans activité ni sous-menu "
+            f"({_names(orphans)}) : ils ne créeront aucun ticket."
+        )
+    unlinked = (Activity.query.outerjoin(Activity.buttons)
+                .filter(Button.id.is_(None))
+                .order_by(Activity.name).all())
+    if unlinked:
+        notices.append(
+            f"{len(unlinked)} activité(s) ne sont reliées à aucun bouton de "
+            f"la borne ({_names(unlinked)}) : inaccessibles aux patients."
+        )
+    return notices
+
+
+_STEP_NOTICES = {
+    "security": _notices_security,
+    "pharmacy": _notices_pharmacy,
+    "activities": _notices_activities,
+    "staff": _notices_staff,
+    "counters": _notices_counters,
+    "patient": _notices_patient,
+    # « announce » et « summary » : pas de signalement.
+}
+
+
+def _step_notices(step_id):
+    """Signalements factuels en lecture seule, répartis par étape.
+
+    Chaque étape délègue à sa fonction ``_notices_*`` ; les étapes sans
+    signalement (``announce``, ``summary``) renvoient une liste vide.
+    Jamais d'exception : un défaut d'une notice d'aide ne doit pas casser
+    la page hôte.
     """
     try:
-        if step_id == "staff":
-            notices = []
-            members = Pharmacist.query.order_by(Pharmacist.name).all()
-            examples = [m for m in members
-                        if any(token.startswith(_EXAMPLE_MARKERS)
-                               for token in _tokens(m.name))]
-            if examples:
-                notices.append(
-                    f"{len(examples)} membre(s) ressemblant à des exemples : "
-                    f"{_names(examples)}. Supprimez-les si ce sont des restes de test."
-                )
-            without_skills = [m for m in members if not m.activities]
-            if without_skills:
-                notices.append(
-                    f"{len(without_skills)} membre(s) sans compétences : "
-                    f"{_names(without_skills)}. Ils ne pourront appeler aucun "
-                    "patient — cochez leurs activités si ces comptes sont réels."
-                )
-            return notices
+        collect = _STEP_NOTICES.get(step_id)
+        return collect() if collect is not None else []
     except Exception:  # pragma: no cover - signalement d'aide, jamais bloquant
         current_app.logger.exception("_step_notices")
-    return []
+        return []
 
 
 def _panel_dict(step_id, state):
@@ -204,6 +319,14 @@ def _page_context(state):
     steps_state = (state.steps_state or {}) if state else {}
     current = state.current_step if state else None
     steps = ob.steps_view(steps_state, _can, current_step=current)
+    for s in steps:
+        # Notices affichées dans la checklist : calculées uniquement pour les
+        # étapes permises et non bilan — ≤6 requêtes légères par rendu de
+        # checklist, coût acceptable.
+        if s["permitted"] and not s["is_summary"]:
+            s["notices"] = _step_notices(s["id"])
+        else:
+            s["notices"] = []
     return {
         "steps": steps,
         "progress": ob.progress(steps_state, _can),

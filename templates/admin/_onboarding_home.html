@@ -54,11 +54,20 @@
                 <i class="bi bi-compass" aria-hidden="true"></i>
                 Configuration guidée en cours{% if onboarding_home.status == 'paused' %} (en pause){% endif %}
             </strong>
-            <p class="small mb-0">
+            <p class="small mb-1">
                 {{ onboarding_home.progress.verified }}/{{ onboarding_home.progress.total }}
                 étapes vérifiées
                 {% if onboarding_home.step %}— étape courante : {{ onboarding_home.step.title }}{% endif %}
             </p>
+            {% set pct = onboarding_home.progress.verified / onboarding_home.progress.total * 100
+                         if onboarding_home.progress.total else 0 %}
+            <div class="progress" role="progressbar"
+                 style="min-width: 120px; height: .5rem;"
+                 aria-valuenow="{{ onboarding_home.progress.verified }}" aria-valuemin="0"
+                 aria-valuemax="{{ onboarding_home.progress.total }}"
+                 aria-label="Progression du parcours">
+                <div class="progress-bar bg-success" style="width: {{ pct }}%"></div>
+            </div>
         </div>
         <form class="d-inline" method="post" action="/admin/onboarding/action"
               hx-post="/admin/onboarding/action"

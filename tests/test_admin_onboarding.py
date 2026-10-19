@@ -25,7 +25,9 @@ from werkzeug.security import generate_password_hash
 import onboarding as ob
 import routes.admin_onboarding as admin_onboarding
 import ui_feedback
-from models import Activity, AdminOnboardingState, Pharmacist, Role, User, db
+from models import (
+    Activity, AdminOnboardingState, Button, Counter, Pharmacist, Role, User, db,
+)
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
 
@@ -379,6 +381,11 @@ def test_rendu_checklist_et_bilan(app, client):
     html = client.get("/admin/onboarding").get_data(as_text=True)
     assert "onboarding-checklist-slot" in html
     assert "Vérifié par vous" not in html and "À faire" in html
+    # Barre de progression et notices des étapes permises dans la checklist
+    # (la fixture ne crée ni comptoir ni activité -> signalements présents).
+    assert 'role="progressbar"' in html
+    assert "Aucun comptoir configuré" in html
+    assert "Aucune activité définie" in html
     _post_json(client, {"action": "verify", "step_id": "security"})
     html = client.get("/admin/onboarding").get_data(as_text=True)
     assert "Vérifié par vous" in html
@@ -488,3 +495,106 @@ def test_suppression_compte_supprime_progression(app, client):
         db.session.commit()
         assert AdminOnboardingState.query.count() == 0
         assert User.query.filter_by(username="alice").first() is None
+
+
+# --- Notices par étape (_step_notices) ----------------------------------------
+
+def test_notices_securite_mots_de_passe_temporaires(app):
+    """Étape Sécurité : les comptes avec mot de passe temporaire sont
+    signalés ; rien à dire quand il n'y en a pas."""
+    with app.app_context():
+        assert admin_onboarding._step_notices("security") == []
+        carol = User(username="carol", email="c@c.c",
+                     password=generate_password_hash("x"), active=True,
+                     must_change_password=True)
+        db.session.add(carol)
+        db.session.commit()
+        notices = admin_onboarding._step_notices("security")
+    assert notices == [
+        "1 compte(s) ont encore un mot de passe temporaire à changer — "
+        "faites-le avant la mise en service."
+    ]
+
+
+def test_notices_pharmacie_nom_et_adresse(app):
+    """Étape Pharmacie : nom vide et adresse réseau vide donnent chacun une
+    notice ; tout renseigné -> liste vide."""
+    app.config["PHARMACY_NAME"] = ""
+    app.config["NETWORK_ADRESS"] = ""
+    with app.app_context():
+        notices = admin_onboarding._step_notices("pharmacy")
+    assert len(notices) == 2
+    assert "nom de la pharmacie" in notices[0]
+    assert "adresse réseau" in notices[1] and "QR codes" in notices[1]
+    app.config["PHARMACY_NAME"] = "Pharmacie Test"
+    app.config["NETWORK_ADRESS"] = "http://192.168.1.20"
+    with app.app_context():
+        assert admin_onboarding._step_notices("pharmacy") == []
+
+
+def test_notices_activites_vide_et_sans_competent(app):
+    """Étape Activités : catalogue vide, puis activité sans collaborateur
+    compétent (avec son nom) ; le signalement disparaît une fois un membre
+    rattaché."""
+    with app.app_context():
+        assert admin_onboarding._step_notices("activities") == [
+            "Aucune activité définie : la borne patient n'aura rien à "
+            "proposer."
+        ]
+        conseil = Activity(name="Conseil", letter="C")
+        db.session.add(conseil)
+        db.session.commit()
+        notices = admin_onboarding._step_notices("activities")
+        assert len(notices) == 1
+        assert "sans collaborateur compétent" in notices[0]
+        assert "Conseil" in notices[0]
+        marie = Pharmacist(name="Marie", initials="MA")
+        marie.activities.append(conseil)
+        db.session.add(marie)
+        db.session.commit()
+        assert admin_onboarding._step_notices("activities") == []
+
+
+def test_notices_comptoirs_aucun(app):
+    """Étape Comptoirs : aucun comptoir -> notice ; un comptoir -> rien."""
+    with app.app_context():
+        assert admin_onboarding._step_notices("counters") == [
+            "Aucun comptoir configuré : personne ne pourra appeler de "
+            "patient."
+        ]
+        db.session.add(Counter(name="Accueil", is_active=True))
+        db.session.commit()
+        assert admin_onboarding._step_notices("counters") == []
+
+
+def test_notices_patient_orphelins_et_activites_sans_bouton(app):
+    """Étape Borne patient : bouton affiché sans activité ni sous-menu (les
+    boutons parents, vrais sous-menus, ne sont pas signalés) et activité non
+    reliée à un bouton. Relier le bouton lève les deux notices."""
+    with app.app_context():
+        assert admin_onboarding._step_notices("patient") == []
+        orphelin = Button(label="Orphelin", is_present=True, is_active=True,
+                          is_parent=False)
+        menu = Button(label="Sous-menu", is_present=True, is_active=True,
+                      is_parent=True)
+        conseil = Activity(name="Conseil", letter="C")
+        db.session.add_all([orphelin, menu, conseil])
+        db.session.commit()
+        notices = admin_onboarding._step_notices("patient")
+        assert len(notices) == 2
+        assert "sans activité ni sous-menu" in notices[0]
+        assert "Orphelin" in notices[0] and "Sous-menu" not in notices[0]
+        assert "inaccessibles aux patients" in notices[1]
+        assert "Conseil" in notices[1]
+        orphelin.activity = conseil
+        db.session.commit()
+        assert admin_onboarding._step_notices("patient") == []
+
+
+def test_notices_summary_et_announce_vides(app):
+    """Les étapes sans signalement renvoient une liste vide (et ne lèvent
+    pas hors contexte de données)."""
+    with app.app_context():
+        assert admin_onboarding._step_notices("summary") == []
+        assert admin_onboarding._step_notices("announce") == []
+        assert admin_onboarding._step_notices("inconnue") == []

@@ -37,6 +37,14 @@
             · {{ progress.todo }} à faire
             {% if progress.unavailable %}· {{ progress.unavailable }} hors de vos droits{% endif %}
         </p>
+        {% set pct = progress.verified / progress.total * 100 if progress.total else 0 %}
+        <div class="progress flex-grow-1" role="progressbar"
+             style="min-width: 120px; height: .5rem;"
+             aria-valuenow="{{ progress.verified }}" aria-valuemin="0"
+             aria-valuemax="{{ progress.total }}"
+             aria-label="Progression du parcours">
+            <div class="progress-bar bg-success" style="width: {{ pct }}%"></div>
+        </div>
         <div class="ms-auto d-flex flex-wrap gap-2">
             {% if state_status == 'active' %}
             <form class="d-inline" method="post" action="/admin/onboarding/action"
@@ -108,6 +116,11 @@
                 <ul class="small text-muted ps-3 mb-1">
                     {% for point in s.points %}<li>{{ point }}</li>{% endfor %}
                 </ul>
+                {% endif %}
+                {% if s.permitted %}
+                    {% for notice in s.notices %}
+                    <div class="alert alert-warning small py-1 px-2 mb-1" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> {{ notice }}</div>
+                    {% endfor %}
                 {% endif %}
                 {% if s.links and s.permitted %}
                 <div class="d-flex flex-wrap gap-2">
@@ -208,7 +221,7 @@
                 <input type="hidden" name="action" value="start">
                 <input type="hidden" name="origin" value="checklist">
                 <input type="hidden" name="version" value="{{ version }}">
-                <button type="submit" class="btn btn-sm btn-outline-primary">Refaire le parcours</button>
+                <button type="submit" class="btn btn-sm btn-outline-primary">Rouvrir le parcours</button>
             </form>
             {% endif %}
         </div>
