@@ -21,6 +21,7 @@ Garde-fous :
 """
 
 import re
+from datetime import datetime
 
 from flask import (
     Blueprint, current_app, jsonify, redirect, render_template, request, url_for,
@@ -31,8 +32,10 @@ from sqlalchemy.exc import IntegrityError
 import onboarding as ob
 from audit_log import ACTION_UPDATE, OUTCOME_SUCCESS
 from audit_service import record_audit
+from config import time_tz
 from models import (
-    Activity, AdminOnboardingState, Button, Counter, Pharmacist, User, db,
+    Activity, AdminOnboardingState, Button, Counter, PageEditorState,
+    Pharmacist, User, db,
 )
 from routes.admin_security import user_has_permission
 from ui_feedback import display_toast
@@ -221,6 +224,21 @@ def _notices_patient():
     return notices
 
 
+def _notices_announce():
+    """Étape Affichage et annonces : un brouillon enregistré dans l'éditeur
+    mais jamais publié n'est pas encore pris en compte par les écrans."""
+    draft = (PageEditorState.query
+             .filter_by(page_key="announce")
+             .filter(PageEditorState.draft_json.isnot(None))
+             .first())
+    if draft is not None:
+        return [
+            "Un brouillon de l'écran d'annonces n'est pas publié — les "
+            "écrans n'en tiennent pas encore compte."
+        ]
+    return []
+
+
 _STEP_NOTICES = {
     "security": _notices_security,
     "pharmacy": _notices_pharmacy,
@@ -228,7 +246,8 @@ _STEP_NOTICES = {
     "staff": _notices_staff,
     "counters": _notices_counters,
     "patient": _notices_patient,
-    # « announce » et « summary » : pas de signalement.
+    "announce": _notices_announce,
+    # « summary » : pas de signalement.
 }
 
 
@@ -236,7 +255,7 @@ def _step_notices(step_id):
     """Signalements factuels en lecture seule, répartis par étape.
 
     Chaque étape délègue à sa fonction ``_notices_*`` ; les étapes sans
-    signalement (``announce``, ``summary``) renvoient une liste vide.
+    signalement (``summary``) renvoient une liste vide.
     Jamais d'exception : un défaut d'une notice d'aide ne doit pas casser
     la page hôte.
     """
@@ -327,6 +346,18 @@ def _page_context(state):
             s["notices"] = _step_notices(s["id"])
         else:
             s["notices"] = []
+        # Horodatage du dernier marquage (ISO UTC en base) converti dans le
+        # fuseau du projet ; une valeur illisible est simplement ignorée.
+        at_label = None
+        if s["at"]:
+            try:
+                at_label = (datetime.fromisoformat(s["at"])
+                            .astimezone(time_tz)
+                            .strftime("%d/%m à %H:%M"))
+            except (TypeError, ValueError):
+                at_label = None
+        s["at_label"] = at_label
+        s["title_with_at"] = s["title"] + (f" ({at_label})" if at_label else "")
     return {
         "steps": steps,
         "progress": ob.progress(steps_state, _can),

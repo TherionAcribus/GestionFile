@@ -1,3 +1,4 @@
+{% from 'admin/_onboarding_form.html' import ob_form %}
 {# Encart contextuel du parcours de configuration guidée.
 
    Inclus par base.html dans la zone de contenu des pages admin associées à une
@@ -59,41 +60,18 @@
                 {% for link in ob_step.links %}
                 <a class="btn btn-sm btn-outline-primary" href="{{ link.url }}">{{ link.label }}</a>
                 {% endfor %}
-                <form class="d-inline" method="post" action="/admin/onboarding/action"
-                      hx-post="/admin/onboarding/action"
-                      hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="verify">
-                    <input type="hidden" name="step_id" value="{{ ob_step.id }}">
-                    <input type="hidden" name="origin" value="panel">
-                    <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
-                    <button type="submit" class="btn btn-sm btn-success">
-                        Marquer comme vérifié et continuer
-                    </button>
-                </form>
-                <form class="d-inline" method="post" action="/admin/onboarding/action"
-                      hx-post="/admin/onboarding/action"
-                      hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="skip">
-                    <input type="hidden" name="step_id" value="{{ ob_step.id }}">
-                    <input type="hidden" name="origin" value="panel">
-                    <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">
-                        Passer cette étape
-                    </button>
-                </form>
-                <form class="d-inline" method="post" action="/admin/onboarding/action"
-                      hx-post="/admin/onboarding/action"
-                      hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="pause">
-                    <input type="hidden" name="origin" value="panel">
-                    <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">
-                        Mettre en pause
-                    </button>
-                </form>
+                {{ ob_form('verify', 'panel', '#onboarding-panel-slot',
+                           onboarding_panel.version,
+                           'Marquer comme vérifié et continuer',
+                           'btn btn-sm btn-success', step_id=ob_step.id) }}
+                {{ ob_form('skip', 'panel', '#onboarding-panel-slot',
+                           onboarding_panel.version,
+                           'Passer cette étape',
+                           'btn btn-sm btn-outline-secondary', step_id=ob_step.id) }}
+                {{ ob_form('pause', 'panel', '#onboarding-panel-slot',
+                           onboarding_panel.version,
+                           'Mettre en pause',
+                           'btn btn-sm btn-outline-secondary') }}
                 <a class="btn btn-sm btn-link" href="/admin/onboarding">Checklist complète</a>
             </div>
         </div>
@@ -105,18 +83,11 @@
             Parcours de configuration en pause
             {% if onboarding_panel.step %}— dernière étape : {{ onboarding_panel.step.title }}{% endif %}.
         </span>
-        <form class="d-inline" method="post" action="/admin/onboarding/action"
-              hx-post="/admin/onboarding/action"
-              hx-target="#onboarding-panel-slot" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="resume">
-            {% if onboarding_panel.step %}
-            <input type="hidden" name="step_id" value="{{ onboarding_panel.step.id }}">
-            {% endif %}
-            <input type="hidden" name="origin" value="panel">
-            <input type="hidden" name="version" value="{{ onboarding_panel.version }}">
-            <button type="submit" class="btn btn-sm btn-primary">Reprendre</button>
-        </form>
+        {{ ob_form('resume', 'panel', '#onboarding-panel-slot',
+                   onboarding_panel.version, 'Reprendre',
+                   'btn btn-sm btn-primary',
+                   step_id=onboarding_panel.step.id
+                           if onboarding_panel.step else none) }}
         <a class="btn btn-sm btn-outline-secondary" href="/admin/onboarding">Checklist</a>
     </div>
 {% endif %}

@@ -1,3 +1,4 @@
+{% from 'admin/_onboarding_form.html' import ob_form %}
 {# Encart d'accueil du parcours de configuration guidée.
 
    Inclus par admin.html ; ``onboarding_home`` est le dict renvoyé par
@@ -24,28 +25,14 @@
                 dans les pages habituelles. Il n'enregistre rien tout seul.
             </p>
         </div>
-        <form class="d-inline" method="post" action="/admin/onboarding/action"
-              hx-post="/admin/onboarding/action"
-              hx-target="#onboarding-home-slot" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="start">
-            <input type="hidden" name="origin" value="home">
-            <input type="hidden" name="version" value="{{ onboarding_home.version }}">
-            <button type="submit" class="btn btn-sm btn-primary">
-                Commencer la configuration guidée
-            </button>
-        </form>
-        <form class="d-inline" method="post" action="/admin/onboarding/action"
-              hx-post="/admin/onboarding/action"
-              hx-target="#onboarding-home-slot" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="dismiss">
-            <input type="hidden" name="origin" value="home">
-            <input type="hidden" name="version" value="{{ onboarding_home.version }}">
-            <button type="submit" class="btn btn-sm btn-outline-secondary">
-                Pas maintenant
-            </button>
-        </form>
+        {{ ob_form('start', 'home', '#onboarding-home-slot',
+                   onboarding_home.version,
+                   'Commencer la configuration guidée',
+                   'btn btn-sm btn-primary') }}
+        {{ ob_form('dismiss', 'home', '#onboarding-home-slot',
+                   onboarding_home.version,
+                   'Pas maintenant',
+                   'btn btn-sm btn-outline-secondary') }}
     </div>
 {% elif onboarding_home and onboarding_home.status in ('active', 'paused') %}
     <div class="onboarding-resume alert alert-info d-flex flex-wrap align-items-center gap-2" role="note">
@@ -69,15 +56,9 @@
                 <div class="progress-bar bg-success" style="width: {{ pct }}%"></div>
             </div>
         </div>
-        <form class="d-inline" method="post" action="/admin/onboarding/action"
-              hx-post="/admin/onboarding/action"
-              hx-target="#onboarding-home-slot" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="resume">
-            <input type="hidden" name="origin" value="home">
-            <input type="hidden" name="version" value="{{ onboarding_home.version }}">
-            <button type="submit" class="btn btn-sm btn-primary">Reprendre</button>
-        </form>
+        {{ ob_form('resume', 'home', '#onboarding-home-slot',
+                   onboarding_home.version, 'Reprendre',
+                   'btn btn-sm btn-primary') }}
         <a class="btn btn-sm btn-outline-secondary" href="/admin/onboarding">Checklist</a>
     </div>
 {% endif %}

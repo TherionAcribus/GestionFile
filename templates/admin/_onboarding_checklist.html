@@ -1,3 +1,4 @@
+{% from 'admin/_onboarding_form.html' import ob_form %}
 {# Checklist complète du parcours de configuration guidée.
 
    Inclus par onboarding.html ; re-rendu en fragment par
@@ -19,16 +20,9 @@
             guide dans les pages de configuration existantes, dans l'ordre
             conseillé, sans rien enregistrer à votre place.
         </p>
-        <form class="d-inline" method="post" action="/admin/onboarding/action"
-              hx-post="/admin/onboarding/action"
-              hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="start">
-            <input type="hidden" name="origin" value="checklist">
-            <button type="submit" class="btn btn-sm btn-primary">
-                Commencer la configuration guidée
-            </button>
-        </form>
+        {{ ob_form('start', 'checklist', '#onboarding-checklist-slot', none,
+                   'Commencer la configuration guidée',
+                   'btn btn-sm btn-primary') }}
     </div>
 {% elif state_status in ('active', 'paused', 'completed') %}
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
@@ -47,25 +41,11 @@
         </div>
         <div class="ms-auto d-flex flex-wrap gap-2">
             {% if state_status == 'active' %}
-            <form class="d-inline" method="post" action="/admin/onboarding/action"
-                  hx-post="/admin/onboarding/action"
-                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="pause">
-                <input type="hidden" name="origin" value="checklist">
-                <input type="hidden" name="version" value="{{ version }}">
-                <button type="submit" class="btn btn-sm btn-outline-secondary">Mettre en pause</button>
-            </form>
+            {{ ob_form('pause', 'checklist', '#onboarding-checklist-slot', version,
+                       'Mettre en pause', 'btn btn-sm btn-outline-secondary') }}
             {% elif state_status == 'paused' %}
-            <form class="d-inline" method="post" action="/admin/onboarding/action"
-                  hx-post="/admin/onboarding/action"
-                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="resume">
-                <input type="hidden" name="origin" value="checklist">
-                <input type="hidden" name="version" value="{{ version }}">
-                <button type="submit" class="btn btn-sm btn-primary">Reprendre le parcours</button>
-            </form>
+            {{ ob_form('resume', 'checklist', '#onboarding-checklist-slot', version,
+                       'Reprendre le parcours', 'btn btn-sm btn-primary') }}
             {% endif %}
         </div>
     </div>
@@ -75,17 +55,9 @@
             Vous aviez décliné le parcours. Vous pouvez le reprendre à tout
             moment — aucune donnée n'a été perdue.
         </p>
-        <form class="d-inline" method="post" action="/admin/onboarding/action"
-              hx-post="/admin/onboarding/action"
-              hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="start">
-            <input type="hidden" name="origin" value="checklist">
-            <input type="hidden" name="version" value="{{ version }}">
-            <button type="submit" class="btn btn-sm btn-primary">
-                Démarrer la configuration guidée
-            </button>
-        </form>
+        {{ ob_form('start', 'checklist', '#onboarding-checklist-slot', version,
+                   'Démarrer la configuration guidée',
+                   'btn btn-sm btn-primary') }}
     </div>
 {% endif %}
 
@@ -134,37 +106,16 @@
             </div>
             {% if s.permitted and state_status == 'active' and not s.is_summary %}
             <div class="onboarding-step-actions d-flex flex-wrap gap-1">
-                <form class="d-inline" method="post" action="/admin/onboarding/action"
-                      hx-post="/admin/onboarding/action"
-                      hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="verify">
-                    <input type="hidden" name="step_id" value="{{ s.id }}">
-                    <input type="hidden" name="origin" value="checklist">
-                    <input type="hidden" name="version" value="{{ version }}">
-                    <button type="submit" class="btn btn-sm btn-success">Marquer vérifié</button>
-                </form>
-                <form class="d-inline" method="post" action="/admin/onboarding/action"
-                      hx-post="/admin/onboarding/action"
-                      hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="skip">
-                    <input type="hidden" name="step_id" value="{{ s.id }}">
-                    <input type="hidden" name="origin" value="checklist">
-                    <input type="hidden" name="version" value="{{ version }}">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">Passer</button>
-                </form>
+                {{ ob_form('verify', 'checklist', '#onboarding-checklist-slot', version,
+                           'Marquer vérifié', 'btn btn-sm btn-success',
+                           step_id=s.id) }}
+                {{ ob_form('skip', 'checklist', '#onboarding-checklist-slot', version,
+                           'Passer', 'btn btn-sm btn-outline-secondary',
+                           step_id=s.id) }}
                 {% if not s.is_current %}
-                <form class="d-inline" method="post" action="/admin/onboarding/action"
-                      hx-post="/admin/onboarding/action"
-                      hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="select">
-                    <input type="hidden" name="step_id" value="{{ s.id }}">
-                    <input type="hidden" name="origin" value="checklist">
-                    <input type="hidden" name="version" value="{{ version }}">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">En faire l'étape courante</button>
-                </form>
+                {{ ob_form('select', 'checklist', '#onboarding-checklist-slot', version,
+                           "En faire l'étape courante",
+                           'btn btn-sm btn-outline-primary', step_id=s.id) }}
                 {% endif %}
             </div>
             {% endif %}
@@ -180,11 +131,11 @@
         <ul class="small mb-2">
             <li>
                 <strong>Vérifié par vous :</strong>
-                {% if verified_steps %}{{ verified_steps | map(attribute='title') | join(', ') }}{% else %}aucune étape{% endif %}
+                {% if verified_steps %}{{ verified_steps | map(attribute='title_with_at') | join(', ') }}{% else %}aucune étape{% endif %}
             </li>
             <li>
                 <strong>Passé :</strong>
-                {% if skipped_steps %}{{ skipped_steps | map(attribute='title') | join(', ') }}{% else %}aucune étape{% endif %}
+                {% if skipped_steps %}{{ skipped_steps | map(attribute='title_with_at') | join(', ') }}{% else %}aucune étape{% endif %}
             </li>
             <li>
                 <strong>À faire :</strong>
@@ -204,25 +155,11 @@
         </p>
         <div class="d-flex flex-wrap gap-2">
             {% if state_status in ('active', 'paused') %}
-            <form class="d-inline" method="post" action="/admin/onboarding/action"
-                  hx-post="/admin/onboarding/action"
-                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="finish">
-                <input type="hidden" name="origin" value="checklist">
-                <input type="hidden" name="version" value="{{ version }}">
-                <button type="submit" class="btn btn-sm btn-primary">Terminer le parcours</button>
-            </form>
+            {{ ob_form('finish', 'checklist', '#onboarding-checklist-slot', version,
+                       'Terminer le parcours', 'btn btn-sm btn-primary') }}
             {% elif state_status == 'completed' %}
-            <form class="d-inline" method="post" action="/admin/onboarding/action"
-                  hx-post="/admin/onboarding/action"
-                  hx-target="#onboarding-checklist-slot" hx-swap="outerHTML">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="start">
-                <input type="hidden" name="origin" value="checklist">
-                <input type="hidden" name="version" value="{{ version }}">
-                <button type="submit" class="btn btn-sm btn-outline-primary">Rouvrir le parcours</button>
-            </form>
+            {{ ob_form('start', 'checklist', '#onboarding-checklist-slot', version,
+                       'Rouvrir le parcours', 'btn btn-sm btn-outline-primary') }}
             {% endif %}
         </div>
     </div>

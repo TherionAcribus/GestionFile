@@ -1,0 +1,28 @@
+{# Macro de formulaire du parcours de configuration guidée.
+
+   Factorise le <form> POST /admin/onboarding/action partagé par les trois
+   gabarits du guide (checklist, encart de page, encart d'accueil) :
+   formulaire natif (POST + redirection 303 calculée serveur quand HTMX est
+   absent), intercepté par HTMX quand il est chargé — hx-target pointe le
+   slot de la zone d'origine, re-rendu en fragment avec hx-swap="outerHTML".
+
+   Paramètres :
+   - ``action``    : action du parcours (liste fermée onboarding.ACTIONS) ;
+   - ``origin``    : zone d'origine (« checklist », « panel », « home ») ;
+   - ``target``    : sélecteur CSS du slot re-rendu par le fragment ;
+   - ``version``   : version de l'état pour le verrouillage optimiste —
+     ``none`` pour les formulaires affichés avant toute ligne en base ;
+   - ``label`` / ``btn_class`` : libellé et classes du bouton ;
+   - ``step_id``   : étape concernée (actions d'étape uniquement). #}
+{% macro ob_form(action, origin, target, version, label, btn_class, step_id=None) %}
+<form class="d-inline" method="post" action="/admin/onboarding/action"
+      hx-post="/admin/onboarding/action"
+      hx-target="{{ target }}" hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="{{ action }}">
+    {% if step_id %}<input type="hidden" name="step_id" value="{{ step_id }}">{% endif %}
+    <input type="hidden" name="origin" value="{{ origin }}">
+    {% if version is not none %}<input type="hidden" name="version" value="{{ version }}">{% endif %}
+    <button type="submit" class="{{ btn_class }}">{{ label }}</button>
+</form>
+{% endmacro %}

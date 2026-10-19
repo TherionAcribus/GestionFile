@@ -14,6 +14,7 @@ Pas de SQLALCHEMY_BINDS : le bind resterait dans les métadonnées de l'extensio
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -25,8 +26,10 @@ from werkzeug.security import generate_password_hash
 import onboarding as ob
 import routes.admin_onboarding as admin_onboarding
 import ui_feedback
+from config import time_tz
 from models import (
-    Activity, AdminOnboardingState, Button, Counter, Pharmacist, Role, User, db,
+    Activity, AdminOnboardingState, Button, Counter, PageEditorState,
+    Pharmacist, Role, User, db,
 )
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
@@ -591,10 +594,55 @@ def test_notices_patient_orphelins_et_activites_sans_bouton(app):
         assert admin_onboarding._step_notices("patient") == []
 
 
-def test_notices_summary_et_announce_vides(app):
-    """Les étapes sans signalement renvoient une liste vide (et ne lèvent
-    pas hors contexte de données)."""
+def test_notices_summary_et_announce(app):
+    """``summary`` reste sans signalement ; ``announce`` signale un brouillon
+    de l'écran d'annonces enregistré dans l'éditeur mais jamais publié (les
+    écrans n'en tiennent pas encore compte)."""
     with app.app_context():
         assert admin_onboarding._step_notices("summary") == []
         assert admin_onboarding._step_notices("announce") == []
         assert admin_onboarding._step_notices("inconnue") == []
+        # Une ligne sans brouillon (draft_json NULL) ne signale rien.
+        db.session.add(PageEditorState(page_key="announce"))
+        db.session.commit()
+        assert admin_onboarding._step_notices("announce") == []
+        # Un brouillon non publié -> notice.
+        draft = PageEditorState.query.filter_by(page_key="announce").one()
+        draft.draft_json = {"x": 1}
+        db.session.commit()
+        assert admin_onboarding._step_notices("announce") == [
+            "Un brouillon de l'écran d'annonces n'est pas publié — les "
+            "écrans n'en tiennent pas encore compte."
+        ]
+
+
+def test_bilan_horodatage_converti_fuseau_paris(app, client):
+    """``_page_context`` expose ``at`` brut et ``at_label`` converti dans le
+    fuseau du projet (``config.time_tz``) — ``title_with_at`` porte le titre
+    suivi du libellé entre parenthèses. Une valeur illisible (« patate ») est
+    ignorée sans exception : ``at_label`` vaut None."""
+    from flask_login import login_user
+    _post(client, action="start")
+    with app.test_request_context("/admin/onboarding"):
+        user = User.query.filter_by(username="alice").one()
+        state = AdminOnboardingState.query.filter_by(user_id=user.id).one()
+        state.steps_state = {
+            "security": {"status": "verified",
+                         "at": "2026-10-18T12:00:00+00:00"},
+            "pharmacy": {"status": "skipped", "at": "patate"},
+        }
+        login_user(user)
+        ctx = admin_onboarding._page_context(state)
+    attendu = (datetime.fromisoformat("2026-10-18T12:00:00+00:00")
+               .astimezone(time_tz)
+               .strftime("%d/%m à %H:%M"))
+    verifie = ctx["verified_steps"][0]
+    assert verifie["id"] == "security"
+    assert verifie["at"] == "2026-10-18T12:00:00+00:00"
+    assert verifie["at_label"] == attendu
+    assert "(18/10 à " in verifie["title_with_at"]
+    assert verifie["title_with_at"] == f"{verifie['title']} ({attendu})"
+    passe = ctx["skipped_steps"][0]
+    assert passe["id"] == "pharmacy"
+    assert passe["at_label"] is None
+    assert passe["title_with_at"] == passe["title"]

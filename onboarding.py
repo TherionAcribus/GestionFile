@@ -314,6 +314,19 @@ def progress(steps_state, can):
     return result
 
 
+def step_recorded_at(steps_state, step_id):
+    """Horodatage brut (chaîne ISO UTC) du dernier marquage de l'étape.
+
+    ``None`` si l'étape n'a jamais été marquée ou si l'entrée est
+    malformée. Module pur : aucun formatage — la couche route convertit
+    vers le fuseau du projet pour l'affichage.
+    """
+    entry = (steps_state or {}).get(step_id)
+    if isinstance(entry, dict):
+        return entry.get("at")
+    return None
+
+
 def steps_view(steps_state, can, current_step=None):
     """Vue gabarit du catalogue : une entrée par étape, permissions résolues."""
     view = []
@@ -329,6 +342,7 @@ def steps_view(steps_state, can, current_step=None):
             "permission": step.get("permission"),
             "permitted": permitted,
             "status": step_status(steps_state, step["id"]),
+            "at": step_recorded_at(steps_state, step["id"]),
             "is_current": current_step == step["id"],
             "is_summary": step["id"] == SUMMARY_STEP_ID,
         })
