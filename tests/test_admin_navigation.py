@@ -215,7 +215,10 @@ def test_onboarding_templates_et_blueprint():
     """Les gabarits du guide, le blueprint et son enregistrement existent."""
     panel = _read("templates/admin/_onboarding_panel.html")
     # HTMX : les actions postent vers l'endpoint, les fragments visent le slot.
-    assert "hx-post" in panel and "/admin/onboarding/action" in panel
+    # Le <form> hx-post est factorisé dans la macro _onboarding_form.html
+    # (depuis la factorisation ob_form) — le contrat s'y vérifie.
+    form = _read("templates/admin/_onboarding_form.html")
+    assert "hx-post" in form and "/admin/onboarding/action" in form
     assert "#onboarding-panel-slot" in panel
     for label in ("Marquer comme vérifié", "Passer cette étape",
                   "Mettre en pause"):

@@ -1561,3 +1561,45 @@ class JobExecutionLog(db.Model):
         UTC.
         """
         return self.execution_time.replace(tzinfo=timezone.utc).astimezone(time_tz)
+
+
+class StaffPreference(db.Model):
+    """Profil de préférences applicatives d'un équipier (App comptoir).
+
+    Les réglages PERSONNELS (raccourcis, notifications, disposition, volume…)
+    remontés par un poste sont stockés ici pour suivre l'équipier d'un PC à
+    l'autre : à la connexion, l'App peut proposer de les récupérer (politique
+    « jamais / sur demande / automatique », elle-même rangée dans le profil).
+
+    Identité du poste volontairement absente (``web_url``, ``counter_id``,
+    secret) : ce qui décrit la machine n'a pas à suivre la personne.
+
+    Une ligne par équipier (dernière écriture gagne — mécanisme de
+    sauvegarde/clonage, pas synchronisation temps réel).
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(
+        db.Integer,
+        db.ForeignKey('pharmacist.id', name='fk_staff_preference_staff'),
+        nullable=False)
+    payload = db.Column(db.JSON, nullable=False, default=dict)
+    schema_version = db.Column(db.Integer, nullable=False, default=1)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    staff = db.relationship('Pharmacist', backref=db.backref(
+        'preference_profile', lazy=True, uselist=False))
+
+    __table_args__ = (
+        UniqueConstraint('staff_id', name='uq_staff_preference_staff'),
+    )
+
+    def to_dict(self):
+        return {
+            "staff_id": self.staff_id,
+            "payload": self.payload or {},
+            "schema_version": self.schema_version,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

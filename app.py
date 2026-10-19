@@ -83,6 +83,7 @@ from routes.announce import announce_bp
 from routes.admin_stats import admin_stats_bp
 from routes.patient import patient_bp
 from routes.pyside import pyside_bp
+from routes.pyside_preferences import staff_prefs_bp
 from routes.home import home_bp
 from python.engine import engine_bp
 from params_registry import CONFIG_MAPPINGS
@@ -400,6 +401,7 @@ def create_app(config_class=Config):
     app.register_blueprint(announce_bp, url_prefix='')
     app.register_blueprint(patient_bp, url_prefix='')
     app.register_blueprint(pyside_bp, url_prefix='')
+    app.register_blueprint(staff_prefs_bp, url_prefix='')
     app.register_blueprint(admin_music_bp, url_prefix='')
     app.register_blueprint(admin_dashboard_bp, url_prefix='')
     app.register_blueprint(admin_stats_bp, url_prefix='')
