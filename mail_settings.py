@@ -1,7 +1,16 @@
-"""Réglages d'envoi d'e-mails (SMTP) — noyau pur, sans Flask.
+"""Réglages d'envoi d'e-mails — noyau pur, sans Flask.
 
 Objectif : qu'une personne aux connaissances informatiques moyennes arrive à
 configurer l'envoi sans connaître SMTP.
+
+Deux modes d'envoi (``BACKENDS``) :
+
+- ``brevo`` (recommandé) : service d'envoi Brevo par son API web. Une clé et
+  une adresse d'expéditeur suffisent, en HTTPS (port 443, jamais bloqué par
+  les hébergeurs). Chaque installation saisit SA clé : elle vit dans la base
+  (secret jamais réaffiché ni sauvegardé) ou dans la variable d'environnement
+  ``BREVO_API_KEY`` — jamais dans le code, qui est public ;
+- ``smtp`` : la messagerie de la pharmacie (Gmail, Orange…).
 
 - ``PROVIDERS`` : préréglages des messageries courantes (serveur, port,
   sécurité, conseil) ; ``guess_provider`` le devine depuis l'adresse ;
@@ -31,6 +40,16 @@ DEFAULT_PORTS = {SECURITY_STARTTLS: 587, SECURITY_SSL: 465, SECURITY_NONE: 25}
 # Délai maximal d'une connexion SMTP : sans lui, un port filtré bloquait la
 # requête (et le worker) jusqu'au délai TCP du système.
 SMTP_TIMEOUT_SECONDS = 10
+
+BACKEND_BREVO = "brevo"
+BACKEND_SMTP = "smtp"
+BACKENDS = (BACKEND_BREVO, BACKEND_SMTP)
+
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+BREVO_ENV_VARIABLE = "BREVO_API_KEY"
+# Brevo délivre aussi des « clés SMTP » (xsmtpsib-…), souvent copiées par
+# erreur à la place de la clé API (xkeysib-…).
+_BREVO_SMTP_KEY_PREFIX = "xsmtpsib-"
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$")
@@ -144,6 +163,10 @@ class MailSettings:
     username: str
     password: str
     sender: str
+    backend: str = BACKEND_SMTP
+    api_key: str = ""
+    # Nom affiché à côté de l'adresse d'expéditeur (ex. nom de la pharmacie).
+    sender_name: str = ""
 
     @property
     def use_tls(self):
@@ -162,8 +185,34 @@ def _as_port(value):
     return port if 1 <= port <= 65535 else None
 
 
-def settings_from_config(config):
+def backend_from_config(config):
+    """Mode d'envoi enregistré.
+
+    Sans choix enregistré (installations antérieures) : SMTP si un serveur a
+    déjà été saisi, sinon Brevo, le mode recommandé.
+    """
+    backend = (config.get("MAIL_BACKEND") or "").strip().lower()
+    if backend in BACKENDS:
+        return backend
+    return BACKEND_SMTP if (config.get("MAIL_SERVER") or "").strip() else BACKEND_BREVO
+
+
+def brevo_api_key(config, env_api_key=""):
+    """Clé Brevo : celle de l'administration, sinon la variable d'environnement."""
+    return (config.get("MAIL_BREVO_API_KEY") or "").strip() or (env_api_key or "").strip()
+
+
+def settings_from_config(config, env_api_key=""):
     """Réglages courants (app.config), ou None si l'envoi n'est pas configuré."""
+    if backend_from_config(config) == BACKEND_BREVO:
+        api_key = brevo_api_key(config, env_api_key)
+        if not api_key:
+            return None
+        return MailSettings(host="", port=0, security=SECURITY_NONE, username="", password="",
+                            sender=(config.get("MAIL_DEFAULT_SENDER") or "").strip(),
+                            backend=BACKEND_BREVO, api_key=api_key,
+                            sender_name=(config.get("PHARMACY_NAME") or "").strip())
+
     host = (config.get("MAIL_SERVER") or "").strip()
     if not host:
         return None
@@ -182,17 +231,24 @@ def settings_from_config(config):
     )
 
 
-def is_configured(config):
-    """Vrai si un serveur ET une adresse d'expéditeur sont connus."""
-    settings = settings_from_config(config)
+def is_configured(config, env_api_key=""):
+    """Vrai si l'envoi est possible : serveur ou clé, ET adresse d'expéditeur."""
+    settings = settings_from_config(config, env_api_key)
     return settings is not None and is_valid_email(settings.sender)
 
 
-def validate_mail_form(data, *, stored_password=""):
+def validate_mail_form(data, *, stored_password="", stored_api_key=""):
     """Contrôle un formulaire complet. Renvoie ``(MailSettings | None, erreurs)``.
 
-    Mot de passe vide = conserver celui qui est enregistré (champ secret).
+    Mot de passe ou clé vides = conserver ceux qui sont enregistrés (champs
+    secrets). ``stored_api_key`` inclut la clé de l'environnement.
     """
+    backend = (data.get("backend") or BACKEND_SMTP).strip().lower()
+    if backend not in BACKENDS:
+        return None, ["Choisissez le mode d'envoi."]
+    if backend == BACKEND_BREVO:
+        return _validate_brevo_form(data, stored_api_key)
+
     errors = []
     host = (data.get("host") or "").strip().lower()
     if host.startswith(("smtp://", "smtps://", "http://", "https://")):
@@ -229,6 +285,78 @@ def validate_mail_form(data, *, stored_password=""):
         return None, errors
     return MailSettings(host=host, port=port, security=security, username=username,
                         password=password, sender=sender), []
+
+
+def _validate_brevo_form(data, stored_api_key):
+    errors = []
+    api_key = (data.get("api_key") or "").strip() or (stored_api_key or "").strip()
+    if not api_key:
+        errors.append("Collez la clé API Brevo (Brevo › SMTP et API › Clés API).")
+    elif api_key.startswith(_BREVO_SMTP_KEY_PREFIX):
+        errors.append("C'est une clé SMTP Brevo (xsmtpsib-…) : créez plutôt une clé API "
+                      "(xkeysib-…) dans Brevo › SMTP et API › Clés API.")
+    elif any(c.isspace() for c in api_key) or len(api_key) > 200:
+        errors.append("La clé API ne doit contenir ni espace ni retour à la ligne.")
+    sender = (data.get("sender") or "").strip()
+    if not is_valid_email(sender):
+        errors.append("Indiquez l'adresse d'expéditeur validée chez Brevo (ex. pharmacie@exemple.fr).")
+    if errors:
+        return None, errors
+    return MailSettings(host="", port=0, security=SECURITY_NONE, username="", password="",
+                        sender=sender, backend=BACKEND_BREVO, api_key=api_key), []
+
+
+def brevo_payload(settings, to, subject, body, html=None):
+    """Corps JSON de l'appel « envoyer un e-mail » de l'API Brevo."""
+    sender = {"email": settings.sender}
+    if settings.sender_name:
+        sender["name"] = settings.sender_name
+    payload = {"sender": sender, "to": [{"email": to}], "subject": subject,
+               "textContent": body}
+    if html:
+        payload["htmlContent"] = html
+    return payload
+
+
+def explain_brevo_error(status, data=None):
+    """Message clair pour un refus de l'API Brevo (statut HTTP + corps JSON)."""
+    data = data if isinstance(data, dict) else {}
+    detail = " ".join(str(data.get("message") or "").split())[:200]
+    text = detail.lower()
+    if status == 401 and "ip" in text:
+        message = ("Brevo bloque l'adresse IP de ce serveur. Brevo › Sécurité › IP autorisées : "
+                   "désactivez le blocage des IP inconnues, ou ajoutez l'adresse de ce serveur.")
+    elif status == 401:
+        message = ("Clé API refusée par Brevo. Vérifiez que vous avez collé une clé API "
+                   "complète (elle commence par xkeysib-) et qu'elle n'a pas été supprimée.")
+    elif "sender" in text or "expéditeur" in text:
+        message = ("Adresse d'expéditeur refusée : elle doit être validée chez Brevo "
+                   "(Brevo › Expéditeurs, domaines et IP dédiées › Expéditeurs).")
+    elif status == 402:
+        message = "Crédits d'envoi Brevo épuisés pour la période."
+    elif status == 403 or "not activated" in text or "activ" in text:
+        message = ("Le compte Brevo n'est pas encore activé pour l'envoi "
+                   "(Brevo vérifie les nouveaux comptes, parfois sous quelques heures).")
+    elif status == 429:
+        message = "Trop d'envois en peu de temps : réessayez dans quelques minutes."
+    elif status and status >= 500:
+        message = "Brevo est momentanément indisponible : réessayez plus tard."
+    else:
+        message = "Brevo a refusé l'envoi."
+    if detail:
+        message += f" Réponse de Brevo : {detail}"
+    return message
+
+
+def explain_brevo_exception(exc):
+    """Échec réseau avant toute réponse de Brevo."""
+    name = type(exc).__name__.lower()
+    if "timeout" in name:
+        return "Brevo ne répond pas : la connexion Internet du serveur est peut-être lente ou coupée."
+    if "ssl" in name:
+        return "La connexion sécurisée à Brevo a échoué (date/heure du serveur ou proxy ?)."
+    return ("Impossible de joindre Brevo depuis ce serveur : vérifiez sa connexion Internet "
+            "(ou un pare-feu qui bloquerait les sorties HTTPS).")
 
 
 def _server_detail(exc):

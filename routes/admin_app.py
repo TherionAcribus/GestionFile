@@ -18,6 +18,9 @@ from python.engine import qr_png_bytes
 import config_sync
 from account_recovery import normalize_base_url
 from mail_settings import (
+    BACKEND_BREVO,
+    BREVO_ENV_VARIABLE,
+    backend_from_config,
     is_configured as mail_is_configured,
     is_valid_email,
     provider_for_host,
@@ -26,7 +29,7 @@ from mail_settings import (
     validate_mail_form,
 )
 from params_registry import PARAM_REGISTRY, column_values_for
-from services.mail_service import send_email
+from services.mail_service import env_brevo_api_key, send_email
 
 admin_app_bp = Blueprint('admin_app', __name__)
 
@@ -177,7 +180,13 @@ def _mail_template_context():
     config = app.config
     host = config.get("MAIL_SERVER") or ""
     provider = provider_for_host(host)
+    env_key = env_brevo_api_key()
     return {
+        "mail_backend": backend_from_config(config),
+        # Secrets : seulement « défini / non défini », jamais la valeur.
+        "mail_brevo_key_set": bool((config.get("MAIL_BREVO_API_KEY") or "").strip()),
+        "mail_brevo_key_from_env": bool(env_key),
+        "mail_brevo_env_variable": BREVO_ENV_VARIABLE,
         "mail_server": host,
         "mail_port": config.get("MAIL_PORT") or "",
         "mail_username": config.get("MAIL_USERNAME") or "",
@@ -188,7 +197,7 @@ def _mail_template_context():
         "mail_security": security_mode(config.get("MAIL_USE_TLS"), config.get("MAIL_USE_SSL")),
         "mail_provider": provider.id if provider else ("other" if host else ""),
         "mail_providers": providers_payload(),
-        "mail_configured": mail_is_configured(config),
+        "mail_configured": mail_is_configured(config, env_key),
         "mail_password_reset": bool(config.get("MAIL_PASSWORD_RESET", True)),
         # Préremplie avec l'adresse par laquelle l'administrateur consulte la
         # page : c'est en général la bonne adresse publique.
@@ -204,8 +213,10 @@ def _mail_result(success, message):
 
 
 def _validated_mail_form():
+    stored_key = (app.config.get("MAIL_BREVO_API_KEY") or "").strip() or env_brevo_api_key()
     return validate_mail_form(request.form,
-                              stored_password=app.config.get("MAIL_PASSWORD") or "")
+                              stored_password=app.config.get("MAIL_PASSWORD") or "",
+                              stored_api_key=stored_key)
 
 
 @admin_app_bp.route('/admin/app/mail/test', methods=['POST'])
@@ -213,7 +224,7 @@ def _validated_mail_form():
 def admin_app_mail_test():
     """Envoie un e-mail de test avec les valeurs DU FORMULAIRE (non enregistrées).
 
-    Mot de passe laissé vide = celui qui est enregistré.
+    Mot de passe ou clé laissés vides = ceux qui sont enregistrés.
     """
     mail_adress = (request.values.get('mail_adress') or '').strip()
     if not mail_adress:
@@ -235,16 +246,18 @@ def admin_app_mail_test():
     _email_test_last_sent[username] = now
 
     pharmacy = app.config.get("PHARMACY_NAME") or "PharmaFile"
+    via = ("Brevo (API)" if settings.backend == BACKEND_BREVO
+           else f"{settings.host}:{settings.port}")
     success, error_msg = send_email(
         mail_adress,
         f"Test d'envoi — {pharmacy}",
         "Cet e-mail confirme que l'envoi depuis la file d'attente fonctionne.\n\n"
-        f"Serveur : {settings.host}:{settings.port}\nExpéditeur : {settings.sender}\n",
+        f"Envoi : {via}\nExpéditeur : {settings.sender}\n",
         settings=settings,
     )
     record_audit(ACTION_CONNECT, "email", target_id=mail_adress,
                  outcome=OUTCOME_SUCCESS if success else OUTCOME_FAILURE,
-                 details=f"host={settings.host}")
+                 details=f"via={via}")
     if success:
         return _mail_result(True, f"E-mail envoyé à {mail_adress}. Vérifiez sa réception "
                                   "(pensez au dossier « indésirables »), puis enregistrez.")
@@ -263,18 +276,28 @@ def admin_app_mail_save():
     if errors:
         return _mail_result(False, " ".join(errors))
 
+    # Seuls les réglages du mode choisi sont écrits : ceux de l'autre mode
+    # restent en place (revenir en arrière ne fait rien perdre).
     values = {
-        "mail_server": settings.host,
-        "mail_port": settings.port,
-        "mail_username": settings.username,
+        "mail_backend": settings.backend,
         "mail_default_sender": settings.sender,
-        "mail_use_tls": settings.use_tls,
-        "mail_use_ssl": settings.use_ssl,
         "mail_link_base_url": base_url or "",
     }
-    # Secret : réécrit seulement si un nouveau mot de passe a été saisi.
-    if (request.form.get("password") or "").strip():
-        values["mail_password"] = settings.password
+    if settings.backend == BACKEND_BREVO:
+        # Secret : réécrit seulement si une nouvelle clé a été collée.
+        if (request.form.get("api_key") or "").strip():
+            values["mail_brevo_api_key"] = settings.api_key
+    else:
+        values.update({
+            "mail_server": settings.host,
+            "mail_port": settings.port,
+            "mail_username": settings.username,
+            "mail_use_tls": settings.use_tls,
+            "mail_use_ssl": settings.use_ssl,
+        })
+        # Secret : réécrit seulement si un nouveau mot de passe a été saisi.
+        if (request.form.get("password") or "").strip():
+            values["mail_password"] = settings.password
 
     try:
         for key, value in values.items():
@@ -295,9 +318,14 @@ def admin_app_mail_save():
 
     for key, value in values.items():
         app.config[PARAM_REGISTRY[key].config_name] = value
+    if settings.backend == BACKEND_BREVO:
+        details = "backend=brevo" + (" (clé modifiée)" if "mail_brevo_api_key" in values else "")
+    else:
+        details = (f"backend=smtp host={settings.host} port={settings.port} "
+                   f"security={settings.security}"
+                   + (" (mot de passe modifié)" if "mail_password" in values else ""))
     record_audit(ACTION_UPDATE, "config", target_id="mail", outcome=OUTCOME_SUCCESS,
-                 details=f"host={settings.host} port={settings.port} security={settings.security}"
-                         + (" (mot de passe modifié)" if "mail_password" in values else ""))
+                 details=details)
     return _mail_result(True, "Réglages enregistrés.")
 
 

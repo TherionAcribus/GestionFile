@@ -38,6 +38,7 @@ from extensions import socketio
 from login_guard import LoginThrottle
 from mail_settings import is_configured as mail_is_configured
 from mail_settings import is_valid_email
+from services.mail_service import env_brevo_api_key
 from models import User, db
 from password_policy import validate_password
 from services.account_recovery_service import set_user_password
@@ -59,7 +60,8 @@ GENERIC_SENT_MESSAGE = (
 def reset_by_email_available(config=None):
     """Vrai si l'option est active ET l'envoi d'e-mails configuré."""
     config = config or current_app.config
-    return bool(config.get("MAIL_PASSWORD_RESET", True)) and mail_is_configured(config)
+    return (bool(config.get("MAIL_PASSWORD_RESET", True))
+            and mail_is_configured(config, env_brevo_api_key()))
 
 
 def _run_async(func_, *args):

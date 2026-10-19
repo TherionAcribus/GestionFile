@@ -276,3 +276,147 @@ def test_gabarit_un_seul_formulaire():
     assert 'name="security"' in tpl and 'mail_use_ssl' not in tpl  # plus de double interrupteur
     assert 'macros.switch("mail_password_reset"' in tpl
     assert "admin_mail.js" in _read("templates/admin/app.html")
+
+
+# --- Mode Brevo (API web) : appel simulé, aucun envoi réel ------------------------
+
+_BREVO_KEY = "xkeysib-" + "b" * 64
+_BREVO_FORM = {"backend": "brevo", "sender": "file@pharma.fr", "api_key": _BREVO_KEY,
+               "link_base_url": "", "mail_adress": "moi@exemple.fr"}
+
+
+class _FakeResponse:
+    def __init__(self, status, data=None):
+        self.status_code = status
+        self._data = data
+
+    def json(self):
+        if self._data is None:
+            raise ValueError("pas de JSON")
+        return self._data
+
+
+@pytest.fixture()
+def brevo_calls(monkeypatch):
+    """Capture les appels à l'API Brevo ; ``reply`` règle la réponse simulée."""
+    calls = []
+    calls_reply = {"response": _FakeResponse(201, {"messageId": "<id@brevo>"}), "error": None}
+
+    def fake_post(url, json=None, headers=None, timeout=None):
+        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+        if calls_reply["error"]:
+            raise calls_reply["error"]
+        return calls_reply["response"]
+
+    monkeypatch.setattr(mail_service.requests, "post", fake_post)
+    monkeypatch.delenv("BREVO_API_KEY", raising=False)
+    return calls, calls_reply
+
+
+def test_brevo_envoi_par_l_api(app, brevo_calls, connections):
+    calls, _ = brevo_calls
+    with app.app_context():
+        app.config.update(MAIL_BACKEND="brevo", MAIL_BREVO_API_KEY=_BREVO_KEY,
+                          MAIL_DEFAULT_SENDER="file@pharma.fr")
+        ok, error = mail_service.send_email("dest@x.fr", "Sujet", "Corps")
+    assert (ok, error) == (True, None)
+    (call,) = calls
+    assert call["url"] == "https://api.brevo.com/v3/smtp/email"
+    assert call["headers"]["api-key"] == _BREVO_KEY
+    assert call["timeout"] == 10
+    assert call["json"]["sender"] == {"email": "file@pharma.fr", "name": "Pharmacie Test"}
+    assert call["json"]["to"] == [{"email": "dest@x.fr"}]
+    assert connections == []  # aucun SMTP
+
+
+def test_brevo_cle_fournie_par_l_environnement(app, brevo_calls, monkeypatch):
+    calls, _ = brevo_calls
+    monkeypatch.setenv("BREVO_API_KEY", "xkeysib-env")
+    with app.app_context():
+        app.config.update(MAIL_BACKEND="brevo", MAIL_BREVO_API_KEY="",
+                          MAIL_DEFAULT_SENDER="file@pharma.fr")
+        assert mail_service.mail_configured()
+        ok, _ = mail_service.send_email("dest@x.fr", "S", "C")
+    assert ok and calls[0]["headers"]["api-key"] == "xkeysib-env"
+
+
+def test_brevo_refus_explique_sans_divulguer_la_cle(app, brevo_calls):
+    _, reply = brevo_calls
+    reply["response"] = _FakeResponse(401, {"code": "unauthorized", "message": "Key not found"})
+    with app.app_context():
+        app.config.update(MAIL_BACKEND="brevo", MAIL_BREVO_API_KEY=_BREVO_KEY,
+                          MAIL_DEFAULT_SENDER="file@pharma.fr")
+        ok, error = mail_service.send_email("dest@x.fr", "S", "C")
+    assert ok is False
+    assert "Clé API refusée" in error
+    assert _BREVO_KEY not in error
+
+
+def test_brevo_injoignable(app, brevo_calls):
+    _, reply = brevo_calls
+    reply["error"] = mail_service.requests.ConnectTimeout("timeout")
+    with app.app_context():
+        app.config.update(MAIL_BACKEND="brevo", MAIL_BREVO_API_KEY=_BREVO_KEY,
+                          MAIL_DEFAULT_SENDER="file@pharma.fr")
+        ok, error = mail_service.send_email("dest@x.fr", "S", "C")
+    assert ok is False and "ne répond pas" in error
+
+
+def test_brevo_test_avant_enregistrement(client, brevo_calls, app):
+    calls, _ = brevo_calls
+    html = client.post("/admin/app/mail/test", data=_BREVO_FORM).get_data(as_text=True)
+    assert "E-mail envoyé à moi@exemple.fr" in html
+    assert calls[0]["headers"]["api-key"] == _BREVO_KEY
+    assert "Brevo (API)" in calls[0]["json"]["textContent"]
+    assert "MAIL_BACKEND" not in app.config or app.config["MAIL_BACKEND"] != "brevo"
+
+
+def test_brevo_cle_smtp_refusee_avant_tout_appel(client, brevo_calls):
+    calls, _ = brevo_calls
+    html = client.post("/admin/app/mail/test",
+                       data={**_BREVO_FORM, "api_key": "xsmtpsib-zzz"}).get_data(as_text=True)
+    assert "clé SMTP" in html
+    assert calls == []
+
+
+def test_brevo_enregistrement(client, app):
+    client.post("/admin/app/mail/save", data=_BREVO_FORM)
+    opts = _options(app)
+    assert opts["mail_backend"].value_str == "brevo"
+    assert opts["mail_brevo_api_key"].value_str == _BREVO_KEY
+    assert opts["mail_default_sender"].value_str == "file@pharma.fr"
+    # Les réglages SMTP ne sont pas touchés (revenir en arrière ne perd rien).
+    assert "mail_server" not in opts and "mail_password" not in opts
+    assert app.config["MAIL_BACKEND"] == "brevo"
+    assert app.config["MAIL_SERVER"] == "smtp.enregistre.fr"
+
+
+def test_brevo_enregistrement_conserve_la_cle_si_vide(client, app):
+    client.post("/admin/app/mail/save", data=_BREVO_FORM)
+    client.post("/admin/app/mail/save", data={**_BREVO_FORM, "api_key": "",
+                                              "sender": "autre@pharma.fr"})
+    opts = _options(app)
+    assert opts["mail_brevo_api_key"].value_str == _BREVO_KEY
+    assert opts["mail_default_sender"].value_str == "autre@pharma.fr"
+
+
+def test_cle_brevo_secrete():
+    from params_registry import is_secret_key
+    assert is_secret_key("mail_brevo_api_key")
+    assert PARAM_REGISTRY["mail_backend"].allowed_values == {"", "brevo", "smtp"}
+
+
+def test_gabarit_propose_brevo_en_premier():
+    tpl = _read("templates/admin/app_mail.html")
+    assert tpl.index('id="mail_backend_brevo"') < tpl.index('id="mail_backend_smtp"')
+    assert 'name="api_key" value=""' in tpl  # jamais réaffichée
+    assert "xkeysib-" in tpl and 'rel="noopener noreferrer"' in tpl
+    css = _read("static/css/admin.css")
+    assert ".app-mail-settings:has(#mail_backend_brevo:checked) .mail-smtp-only" in css
+
+
+def test_compose_transmet_la_cle_au_service_web():
+    compose = _read("docker-compose.coolify.yaml")
+    import re as _re
+    web = _re.search(r"\n  web:\n(.*?)\n  \w+:\n", compose, _re.DOTALL).group(1)
+    assert "BREVO_API_KEY: ${BREVO_API_KEY:-}" in web

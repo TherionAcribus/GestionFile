@@ -127,6 +127,7 @@ def _user(app, username):
 def test_page_formulaire_quand_disponible(app):
     html = app.test_client().get("/forgot_password").get_data(as_text=True)
     assert 'name="identifier"' in html
+    assert "n'est pas activée" not in html
     assert "administrateur" in html  # les autres solutions restent affichées
 
 
@@ -140,6 +141,8 @@ def test_indisponible_sans_envoi_ou_option_coupee(make_app, config):
     client = app.test_client()
     html = client.get("/forgot_password").get_data(as_text=True)
     assert 'name="identifier"' not in html
+    # La page dit pourquoi il n'y a pas de formulaire (sinon elle semble cassée).
+    assert "n'est pas activée sur ce serveur" in html
     assert "Pour retrouver l'accès" in html
     _request(client, "alice")
     assert _outbox(app) == []

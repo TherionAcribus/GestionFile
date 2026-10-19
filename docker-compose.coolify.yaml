@@ -10,6 +10,8 @@
 #     déploiement est bloqué tant qu'elle est vide).
 #   - ADMIN_RESET_PASSWORD : facultative, VIDE en temps normal. Sert à
 #     retrouver l'accès si le mot de passe admin est perdu (appliquée une fois).
+#   - BREVO_API_KEY : facultative, clé API Brevo pour l'envoi d'e-mails (peut
+#     aussi être saisie dans l'administration).
 #   - Domaine : pas une variable ici — il se configure dans le champ
 #     « Domains » du service web, sous la forme https://mon-domaine.fr:5000
 #     (le suffixe indique le port interne du conteneur au proxy Coolify).
@@ -153,6 +155,9 @@ services:
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:?}
       # Lue ici seulement pour afficher le bandeau « videz cette variable ».
       ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-}
+      # Facultative : clé API Brevo de CETTE installation (sinon saisie dans
+      # Administration › Application › E-mails). Jamais dans le dépôt.
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
     depends_on:
       init:
         condition: service_completed_successfully

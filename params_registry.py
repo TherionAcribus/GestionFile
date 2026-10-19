@@ -162,6 +162,10 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     # anonyme : empoisonnement de lien).
     "mail_password_reset": ("MAIL_PASSWORD_RESET", "value_bool"),
     "mail_link_base_url": ("MAIL_LINK_BASE_URL", "value_str"),
+    # Mode d'envoi (mail_settings.BACKENDS) et clé de l'API Brevo (secret :
+    # propre à chaque installation, jamais dans le code public).
+    "mail_backend": ("MAIL_BACKEND", "value_str"),
+    "mail_brevo_api_key": ("MAIL_BREVO_API_KEY", "value_str"),
     "phone_center": ("PHONE_CENTER", "value_bool"),
     "phone_title": ("PHONE_TITLE", "value_str"),
     "phone_line1": ("PHONE_LINE1", "value_str"),
@@ -270,6 +274,7 @@ _RESTART_REQUIRED = {
 # parce que le champ du formulaire est vide, cf. app.update_input).
 SECRET_CONFIG_KEYS: frozenset[str] = frozenset({
     "mail_password",
+    "mail_brevo_api_key",
     "music_spotify_key",
 })
 
@@ -444,6 +449,8 @@ _TRANSLATABLE_KEYS = {
 _ANNOUNCE_TRANSITIONS = frozenset({"slide", "fade", "cube", "coverflow", "flip", "cards"})
 
 _ENUM_VALUES: dict[str, frozenset[str]] = {
+    # Vide = pas encore choisi (mail_settings.backend_from_config décide).
+    "mail_backend": frozenset({"", "brevo", "smtp"}),
     "announce_player": frozenset({"web"}),
     "announce_call_translation": frozenset({"fr", "vo", "both"}),
     "announce_infos_transition": _ANNOUNCE_TRANSITIONS,

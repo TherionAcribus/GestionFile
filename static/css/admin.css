@@ -987,6 +987,11 @@ font-size: 0.85rem;
 }
 
 /* --- Page Application ----------------------------------------------------- */
+/* Onglet E-mails : seul le volet du mode d'envoi choisi est visible. */
+.app-mail-settings:has(#mail_backend_brevo:checked) .mail-smtp-only,
+.app-mail-settings:has(#mail_backend_smtp:checked) .mail-brevo-only {
+    display: none;
+}
 /* Numérotation : le mode actif est mis en avant. */
 .app-page:has(#numbering_by_activity:checked) .numbering-on,
 .app-page:has(#numbering_by_activity:not(:checked)) .numbering-off {

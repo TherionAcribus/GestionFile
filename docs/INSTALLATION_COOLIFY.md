@@ -180,6 +180,7 @@ Ouvrez la section **Environment Variables** de la ressource.
 | Variable | Défaut | Quand la modifier |
 |---|---|---|
 | `ADMIN_USERNAME` | `admin` | Choisir un autre identifiant pour le premier admin |
+| `BREVO_API_KEY` | vide | Clé API Brevo pour l'envoi d'e-mails, si vous préférez la mettre ici plutôt que dans l'administration (voir [Envoi d'e-mails](#envoi-de-mails-facultatif)) |
 | `ADMIN_RESET_PASSWORD` | vide | **Laisser vide.** Ne sert qu'à retrouver l'accès si le mot de passe admin est perdu (voir [Mot de passe administrateur perdu](#mot-de-passe-administrateur-perdu)) |
 | `APP_SECRET` | auto-généré | Secret partagé avec les clients (comptoir, borne, imprimante). Dans Coolify, il s'appelle **`SERVICE_BASE64_64_GFAPPSECRET`** : le Compose le renomme `APP_SECRET` à l'intérieur des conteneurs. **Notez sa valeur** : vous la saisirez dans chaque client |
 | `COOKIE_SECURE` | `1` | Ne mettre `0` que pour un test local sans HTTPS |
@@ -317,23 +318,32 @@ dans l'ordre : `init` (migrations/bootstrap), puis `web`, puis `scheduler`.
 ### Envoi d'e-mails (facultatif)
 
 Sert uniquement au lien **« Mot de passe oublié »** de la page de connexion.
-*Administration › Application › E-mails* :
+*Administration › Application › E-mails*, deux modes :
 
-1. saisissez l'adresse d'envoi : pour Gmail, Outlook, Orange, Free, SFR,
-   La Poste, le serveur se remplit tout seul (sinon choisissez votre
-   messagerie dans la liste, ou « Autre ») ;
-2. identifiant et mot de passe du compte. **Gmail et Outlook exigent un
-   « mot de passe d'application »**, pas le mot de passe habituel ;
-3. **Tester** (avec les valeurs saisies, même non enregistrées) : en cas
-   d'échec, le message explique la cause probable ;
-4. **Enregistrer**.
+**Service d'envoi Brevo (recommandé)** — gratuit jusqu'à 300 e-mails par
+jour, fonctionne sur tous les hébergements (HTTPS) :
+
+1. créez un compte sur [brevo.com](https://www.brevo.com/fr/) ;
+2. validez l'adresse d'expéditeur : *Expéditeurs, domaines et IP dédiées ›
+   Expéditeurs* (Brevo envoie un code à cette adresse) ;
+3. créez une **clé API** (*SMTP et API › Clés API*, elle commence par
+   `xkeysib-` ; une « clé SMTP » `xsmtpsib-` ne convient pas) ;
+4. collez-la dans l'onglet avec l'adresse d'expéditeur, **Tester**, puis
+   **Enregistrer**.
+
+La clé est **propre à votre installation** : rangée dans votre base (jamais
+réaffichée, exclue des sauvegardes) ou dans la variable `BREVO_API_KEY` de
+Coolify. Elle n'est jamais dans le code du projet. Si le test répond
+« adresse IP bloquée » : Brevo › *Sécurité › IP autorisées*, désactivez le
+blocage des IP inconnues ou ajoutez l'adresse du serveur.
+
+**Ma messagerie (SMTP)** — Gmail, Orange, OVH… : l'adresse d'envoi remplit
+le serveur toute seule ; Gmail et Outlook exigent un « mot de passe
+d'application ». Certains hébergeurs bloquent les ports 25 et 465 : préférez
+587 (STARTTLS).
 
 Chaque utilisateur renseigne ensuite son adresse dans **Mon compte**.
 L'onglet E-mails liste les comptes qui n'en ont pas.
-
-Si le serveur ne répond pas : certains hébergeurs bloquent les ports 25 et
-465 en sortie. Préférez 587 (STARTTLS), ou un service d'envoi comme Brevo
-(gratuit jusqu'à 300 e-mails par jour).
 
 ### Mot de passe administrateur perdu
 

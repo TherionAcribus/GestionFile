@@ -1,7 +1,9 @@
 {# Onglet « E-mails » (mail_settings.py, routes admin_app.admin_app_mail_*).
-   Un seul formulaire : l'adresse d'envoi suffit souvent (le fournisseur est
-   deviné et préremplit le serveur), on TESTE avec les valeurs saisies, puis on
-   enregistre tout d'un coup. Comportement : static/js/admin_mail.js. #}
+   Un seul formulaire, deux modes : Brevo (clé API, recommandé) ou la
+   messagerie de la pharmacie (SMTP, le fournisseur deviné préremplit le
+   serveur). On TESTE avec les valeurs saisies, puis on enregistre tout d'un
+   coup. Bascule des volets : CSS (:has, admin.css) ; préréglages SMTP :
+   static/js/admin_mail.js. #}
 <div class="alert alert-light border small">
     <i class="bi bi-info-circle" aria-hidden="true"></i>
     L'envoi d'e-mails sert au lien <strong>« Mot de passe oublié »</strong> de la page de connexion.
@@ -21,15 +23,65 @@
 
     <form id="mail-settings-form" autocomplete="off"
           data-providers="{{ mail_providers | tojson | forceescape }}">
+        <fieldset class="mb-3">
+            <legend class="form-label fs-6 mb-2">Comment envoyer les e-mails ?</legend>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="backend" id="mail_backend_brevo" value="brevo"
+                       {% if mail_backend == 'brevo' %}checked{% endif %}>
+                <label class="form-check-label" for="mail_backend_brevo">
+                    <strong>Service d'envoi Brevo</strong> <span class="badge text-bg-success">recommandé</span>
+                    <span class="d-block small text-muted">Gratuit (300 e-mails/jour), une clé à coller, fonctionne sur tous les hébergements.</span>
+                </label>
+            </div>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="radio" name="backend" id="mail_backend_smtp" value="smtp"
+                       {% if mail_backend == 'smtp' %}checked{% endif %}>
+                <label class="form-check-label" for="mail_backend_smtp">
+                    <strong>Ma messagerie</strong> (Gmail, Orange, OVH…)
+                    <span class="d-block small text-muted">Plus délicat : mot de passe d'application, ports parfois bloqués.</span>
+                </label>
+            </div>
+        </fieldset>
+
         <div class="mb-3">
             <label for="mail_default_sender" class="form-label">Adresse e-mail d'envoi (expéditeur)</label>
             <input type="email" class="form-control" id="mail_default_sender" name="sender"
                    value="{{ mail_default_sender }}" placeholder="pharmacie@exemple.fr"
                    aria-describedby="mail_sender_help">
             <div class="form-text" id="mail_sender_help">
-                L'adresse qui apparaîtra comme expéditeur. Pour Gmail, Orange, Free… le reste se remplit tout seul.
+                <span class="mail-brevo-only">Elle doit être validée dans votre compte Brevo (étape 2 ci-dessous).</span>
+                <span class="mail-smtp-only">Pour Gmail, Orange, Free… le reste se remplit tout seul.</span>
             </div>
         </div>
+
+        <div class="mail-brevo-only">
+            <ol class="small mb-3 ps-3">
+                <li>Créez un compte gratuit sur
+                    <a href="https://www.brevo.com/fr/" target="_blank" rel="noopener noreferrer">brevo.com</a>.</li>
+                <li>Validez l'adresse d'expéditeur : Brevo › <em>Expéditeurs, domaines et IP dédiées</em> ›
+                    <em>Expéditeurs</em> › Ajouter (Brevo envoie un code à cette adresse).</li>
+                <li>Créez une clé : Brevo › <em>SMTP et API</em> › onglet <em>Clés API</em> › Générer
+                    (une clé <strong>API</strong>, qui commence par <code>xkeysib-</code>).</li>
+                <li>Collez-la ci-dessous, puis <strong>Tester</strong>.</li>
+            </ol>
+            <div class="mb-3">
+                <label for="mail_brevo_api_key" class="form-label">Clé API Brevo</label>
+                <div class="input-group">
+                    <input type="password" class="form-control" id="mail_brevo_api_key" name="api_key" value=""
+                           autocomplete="off" spellcheck="false" aria-describedby="mail_brevo_api_key_help"
+                           placeholder="{% if mail_brevo_key_set %}•••••••• (enregistrée — laisser vide pour la conserver){% elif mail_brevo_key_from_env %}Fournie par le serveur ({{ mail_brevo_env_variable }}){% else %}xkeysib-…{% endif %}">
+                    <button type="button" class="btn btn-outline-secondary" data-toggle-password="#mail_brevo_api_key" aria-label="Afficher la clé"><i class="bi bi-eye"></i></button>
+                </div>
+                <div class="form-text" id="mail_brevo_api_key_help">
+                    Propre à cette installation : jamais réaffichée, ni incluse dans les sauvegardes, ni dans le code.
+                    {% if mail_brevo_key_from_env and not mail_brevo_key_set %}
+                    Une clé est déjà fournie par la variable d'environnement <code>{{ mail_brevo_env_variable }}</code>.
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="mail-smtp-only">
 
         <div class="mb-3">
             <label for="mail_provider" class="form-label">Votre messagerie</label>
@@ -87,8 +139,12 @@
                 </div>
             </div>
             <div class="form-text">En général : 587 avec STARTTLS, ou 465 avec SSL.</div>
+        </details>
+        </div>
 
-            <div class="mt-3">
+        <details class="mb-3">
+            <summary>Avancé</summary>
+            <div class="mt-2">
                 <label for="mail_link_base_url" class="form-label">Adresse de l'administration dans les liens envoyés</label>
                 <input type="url" class="form-control" id="mail_link_base_url" name="link_base_url"
                        value="{{ mail_link_base_url }}" placeholder="https://file.ma-pharmacie.fr"
