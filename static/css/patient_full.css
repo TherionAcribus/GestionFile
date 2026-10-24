@@ -49,10 +49,9 @@
     min-width: 0;
 }
 
-/* Les cellules doivent pouvoir rétrécir sous la taille de leur contenu :
-   sans cela min-height:auto leur impose la hauteur du bouton et le débordement
-   revient. Le bouton rond s'étire verticalement pour mesurer l'espace dispo ;
-   le bouton carré garde sa hauteur configurée et reste centré. */
+/* Les cellules peuvent se partager la grille sans imposer une hauteur minimale.
+   Les dimensions configurées des boutons restent toutefois fixes : si un choix
+   est trop grand pour l'écran, il est rogné plutôt que redimensionné en silence. */
 .inner-grid-container > .grid-item {
     min-height: 0;
     min-width: 0;

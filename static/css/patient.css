@@ -5,6 +5,8 @@
     --circle_button_border_size: 0px;
     --circle_button_border_color: black;
     --circle_button_image_size: 215px;
+    --circle_button_image_offset_x: 0px;
+    --circle_button_image_offset_y: 0px;
     --circle_button_text_size: 24px;
     --circle_button_text_color: darkcyan;
     --circle_button_text_border_size: 0px;
@@ -219,16 +221,14 @@ html, body {
 }
 
 .div_circle_buttons {
-    /* flex:1 + min-height:0 laissent le cercle se réduire quand la cellule de
-       grille est plus petite que la taille configurée : le bouton reste dans
-       la zone centrale au lieu de déborder sur le titre ou le pied de page. */
-    flex: 1 1 auto;
-    min-height: 0;
+    /* Le diamètre configuré est la taille réelle du cercle. L'image est
+       positionnée indépendamment plus bas : elle ne peut donc plus consommer
+       la hauteur de la cellule et faire rétrécir le bouton. */
+    flex: 0 0 var(--circle_button_size);
+    min-height: var(--circle_button_size);
     height: var(--circle_button_size);
-    max-height: var(--circle_button_size);
-    aspect-ratio: 1 / 1;
-    width: auto;
-    max-width: 100%;
+    width: var(--circle_button_size);
+    min-width: var(--circle_button_size);
     margin: 0 10px;
     border-radius: 50%;
     box-shadow: 5px 5px 5px #888888;
@@ -240,6 +240,7 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
     transition: scale 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -348,42 +349,32 @@ html, body {
 }
 
 .img_btn {
-    /* ~93 % du cercle (ratio des réglages par défaut), plafonné à la taille
-       configurée : l'image suit le cercle quand celui-ci est réduit. */
-    height: 93%;
-    width: 93%;
-    max-height: var(--circle_button_image_size);
-    max-width: var(--circle_button_image_size);
+    /* L'image flotte au centre du cercle : sa taille et sa position ne
+       participent pas au calcul de la grille et ne réduisent jamais le
+       bouton. Les décalages positifs déplacent vers la droite et le bas. */
+    position: absolute;
+    left: calc(50% + var(--circle_button_image_offset_x));
+    top: calc(50% + var(--circle_button_image_offset_y));
+    height: var(--circle_button_image_size);
+    width: var(--circle_button_image_size);
+    max-height: 100%;
+    max-width: 100%;
     object-fit: contain;
     border-radius: 50%;
+    transform: translate(-50%, -50%);
 }
 
 /* Mode « image au-dessus » (page_patient_circle_image_above) : l'image est
-   décalée vers le haut et déborde au-dessus du cercle, comme sur l'ancienne
-   borne. Le pseudo-élément réserve la place du débordement au-dessus du cercle ;
-   rétractable (flex-shrink élevé), il cède sa place au cercle quand la cellule
-   manque de hauteur — contrairement à un padding qui rognait le cercle. */
-.div_bloc_activity.img_above::before {
-    content: "";
-    /* Réserve le débordement de l'image (translateY -25%) — flex-shrink:0 :
-       elle ne cède jamais sa place. Quand la cellule manque de hauteur,
-       c'est le cercle (flex:1, min-height:0) qui compresse ; un spacer
-       rétractable laissait le cercle remonter en haut de cellule et
-       l'image repassait sous le bandeau titre. */
-    flex: 0 0 calc(var(--circle_button_image_size) * 0.25);
-    min-height: 0;
-}
-
-/* La taille de l'image est indépendante du cercle (circle_button_image_size) ;
-   plafonnée à 140 % du cercle réellement affiché pour que le débordement reste
-   raisonnable quand le cercle a été réduit faute de place. */
+   décalée vers le haut et peut dépasser librement du cercle, comme sur
+   l'ancienne borne. Elle reste absolument positionnée : l'agrandir ne change
+   ni le diamètre du cercle ni la hauteur de la cellule. */
 .div_bloc_activity.img_above .img_btn {
-    height: min(var(--circle_button_image_size), 140%);
-    width: min(var(--circle_button_image_size), 140%);
+    height: var(--circle_button_image_size);
+    width: var(--circle_button_image_size);
     max-height: none;
     max-width: none;
     border-radius: 0;
-    transform: translateY(-25%);
+    transform: translate(-50%, -75%);
 }
 
 .img_square_button {
@@ -405,9 +396,8 @@ html, body {
     text-align: center;
     font-size: var(--circle_button_text_size);
     font-weight: bold;
-    /* flex:0 0 auto — l'étiquette ne rétrécit jamais : quand la place manque,
-       c'est le cercle (flex:1) qui absorbe la compression. Sans cela le <p>
-       débordait de son conteneur réduit et était rogné en bas de la zone. */
+    /* L'étiquette ne rétrécit jamais : elle garde sa hauteur lisible sous le
+       cercle, dont le diamètre configuré reste lui aussi fixe. */
     flex: 0 0 auto;
     -webkit-text-stroke-color: var(--circle_button_text_border_color);
     -webkit-text-stroke-width: var(--circle_button_text_border_size);

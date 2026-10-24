@@ -1636,6 +1636,109 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app, 
 
 
 @pytest.mark.e2e
+def test_patient_circle_size_and_image_position_are_independent(editor_app, playwright_driver):
+    """Le diamètre demandé reste exact quand l'image grandit, et les deux
+    décalages déplacent uniquement l'image dans l'aperçu de l'éditeur."""
+    from threading import Thread
+
+    from werkzeug.serving import make_server
+
+    playwright = pytest.importorskip("playwright.sync_api")
+    app, _ = editor_app
+    _preview_ready_app(app)
+    with app.app_context():
+        app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "circle"
+        app.config["PAGE_PATIENT_CIRCLE_IMAGE_ABOVE"] = True
+        activity = Activity(name="Dimension indépendante", letter="D")
+        button = Button(
+            label="Test image", activity=activity, image_url="prescription.png",
+            is_present=True, is_active=True, shape="circle", sort_order=1,
+        )
+        db.session.add_all([activity, button])
+        db.session.commit()
+    client = authenticated_client(editor_app)
+    server = make_server("127.0.0.1", 0, app)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with nullcontext(playwright_driver) as driver:
+            browser = driver.chromium.launch(headless=True)
+            try:
+                context = browser.new_context(viewport={"width": 1440, "height": 900})
+                context.add_cookies([{"name": "session", "value": client.get_cookie("session").value, "url": url}])
+                page = context.new_page()
+                page.goto(f"{url}/admin/page-editor/patient")
+                playwright.expect(page.locator("#page-editor")).to_have_attribute("aria-busy", "false")
+                page.locator("#editor-mode-design").click()
+                page.locator("[data-component-id='buttons']").click()
+                page.locator(".page-editor-fieldset summary", has_text="Apparence").click()
+                image_above = page.locator(
+                    "#editor-config-page_patient_circle_image_above"
+                )
+                if not image_above.is_checked():
+                    image_above.check()
+
+                preview = page.frame_locator("#editor-preview")
+                circle = preview.locator(
+                    ".page-editor-button-shape-preview:visible .div_circle_buttons"
+                ).first
+                image = circle.locator(".img_btn")
+                playwright.expect(circle.locator("xpath=..")) \
+                    .to_have_class(re.compile(r"\bimg_above\b"))
+
+                circle_size = page.locator("#editor-css-circle_button_size")
+                circle_size.fill("240")
+                circle_size.dispatch_event("change")
+                image_size = page.locator("#editor-css-circle_button_image_size")
+                image_size.fill("300")
+                image_size.dispatch_event("change")
+                offset_x = page.locator("#editor-css-circle_button_image_offset_x")
+                offset_x.fill("0")
+                offset_x.dispatch_event("change")
+                offset_y = page.locator("#editor-css-circle_button_image_offset_y")
+                offset_y.fill("0")
+                offset_y.dispatch_event("change")
+                playwright.expect(circle).to_have_css("width", "240px")
+                playwright.expect(image).to_have_css("width", "300px")
+                geometry = circle.evaluate("""circle => {
+                    const c = circle.getBoundingClientRect();
+                    const image = circle.querySelector('.img_btn').getBoundingClientRect();
+                    return {circleWidth: c.width, circleHeight: c.height,
+                            imageWidth: image.width, imageCenterX: image.left + image.width / 2,
+                            imageCenterY: image.top + image.height / 2};
+                }""")
+                assert geometry["circleWidth"] == pytest.approx(240, abs=1)
+                assert geometry["circleHeight"] == pytest.approx(240, abs=1)
+                assert geometry["imageWidth"] == pytest.approx(300, abs=1)
+
+                offset_x = page.locator("#editor-css-circle_button_image_offset_x")
+                offset_x.fill("35")
+                offset_x.dispatch_event("change")
+                offset_y = page.locator("#editor-css-circle_button_image_offset_y")
+                offset_y.fill("20")
+                offset_y.dispatch_event("change")
+                preview_root = preview.locator("html")
+                playwright.expect(preview_root).to_have_css(
+                    "--circle_button_image_offset_x", "35px")
+                playwright.expect(preview_root).to_have_css(
+                    "--circle_button_image_offset_y", "20px")
+                moved = image.evaluate("""image => {
+                    const box = image.getBoundingClientRect();
+                    return {x: box.left + box.width / 2, y: box.top + box.height / 2};
+                }""")
+                assert moved["x"] - geometry["imageCenterX"] == pytest.approx(35, abs=1)
+                assert moved["y"] - geometry["imageCenterY"] == pytest.approx(20, abs=1)
+                assert circle.evaluate("circle => circle.getBoundingClientRect().width") == pytest.approx(240, abs=1)
+            finally:
+                browser.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+@pytest.mark.e2e
 def test_patient_circle_button_row_spacing_stays_homogeneous(editor_app, playwright_driver):
     """Régression : les étiquettes s'enroulent dans leur colonne (pas de
     chevauchement entre boutons voisins) et tous les cercles d'une rangée
@@ -2889,6 +2992,14 @@ def test_patient_adapter_limits_layout_controls_and_filters_fields_by_scenario()
         "key_by_scenario": by_scenario,
     }
     assert css_fields["circle_button_size"]["scenarios"] == ["home", "children"]
+    assert css_fields["circle_button_image_offset_x"]["default"] == "0px"
+    assert css_fields["circle_button_image_offset_y"]["default"] == "0px"
+    assert css_fields["circle_button_image_offset_x"]["optional"] is True
+    assert css_fields["circle_button_image_offset_y"]["optional"] is True
+    assert css_fields["circle_button_image_offset_x"]["visible_when"] == {
+        "key": "page_patient_button_shape", "values": ["circle"],
+        "key_by_scenario": by_scenario,
+    }
     assert css_fields["square_button_width"]["visible_when"] == {
         "key": "page_patient_button_shape", "values": ["square"],
         "key_by_scenario": by_scenario,

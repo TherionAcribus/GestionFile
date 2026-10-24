@@ -265,8 +265,12 @@
                         {{ macros.css_color_bloc("patient", "circle_button_text_background_color", circle_button_text_background_color, "Couleur") }}
                     </div>
                     
-                    <strong>Taille de l'image</strong>
-                    {{ macros.css_unit_bloc("patient", "circle_button_image_size", circle_button_image_size, "Taille", "px") }}
+                    <strong>Image</strong>
+                    <div class="admin_css_textbloc">
+                        {{ macros.css_unit_bloc("patient", "circle_button_image_size", circle_button_image_size, "Taille", "px") }}
+                        {{ macros.css_unit_bloc("patient", "circle_button_image_offset_x", circle_button_image_offset_x, "Décalage horizontal (+ droite / − gauche)", "px") }}
+                        {{ macros.css_unit_bloc("patient", "circle_button_image_offset_y", circle_button_image_offset_y, "Décalage vertical (+ bas / − haut)", "px") }}
+                    </div>
 
                 </div>
             </div>
