@@ -28,9 +28,11 @@
         </div>
         {% endif %}
 
-        <fieldset class="mb-3">
-            <legend class="form-label fs-6 fw-semibold">Moteur</legend>
-            <div class="form-check">
+        <fieldset class="mb-3" aria-describedby="voice_model_help">
+            <legend class="form-label fs-6 fw-semibold">Moteur pour la langue : {{ language.name }}</legend>
+            <p id="voice_model_help" class="form-text mt-0">Le choix est enregistré immédiatement.</p>
+            <div class="voice-engine-options">
+            <div class="form-check voice-engine-option">
                 <input class="form-check-input" type="radio" name="voice_model_{{ language.id }}"
                        id="voice_model_google" value="google"
                        {% if current_model == 'google' %}checked{% endif %}
@@ -44,7 +46,7 @@
                     {% if not voice_google_key %}<span class="d-block form-text">Enregistrez d'abord une clé Google Cloud (étape 3).</span>{% endif %}
                 </label>
             </div>
-            <div class="form-check">
+            <div class="form-check voice-engine-option">
                 <input class="form-check-input" type="radio" name="voice_model_{{ language.id }}"
                        id="voice_model_gtts" value="gtts"
                        {% if current_model == 'gtts' %}checked{% endif %}
@@ -53,6 +55,7 @@
                        hx-trigger="change"
                        hx-vals='{"language_id": {{ language.id }}, "voice_model": "gtts"}'>
                 <label class="form-check-label" for="voice_model_gtts">gTTS (sans clé)</label>
+            </div>
             </div>
         </fieldset>
 

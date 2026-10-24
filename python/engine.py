@@ -752,29 +752,48 @@ def register_journey_patient(activity, journey_id):
         return patient, False
 
 
-def generate_audio_calling(counter_number, next_patient, language_code="fr"):
+def generate_audio_calling(counter_number, next_patient, language_code="fr",
+                           text_template_override=None):
 
     # Si on ne veux pas de son, on quitte
     if not app.config["ANNOUNCE_SOUND"]:
         return
     
+    # Texte français pour la synthèse vocale. L'interface d'administration
+    # peut fournir le texte actuellement affiché dans son champ de test (même
+    # avant enregistrement) ; les appels réels continuent à utiliser la
+    # configuration serveur.
+    french_template = (
+        text_template_override
+        if text_template_override is not None
+        else app.config["ANNOUNCE_CALL_SOUND"]
+    )
+
     # Texte pour la synthèse vocale
     # patient FR ou que langue FR
     if language_code == "fr" or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
-        text_template = app.config["ANNOUNCE_CALL_SOUND"]
+        text_template = french_template
     # si pas FR
     else:
         # si langue desactivée
         if not next_patient.language.voice_is_active:
-            text_template = app.config["ANNOUNCE_CALL_SOUND"]
+            text_template = french_template
         # si langue activée
         else :
             translated_template = get_text_translation("announce_call_sound", next_patient.language.code)
             if translated_template["error"]:
                 # Traduction absente/vide : get_text_translation renvoie le texte
-                # FR, la voix doit donc repasser en FR elle aussi.
+                # FR de la configuration. Pour un test depuis l'administration,
+                # le champ visible à l'étape 2 est toutefois la source de
+                # vérité : on l'utilise aussi pour ce repli.
                 language_code = "fr"
-            text_template = translated_template["translation"]
+                text_template = (
+                    french_template
+                    if text_template_override is not None
+                    else translated_template["translation"]
+                )
+            else:
+                text_template = translated_template["translation"]
 
     text = replace_balise_announces(text_template, next_patient)
 

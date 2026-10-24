@@ -84,6 +84,35 @@ def test_langue_sans_voix_activee_laisse_le_choix_a_choose_voice_model(flask_app
     assert capture == [("Numéro {N}, comptoir {C}", "ar")]
 
 
+def test_texte_courant_de_linterface_remplace_le_texte_francais(flask_app, capture):
+    """Le test vocal lit le champ de l'étape 2, pas une ancienne config."""
+    with flask_app.app_context():
+        engine.generate_audio_calling(
+            1, _patient(), language_code="fr",
+            text_template_override="Veuillez rejoindre {C}, numéro {N}")
+
+    assert capture == [("Veuillez rejoindre {C}, numéro {N}", "fr")]
+
+
+def test_texte_courant_est_utilise_lors_du_repli_de_traduction(
+        flask_app, capture, monkeypatch):
+    monkeypatch.setattr(
+        engine,
+        "get_text_translation",
+        lambda key, code: {
+            "success": False,
+            "translation": "Ancien texte {N}",
+            "error": "Translation not found",
+        },
+    )
+    with flask_app.app_context():
+        engine.generate_audio_calling(
+            1, _patient(), language_code="ar",
+            text_template_override="Nouveau texte {N}")
+
+    assert capture == [("Nouveau texte {N}", "fr")]
+
+
 def test_aucune_comparaison_sans_effet_dans_engine():
     arbre = ast.parse(io.open(_ENGINE_SOURCE, encoding="utf-8").read())
     orphelines = [

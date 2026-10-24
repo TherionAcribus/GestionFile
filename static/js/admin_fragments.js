@@ -39,6 +39,8 @@ function updateGenerationTime(time, scope) {
 function testAudio(scope, language) {
     let language_code = language || document.getElementById('language_code').value;
     let call_number = document.getElementById('call_number').value;
+    let textField = document.getElementById('announce_call_sound');
+    let text_template = textField ? textField.value : '';
 
     // Anti double-clic : la génération TTS est synchrone côté serveur et peut
     // appeler un service externe — on bloque les boutons le temps de la requête.
@@ -46,7 +48,11 @@ function testAudio(scope, language) {
     buttons.forEach(function (btn) { btn.disabled = true; });
     showTestStatus("Génération de l'annonce…", false);
 
-    const params = new URLSearchParams({ language_code: language_code, call_number: call_number });
+    const params = new URLSearchParams({
+        language_code: language_code,
+        call_number: call_number,
+        text_template: text_template
+    });
     fetch(`/admin/announce/audio/test/${scope}?${params}`, { method: 'POST' })
         .then(response => response.json().then(data => ({ ok: response.ok, data: data })))
         .then(result => {

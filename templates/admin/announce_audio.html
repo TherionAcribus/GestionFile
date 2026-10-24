@@ -81,8 +81,37 @@
 
 {# ---------------------------------------------------------------- #}
 <section class="admin-setting-card announce-audio-section" aria-labelledby="audio_engine_title">
-    <h5 id="audio_engine_title"><span class="step-badge" aria-hidden="true">3</span> Moteur de voix</h5>
-    <p class="text-muted">Deux services peuvent fabriquer la voix. Le moteur se règle ensuite langue par langue (étape 4).</p>
+    <h5 id="audio_engine_title"><span class="step-badge" aria-hidden="true">3</span> Choisir le moteur de voix</h5>
+    <p class="text-muted mb-3">
+        Appliquez d'abord un moteur à toutes les langues. Vous pourrez ensuite faire un choix différent pour une langue précise à l'étape 4.
+    </p>
+
+    <div class="voice-engine-quick-choice mb-4" aria-labelledby="voice_engine_quick_title">
+        <h6 id="voice_engine_quick_title" class="mb-2">Choix rapide pour toutes les langues</h6>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-post="/admin/announce/gtts/use_for_all"
+                    hx-target="#invisible"
+                    hx-confirm="Utiliser gTTS pour toutes les langues ? Vous pourrez toujours modifier une langue à l'étape 4.">
+                <i class="bi bi-soundwave" aria-hidden="true"></i> Utiliser gTTS partout
+            </button>
+            <button type="button" class="btn btn-primary"
+                    hx-post="/admin/announce/google/use_for_all"
+                    hx-target="#invisible"
+                    {% if not voice_google_key %}disabled aria-describedby="google_engine_unavailable"{% else %}hx-confirm="Utiliser Google Cloud pour toutes les langues ? Une voix conseillée sera choisie pour les langues qui n'en ont pas encore."{% endif %}>
+                <i class="bi bi-google" aria-hidden="true"></i> Utiliser Google Cloud partout
+            </button>
+        </div>
+        {% if not voice_google_key %}
+        <p id="google_engine_unavailable" class="form-text mb-0">
+            Google Cloud sera disponible après l'enregistrement d'une clé ci-dessous. gTTS fonctionne immédiatement sans clé.
+        </p>
+        {% else %}
+        <p class="form-text mb-0">Le tableau de l'étape 4 confirme le moteur réellement utilisé pour chaque langue.</p>
+        {% endif %}
+    </div>
+
+    <h6 class="mb-3">Comparer et configurer les deux moteurs</h6>
 
     <div class="row g-3">
         <div class="col-xl-7">
@@ -140,8 +169,8 @@
 
 {# ---------------------------------------------------------------- #}
 <section class="admin-setting-card announce-audio-section" aria-labelledby="audio_voices_title">
-    <h5 id="audio_voices_title"><span class="step-badge" aria-hidden="true">4</span> Voix de chaque langue</h5>
-    <p class="text-muted">Le français sert de voix par défaut. Cliquez sur « Régler » pour changer le moteur ou la voix d'une langue.</p>
+    <h5 id="audio_voices_title"><span class="step-badge" aria-hidden="true">4</span> Moteur et voix par langue</h5>
+    <p class="text-muted">La colonne « Moteur » indique ce qui sera réellement utilisé. Cliquez sur « Régler » pour personnaliser une langue ; le français sert de valeur par défaut.</p>
 
     {# Rechargé après chaque réglage (événement voicesChanged renvoyé par les
        routes de sauvegarde) et après un changement de « Langue de l'annonce »
@@ -165,7 +194,7 @@
 {# ---------------------------------------------------------------- #}
 <section class="admin-setting-card announce-audio-section" aria-labelledby="audio_test_title">
     <h5 id="audio_test_title"><span class="step-badge" aria-hidden="true">5</span> Tester</h5>
-    <p class="text-muted">Génère l'annonce avec les réglages enregistrés. La première génération d'une annonce prend un peu de temps ; les suivantes sont instantanées (fichier réutilisé).</p>
+    <p class="text-muted">Lit le texte actuellement affiché à l'étape 2, même avant de l'enregistrer (ou sa traduction pour la langue choisie), avec le moteur et la voix sélectionnés. La première génération prend un peu de temps ; les suivantes sont instantanées (fichier réutilisé).</p>
     <div class="row g-2 align-items-end">
         <div class="col-sm-4 col-lg-3">
             <label for="call_number" class="form-label">Numéro d'appel</label>

@@ -257,6 +257,75 @@ def test_tout_sur_google_si_google_refuse_ne_modifie_rien(app, client):
     assert _lang(app, "fr").voice_model == "gtts"
 
 
+def test_tout_sur_gtts_change_toutes_les_langues_actives(app, client):
+    response = client.post("/admin/announce/gtts/use_for_all")
+    assert response.status_code == 200
+    assert "voicesChanged" in json.loads(response.headers["HX-Trigger"])
+    assert _lang(app, "fr").voice_model == "gtts"
+    assert _lang(app, "en").voice_model == "gtts"
+    assert _lang(app, "de").voice_model == "gtts"
+    assert _lang(app, "xx").voice_model == "gtts"
+    # Langue inactive : elle n'est pas proposée dans l'écran d'annonce.
+    assert _lang(app, "it").voice_model is None
+    assert app.config["VOICE_MODEL"] == "gtts"
+
+
+def test_test_audio_transmet_le_texte_courant_de_letape_2(client):
+    admin_announce._audio_test_last_run.clear()
+    captured = {}
+    patient = SimpleNamespace(
+        language=SimpleNamespace(code="fr", voice_is_active=True),
+        language_code="fr", counter=None)
+
+    def fake_generate(counter, current_patient, **kwargs):
+        captured.update(kwargs)
+        return "/static/audio/test.mp3"
+
+    with patch.object(admin_announce, "get_futur_patient", return_value=patient), \
+            patch.object(admin_announce, "generate_audio_calling",
+                         side_effect=fake_generate), \
+            patch.object(admin_announce, "communikation"):
+        response = client.post(
+            "/admin/announce/audio/test/test",
+            data={
+                "language_code": "fr",
+                "call_number": "A-1",
+                "text_template": "Veuillez rejoindre {C}, numéro {N}",
+            },
+        )
+
+    assert response.status_code == 200
+    assert captured["text_template_override"] == \
+        "Veuillez rejoindre {C}, numéro {N}"
+
+
+def test_test_audio_refuse_une_balise_inconnue(client):
+    admin_announce._audio_test_last_run.clear()
+    response = client.post(
+        "/admin/announce/audio/test/test",
+        data={
+            "language_code": "fr",
+            "call_number": "A-1",
+            "text_template": "Texte {X}",
+        },
+    )
+    assert response.status_code == 400
+    assert "balises" in response.get_json()["error"]
+
+
+def test_interface_explique_le_choix_du_moteur_et_le_texte_du_test():
+    template = (SERVEUR_DIR / "templates" / "admin" /
+                "announce_audio.html").read_text(encoding="utf-8")
+    javascript = (SERVEUR_DIR / "static" / "js" /
+                  "admin_fragments.js").read_text(encoding="utf-8")
+
+    assert "Choix rapide pour toutes les langues" in template
+    assert "/admin/announce/gtts/use_for_all" in template
+    assert "Moteur et voix par langue" in template
+    assert "texte actuellement affiché à l'étape 2" in template
+    assert "text_template: text_template" in javascript
+
+
 def test_liste_des_voix_preselectionne_la_voix_de_la_langue_editee(app, client):
     en = _lang(app, "en")
     voices = [_voice("en-GB-Wavenet-B", "en-GB"), _voice("en-GB-Neural2-A", "en-GB")]

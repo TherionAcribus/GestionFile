@@ -27,6 +27,7 @@ from upload_security import (
 )
 from audit_service import record_audit
 from tts_voice_defaults import pick_default_google_voice, voice_type as google_voice_type
+from utils import validate_config_text
 from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
@@ -338,11 +339,25 @@ _CALL_NUMBER_RE = re.compile(r"[A-Za-z0-9-]{1,10}")
 def announce_audio_test(scope):
     language_code = request.values.get('language_code', 'fr')
     call_number = request.values.get('call_number', 'A-1')
+    text_template = request.values.get('text_template')
 
     if scope not in ("test", "announce"):
         return jsonify({"error": "Portée de test invalide."}), 400
     if not _CALL_NUMBER_RE.fullmatch(call_number or ""):
         return jsonify({"error": "Numéro d'appel invalide (10 caractères max, lettres/chiffres/tiret)."}), 400
+
+    # Le test doit lire le texte actuellement visible à l'étape 2, y
+    # compris s'il n'a pas encore été enregistré. La valeur reste bornée et
+    # soumise exactement aux mêmes règles de balises que la configuration.
+    if text_template is not None:
+        if not text_template.strip():
+            return jsonify({"error": "Le texte à lire ne peut pas être vide."}), 400
+        if len(text_template) > 200:
+            return jsonify({"error": "Le texte à lire est trop long (200 caractères max)."}), 400
+        text_check = validate_config_text("announce_call_sound", text_template)
+        if not text_check["success"]:
+            return jsonify({"error": text_check["value"]}), 400
+        text_template = text_check["value"]
 
     # Throttling par utilisateur AVANT toute génération.
     username = getattr(current_user, "username", "unknown")
@@ -381,11 +396,15 @@ def announce_audio_test(scope):
     if scope == "test":
         # Mesure du temps uniquement pour le test sur cette page
         start_time = time.time()
-        audio_url = generate_audio_calling("A", patient, language_code=language_code)
+        audio_url = generate_audio_calling(
+            "A", patient, language_code=language_code,
+            text_template_override=text_template)
         generation_time = time.time() - start_time
     else:
         # Pour l'annonce sur l'écran d'annonce, pas de mesure de temps
-        audio_url = generate_audio_calling("A", patient, language_code=language_code)
+        audio_url = generate_audio_calling(
+            "A", patient, language_code=language_code,
+            text_template_override=text_template)
         generation_time = 0
 
     if scope == "announce":        
@@ -732,6 +751,35 @@ def announce_use_google_for_all():
         message += (" Aucune voix Google pour : " + ", ".join(skipped)
                     + " (restent sur gTTS).")
     display_toast(success=True, message=message)
+    return "", 200, _VOICES_CHANGED
+
+
+@admin_announce_bp.route('/admin/announce/gtts/use_for_all', methods=['POST'])
+@require_permission('announce')
+def announce_use_gtts_for_all():
+    """Utilise gTTS pour toutes les langues proposées dans l'annonce."""
+    languages = _voice_languages()
+    try:
+        for language in languages:
+            language.voice_model = "gtts"
+        config_sync.bump_generation()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        record_audit(ACTION_UPDATE, "language", target_id="*",
+                     outcome=OUTCOME_FAILURE, details="voice_model=gtts (toutes)")
+        app.logger.exception("Échec du passage de toutes les langues sur gTTS")
+        return display_toast(success=False,
+                             message="L'enregistrement a échoué.")
+
+    record_audit(ACTION_UPDATE, "language", target_id="*",
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"voice_model=gtts ({len(languages)} langues)")
+    if any(language.code == "fr" for language in languages):
+        app.config["VOICE_MODEL"] = "gtts"
+
+    display_toast(success=True,
+                  message=f"gTTS activé pour {len(languages)} langue(s).")
     return "", 200, _VOICES_CHANGED
 
 @admin_announce_bp.route('/admin/announce/save_voice_model', methods=['POST'])
