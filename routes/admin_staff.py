@@ -116,8 +116,10 @@ def update_member(member_id):
     record_audit(ACTION_UPDATE, "staff", target_id=member_id,
                  outcome=OUTCOME_SUCCESS,
                  details=f"name={member.name}")
-    # Compétences modifiées : les comptoirs rechargent leurs boutons.
+    # Compétences modifiées : les comptoirs rechargent leurs boutons et la
+    # borne revérifie les activités encore appelables.
     communikation("counter", event="update buttons")
+    communikation("patient", event="refresh_buttons")
     display_toast(success=True, message="Membre enregistré")
     return display_staff_table()
 
@@ -152,6 +154,9 @@ def delete_staff(member_id):
         if was_connected:
             # Le comptoir qu'il occupait se retrouve sans personne.
             communikation("counter", event="update buttons")
+        # Ses compétences disparaissent avec lui : des activités peuvent
+        # devenir non appelables sur la borne.
+        communikation("patient", event="refresh_buttons")
         display_toast(success=True, message="Membre supprimé")
         return display_staff_table()
 
@@ -202,6 +207,8 @@ def add_new_staff():
         record_audit(ACTION_CREATE, "staff", target_id=new_staff.id,
                      outcome=OUTCOME_SUCCESS,
                      details=f"name={new_staff.name}")
+        # Ses compétences peuvent rendre des activités appelables sur la borne.
+        communikation("patient", event="refresh_buttons")
 
         # Effacer le formulaire via swap-oob
         clear_form_html = """<div hx-swap-oob="innerHTML:#div_add_staff_form"></div>"""

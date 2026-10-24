@@ -34,7 +34,7 @@ os.environ.setdefault("SKIP_STARTUP_HOOKS", "1")
 import pytest
 from flask import Flask
 
-from models import db, Activity, ActivitySchedule, Button, Language, Patient, Weekday
+from models import db, Activity, ActivitySchedule, Button, Language, Patient, Pharmacist, Weekday
 
 _SERVEUR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
@@ -113,12 +113,16 @@ def client(application):
 
 
 def _activite(application, letter="O"):
-    """Crée langue + activité, renvoie l'id de l'activité."""
+    """Crée langue + activité, renvoie l'id de l'activité.
+
+    L'activité est assignée à un équipier : sans personne pouvant l'appeler,
+    la borne la refuse désormais (activity_accepting_registrations)."""
     with application.app_context():
         langue = Language(code="fr", name="Français", translation="Français")
         activite = Activity(name="Ordonnance", letter=letter,
                             notification=False, specific_message="")
-        db.session.add_all([langue, activite])
+        marie = Pharmacist(name="Marie", initials="MA", activities=[activite])
+        db.session.add_all([langue, activite, marie])
         db.session.commit()
         return activite.id
 

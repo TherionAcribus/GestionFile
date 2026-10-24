@@ -708,11 +708,15 @@ def activity_accepting_registrations(activity, now=None):
     affiché peut être scanné après la fin des horaires. La disponibilité est
     donc recalculée au moment de l'inscription, jamais lue du formulaire.
 
-    Deux conditions :
+    Trois conditions :
 
     - dans ses horaires (``is_open_at`` — la même règle que la page admin et
       le scheduler, mais recalculée en direct : un job de bascule raté ou un
       redémarrage ne laisse pas la porte ouverte) ;
+    - au moins un équipier a l'activité en compétence : sinon aucun comptoir
+      ne pourra jamais appeler le patient (``algo_choice_next_patient``
+      filtre sur ``counter.staff.activities``) et il attendrait
+      indéfiniment ;
     - et, si l'activité possède des boutons, au moins l'un encore proposé
       (``is_active`` ET ``is_present`` — couvre la désactivation manuelle
       admin comme le masquage « hors horaires » quand
@@ -725,6 +729,8 @@ def activity_accepting_registrations(activity, now=None):
     now = now or datetime.now(time_tz)
     if not is_open_at(activity.schedules,
                       ENGLISH_DAY_NAMES[now.weekday()], now.time()):
+        return False
+    if not activity.pharmacists:
         return False
     buttons = activity.buttons
     return not buttons or any(

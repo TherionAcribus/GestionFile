@@ -196,8 +196,10 @@ def update_activity(activity_id):
     record_audit(ACTION_UPDATE, "activity", target_id=activity_id,
                  outcome=OUTCOME_SUCCESS,
                  details=f"name={activity.name}")
-    # Compétences modifiées : les comptoirs rechargent leurs boutons.
+    # Compétences modifiées : les comptoirs rechargent leurs boutons et la
+    # borne revérifie si l'activité reste appelable (bouton grisé/masqué).
     communikation("counter", event="update buttons")
+    communikation("patient", event="refresh_buttons")
     display_toast(success=True, message="Activité enregistrée")
     return return_good_display_activity(activity.is_staff)
 
@@ -266,8 +268,10 @@ def delete_activity(activity_id, staff=None):
         remove_activity_jobs(activity_id)
         record_audit(ACTION_DELETE, "activity", target_id=activity_id,
                      outcome=OUTCOME_SUCCESS)
-        # L'activité disparaît des compétences : les comptoirs rechargent.
+        # L'activité disparaît des compétences : les comptoirs rechargent
+        # et la borne retire/grise ses boutons.
         communikation("counter", event="update buttons")
+        communikation("patient", event="refresh_buttons")
         display_toast(success=True, message="Activité supprimée avec succès")
         return return_good_display_activity(staff)
 

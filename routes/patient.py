@@ -2,7 +2,7 @@ import uuid
 import markdown2
 from routes.admin_security import require_permission
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
-from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision
+from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision, pharmacists_activities
 from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
 from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, qr_code_data_uri, _business_day, activity_accepting_registrations
 from communication import communikation, notify_patient_phone_closed, send_app_notification
@@ -79,10 +79,39 @@ def patient_cancel():
     session["language_code"] = "fr"
     return patient_right_page()
 
+def _callable_activity_ids():
+    """Ids des activités appelables : au moins un équipier les a en
+    compétence. Un patient d'une activité sans équipier attendrait
+    indéfiniment — l'appel « suivant » filtre sur ``counter.staff.activities``.
+    """
+    return {row[0] for row in
+            db.session.query(pharmacists_activities.c.activity_id).distinct()}
+
+
+def _uncallable_button_ids(buttons, callable_ids):
+    """Ids des boutons dont l'activité n'est appelable par personne :
+    grisés sur la borne (même rendu qu'un bouton hors horaires)."""
+    return {b.id for b in buttons
+            if b.activity_id is not None and b.activity_id not in callable_ids}
+
+
+def _hide_uncallable(buttons, callable_ids):
+    """Liste sans les boutons non appelables — politique « masquer les
+    boutons indisponibles » (PAGE_PATIENT_DISABLE_BUTTON désactivé)."""
+    return [b for b in buttons
+            if b.activity_id is None or b.activity_id in callable_ids]
+
+
 # affiche les boutons
 @patient_bp.route('/patient/patient_buttons')
 def patient_right_page():
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
+
+    callable_ids = _callable_activity_ids()
+    # Même politique que les boutons hors horaires : non appelable =
+    # retiré de l'écran quand l'option masque les indisponibles.
+    if not app.config.get("PAGE_PATIENT_DISABLE_BUTTON", True):
+        buttons = _hide_uncallable(buttons, callable_ids)
 
     # Aucun bouton présent (tous décochés) : message clair au lieu d'une page
     # vide / d'un plantage. Le personnel est par ailleurs alerté côté admin
@@ -103,12 +132,21 @@ def patient_right_page():
 
     max_length = 2 if buttons and buttons[0].shape == "square" else 4
 
+    uncallable_button_ids = _uncallable_button_ids(buttons, callable_ids)
+
     # Boutons parents affichés sans sous-bouton affiché : ils seront grisés et
     # rendus non cliquables par le gabarit (au lieu de mener à une page vide /
     # de planter sur children_buttons[0]). Voir diagnostics.find_empty_present_parents.
+    # Un enfant non appelable ne « compte » plus pour son parent quand
+    # l'option masque les boutons indisponibles (il ne sera pas affiché).
+    gray_disabled = app.config.get("PAGE_PATIENT_DISABLE_BUTTON", True)
     empty_parent_ids = {
         b.id for b in buttons
-        if b.is_parent and not any(child.is_present for child in b.dependent_buttons)
+        if b.is_parent and not any(
+            child.is_present and (gray_disabled
+                                  or child.activity_id is None
+                                  or child.activity_id in callable_ids)
+            for child in b.dependent_buttons)
     }
 
     # UUID d'intention du parcours : il voyage dans les hx-vals des boutons
@@ -123,6 +161,7 @@ def patient_right_page():
                             max_length=max_length,
                             journey_id=journey_id,
                             empty_parent_ids=empty_parent_ids,
+                            uncallable_button_ids=uncallable_button_ids,
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             circle_image_above=app.config.get('PAGE_PATIENT_CIRCLE_IMAGE_ABOVE', True))
     
@@ -191,7 +230,12 @@ def cancel_children():
 # affiche les boutons "enfants" de droite
 def display_children_buttons_for_right_page(request):
     children_buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = request.form.get('button_id')).all()
-    
+
+    callable_ids = _callable_activity_ids()
+    if not app.config.get("PAGE_PATIENT_DISABLE_BUTTON", True):
+        children_buttons = _hide_uncallable(children_buttons, callable_ids)
+    uncallable_button_ids = _uncallable_button_ids(children_buttons, callable_ids)
+
     language_code = session.get('language_code', 'fr')
     button_translations = {}
     if language_code != "fr":
@@ -213,6 +257,7 @@ def display_children_buttons_for_right_page(request):
                             button_translations=button_translations,
                             page_patient_interface_children_back=page_patient_interface_children_back,
                             max_length=max_length,
+                            uncallable_button_ids=uncallable_button_ids,
                             circle_image_above=app.config.get('PAGE_PATIENT_CIRCLE_IMAGE_ABOVE', True),
                             # L'intention de parcours suit la navigation dans
                             # les sous-boutons : l'inscription finale reste

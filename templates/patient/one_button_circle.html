@@ -1,8 +1,12 @@
 {# Un parent sans sous-bouton affiché est grisé et non cliquable (pas de hx-post) :
    inutilisable pour le patient, mais visible pour signaler le problème. #}
 {% set is_empty_parent = empty_parent_ids is defined and button.id in empty_parent_ids %}
+{# Activité sans équipier assigné : personne ne pourra appeler le patient —
+   même rendu grisé qu'un bouton hors horaires (le clic affiche le message
+   d'indisponibilité). #}
+{% set is_uncallable = uncallable_button_ids is defined and button.id in uncallable_button_ids %}
 {% set preview_is_inactive = preview_inactive_mode | default(false) and button.id in preview_inactive_button_ids %}
-{% set is_active = (not preview_is_inactive) if preview_inactive_mode | default(false) else button.is_active %}
+{% set is_active = (not preview_is_inactive) if preview_inactive_mode | default(false) else (button.is_active and not is_uncallable) %}
 {# Image « au-dessus » du cercle (présentation historique) : le défaut vaut
    True — seul un False explicite la contient dans le bouton. La classe
    img_above est posée sur TOUTES les cellules quand le mode est actif
