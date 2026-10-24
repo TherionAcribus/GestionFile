@@ -20,7 +20,7 @@ from werkzeug.security import generate_password_hash
 
 import python.engine as engine
 import routes.admin_announce as admin_announce
-from models import Language, Role, User, db
+from models import ConfigOption, Language, Role, User, db
 from tts_voice_defaults import pick_default_google_voice, voice_type
 
 SERVEUR_DIR = Path(__file__).resolve().parents[1]
@@ -297,6 +297,41 @@ def test_test_audio_transmet_le_texte_courant_de_letape_2(client):
     assert response.status_code == 200
     assert captured["text_template_override"] == \
         "Veuillez rejoindre {C}, numéro {N}"
+    assert captured["preserve_text_template"] is True
+
+
+def test_test_audio_sans_texte_client_relit_la_base(app, client):
+    """Un ancien JS ne doit pas faire relire une app.config périmée."""
+    with app.app_context():
+        db.session.add(ConfigOption(
+            config_key="announce_call_sound",
+            value_str="Texte enregistré {N} vers {C}"))
+        db.session.commit()
+    app.config["ANNOUNCE_CALL_SOUND"] = "Ancien texte {C}, {N}"
+
+    admin_announce._audio_test_last_run.clear()
+    captured = {}
+    patient = SimpleNamespace(
+        language=SimpleNamespace(code="fr", voice_is_active=True),
+        language_code="fr", counter=None)
+
+    def fake_generate(counter, current_patient, **kwargs):
+        captured.update(kwargs)
+        return "/static/audio/test.mp3"
+
+    with patch.object(admin_announce, "get_futur_patient", return_value=patient), \
+            patch.object(admin_announce, "generate_audio_calling",
+                         side_effect=fake_generate), \
+            patch.object(admin_announce, "communikation"):
+        response = client.post(
+            "/admin/announce/audio/test/test",
+            data={"language_code": "fr", "call_number": "A-1"},
+        )
+
+    assert response.status_code == 200
+    assert captured["text_template_override"] == \
+        "Texte enregistré {N} vers {C}"
+    assert captured["preserve_text_template"] is True
 
 
 def test_test_audio_refuse_une_balise_inconnue(client):
@@ -318,12 +353,15 @@ def test_interface_explique_le_choix_du_moteur_et_le_texte_du_test():
                 "announce_audio.html").read_text(encoding="utf-8")
     javascript = (SERVEUR_DIR / "static" / "js" /
                   "admin_fragments.js").read_text(encoding="utf-8")
+    base = (SERVEUR_DIR / "templates" / "admin" /
+            "base.html").read_text(encoding="utf-8")
 
     assert "Choix rapide pour toutes les langues" in template
     assert "/admin/announce/gtts/use_for_all" in template
     assert "Moteur et voix par langue" in template
     assert "texte actuellement affiché à l'étape 2" in template
     assert "text_template: text_template" in javascript
+    assert "admin_fragments.js', v='20261024-voice-test'" in base
 
 
 def test_liste_des_voix_preselectionne_la_voix_de_la_langue_editee(app, client):

@@ -35,7 +35,9 @@ def flask_app():
 def capture(monkeypatch):
     """Court-circuite la synthèse : on ne garde que (texte, langue) demandés."""
     appels = []
-    monkeypatch.setattr(engine, "replace_balise_announces", lambda template, patient: template)
+    monkeypatch.setattr(
+        engine, "replace_balise_announces",
+        lambda template, patient, **kwargs: template)
     monkeypatch.setattr(
         engine,
         "choose_voice_model",
@@ -92,6 +94,27 @@ def test_texte_courant_de_linterface_remplace_le_texte_francais(flask_app, captu
             text_template_override="Veuillez rejoindre {C}, numéro {N}")
 
     assert capture == [("Veuillez rejoindre {C}, numéro {N}", "fr")]
+
+
+def test_preecoute_preserve_le_texte_sans_personnel_connecte(
+        flask_app, capture, monkeypatch):
+    calls = []
+
+    def replace(template, patient, **kwargs):
+        calls.append((template, kwargs))
+        return template
+
+    monkeypatch.setattr(engine, "replace_balise_announces", replace)
+    with flask_app.app_context():
+        engine.generate_audio_calling(
+            1, _patient(), language_code="fr",
+            text_template_override="Veuillez rejoindre {C}, numéro {N}",
+            preserve_text_template=True)
+
+    assert calls == [(
+        "Veuillez rejoindre {C}, numéro {N}",
+        {"fallback_on_missing_staff": False},
+    )]
 
 
 def test_texte_courant_est_utilise_lors_du_repli_de_traduction(

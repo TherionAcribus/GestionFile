@@ -753,7 +753,8 @@ def register_journey_patient(activity, journey_id):
 
 
 def generate_audio_calling(counter_number, next_patient, language_code="fr",
-                           text_template_override=None):
+                           text_template_override=None,
+                           preserve_text_template=False):
 
     # Si on ne veux pas de son, on quitte
     if not app.config["ANNOUNCE_SOUND"]:
@@ -795,7 +796,14 @@ def generate_audio_calling(counter_number, next_patient, language_code="fr",
             else:
                 text_template = translated_template["translation"]
 
-    text = replace_balise_announces(text_template, next_patient)
+    if preserve_text_template:
+        # La préécoute Admin utilise un patient fictif : l'absence de membre
+        # connecté ne doit pas remplacer le texte testé par « Comptoir C: N ».
+        text = replace_balise_announces(
+            text_template, next_patient, fallback_on_missing_staff=False)
+    else:
+        # Appels réels : conserver le garde-fou historique.
+        text = replace_balise_announces(text_template, next_patient)
 
     return choose_voice_model(next_patient, text, language_code)
     

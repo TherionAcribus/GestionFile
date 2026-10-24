@@ -341,6 +341,20 @@ def announce_audio_test(scope):
     call_number = request.values.get('call_number', 'A-1')
     text_template = request.values.get('text_template')
 
+    # Compatibilité avec un onglet ayant conservé l'ancienne version de
+    # admin_fragments.js : si le navigateur n'envoie pas encore le champ de
+    # l'étape 2, relire sa valeur directement dans la base (source de vérité)
+    # au lieu de retomber sur app.config, qui peut être brièvement périmée
+    # dans une autre réplique web.
+    if text_template is None:
+        stored_text = ConfigOption.query.filter_by(
+            config_key="announce_call_sound").first()
+        text_template = (
+            stored_text.value_str
+            if stored_text is not None and stored_text.value_str is not None
+            else app.config.get("ANNOUNCE_CALL_SOUND", "")
+        )
+
     if scope not in ("test", "announce"):
         return jsonify({"error": "Portée de test invalide."}), 400
     if not _CALL_NUMBER_RE.fullmatch(call_number or ""):
@@ -349,15 +363,14 @@ def announce_audio_test(scope):
     # Le test doit lire le texte actuellement visible à l'étape 2, y
     # compris s'il n'a pas encore été enregistré. La valeur reste bornée et
     # soumise exactement aux mêmes règles de balises que la configuration.
-    if text_template is not None:
-        if not text_template.strip():
-            return jsonify({"error": "Le texte à lire ne peut pas être vide."}), 400
-        if len(text_template) > 200:
-            return jsonify({"error": "Le texte à lire est trop long (200 caractères max)."}), 400
-        text_check = validate_config_text("announce_call_sound", text_template)
-        if not text_check["success"]:
-            return jsonify({"error": text_check["value"]}), 400
-        text_template = text_check["value"]
+    if not text_template.strip():
+        return jsonify({"error": "Le texte à lire ne peut pas être vide."}), 400
+    if len(text_template) > 200:
+        return jsonify({"error": "Le texte à lire est trop long (200 caractères max)."}), 400
+    text_check = validate_config_text("announce_call_sound", text_template)
+    if not text_check["success"]:
+        return jsonify({"error": text_check["value"]}), 400
+    text_template = text_check["value"]
 
     # Throttling par utilisateur AVANT toute génération.
     username = getattr(current_user, "username", "unknown")
@@ -398,13 +411,15 @@ def announce_audio_test(scope):
         start_time = time.time()
         audio_url = generate_audio_calling(
             "A", patient, language_code=language_code,
-            text_template_override=text_template)
+            text_template_override=text_template,
+            preserve_text_template=True)
         generation_time = time.time() - start_time
     else:
         # Pour l'annonce sur l'écran d'annonce, pas de mesure de temps
         audio_url = generate_audio_calling(
             "A", patient, language_code=language_code,
-            text_template_override=text_template)
+            text_template_override=text_template,
+            preserve_text_template=True)
         generation_time = 0
 
     if scope == "announce":        

@@ -496,7 +496,9 @@
         attachés par délégation. Ils étaient définis EN LIGNE, donc redéfinis à
         chaque échange. `selectImage` et `getSelectedOptions` étaient même
         dupliquées à l'identique dans deux gabarits chacune. #}
-    <script defer src="{{ url_for('static', filename='js/admin_fragments.js') }}"></script>
+    {# Version explicite : un ancien script gardé en cache ferait tester la
+       copie serveur du texte au lieu du champ visible dans « Son et voix ». #}
+    <script defer src="{{ url_for('static', filename='js/admin_fragments.js', v='20261024-voice-test') }}"></script>
     <script defer src="{{ url_for('static', filename='js/admin_backups.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/admin_dashboard_select.js') }}"></script>
     {#  admin_unsaved_changes.js : détection des modifications non enregistrées

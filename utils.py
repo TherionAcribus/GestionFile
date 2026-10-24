@@ -325,16 +325,19 @@ def replace_balises(template, patient=None, language_code=None):
     )
 
 
-def replace_balise_announces(template, patient):
+def replace_balise_announces(template, patient, fallback_on_missing_staff=True):
     """ Remplace les balises dans les textes d'annonces (texte et son).
 
     Sans membre d'équipe sur le comptoir, on dégrade le texte en
     « Comptoir {C}: {N} » et on alerte le personnel — le patient reste appelé.
+    ``fallback_on_missing_staff=False`` est réservé à la préécoute Admin :
+    son patient est fictif et doit conserver le texte choisi même lorsqu'aucun
+    membre d'équipe n'est actuellement connecté.
     """
     app.logger.debug('replace_balise_announces %s %s', template, patient)
     counter = getattr(patient, 'counter', None)
     staff = getattr(counter, 'staff', None)
-    if patient is None or staff is None:
+    if fallback_on_missing_staff and (patient is None or staff is None):
         app.logger.error(f"Pas de Staff on counter : {patient} {counter} {staff}")
         send_app_notification(origin="erreur", data="Erreur: Vous n'êtes pas connecté au comptoir. Le patient est bien appelé. Signaler le problème.")
         template = "Comptoir {C}: {N}"

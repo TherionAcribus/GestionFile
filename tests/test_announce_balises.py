@@ -67,6 +67,21 @@ def test_sans_staff_le_repli_reste_rendu(flask_app, monkeypatch):
     assert envoyees and envoyees[0]["origin"] == "erreur"
 
 
+def test_preecoute_sans_staff_conserve_le_texte_choisi(flask_app, monkeypatch):
+    """Le patient fictif du test vocal n'est pas un appel patient en erreur."""
+    envoyees = []
+    monkeypatch.setattr(utils, "send_app_notification",
+                        lambda **kw: envoyees.append(kw))
+    with flask_app.app_context():
+        rendu = utils.replace_balise_announces(
+            "Veuillez rejoindre le comptoir {C}, numéro {N}",
+            _patient(with_staff=False),
+            fallback_on_missing_staff=False,
+        )
+    assert rendu == "Veuillez rejoindre le comptoir 1, numéro A12"
+    assert envoyees == []
+
+
 def test_source_ne_requete_plus_configoption_par_cle():
     source = open(os.path.join(os.path.dirname(__file__), os.pardir, "utils.py"), encoding="utf-8").read()
     assert 'ConfigOption.query.get(' not in source
