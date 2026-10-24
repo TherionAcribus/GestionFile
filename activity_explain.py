@@ -98,6 +98,27 @@ def is_open_at(schedules, weekday_english: str, current_time) -> bool:
     return False
 
 
+ASSIGNEES_ALL = "all"
+ASSIGNEES_NONE = "none"
+ASSIGNEES_SOME = "some"
+
+
+def assignees(member_ids, members):
+    """``(code, noms)`` : toute l'équipe / personne / certains peuvent appeler.
+
+    Pendant de ``staff_explain.competences`` vu de l'autre côté : ici la
+    référence est la liste des membres de l'équipe (``members``), et les
+    ``member_ids`` sont ceux qui ont l'activité dans leurs compétences.
+    """
+    ids = set(member_ids or ())
+    names = sorted(m.name for m in members or () if m.id in ids)
+    if not members or not names:
+        return ASSIGNEES_NONE, []
+    if len(names) == len(members):
+        return ASSIGNEES_ALL, names
+    return ASSIGNEES_SOME, names
+
+
 def shared_letters(activities) -> dict:
     """``{id: [noms des autres activités ayant la même lettre]}``.
 

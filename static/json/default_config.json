@@ -44,7 +44,7 @@
             "announce_next_patients_display": true,
             "announce_next_patients_text": "Prochains patients :",
             "announce_next_patients_alignment": "center",
-            "announce_call_sound": "Le patient {N} est invité au comptoir {C}",
+            "announce_call_sound": "Le patient {N}, est invité au comptoir {C}",
             "announce_call_translation": "vo",
             "announce_infos_display": false,
             "announce_infos_display_time": 30,

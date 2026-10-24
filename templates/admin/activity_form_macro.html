@@ -4,8 +4,11 @@
    id (plusieurs formulaires coexistent sur la page). Une erreur de
    validation répond 204 : rien n'est remplacé, la saisie reste en place. #}
 
-{% macro activity_form(p, activity, schedules, url, target, submit_label, staff=None, cancel_target=None, continuous=False) %}
+{% macro activity_form(p, activity, schedules, url, target, submit_label, staff=None, cancel_target=None, continuous=False, members=None) %}
 {% set selected = activity.schedules | map(attribute='id') | list if activity else [] %}
+{# Équipiers cochés : ceux qui ont l'activité en compétence ; à la création,
+   toute l'équipe est proposée (comportement par défaut le plus courant). #}
+{% set selected_members = activity.pharmacists | map(attribute='id') | list if activity else (members or []) | map(attribute='id') | list %}
 <form class="activity-form" hx-post="{{ url }}" hx-target="{{ target }}" hx-swap="innerHTML">
     <div class="row g-3">
         {% if staff is not none %}
@@ -72,6 +75,37 @@
                 {% endif %}
             </fieldset>
         </div>
+
+        {% if members is not none %}
+        <div class="col-12">
+            <fieldset>
+                <div class="d-flex flex-wrap align-items-baseline gap-2 mb-1">
+                    <legend class="form-label fs-6 mb-0 w-auto">Équipiers pouvant appeler ces patients</legend>
+                    {% if members %}
+                    <button type="button" class="btn btn-link btn-sm p-0" data-check-all="#{{ p }}_assignees">Tout cocher</button>
+                    <button type="button" class="btn btn-link btn-sm p-0" data-uncheck-all="#{{ p }}_assignees">Tout décocher</button>
+                    {% endif %}
+                </div>
+                {% if members %}
+                <div class="staff-competences" id="{{ p }}_assignees">
+                    {% for member in members %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="pharmacists" value="{{ member.id }}"
+                               id="{{ p }}_member_{{ member.id }}" {% if member.id in selected_members %}checked{% endif %}>
+                        <label class="form-check-label" for="{{ p }}_member_{{ member.id }}">
+                            {{ member.name }}
+                            {% if staff is not none and activity and member.id == activity.staff_id %}<span class="badge text-bg-info">demandée</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="form-text">Aucune case cochée : personne ne pourra appeler ces patients.{% if staff is not none %} La personne demandée est toujours ajoutée.{% endif %}</div>
+                {% else %}
+                <p class="small text-muted mb-0">Aucun membre : ajoutez-en dans <a href="/admin/staff">Équipe</a>.</p>
+                {% endif %}
+            </fieldset>
+        </div>
+        {% endif %}
 
         <div class="col-md-6">
             <label class="form-label" for="{{ p }}_specific">Message affiché au patient après son choix <span class="text-muted fw-normal">(facultatif)</span></label>

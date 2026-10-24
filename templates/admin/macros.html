@@ -185,12 +185,15 @@
 {% endmacro %}
 
 {# Macro pour les blocs de texte avec balises #}
-{% macro textbloc_with_balises(key, value, label, balises_macro, balises_key, display_balises_web=False) %}
+{% macro textbloc_with_balises(key, value, label, balises_macro, balises_key, display_balises_web=False, help_text=None) %}
 <div class="row mb-4 admin-setting-card admin-text-setting">
     <div class="col-12">
         <div class="d-flex align-items-start">
             <div class="flex-grow-1">
                 {{ textarea(key, value, label) }}
+                {% if help_text %}
+                    <p class="form-text mb-0">{{ help_text }}</p>
+                {% endif %}
                 <div class="mt-2">
                     {{ balises_macro(key) }}
                 </div>
@@ -217,8 +220,8 @@
 {% endmacro %}
 
 {# Macro pour bloc after_call #}
-{% macro textbloc_after_call(key, value, label) %}
-{{ textbloc_with_balises(key, value, label, balises_after_call, "after_call") }}
+{% macro textbloc_after_call(key, value, label, help_text=None) %}
+{{ textbloc_with_balises(key, value, label, balises_after_call, "after_call", help_text=help_text) }}
 {% endmacro %}
 
 {# Macro pour bloc after_call pour le web dans le cadre #}

@@ -360,8 +360,19 @@ def test_interface_explique_le_choix_du_moteur_et_le_texte_du_test():
     assert "/admin/announce/gtts/use_for_all" in template
     assert "Moteur et voix par langue" in template
     assert "texte actuellement affiché à l'étape 2" in template
+    assert "Si la prononciation n’est pas assez marquée" in template
     assert "text_template: text_template" in javascript
     assert "admin_fragments.js', v='20261024-voice-test'" in base
+
+
+def test_texte_vocal_par_defaut_marque_une_pause_apres_le_numero():
+    defaults = json.loads(
+        (SERVEUR_DIR / "static" / "json" / "default_config.json")
+        .read_text(encoding="utf-8")
+    )
+
+    assert defaults["configurations"]["announce_call_sound"] == \
+        "Le patient {N}, est invité au comptoir {C}"
 
 
 def test_liste_des_voix_preselectionne_la_voix_de_la_langue_editee(app, client):

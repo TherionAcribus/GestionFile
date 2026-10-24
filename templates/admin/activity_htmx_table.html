@@ -45,6 +45,16 @@
                     <li><i class="bi bi-clock" aria-hidden="true"></i>
                         {% if item.continuous %}Proposée en continu{% else %}Seulement : {{ item.schedules | join(' ; ') }}{% endif %}
                     </li>
+                    <li><i class="bi bi-people" aria-hidden="true"></i>
+                        {% if item.assignees == 'all' %}
+                            Appelable par <strong>toute l'équipe</strong>
+                        {% elif item.assignee_names %}
+                            Appelable par : {{ item.assignee_names | join(', ') }}
+                        {% else %}
+                            <span class="text-warning-emphasis"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+                            Personne ne peut appeler ces patients.</span>
+                        {% endif %}
+                    </li>
                     {% if activity.specific_message %}
                     <li class="text-muted"><i class="bi bi-chat-left-text" aria-hidden="true"></i> Après le choix : « {{ activity.specific_message }} »</li>
                     {% endif %}
@@ -72,7 +82,7 @@
         </div>
         <div class="collapse" id="edit_{{ p }}">
             <div class="card-body border-top">
-                {{ activity_form(p, activity, schedules, '/admin/activity/activity_update/' ~ activity.id, target, 'Enregistrer', staff=staff, cancel_target='#edit_' ~ p, continuous=item.continuous) }}
+                {{ activity_form(p, activity, schedules, '/admin/activity/activity_update/' ~ activity.id, target, 'Enregistrer', staff=staff, cancel_target='#edit_' ~ p, continuous=item.continuous, members=members) }}
             </div>
         </div>
     </article>

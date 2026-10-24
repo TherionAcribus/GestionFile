@@ -151,7 +151,8 @@ def app(tmp_path, fake_scheduler):
         samedi = ActivitySchedule(name="Samedi", start_time=time(9), end_time=time(12),
                                   weekdays=[days[5]])
         marie = Pharmacist(name="Marie", initials="MA")
-        db.session.add_all([matin, samedi, marie])
+        jean = Pharmacist(name="Jean", initials="JD")
+        db.session.add_all([matin, samedi, marie, jean])
         db.session.add_all([
             Activity(name="Ordonnance", letter="A", schedules=[matin], notification=True),
             Activity(name="Conseil", letter="A", schedules=[samedi]),
@@ -161,6 +162,7 @@ def app(tmp_path, fake_scheduler):
         ])
         db.session.commit()
     with patch.object(admin_activity, "_now", return_value=_LUNDI_10H), \
+            patch.object(admin_activity, "communikation", lambda *a, **k: None), \
             patch.object(admin_schedule, "communikation", lambda *a, **k: None), \
             patch("ui_feedback.communikation", lambda *a, **k: None):
         yield app
@@ -304,6 +306,90 @@ def test_demande_nominative_ajoutee_aux_competences(app, client):
     with app.app_context():
         member = db.session.get(Pharmacist, marie.id)
         assert "Voir Marie bis" in [a.name for a in member.activities]
+
+
+# --- Assignation aux équipiers (cases « pharmacists ») -------------------------
+
+def test_cartes_indiquent_qui_peut_appeler(client):
+    html = client.get("/admin/activity/table").get_data(as_text=True)
+    # Aucune compétence attribuée au départ.
+    assert html.count("Personne ne peut appeler ces patients") == 3
+
+
+def test_formulaire_creation_coche_toute_l_equipe(client):
+    html = client.get("/admin/activity/add_form").get_data(as_text=True)
+    assert html.count('name="pharmacists"') == 2  # Marie et Jean
+    assert "data-check-all" in html and "data-uncheck-all" in html
+    # Par défaut, tout le monde est proposé (le plus courant).
+    boxes = [b for b in html.split("<input") if 'name="pharmacists"' in b]
+    assert all("checked" in b for b in boxes)
+
+
+def test_creation_assignee_seulement_aux_coches(app, client):
+    marie = _get(app, Pharmacist, name="Marie")
+    response = client.post("/admin/activity/add_new_activity",
+                           data=_form(name="Vaccin", letter="v",
+                                      pharmacists=[str(marie.id)]))
+    assert response.status_code == 200
+    with app.app_context():
+        vaccin = Activity.query.filter_by(name="Vaccin").one()
+        assert [m.name for m in vaccin.pharmacists] == ["Marie"]
+        assert "Vaccin" in response.get_data(as_text=True)
+
+
+def test_creation_sans_assignation_personne_ne_peut_appeler(app, client):
+    response = client.post("/admin/activity/add_new_activity",
+                           data=_form(name="Vaccin", letter="v"))
+    assert response.status_code == 200
+    with app.app_context():
+        assert Activity.query.filter_by(name="Vaccin").one().pharmacists == []
+
+
+def test_modification_change_les_assignes(app, client):
+    act = _get(app, Activity, name="Ordonnance")
+    jean = _get(app, Pharmacist, name="Jean")
+    # Assigner à Jean seul.
+    response = client.post(f"/admin/activity/activity_update/{act.id}",
+                           data=_form(availability="always",
+                                      pharmacists=[str(jean.id)]))
+    assert response.status_code == 200
+    with app.app_context():
+        assert [m.name for m in db.session.get(Activity, act.id).pharmacists] == ["Jean"]
+        assert "Appelable par : Jean" in response.get_data(as_text=True)
+    # Tout décocher : plus personne.
+    response = client.post(f"/admin/activity/activity_update/{act.id}",
+                           data=_form(availability="always"))
+    assert response.status_code == 200
+    with app.app_context():
+        assert db.session.get(Activity, act.id).pharmacists == []
+    assert "Personne ne peut appeler ces patients" in response.get_data(as_text=True)
+
+
+def test_demande_nominative_personne_demandee_toujours_assignee(app, client):
+    """Même décochée, la personne demandée garde la demande en compétence —
+    sinon le patient attendrait indéfiniment."""
+    act = _get(app, Activity, name="Voir Marie")
+    marie = _get(app, Pharmacist, name="Marie")
+    response = client.post(f"/admin/activity/activity_update/{act.id}",
+                           data=_form(name="Voir Marie", letter="M",
+                                      staff_id=str(marie.id), availability="always"))
+    assert response.status_code == 200
+    with app.app_context():
+        assert db.session.get(Activity, act.id).pharmacists == [db.session.get(Pharmacist, marie.id)]
+
+
+def test_demande_nominative_assignable_a_d_autres(app, client):
+    act = _get(app, Activity, name="Voir Marie")
+    marie = _get(app, Pharmacist, name="Marie")
+    jean = _get(app, Pharmacist, name="Jean")
+    response = client.post(f"/admin/activity/activity_update/{act.id}",
+                           data=_form(name="Voir Marie", letter="M",
+                                      staff_id=str(marie.id), availability="always",
+                                      pharmacists=[str(jean.id)]))
+    assert response.status_code == 200
+    with app.app_context():
+        names = sorted(m.name for m in db.session.get(Activity, act.id).pharmacists)
+        assert names == ["Jean", "Marie"]
 
 
 def test_creation_invalide_conserve_le_formulaire(client):

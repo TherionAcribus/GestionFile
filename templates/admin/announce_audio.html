@@ -54,7 +54,12 @@
 <section class="admin-setting-card announce-audio-section" aria-labelledby="audio_text_title">
     <h5 id="audio_text_title"><span class="step-badge" aria-hidden="true">2</span> Texte lu à voix haute</h5>
 
-    {{ macros.textbloc_after_call("announce_call_sound", announce_call_sound, "Phrase annoncée lors de l'appel d'un patient") }}
+    {{ macros.textbloc_after_call(
+        "announce_call_sound",
+        announce_call_sound,
+        "Phrase annoncée lors de l'appel d'un patient",
+        "Si la prononciation n’est pas assez marquée, ajoutez une virgule dans le texte pour créer une courte pause."
+    ) }}
 
     <label for="announce_call_translation" class="form-label">Langue de l'annonce</label>
     <select

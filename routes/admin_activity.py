@@ -11,7 +11,11 @@ from audit_log import (
     ACTION_CREATE, ACTION_DELETE, ACTION_UPDATE,
     OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
-from activity_explain import ENGLISH_DAY_NAMES, describe_schedule, is_continuous, is_open_at, shared_letters
+from activity_explain import (
+    ENGLISH_DAY_NAMES, assignees, describe_schedule, is_continuous,
+    is_open_at, shared_letters,
+)
+from communication import communikation
 from extensions import scheduler
 
 admin_activity_bp = Blueprint('admin_activity', __name__)
@@ -42,35 +46,45 @@ def _schedules_with_summary():
     return [{"schedule": s, "summary": describe_schedule(s)} for s in schedules]
 
 
+def _team_members():
+    return Pharmacist.query.order_by(Pharmacist.name).all()
+
+
 def _render_activity_list(is_staff):
     """Liste des activités (ou des demandes « équipier ») en cartes."""
-    # Le gabarit lit activity.schedules pour chaque activité : selectinload
-    # charge les horaires en une requête IN groupée (évite un N+1).
+    # Le gabarit lit activity.schedules et activity.pharmacists pour chaque
+    # activité : selectinload charge ces relations en requêtes IN groupées
+    # (évite un N+1).
     activities = (Activity.query
                   .options(selectinload(Activity.schedules)
-                           .selectinload(ActivitySchedule.weekdays))
+                           .selectinload(ActivitySchedule.weekdays),
+                           selectinload(Activity.pharmacists))
                   .filter_by(is_staff=is_staff)
                   .order_by(Activity.letter, Activity.name)
                   .all())
     # Doublons de lettre cherchés sur TOUTES les activités (équipier compris).
     shared = shared_letters(Activity.query.all())
+    members = _team_members()
     now = _now()
     weekday = ENGLISH_DAY_NAMES[now.weekday()]
-    items = [
-        {
+    items = []
+    for activity in activities:
+        code, names = assignees([m.id for m in activity.pharmacists], members)
+        items.append({
             "activity": activity,
             "continuous": is_continuous(activity.schedules),
             "open": is_open_at(activity.schedules, weekday, now.time()),
             "schedules": [describe_schedule(s) for s in activity.schedules],
             "shared_letter": shared.get(activity.id, []),
-        }
-        for activity in activities
-    ]
+            "assignees": code,
+            "assignee_names": names,
+        })
     return render_template('admin/activity_htmx_table.html',
                            items=items,
                            is_staff=is_staff,
                            schedules=_schedules_with_summary(),
-                           staff=Pharmacist.query.all() if is_staff else None)
+                           staff=members if is_staff else None,
+                           members=members)
 
 
 # affiche la liste des activités
@@ -98,6 +112,9 @@ SCHEMA_ACTIVITE = (
     Champ("notification", type=BOOLEEN, libelle="La notification"),
     Champ("staff_id", type=ENTIER, libelle="Le membre d'equipe"),
     Champ("schedules", type=LISTE_ENTIERS, libelle="Les plages horaires"),
+    # Équipiers ayant l'activité en compétence (cases « pharmacists »).
+    # Absent ou vide = personne ne peut appeler ces patients.
+    Champ("pharmacists", type=LISTE_ENTIERS, libelle="Les équipiers"),
     # « always » (défaut du formulaire) : proposée en continu, aucune plage.
     # Absent (restauration, anciens clients) : les plages envoyées font foi.
     Champ("availability", libelle="La disponibilité", choix=("always", "schedules")),
@@ -145,6 +162,11 @@ def update_activity(activity_id):
         activity.schedules = [s for s in (db.session.get(ActivitySchedule, sid)
                                           for sid in valeurs["schedules"]) if s]
 
+        # Assignation aux équipiers : les cases cochées font foi (tous,
+        # personne ou certains). Identifiants inconnus ignorés.
+        members = Pharmacist.query.filter(
+            Pharmacist.id.in_(valeurs["pharmacists"])).all()
+
         if activity.is_staff:
             staff = db.session.get(Pharmacist, valeurs["staff_id"]) if valeurs["staff_id"] else None
             if staff is None:
@@ -153,8 +175,9 @@ def update_activity(activity_id):
             activity.staff = staff
             # Même règle qu'à la création : la personne demandée doit avoir
             # cette demande dans ses compétences pour pouvoir l'appeler.
-            if activity not in staff.activities:
-                staff.activities.append(activity)
+            if staff not in members:
+                members.append(staff)
+        activity.pharmacists = members
 
         db.session.commit()
     except Exception:
@@ -173,6 +196,8 @@ def update_activity(activity_id):
     record_audit(ACTION_UPDATE, "activity", target_id=activity_id,
                  outcome=OUTCOME_SUCCESS,
                  details=f"name={activity.name}")
+    # Compétences modifiées : les comptoirs rechargent leurs boutons.
+    communikation("counter", event="update buttons")
     display_toast(success=True, message="Activité enregistrée")
     return return_good_display_activity(activity.is_staff)
 
@@ -241,6 +266,8 @@ def delete_activity(activity_id, staff=None):
         remove_activity_jobs(activity_id)
         record_audit(ACTION_DELETE, "activity", target_id=activity_id,
                      outcome=OUTCOME_SUCCESS)
+        # L'activité disparaît des compétences : les comptoirs rechargent.
+        communikation("counter", event="update buttons")
         display_toast(success=True, message="Activité supprimée avec succès")
         return return_good_display_activity(staff)
 
@@ -263,16 +290,19 @@ def delete_activity_staff(activity_id, staff=None):
 @require_permission('activity')
 def add_activity_form():
     return render_template('/admin/activity_add_form.html',
-                           schedules=_schedules_with_summary())
+                           schedules=_schedules_with_summary(),
+                           members=_team_members())
 
 
 # affiche le formulaire pour ajouter un activité lié à un membre de l'équipe
 @admin_activity_bp.route('/admin/activity/add_staff_form')
 @require_permission('activity')
 def add_activity_staff_form():
+    members = _team_members()
     return render_template('/admin/activity_add_form.html',
                             schedules=_schedules_with_summary(),
-                            staff=Pharmacist.query.all())
+                            staff=members,
+                            members=members)
 
 
 # enregistre l'activité' dans la Bdd
@@ -303,12 +333,18 @@ def add_new_activity():
             if staff_id:
                 new_activity.is_staff = True
                 new_activity.staff = db.session.get(Pharmacist, staff_id)
-                # La personne demandée doit pouvoir appeler ces patients : un
-                # comptoir n'appelle que les activités de ses compétences.
-                if new_activity.staff and new_activity not in new_activity.staff.activities:
-                    new_activity.staff.activities.append(new_activity)
 
             db.session.add(new_activity)
+
+            # Assignation aux équipiers (compétences) : un comptoir n'appelle
+            # que les activités de la personne connectée. Identifiants
+            # inconnus ignorés. La personne demandée (demande nominative)
+            # doit toujours pouvoir appeler ces patients.
+            members = Pharmacist.query.filter(
+                Pharmacist.id.in_(valeurs["pharmacists"])).all()
+            if new_activity.staff and new_activity.staff not in members:
+                members.append(new_activity.staff)
+            new_activity.pharmacists = members
             db.session.flush()
 
             for schedule_id in schedule_ids:
@@ -329,6 +365,8 @@ def add_new_activity():
         record_audit(ACTION_CREATE, "activity", target_id=new_activity.id,
                      outcome=OUTCOME_SUCCESS,
                      details=f"name={new_activity.name}")
+        # Nouvelle compétence pour les équipiers : les comptoirs rechargent.
+        communikation("counter", event="update buttons")
         display_toast(success=True, message="Activité créée")
         return f"{return_good_display_activity(staff_id)}{clear_form_html}"
 

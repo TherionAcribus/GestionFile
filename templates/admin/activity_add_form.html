@@ -14,7 +14,7 @@
         {% else %}
             {{ activity_form('new_' ~ ('s' if is_staff else 'a'), None, schedules, '/admin/activity/add_new_activity',
                              '#div_activity_staff_table' if is_staff else '#div_activity_table',
-                             'Créer', staff=staff if is_staff else None) }}
+                             'Créer', staff=staff if is_staff else None, members=members) }}
         {% endif %}
     </div>
 </div>
