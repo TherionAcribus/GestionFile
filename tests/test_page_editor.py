@@ -1608,25 +1608,31 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app, 
                 )
                 playwright.expect(cells).to_have_count(2)
 
+                outer = page.frame_locator("#editor-preview").locator(
+                    ".page-editor-button-shape-preview:visible .outer-grid-container"
+                )
                 gaps = cells.evaluate_all("""cells => cells.map(cell => {
                     const box = cell.getBoundingClientRect();
                     const circle = cell.querySelector('.div_circle_buttons').getBoundingClientRect();
                     const label = cell.querySelector('.div_text_button').getBoundingClientRect();
                     return {
-                        cellTop: box.top,
-                        cellBottom: box.bottom,
+                        cellTop: box.top, cellBottom: box.bottom,
                         top: circle.top,
                         bottom: label.bottom,
                     };
                 })""")
+                outer_box = outer.evaluate("""outer => {
+                    const box = outer.getBoundingClientRect();
+                    return {top: box.top, bottom: box.bottom};
+                }""")
                 for gap in gaps:
-                    above = gap["top"] - gap["cellTop"]
-                    below = gap["cellBottom"] - gap["bottom"]
-                    # Centré : les marges au-dessus et en dessous du groupe
-                    # cercle + étiquette sont équivalentes (le padding-bottom
-                    # de la cellule décale le bas d'environ 10 px).
+                    above = gap["top"] - outer_box["top"]
+                    below = outer_box["bottom"] - gap["bottom"]
+                    # La rangée complète reste centrée dans la zone. Le
+                    # padding de protection est volontairement plus grand en
+                    # haut pour laisser déborder les images au-dessus.
                     assert above > 0 and below > 0
-                    assert abs(above - below) <= 15
+                    assert abs(above - below) <= 30
             finally:
                 browser.close()
     finally:
@@ -1638,7 +1644,9 @@ def test_patient_single_circle_button_row_stays_vertically_centered(editor_app, 
 @pytest.mark.e2e
 def test_patient_circle_size_and_image_position_are_independent(editor_app, playwright_driver):
     """Le diamètre demandé reste exact quand l'image grandit, et les deux
-    décalages déplacent uniquement l'image dans l'aperçu de l'éditeur."""
+    décalages déplacent uniquement l'image dans l'aperçu de l'éditeur.
+    Les espacements cercle/libellé et inter-rangées restent aussi exacts,
+    sans chevauchement lorsque six boutons forment deux rangées."""
     from threading import Thread
 
     from werkzeug.serving import make_server
@@ -1650,11 +1658,19 @@ def test_patient_circle_size_and_image_position_are_independent(editor_app, play
         app.config["PAGE_PATIENT_BUTTON_SHAPE"] = "circle"
         app.config["PAGE_PATIENT_CIRCLE_IMAGE_ABOVE"] = True
         activity = Activity(name="Dimension indépendante", letter="D")
-        button = Button(
-            label="Test image", activity=activity, image_url="prescription.png",
-            is_present=True, is_active=True, shape="circle", sort_order=1,
-        )
-        db.session.add_all([activity, button])
+        buttons = [
+            Button(
+                label=label, activity=activity,
+                image_url="prescription.png" if index == 1 else None,
+                is_present=True, is_active=True, shape="circle", sort_order=index,
+            )
+            for index, label in enumerate(
+                ["Test image", "Sans ordonnance", "Test", "Retrait de commande",
+                 "Vaccination", "Prioritaire"],
+                start=1,
+            )
+        ]
+        db.session.add_all([activity, *buttons])
         db.session.commit()
     client = authenticated_client(editor_app)
     server = make_server("127.0.0.1", 0, app)
@@ -1730,6 +1746,41 @@ def test_patient_circle_size_and_image_position_are_independent(editor_app, play
                 assert moved["x"] - geometry["imageCenterX"] == pytest.approx(35, abs=1)
                 assert moved["y"] - geometry["imageCenterY"] == pytest.approx(20, abs=1)
                 assert circle.evaluate("circle => circle.getBoundingClientRect().width") == pytest.approx(240, abs=1)
+
+                # Les deux nouveaux réglages agissent sur des espaces distincts.
+                # Le libellé reste sous son cercle et la seconde rangée commence
+                # après le libellé le plus bas de la première.
+                page.locator("#editor-css-circle_button_text_gap-unit").select_option("px")
+                text_gap = page.locator("#editor-css-circle_button_text_gap")
+                text_gap.fill("18")
+                text_gap.dispatch_event("change")
+                row_gap = page.locator("#editor-css-circle_button_row_gap")
+                row_gap.fill("36")
+                row_gap.dispatch_event("change")
+                playwright.expect(preview_root).to_have_css(
+                    "--circle_button_text_gap", "18px")
+                playwright.expect(preview_root).to_have_css(
+                    "--circle_button_row_gap", "36px")
+
+                rows = preview.locator(
+                    ".page-editor-button-shape-preview:visible .inner-grid-container"
+                )
+                playwright.expect(rows).to_have_count(2)
+                row_geometry = rows.evaluate_all("""rows => rows.map(row => {
+                    const circles = [...row.querySelectorAll('.div_circle_buttons')]
+                        .map(node => node.getBoundingClientRect());
+                    const labels = [...row.querySelectorAll('.div_text_button')]
+                        .map(node => node.getBoundingClientRect());
+                    return {
+                        firstCircleBottom: circles[0].bottom,
+                        firstLabelTop: labels[0].top,
+                        minCircleTop: Math.min(...circles.map(box => box.top)),
+                        maxLabelBottom: Math.max(...labels.map(box => box.bottom)),
+                    };
+                })""")
+                top_row, bottom_row = row_geometry
+                assert top_row["firstLabelTop"] - top_row["firstCircleBottom"] == pytest.approx(18, abs=1)
+                assert bottom_row["minCircleTop"] - top_row["maxLabelBottom"] >= 35
             finally:
                 browser.close()
     finally:
@@ -2992,6 +3043,10 @@ def test_patient_adapter_limits_layout_controls_and_filters_fields_by_scenario()
         "key_by_scenario": by_scenario,
     }
     assert css_fields["circle_button_size"]["scenarios"] == ["home", "children"]
+    assert css_fields["circle_button_text_gap"]["default"] == "0.2em"
+    assert css_fields["circle_button_row_gap"]["default"] == "20px"
+    assert css_fields["circle_button_text_gap"]["optional"] is True
+    assert css_fields["circle_button_row_gap"]["optional"] is True
     assert css_fields["circle_button_image_offset_x"]["default"] == "0px"
     assert css_fields["circle_button_image_offset_y"]["default"] == "0px"
     assert css_fields["circle_button_image_offset_x"]["optional"] is True

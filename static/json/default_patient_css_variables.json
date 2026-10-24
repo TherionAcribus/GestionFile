@@ -13,6 +13,8 @@
         "circle_button_image_offset_x": "0px",
         "circle_button_image_offset_y": "0px",
         "circle_button_text_size": "32px",
+        "circle_button_text_gap": "0.2em",
+        "circle_button_row_gap": "20px",
         "circle_button_text_color": "#18332F",
         "circle_button_text_border_size": "0px",
         "circle_button_text_border_color": "#18332F",

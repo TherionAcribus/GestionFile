@@ -12,17 +12,18 @@
        d'autant plus visible avec les images qui débordent au-dessus du
        cercle. En haut, la marge couvre le débordement maximal de l'image
        (25 % de sa taille) quand la réserve interne s'est compressée :
-       l'image n'atteint jamais le bandeau titre. Les rangées
-       minmax(0,1fr) absorbent la place prise. */
+       l'image n'atteint jamais le bandeau titre. */
     padding: min(45px, 6vh) 0 min(20px, 2.5vh);
     grid-template-columns: 1fr;
-    /* Une ou deux lignes (selon le nombre de boutons) se partagent la hauteur
-       disponible : le contenu ne déborde plus sur le titre ni le pied de page. */
-    grid-auto-rows: minmax(0, 1fr);
-    gap: 20px;
+    /* Chaque rangée prend la hauteur réelle de ses boutons et libellés. Deux
+       rangées ne sont donc plus forcées dans deux moitiés trop petites et ne
+       peuvent plus se chevaucher. L'ensemble reste centré dans la zone. */
+    grid-auto-rows: max-content;
+    gap: var(--circle_button_row_gap);
     justify-items: center; /* Center the inner grids */
     align-content: center;
     width: 100%;
+    box-sizing: border-box;
     /* height:100% explicite : dans l'aperçu de l'éditeur, le conteneur est dans
        un .page-editor-button-shape-preview en align-items:center (pas d'étirement). */
     height: 100%;
@@ -37,14 +38,14 @@
        de largeurs différentes entre les deux rangées (désalignement). */
     justify-self: stretch;
     width: 100%;
-    grid-auto-rows: minmax(0, 1fr);
+    grid-auto-rows: max-content;
     /* Espace latéral généreux entre cellules : les cercles ne doivent pas
        se toucher visuellement quand les libellés sont courts. */
     column-gap: 22px;
     row-gap: 12px;
     justify-items: center; /* Center the items */
     align-items: center;
-    height: 100%;
+    height: auto;
     min-height: 0;
     min-width: 0;
 }

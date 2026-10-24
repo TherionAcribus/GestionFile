@@ -8,6 +8,8 @@
     --circle_button_image_offset_x: 0px;
     --circle_button_image_offset_y: 0px;
     --circle_button_text_size: 24px;
+    --circle_button_text_gap: 0.2em;
+    --circle_button_row_gap: 20px;
     --circle_button_text_color: darkcyan;
     --circle_button_text_border_size: 0px;
     --circle_button_text_border_color: black;
@@ -429,7 +431,7 @@ html, body {
        (débordement de l'image) et en bas de cellule restent homogènes. */
     justify-content: center;
     line-height: 1.2;
-    margin-top: 0.2em;
+    margin-top: var(--circle_button_text_gap);
     min-height: 2.8em;
     overflow-wrap: break-word;
     hyphens: auto;
