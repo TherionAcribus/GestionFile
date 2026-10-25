@@ -52,18 +52,24 @@ class AnnouncementDispatcher:
             flask_app, job = self._queue.get()
             try:
                 with flask_app.app_context():
-                    job()
+                    try:
+                        job()
+                    finally:
+                        # Une session SQLAlchemy creee par le job ne doit jamais
+                        # vivre plus longtemps que le travail qui l'a utilisee.
+                        # remove() doit rester dans le contexte applicatif : la
+                        # scoped_session est indexee sur celui-ci.
+                        if "sqlalchemy" in flask_app.extensions:
+                            try:
+                                from models import db
+                                db.session.remove()
+                            except Exception:
+                                flask_app.logger.exception(
+                                    "Nettoyage de session apres annonce impossible"
+                                )
             except Exception:
                 flask_app.logger.exception("Echec de la generation/diffusion d'une annonce vocale")
             finally:
-                # Une session SQLAlchemy creee par le job ne doit jamais vivre
-                # plus longtemps que le travail qui l'a utilisee.
-                if "sqlalchemy" in flask_app.extensions:
-                    try:
-                        from models import db
-                        db.session.remove()
-                    except Exception:
-                        flask_app.logger.exception("Nettoyage de session apres annonce impossible")
                 self._queue.task_done()
 
 
