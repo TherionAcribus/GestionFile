@@ -215,6 +215,45 @@ def test_seule_echeance_expiree_est_validee_automatiquement(application, message
     assert db.session.get(Patient, futur.id).status == "calling"
 
 
+def test_tache_planifiee_valide_et_notifie_les_echeances(application, messages, monkeypatch):
+    """``call_auto_validation_job`` — le maillon réellement exécuté par
+    APScheduler toutes les 5 s (AppHolder, rechargement de config) — doit
+    valider le patient expiré ET émettre ``counter_state_changed`` : sans cet
+    évènement, l'App Comptoir garde l'échéance périmée et clignote sans fin."""
+    from datetime import datetime, timedelta
+    from app_holder import AppHolder
+    from config import time_tz
+    from scheduler_functions import call_auto_validation_job
+    import services.call_auto_validation as service_echeances
+
+    def faux_communikation(stream, data=None, flag=None, event="update", client_id=None):
+        messages.append((stream, event, data))
+
+    monkeypatch.setattr(service_echeances, "communikation", faux_communikation)
+
+    application.config.update(CALL_AUTO_VALIDATION_ENABLED=True)
+    comptoirs, patients, _ = _jeu_de_donnees()
+    patient = patients[0]
+    patient.status = "calling"
+    patient.counter_id = comptoirs[0].id
+    patient.call_auto_validate_at = (
+        datetime.now(time_tz).replace(tzinfo=None) - timedelta(seconds=1))
+    db.session.commit()
+
+    AppHolder.set_app(application)
+    try:
+        call_auto_validation_job()
+    finally:
+        AppHolder.set_app(None)
+
+    rafraichi = db.session.get(Patient, patient.id)
+    assert rafraichi.status == "ongoing"
+    assert rafraichi.call_auto_validate_at is None
+    assert ("update_patient", "update") in [(s, e) for s, e, _ in messages]
+    assert ("app_counter", "counter_state_changed") in [
+        (s, e) for s, e, _ in messages]
+
+
 def test_appel_cible_refuse_un_patient_deja_pris(application, messages):
     from services import calling_service
 
