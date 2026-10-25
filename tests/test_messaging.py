@@ -522,6 +522,48 @@ def test_broadcast_message_keeps_emitting_to_everyone(api, monkeypatch):
     assert changed[0]["room"] is None
 
 
+def test_broadcast_mentions_are_reported_by_initials(api, monkeypatch):
+    # Une mention « @initiales » dans un message à tous identifie les
+    # équipiers cités : l'App concernée affiche une alerte dédiée.
+    _app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    calls.clear()
+    response, _ = _send(
+        client, 1, kind="broadcast", recipient_staff_id=None,
+        body="Réunion : @BO et @ch aussi", scope="all")
+    assert response.status_code == 201
+    mentioned = sorted([ids["bob"], ids["charlie"]])
+    assert response.get_json()["mentioned_staff_ids"] == mentioned
+    changed = _changed_events(calls)
+    assert changed and all(
+        call["data"]["mentioned_staff_ids"] == mentioned
+        for call in changed)
+
+    # Bob voit sa mention non lue comptée à part ; Alice — son propre
+    # message — n'a pas de ligne destinataire, rien n'est compté.
+    bob_state = client.get("/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["self"]["initials"] == "BO"
+    assert bob_state["unread_mentions"] == 1
+    alice_state = client.get("/api/messaging/state?counter_id=1").get_json()
+    assert alice_state["unread_mentions"] == 0
+
+
+def test_mention_token_must_match_a_known_initials(api):
+    # « @BOB » ne mentionne pas « BO » (token entier), « @ » seul ne
+    # mentionne personne, un token inconnu non plus.
+    _app, client, ids = api
+    _presence(client, 1)
+    response, _ = _send(
+        client, 1, kind="broadcast", recipient_staff_id=None,
+        body="@BOB inconnu, @ZZ pareil et @ seul", scope="all")
+    assert response.status_code == 201
+    assert response.get_json()["mentioned_staff_ids"] == []
+    bob_state = client.get("/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["unread_mentions"] == 0
+
+
 def test_mark_read_targets_reader_and_sender_counters(api, monkeypatch):
     _app, client, ids = api
     calls = _spy_communikation(monkeypatch)

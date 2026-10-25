@@ -6,6 +6,7 @@ d'invalidation sans le texte des messages.
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -328,10 +329,17 @@ def _mark_delivered(staff):
 def state(counter_id):
     require_enabled()
     counter, staff = resolve_identity(counter_id)
-    # L'app de cet équipier vient d'interroger le serveur : ses messages
+    # L'app de cet équipier vient d'interroge le serveur : ses messages
     # destinés sont « remis ». heartbeat() délègue à state(), couvert aussi.
     _mark_delivered(staff)
     people = _all_people(exclude_staff_id=staff.id)
+    # Mentions « @mes initiales » dans les broadcasts non lus : comptées à
+    # part, elles méritent une alerte plus insistante qu'un message quel
+    # qu'il soit. Equipier sans initiales : jamais de mention possible.
+    mention_pattern = (
+        re.compile(rf"@{re.escape(staff.initials)}\b", re.IGNORECASE)
+        if staff.initials else None)
+    unread_mentions = 0
     recent = (
         _visible_query(staff.id)
         .options(joinedload(AppMessage.recipients))
@@ -390,6 +398,12 @@ def state(counter_id):
         )
         if recipient and recipient.read_at is None:
             summary["unread_count"] += 1
+            # Non-lu qui me mentionne dans un message à tous. Un message
+            # que j'ai envoyé moi-même n'a pas de ligne destinataire pour
+            # moi : il n'entre jamais ici — attendu.
+            if (message.kind == "broadcast" and mention_pattern is not None
+                    and mention_pattern.search(message.body or "")):
+                unread_mentions += 1
 
     for peer_id, peer in people.items():
         key = f"direct:{peer_id}"
@@ -413,10 +427,12 @@ def state(counter_id):
         "enabled": True,
         "self": {
             "staff_id": staff.id, "name": staff.name,
+            "initials": staff.initials,
             "counter_id": counter.id, "counter_name": counter.name,
         },
         "conversations": ordered,
         "unread_total": sum(item["unread_count"] for item in ordered),
+        "unread_mentions": unread_mentions,
         "online_count": sum(1 for person in people.values() if person["online"]),
         "server_time": _iso(now()),
     }
@@ -487,6 +503,7 @@ def send_message(counter_id, payload):
         raise MessagingError("invalid_message", 400)
 
     people = _all_people(exclude_staff_id=staff.id)
+    mentioned_staff_ids = []
     if kind == "direct":
         try:
             recipient_id = int(payload.get("recipient_staff_id"))
@@ -512,6 +529,15 @@ def send_message(counter_id, payload):
             ]
         if not recipients:
             raise MessagingError("recipient_offline", 409)
+        # Mentions « @initiales » : une mention n'a de sens que dans un
+        # message à tous. Match insensible à la casse sur les initiales
+        # métier de l'annuaire ; le token doit correspondre entièrement
+        # (« @BOB » ne mentionne pas « BO »).
+        tokens = {token.lower() for token in re.findall(r"@(\w{1,10})", body)}
+        mentioned_staff_ids = sorted(
+            staff_id for staff_id, person in people.items()
+            if (person.get("initials") or "").lower() in tokens
+        )
 
     message = AppMessage(
         client_message_id=client_message_id,
@@ -557,9 +583,13 @@ def send_message(counter_id, payload):
         "kind": message.kind,
         "sender_staff_id": staff.id,
         "sender_name": staff.name,
+        # Toujours présente (liste vide hors broadcast) : l'App visée par
+        # une mention transforme l'alerte générique en alerte dédiée.
+        "mentioned_staff_ids": mentioned_staff_ids,
     }, rooms=rooms)
     result = serialize_message(message, staff.id)
     result["recipient_count"] = len(recipients)
+    result["mentioned_staff_ids"] = mentioned_staff_ids
     return result, True
 
 
