@@ -27,7 +27,19 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None, 
         revision = bump_queue_revision()
         patients = create_patients_list_for_pyside()
         current_app.logger.debug('PATIENT LIST %s', patients)
-        communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list", revision=revision)
+        if isinstance(patients, list):
+            communication_websocket("socket_app_counter", patients, flag=None, event="update_patient_list", revision=revision)
+        else:
+            # Garde-fou : ne JAMAIS diffuser un payload qui n'est pas la liste
+            # (data=None viderait la file affichée). La révision étant déjà
+            # incrémentée, les App détecteront un trou et resynchroniseront —
+            # mais l'incident doit être visible dans les logs (il est resté
+            # silencieux quand la fonction renvoyait une réponse 401 à la
+            # place de la liste, cf. routes/pyside.py).
+            current_app.logger.error(
+                "update_patient (rev %s) : snapshot de file invalide (%s), "
+                "diffusion vers les App Comptoir sautée",
+                revision, type(patients).__name__)
         # Le namespace public /socket_update_patient n'a pas de garde et ses
         # consommateurs (écran, comptoir web, admin) n'utilisent l'évènement que
         # comme déclencheur de refresh HTMX : plus besoin d'y diffuser la liste
@@ -95,8 +107,10 @@ def communication_websocket(stream, data=None, flag=None, client_id=None, event=
         socketio.emit(event, {"flag": flag, 'data': message, 'revision': revision}, namespace=namespace, room=room)
         logging.info(f"Message SocketIO envoyé: {namespace}")
         return "Message sent!"
-    except Exception as e:
-        logging.error(f"Échec de l'envoi du message SocketIO: {e}")
+    except Exception:
+        # exception() : la pile est indispensable pour diagnostiquer un payload
+        # non sérialisable ou une file de messages indisponible.
+        logging.exception("Échec de l'envoi du message SocketIO (%s / %s)", namespace, event)
         return "Failed to send message", 500
 
 

@@ -1,12 +1,23 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 from models import db, Patient, Activity, Language
 from auth_utils import require_app_token_or_login
 
 pyside_bp = Blueprint('pyside', __name__)
 
-@pyside_bp.route('/api/patients_list_for_pyside', methods=['GET'])
-@require_app_token_or_login
+
 def create_patients_list_for_pyside():
+    """Snapshot de la file (patients 'standing') pour l'App Comptoir.
+
+    Fonction MÉTIER pure, sans garde d'authentification : elle est appelée par
+    ``communication.communikation("update_patient")`` depuis n'importe quel
+    contexte — requête borne anonyme, scheduler sans requête, action admin ou
+    App. Elle a longtemps porté directement ``@require_app_token_or_login`` :
+    appelée depuis une inscription borne (ni jeton, ni session), le décorateur
+    renvoyait ``(jsonify(...), 401)`` à la place de la liste ; l'émission vers
+    ``/socket_app_counter`` échouait alors en silence (payload non
+    sérialisable) tandis que celle vers ``/socket_update_patient`` partait —
+    l'Admin voyait le patient, l'App Comptoir jamais.
+    """
     # Cette liste est reconstruite à chaque mutation de la file (design de
     # convergence : on rediffuse un snapshot complet + révision). On sélectionne
     # donc directement les seules colonnes utiles via une projection + JOIN :
@@ -38,3 +49,10 @@ def create_patients_list_for_pyside():
                         "language_code": r.code
                     } for r in rows]
     return patients_list
+
+
+@pyside_bp.route('/api/patients_list_for_pyside', methods=['GET'])
+@require_app_token_or_login
+def patients_list_for_pyside_route():
+    """Exposition HTTP du snapshot, réservée aux clients authentifiés."""
+    return jsonify(create_patients_list_for_pyside())
