@@ -28,6 +28,13 @@ MESSAGE_MAX_LENGTH = 1000
 PAGE_SIZE_DEFAULT = 50
 PAGE_SIZE_MAX = 100
 
+# Nom de salle Socket.IO par comptoir sur le namespace /socket_app_counter.
+# CONTRAT avec sockets.py (MESSAGING_ROOM_PREFIX, même valeur) : l'App
+# Comptoir rejoint ``messaging_counter_<counter_id>`` via l'évènement
+# ``join_messaging_room`` à chaque (re)connexion ; le service n'émet les
+# signaux d'invalidation ciblés que vers ces salles.
+MESSAGING_ROOM_PREFIX = "messaging_counter_"
+
 
 class MessagingError(Exception):
     def __init__(self, code: str, status: int = 400):
@@ -124,8 +131,22 @@ def _all_people(exclude_staff_id=None):
     return people
 
 
-def _emit(event, data=None):
-    communikation("app_counter", data=data, event=event)
+def _emit(event, data=None, rooms=None):
+    """Émet un signal d'invalidation vers les App Comptoir.
+
+    ``rooms`` est une liste d'ids de comptoir : l'évènement n'est émis que
+    vers la salle ``messaging_counter_<id>`` de chacun (une émission par
+    salle, doublons éliminés, ids None ignorés). Sans ``rooms``, diffusion à
+    tout le namespace — comportement historique, conservé pour les signaux
+    qui touchent tous les postes (présence, config, broadcast)."""
+    if rooms is None:
+        communikation("app_counter", data=data, event=event)
+        return
+    for counter_id in {cid for cid in rooms if cid is not None}:
+        communikation(
+            "app_counter", data=data, event=event,
+            room=f"{MESSAGING_ROOM_PREFIX}{counter_id}",
+        )
 
 
 def heartbeat(counter_id, client_instance_id):
@@ -491,12 +512,21 @@ def send_message(counter_id, payload):
         if existing and existing.sender_staff_id == staff.id:
             return serialize_message(existing, staff.id), False
         raise MessagingError("invalid_message", 400)
+    rooms = None
+    if message.kind == "direct":
+        # Message direct : seuls le comptoir de l'expéditeur et celui du
+        # destinataire sont signalés. Un destinataire hors ligne n'a pas de
+        # comptoir figé : il verra le non-lu à sa prochaine connexion.
+        rooms = {counter.id}
+        if recipient["counter_id"] is not None:
+            rooms.add(recipient["counter_id"])
+    # Broadcast : signal global — tout le namespace, comme avant.
     _emit("messaging_changed", {
         "message_id": message.id,
         "kind": message.kind,
         "sender_staff_id": staff.id,
         "sender_name": staff.name,
-    })
+    }, rooms=rooms)
     result = serialize_message(message, staff.id)
     result["recipient_count"] = len(recipients)
     return result, True
@@ -504,24 +534,33 @@ def send_message(counter_id, payload):
 
 def mark_read(counter_id, message_ids):
     require_enabled()
-    _counter, staff = resolve_identity(counter_id)
+    counter, staff = resolve_identity(counter_id)
     if not isinstance(message_ids, list) or not message_ids or len(message_ids) > 100:
         raise MessagingError("invalid_message", 400)
     try:
         ids = {int(value) for value in message_ids}
     except (TypeError, ValueError):
         raise MessagingError("invalid_message", 400)
-    rows = AppMessageRecipient.query.filter(
-        AppMessageRecipient.recipient_staff_id == staff.id,
-        AppMessageRecipient.message_id.in_(ids),
-        AppMessageRecipient.read_at.is_(None),
-    ).all()
+    rows = (
+        AppMessageRecipient.query
+        .filter(
+            AppMessageRecipient.recipient_staff_id == staff.id,
+            AppMessageRecipient.message_id.in_(ids),
+            AppMessageRecipient.read_at.is_(None),
+        )
+        .options(joinedload(AppMessageRecipient.message))
+        .all()
+    )
     read_at = now()
     for row in rows:
         row.read_at = read_at
     if rows:
         db.session.commit()
-        _emit("messaging_changed", {"read": True})
+        # Ciblé : le comptoir du lecteur (son compteur de non-lus change)
+        # et le comptoir de chaque expéditeur (sa pastille « lu » change).
+        rooms = {counter.id}
+        rooms.update(row.message.sender_counter_id for row in rows)
+        _emit("messaging_changed", {"read": True}, rooms=rooms)
     return {"read": len(rows), "read_at": _iso(read_at) if rows else None}
 
 

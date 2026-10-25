@@ -194,6 +194,29 @@ _handlers_simples("/socket_app_screen", "SECURITY_LOGIN_SCREEN", "App ecran")
 _handlers_simples("/socket_counter", "SECURITY_LOGIN_COUNTER", "comptoir")
 
 
+# --- Salles de messagerie des App Comptoir ------------------------------------
+# Le nom de salle est un CONTRAT avec services/messaging_service.py
+# (constante MESSAGING_ROOM_PREFIX, même valeur) : l'App déclare son comptoir
+# à chaque (re)connexion, et le service n'émet les signaux d'invalidation
+# « messaging_changed » d'un message direct que vers les salles des comptoirs
+# concernés, au lieu de tout le namespace. Les rooms sont par sid : elles sont
+# libérées automatiquement à la déconnexion — pas de leave explicite.
+MESSAGING_ROOM_PREFIX = "messaging_counter_"
+
+
+@socketio.on("join_messaging_room", namespace="/socket_app_counter")
+def join_messaging_room(data):
+    # L'App déclare son comptoir pour ne recevoir que les événements de
+    # messagerie qui le concernent. Les events ne transportent que des
+    # signaux d'invalidation (jamais le contenu des messages) : une
+    # déclaration mensongère ne fait fuiter aucune donnée.
+    try:
+        counter_id = int((data or {}).get("counter_id"))
+    except (TypeError, ValueError, AttributeError):
+        return
+    join_room(f"{MESSAGING_ROOM_PREFIX}{counter_id}")
+
+
 # --- Sondes du test de charge -------------------------------------------------
 # Namespace interne, hors NAMESPACES (jamais proposé comme destination dans
 # l'administration) : seuls les écouteurs du runner, porteurs du secret

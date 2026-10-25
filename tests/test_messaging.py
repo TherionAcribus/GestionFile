@@ -374,3 +374,201 @@ def test_disabling_clears_all_presence(api, monkeypatch):
         assert AppMessagingPresence.query.count() == 2
         messaging.disable_and_clear_presence()
         assert AppMessagingPresence.query.count() == 0
+
+
+# --- Diffusion ciblée des évènements de messagerie -----------------------------
+# Les évènements « messaging_* » d'un échange privé ne doivent plus atteindre
+# tous les comptoirs : chaque App déclare sa salle ``messaging_counter_<id>``
+# (handler ``join_messaging_room`` de sockets.py) et le service n'émet que
+# vers les salles concernées.
+
+def _spy_communikation(monkeypatch):
+    calls = []
+
+    def _fake(stream, data=None, flag=None, event="update",
+              client_id=None, room=None):
+        calls.append({
+            "stream": stream, "data": data, "event": event, "room": room,
+        })
+
+    monkeypatch.setattr(messaging, "communikation", _fake)
+    return calls
+
+
+def _changed_events(calls):
+    return [call for call in calls if call["event"] == "messaging_changed"]
+
+
+def test_direct_message_targets_only_sender_and_recipient_counters(
+        api, monkeypatch):
+    _app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    calls.clear()
+
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    assert response.status_code == 201
+    changed = _changed_events(calls)
+    assert {call["room"] for call in changed} == {
+        "messaging_counter_1", "messaging_counter_2"}
+    assert all(call["stream"] == "app_counter" for call in changed)
+    # Le payload du signal est inchangé : jamais le contenu du message.
+    assert {call["data"]["kind"] for call in changed} == {"direct"}
+    assert all("body" not in call["data"] for call in changed)
+
+
+def test_direct_message_to_offline_recipient_targets_sender_only(
+        api, monkeypatch):
+    _app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    calls.clear()
+
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    assert response.status_code == 201
+    changed = _changed_events(calls)
+    assert [call["room"] for call in changed] == ["messaging_counter_1"]
+
+
+def test_broadcast_message_keeps_emitting_to_everyone(api, monkeypatch):
+    _app, client, _ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    calls.clear()
+
+    response, _ = _send(
+        client, 1, kind="broadcast", recipient_staff_id=None, scope="all",
+    )
+    assert response.status_code == 201
+    changed = _changed_events(calls)
+    assert len(changed) == 1
+    assert changed[0]["room"] is None
+
+
+def test_mark_read_targets_reader_and_sender_counters(api, monkeypatch):
+    _app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    _presence(client, 3)
+    first, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    second, _ = _send(client, 3, recipient_staff_id=ids["bob"])
+    ids_read = [first.get_json()["id"], second.get_json()["id"]]
+    calls.clear()
+
+    response = client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": ids_read,
+    })
+    assert response.get_json()["read"] == 2
+    changed = _changed_events(calls)
+    assert {call["room"] for call in changed} == {
+        "messaging_counter_1", "messaging_counter_2", "messaging_counter_3"}
+    assert all(call["data"] == {"read": True} for call in changed)
+
+
+def test_presence_and_config_signals_stay_broadcast(api, monkeypatch):
+    _app, client, _ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    assert any(
+        call["event"] == "messaging_presence_changed" and call["room"] is None
+        for call in calls
+    )
+
+    calls.clear()
+    with _app.app_context():
+        messaging.announce_enabled()
+        messaging.disable_and_clear_presence()
+    config = [c for c in calls if c["event"] == "messaging_config_changed"]
+    assert len(config) == 2
+    assert all(call["room"] is None for call in config)
+
+
+# --- Handler ``join_messaging_room`` sur /socket_app_counter ------------------
+
+def _init_counter_sockets(app):
+    from extensions import socketio
+    import sockets  # noqa: F401 — enregistre les handlers sur l'objet partagé
+
+    # init_app instancie un nouveau Server Socket.IO : une seule fois par
+    # test, AVANT de créer les clients — un second appel les déconnecterait.
+    socketio.init_app(app)
+    return socketio
+
+
+def _counter_socket(socketio, app, client):
+    return socketio.test_client(
+        app, flask_test_client=client, namespace="/socket_app_counter")
+
+
+def test_join_messaging_room_delivers_only_to_that_counter(messaging_app):
+    """Un comptoir ne reçoit que les évènements adressés à sa salle ; un
+    client qui n'a pas déclaré son comptoir ne reçoit plus les signaux
+    ciblés, mais toujours les diffusions globales."""
+    app, token, _ids = messaging_app
+    from communication import communikation
+
+    socketio = _init_counter_sockets(app)
+    client = app.test_client()
+    sio_a = _counter_socket(socketio, app, client)
+    sio_b = _counter_socket(socketio, app, client)
+    sio_muet = _counter_socket(socketio, app, client)
+    assert sio_a.is_connected("/socket_app_counter")
+    assert sio_b.is_connected("/socket_app_counter")
+
+    sio_a.emit("join_messaging_room", {"counter_id": 1},
+               namespace="/socket_app_counter")
+    sio_b.emit("join_messaging_room", {"counter_id": 2},
+               namespace="/socket_app_counter")
+
+    with app.app_context():
+        communikation("app_counter", event="messaging_changed",
+                      data={"message_id": 7},
+                      room="messaging_counter_1")
+        communikation("app_counter", event="messaging_changed",
+                      data={"message_id": 8},
+                      room="messaging_counter_2")
+        communikation("app_counter", event="messaging_presence_changed")
+
+    recus_a = [m for m in sio_a.get_received("/socket_app_counter")
+               if m["name"] == "messaging_changed"]
+    assert [m["args"][0]["data"] for m in recus_a] == [{"message_id": 7}]
+    recus_b = [m for m in sio_b.get_received("/socket_app_counter")
+               if m["name"] == "messaging_changed"]
+    assert [m["args"][0]["data"] for m in recus_b] == [{"message_id": 8}]
+    # Sans salle rejointe : aucun signal ciblé, mais la diffusion passe.
+    # NB : get_received vide la file — on ne le lit qu'une fois par client.
+    recus_muet = sio_muet.get_received("/socket_app_counter")
+    assert all(m["name"] != "messaging_changed" for m in recus_muet)
+    assert any(m["name"] == "messaging_presence_changed" for m in recus_muet)
+
+
+def test_join_messaging_room_rejette_les_payloads_invalides(messaging_app):
+    """Un counter_id absent ou non convertible ne fait rejoindre aucune
+    salle : le client ne reçoit aucun évènement ciblé."""
+    app, _token, _ids = messaging_app
+    from communication import communikation
+
+    socketio = _init_counter_sockets(app)
+    client = app.test_client()
+    sio = _counter_socket(socketio, app, client)
+
+    for payload in (
+        {"counter_id": "abc"},
+        {"counter_id": None},
+        {},
+        None,
+        "pas-un-dict",
+    ):
+        sio.emit("join_messaging_room", payload,
+                 namespace="/socket_app_counter")
+
+    with app.app_context():
+        communikation("app_counter", event="messaging_changed",
+                      data={"message_id": 7},
+                      room="messaging_counter_1")
+
+    assert all(m["name"] != "messaging_changed"
+               for m in sio.get_received("/socket_app_counter"))
