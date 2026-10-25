@@ -108,11 +108,13 @@ def _active_people(exclude_staff_id=None):
 
 
 def _all_people(exclude_staff_id=None):
-    """Annuaire complet : tous les équipiers utilisables, en ligne ou non.
+    """Annuaire complet : tous les équipiers enregistrés, en ligne ou non.
 
-    Les présences actives écrasent les entrées hors ligne avec le comptoir
-    réel. Une présence dont l'équipier a été désactivé entre-temps reste
-    listée : elle finira par expirer.
+    Tous les ``Pharmacist`` sont listés, sans filtre ``is_active`` : la case
+    « actif » de l'admin n'est pas alimentée en pratique (aucun équipier ne
+    la possède sur les données réelles) et la login par initiales ne la
+    consulte pas — la filtrer viderait l'annuaire. Les présences actives
+    écrasent les entrées hors ligne avec le comptoir réel.
     """
     people = {
         pharmacist.id: {
@@ -123,7 +125,6 @@ def _all_people(exclude_staff_id=None):
             "online": False,
         }
         for pharmacist in Pharmacist.query.filter(
-            Pharmacist.is_active.is_(True),
             Pharmacist.id != exclude_staff_id,
         ).all()
     }
@@ -451,8 +452,8 @@ def send_message(counter_id, payload):
             recipient_id = int(payload.get("recipient_staff_id"))
         except (TypeError, ValueError):
             raise MessagingError("invalid_message", 400)
-        # N'importe quel équipier actif, en ligne ou non ; jamais soi-même
-        # (exclu de l'annuaire) ni un équipier inactif/inexistant.
+        # N'importe quel équipier enregistré, en ligne ou non ; jamais
+        # soi-même (exclu de l'annuaire) ni un id inconnu.
         recipient = people.get(recipient_id)
         if recipient is None:
             raise MessagingError("invalid_message", 400)
@@ -462,19 +463,9 @@ def send_message(counter_id, payload):
         if scope not in {"all", "online"}:
             raise MessagingError("invalid_message", 400)
         if scope == "all":
-            # Tous les équipiers actifs, y compris hors ligne ; les entrées
-            # en ligne portent le comptoir réel de leur présence.
-            active_ids = {
-                pharmacist.id
-                for pharmacist in Pharmacist.query.filter(
-                    Pharmacist.is_active.is_(True),
-                    Pharmacist.id != staff.id,
-                ).all()
-            }
-            recipients = [
-                person for staff_id, person in people.items()
-                if staff_id in active_ids
-            ]
+            # Tous les équipiers enregistrés, y compris hors ligne ; les
+            # entrées en ligne portent le comptoir réel de leur présence.
+            recipients = list(people.values())
         else:
             recipients = [
                 person for person in people.values() if person["online"]

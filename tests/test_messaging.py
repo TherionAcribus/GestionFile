@@ -198,7 +198,7 @@ def test_validation_and_server_side_identity(api):
     assert too_long.get_json()["error"] == "invalid_message"
 
 
-def test_state_lists_every_active_staff_member_online_or_offline(api):
+def test_state_lists_every_registered_staff_member_online_or_offline(api):
     app, client, ids = api
     _presence(client, 1)
     state = client.get("/api/messaging/state?counter_id=1").get_json()
@@ -226,6 +226,9 @@ def test_state_lists_every_active_staff_member_online_or_offline(api):
     assert directs[ids["charlie"]]["online"] is False
     assert state["online_count"] == 1
 
+    # Le flag « is_active » de l'admin n'est pas un critère d'annuaire : il
+    # n'est pas alimenté en pratique (tous les équipiers réels sont à 0) —
+    # Charlie reste joignable même désactivé.
     with app.app_context():
         charlie = db.session.get(Pharmacist, ids["charlie"])
         charlie.is_active = False
@@ -235,7 +238,7 @@ def test_state_lists_every_active_staff_member_online_or_offline(api):
         item["staff_id"]: item
         for item in state["conversations"] if item["kind"] == "direct"
     }
-    assert set(directs) == {ids["bob"]}
+    assert set(directs) == {ids["bob"], ids["charlie"]}
 
 
 def test_heartbeat_after_expiration_emits_presence_changed(api, monkeypatch):
@@ -344,8 +347,8 @@ def test_yesterday_unread_message_stays_visible_until_read(api):
     assert client.get(alice_url).get_json()["messages"] == []
 
 
-def test_direct_to_self_unknown_or_inactive_staff_is_rejected(api):
-    app, client, ids = api
+def test_direct_to_self_or_unknown_staff_is_rejected(api):
+    _app, client, ids = api
     _presence(client, 1)
     response, _ = _send(client, 1, recipient_staff_id=ids["alice"])
     assert response.status_code == 400
@@ -355,13 +358,19 @@ def test_direct_to_self_unknown_or_inactive_staff_is_rejected(api):
     assert response.status_code == 400
     assert response.get_json()["error"] == "invalid_message"
 
+
+def test_direct_to_staff_flagged_inactive_is_still_accepted(api):
+    # « is_active » n'est pas utilisé par la connexion par initiales ni par
+    # l'annuaire : un équipier désactivé reste joignable tant qu'il est
+    # enregistré — le message l'attendra à sa connexion.
+    app, client, ids = api
+    _presence(client, 1)
     with app.app_context():
         charlie = db.session.get(Pharmacist, ids["charlie"])
         charlie.is_active = False
         db.session.commit()
     response, _ = _send(client, 1, recipient_staff_id=ids["charlie"])
-    assert response.status_code == 400
-    assert response.get_json()["error"] == "invalid_message"
+    assert response.status_code == 201
 
 
 def test_disabling_clears_all_presence(api, monkeypatch):
