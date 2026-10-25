@@ -287,6 +287,12 @@ def api_counter_state(counter_id):
         "messaging_enabled": bool(app.config.get("APP_MESSAGING_ENABLED", False)),
         "call_auto_validation": call_auto_validation.client_config(),
         "activities_staff": [activity.to_dict_for_app() for activity in activity_staff],
+        # Cibles de « Remettre en attente pour... » : les ÉQUIPIERS eux-mêmes,
+        # pas leurs demandes nominatives — adresser un patient à quelqu'un ne
+        # dépend plus d'une activité staff préconfigurée (le serveur résout ou
+        # crée la nominative à la volée, cf. put_waiting_list_for_staff).
+        "staff_targets": [{"id": m.id, "name": m.name} for m in
+                          Pharmacist.query.order_by(Pharmacist.name).all()],
         "staff": counter.staff.to_dict() if counter.staff else None,
     }), 200
 
@@ -463,6 +469,46 @@ def put_waiting_list_with_activity(patient_id, activity_id):
 @require_app_token_or_login
 def put_waiting_list(patient_id):
     return handle_patient_from_app(patient_id, action="standing")
+
+
+@counter_bp.route('/api/counter/put_standing_list/<int:patient_id>/for_staff/<int:staff_id>', methods=['POST'])
+@require_app_token_or_login
+def put_waiting_list_for_staff(patient_id, staff_id):
+    """Variante « adresser à un équipier » de put_waiting_list : le patient est
+    renvoyé en file sur la demande nominative de l'équipier visé, résolue ou
+    CRÉÉE à la volée — l'App n'a donc plus besoin de demandes nominatives
+    préconfigurées pour envoyer un patient à quelqu'un."""
+    member = db.session.get(Pharmacist, staff_id)
+    if member is None:
+        return 'Staff not found', 404
+    nominative = _nominative_activity_for(member)
+    return handle_patient_from_app(patient_id, action="standing",
+                                   activity_id=nominative.id)
+
+
+def _nominative_activity_for(member):
+    """Demande nominative désignant ``member``, créée si absente.
+
+    L'équipier visé doit figurer dans les compétences de l'activité : une
+    demande nominative n'est appelable que par qui l'a en compétence — sans
+    cela le patient adressé attendrait indéfiniment (même règle que la
+    création admin, qui ajoute toujours le destinataire)."""
+    nominative = (Activity.query
+                  .filter_by(is_staff=True, staff_id=member.id)
+                  .order_by(Activity.id)
+                  .first())
+    if nominative is None:
+        name = (member.name or "").strip()
+        nominative = Activity(name=f"Voir {name}",
+                              letter=(name[0].upper() if name else "S"),
+                              is_staff=True, staff=member)
+        db.session.add(nominative)
+        db.session.flush()
+        app.logger.info("Demande nominative créée à la volée pour %s (id=%s)",
+                        member.name, nominative.id)
+    if member not in nominative.pharmacists:
+        nominative.pharmacists.append(member)
+    return nominative
 
 @counter_bp.route('/api/counter/validate_patient/<int:patient_id>', methods=['POST'])
 @require_app_token_or_login

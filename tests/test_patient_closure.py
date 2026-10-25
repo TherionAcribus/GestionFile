@@ -326,6 +326,103 @@ def test_transfert_vers_activite_inconnue_404(client, application, token):
     assert _etapes(application, pid) == []
 
 
+def test_transfert_vers_equipier_cree_la_nominative_a_la_volee(
+        client, application, token):
+    """« Adresser à un équipier » sans demande nominative préconfigurée : le
+    serveur la crée, y ajoute le destinataire en compétence (sinon personne ne
+    pourrait appeler le patient) et transfère le patient dessus."""
+    activite_id, comptoir_id = _base(application)
+    with application.app_context():
+        membre = Pharmacist(name="Marie", initials="MA")
+        db.session.add(membre)
+        db.session.commit()
+        membre_id = membre.id
+
+    pid = _patient(application, status="ongoing", counter_id=comptoir_id,
+                   activity_id=activite_id)
+    reponse = client.post(
+        f"/api/counter/put_standing_list/{pid}/for_staff/{membre_id}",
+        headers={"X-App-Token": token})
+
+    assert reponse.status_code == 201
+    patient = _relu(application, pid)
+    assert patient.status == "standing"
+    assert patient.counter_id is None
+
+    with application.app_context():
+        nominative = db.session.get(Activity, patient.activity_id)
+        assert nominative.is_staff is True
+        assert nominative.staff_id == membre_id
+        assert nominative.name == "Voir Marie"
+        assert membre_id in [m.id for m in nominative.pharmacists]
+
+    etapes = _etapes(application, pid)
+    assert len(etapes) == 1
+    assert etapes[0].outcome == "transferred"
+    assert etapes[0].new_activity_id == patient.activity_id
+
+
+def test_transfert_vers_equipier_reutilise_la_nominative_existante(
+        client, application, token):
+    """Équipier déjà doté d'une nominative : réutilisée sans doublon, et le
+    destinataire absent des compétences y est (ré)ajouté."""
+    activite_id, comptoir_id = _base(application)
+    with application.app_context():
+        membre = Pharmacist(name="Marie", initials="MA")
+        nominative = Activity(name="Dr Marie", letter="M",
+                              is_staff=True, staff=membre)
+        db.session.add_all([membre, nominative])
+        db.session.commit()
+        membre_id, nominative_id = membre.id, nominative.id
+
+    pid = _patient(application, status="ongoing", counter_id=comptoir_id,
+                   activity_id=activite_id)
+    reponse = client.post(
+        f"/api/counter/put_standing_list/{pid}/for_staff/{membre_id}",
+        headers={"X-App-Token": token})
+
+    assert reponse.status_code == 201
+    assert _relu(application, pid).activity_id == nominative_id
+    with application.app_context():
+        nominative = db.session.get(Activity, nominative_id)
+        assert membre_id in [m.id for m in nominative.pharmacists]
+        assert Activity.query.filter_by(is_staff=True).count() == 1
+
+
+def test_transfert_vers_equipier_inconnu_404(client, application, token):
+    _base(application)
+    pid = _patient(application, status="standing")
+
+    reponse = client.post(
+        f"/api/counter/put_standing_list/{pid}/for_staff/99999",
+        headers={"X-App-Token": token})
+
+    assert reponse.status_code == 404
+    assert _relu(application, pid).status == "standing"
+    assert _etapes(application, pid) == []
+    with application.app_context():
+        assert Activity.query.filter_by(is_staff=True).count() == 0
+
+
+def test_state_expose_les_equipiers_comme_cibles(client, application, token):
+    """/state liste les ÉQUIPIERS (staff_targets) : l'App peut proposer
+    « Remettre en attente pour... » sans demande nominative préconfigurée."""
+    _, comptoir_id = _base(application)
+    with application.app_context():
+        db.session.add_all([Pharmacist(name="Marie", initials="MA"),
+                            Pharmacist(name="Bob", initials="BO")])
+        db.session.commit()
+    application.config["ADD_PAPER"] = False
+
+    corps = client.get(f"/api/counter/{comptoir_id}/state",
+                       headers={"X-App-Token": token}).get_json()
+
+    with application.app_context():
+        attendu = [{"id": m.id, "name": m.name} for m in
+                   Pharmacist.query.order_by(Pharmacist.name).all()]
+    assert corps["staff_targets"] == attendu
+
+
 def test_remise_en_file_sur_terminal_est_un_noop(client, application, token):
     """Un patient 'done' ne peut pas revenir en file via l'App : la
     résurrection silencieuse perdait l'issue enregistrée."""

@@ -23,6 +23,7 @@ def _read(rel):
 POST_ONLY_ROUTES = [
     ("routes/counter.py", "/api/counter/put_standing_list/<int:patient_id>/<int:activity_id>"),
     ("routes/counter.py", "/api/counter/put_standing_list/<int:patient_id>"),
+    ("routes/counter.py", "/api/counter/put_standing_list/<int:patient_id>/for_staff/<int:staff_id>"),
     ("routes/counter.py", "/api/counter/validate_patient/<int:patient_id>"),
     ("routes/counter.py", "/api/counter/delete_patient/<int:patient_id>"),
     # Ces quatre routes ont quitte app.py pour routes/calling.py (point 9.5d) ;
