@@ -503,7 +503,8 @@ class AppMessageRecipient(db.Model):
         db.Integer, db.ForeignKey("counter.id", ondelete="SET NULL"), nullable=True,
     )
     recipient_name = db.Column(db.String(50), nullable=False)
-    recipient_counter_name = db.Column(db.String(20), nullable=False)
+    # Nullable : un destinataire hors ligne n'a pas de comptoir courant.
+    recipient_counter_name = db.Column(db.String(20), nullable=True)
     read_at = db.Column(db.DateTime, nullable=True)
 
     message = db.relationship("AppMessage", back_populates="recipients")
@@ -528,11 +529,15 @@ class AppMessagingPresence(db.Model):
     counter_id = db.Column(
         db.Integer, db.ForeignKey("counter.id", ondelete="CASCADE"), nullable=False,
     )
+    # UTC naïf, cohérent avec services.messaging_service.now() (défaut
+    # Python uniquement : pas de migration pour ce changement).
     connected_at = db.Column(
-        db.DateTime, nullable=False, default=lambda: datetime.now(time_tz),
+        db.DateTime, nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     last_seen_at = db.Column(
-        db.DateTime, nullable=False, default=lambda: datetime.now(time_tz), index=True,
+        db.DateTime, nullable=False, index=True,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     staff = db.relationship("Pharmacist")

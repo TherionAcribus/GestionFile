@@ -143,7 +143,7 @@ def test_broadcast_snapshots_only_active_recipients(api):
         assert recipient.recipient_staff_id == ids["bob"]
 
 
-def test_expired_presence_refuses_direct_message_and_purge_removes_old_data(api):
+def test_expired_presence_accepts_direct_message_and_purge_removes_old_data(api):
     app, client, ids = api
     _presence(client, 1)
     bob_instance, _ = _presence(client, 2)
@@ -151,9 +151,15 @@ def test_expired_presence_refuses_direct_message_and_purge_removes_old_data(api)
         presence = db.session.get(AppMessagingPresence, bob_instance)
         presence.last_seen_at = messaging.now() - timedelta(seconds=91)
         db.session.commit()
+    # Envoyer à un équipier actif mais hors ligne est désormais accepté :
+    # le message l'attendra à sa prochaine connexion.
     response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
-    assert response.status_code == 409
-    assert response.get_json()["error"] == "recipient_offline"
+    assert response.status_code == 201
+    with app.app_context():
+        recipient = AppMessageRecipient.query.one()
+        assert recipient.recipient_staff_id == ids["bob"]
+        assert recipient.recipient_counter_id is None
+        assert recipient.recipient_counter_name is None
 
     with app.app_context():
         old = AppMessage(
@@ -165,8 +171,9 @@ def test_expired_presence_refuses_direct_message_and_purge_removes_old_data(api)
         db.session.add(old)
         db.session.commit()
         assert messaging.purge_expired() == 1
-        assert AppMessage.query.count() == 0
-        assert AppMessageRecipient.query.count() == 0
+        # Seul le vieux message est purgé ; le direct envoyé plus haut reste.
+        assert AppMessage.query.count() == 1
+        assert AppMessageRecipient.query.count() == 1
 
 
 def test_validation_and_server_side_identity(api):
@@ -189,6 +196,172 @@ def test_validation_and_server_side_identity(api):
     )
     assert too_long.status_code == 400
     assert too_long.get_json()["error"] == "invalid_message"
+
+
+def test_state_lists_every_active_staff_member_online_or_offline(api):
+    app, client, ids = api
+    _presence(client, 1)
+    state = client.get("/api/messaging/state?counter_id=1").get_json()
+    directs = {
+        item["staff_id"]: item
+        for item in state["conversations"] if item["kind"] == "direct"
+    }
+    assert set(directs) == {ids["bob"], ids["charlie"]}
+    assert ids["alice"] not in directs
+    for entry in directs.values():
+        assert entry["online"] is False
+        assert entry["counter_id"] is None
+        assert entry["counter_name"] is None
+    assert state["online_count"] == 0
+
+    _presence(client, 2)
+    state = client.get("/api/messaging/state?counter_id=1").get_json()
+    directs = {
+        item["staff_id"]: item
+        for item in state["conversations"] if item["kind"] == "direct"
+    }
+    assert directs[ids["bob"]]["online"] is True
+    assert directs[ids["bob"]]["counter_id"] == 2
+    assert directs[ids["bob"]]["counter_name"] == "2"
+    assert directs[ids["charlie"]]["online"] is False
+    assert state["online_count"] == 1
+
+    with app.app_context():
+        charlie = db.session.get(Pharmacist, ids["charlie"])
+        charlie.is_active = False
+        db.session.commit()
+    state = client.get("/api/messaging/state?counter_id=1").get_json()
+    directs = {
+        item["staff_id"]: item
+        for item in state["conversations"] if item["kind"] == "direct"
+    }
+    assert set(directs) == {ids["bob"]}
+
+
+def test_heartbeat_after_expiration_emits_presence_changed(api, monkeypatch):
+    app, client, _ids = api
+    events = []
+    monkeypatch.setattr(
+        messaging, "_emit",
+        lambda event, data=None: events.append(event),
+    )
+    instance, _ = _presence(client, 2)
+    assert events == ["messaging_presence_changed"]
+
+    # Heartbeat normal d'une présence encore fraîche : rien à signaler.
+    events.clear()
+    _presence(client, 2, instance=instance)
+    assert events == []
+
+    # Le poste revient après expiration : les autres doivent rafraîchir.
+    with app.app_context():
+        presence = db.session.get(AppMessagingPresence, instance)
+        presence.last_seen_at = messaging.now() - timedelta(seconds=91)
+        db.session.commit()
+    _presence(client, 2, instance=instance)
+    assert events == ["messaging_presence_changed"]
+
+
+def test_direct_message_to_offline_staff_is_stored_and_read_on_connect(api):
+    app, client, ids = api
+    _presence(client, 1)
+    response, _ = _send(client, 1, recipient_staff_id=ids["charlie"])
+    assert response.status_code == 201
+    with app.app_context():
+        recipient = AppMessageRecipient.query.one()
+        assert recipient.recipient_staff_id == ids["charlie"]
+        assert recipient.recipient_counter_id is None
+        assert recipient.recipient_counter_name is None
+
+    # Charlie se connecte : le message l'attend comme non lu.
+    _presence(client, 3)
+    state = client.get("/api/messaging/state?counter_id=3").get_json()
+    assert state["unread_total"] == 1
+
+
+def test_broadcast_scope_all_online_and_invalid(api):
+    app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    response, _ = _send(
+        client, 1, kind="broadcast", recipient_staff_id=None, scope="all",
+    )
+    assert response.status_code == 201
+    assert response.get_json()["recipient_count"] == 2
+    with app.app_context():
+        recipients = AppMessageRecipient.query.all()
+        assert {row.recipient_staff_id for row in recipients} == {
+            ids["bob"], ids["charlie"],
+        }
+        offline = next(
+            row for row in recipients
+            if row.recipient_staff_id == ids["charlie"]
+        )
+        assert offline.recipient_counter_id is None
+        assert offline.recipient_counter_name is None
+
+    response, _ = _send(
+        client, 1, kind="broadcast", recipient_staff_id=None, scope="bogus",
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_message"
+
+    # scope absent → "online" : seules les présences actives (comportement
+    # des anciens clients).
+    response, _ = _send(client, 1, kind="broadcast", recipient_staff_id=None)
+    assert response.status_code == 201
+    assert response.get_json()["recipient_count"] == 1
+
+
+def test_yesterday_unread_message_stays_visible_until_read(api):
+    app, client, ids = api
+    _presence(client, 1)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    assert response.status_code == 201
+    message_id = response.get_json()["id"]
+    with app.app_context():
+        message = db.session.get(AppMessage, message_id)
+        message.created_at = messaging.now() - timedelta(days=1)
+        db.session.commit()
+
+    bob_url = (
+        "/api/messaging/messages?counter_id=2&kind=direct"
+        f"&peer_staff_id={ids['alice']}"
+    )
+    assert [m["id"] for m in client.get(bob_url).get_json()["messages"]] == [message_id]
+    assert client.get("/api/messaging/state?counter_id=2").get_json()["unread_total"] == 1
+    # L'expéditeur le voit aussi tant qu'un destinataire ne l'a pas lu.
+    alice_url = (
+        "/api/messaging/messages?counter_id=1&kind=direct"
+        f"&peer_staff_id={ids['bob']}"
+    )
+    assert [m["id"] for m in client.get(alice_url).get_json()["messages"]] == [message_id]
+
+    client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [message_id],
+    })
+    assert client.get(bob_url).get_json()["messages"] == []
+    assert client.get(alice_url).get_json()["messages"] == []
+
+
+def test_direct_to_self_unknown_or_inactive_staff_is_rejected(api):
+    app, client, ids = api
+    _presence(client, 1)
+    response, _ = _send(client, 1, recipient_staff_id=ids["alice"])
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_message"
+
+    response, _ = _send(client, 1, recipient_staff_id=999999)
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_message"
+
+    with app.app_context():
+        charlie = db.session.get(Pharmacist, ids["charlie"])
+        charlie.is_active = False
+        db.session.commit()
+    response, _ = _send(client, 1, recipient_staff_id=ids["charlie"])
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_message"
 
 
 def test_disabling_clears_all_presence(api, monkeypatch):
