@@ -131,6 +131,55 @@ def test_direct_message_is_idempotent_private_and_readable(api):
     assert alice_thread[0]["read_at"] is not None
 
 
+def test_delivered_then_read_timestamps_follow_recipient_app(api):
+    # « Remis » : l'app de Bob apprend que le message existe en interrogeant
+    # le serveur (heartbeat/état/fil) — distinct de « Lu », la consultation
+    # réelle. Lu implique Remis, jamais l'inverse.
+    _app, client, ids = api
+    _presence(client, 1)
+    response, _payload = _send(client, 1, recipient_staff_id=ids["bob"])
+    assert response.status_code == 201
+    message_id = response.get_json()["id"]
+
+    def alice_thread():
+        return client.get(
+            "/api/messaging/messages?counter_id=1&kind=direct"
+            f"&peer_staff_id={ids['bob']}"
+        ).get_json()["messages"]
+
+    # Bob n'a pas encore contacté le serveur : ni remis ni lu.
+    assert alice_thread()[0]["delivered_at"] is None
+    assert alice_thread()[0]["read_at"] is None
+    # Heartbeat de Bob : son app sait désormais que le message existe.
+    _presence(client, 2)
+    assert alice_thread()[0]["delivered_at"] is not None
+    assert alice_thread()[0]["read_at"] is None
+    # Accusé de lecture : les deux horodatages sont renseignés.
+    client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [message_id],
+    })
+    assert alice_thread()[0]["delivered_at"] is not None
+    assert alice_thread()[0]["read_at"] is not None
+
+
+def test_read_implies_delivered_even_without_prior_delivery(api):
+    # Lecture du fil sans contact préalable de l'app (jamais « remise ») :
+    # l'accusé « Lu » pose aussi « Remis » — Lu implique Remis.
+    _app, client, ids = api
+    _presence(client, 1)
+    response, _payload = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+    read = client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [message_id],
+    })
+    assert read.get_json()["read"] == 1
+    alice_thread = client.get(
+        f"/api/messaging/messages?counter_id=1&kind=direct&peer_staff_id={ids['bob']}"
+    ).get_json()["messages"]
+    assert alice_thread[0]["delivered_at"] is not None
+    assert alice_thread[0]["read_at"] is not None
+
+
 def test_broadcast_snapshots_only_active_recipients(api):
     app, client, ids = api
     _presence(client, 1)

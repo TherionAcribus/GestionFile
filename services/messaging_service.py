@@ -262,6 +262,7 @@ def _recipient_payload(recipient):
         "name": recipient.recipient_name,
         "counter_id": recipient.recipient_counter_id,
         "counter_name": recipient.recipient_counter_name,
+        "delivered_at": _iso(recipient.delivered_at),
         "read_at": _iso(recipient.read_at),
     }
 
@@ -273,8 +274,11 @@ def serialize_message(message, viewer_staff_id):
         None,
     )
     direct_read_at = None
+    direct_delivered_at = None
     if message.kind == "direct" and message.sender_staff_id == viewer_staff_id:
-        direct_read_at = _iso(message.recipients[0].read_at) if message.recipients else None
+        if message.recipients:
+            direct_read_at = _iso(message.recipients[0].read_at)
+            direct_delivered_at = _iso(message.recipients[0].delivered_at)
     return {
         "id": message.id,
         "client_message_id": message.client_message_id,
@@ -288,14 +292,45 @@ def serialize_message(message, viewer_staff_id):
             "counter_name": message.sender_counter_name,
         },
         "recipients": recipients if message.kind == "direct" else [],
+        "delivered_at": direct_delivered_at,
         "read_at": direct_read_at,
         "is_unread": bool(viewer_recipient and not viewer_recipient.read_at),
     }
 
 
+def _mark_delivered(staff):
+    # delivered_at = l'app du destinataire est connectée : marqué dès que
+    # son app interroge le serveur (état, fil). « Remis » ≠ « Lu ».
+    rows = (
+        AppMessageRecipient.query
+        .filter(
+            AppMessageRecipient.recipient_staff_id == staff.id,
+            AppMessageRecipient.delivered_at.is_(None),
+        )
+        .options(joinedload(AppMessageRecipient.message))
+        .all()
+    )
+    if not rows:
+        return
+    delivered_at = now()
+    for row in rows:
+        row.delivered_at = delivered_at
+    db.session.commit()
+    # Rafraîchissement ciblé : les comptoirs des expéditeurs concernés
+    # voient leur « Remis » sans attendre. /!\ rooms vide -> NE PAS
+    # appeler _emit : rooms=None diffuse à tout le namespace.
+    rooms = {row.message.sender_counter_id for row in rows}
+    rooms.discard(None)
+    if rooms:
+        _emit("messaging_changed", {"delivered": True}, rooms=rooms)
+
+
 def state(counter_id):
     require_enabled()
     counter, staff = resolve_identity(counter_id)
+    # L'app de cet équipier vient d'interroger le serveur : ses messages
+    # destinés sont « remis ». heartbeat() délègue à state(), couvert aussi.
+    _mark_delivered(staff)
     people = _all_people(exclude_staff_id=staff.id)
     recent = (
         _visible_query(staff.id)
@@ -391,6 +426,7 @@ def list_messages(counter_id, *, kind, peer_staff_id=None, before_id=None,
                   after_id=None, limit=PAGE_SIZE_DEFAULT):
     require_enabled()
     _counter, staff = resolve_identity(counter_id)
+    _mark_delivered(staff)
     if kind not in {"direct", "broadcast"}:
         raise MessagingError("invalid_message", 400)
     try:
@@ -549,6 +585,9 @@ def mark_read(counter_id, message_ids):
     read_at = now()
     for row in rows:
         row.read_at = read_at
+        # « Lu » implique « Remis » — même si l'app n'a jamais été marquée
+        # destinataire d'un delivered_at avant (lecture directe du fil).
+        row.delivered_at = row.delivered_at or read_at
     if rows:
         db.session.commit()
         # Ciblé : le comptoir du lecteur (son compteur de non-lus change)

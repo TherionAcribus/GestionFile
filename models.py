@@ -506,6 +506,10 @@ class AppMessageRecipient(db.Model):
     # Nullable : un destinataire hors ligne n'a pas de comptoir courant.
     recipient_counter_name = db.Column(db.String(20), nullable=True)
     read_at = db.Column(db.DateTime, nullable=True)
+    # « Remis » : horodatage de réception par l'app destinataire (elle a
+    # appris que le message existe en interrogeant le serveur), distinct
+    # de la lecture réelle. Un read_at implique toujours un delivered_at.
+    delivered_at = db.Column(db.DateTime, nullable=True)
 
     message = db.relationship("AppMessage", back_populates="recipients")
 
