@@ -271,7 +271,9 @@ def api_counter_state(counter_id):
         "activity_id": p.activity_id,
         "activity": p.activity.name,
         "activity_is_staff": p.activity.staff_id,
-        "language_code": p.language.code,
+        # language_id nullable : sans garde, un patient sans langue levait
+        # AttributeError -> 500 -> aucune resync possible pour l'App Comptoir.
+        "language_code": p.language.code if p.language else None,
     } for p in standing]
 
     activity_staff = Activity.query.filter_by(is_staff=True).all()
@@ -444,7 +446,9 @@ def do_relaunch_patient_call(counter_id):
     # La relance rejoint la MEME file FIFO que l'appel initial. Ainsi, si le
     # premier MP3 est encore en cours de generation, le rappel ne peut ni lire
     # un ancien fichier portant le meme numero ni passer avant l'annonce initiale.
-    trigger_async_audio_calling(counter_id, patient.id, patient.language.code)
+    trigger_async_audio_calling(
+        counter_id, patient.id,
+        patient.language.code if patient.language else "fr")
 
 
 # Route fusionnee web + App (point C12), POST uniquement — la relance

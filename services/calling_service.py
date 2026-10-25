@@ -182,7 +182,9 @@ def call_specific(counter_id, patient_id):
     mark_overtaken_patients(next_patient, counter_id)
 
     announce_call(counter_id, next_patient)
-    trigger_async_audio_calling(counter_id, next_patient.id, next_patient.language.code)
+    trigger_async_audio_calling(
+        counter_id, next_patient.id,
+        next_patient.language.code if next_patient.language else "fr")
     # Notification du telephone du patient : elle etait faite par l'appelant web
     # (counter_select_patient) mais PAS par la route utilisee par l'App, qui
     # n'avertissait donc jamais le patient. Centralisee ici, les deux chemins se
@@ -353,10 +355,31 @@ def run_auto_calling():
 
     S'arrête au premier comptoir servi (un patient appelé à la fois), comme la
     version d'origine.
+
+    Ne lève JAMAIS d'exception : cette fonction s'exécute sur le chemin
+    critique d'inscription (borne, scan, confirm_print) AVANT la diffusion de
+    la file — un comptoir défectueux (staff supprimé, patient sans langue...)
+    ou une erreur de réclamation ne doit pas empêcher
+    ``communikation("update_patient")`` de partir, sinon le patient nouvellement
+    inscrit reste invisible des App Comptoir jusqu'à la prochaine diffusion.
     """
-    for counter in counters_en_appel_automatique():
-        ok, resultat = call_next_for_counter(counter.id)
-        if not ok:
+    try:
+        counters = counters_en_appel_automatique()
+    except Exception:
+        current_app.logger.exception(
+            "Appel automatique : lecture des comptoirs impossible")
+        return False, "no_counter"
+
+    for counter in counters:
+        try:
+            ok, resultat = call_next_for_counter(counter.id)
+            if ok:
+                communikation(
+                    "app_counter",
+                    event="update_auto_calling",
+                    data={"counter_id": counter.id, "patient": resultat.to_dict()},
+                )
+                return True, resultat
             # Aucun patient ne convient à CE comptoir : on tente le suivant.
             # L'ancienne version ne testait pas le drapeau de retour et faisait
             # directement `patient.id` : quand call_next renvoyait
@@ -365,14 +388,9 @@ def run_auto_calling():
             current_app.logger.debug(
                 "Appel automatique : rien a appeler pour le comptoir %s (%s)", counter.id, resultat
             )
-            continue
-
-        communikation(
-            "app_counter",
-            event="update_auto_calling",
-            data={"counter_id": counter.id, "patient": resultat.to_dict()},
-        )
-        return True, resultat
+        except Exception:
+            current_app.logger.exception(
+                "Appel automatique : échec pour le comptoir %s", counter.id)
 
     return False, "no_counter"
 

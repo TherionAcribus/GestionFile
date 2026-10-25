@@ -144,7 +144,11 @@ def call_next(counter_id, attempts=0):
     # committé (status='calling', counter_id renseigné).
     app.logger.info(f"Patient {next_patient.id} status updated to 'calling' for counter {counter_id}")
 
-    trigger_async_audio_calling(counter_id, next_patient.id, next_patient.language.code)
+    # language_id est nullable (patients historiques ou langue supprimée) :
+    # un accès direct à .language.code lèverait AttributeError après la
+    # réclamation — laissant l'appel fait mais la suite du flux en échec.
+    language_code = next_patient.language.code if next_patient.language else "fr"
+    trigger_async_audio_calling(counter_id, next_patient.id, language_code)
     notify_patient_phone(next_patient.call_number)
 
     return True, next_patient
@@ -245,6 +249,15 @@ def pick_priority_patient(candidates, applicable_rules):
 def algo_choice_next_patient(counter_id):
 
     counter = db.session.get(Counter, counter_id)
+    # staff_id peut rester renseigné alors que le pharmacien a été supprimé :
+    # counter.staff vaut alors None et .activities planterait (AttributeError) —
+    # faisant échouer toute la chaîne d'appel (dont la diffusion de la file,
+    # quand run_auto_calling tournait sur le chemin d'inscription borne).
+    if counter is None or counter.staff is None:
+        app.logger.warning(
+            "Comptoir %s sans équipier valide : aucun patient ne peut être choisi",
+            counter_id)
+        return None
 
     # activités possible par ce pharmacien
     staff_activities = set(activity.id for activity in counter.staff.activities)
@@ -686,7 +699,16 @@ def register_patient(activity, journey_id=None):
     new_patient = add_patient(call_number, activity, journey_id=journey_id)
 
     from services.calling_service import run_auto_calling
-    run_auto_calling()
+    try:
+        run_auto_calling()
+    except Exception:
+        # Auxiliaire : sa défaillance ne doit jamais empêcher la diffusion
+        # ci-dessous — le patient est DÉJÀ commité 'standing', il resterait
+        # invisible des App Comptoir jusqu'à la prochaine émission quelconque
+        # (incident « borne → App » : admin à jour, file du comptoir muette).
+        app.logger.exception(
+            "Appel automatique échoué après inscription du patient %s",
+            new_patient.id)
 
     communikation("update_patient")
     return new_patient
@@ -783,7 +805,7 @@ def generate_audio_calling(counter_number, next_patient, language_code="fr",
     # si pas FR
     else:
         # si langue desactivée
-        if not next_patient.language.voice_is_active:
+        if (not next_patient.language or not next_patient.language.voice_is_active):
             text_template = french_template
         # si langue activée
         else :
@@ -817,7 +839,7 @@ def choose_voice_model(next_patient, text, language_code):
     if language_code == "fr" or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         voice_model = app.config["VOICE_MODEL"]
     else:
-        if not next_patient.language.voice_is_active:
+        if (not next_patient.language or not next_patient.language.voice_is_active):
             voice_model = app.config["VOICE_MODEL"]
         else:
             voice_model = next_patient.language.voice_model
@@ -841,7 +863,7 @@ def create_tts_sound(next_patient, text, language_code):
     if language_code == "fr"or app.config["ANNOUNCE_CALL_TRANSLATION"] == "fr":
         voice_gtts_name = app.config["VOICE_GTTS_NAME"]
     else:
-        if not next_patient.language.voice_is_active:
+        if (not next_patient.language or not next_patient.language.voice_is_active):
             voice_gtts_name = app.config["VOICE_GTTS_NAME"]
         else:
             voice_gtts_name = next_patient.language.voice_gtts_name
@@ -868,7 +890,7 @@ def create_google_tts_sound(next_patient, text, language_code):
         voice_google_name = app.config["VOICE_GOOGLE_NAME"]
         voice_google_region = app.config["VOICE_GOOGLE_REGION"]
     else:
-        if not next_patient.language.voice_is_active:
+        if (not next_patient.language or not next_patient.language.voice_is_active):
             voice_google_name = app.config["VOICE_GOOGLE_NAME"]
             voice_google_region = app.config["VOICE_GOOGLE_REGION"]
         else:

@@ -204,7 +204,8 @@ class Patient(db.Model):
             "status": self.status,
             "counter_id": self.counter_id,
             "language_id": self.language_id,
-            "language_code": self.language.code,
+            # language_id nullable : sérialiser sans garde levait AttributeError.
+            "language_code": self.language.code if self.language else None,
             "call_auto_validate_at": (
                 int(auto_validate_at.timestamp()) if auto_validate_at else None
             ),

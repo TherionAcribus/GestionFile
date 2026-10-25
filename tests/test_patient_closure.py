@@ -423,6 +423,27 @@ def test_state_expose_les_equipiers_comme_cibles(client, application, token):
     assert corps["staff_targets"] == attendu
 
 
+def test_state_tolere_un_patient_sans_langue(client, application, token):
+    """language_id est nullable : un patient 'standing' sans langue ne doit pas
+    planter /state en 500 — sinon TOUTES les resyncs de l'App Comptoir
+    échouaient tant que ce patient restait en file (la liste affichée ne
+    convergeait plus jamais)."""
+    _, comptoir_id = _base(application)
+    application.config["ADD_PAPER"] = False
+    with application.app_context():
+        activite = Activity.query.first()
+        db.session.add(Patient(call_number="42", status="standing",
+                               activity_id=activite.id, language_id=None))
+        db.session.commit()
+
+    reponse = client.get(f"/api/counter/{comptoir_id}/state",
+                         headers={"X-App-Token": token})
+
+    assert reponse.status_code == 200
+    corps = reponse.get_json()
+    assert corps["standing_list"][0]["language_code"] is None
+
+
 def test_remise_en_file_sur_terminal_est_un_noop(client, application, token):
     """Un patient 'done' ne peut pas revenir en file via l'App : la
     résurrection silencieuse perdait l'issue enregistrée."""

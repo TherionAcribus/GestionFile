@@ -690,7 +690,15 @@ def _after_activation(patient):
     patient' (différée jusqu'ici pour ne pas annoncer un patient qui aurait
     pu être annulé)."""
     from services.calling_service import run_auto_calling
-    run_auto_calling()
+    try:
+        run_auto_calling()
+    except Exception:
+        # Auxiliaire : sa défaillance ne doit jamais empêcher la diffusion
+        # ci-dessous — le patient est DÉJÀ en file, il deviendrait invisible
+        # des App Comptoir jusqu'à la prochaine émission quelconque.
+        app.logger.exception(
+            "Appel automatique échoué après activation du patient %s",
+            patient.id)
     communikation("update_patient")
     if patient.activity and patient.activity.notification:
         send_app_notification(origin="activity", data={"patient": patient, "activity": patient.activity})

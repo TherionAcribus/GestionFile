@@ -527,6 +527,72 @@ def test_arrivee_refuse_un_patient_termine(application, messages):
     assert rafraichi.timestamp_counter is None
 
 
+# --- 6. Robustesse du chemin d'inscription borne -----------------------------
+#
+# Le flux borne commit le patient 'standing' PUIS fait run_auto_calling() et
+# communikation("update_patient"). Une exception dans l'appel automatique ne
+# doit jamais empêcher la diffusion — sinon le patient est en base, visible en
+# Admin, mais jamais poussé aux App Comptoir (incident « borne → App »).
+
+def test_run_auto_calling_ne_propage_pas_une_erreur_de_comptoir(application, messages, monkeypatch):
+    """Le service s'exécute avant la diffusion de la file : même si la
+    réclamation lève (comptoir défectueux), l'exception ne doit pas sortir —
+    sinon communikation("update_patient") n'est jamais atteint."""
+    from services import calling_service
+
+    _jeu_de_donnees(nb_patients=1, nb_comptoirs=1, auto=True)
+
+    def panne(*args, **kwargs):
+        raise RuntimeError("panne interne")
+
+    monkeypatch.setattr(calling_service, "call_next_for_counter", panne)
+
+    ok, raison = calling_service.run_auto_calling()   # ne doit pas lever
+    assert (ok, raison) == (False, "no_counter")
+
+
+def test_auto_calling_survit_a_un_staff_supprime(application, messages):
+    """Counter.staff_id peut pointer vers un pharmacien supprimé : la relation
+    vaut None et l'ancien algo plantait sur ``counter.staff.activities``."""
+    from services import calling_service
+
+    comptoirs, _, _ = _jeu_de_donnees(
+        nb_patients=1, nb_comptoirs=1, auto=True, avec_staff=False)
+    comptoirs[0].staff_id = 99999   # FK pendante (SQLite n'impose pas la FK)
+    db.session.commit()
+
+    ok, raison = calling_service.run_auto_calling()   # ne doit pas lever
+    assert (ok, raison) == (False, "no_counter")
+
+
+def test_register_patient_diffuse_meme_si_appel_auto_plante(application, messages, monkeypatch):
+    """Régression « borne → App Comptoir » : le patient est commité 'standing'
+    AVANT l'appel automatique ; une panne de celui-ci ne doit pas empêcher
+    communikation("update_patient") — sinon le patient reste invisible de
+    l'App Comptoir jusqu'à la prochaine diffusion quelconque (ajout admin,
+    appel du suivant…)."""
+    import services.calling_service as service
+    from python.engine import register_patient
+
+    _jeu_de_donnees(nb_patients=0, nb_comptoirs=0)
+    activite = Activity.query.first()
+
+    def panne():
+        raise RuntimeError("panne interne")
+
+    monkeypatch.setattr(service, "run_auto_calling", panne)
+
+    # add_patient lit la session Flask (langue choisie sur la borne).
+    with application.test_request_context():
+        patient = register_patient(activite)
+
+    assert patient.status == "standing"
+    assert ("update_patient", "update") in [(s, e) for s, e, _ in messages], (
+        "la diffusion de la file doit partir malgré la panne de "
+        "l'appel automatique"
+    )
+
+
 def test_arrivee_refuse_le_mauvais_comptoir(application, messages):
     """Le patient appelé par le comptoir 2 ne peut pas être validé depuis le
     comptoir 1."""
