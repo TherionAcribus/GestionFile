@@ -466,6 +466,13 @@ class AppMessage(db.Model):
     sender_name = db.Column(db.String(50), nullable=False)
     sender_counter_name = db.Column(db.String(20), nullable=False)
     body = db.Column(db.String(1000), nullable=False)
+    # Message prioritaire : l'app du destinataire lui donne une
+    # notification persistante et un rendu distinct dans le fil.
+    urgent = db.Column(db.Boolean, nullable=False, default=False,
+                       server_default=db.false())
+    # Retrait logique par l'expéditeur (envoi par erreur) : l'enregistrement
+    # est conservé pour l'audit — jamais de DELETE physique.
+    deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(
         db.DateTime,
         nullable=False,

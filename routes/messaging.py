@@ -74,6 +74,18 @@ def messages():
         return _error(exc)
 
 
+@messaging_bp.route("/api/messaging/delete", methods=["POST"])
+@require_app_token
+def delete_message():
+    data = _json()
+    try:
+        return jsonify(messaging.delete_message(
+            data.get("counter_id"), data.get("message_id"),
+        ))
+    except messaging.MessagingError as exc:
+        return _error(exc)
+
+
 @messaging_bp.route("/api/messaging/read", methods=["POST"])
 @require_app_token
 def read_messages():

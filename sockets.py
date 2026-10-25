@@ -217,6 +217,32 @@ def join_messaging_room(data):
     join_room(f"{MESSAGING_ROOM_PREFIX}{counter_id}")
 
 
+@socketio.on("messaging_typing", namespace="/socket_app_counter")
+def messaging_typing(data):
+    # Relais pur « en train d'écrire » — zéro base : l'évènement est
+    # éphémère, le serveur ne fait que router (salle du destinataire pour
+    # un direct, tout le namespace pour un message d'équipe). L'émetteur
+    # s'exclut côté client via son staff_id.
+    if not isinstance(data, dict) or data.get("kind") not in ("direct", "broadcast"):
+        return
+    # Même enveloppe que communikation ({flag, data, revision}) : le client
+    # lit indifféremment data["data"].
+    envelope = {"flag": None, "data": data, "revision": None}
+    if data["kind"] == "broadcast":
+        socketio.emit("messaging_typing", envelope,
+                      namespace="/socket_app_counter")
+        return
+    # Direct : uniquement la salle du comptoir destinataire ; sans
+    # comptoir cible convertible, rien à router.
+    try:
+        peer_counter_id = int(data.get("peer_counter_id"))
+    except (TypeError, ValueError):
+        return
+    socketio.emit("messaging_typing", envelope,
+                  namespace="/socket_app_counter",
+                  room=f"{MESSAGING_ROOM_PREFIX}{peer_counter_id}")
+
+
 # --- Sondes du test de charge -------------------------------------------------
 # Namespace interne, hors NAMESPACES (jamais proposé comme destination dans
 # l'administration) : seuls les écouteurs du runner, porteurs du secret

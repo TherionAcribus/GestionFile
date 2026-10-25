@@ -220,6 +220,10 @@ def _today_start():
 
 def _visible_query(staff_id):
     return AppMessage.query.filter(
+        # Retrait logique : un message supprimé par son expéditeur
+        # disparaît de tous les fils, états et compteurs de non-lus
+        # (l'enregistrement reste en base pour l'audit).
+        AppMessage.deleted_at.is_(None),
         # Je suis expéditeur ou destinataire.
         or_(
             AppMessage.sender_staff_id == staff_id,
@@ -285,6 +289,7 @@ def serialize_message(message, viewer_staff_id):
         "client_message_id": message.client_message_id,
         "kind": message.kind,
         "body": message.body,
+        "urgent": bool(message.urgent),
         "created_at": _iso(message.created_at),
         "sender": {
             "staff_id": message.sender_staff_id,
@@ -340,6 +345,7 @@ def state(counter_id):
         re.compile(rf"@{re.escape(staff.initials)}\b", re.IGNORECASE)
         if staff.initials else None)
     unread_mentions = 0
+    unread_urgent = 0
     recent = (
         _visible_query(staff.id)
         .options(joinedload(AppMessage.recipients))
@@ -398,6 +404,10 @@ def state(counter_id):
         )
         if recipient and recipient.read_at is None:
             summary["unread_count"] += 1
+            # Non-lu prioritaire (direct ou équipe) : compté à part pour
+            # l'alerte « urgent » de l'App — comme les mentions.
+            if message.urgent:
+                unread_urgent += 1
             # Non-lu qui me mentionne dans un message à tous. Un message
             # que j'ai envoyé moi-même n'a pas de ligne destinataire pour
             # moi : il n'entre jamais ici — attendu.
@@ -433,6 +443,7 @@ def state(counter_id):
         "conversations": ordered,
         "unread_total": sum(item["unread_count"] for item in ordered),
         "unread_mentions": unread_mentions,
+        "unread_urgent": unread_urgent,
         "online_count": sum(1 for person in people.values() if person["online"]),
         "server_time": _iso(now()),
     }
@@ -493,7 +504,11 @@ def send_message(counter_id, payload):
     client_message_id = _valid_uuid(payload.get("client_message_id"))
     existing = AppMessage.query.filter_by(client_message_id=client_message_id).first()
     if existing:
-        if existing.sender_staff_id != staff.id:
+        if existing.sender_staff_id != staff.id or existing.deleted_at is not None:
+            # Réémettre le client_message_id d'un message retiré le
+            # ressusciterait en silence : la déduplication sert les
+            # rejeux réseau, pas le recyclage — refus, un vrai nouvel
+            # envoi repart avec un autre identifiant.
             raise MessagingError("invalid_message", 400)
         return serialize_message(existing, staff.id), False
 
@@ -539,6 +554,9 @@ def send_message(counter_id, payload):
             if (person.get("initials") or "").lower() in tokens
         )
 
+    # « urgent » : drapeau demandé par l'app expéditrice — l'app
+    # destinataire affiche une notification persistante.
+    urgent = bool(payload.get("urgent"))
     message = AppMessage(
         client_message_id=client_message_id,
         kind=kind,
@@ -547,6 +565,7 @@ def send_message(counter_id, payload):
         sender_name=staff.name,
         sender_counter_name=counter.name,
         body=body,
+        urgent=urgent,
     )
     for recipient in recipients:
         message.recipients.append(AppMessageRecipient(
@@ -567,6 +586,10 @@ def send_message(counter_id, payload):
             client_message_id=client_message_id,
         ).first()
         if existing and existing.sender_staff_id == staff.id:
+            if existing.deleted_at is not None:
+                # Même garde que ci-dessus : pas de résurrection d'un
+                # message retiré via l'unicité de client_message_id.
+                raise MessagingError("invalid_message", 400)
             return serialize_message(existing, staff.id), False
         raise MessagingError("invalid_message", 400)
     rooms = None
@@ -586,11 +609,53 @@ def send_message(counter_id, payload):
         # Toujours présente (liste vide hors broadcast) : l'App visée par
         # une mention transforme l'alerte générique en alerte dédiée.
         "mentioned_staff_ids": mentioned_staff_ids,
+        # Priorité transportée dans le signal : l'App destinataire choisit
+        # l'alerte « urgent » (persistante) sans attendre l'état.
+        "urgent": bool(message.urgent),
     }, rooms=rooms)
     result = serialize_message(message, staff.id)
     result["recipient_count"] = len(recipients)
     result["mentioned_staff_ids"] = mentioned_staff_ids
     return result, True
+
+
+# Fenêtre de retrait d'un message par son expéditeur — alignée sur la
+# proposition de l'App (« Retirer mon dernier message »).
+DELETE_WINDOW_SECONDS = 15 * 60
+
+
+def delete_message(counter_id, message_id):
+    require_enabled()
+    counter, staff = resolve_identity(counter_id)
+    try:
+        message_id = int(message_id)
+    except (TypeError, ValueError):
+        raise MessagingError("invalid_message", 400)
+    message = (
+        AppMessage.query
+        .filter(AppMessage.id == message_id)
+        .options(joinedload(AppMessage.recipients))
+        .first()
+    )
+    if message is None or message.deleted_at is not None:
+        raise MessagingError("invalid_message", 400)
+    if message.sender_staff_id != staff.id:
+        # Seul l'expéditeur retire son propre envoi : on ne modifie pas le
+        # fil des autres à leur place.
+        raise MessagingError("invalid_message", 403)
+    if (now() - message.created_at).total_seconds() > DELETE_WINDOW_SECONDS:
+        raise MessagingError("delete_window_expired", 409)
+    message.deleted_at = now()
+    db.session.commit()
+    # Invalidation ciblée : comptoir expéditeur + comptoirs figés des
+    # destinataires — le message disparaît de tous les fils concernés.
+    # /!\ rooms vide -> NE PAS appeler _emit : rooms=None diffuse partout.
+    rooms = {counter.id}
+    rooms.update(row.recipient_counter_id for row in message.recipients)
+    rooms.discard(None)
+    if rooms:
+        _emit("messaging_changed", {"deleted": True}, rooms=rooms)
+    return {"deleted": True, "message_id": message.id}
 
 
 def mark_read(counter_id, message_ids):

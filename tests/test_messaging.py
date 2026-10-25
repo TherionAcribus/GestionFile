@@ -564,6 +564,35 @@ def test_mention_token_must_match_a_known_initials(api):
     assert bob_state["unread_mentions"] == 0
 
 
+def test_urgent_message_is_flagged_counted_and_signaled(api, monkeypatch):
+    # « Urgent » voyage partout : sérialisation, signal temps réel, et
+    # compteur dédié de l'état pour le destinataire uniquement.
+    _app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    calls.clear()
+    response, _ = _send(
+        client, 1, recipient_staff_id=ids["bob"], urgent=True)
+    assert response.status_code == 201
+    assert response.get_json()["urgent"] is True
+    changed = _changed_events(calls)
+    assert changed and all(
+        call["data"]["urgent"] is True for call in changed)
+
+    bob_state = client.get("/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["unread_urgent"] == 1
+    # L'expéditeur ne compte jamais ses propres messages en non-lu.
+    alice_state = client.get("/api/messaging/state?counter_id=1").get_json()
+    assert alice_state["unread_urgent"] == 0
+
+    # Un envoi ordinaire : ni drapeau ni compteur supplémentaire.
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    assert response.get_json()["urgent"] is False
+    bob_state = client.get("/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["unread_urgent"] == 1
+
+
 def test_mark_read_targets_reader_and_sender_counters(api, monkeypatch):
     _app, client, ids = api
     calls = _spy_communikation(monkeypatch)
@@ -689,3 +718,194 @@ def test_join_messaging_room_rejette_les_payloads_invalides(messaging_app):
 
     assert all(m["name"] != "messaging_changed"
                for m in sio.get_received("/socket_app_counter"))
+
+
+# --- Handler ``messaging_typing`` : relais « en train d'écrire » ---------------
+
+def test_messaging_typing_relays_direct_only_to_recipient_room(messaging_app):
+    """Un typing direct n'atteint que la salle du comptoir destinataire ;
+    un typing « équipe » est diffusé à tout le namespace."""
+    app, _token, _ids = messaging_app
+
+    socketio = _init_counter_sockets(app)
+    client = app.test_client()
+    sio_a = _counter_socket(socketio, app, client)
+    sio_b = _counter_socket(socketio, app, client)
+    sio_c = _counter_socket(socketio, app, client)
+    sio_a.emit("join_messaging_room", {"counter_id": 1},
+               namespace="/socket_app_counter")
+    sio_b.emit("join_messaging_room", {"counter_id": 2},
+               namespace="/socket_app_counter")
+    sio_c.emit("join_messaging_room", {"counter_id": 3},
+               namespace="/socket_app_counter")
+
+    sio_a.emit("messaging_typing", {
+        "kind": "direct", "peer_counter_id": 2,
+        "staff_id": 1, "name": "Alice", "peer_staff_id": 2,
+    }, namespace="/socket_app_counter")
+
+    recus_a = [m for m in sio_a.get_received("/socket_app_counter")
+               if m["name"] == "messaging_typing"]
+    recus_b = [m for m in sio_b.get_received("/socket_app_counter")
+               if m["name"] == "messaging_typing"]
+    recus_c = [m for m in sio_c.get_received("/socket_app_counter")
+               if m["name"] == "messaging_typing"]
+    assert recus_a == [] and recus_c == []
+    assert len(recus_b) == 1
+    # Le payload est relayé tel quel dans l'enveloppe {data: ...}.
+    assert recus_b[0]["args"][0]["data"]["peer_staff_id"] == 2
+
+    # « Équipe » : tout le namespace reçoit — l'émetteur compris (le client
+    # s'exclut lui-même via son staff_id).
+    sio_a.emit("messaging_typing", {
+        "kind": "broadcast", "staff_id": 1, "name": "Alice",
+    }, namespace="/socket_app_counter")
+    for sio in (sio_a, sio_b, sio_c):
+        recus = [m for m in sio.get_received("/socket_app_counter")
+                 if m["name"] == "messaging_typing"]
+        assert len(recus) == 1
+
+
+def test_messaging_typing_drops_invalid_payloads(messaging_app):
+    """Kind inconnu, payload non dict, direct sans comptoir cible : ignorés."""
+    app, _token, _ids = messaging_app
+
+    socketio = _init_counter_sockets(app)
+    client = app.test_client()
+    sio = _counter_socket(socketio, app, client)
+    sio.emit("join_messaging_room", {"counter_id": 2},
+             namespace="/socket_app_counter")
+
+    for payload in (
+        {"kind": "direct"},                       # pas de peer_counter_id
+        {"kind": "direct", "peer_counter_id": "abc"},
+        {"kind": "tchat", "peer_counter_id": 2},  # kind inconnu
+        None,
+        "pas-un-dict",
+    ):
+        sio.emit("messaging_typing", payload,
+                 namespace="/socket_app_counter")
+
+    assert [m for m in sio.get_received("/socket_app_counter")
+            if m["name"] == "messaging_typing"] == []
+
+
+def test_sender_can_delete_a_message_within_the_window(api, monkeypatch):
+    app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+    bob_state = client.get("/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["unread_total"] == 1
+    calls.clear()
+
+    deleted = client.post("/api/messaging/delete", json={
+        "counter_id": 1, "message_id": message_id,
+    })
+    assert deleted.status_code == 200
+    assert deleted.get_json() == {
+        "deleted": True, "message_id": message_id,
+    }
+    # Invalidation ciblée : comptoirs expéditeur + destinataire figé.
+    changed = _changed_events(calls)
+    assert {call["room"] for call in changed} == {
+        "messaging_counter_1", "messaging_counter_2",
+    }
+
+    # Le message disparaît des fils et de l'état des deux côtés,
+    # non-lus décrémentés.
+    for counter in (1, 2):
+        state = client.get(
+            f"/api/messaging/state?counter_id={counter}").get_json()
+        assert all(
+            conv.get("last_message_id") != message_id
+            for conv in state["conversations"]
+        )
+    bob_state = client.get(
+        "/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["unread_total"] == 0
+    alice_thread = client.get(
+        "/api/messaging/messages?counter_id=1&kind=direct"
+        f"&peer_staff_id={ids['bob']}").get_json()["messages"]
+    assert alice_thread == []
+
+
+def test_delete_is_refused_to_anyone_but_the_sender(api):
+    app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    response, payload = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+
+    # Bob est destinataire, pas expéditeur.
+    refused = client.post("/api/messaging/delete", json={
+        "counter_id": 2, "message_id": message_id,
+    })
+    assert refused.status_code == 403
+    assert refused.get_json()["error"] == "invalid_message"
+
+    # Le retrait de l'expéditeur fonctionne…
+    first = client.post("/api/messaging/delete", json={
+        "counter_id": 1, "message_id": message_id,
+    })
+    assert first.status_code == 200
+
+    # …mais le même id ne se retire pas deux fois, ni ne peut être
+    # ressuscité par un rejeu de son client_message_id.
+    second = client.post("/api/messaging/delete", json={
+        "counter_id": 1, "message_id": message_id,
+    })
+    assert second.status_code == 400
+    assert second.get_json()["error"] == "invalid_message"
+    resent = client.post("/api/messaging/messages", json=payload)
+    assert resent.status_code == 400
+    assert resent.get_json()["error"] == "invalid_message"
+
+
+def test_delete_is_refused_after_the_window(api):
+    app, client, ids = api
+    _presence(client, 1)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+    with app.app_context():
+        db.session.get(AppMessage, message_id).created_at = (
+            messaging.now() - timedelta(minutes=16))
+        db.session.commit()
+
+    expired = client.post("/api/messaging/delete", json={
+        "counter_id": 1, "message_id": message_id,
+    })
+    assert expired.status_code == 409
+    assert expired.get_json()["error"] == "delete_window_expired"
+
+
+def test_delete_rejects_invalid_message_id(api):
+    app, client, ids = api
+    _presence(client, 1)
+    for message_id in ("abc", 9999):
+        response = client.post("/api/messaging/delete", json={
+            "counter_id": 1, "message_id": message_id,
+        })
+        assert response.status_code == 400
+        assert response.get_json()["error"] == "invalid_message"
+
+
+def test_list_messages_pages_older_messages_with_has_more(api):
+    app, client, ids = api
+    _presence(client, 1)
+    for index in range(3):
+        _send(client, 1, recipient_staff_id=ids["bob"],
+              body=f"msg{index}")
+    page1 = client.get(
+        "/api/messaging/messages?counter_id=1&kind=direct"
+        f"&peer_staff_id={ids['bob']}&limit=2").get_json()
+    assert page1["has_more"] is True
+    assert [m["body"] for m in page1["messages"]] == ["msg1", "msg2"]
+    page2 = client.get(
+        "/api/messaging/messages?counter_id=1&kind=direct"
+        f"&peer_staff_id={ids['bob']}&limit=2"
+        f"&before_id={page1['messages'][0]['id']}").get_json()
+    assert page2["has_more"] is False
+    assert [m["body"] for m in page2["messages"]] == ["msg0"]
