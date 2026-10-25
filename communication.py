@@ -1,6 +1,6 @@
 import time
 import logging
-from flask import url_for, current_app
+from flask import current_app
 from routes.pyside import create_patients_list_for_pyside
 from models import bump_queue_revision
 from extensions import socketio
@@ -52,7 +52,13 @@ def communikation(stream, data=None, flag=None, event="update", client_id=None, 
 
         if current_app.config["ANNOUNCE_ALERT"]:
             signal_file = current_app.config["ANNOUNCE_ALERT_FILENAME"]
-            audio_path = url_for('static', filename=f'audio/signals/{signal_file}', _external=True)
+            # Chemin RELATIF, comme _public_url pour les MP3 d'annonce :
+            # url_for(_external=True) exige une requête active ou SERVER_NAME,
+            # et le dispatcher d'annonces appelle communikation depuis un
+            # thread en simple contexte applicatif — url_for y levait
+            # RuntimeError, tuant l'annonce entière (ni beep ni MP3 émis).
+            static_root = (current_app.static_url_path or "/static").rstrip("/")
+            audio_path = f"{static_root}/audio/signals/{signal_file}"
             if player_mode == "web":
                 communication_websocket("socket_update_screen", audio_path, event="audio")
                 current_app.logger.debug('AUDIO_PATH %s', audio_path)
