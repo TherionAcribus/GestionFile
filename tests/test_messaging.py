@@ -241,6 +241,23 @@ def test_state_lists_every_registered_staff_member_online_or_offline(api):
     assert set(directs) == {ids["bob"], ids["charlie"]}
 
 
+def test_state_conversations_carry_staff_initials(api):
+    # Les initiales métier (colonne Pharmacist.initials, utilisée à la
+    # connexion) accompagnent le nom dans l'annuaire messagerie : l'App
+    # Comptoir les affiche et les matche dans sa recherche « Écrire à… ».
+    _app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    state = client.get("/api/messaging/state?counter_id=1").get_json()
+    directs = {
+        item["staff_id"]: item
+        for item in state["conversations"] if item["kind"] == "direct"
+    }
+    # En ligne (dict de présence) comme hors ligne (annuaire complet).
+    assert directs[ids["bob"]]["initials"] == "BO"
+    assert directs[ids["charlie"]]["initials"] == "CH"
+
+
 def test_heartbeat_after_expiration_emits_presence_changed(api, monkeypatch):
     app, client, _ids = api
     events = []

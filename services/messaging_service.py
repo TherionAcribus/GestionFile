@@ -100,6 +100,7 @@ def _active_people(exclude_staff_id=None):
         people.setdefault(presence.staff_id, {
             "staff_id": presence.staff_id,
             "name": presence.staff.name,
+            "initials": presence.staff.initials,
             "counter_id": presence.counter_id,
             "counter_name": presence.counter.name,
             "online": True,
@@ -120,6 +121,7 @@ def _all_people(exclude_staff_id=None):
         pharmacist.id: {
             "staff_id": pharmacist.id,
             "name": pharmacist.name,
+            "initials": pharmacist.initials,
             "counter_id": None,
             "counter_name": None,
             "online": False,
@@ -321,6 +323,7 @@ def state(counter_id):
                 peer = people.get(peer_id, {
                     "staff_id": peer_id,
                     "name": recipient.recipient_name,
+                    "initials": None,
                     "counter_id": recipient.recipient_counter_id,
                     "counter_name": recipient.recipient_counter_name,
                     "online": False,
@@ -332,6 +335,7 @@ def state(counter_id):
                 peer = people.get(peer_id, {
                     "staff_id": peer_id,
                     "name": message.sender_name,
+                    "initials": None,
                     "counter_id": message.sender_counter_id,
                     "counter_name": message.sender_counter_name,
                     "online": False,
