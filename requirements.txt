@@ -2,6 +2,8 @@
 #    uv pip compile requirements.in --universal --python-version 3.10 -o requirements.txt
 alembic==1.13.2
     # via flask-migrate
+amqp==5.4.1
+    # via kombu
 apscheduler==3.10.4
     # via -r requirements.in
 async-timeout==5.0.1 ; python_full_version < '3.11.3'
@@ -123,6 +125,8 @@ jmespath==1.0.1
     # via
     #   boto3
     #   botocore
+kombu==5.4.2
+    # via -r requirements.in
 mako==1.3.5
     # via alembic
 markdown2==2.5.0
@@ -214,8 +218,10 @@ typing-extensions==4.12.2
     #   alembic
     #   qrcode
     #   sqlalchemy
-tzdata==2024.1 ; sys_platform == 'win32'
-    # via tzlocal
+tzdata==2024.1
+    # via
+    #   kombu
+    #   tzlocal
 tzlocal==5.2
     # via apscheduler
 urllib3==2.2.2
@@ -223,6 +229,10 @@ urllib3==2.2.2
     #   botocore
     #   requests
     #   spotipy
+vine==5.1.0
+    # via
+    #   amqp
+    #   kombu
 webencodings==0.5.1
     # via bleach
 werkzeug==3.0.3
