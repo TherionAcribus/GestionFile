@@ -22,8 +22,8 @@
              bloque le CDN, et l'écran doit fonctionner sans Internet. -->
         <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/swiper-bundle.min.css') }}">
         <script src="{{ url_for('static', filename='js/libs/swiper-bundle.min.js') }}"></script>
-        <!-- Anime JS -->   
-        <script src="{{ url_for('static', filename='js/anime-master/anime.min.js') }}"></script>
+        {# Les animations des bannières utilisent l'API Web Animations native
+           (announce.js) : anime.js n'est plus embarqué. #}
 
 </head>
 <body>

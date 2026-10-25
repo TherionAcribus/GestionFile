@@ -481,12 +481,41 @@ const display_text_down = document.getElementById('div_display_text_down');
 const patientList = document.getElementById('patient_list');
 
 
+// anime.js n'est plus embarqué (nettoyage code mort) : les animations des
+// bannières d'appel passent par l'API Web Animations native. Les propriétés
+// reçues gardent le format historique anime.js (durée/easing mélangés aux
+// propriétés animées, translateX en pixels).
+var ANIME_EASING_MAP = {
+    'linear': 'linear',
+    'easeInQuad': 'cubic-bezier(0.55, 0.085, 0.68, 0.53)',
+    'easeOutQuad': 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+    'easeInOutQuad': 'cubic-bezier(0.455, 0.03, 0.515, 0.955)'
+};
+
 function animateElement(element, properties, options) {
-    return anime({
-        targets: element,
-        ...properties,
-        ...options
-    }).finished;
+    options = options || {};
+    var keyframes = {};
+    var timing = {};
+    Object.keys(properties).forEach(function (prop) {
+        var value = properties[prop];
+        if (prop === 'duration') {
+            timing.duration = value;
+        } else if (prop === 'easing') {
+            timing.easing = ANIME_EASING_MAP[value] || value;
+        } else if (prop === 'translateX') {
+            keyframes.transform = value.map(function (v) {
+                return 'translateX(' + v + 'px)';
+            });
+        } else {
+            keyframes[prop] = value;
+        }
+    });
+    if (typeof options.begin === 'function') {
+        options.begin();
+    }
+    // .finished rejette si l'animation est annulée (élément retiré du DOM) :
+    // les appelants l'awaitent sans catch, on résout dans ce cas.
+    return element.animate(keyframes, timing).finished.catch(function () {});
 }
 
 
