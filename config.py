@@ -84,6 +84,29 @@ def _build_rabbitmq_url() -> str | None:
     return f"amqp://{user}:{password}@{host}:5672/%2F"
 
 
+def _engine_options_for_url(url: str) -> dict:
+    """Options de pool protégeant des connexions tuées par le serveur MySQL
+    (wait_timeout, redémarrage, coupure réseau) : sans ``pool_pre_ping``, la
+    première requête sur une connexion morte lève « MySQL server has gone
+    away ». Les ``connect_args`` ne sont ajoutés que pour les URL MySQL."""
+    options = {
+        "pool_size": 5,  # Nombre maximum de connexions permanentes
+        "max_overflow": 10,  # Connexions supplémentaires temporaires si nécessaire
+        "pool_recycle": 7200,  # Recycle les connexions après 2 heures
+        "pool_pre_ping": True,  # Vérifie la validité de la connexion avant utilisation
+        "pool_timeout": 30,  # Temps d'attente pour obtenir une connexion du pool
+    }
+    if make_url(url).drivername.startswith("mysql"):
+        options["connect_args"] = {
+            "init_command": "SET time_zone = '+02:00'",
+            # Paramètres MySQL pour les connexions longue durée
+            "connect_timeout": 60,  # Timeout de connexion en secondes
+            "read_timeout": 60 * 60,  # Timeout de lecture (1 heure)
+            "write_timeout": 60 * 60,  # Timeout d'écriture (1 heure)
+        }
+    return options
+
+
 class Config:
     SECRET_KEY = _load_or_create_secret("SECRET_KEY", "flask_secret_key.txt")
     SECURITY_PASSWORD_SALT = _load_or_create_secret("SECURITY_PASSWORD_SALT", "security_password_salt.txt")
@@ -186,10 +209,21 @@ class Config:
     else:
         SOCKETIO_CORS_ALLOWED_ORIGINS = [origin.strip() for origin in _socketio_cors_raw.split(",") if origin.strip()]
 
+    # Options du moteur SQLAlchemy du jobstore APScheduler. Définies avant les
+    # branches if/elif ci-dessous pour couvrir aussi le cas DATABASE_URL :
+    # configure_scheduler() s'en sert quel que soit le backend. Sans
+    # pool_pre_ping, une connexion poolée tuée par MySQL (wait_timeout)
+    # faisait échouer scheduler.get_jobs() avec « MySQL server has gone away ».
+    SCHEDULER_ENGINE_OPTIONS = {
+        "pool_recycle": 7200,
+        "pool_pre_ping": True,
+    }
+
     if database_url:
 
         SQLALCHEMY_DATABASE_URI = database_url
         SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or database_url
+        SQLALCHEMY_ENGINE_OPTIONS = _engine_options_for_url(database_url)
 
     elif database == "mysql":
 
@@ -218,20 +252,7 @@ class Config:
         SCHEDULER_DB_NAME = os.getenv("MYSQL_SCHEDULER_DATABASE") or DB_NAME
         SQLALCHEMY_DATABASE_URI_SCHEDULER = scheduler_database_url or f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/{SCHEDULER_DB_NAME}'
 
-        SQLALCHEMY_ENGINE_OPTIONS = {
-            "pool_size": 5,  # Nombre maximum de connexions permanentes
-            "max_overflow": 10,  # Connexions supplémentaires temporaires si nécessaire
-            "pool_recycle": 7200,  # Recycle les connexions après 2 heures
-            "pool_pre_ping": True,  # Vérifie la validité de la connexion avant utilisation
-            "pool_timeout": 30,  # Temps d'attente pour obtenir une connexion du pool
-            "connect_args": {
-                "init_command": "SET time_zone = '+02:00'",
-                # Paramètres MySQL pour les connexions longue durée
-                "connect_timeout": 60,  # Timeout de connexion en secondes
-                "read_timeout": 60 * 60,  # Timeout de lecture (1 heure)
-                "write_timeout": 60 * 60,  # Timeout d'écriture (1 heure)
-            }
-        }
+        SQLALCHEMY_ENGINE_OPTIONS = _engine_options_for_url(SQLALCHEMY_DATABASE_URI)
         # SQLALCHEMY_BINDS configuration to include MySQL
         #SQLALCHEMY_BINDS = {
         #    'users': f'mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{HOST}/userdatabase'
@@ -241,10 +262,7 @@ class Config:
         SCHEDULER_JOBSTORES = {
             'default': SQLAlchemyJobStore(
                 url=SQLALCHEMY_DATABASE_URI_SCHEDULER,
-                engine_options={
-                    "pool_recycle": 7200,
-                    "pool_pre_ping": True
-                }
+                engine_options=SCHEDULER_ENGINE_OPTIONS
             )
         }
         SCHEDULER_API_ENABLED = True

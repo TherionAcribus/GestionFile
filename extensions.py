@@ -71,10 +71,20 @@ def init_socketio(app):
 
 
 def configure_scheduler(app):
-    """Pose le magasin de tâches persistant de l'ordonnanceur."""
-    scheduler.configure(
-        jobstores={"default": SQLAlchemyJobStore(url=app.config["SQLALCHEMY_DATABASE_URI_SCHEDULER"])}
-    )
+    """Pose le magasin de tâches persistant de l'ordonnanceur.
+
+    ``SCHEDULER_JOBSTORES`` (config.py) est honoré s'il est défini ; sinon le
+    jobstore est construit ici avec ``SCHEDULER_ENGINE_OPTIONS`` — sans
+    ``pool_pre_ping``, une connexion poolée tuée par MySQL (wait_timeout)
+    faisait échouer ``get_jobs()`` avec « MySQL server has gone away ».
+    """
+    jobstores = app.config.get("SCHEDULER_JOBSTORES") or {
+        "default": SQLAlchemyJobStore(
+            url=app.config["SQLALCHEMY_DATABASE_URI_SCHEDULER"],
+            engine_options=app.config.get("SCHEDULER_ENGINE_OPTIONS"),
+        )
+    }
+    scheduler.configure(jobstores=jobstores)
     return scheduler
 
 
