@@ -360,6 +360,7 @@ LABEL_OVERRIDES = {
     "page_patient_print_uncertain_timeout_action": "Impression incertaine : action si le patient ne répond pas",
     "page_patient_print_fail_behavior": "Échec d'impression : que faire si le ticket ne sort pas",
     "page_patient_end_timer": "Délai avant le retour à l'accueil de la borne (s)",
+    "page_patient_interface_printer_down": "Message du bandeau « imprimante indisponible » de la borne",
     "page_patient_idle_timer": "Retour à l'accueil de la borne sans contact du patient (s)",
 }
 

@@ -83,6 +83,13 @@
             </div>
         {% endif %}
 
+        {# Libellés d'incident injectés par le serveur (lus par patients.js) :
+           orientation et bandeau imprimante, traduisibles, résolus dans la
+           langue courante. DANS #main : le changement de langue remplace
+           #main, donc ces textes suivent la langue choisie (hors de #main,
+           ils restaient dans la langue du premier chargement). #}
+        <script id="kiosk_ui_labels" type="application/json">{{ kiosk_ui_labels | tojson }}</script>
+
     </div>
 
     {# Bandeau « imprimante indisponible » : affiché/masqué par patients.js
@@ -111,12 +118,6 @@
         <span class="busy_spinner" aria-hidden="true"></span>
         <span class="busy_text"></span>
     </div>
-
-    {# Libellés d'incident injectés par le serveur (#kiosk_ui_labels, lus par
-       patients.js) : texte d'orientation traduisible issu de la config,
-       résolu dans la langue courante. Survit aux swaps HTMX comme les
-       overlays : il est hors de #main. #}
-    <script id="kiosk_ui_labels" type="application/json">{{ kiosk_ui_labels | tojson }}</script>
 
     <script src="{{ url_for('static', filename='js/libs/materialize.min.js') }}"></script>
 

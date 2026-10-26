@@ -412,7 +412,11 @@ ADAPTERS = {
                         # Texte d'orientation commun à tous les écrans
                         # d'incident de la borne (hors ligne, imprimante
                         # indisponible) — pas un libellé de l'overlay seul.
-                        {"key": "page_patient_interface_orientation", "label": "Texte d'orientation des écrans d'incident (perte de connexion, imprimante indisponible)", "type": "text"}]),
+                        {"key": "page_patient_interface_orientation", "label": "Texte d'orientation des écrans d'incident (perte de connexion, imprimante indisponible)", "type": "text"},
+                        # Bandeau affiché AVANT le choix quand l'imprimante de
+                        # la borne est en panne (#printer_state_banner).
+                        {"key": "page_patient_interface_printer_down", "label": "Bandeau « imprimante indisponible »", "type": "text",
+                         "help": "Affiché en haut de la borne tant que l'imprimante est en panne. Si l'échec d'impression annule l'inscription, adaptez ce texte."}]),
             "languages": _component("Choix de langue", "overlay", ".language-selector",
                 managed_bool="page_patient_display_translations",
                 layout_controls=["visible"],
@@ -758,6 +762,8 @@ _PRINT_ERROR_FIELD_SCENARIOS = {
     # L'écran hors ligne et le bandeau imprimante recouvrent n'importe quel
     # état : le texte reste éditable sur tous les scénarios d'incident.
     "page_patient_interface_orientation": [
+        "print_error", "printing", "print_uncertain", "staff_called"],
+    "page_patient_interface_printer_down": [
         "print_error", "printing", "print_uncertain", "staff_called"],
 }
 for _field in ADAPTERS["patient"]["components"]["print_error"]["config"]:

@@ -237,6 +237,8 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     # l'accueil ») sur l'écran de déconnexion et le bandeau imprimante ;
     # « ticket imprimé en attente de serveur » sur la page de conclusion.
     "page_patient_interface_orientation": ("PAGE_PATIENT_INTERFACE_ORIENTATION", "value_str"),
+    # Bandeau « imprimante indisponible » de la borne (avant le choix).
+    "page_patient_interface_printer_down": ("PAGE_PATIENT_INTERFACE_PRINTER_DOWN", "value_str"),
     "page_patient_interface_ticket_pending": ("PAGE_PATIENT_INTERFACE_TICKET_PENDING", "value_str"),
 }
 
@@ -338,6 +340,7 @@ _BEFORE_CALL_KEYS = {
     # la pharmacie) comme les autres textes « avant appel » ; ticket_pending
     # garde {N}, résolu côté borne comme les autres textes d'impression.
     "page_patient_interface_orientation",
+    "page_patient_interface_printer_down",
     "page_patient_interface_ticket_pending",
     "phone_title",
     "phone_line1", "phone_line2", "phone_line3",
@@ -430,6 +433,7 @@ _TRANSLATABLE_KEYS = {
     "page_patient_interface_ticket_received",
     "page_patient_interface_ticket_missing",
     "page_patient_interface_orientation",
+    "page_patient_interface_printer_down",
     "page_patient_interface_ticket_pending",
     # Ticket (utils.render_ticket_escpos, routes/admin_patient.py).
     "ticket_header",

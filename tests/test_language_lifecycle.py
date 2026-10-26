@@ -52,6 +52,8 @@ def application():
         PAGE_PATIENT_DISPLAY_TRANSLATIONS=False,
         # Clé lue par /patient (texte d'orientation des écrans d'incident).
         PAGE_PATIENT_INTERFACE_ORIENTATION="Adressez-vous à l'accueil.",
+        # … et texte du bandeau « imprimante indisponible ».
+        PAGE_PATIENT_INTERFACE_PRINTER_DOWN="Imprimante indisponible.",
         PHONE_TITLE="Titre téléphone",
     )
     db.init_app(app)

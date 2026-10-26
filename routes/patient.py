@@ -69,6 +69,10 @@ def patients_front_page():
                                 "orientation": replace_balises(
                                     choose_text_translation(
                                         "page_patient_interface_orientation")),
+                                # Bandeau « imprimante indisponible ».
+                                "printer_down": replace_balises(
+                                    choose_text_translation(
+                                        "page_patient_interface_printer_down")),
                             },
                             # Révision publiée par l'éditeur visuel : renvoyée
                             # dans l'accusé socket de (re)connexion.

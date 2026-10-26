@@ -163,6 +163,9 @@ def load_configuration(app):
     # Texte d'orientation affiché sur les écrans d'incident de la borne
     # (perte de connexion, imprimante indisponible) : {P} {D} {H} autorisées.
     app.config.setdefault("PAGE_PATIENT_INTERFACE_ORIENTATION", "Si l'attente se prolonge, adressez-vous à l'accueil.")
+    # Bandeau « imprimante indisponible » de la borne, affiché AVANT le choix
+    # du patient : {P} {D} {H} autorisées.
+    app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINTER_DOWN", "L'imprimante est momentanément indisponible : aucun ticket ne vous sera remis, mais votre numéro sera tout de même affiché à l'écran.")
     # Ticket imprimé mais confirmation serveur en attente : le patient repart
     # rassuré, l'acquittement rejoué dès le retour réseau.
     app.config.setdefault("PAGE_PATIENT_INTERFACE_TICKET_PENDING", "Votre ticket {N} est bien imprimé : conservez-le. Votre inscription sera validée automatiquement.")

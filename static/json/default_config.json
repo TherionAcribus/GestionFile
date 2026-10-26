@@ -1,7 +1,7 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.45",
+    "version": "0.46",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
@@ -96,6 +96,7 @@
             "page_patient_interface_done_extend": "Prolonger",
             "page_patient_interface_done_back": "Terminer",
             "page_patient_interface_orientation": "Si l'attente se prolonge, adressez-vous à l'accueil.",
+            "page_patient_interface_printer_down": "L'imprimante est momentanément indisponible : aucun ticket ne vous sera remis, mais votre numéro sera tout de même affiché à l'écran.",
             "page_patient_interface_ticket_pending": "Votre ticket {N} est bien imprimé : conservez-le. Votre inscription sera validée automatiquement.",
             "page_patient_direct_print": false,
             "page_patient_print_after_scan": true,

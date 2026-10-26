@@ -78,7 +78,7 @@ function kioskOfflineLabels() {
             orientation: "Si l'attente se prolonge, adressez-vous à l'accueil.",
             retry: "Réessayer",
             busy: "Un instant…",
-            printer_down: "L'imprimante est momentanément indisponible. Votre numéro vous sera indiqué à l'écran ou remis par l'accueil.",
+            printer_down: "L'imprimante est momentanément indisponible : aucun ticket ne vous sera remis, mais votre numéro sera tout de même affiché à l'écran.",
             server_title: "Un problème est survenu",
             server_message: "Votre demande n'a pas pu aboutir. Vous allez revenir à l'accueil pour recommencer.",
             home: "Retour à l'accueil"
@@ -89,7 +89,7 @@ function kioskOfflineLabels() {
             orientation: "If the wait continues, please contact the reception desk.",
             retry: "Try again",
             busy: "One moment…",
-            printer_down: "The printer is temporarily unavailable. Your number will be shown on screen or given at the reception desk.",
+            printer_down: "The printer is temporarily unavailable: no ticket will be printed, but your number will still be shown on screen.",
             server_title: "Something went wrong",
             server_message: "Your request could not be completed. You will return to the home screen to try again.",
             home: "Back to home"
@@ -100,6 +100,9 @@ function kioskOfflineLabels() {
     // il est injecté ; il remplace le repli ci-dessus.
     var cfg = kioskUiLabels();
     if (cfg.orientation) { labels = Object.assign({}, labels, { orientation: cfg.orientation }); }
+    // Bandeau « imprimante indisponible » : texte réglable dans l'Admin
+    // (page_patient_interface_printer_down), même principe.
+    if (cfg.printer_down) { labels = Object.assign({}, labels, { printer_down: cfg.printer_down }); }
     return labels;
 }
 
@@ -210,6 +213,17 @@ function setPrinterAvailable(available) {
     }
     banner.hidden = false;
 }
+
+// Changement de langue : #main (et les libellés #kiosk_ui_labels qu'il
+// contient) est remplacé — un bandeau affiché est réécrit, dans la nouvelle
+// langue. Réécriture idempotente : on la fait après tout échange plutôt que
+// de deviner l'élément remplacé.
+document.addEventListener('htmx:afterSwap', function() {
+    var banner = document.getElementById('printer_state_banner');
+    if (banner && !banner.hidden) {
+        setPrinterAvailable(false);
+    }
+});
 
 // Sans pont pywebview (page ouverte dans un navigateur de test), pas
 // d'identité → pas de bandeau : mieux vaut n'alarmer personne que faussement.

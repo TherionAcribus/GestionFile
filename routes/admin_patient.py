@@ -131,6 +131,7 @@ def admin_patient(tab=None):
                             page_patient_interface_ticket_received = app.config.get('PAGE_PATIENT_INTERFACE_TICKET_RECEIVED', ''),
                             page_patient_interface_ticket_missing = app.config.get('PAGE_PATIENT_INTERFACE_TICKET_MISSING', ''),
                             page_patient_interface_orientation = app.config.get('PAGE_PATIENT_INTERFACE_ORIENTATION', ''),
+                            page_patient_interface_printer_down = app.config.get('PAGE_PATIENT_INTERFACE_PRINTER_DOWN', ''),
                             page_patient_interface_ticket_pending = app.config.get('PAGE_PATIENT_INTERFACE_TICKET_PENDING', ''),
                             page_patient_display_translations=app.config['PAGE_PATIENT_DISPLAY_TRANSLATIONS'],
                             page_patient_timer_activity_inactive=app.config['PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE'],

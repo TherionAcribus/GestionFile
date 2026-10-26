@@ -22,6 +22,7 @@
         "page_patient_interface_staff_called",
         "page_patient_interface_ticket_missing",
         "page_patient_interface_orientation",
+        "page_patient_interface_printer_down",
         "page_patient_interface_ticket_pending",
         "page_patient_interface_ticket_received",
         "page_patient_interface_print_uncertain",
