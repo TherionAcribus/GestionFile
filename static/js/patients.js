@@ -726,6 +726,7 @@ function printLabels() {
         no_ticket: 'Ticket non imprimé. Veuillez noter votre numéro :',
         print_failed_staff: 'Impression impossible. Veuillez vous adresser au personnel.',
         print_uncertain: 'Impossible de vérifier si le ticket est sorti. Votre numéro est le {N}.',
+        ticket_printed_pending: 'Votre ticket {N} est bien imprimé : conservez-le. Votre inscription sera validée automatiquement dès le retour de la connexion.',
         ticket_received: "J'ai récupéré mon ticket",
         ticket_missing: "Je n'ai pas de ticket",
         back: 'Retour'
@@ -933,7 +934,15 @@ function confirmPrintResult(printJobId, result, printData) {
             _confirmFallbackTimer = setTimeout(function() {
                 _confirmFallbackTimer = null;
                 var L = printLabels();
-                renderPrintOverlay(messageHtml(L.print_failed_staff), [
+                // Le résultat MATÉRIEL est connu localement (le pont
+                // imprimante a répondu) : seul l'acquittement serveur est en
+                // attente. Le message reflète donc la réalité — « ticket
+                // imprimé, conservez-le » si le tirage a réussi — au lieu du
+                // « impression impossible » affiché à tort auparavant.
+                var text = (result && result.success) ? L.ticket_printed_pending
+                    : (result && result.maybe_printed) ? L.print_uncertain
+                    : L.print_failed_staff;
+                renderPrintOverlay(bigNumberHtml(text), [
                     { label: L.back, onClick: function() {
                         finishPrintFlow(printJobId);
                         conclusionTimer().goHome();
