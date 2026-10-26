@@ -765,4 +765,54 @@ html, body {
     font-weight: bold;
 }
 
+/* Écran plein écran « connexion perdue » (borne patient) : affiché par
+   patients.js tant que le socket n'a pas retrouvé le serveur. Charte reprise
+   de l'écran local offline.html de l'application borne (pywebview) — le
+   patient voit la même page avant et après le chargement de /patient. */
+#kiosk_offline_overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #173B4B;
+    color: #E5F4EF;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    box-sizing: border-box;
+}
+
+#kiosk_offline_overlay[hidden] {
+    display: none;
+}
+
+.kiosk_offline_spinner {
+    width: 84px;
+    height: 84px;
+    margin-bottom: 2.5rem;
+    border: 8px solid rgba(229, 244, 239, 0.2);
+    border-top-color: #30A99A;
+    border-radius: 50%;
+    animation: kiosk_offline_spin 1s linear infinite;
+}
+
+@keyframes kiosk_offline_spin {
+    to { transform: rotate(360deg); }
+}
+
+.kiosk_offline_title {
+    font-size: 2.6rem;
+    font-weight: 700;
+    margin: 0 0 1rem;
+}
+
+.kiosk_offline_message {
+    font-size: 1.4rem;
+    margin: 0;
+    color: #D9E5E1;
+    max-width: 44rem;
+}
+
 

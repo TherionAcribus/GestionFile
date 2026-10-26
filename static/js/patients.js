@@ -24,6 +24,74 @@ function rejoinScanJourney() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Écran « connexion perdue » (#kiosk_offline_overlay dans
+// patient_front_page.html).
+//
+// La page patient ne disait RIEN au patient quand le serveur devenait
+// injoignable : les boutons semblaient simplement « morts ». Cet écran plein
+// page reprend la charte de l'écran local offline.html de la borne et
+// s'affiche dès que la déconnexion dépasse une courte grâce (les micro-
+// coupures et les reconnexions rapides ne doivent pas faire clignoter
+// l'écran). Il est masqué à la reconnexion — les rattrapages d'état
+// (boutons/titre) restent dans le handler 'reconnect' du Manager.
+// ---------------------------------------------------------------------------
+var KIOSK_OFFLINE_GRACE_MS = 5000;
+var _kioskOfflineTimer = null;
+
+// Libellés dans la langue courante (attribut lang du document, mis à jour au
+// clic sur un drapeau) : pas de config serveur dédiée, repli FR.
+function kioskOfflineLabels() {
+    var lang = (document.documentElement.lang || 'fr').slice(0, 2).toLowerCase();
+    var table = {
+        fr: {
+            title: "Borne momentanément indisponible",
+            message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants. Si l'attente se prolonge, merci de vous adresser à l'accueil."
+        },
+        en: {
+            title: "Kiosk temporarily unavailable",
+            message: "We are experiencing a connection problem. The kiosk will be available again shortly. If the wait continues, please contact the reception desk."
+        }
+    };
+    return table[lang] || table.fr;
+}
+
+function setKioskOffline(show) {
+    var overlay = document.getElementById('kiosk_offline_overlay');
+    if (!overlay) { return; }
+    if (show) {
+        var L = kioskOfflineLabels();
+        var title = overlay.querySelector('.kiosk_offline_title');
+        var message = overlay.querySelector('.kiosk_offline_message');
+        if (title) { title.textContent = L.title; }
+        if (message) { message.textContent = L.message; }
+        overlay.hidden = false;
+    } else {
+        overlay.hidden = true;
+    }
+}
+
+// Un seul timer armé à la fois : la vérification finale relit l'état réel du
+// socket, donc un timer existant couvre aussi les déconnexions survenues
+// entre-temps.
+function scheduleKioskOfflineCheck() {
+    if (_kioskOfflineTimer !== null) { return; }
+    _kioskOfflineTimer = setTimeout(function() {
+        _kioskOfflineTimer = null;
+        var s = window.__patientSocket;
+        if (!s || !s.connected) {
+            setKioskOffline(true);
+        }
+    }, KIOSK_OFFLINE_GRACE_MS);
+}
+
+function clearKioskOfflineTimer() {
+    if (_kioskOfflineTimer !== null) {
+        clearTimeout(_kioskOfflineTimer);
+        _kioskOfflineTimer = null;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
     // Socket.IO expects an http(s) URL. Use same-origin host/port for reverse proxies (Coolify).
@@ -35,8 +103,19 @@ document.addEventListener('DOMContentLoaded', (event) => {
     var patientSocket = io.connect(baseUrl + '/socket_patient');
     window.__patientSocket = patientSocket;
 
+    // Couvre le cas limite où ni connect ni connect_error n'arrivent vite :
+    // l'écran s'affiche après la grâce si le socket n'est toujours pas ouvert.
+    scheduleKioskOfflineCheck();
+
+    // Perte réseau de la machine elle-même (câble, wifi) : même traitement
+    // que la déconnexion socket, sans attendre l'évènement 'disconnect'.
+    window.addEventListener('offline', scheduleKioskOfflineCheck);
+
     patientSocket.on('connect', function() {
         console.log('Patient WebSocket connected');
+        // Le serveur est (re)joignable : annule le délai de grâce et l'écran.
+        clearKioskOfflineTimer();
+        setKioskOffline(false);
         // Les salles Socket.IO ne survivent pas à une déconnexion : si un QR
         // est affiché à la (re)connexion, on rejoint à nouveau sa salle.
         rejoinScanJourney();
@@ -53,6 +132,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     patientSocket.on('disconnect', function() {
         console.log('Patient WebSocket disconnected');
+        // Grâce avant d'afficher l'écran : une reconnexion immédiate ne doit
+        // pas faire clignoter la page.
+        scheduleKioskOfflineCheck();
     });
 
     patientSocket.on('refresh', function(msg) {
@@ -112,6 +194,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
     patientSocket.on('connect_error', function(err) {
         console.error('Patient WebSocket connection error:', err);
+        // Couvre le cas où la page se charge alors que le serveur est déjà
+        // injoignable : après la grâce, l'écran « connexion perdue » s'affiche.
+        scheduleKioskOfflineCheck();
     });
 
     // En Socket.IO client v4, les évènements de reconnexion sont émis par le

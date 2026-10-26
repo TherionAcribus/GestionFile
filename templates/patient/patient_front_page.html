@@ -82,6 +82,15 @@
 
     </div>
 
+    {# Écran « connexion perdue » : affiché par patients.js (id fixe
+       #kiosk_offline_overlay) quand le socket reste déconnecté. Placé HORS de
+       #main pour survivre aux swaps HTMX (hx-select remplace #main entier). #}
+    <div id="kiosk_offline_overlay" hidden>
+        <div class="kiosk_offline_spinner" aria-hidden="true"></div>
+        <h1 class="kiosk_offline_title"></h1>
+        <p class="kiosk_offline_message"></p>
+    </div>
+
     <script src="{{ url_for('static', filename='js/libs/materialize.min.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/patients.js') }}"></script>
