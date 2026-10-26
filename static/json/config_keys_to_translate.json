@@ -21,6 +21,8 @@
         "page_patient_interface_scan_explanation",
         "page_patient_interface_staff_called",
         "page_patient_interface_ticket_missing",
+        "page_patient_interface_orientation",
+        "page_patient_interface_ticket_pending",
         "page_patient_interface_ticket_received",
         "page_patient_interface_print_uncertain",
         "page_patient_interface_children_back",

@@ -78,6 +78,7 @@ def application(tmp_path):
         PAGE_PATIENT_INTERFACE_PRINT_UNCERTAIN="résultat incertain",
         PAGE_PATIENT_INTERFACE_TICKET_RECEIVED="ticket reçu",
         PAGE_PATIENT_INTERFACE_TICKET_MISSING="pas reçu",
+        PAGE_PATIENT_INTERFACE_TICKET_PENDING="ticket imprimé {N}",
         PAGE_PATIENT_INTERFACE_DONE_BACK="retour",
         PAGE_PATIENT_INTERFACE_DONE_PRINT="imprimer",
         PAGE_PATIENT_INTERFACE_DONE_EXTEND="prolonger",

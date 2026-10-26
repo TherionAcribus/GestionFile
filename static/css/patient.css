@@ -815,6 +815,21 @@ html, body {
     max-width: 44rem;
 }
 
+/* Texte d'orientation « adressez-vous à l'accueil » : même clé de config
+   traduisible pour l'écran de déconnexion et le bandeau imprimante, sur sa
+   propre ligne pour ne pas gonfler le message de panne. */
+.kiosk_offline_orientation {
+    margin: 1.2rem 0 0;
+    font-size: clamp(1rem, 2.2vmin, 1.5rem);
+    opacity: .85;
+}
+
+.printer_state_orientation {
+    margin: .35rem 0 0;
+    font-size: .95rem;
+    opacity: .9;
+}
+
 /* Choix proposés dans l'écran « connexion perdue » : « Réessayer » n'est
    rendu par patients.js que quand le serveur reste joignable (erreur HTTP),
    pour laisser le patient relancer sans attendre la reconnexion socket. */

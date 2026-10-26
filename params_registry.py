@@ -231,6 +231,11 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_interface_print_uncertain": ("PAGE_PATIENT_INTERFACE_PRINT_UNCERTAIN", "value_str"),
     "page_patient_interface_ticket_received": ("PAGE_PATIENT_INTERFACE_TICKET_RECEIVED", "value_str"),
     "page_patient_interface_ticket_missing": ("PAGE_PATIENT_INTERFACE_TICKET_MISSING", "value_str"),
+    # Textes d'incident de la borne : orientation (« adressez-vous à
+    # l'accueil ») sur l'écran de déconnexion et le bandeau imprimante ;
+    # « ticket imprimé en attente de serveur » sur la page de conclusion.
+    "page_patient_interface_orientation": ("PAGE_PATIENT_INTERFACE_ORIENTATION", "value_str"),
+    "page_patient_interface_ticket_pending": ("PAGE_PATIENT_INTERFACE_TICKET_PENDING", "value_str"),
 }
 
 
@@ -327,6 +332,11 @@ _BEFORE_CALL_KEYS = {
     "page_patient_interface_staff_called",
     "page_patient_interface_print_failed_staff",
     "page_patient_interface_print_uncertain",
+    # Écrans d'incident de la borne : l'orientation peut utiliser {P} (nom de
+    # la pharmacie) comme les autres textes « avant appel » ; ticket_pending
+    # garde {N}, résolu côté borne comme les autres textes d'impression.
+    "page_patient_interface_orientation",
+    "page_patient_interface_ticket_pending",
     "phone_title",
     "phone_line1", "phone_line2", "phone_line3",
     "phone_line4", "phone_line5", "phone_line6",
@@ -414,6 +424,8 @@ _TRANSLATABLE_KEYS = {
     "page_patient_interface_print_uncertain",
     "page_patient_interface_ticket_received",
     "page_patient_interface_ticket_missing",
+    "page_patient_interface_orientation",
+    "page_patient_interface_ticket_pending",
     # Ticket (utils.render_ticket_escpos, routes/admin_patient.py).
     "ticket_header",
     "ticket_message",

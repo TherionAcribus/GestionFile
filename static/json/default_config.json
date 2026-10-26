@@ -94,6 +94,8 @@
             "page_patient_interface_done_print": "Imprimer",
             "page_patient_interface_done_extend": "Prolonger",
             "page_patient_interface_done_back": "Terminer",
+            "page_patient_interface_orientation": "Si l'attente se prolonge, adressez-vous à l'accueil.",
+            "page_patient_interface_ticket_pending": "Votre ticket {N} est bien imprimé : conservez-le. Votre inscription sera validée automatiquement.",
             "page_patient_direct_print": false,
             "page_patient_print_after_scan": true,
             "page_patient_print_after_print": true,

@@ -87,6 +87,7 @@
        swaps HTMX ; superposé en haut, sous l'écran « connexion perdue ». #}
     <div id="printer_state_banner" hidden>
         <p class="printer_state_message"></p>
+        <p class="printer_state_orientation" hidden></p>
     </div>
 
     {# Écran « connexion perdue » : affiché par patients.js (id fixe
@@ -96,8 +97,15 @@
         <div class="kiosk_offline_spinner" aria-hidden="true"></div>
         <h1 class="kiosk_offline_title"></h1>
         <p class="kiosk_offline_message"></p>
+        <p class="kiosk_offline_orientation" hidden></p>
         <div class="kiosk_offline_buttons"></div>
     </div>
+
+    {# Libellés d'incident injectés par le serveur (#kiosk_ui_labels, lus par
+       patients.js) : texte d'orientation traduisible issu de la config,
+       résolu dans la langue courante. Survit aux swaps HTMX comme les
+       overlays : il est hors de #main. #}
+    <script id="kiosk_ui_labels" type="application/json">{{ kiosk_ui_labels | tojson }}</script>
 
     <script src="{{ url_for('static', filename='js/libs/materialize.min.js') }}"></script>
 

@@ -48,25 +48,51 @@ var KIOSK_HARD_RELOAD_AFTER_MS = 10 * 60 * 1000;
 var _socketDisconnectedAt = null;
 var _kioskBorneId = null;
 
+// Libellés de l'écran d'incident injectés par patient_front_page.html
+// (#kiosk_ui_labels) : le texte d'orientation est une clé de configuration
+// traduisible, le reste de l'écran reste un repli FR/EN codé ici.
+function kioskUiLabels() {
+    try {
+        var el = document.getElementById('kiosk_ui_labels');
+        if (el && el.textContent.trim()) {
+            var parsed = JSON.parse(el.textContent);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        }
+    } catch (e) {
+        console.error('Libellés borne illisibles, repli local', e);
+    }
+    return {};
+}
+
 // Libellés dans la langue courante (attribut lang du document, mis à jour au
-// clic sur un drapeau) : pas de config serveur dédiée, repli FR.
+// clic sur un drapeau) : pas de config serveur dédiée, repli FR. Seul le
+// texte d'orientation (« adressez-vous à l'accueil ») peut être remplacé par
+// la clé de configuration traduisible injectée dans #kiosk_ui_labels — il a
+// sa propre ligne, hors du message de panne.
 function kioskOfflineLabels() {
     var lang = (document.documentElement.lang || 'fr').slice(0, 2).toLowerCase();
     var table = {
         fr: {
             title: "Borne momentanément indisponible",
-            message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants. Si l'attente se prolonge, merci de vous adresser à l'accueil.",
+            message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants.",
+            orientation: "Si l'attente se prolonge, adressez-vous à l'accueil.",
             retry: "Réessayer",
             printer_down: "L'imprimante est momentanément indisponible. Votre numéro vous sera indiqué à l'écran ou remis par l'accueil."
         },
         en: {
             title: "Kiosk temporarily unavailable",
-            message: "We are experiencing a connection problem. The kiosk will be available again shortly. If the wait continues, please contact the reception desk.",
+            message: "We are experiencing a connection problem. The kiosk will be available again shortly.",
+            orientation: "If the wait continues, please contact the reception desk.",
             retry: "Try again",
             printer_down: "The printer is temporarily unavailable. Your number will be shown on screen or given at the reception desk."
         }
     };
-    return table[lang] || table.fr;
+    var labels = table[lang] || table.fr;
+    // Le texte d'orientation vient de la configuration (traduisible) quand
+    // il est injecté ; il remplace le repli ci-dessus.
+    var cfg = kioskUiLabels();
+    if (cfg.orientation) { labels = Object.assign({}, labels, { orientation: cfg.orientation }); }
+    return labels;
 }
 
 // options.buttons : [{label, onClick}] — des choix affichés sous le message
@@ -86,6 +112,12 @@ function setKioskOffline(show, options) {
     var buttons = overlay.querySelector('.kiosk_offline_buttons');
     if (title) { title.textContent = options.title || L.title; }
     if (message) { message.textContent = options.message || L.message; }
+    var orientation = overlay.querySelector('.kiosk_offline_orientation');
+    if (orientation) {
+        var o = options.orientation || L.orientation || '';
+        orientation.textContent = o;
+        orientation.hidden = !o;
+    }
     if (buttons) {
         buttons.innerHTML = '';
         (options.buttons || []).forEach(function(b) {
@@ -138,6 +170,12 @@ function setPrinterAvailable(available) {
     }
     var msg = banner.querySelector('.printer_state_message');
     if (msg) { msg.textContent = kioskOfflineLabels().printer_down; }
+    var orientationEl = banner.querySelector('.printer_state_orientation');
+    if (orientationEl) {
+        var oText = kioskOfflineLabels().orientation || '';
+        orientationEl.textContent = oText;
+        orientationEl.hidden = !oText;
+    }
     banner.hidden = false;
 }
 

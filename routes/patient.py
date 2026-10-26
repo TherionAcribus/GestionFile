@@ -3,7 +3,7 @@ import markdown2
 from routes.admin_security import require_permission
 from flask import Blueprint, render_template, make_response, request, session, url_for, redirect, jsonify, current_app as app
 from models import Language, Button, Activity, Patient, db, record_printer_status, page_editor_published_revision, pharmacists_activities
-from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises
+from utils import choose_text_translation, get_button_translations, get_text_translation, replace_balise_phone, replace_balise_welcome, format_ticket_text, get_activity_message_translation, get_activity_inactivity_message_translation, balise_values, render_balises, replace_balises
 from python.engine import peek_next_call_number, get_futur_patient, register_patient, register_pending_patient, register_journey_patient, find_patient_by_journey, qr_code_data_uri, _business_day, activity_accepting_registrations
 from communication import communikation, notify_patient_phone_closed, send_app_notification
 from queue_explain import TERMINAL_STATUSES
@@ -58,6 +58,14 @@ def patients_front_page():
     return render_template('patient/patient_front_page.html',
                             languages=languages,
                             page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
+                            # Texte d'orientation des écrans d'incident
+                            # (offline overlay, bandeau imprimante) : résolu
+                            # dans la langue courante, {P} {D} {H} rendues.
+                            kiosk_ui_labels={
+                                "orientation": replace_balises(
+                                    choose_text_translation(
+                                        "page_patient_interface_orientation")),
+                            },
                             # Révision publiée par l'éditeur visuel : renvoyée
                             # dans l'accusé socket de (re)connexion.
                             page_revision=page_editor_published_revision("patient"))
@@ -954,6 +962,7 @@ def patient_conclusion_page(patient_id, print_ticket=False, print_data=None, pri
         "print_uncertain": "page_patient_interface_print_uncertain",
         "ticket_received": "page_patient_interface_ticket_received",
         "ticket_missing": "page_patient_interface_ticket_missing",
+        "ticket_printed_pending": "page_patient_interface_ticket_pending",
         "back": "page_patient_interface_done_back",
     }
     raw_labels = {name: choose_text_translation(key) for name, key in _print_label_keys.items()}
