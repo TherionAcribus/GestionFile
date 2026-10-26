@@ -8,6 +8,7 @@
        l'accusé socket page_editor_ack à chaque (re)connexion. #}
     <meta name="page-editor-revision" content="{{ page_revision | default(0) }}">
     <title>Patient Information</title>
+    {% include 'shared/_favicon.html' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
     {# CSS par défaut pour être sûr d'avoir quelque chose #}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/phone.css') }}">

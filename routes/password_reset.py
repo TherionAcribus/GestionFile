@@ -113,7 +113,7 @@ def forgot_password():
                         or normalize_base_url(request.host_url))
             token = make_reset_token(current_app.config["SECRET_KEY"], user.id, user.password)
             link = reset_link(base_url, url_for("password_reset.reset_password", token=token))
-            site = current_app.config.get("PHARMACY_NAME") or "PharmaFile"
+            site = current_app.config.get("PHARMACY_NAME") or "Flowelis"
             subject, body = reset_email_content(user.username, site, link)
             _run_async(_send_reset_email, current_app._get_current_object(),
                        user.email, subject, body)

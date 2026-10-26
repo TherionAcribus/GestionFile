@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Comptoir {{ counter_id }}</title>
+    {% include 'shared/_favicon.html' %}
     <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/counter.css') }}">

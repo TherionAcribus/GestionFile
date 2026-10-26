@@ -16,6 +16,7 @@
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'">
     <title>Enregistrement de la file d'attente</title>
+    {% include 'shared/_favicon.html' %}
     {# Dépendances hébergées LOCALEMENT et à versions figées pour que la borne
        reste utilisable si Internet est coupé mais le serveur local accessible :
        Materialize 1.0.0, HTMX 2.0.2, Socket.IO 4.7.4. #}

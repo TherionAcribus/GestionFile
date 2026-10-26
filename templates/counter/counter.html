@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Comptoir {{ counter.name }}</title>
+    {% include 'shared/_favicon.html' %}
     {# Dependances servies LOCALEMENT et a versions figees : la page comptoir
        doit rester utilisable si Internet tombe mais que le serveur local
        repond (meme principe que la page patient et la borne).

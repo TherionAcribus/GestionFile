@@ -251,7 +251,7 @@ def admin_app_mail_test():
         return _mail_result(False, f"Patientez {int(remaining) + 1} s avant un nouveau test.")
     _email_test_last_sent[username] = now
 
-    pharmacy = app.config.get("PHARMACY_NAME") or "PharmaFile"
+    pharmacy = app.config.get("PHARMACY_NAME") or "Flowelis"
     via = ("Brevo (API)" if settings.backend == BACKEND_BREVO
            else f"{settings.host}:{settings.port}")
     success, error_msg = send_email(

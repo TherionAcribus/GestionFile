@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- Jeton CSRF (Flask-WTF), injecté dans HTMX/fetch/jQuery par csrf.js -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% block title %}Administration{% endblock %} · PharmaFile</title>
+    <title>{% block title %}Administration{% endblock %} · Flowelis</title>
+    {% include 'shared/_favicon.html' %}
 
     {# ------------------------------------------------------------------ #}
     {#  Point 6.1 — Ressources communes                                   #}
@@ -433,8 +434,9 @@
         <div class="container py-4">
           <div class="row">
             <div class="col-md-4">
-              <h5>PharmaFile</h5>
-              <p class="mb-0">Système de gestion de file d'attente pour officine.</p>
+              <img src="{{ url_for('static', filename='images/flowelis-horizontal-fond-sombre.svg') }}"
+                   alt="Flowelis" height="30" class="mb-2">
+              <p class="mb-0">Gestion de file et accueil en officine.</p>
             </div>
             <div class="col-md-4">
               <h5>Pages publiques</h5>
@@ -453,7 +455,7 @@
             </div>
           </div>
           <div class="text-center mt-3">
-            <small>PharmaFile · Distribué sous licence CC BY-SA 4.0</small>
+            <small>Flowelis · Distribué sous licence CC BY-SA 4.0</small>
           </div>
         </div>
       </footer>

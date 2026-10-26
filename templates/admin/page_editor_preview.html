@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Aperçu {{ adapter.label }}</title>
+    {% include 'shared/_favicon.html' %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/libs/materialize.min.css') }}">
     {% if page == 'announce' %}
         <link rel="stylesheet" href="{{ url_for('static', filename='css/display.css') }}">

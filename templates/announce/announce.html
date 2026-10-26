@@ -8,6 +8,7 @@
        l'accusé socket page_editor_ack à chaque (re)connexion. #}
     <meta name="page-editor-revision" content="{{ page_revision | default(0) }}">
     <title>Écran d'Affichage</title>
+    {% include 'shared/_favicon.html' %}
         <!-- Script SocketIO -->
         <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
         <script src="{{ url_for('static', filename='js/csrf.js') }}"></script>
