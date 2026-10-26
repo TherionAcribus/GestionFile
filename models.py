@@ -1155,7 +1155,10 @@ def record_printer_status(error_code, message, borne_id=None, generated_at=None,
     # Le message vient du réseau : on le borne pour ne pas laisser une borne
     # (ou un client forgé) gonfler la table indéfiniment.
     message = (str(message) if message is not None else "")[:1000]
-    borne_id = (str(borne_id) if borne_id is not None else None)
+    # Une chaîne vide (ou blanche) n'est pas un identifiant : stockée telle
+    # quelle — pas NULL — elle échapperait au filtre ``borne_id.isnot(None)``
+    # des snapshots et créerait une borne fantôme « » sur les écrans.
+    borne_id = (str(borne_id).strip() if borne_id is not None else None) or None
     if borne_id:
         borne_id = borne_id[:80]
     error_code = str(error_code)[:40]
@@ -1244,6 +1247,10 @@ def _borne_status_snapshots():
     rows = (
         db.session.query(PrinterStatus)
         .filter(PrinterStatus.borne_id.isnot(None))
+        # D'éventuelles lignes historiques portent encore une chaîne vide
+        # (écrites avant la normalisation en NULL de record_printer_status) :
+        # sans ce filtre, elles dessineraient une borne fantôme « » à l'écran.
+        .filter(PrinterStatus.borne_id != "")
         .order_by(PrinterStatus.id.asc())
         .all()
     )

@@ -284,3 +284,31 @@ def test_kiosk_event_only_borne_stays_printable(application):
                               borne_id="borne-1", is_error=True)
         assert borne_printing_available("borne-1") is True
         assert get_printer_error() is False
+
+
+def test_borne_id_vide_normalise_en_null(application):
+    """Une chaîne vide n'est pas un identifiant : normalisée en NULL à
+    l'enregistrement, elle ne peut plus créer de borne fantôme « » dans
+    les snapshots."""
+    from models import _borne_status_snapshots
+    with application.app_context():
+        record_printer_status("paper_ok", "Papier OK", borne_id="")
+        row = PrinterStatus.query.order_by(PrinterStatus.id.desc()).first()
+        assert row.borne_id is None
+        assert "" not in _borne_status_snapshots()
+
+
+def test_borne_id_vide_historique_exclu_des_snapshots(application):
+    """Des lignes écrites avant la normalisation peuvent encore porter
+    ``borne_id = ''`` : le filtre des snapshots les exclut pour ne pas
+    dessiner de borne fantôme sur les écrans."""
+    from models import _borne_status_snapshots
+    with application.app_context():
+        db.session.add(PrinterStatus(
+            borne_id="", error_code="paper_ok", is_error=False,
+            message="statut historique", received_at=datetime.now(time_tz)))
+        db.session.commit()
+        assert "" not in _borne_status_snapshots()
+        # Une vraie borne continue d'apparaître normalement.
+        record_printer_status("paper_ok", "Papier OK", borne_id="borne-1")
+        assert "borne-1" in _borne_status_snapshots()
