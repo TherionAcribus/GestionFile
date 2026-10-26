@@ -287,13 +287,47 @@ function pageEditorRevision() {
     return meta ? (parseInt(meta.content, 10) || 0) : 0;
 }
 
+// Sonde légère vers le serveur (HEAD /patient) : utilisée avant les
+// navigations dures, qui ne passent pas par HTMX et ne déclencheraient donc
+// ni timeout ni écran d'incident en cas de serveur parti.
+function pingServer(timeoutMs) {
+    var controller = (typeof AbortController === 'function') ? new AbortController() : null;
+    var options = { method: 'HEAD', cache: 'no-store' };
+    if (controller) { options.signal = controller.signal; }
+    return new Promise(function(resolve) {
+        var done = false;
+        var finish = function(alive) {
+            if (done) { return; }
+            done = true;
+            resolve(alive);
+        };
+        setTimeout(function() {
+            if (controller) { controller.abort(); }
+            finish(false);
+        }, timeoutMs);
+        fetch('/patient', options)
+            .then(function(r) { finish(!!(r && r.ok)); })
+            .catch(function() { finish(false); });
+    });
+}
+
 function refresh_page() {
     if (printFlowActive()) {
         console.log("Refresh différé : flux d'impression en cours.");
         return;
     }
     console.log("Refresh page...");
-    window.location.reload();
+    // Rechargement protégé : si le serveur est parti entre la réception de
+    // l'évènement et le reload, la borne afficherait la page d'erreur du
+    // navigateur. On sonde d'abord ; en échec, l'écran d'incident prend le
+    // relais (le rattrapage boutons/titre du 'reconnect' remet l'état à jour).
+    pingServer(5000).then(function(alive) {
+        if (alive) {
+            window.location.reload();
+        } else {
+            handleKioskRequestFailure();
+        }
+    });
 }
 
 function refresh_buttons(){
