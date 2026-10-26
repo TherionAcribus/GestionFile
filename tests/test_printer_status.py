@@ -329,3 +329,63 @@ def test_retrait_borne_supprime_tout_son_historique(application):
         assert deleted == 2
         assert "ancienne" not in _borne_status_snapshots()
         assert "autre" in _borne_status_snapshots()
+
+
+# --- Retour à la normale après une panne (imprimante éteinte puis rallumée) --
+#
+# Bug signalé : imprimante coupée -> bandeau à la première impression ;
+# rallumée -> on imprime de nouveau, mais bandeau borne ET alerte admin
+# restaient. Cause : le statut de reprise (« init_ok », même message qu'au
+# démarrage) était dédoublonné contre la ligne du DÉMARRAGE, plus ancienne
+# que l'erreur : cette vieille ligne était rafraîchie en place, et l'erreur
+# restait la plus récente — donc l'état courant.
+
+def test_reprise_apres_panne_redevient_l_etat_courant(application):
+    with application.app_context():
+        record_printer_status("init_ok", "Imprimante USB initialisée avec succès.",
+                              borne_id="borne-1")
+        record_printer_status("error_print", "Erreur USB lors de l'impression",
+                              borne_id="borne-1")
+        assert borne_printing_available("borne-1") is False
+
+        # Imprimante rallumée : le gestionnaire de santé la rouvre.
+        assert record_printer_status(
+            "init_ok", "Imprimante USB initialisée avec succès.",
+            borne_id="borne-1") is True
+
+        assert borne_printing_available("borne-1") is True
+        assert get_printer_error() is False
+        assert borne_overview()[0]["code"] == "init_ok"
+        # Le journal se termine par la reprise, pas par l'erreur.
+        assert get_printer_infos()[-1]["error_code"] == "init_ok"
+
+
+def test_pannes_repetees_restent_chacune_visibles(application):
+    with application.app_context():
+        for _ in range(3):
+            record_printer_status("error_print", "Erreur USB", borne_id="borne-1")
+            assert borne_printing_available("borne-1") is False
+            record_printer_status("init_ok", "Initialisée", borne_id="borne-1")
+            assert borne_printing_available("borne-1") is True
+        codes = [info["error_code"] for info in get_printer_infos()]
+        assert codes == ["error_print", "init_ok"] * 3
+
+
+def test_statut_repete_sans_changement_reste_une_seule_ligne(application):
+    """Le dédoublonnage reste utile quand RIEN n'a changé entre-temps :
+    contrôle papier périodique, renvoi après réessai réseau."""
+    with application.app_context():
+        record_printer_status("no_paper", "Plus de papier", borne_id="borne-1")
+        record_printer_status(PRINTER_HEARTBEAT_CODE, "Borne en ligne", borne_id="borne-1")
+        assert record_printer_status("no_paper", "Plus de papier", borne_id="borne-1") is False
+        assert PrinterStatus.query.filter_by(error_code="no_paper").count() == 1
+
+
+def test_reprise_n_est_pas_masquee_par_une_autre_borne(application):
+    with application.app_context():
+        record_printer_status("init_ok", "Initialisée", borne_id="borne-1")
+        record_printer_status("init_ok", "Initialisée", borne_id="borne-2")
+        record_printer_status("error_print", "Erreur USB", borne_id="borne-1")
+        record_printer_status("init_ok", "Initialisée", borne_id="borne-1")
+        assert borne_printing_available("borne-1") is True
+        assert get_printer_error() is False

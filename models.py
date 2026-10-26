@@ -1172,21 +1172,32 @@ def record_printer_status(error_code, message, borne_id=None, generated_at=None,
         "received_at": received_at,
     }
     with db.engine.begin() as conn:
-        dedupe = [
-            table.c.borne_id == borne_id,
-            table.c.error_code == error_code,
-        ]
-        # Pour un heartbeat, seul le dernier contact de cette borne compte ;
-        # pour un statut métier, un même code avec un nouveau message reste un
-        # nouvel état à historiser.
-        if error_code != PRINTER_HEARTBEAT_CODE:
-            dedupe.append(table.c.message == message)
-        duplicate_id = conn.execute(
-            db.select(table.c.id)
-            .where(*dedupe)
-            .order_by(table.c.id.desc())
-            .limit(1)
-        ).scalar()
+        if error_code == PRINTER_HEARTBEAT_CODE:
+            # Heartbeat : seul le dernier contact de cette borne compte.
+            duplicate_id = conn.execute(
+                db.select(table.c.id)
+                .where(table.c.borne_id == borne_id,
+                       table.c.error_code == PRINTER_HEARTBEAT_CODE)
+                .order_by(table.c.id.desc())
+                .limit(1)
+            ).scalar()
+        else:
+            # Statut métier : doublon UNIQUEMENT s'il répète le DERNIER statut
+            # de cette borne (même code, même message). Comparer à n'importe
+            # quelle ligne plus ancienne rafraîchissait en place, par exemple,
+            # le « init_ok » du démarrage quand l'imprimante était rallumée :
+            # l'erreur intermédiaire restait la ligne la plus récente, donc
+            # l'état courant — bandeau borne et alerte admin ne partaient plus.
+            latest = conn.execute(
+                db.select(table.c.id, table.c.error_code, table.c.message)
+                .where(table.c.borne_id == borne_id,
+                       table.c.error_code != PRINTER_HEARTBEAT_CODE)
+                .order_by(table.c.id.desc())
+                .limit(1)
+            ).first()
+            duplicate_id = (latest.id if latest is not None
+                            and latest.error_code == error_code
+                            and latest.message == message else None)
         if duplicate_id is not None:
             conn.execute(
                 table.update()
