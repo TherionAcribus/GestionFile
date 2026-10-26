@@ -1362,6 +1362,21 @@ def borne_overview(now=None):
     return overview
 
 
+def retire_borne(borne_id):
+    """Supprime toutes les traces de supervision d'une borne.
+
+    Toute la santé d'une borne est dérivée de ses lignes ``PrinterStatus``
+    (snapshots, joignabilité, journal, alertes) : sans retrait, une borne
+    renommée ou décommissionnée resterait « injoignable » et en alerte pour
+    toujours. Le journal de cette borne part avec — l'appelant doit avoir
+    fait confirmer l'action. Renvoie le nombre de lignes supprimées."""
+    deleted = (db.session.query(PrinterStatus)
+               .filter(PrinterStatus.borne_id == borne_id)
+               .delete(synchronize_session=False))
+    db.session.commit()
+    return deleted
+
+
 def get_printer_infos(limit=PRINTER_INFOS_LIMIT):
     """ Les ``limit`` derniers statuts, du plus ancien au plus récent, au
     format attendu par le gabarit du tableau de bord (clés historiques

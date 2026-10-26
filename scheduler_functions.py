@@ -778,7 +778,12 @@ def kiosk_watchdog_job():
         try:
             from models import borne_reachability
             from communication import send_app_notification
-            for borne_id, online in borne_reachability().items():
+            reachability = borne_reachability()
+            # Une borne retirée de la supervision ne doit pas laisser son
+            # état en mémoire : l'entrée survivrait sinon indéfiniment.
+            for gone in set(_kiosk_online_state) - set(reachability):
+                del _kiosk_online_state[gone]
+            for borne_id, online in reachability.items():
                 was_online = _kiosk_online_state.get(borne_id)
                 _kiosk_online_state[borne_id] = online
                 if was_online is None or was_online == online:

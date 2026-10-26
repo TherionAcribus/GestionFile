@@ -27,6 +27,7 @@
                 <th>Page patient</th>
                 <th>Acquittements en attente</th>
                 <th>Dernier incident</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -76,6 +77,18 @@
                     <span class="text-muted">—</span>
                     {% endif %}
                 </td>
+                <td>
+                    {# Retirer : borne renommée, remplacée ou de test. Sans
+                       cette action, son ancienne identité resterait
+                       « injoignable » et en alerte pour toujours. #}
+                    <form method="post"
+                          action="/admin/bornes/{{ b.borne_id | urlencode }}/retirer"
+                          data-confirm="Retirer cette borne de la supervision ? Son historique sera supprimé.">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-outline-danger btn-sm"
+                                title="Retirer {{ b.borne_id }} de la supervision">Retirer</button>
+                    </form>
+                </td>
             </tr>
         {% endfor %}
         </tbody>
@@ -99,4 +112,8 @@
 {% else %}
 <p class="text-muted small">Aucun évènement enregistré.</p>
 {% endif %}
+{% endblock %}
+
+{% block scripts_end %}
+<script src="{{ url_for('static', filename='js/admin_bornes.js') }}"></script>
 {% endblock %}

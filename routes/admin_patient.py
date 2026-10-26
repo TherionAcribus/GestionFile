@@ -12,7 +12,7 @@ from flask import Blueprint, request, render_template, redirect, jsonify, sessio
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
     record_printer_status, get_printer_infos, get_printer_error,
-    borne_printing_available, borne_overview,
+    borne_printing_available, borne_overview, retire_borne,
     PRINTER_HEARTBEAT_CODE, PRINTER_STATUS_STALE_SECONDS,
     KIOSK_EVENT_PREFIX,
 )
@@ -38,7 +38,7 @@ from path_security import safe_path_under
 from audit_service import record_audit
 from audit_log import (
     ACTION_ACTIVATE, ACTION_CREATE, ACTION_DEACTIVATE, ACTION_DELETE,
-    ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS,
+    ACTION_UPDATE, ACTION_DELETE, OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
@@ -1066,3 +1066,26 @@ def admin_bornes():
         journal=journal,
         stale_seconds=PRINTER_STATUS_STALE_SECONDS,
     )
+
+
+@admin_patient_bp.route('/admin/bornes/<borne_id>/retirer', methods=['POST'])
+@require_permission('patient')
+def admin_borne_retirer(borne_id):
+    """Retire une borne qui n'existe plus (renommée, remplacée, de test).
+
+    Sans cette action, une ancienne identité restait « injoignable » et en
+    alerte pour toujours : toute la santé d'une borne est dérivée de ses
+    lignes ``PrinterStatus``. Son journal part avec — le gabarit demande
+    confirmation avant d'envoyer."""
+    deleted = retire_borne(borne_id)
+    # Le signe de vie de la page vit en mémoire, pas en base : il faut le
+    # purger à la main, sinon la borne « retirée » garderait une page active.
+    kiosk_page_last_seen.pop(borne_id, None)
+    record_audit(ACTION_DELETE, "borne", target_id=borne_id,
+                 outcome=OUTCOME_SUCCESS,
+                 details=f"statuts supprimés={deleted}")
+    display_toast(
+        success=True,
+        message=f"Borne {borne_id} retirée "
+                f"({deleted} évènement(s) supprimé(s)).")
+    return redirect('/admin/bornes')

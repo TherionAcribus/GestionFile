@@ -312,3 +312,20 @@ def test_borne_id_vide_historique_exclu_des_snapshots(application):
         # Une vraie borne continue d'apparaître normalement.
         record_printer_status("paper_ok", "Papier OK", borne_id="borne-1")
         assert "borne-1" in _borne_status_snapshots()
+
+
+def test_retrait_borne_supprime_tout_son_historique(application):
+    """Une borne renommée ou disparue doit pouvoir être retirée : sinon son
+    ancienne identité resterait « injoignable » et en alerte pour toujours."""
+    from models import _borne_status_snapshots, retire_borne
+    with application.app_context():
+        record_printer_status("paper_ok", "Papier OK", borne_id="ancienne")
+        record_printer_status("heartbeat", "", borne_id="ancienne")
+        record_printer_status("paper_ok", "Papier OK", borne_id="autre")
+        assert "ancienne" in _borne_status_snapshots()
+
+        deleted = retire_borne("ancienne")
+
+        assert deleted == 2
+        assert "ancienne" not in _borne_status_snapshots()
+        assert "autre" in _borne_status_snapshots()
