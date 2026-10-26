@@ -1,5 +1,6 @@
 # Dependances de developpement / test. Jamais installees en production.
-#     uv pip compile requirements-dev.in --python-version 3.12 -o requirements-dev.txt
+#     uv pip compile requirements-dev.in --universal --python-version 3.10 -o requirements-dev.txt
+# (memes drapeaux que la CI, cf. .github/workflows/ci.yml — job "deps")
 -r requirements.in
 
 pytest==8.3.2
