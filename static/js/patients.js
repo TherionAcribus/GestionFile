@@ -47,12 +47,14 @@ function kioskOfflineLabels() {
         fr: {
             title: "Borne momentanément indisponible",
             message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants. Si l'attente se prolonge, merci de vous adresser à l'accueil.",
-            retry: "Réessayer"
+            retry: "Réessayer",
+            printer_down: "L'imprimante est momentanément indisponible. Votre numéro vous sera indiqué à l'écran ou remis par l'accueil."
         },
         en: {
             title: "Kiosk temporarily unavailable",
             message: "We are experiencing a connection problem. The kiosk will be available again shortly. If the wait continues, please contact the reception desk.",
-            retry: "Try again"
+            retry: "Try again",
+            printer_down: "The printer is temporarily unavailable. Your number will be shown on screen or given at the reception desk."
         }
     };
     return table[lang] || table.fr;
@@ -108,6 +110,41 @@ function clearKioskOfflineTimer() {
         clearTimeout(_kioskOfflineTimer);
         _kioskOfflineTimer = null;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Bandeau « imprimante indisponible » (#printer_state_banner).
+//
+// Le serveur connaît l'état de l'imprimante (PrinterStatus : no_paper,
+// error_*) mais le patient ne le découvrait qu'en fin de parcours. La page
+// déclare son borne_id au serveur (salle dédiée par borne), qui lui pousse
+// 'printer_state' à la connexion puis à chaque statut métier.
+// ---------------------------------------------------------------------------
+function setPrinterAvailable(available) {
+    var banner = document.getElementById('printer_state_banner');
+    if (!banner) { return; }
+    if (available) {
+        banner.hidden = true;
+        return;
+    }
+    var msg = banner.querySelector('.printer_state_message');
+    if (msg) { msg.textContent = kioskOfflineLabels().printer_down; }
+    banner.hidden = false;
+}
+
+// Sans pont pywebview (page ouverte dans un navigateur de test), pas
+// d'identité → pas de bandeau : mieux vaut n'alarmer personne que faussement.
+function joinPrinterWatch() {
+    var api = window.pywebview && window.pywebview.api && window.pywebview.api.kiosk;
+    if (!api || typeof api.borne_id !== 'function') { return; }
+    Promise.resolve(api.borne_id()).then(function(id) {
+        var s = window.__patientSocket;
+        if (id && s && s.connected) {
+            s.emit('join_printer_watch', { borne_id: String(id) });
+        }
+    }).catch(function(err) {
+        console.warn('Identification de la borne impossible :', err);
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +211,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // Le serveur est (re)joignable : annule le délai de grâce et l'écran.
         clearKioskOfflineTimer();
         setKioskOffline(false);
+        // (Re)déclaration de la borne : la salle Socket.IO ne survit pas à
+        // une déconnexion, et l'état courant de l'imprimante est renvoyé.
+        joinPrinterWatch();
         // Les salles Socket.IO ne survivent pas à une déconnexion : si un QR
         // est affiché à la (re)connexion, on rejoint à nouveau sa salle.
         rejoinScanJourney();
@@ -227,6 +267,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
             }));
         }
         htmx.trigger('#div_for_scan', 'qrcode_is_scanned');
+    });
+
+    // État imprimante de CETTE borne, poussé par le serveur : affiche ou
+    // masque le bandeau préventif (défaut optimiste si payload incomplet).
+    patientSocket.on('printer_state', function(msg) {
+        var ok = !msg || !msg.data || msg.data.printing_ok !== false;
+        setPrinterAvailable(ok);
     });
 
     // Impression de test déclenchée depuis l'admin (onglet Ticket). Le payload

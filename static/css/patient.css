@@ -836,4 +836,25 @@ html, body {
     cursor: pointer;
 }
 
+/* Bandeau « imprimante indisponible » : le patient est prévenu AVANT de
+   choisir. Superposé en haut de page ; z-index sous l'écran « connexion
+   perdue » (9999) qui prend le pas quand il est affiché. */
+#printer_state_banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9000;
+    background: #C0392B;
+    color: #fff;
+    text-align: center;
+    padding: 0.9rem 2rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+#printer_state_banner[hidden] {
+    display: none;
+}
+
 

@@ -1295,6 +1295,20 @@ def borne_reachability(now=None):
     }
 
 
+def borne_printing_available(borne_id):
+    """L'imprimante de CETTE borne est-elle en état de fonctionner ?
+
+    Dernier statut métier connu : ``no_paper`` et tout code d'erreur
+    bloquent ; ``low_paper`` laisse imprimer (l'équipe est déjà alertée,
+    inutile d'alarmer le patient). Aucun statut connu = aucune raison
+    d'afficher le bandeau."""
+    snapshot = _borne_status_snapshots().get(borne_id)
+    current = snapshot["current"] if snapshot else None
+    if current is None:
+        return True
+    return not current.is_error and current.error_code != "no_paper"
+
+
 def get_printer_infos(limit=PRINTER_INFOS_LIMIT):
     """ Les ``limit`` derniers statuts, du plus ancien au plus récent, au
     format attendu par le gabarit du tableau de bord (clés historiques

@@ -11,6 +11,7 @@ from flask import Blueprint, request, render_template, redirect, jsonify, sessio
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
     record_printer_status, get_printer_infos, get_printer_error,
+    borne_printing_available,
     PRINTER_HEARTBEAT_CODE,
 )
 from diagnostics import collect_patient_page_alerts
@@ -25,6 +26,7 @@ from utils import (
     validate_ticket_text,
 )
 from communication import communikation, send_app_notification
+from sockets import BORNE_PRINTER_ROOM_PREFIX
 from routes.counter import action_add_paper
 from routes.admin_security import require_permission, require_permission_dashboard
 from auth_utils import require_app_token_or_login
@@ -961,6 +963,16 @@ def admin_printer_status():
         # notification à Pyside
         timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
         send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp, "borne_id": borne_id})
+
+    if not is_heartbeat and borne_id:
+        # Bandeau « imprimante indisponible » sur la page de CETTE borne :
+        # le patient est prévenu avant de choisir au lieu de découvrir
+        # l'échec en fin de parcours. Envoyé à chaque statut métier, même
+        # dédupliqué — l'évènement est idempotent pour la page.
+        communikation(
+            "patient", event="printer_state",
+            data={"printing_ok": borne_printing_available(borne_id)},
+            room=f"{BORNE_PRINTER_ROOM_PREFIX}{borne_id}")
 
     if not is_heartbeat:
         # L'icône papier des apps comptoir est idempotente : elle doit rester

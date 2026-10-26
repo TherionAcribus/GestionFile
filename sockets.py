@@ -16,7 +16,7 @@ import re
 import time
 
 from flask import current_app, request
-from flask_socketio import join_room, leave_room, rooms
+from flask_socketio import emit, join_room, leave_room, rooms
 
 from auth_utils import is_authenticated_request, is_admin_session, is_kiosk_patient_session, is_socket_connection_authorized, check_patient_phone_token
 from extensions import socketio
@@ -296,6 +296,30 @@ def connect_patient():
 def disconnect_patient():
     forget_client(request)
     logger.info("Client deconnecte du namespace page patient")
+
+
+#: Salle par borne pour le bandeau « imprimante indisponible » de la page
+#: patient — chaque borne ne voit que l'état de SA propre imprimante.
+BORNE_PRINTER_ROOM_PREFIX = "borne_printer_"
+
+
+@socketio.on("join_printer_watch", namespace="/socket_patient")
+def join_printer_watch(msg):
+    """La page borne déclare son identité et rejoint la salle de SON
+    imprimante ; l'état courant lui est renvoyé immédiatement (une borne
+    déjà en panne papier doit afficher le bandeau dès la connexion)."""
+    borne_id = ""
+    if isinstance(msg, dict):
+        borne_id = str(msg.get("borne_id") or "")[:80]
+    if not borne_id:
+        return
+    join_room(f"{BORNE_PRINTER_ROOM_PREFIX}{borne_id}")
+    from models import borne_printing_available
+    emit("printer_state", {
+        "flag": None,
+        "data": {"printing_ok": borne_printing_available(borne_id)},
+        "revision": None,
+    })
 
 
 # --- Parcours QR de la borne -------------------------------------------------

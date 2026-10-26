@@ -192,3 +192,33 @@ def test_borne_reachability_tracks_last_contact(application):
         db.session.commit()
 
         assert borne_reachability() == {"borne-1": False, "borne-2": True}
+
+
+def test_borne_printing_available_per_borne(application):
+    with application.app_context():
+        from models import borne_printing_available
+        # Aucun statut connu : pas de raison d'alarmer.
+        assert borne_printing_available("borne-inconnue") is True
+
+        record_printer_status(
+            "init_ok", "Imprimante initialisée", borne_id="borne-1")
+        assert borne_printing_available("borne-1") is True
+
+        record_printer_status(
+            "no_paper", "Plus de papier", borne_id="borne-1")
+        assert borne_printing_available("borne-1") is False
+
+        record_printer_status(
+            "paper_ok", "Papier OK", borne_id="borne-1")
+        assert borne_printing_available("borne-1") is True
+
+        # low_paper laisse imprimer : l'équipe est alertée, pas le patient.
+        record_printer_status(
+            "low_paper", "Papier bientôt épuisé", borne_id="borne-1")
+        assert borne_printing_available("borne-1") is True
+
+        # Un code d'erreur bloque ; l'état est par borne, pas global.
+        record_printer_status(
+            "error_print", "Échec impression", borne_id="borne-1")
+        assert borne_printing_available("borne-1") is False
+        assert borne_printing_available("borne-2") is True

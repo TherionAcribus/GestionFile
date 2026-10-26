@@ -82,6 +82,13 @@
 
     </div>
 
+    {# Bandeau « imprimante indisponible » : affiché/masqué par patients.js
+       (évènement socket printer_state). Hors de #main pour survivre aux
+       swaps HTMX ; superposé en haut, sous l'écran « connexion perdue ». #}
+    <div id="printer_state_banner" hidden>
+        <p class="printer_state_message"></p>
+    </div>
+
     {# Écran « connexion perdue » : affiché par patients.js (id fixe
        #kiosk_offline_overlay) quand le socket reste déconnecté. Placé HORS de
        #main pour survivre aux swaps HTMX (hx-select remplace #main entier). #}
