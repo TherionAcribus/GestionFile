@@ -179,8 +179,8 @@ services:
 
   # Jobs APScheduler (nettoyages, cron métier). Aucune interface HTTP :
   # un seul replica, toujours. Les mises à jour temps réel vers les clients
-  # passent par le message_queue RabbitMQ (START_RABBITMQ à activer dans
-  # l'administration).
+  # passent par le message_queue RabbitMQ, câblé automatiquement dès que
+  # RABBITMQ_URL est résolue (extensions.init_socketio).
   scheduler:
     build: .
     restart: unless-stopped

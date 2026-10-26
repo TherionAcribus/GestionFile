@@ -49,7 +49,6 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "pharmacy_name": ("PHARMACY_NAME", "value_str"),
     "network_adress": ("NETWORK_ADRESS", "value_str"),
     "numbering_by_activity": ("NUMBERING_BY_ACTIVITY", "value_bool"),
-    "start_rabbitmq": ("START_RABBITMQ", "value_bool"),
     "app_messaging_enabled": ("APP_MESSAGING_ENABLED", "value_bool"),
     "call_auto_validation_enabled": ("CALL_AUTO_VALIDATION_ENABLED", "value_bool"),
     "call_auto_validation_warning_seconds": (
@@ -248,17 +247,14 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
 #   ``network_adress`` (``NETWORK_ADRESS`` est lu en direct, cf. engine.set_server_url).
 #
 # * Un paramètre **nécessite un redémarrage** si sa valeur n'est consommée qu'à
-#   l'INITIALISATION du processus. C'est le cas de ``start_rabbitmq`` : la file
-#   de messages SocketIO (relais inter-processus) est câblée une seule fois au
-#   démarrage (cf. app.py, construction de ``SocketIO``). Recharger ``app.config``
-#   n'y changerait rien et rendrait la mémoire incohérente avec le transport réel.
+#   l'INITIALISATION du processus. (Il n'y en a plus depuis que le relais
+#   RabbitMQ — ex-``start_rabbitmq`` — est auto-détecté depuis ``RABBITMQ_URL``,
+#   décision d'infrastructure et non réglage applicatif, cf. extensions.py.)
 #
 # Pour ces clés, les routes ``update_*`` persistent la valeur mais N'incrémentent
 # PAS la génération, NE mutent PAS ``app.config``, et l'interface affiche
 # « Enregistré — redémarrage requis » plutôt que de prétendre l'application faite.
-_RESTART_REQUIRED = {
-    "start_rabbitmq",
-}
+_RESTART_REQUIRED: set[str] = set()
 
 
 # ---------------------------------------------------------------------------
@@ -504,7 +500,7 @@ def _permission_for(key: str) -> str:
         return "patient"
     if key == "counter_order":
         return "counter"
-    # network_adress, pharmacy_name, start_rabbitmq, numbering_by_activity,
+    # network_adress, pharmacy_name, numbering_by_activity,
     # mail_*, admin_colors : page « Application ».
     return "app"
 

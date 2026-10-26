@@ -7,7 +7,6 @@
         "configurations": {
             "network_adress": "",
             "pharmacy_name": "Pharmacie",
-            "start_rabbitmq": false,
             "app_messaging_enabled": false,
             "call_auto_validation_enabled": false,
             "call_auto_validation_warning_seconds": 60,
@@ -15,7 +14,6 @@
             "call_auto_validation_extension_seconds": 60,
             "stress_test_enabled": false,
             "stress_reference_patients": 10,
-            "use_rabbitmq": false,
             "cron_delete_patient_table_activated": true,
             "cron_transfer_patient_to_history": true,
             "cron_delete_patient_table_hour": "00:00",

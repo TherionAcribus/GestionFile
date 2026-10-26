@@ -4,7 +4,8 @@ Couvre :
 - l'onglet demandé par l'URL (/admin/app/<tab> était ignoré) ;
 - les connexions en direct : libellés lisibles, filtre limité aux canaux
   connus, total ;
-- les gabarits : alerte RabbitMQ déplacée dans « Avancé », alerte TLS+SSL,
+- les gabarits : état du relais RabbitMQ en lecture seule dans « Avancé »
+  (auto-détection sur RABBITMQ_URL, plus de switch), alerte TLS+SSL,
   honnêteté sur l'usage des e-mails ;
 - les endpoints ``network_adress`` (suggestion d'adresse, QR de test) ;
 - ``call_numbering.next_category_call_number`` : plus grand numéro + 1
@@ -56,10 +57,12 @@ def test_gabarits_general_et_mail():
     assert 'call_auto_validation_extension_seconds' in general
     assert 'id="stress_reference_patients"' in general
     assert 'Pic habituel de patients' in general
-    # L'avertissement « redémarrage requis » est dans la section RabbitMQ.
+    # Relais RabbitMQ : état en lecture seule (auto-détecté sur RABBITMQ_URL),
+    # plus aucun interrupteur ni clé de paramètre.
     avance = general.split("Avancé : relais entre processus", 1)[1]
-    assert "Redémarrage requis" in avance and "start_rabbitmq" in avance
-    assert "Redémarrage requis" not in general.split("Avancé : relais entre processus", 1)[0]
+    assert "start_rabbitmq" not in general
+    assert "rabbitmq_relay" in avance and "rabbitmq_url_set" in avance
+    assert "RABBITMQ_URL" in avance
     # Onglet E-mails : détail dans test_admin_test_email.py. La sécurité est un
     # choix unique (l'ancien double interrupteur TLS + SSL pouvait être
     # coché deux fois) et le mot de passe n'est jamais réaffiché.
@@ -79,7 +82,7 @@ def app(tmp_path):
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path}/test.db",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         TESTING=True,
-        START_RABBITMQ=False, NETWORK_ADRESS="", NUMBERING_BY_ACTIVITY=True,
+        RABBITMQ_URL=None, NETWORK_ADRESS="", NUMBERING_BY_ACTIVITY=True,
         ANNOUNCE_SOUND=True, PHARMACY_NAME="Test", MAIL_SERVER="", MAIL_PORT=587,
         MAIL_USERNAME="", MAIL_DEFAULT_SENDER="", MAIL_USE_TLS=True, MAIL_USE_SSL=False,
     )
@@ -152,6 +155,19 @@ def test_palette_admin_dans_application(client, app):
     general = _read("templates/admin/app_general.html")
     assert 'id="admin_colors"' in general
     assert '"key": "admin_colors"' in general
+
+
+def test_page_app_recoit_etat_relais_rabbitmq(client, app):
+    """La page expose l'état RÉEL du relais (gestionnaire Socket.IO instancié),
+    pas un booléen de configuration."""
+    captured = {}
+    with patch.object(admin_app, "render_template",
+                      lambda tpl, **kw: captured.update(kw) or ""):
+        client.get("/admin/app")
+    assert captured["rabbitmq_url_set"] is False
+    # Pas d'init Socket.IO dans ce contexte de test : relay inconnu (None) ou
+    # valeur du gestionnaire — l'essentiel est que la clé soit transmise.
+    assert "rabbitmq_relay" in captured
 
 
 def test_ancienne_page_preferences_redirige(client):

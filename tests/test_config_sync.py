@@ -79,11 +79,14 @@ def test_network_adress_is_dynamic_now():
     assert "network_adress" not in reg.RESTART_REQUIRED_KEYS
 
 
-def test_start_rabbitmq_requires_restart():
-    """start_rabbitmq est consommé à l'init du process (message_queue SocketIO)."""
-    assert reg.is_restart_required("start_rabbitmq") is True
-    assert "start_rabbitmq" in reg.RESTART_REQUIRED_KEYS
-    assert reg.get_spec("start_rabbitmq").restart_required is True
+def test_start_rabbitmq_nest_plus_un_parametre():
+    """Le relais RabbitMQ est auto-détecté depuis RABBITMQ_URL (extensions.
+    init_socketio) : décision d'infrastructure, plus un réglage applicatif —
+    l'ancienne clé ne doit plus être connue du registre."""
+    assert "start_rabbitmq" not in reg.PARAM_REGISTRY
+    assert "start_rabbitmq" not in reg.RESTART_REQUIRED_KEYS
+    assert reg.get_spec("start_rabbitmq") is None
+    assert reg.is_restart_required("start_rabbitmq") is False
 
 
 def test_is_restart_required_unknown_key():

@@ -39,7 +39,8 @@ services:
       - key: SECURITY_PASSWORD_SALT
         generateValue: true
 
-      # Keep this if RabbitMQ is enabled in app configuration.
-      # If RabbitMQ is disabled, this value is not used.
+      # Socket.IO relay between processes (e.g. web + scheduler): enabled
+      # automatically whenever this URL resolves — leave empty for a
+      # single-process deployment without a broker.
       - key: RABBITMQ_URL
         sync: false

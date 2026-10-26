@@ -23,7 +23,6 @@ import logging
 import subprocess
 import threading
 import socket
-import pika
 
 
 from functools import partial
@@ -102,9 +101,6 @@ if APP_ROLE not in VALID_APP_ROLES:
 SKIP_STARTUP_HOOKS = os.getenv("SKIP_STARTUP_HOOKS", "").strip().lower() in {"1", "true", "yes", "on"}
 
 server_port = int(os.environ.get("PORT", 5000))
-
-_rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/%2F")
-parameters = pika.URLParameters(_rabbitmq_url)
 
 
 
@@ -949,11 +945,13 @@ if __name__ == "__main__":
             _reconcile_scheduler_jobs()
             _ensure_stress_probe()
             # Ce process ne sert aucune connexion WebSocket (pas de socketio.run()),
-            # mais s'il partage un message_queue (START_RABBITMQ) avec les process
-            # "web", les communikation()/socketio.emit() appelés depuis les tâches
+            # mais s'il partage un message_queue (RABBITMQ_URL résolue au
+            # démarrage, cf. extensions.init_socketio) avec les process "web",
+            # les communikation()/socketio.emit() appelés depuis les tâches
             # planifiées (ex: scheduler_functions.py) sont bien relayés à leurs
-            # clients. Sans message_queue configuré, ces appels sont des no-op ici,
-            # ce qui reste acceptable : le scheduler ne fait que des tâches de fond.
+            # clients. Sans message_queue configuré, ces appels sont des no-op
+            # ici : les mutations restent en base mais aucun client temps réel
+            # n'est notifié avant sa prochaine resynchronisation HTTP.
             try:
                 while True:
                     tm.sleep(60)

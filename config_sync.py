@@ -41,9 +41,9 @@ rechargement — la valeur exacte n'a pas d'importance.
 
 Paramètres nécessitant un redémarrage
 -------------------------------------
-Les clés marquées ``restart_required`` dans ``params_registry`` (ex.
-``start_rabbitmq``) sont consommées à l'**initialisation** du processus
-(file de messages SocketIO). Un simple rechargement de ``app.config`` ne les
+Les clés marquées ``restart_required`` dans ``params_registry`` sont
+consommées à l'**initialisation** du processus. Un simple rechargement de
+``app.config`` ne les
 appliquerait pas ; pire, il rendrait la mémoire incohérente avec ce qui tourne
 réellement. Pour celles-ci, on **n'incrémente pas** la génération et on **ne
 mute pas** ``app.config`` : la base porte l'intention, appliquée au prochain

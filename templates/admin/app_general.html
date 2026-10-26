@@ -180,15 +180,23 @@
 <details class="admin-setting-card algo-section">
     <summary class="fw-semibold"><i class="bi bi-gear-wide-connected" aria-hidden="true"></i> Avancé : relais entre processus (RabbitMQ)</summary>
     <p class="text-muted small mt-2">
-        Uniquement pour une installation répartie sur plusieurs processus ou conteneurs : les messages temps réel
-        transitent alors par RabbitMQ. La variable d'environnement <code>RABBITMQ_URL</code> doit être configurée.
-        Laissez désactivé sur une installation simple.
+        Sur une installation répartie sur plusieurs processus ou conteneurs (web + scheduler), les messages
+        temps réel transitent par RabbitMQ pour atteindre les clients connectés à un autre processus.
+        Le relais est <strong>détecté automatiquement</strong> : il est actif dès que la variable
+        d'environnement <code>RABBITMQ_URL</code> (ou le triplet
+        <code>RABBITMQ_HOST/USER/PASSWORD</code>) est renseignée au démarrage — il n'y a plus de
+        réglage applicatif à basculer. Sans URL, l'application fonctionne en mono-processus sans relais.
     </p>
-    {{ macros.switch("start_rabbitmq",
-        start_rabbitmq,
-        "Activer le relais RabbitMQ") }}
-    <div class="alert alert-warning small mt-2 mb-0" role="note">
-        <strong>Redémarrage requis :</strong> ce réglage est enregistré immédiatement mais ne s'applique
-        qu'au prochain démarrage du serveur.
-    </div>
+    {% if rabbitmq_relay == "rabbitmq" %}
+        <p class="mb-0"><span class="badge text-bg-success">Actif</span>
+            <span class="text-muted small">Relais RabbitMQ opérationnel dans ce processus.</span></p>
+    {% elif rabbitmq_url_set %}
+        <p class="mb-0"><span class="badge text-bg-warning">URL configurée, relais inactif</span>
+            <span class="text-muted small">Une URL AMQP est configurée mais ce processus n'a pas de
+                gestionnaire de relais — redémarrage probablement nécessaire.</span></p>
+    {% else %}
+        <p class="mb-0"><span class="badge text-bg-secondary">Inactif</span>
+            <span class="text-muted small">Aucune URL AMQP configurée : diffusion locale uniquement
+                (adapté à un processus unique).</span></p>
+    {% endif %}
 </details>

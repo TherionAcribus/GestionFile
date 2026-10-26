@@ -9,12 +9,12 @@ from extensions import socketio
 def communikation(stream, data=None, flag=None, event="update", client_id=None, room=None):
     """ Effectue la communication temps réel avec les clients.
 
-    Passe toujours par SocketIO. Si l'app est configurée avec un message_queue
-    (voir START_RABBITMQ / RABBITMQ_URL dans app.py), SocketIO relaie
-    automatiquement le message aux clients connectés sur les autres processus
-    (ex: le conteneur "scheduler" qui n'a pas de connexions directes). Sans
-    message_queue configuré, le comportement est identique à avant : seuls les
-    clients connectés à ce process reçoivent le message.
+    Passe toujours par SocketIO. Si une URL AMQP est résolue au démarrage
+    (RABBITMQ_URL, voir extensions.init_socketio — auto-détection), SocketIO
+    relaie automatiquement le message aux clients connectés sur les autres
+    processus (ex: émissions du conteneur "scheduler" qui n'a pas de
+    connexions directes). Sans message_queue, seuls les clients connectés à
+    ce process reçoivent le message.
     """
     logging.info(f"communikation called with stream={stream}, event={event}")
 

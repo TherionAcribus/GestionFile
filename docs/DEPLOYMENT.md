@@ -110,7 +110,8 @@ obligatoire à saisir :
 
 - `https://files.mapharmacie.fr/healthz` → `{"status": "alive"}` (processus vivant).
 - `https://files.mapharmacie.fr/readyz` → `200` (base joignable ; RabbitMQ
-  aussi si `START_RABBITMQ` est activé).
+  aussi si `RABBITMQ_URL` est résolue — ce qui est le cas sur cette stack,
+  le relais Socket.IO étant auto-détecté).
 - La page d'accueil et `/admin_security/login` s'affichent en HTTPS.
 
 ### Étape 6 — Premier administrateur

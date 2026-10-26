@@ -9,10 +9,11 @@ Les différentes apps (comptoirs, écran d’affichage, borne/patient/phone) se 
 - Une base de données :
   - **MySQL** (par défaut), ou
   - **SQLite** (mode simple / dev)
-- (Optionnel) **RabbitMQ** si le switch admin `start_rabbitmq` est activé (et `RABBITMQ_URL` renseignée) —
-  sert de message queue pour relayer les évènements SocketIO entre plusieurs processus (ex: `web` + `scheduler`).
-  Sans lui, chaque processus ne diffuse qu'à ses propres clients connectés, ce qui reste un mode de
-  fonctionnement pleinement valide pour un déploiement mono-processus.
+- (Optionnel) **RabbitMQ** : relais des évènements SocketIO entre plusieurs processus
+  (ex: `web` + `scheduler`). Il est **auto-détecté** — actif dès que `RABBITMQ_URL` est
+  résolue au démarrage (variable explicite ou construite depuis `RABBITMQ_HOST/USER/PASSWORD`),
+  sans aucun réglage applicatif. Sans URL, chaque processus ne diffuse qu'à ses propres
+  clients connectés, ce qui reste le mode correct pour un déploiement mono-processus.
 
 ## Configuration (variables d’environnement)
 

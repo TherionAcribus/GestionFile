@@ -426,18 +426,11 @@ def _memory_limit():
 
 
 def _realtime_relay():
-    """Relais Socket.IO reellement actif dans ce processus.
-
-    Lu sur le gestionnaire de clients et non sur la configuration : activer
-    RabbitMQ dans l'administration ne prend effet qu'apres redemarrage.
-    """
-    try:
-        from extensions import socketio
-        name = type(socketio.server.manager).__name__
-    except AttributeError:
-        return None
-    return {'BaseManager': 'none', 'KombuManager': 'rabbitmq'}.get(
-        name, name.lower())
+    """Relais Socket.IO réellement actif dans ce processus : délégué à
+    ``extensions.realtime_relay`` (lecture du gestionnaire instancié, pas de
+    la configuration)."""
+    from extensions import realtime_relay
+    return realtime_relay()
 
 
 def _emit_journey_probe(run, patient_id, action):
@@ -476,7 +469,10 @@ def internal_metrics():
     except Exception:
         ready = False
         db.session.rollback()
-    if ready and current_app.config.get('START_RABBITMQ'):
+    # Le relais Socket.IO est auto-détecté : une URL AMQP résolue signifie
+    # que le broker est une dépendance réelle du temps réel — sa
+    # joignabilité conditionne alors la readiness affichée.
+    if ready and current_app.config.get('RABBITMQ_URL'):
         try:
             connection = pika.BlockingConnection(pika.URLParameters(
                 current_app.config.get('RABBITMQ_URL')))

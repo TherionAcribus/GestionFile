@@ -470,7 +470,7 @@ suppression de volume.
 | `CSRF validation failed` au login | Domaine sslip.io généré en `http://` : le cookie `Secure` n'est pas stocké | Préfixer le domaine par `https://` dans **Domains** (ports 80/443 ouverts), attendre le certificat, recharger |
 | « Database schema is not initialized » | `web` a démarré sans `init` terminé | Vérifier les logs `init`, Redeploy |
 | Clients refusés (401) | `APP_SECRET` différent côté client | Copier la valeur exacte de `SERVICE_BASE64_64_GFAPPSECRET` dans Environment Variables |
-| Écrans/comptoirs ne se rafraîchissent plus | Relais RabbitMQ inactif | Activer l'option RabbitMQ dans l'admin + Restart |
+| Écrans/comptoirs ne se rafraîchissent plus | Broker `rabbitmq` arrêté ou `RABBITMQ_URL` mal renseignée (le relais est auto-détecté, sans réglage applicatif) | Vérifier `/readyz` et que le service `rabbitmq` est *healthy*, puis Restart |
 | `E: Failed to fetch … deb11u16 … 404 Not Found` pendant le build | Image de base `python:3.10.4` (Debian bullseye) obsolète : paquets retirés des miroirs | Corrigé dans le Dockerfile (`python:3.12-slim-bookworm`) ; utiliser un commit à jour puis Redeploy |
 | Certificat TLS absent | DNS non propagé ou domaine incorrect | Vérifier l'enregistrement A, le champ Domains (`https://...:5000`), attendre la propagation |
 

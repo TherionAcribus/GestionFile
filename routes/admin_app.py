@@ -9,7 +9,7 @@ from flask_security import current_user
 from routes.admin_security import require_permission, require_permission_dashboard, require_permission_api
 from models import ConfigOption, DashboardCard, User, db
 from ui_feedback import display_toast
-from extensions import socketio
+from extensions import socketio, realtime_relay
 from sockets import active_connections
 from sockets import connected_clients_info
 from audit_log import ACTION_CONNECT, ACTION_UPDATE, OUTCOME_SUCCESS, OUTCOME_FAILURE
@@ -73,7 +73,13 @@ def admin_app(tab=None):
         
     return render_template('/admin/app.html',
                             active_tab=tab,
-                            start_rabbitmq= app.config["START_RABBITMQ"],
+                            # Relais inter-processus (RabbitMQ) : plus de
+                            # switch applicatif — auto-détecté depuis
+                            # RABBITMQ_URL (extensions.init_socketio). On
+                            # affiche l'état RÉEL du processus, pas la config.
+                            rabbitmq_relay=realtime_relay(),
+                            rabbitmq_url_set=bool(
+                                app.config.get("RABBITMQ_URL")),
                             app_messaging_enabled=app.config.get("APP_MESSAGING_ENABLED", False),
                             call_auto_validation_enabled=app.config.get(
                                 "CALL_AUTO_VALIDATION_ENABLED", False),

@@ -38,7 +38,7 @@ def send_message():
 # une file 'hello' que rien ne consomme, avec 5 x 5 s de reessai bloquant dans
 # la vue ; /test pingait le broker. Le seul usage reel de RabbitMQ est le
 # message_queue de Socket.IO (extensions.py) et le diagnostic equivalent est
-# deja fait proprement par /readyz (check AMQP conditionne a START_RABBITMQ).
+# deja fait proprement par /readyz (check AMQP conditionne a RABBITMQ_URL).
 # Les sondes manuelles dormantes ci-dessous restent cataloguees dans
 # tests/test_code_mort.py (ROUTES_DESACTIVEES).
 
@@ -92,8 +92,9 @@ def readyz():
     Vérifie les dépendances critiques avant de répondre 200 :
       1. **Base de données** : exécute un ``SELECT 1`` pour confirmer que la
          connexion SQL est opérationnelle.
-      2. **RabbitMQ** *(optionnel)* : si ``START_RABBITMQ`` est activé, ouvre
-         puis ferme une connexion AMQP pour valider la joignabilité du broker.
+      2. **RabbitMQ** *(optionnel)* : si ``RABBITMQ_URL`` est résolue (relais
+         Socket.IO auto-détecté, cf. extensions.init_socketio), ouvre puis
+         ferme une connexion AMQP pour valider la joignabilité du broker.
 
     Si l'une des vérifications échoue, l'endpoint renvoie HTTP 503 avec le
     détail des checks en erreur.  L'orchestrateur cessera alors de router
@@ -136,14 +137,14 @@ def readyz():
         checks["database"] = "error"
         ready = False
 
-    # --- Check RabbitMQ (seulement si activé) ---
-    if app.config.get("START_RABBITMQ"):
+    # --- Check RabbitMQ (seulement si le relais est configuré) ---
+    rabbitmq_url = app.config.get('RABBITMQ_URL')
+    if rabbitmq_url:
         try:
-            rabbitmq_url = app.config.get('RABBITMQ_URL') or os.getenv('RABBITMQ_URL', 'amqp://guest:guest@localhost:5672/%2F')
             connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
             connection.close()
             checks["rabbitmq"] = "ok"
-        except Exception as e:
+        except Exception:
             app.logger.exception("Sonde /readyz : RabbitMQ injoignable")
             checks["rabbitmq"] = "error"
             ready = False

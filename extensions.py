@@ -54,20 +54,38 @@ def init_socketio(app):
     if app.config.get("SOCKETIO_CORS_ALLOWED_ORIGINS") is not None:
         kwargs["cors_allowed_origins"] = app.config["SOCKETIO_CORS_ALLOWED_ORIGINS"]
 
-    # Message queue optionnel (RabbitMQ). Sans lui, chaque processus ne diffuse
-    # qu'à ses propres clients connectés -- ce qui est le comportement historique
-    # et reste parfaitement valide pour un déploiement mono-processus (aucune
-    # infra supplémentaire requise). Avec lui, Socket.IO relaie automatiquement
-    # les messages entre tous les processus qui partagent le même message_queue,
-    # y compris depuis un processus qui ne sert aucune connexion lui-même
-    # (ex : le conteneur APP_ROLE=scheduler, cf. scheduler_functions.py).
-    # Activé via le switch admin « Démarrer le serveur avec RabbitMQ » (nécessite
-    # un redémarrage du process pour prendre effet).
-    if app.config.get("START_RABBITMQ") and app.config.get("RABBITMQ_URL"):
-        kwargs["message_queue"] = app.config["RABBITMQ_URL"]
+    # Message queue (RabbitMQ) : AUTO-DÉTECTION. Dès qu'une URL AMQP est
+    # résolue (``RABBITMQ_URL`` explicite ou construite depuis
+    # RABBITMQ_HOST/USER/PASSWORD dans config.py), le relais inter-processus
+    # est câblé — sans lui, un processus sans clients connectés (ex : le
+    # conteneur APP_ROLE=scheduler) émet dans le vide : file jamais diffusée,
+    # validations automatiques invisibles jusqu'aux resyncs périodiques.
+    # Il n'y a plus de switch applicatif : la présence de l'URL reflète
+    # l'infrastructure réelle, contrairement à un booléen en base qui pouvait
+    # rester faux pendant que les émissions du scheduler se perdaient.
+    # Installation mono-processus sans broker : laisser les variables
+    # RABBITMQ_* non renseignées (URL None) → aucun relais.
+    rabbitmq_url = app.config.get("RABBITMQ_URL")
+    if rabbitmq_url:
+        kwargs["message_queue"] = rabbitmq_url
 
     socketio.init_app(app, **kwargs)
     return socketio
+
+
+def realtime_relay():
+    """Relais Socket.IO réellement actif dans ce processus.
+
+    Lu sur le gestionnaire de clients instancié (KombuManager, BaseManager…)
+    et non sur la configuration : ``init_socketio`` n'a pu brancher le
+    message_queue que si l'URL AMQP était résolue au démarrage, et c'est cet
+    état effectif — pas l'intention — qui doit être affiché."""
+    try:
+        name = type(socketio.server.manager).__name__
+    except AttributeError:
+        return None
+    return {'BaseManager': 'none', 'KombuManager': 'rabbitmq'}.get(
+        name, name.lower())
 
 
 def configure_scheduler(app):

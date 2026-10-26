@@ -42,6 +42,16 @@ os.environ.setdefault("SKIP_STARTUP_HOOKS", "1")
 # propre secret.
 os.environ.setdefault("APP_SECRET", "secret-de-test-non-production-ne-pas-reutiliser")
 
+# Relais RabbitMQ : la suite de reference simule un deploiement mono-processus.
+# init_socketio cable le message_queue des que RABBITMQ_URL est resolue
+# (auto-detection) ; une URL heritee du .env local de la machine produirait un
+# KombuManager, que flask_socketio.test_client refuse explicitement. On pose
+# des valeurs vides AVANT tout import de config.py : load_dotenv(override=False)
+# ne les ecrase pas et l'URL resout alors a None. Un test voulant le relais
+# renseigne app.config["RABBITMQ_URL"] lui-meme (cf. tests/test_socketio_relay.py).
+for _var in ("RABBITMQ_URL", "RABBITMQ_HOST", "RABBITMQ_USER", "RABBITMQ_PASSWORD"):
+    os.environ[_var] = ""
+
 
 def live_server_url():
     """Adresse du serveur cible des tests ``live_server`` (sans « / »
