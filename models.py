@@ -1279,6 +1279,22 @@ def _offline_status_infos(snapshots):
     } for row in stale]
 
 
+def borne_reachability(now=None):
+    """État joignable/injoignable de chaque borne connue, d'après son dernier
+    contact (heartbeat ou statut métier).
+
+    ``{borne_id: True|False}`` — injoignable au-delà de
+    ``PRINTER_STATUS_STALE_SECONDS`` sans contact. Utilisé par le job de
+    surveillance (``scheduler_functions.kiosk_watchdog_job``) pour notifier
+    les transitions : ``_offline_status_infos`` sert, lui, l'affichage du
+    dashboard."""
+    return {
+        borne_id: not _borne_is_stale(snapshot["last_seen"], now=now)
+        for borne_id, snapshot in _borne_status_snapshots().items()
+        if snapshot["last_seen"] is not None
+    }
+
+
 def get_printer_infos(limit=PRINTER_INFOS_LIMIT):
     """ Les ``limit`` derniers statuts, du plus ancien au plus récent, au
     format attendu par le gabarit du tableau de bord (clés historiques

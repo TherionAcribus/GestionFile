@@ -24,6 +24,12 @@ HEARTBEAT_JOB_ID = "Scheduler Heartbeat"
 CLEAR_PATIENT_TABLE_JOB_ID = "Clear Patient Table"
 CLEAR_ANNOUNCE_CALLS_JOB_ID = "Clear Announce Calls"
 CALL_AUTO_VALIDATION_JOB_ID = "Automatic Call Validation"
+KIOSK_WATCHDOG_JOB_ID = "Kiosk Watchdog"
+# État connu de chaque borne pour la détection de transition
+# (joignable -> injoignable et retour). Posé par le premier passage du job
+# sans notifier : un redémarrage du scheduler ne doit pas re-signaler une
+# panne déjà connue de l'équipe.
+_kiosk_online_state = {}
 # Sonde temps reel du test de charge : boucle dediee (pas une tache
 # APScheduler, qui journaliserait chaque execution en INFO). Rythme adaptatif :
 # une requete legere toutes les 5 s hors test, une sonde par seconde pendant.
@@ -739,6 +745,54 @@ def emit_stress_probe():
         return None
 
 
+def ensure_kiosk_watchdog_job():
+    """Garantit la surveillance minutée de la joignabilité des bornes."""
+    if scheduler.get_job(KIOSK_WATCHDOG_JOB_ID):
+        return "unchanged"
+    scheduler.add_job(
+        id=KIOSK_WATCHDOG_JOB_ID,
+        func=kiosk_watchdog_job,
+        trigger="interval",
+        seconds=60,
+        misfire_grace_time=120,
+        coalesce=True,
+        max_instances=1,
+    )
+    return "added"
+
+
+def kiosk_watchdog_job():
+    """Notifie l'équipe des transitions joignable/injoignable des bornes.
+
+    ``PrinterStatus`` ne servait qu'à l'affichage du tableau de bord — lu à
+    la demande. Une borne qui meurt hors consultation n'était donc signalée
+    à personne. Ce job recalcule l'état chaque minute (rythme du heartbeat
+    borne) et émet une notification ``app_counter`` à chaque TRANSITION :
+    l'équipe sait qu'une borne est injoignable en moins de ~4 minutes
+    (3 heartbeats manqués + un passage), et qu'elle est revenue.
+    """
+    app = AppHolder.get_app()
+    with app.app_context():
+        try:
+            from models import borne_reachability
+            from communication import send_app_notification
+            for borne_id, online in borne_reachability().items():
+                was_online = _kiosk_online_state.get(borne_id)
+                _kiosk_online_state[borne_id] = online
+                if was_online is None or was_online == online:
+                    continue
+                if online:
+                    app.logger.info("Borne %s de nouveau en ligne.", borne_id)
+                    send_app_notification("kiosk_online", {"borne_id": borne_id})
+                else:
+                    app.logger.warning(
+                        "Borne %s injoignable, notification envoyée.", borne_id)
+                    send_app_notification("kiosk_offline", {"borne_id": borne_id})
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Échec de la surveillance des bornes")
+
+
 def reconcile_scheduled_jobs():
     """Réaligne TOUTES les tâches planifiées gérées par ce module.
 
@@ -758,6 +812,7 @@ def reconcile_scheduled_jobs():
         AUTO_ARCHIVE_JOB_ID: reconcile_auto_archive_job(),
         MESSAGING_CLEANUP_JOB_ID: ensure_messaging_cleanup_job(),
         CALL_AUTO_VALIDATION_JOB_ID: ensure_call_auto_validation_job(),
+        KIOSK_WATCHDOG_JOB_ID: ensure_kiosk_watchdog_job(),
         CLEAR_PATIENT_TABLE_JOB_ID: reconcile_clear_patient_table_job(),
         CLEAR_ANNOUNCE_CALLS_JOB_ID: reconcile_clear_announce_calls_job(),
     }

@@ -172,3 +172,23 @@ def test_server_only_statuses_keep_last_state_semantics(application):
         # Pas de borne_id : comportement historique, dernier statut gagne.
         assert get_printer_error() is False
         assert _count() == 2
+
+
+def test_borne_reachability_tracks_last_contact(application):
+    with application.app_context():
+        from models import borne_reachability
+        assert borne_reachability() == {}
+
+        record_printer_status(
+            PRINTER_HEARTBEAT_CODE, "Borne en ligne", borne_id="borne-1")
+        record_printer_status(
+            PRINTER_HEARTBEAT_CODE, "Borne en ligne", borne_id="borne-2")
+        assert borne_reachability() == {"borne-1": True, "borne-2": True}
+
+        stale_at = datetime.now(time_tz) - timedelta(
+            seconds=PRINTER_STATUS_STALE_SECONDS + 30)
+        db.session.query(PrinterStatus).filter_by(
+            borne_id="borne-1").update({"received_at": stale_at})
+        db.session.commit()
+
+        assert borne_reachability() == {"borne-1": False, "borne-2": True}

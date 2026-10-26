@@ -123,6 +123,10 @@ def send_app_notification(origin, data):
         current_app.logger.debug('message_notif: %s', message)
     elif origin == "printer_error":
         message = f"Erreur d'impression: {data['message']}"
+    elif origin == "kiosk_offline":
+        message = f"Borne {data['borne_id']} injoignable : aucun contact récent."
+    elif origin == "kiosk_online":
+        message = f"Borne {data['borne_id']} de nouveau en ligne."
     elif origin == "low_paper":
         message = "On est quasiment au bout du rouleau"
     elif origin == "no_paper":
