@@ -3,6 +3,7 @@ import base64
 import datetime
 import json
 import re
+import time
 import uuid
 
 import config_sync
@@ -11,8 +12,8 @@ from flask import Blueprint, request, render_template, redirect, jsonify, sessio
 from models import (
     Button, Activity, DashboardCard, Language, ConfigOption, db,
     record_printer_status, get_printer_infos, get_printer_error,
-    borne_printing_available,
-    PRINTER_HEARTBEAT_CODE,
+    borne_printing_available, borne_overview,
+    PRINTER_HEARTBEAT_CODE, PRINTER_STATUS_STALE_SECONDS,
 )
 from diagnostics import collect_patient_page_alerts
 from params_registry import get_spec
@@ -26,7 +27,7 @@ from utils import (
     validate_ticket_text,
 )
 from communication import communikation, send_app_notification
-from sockets import BORNE_PRINTER_ROOM_PREFIX
+from sockets import BORNE_PRINTER_ROOM_PREFIX, kiosk_page_last_seen
 from routes.counter import action_add_paper
 from routes.admin_security import require_permission, require_permission_dashboard
 from auth_utils import require_app_token_or_login
@@ -1002,3 +1003,37 @@ def dashboard_printer():
                             dashboardcard=dashboardcard,
                             printer_error=get_printer_error(),
                             printer_infos=printer_infos)
+
+
+# Âge maximal d'un signe de vie de page avant de la considérer inactive :
+# la borne émet ``kiosk_alive`` toutes les 60 s ; trois périodes de marge.
+KIOSK_PAGE_ALIVE_SECONDS = 150
+
+
+@admin_patient_bp.route('/admin/bornes')
+@require_permission('patient')
+def admin_bornes():
+    """Supervision des bornes patient : santé, imprimante et journal.
+
+    La page complète ce que la carte « Imprimante » du dashboard ne montre
+    pas : le détail par borne, le signe de vie de la PAGE (une borne peut
+    être en ligne avec une page figée) et la file d'acquittements que le
+    patient n'a pas pu envoyer."""
+    now = time.time()
+    bornes = []
+    for entry in borne_overview():
+        page_seen = kiosk_page_last_seen.get(entry["borne_id"])
+        bornes.append(dict(
+            entry,
+            page_alive=(page_seen is not None
+                        and now - page_seen["seen_at"] < KIOSK_PAGE_ALIVE_SECONDS),
+            page_seen_at=page_seen["seen_at"] if page_seen else None,
+            page_path=page_seen["path"] if page_seen else None,
+            pending_acks=page_seen["pending_acks"] if page_seen else None,
+        ))
+    return render_template(
+        '/admin/bornes.html',
+        bornes=bornes,
+        journal=get_printer_infos(limit=50),
+        stale_seconds=PRINTER_STATUS_STALE_SECONDS,
+    )

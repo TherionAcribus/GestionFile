@@ -25,8 +25,10 @@ from config import time_tz
 from models import (
     KIOSK_OFFLINE_CODE,
     PRINTER_HEARTBEAT_CODE,
+    PRINTER_STATUS_KEEP,
     PRINTER_STATUS_STALE_SECONDS,
     PrinterStatus,
+    borne_overview,
     db,
     get_printer_error,
     get_printer_infos,
@@ -222,3 +224,33 @@ def test_borne_printing_available_per_borne(application):
             "error_print", "Échec impression", borne_id="borne-1")
         assert borne_printing_available("borne-1") is False
         assert borne_printing_available("borne-2") is True
+
+
+def test_borne_overview_reports_per_borne_state(application):
+    """La vue consolidée par borne distingue joignabilité et état imprimante,
+    indépendamment l'une de l'autre."""
+    with application.app_context():
+        record_printer_status("paper_ok", "OK", borne_id="borne-1")
+        record_printer_status("no_paper", "Plus de papier", borne_id="borne-2")
+
+        overview = {b["borne_id"]: b for b in borne_overview()}
+
+        assert overview["borne-1"]["reachable"] is True
+        assert overview["borne-1"]["code"] == "paper_ok"
+        assert overview["borne-1"]["is_error"] is False
+        assert overview["borne-2"]["reachable"] is True
+        assert overview["borne-2"]["code"] == "no_paper"
+        assert overview["borne-2"]["message"] == "Plus de papier"
+
+
+def test_business_journal_keeps_printer_status_keep_rows(application):
+    """La purge conserve ``PRINTER_STATUS_KEEP`` statuts métier : le journal
+    de la page Bornes dépasse les 10 lignes de la carte dashboard."""
+    with application.app_context():
+        for i in range(PRINTER_STATUS_KEEP + 5):
+            record_printer_status(
+                "error_print", f"Échec {i}", borne_id="borne-1")
+
+        kept = PrinterStatus.query.filter(
+            PrinterStatus.error_code != "heartbeat").count()
+        assert kept == PRINTER_STATUS_KEEP

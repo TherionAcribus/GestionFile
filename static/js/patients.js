@@ -1326,7 +1326,13 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(function() {
         var s = window.__patientSocket;
         if (_kioskBorneId && s && s.connected) {
-            s.emit('kiosk_alive', { borne_id: _kioskBorneId });
+            s.emit('kiosk_alive', {
+                borne_id: _kioskBorneId,
+                // Acquittements encore en file : l'équipe voit combien de
+                // patients attendent une validation différée sur cette borne.
+                pending_acks: _readPrintQueue().length,
+                path: window.location.pathname
+            });
         }
     }, 60000);
 

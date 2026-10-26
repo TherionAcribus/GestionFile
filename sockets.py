@@ -322,20 +322,29 @@ def join_printer_watch(msg):
     })
 
 
-#: Dernière activité JS de chaque page borne : distincte du heartbeat
-#: imprimante (processus borne vivant), elle prouve que la PAGE tourne —
-#: base pour repérer les bornes « vivantes mais page figée » en supervision.
+#: Dernier signe de vie de chaque page borne : ``{seen_at, pending_acks,
+#: path}``. Distinct du heartbeat imprimante (processus borne vivant), il
+#: prouve que la PAGE tourne — base pour repérer les bornes « vivantes mais
+#: page figée » en supervision, et pour voir les acquittements qui
+#: s'accumulent côté patient.
 kiosk_page_last_seen = {}
 
 
 @socketio.on("kiosk_alive", namespace="/socket_patient")
 def kiosk_alive(msg):
-    borne_id = ""
-    if isinstance(msg, dict):
-        borne_id = str(msg.get("borne_id") or "")[:80]
+    if not isinstance(msg, dict):
+        return
+    borne_id = str(msg.get("borne_id") or "")[:80]
     if not borne_id:
         return
-    kiosk_page_last_seen[borne_id] = time.time()
+    pending_acks = msg.get("pending_acks")
+    kiosk_page_last_seen[borne_id] = {
+        "seen_at": time.time(),
+        "pending_acks": pending_acks if isinstance(pending_acks, int) else None,
+        # Chemin de la page : une borne figée sur un écran d'erreur ou une
+        # page inattendue est repérable d'ici.
+        "path": str(msg.get("path") or "")[:120],
+    }
 
 
 # --- Parcours QR de la borne -------------------------------------------------

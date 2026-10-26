@@ -1,0 +1,93 @@
+{% extends '/admin/base.html' %}
+
+{% block title %}Bornes patient{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h2 class="mb-0">Bornes patient</h2>
+        <p class="text-muted small mb-0">Santé des bornes en direct. Une borne est injoignable après {{ stale_seconds // 60 }} min sans contact.</p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="/admin/bornes">
+        <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Actualiser
+    </a>
+</div>
+
+{% if not bornes %}
+<div class="alert alert-secondary">Aucune borne n'a encore contacté le serveur.</div>
+{% else %}
+<div class="table-responsive mb-4">
+    <table class="table table-sm align-middle">
+        <thead>
+            <tr>
+                <th>Borne</th>
+                <th>Joignabilité</th>
+                <th>Dernier contact</th>
+                <th>Imprimante</th>
+                <th>Page patient</th>
+                <th>Acquittements en attente</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for b in bornes %}
+            <tr class="{{ 'table-danger' if (not b.reachable) or b.is_error else '' }}">
+                <td class="fw-semibold">{{ b.borne_id }}</td>
+                <td>
+                    {% if b.reachable %}
+                    <span class="badge text-bg-success">En ligne</span>
+                    {% else %}
+                    <span class="badge text-bg-danger">Injoignable</span>
+                    {% endif %}
+                </td>
+                <td>{{ b.last_contact.strftime('%d/%m %H:%M:%S') }}</td>
+                <td>
+                    {% if b.code %}
+                    <span class="badge {{ 'text-bg-danger' if b.is_error or b.code == 'no_paper' else 'text-bg-success' }}">{{ b.code }}</span>
+                    {% if b.message %}<span class="text-muted small">{{ b.message }}</span>{% endif %}
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if b.page_seen_at is none %}
+                    <span class="text-muted">inconnue</span>
+                    {% elif b.page_alive %}
+                    <span class="badge text-bg-success">active</span>
+                    {% if b.page_path %}<span class="text-muted small">{{ b.page_path }}</span>{% endif %}
+                    {% else %}
+                    <span class="badge text-bg-warning">figée ?</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if b.pending_acks is not none and b.pending_acks > 0 %}
+                    <span class="badge text-bg-warning">{{ b.pending_acks }}</span>
+                    {% elif b.pending_acks == 0 %}
+                    <span class="text-muted">0</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{# Journal des incidents remontés par les bornes (statuts imprimante,
+   pannes signalées), le plus récent en premier. #}
+<h5>Journal des évènements</h5>
+{% if journal %}
+<ul class="list-unstyled small">
+    {% for info in journal | reverse %}
+    <li class="d-flex gap-2 py-1 border-top">
+        <i class="bi {{ 'bi-x-circle-fill text-danger' if info.error else 'bi-check-circle text-success' }}" aria-hidden="true"></i>
+        <span class="text-muted text-nowrap">{{ info.timestamp }}</span>
+        <span>{% if info.borne_id %}<span class="badge text-bg-light border">{{ info.borne_id }}</span> {% endif %}{{ info.message }}</span>
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="text-muted small">Aucun évènement enregistré.</p>
+{% endif %}
+{% endblock %}

@@ -915,6 +915,18 @@ def _ensure_stress_probe():
         app.logger.error("Sonde temps reel du test de charge impossible : %s", e)
 
 
+def _kiosk_alert_active():
+    """Une borne ou son imprimante réclame une intervention ?
+
+    Tolérant aux pannes : pendant le démarrage ou sans base prête, le
+    context processor ne doit pas faire échouer le rendu de la page."""
+    try:
+        from models import get_printer_error
+        return bool(get_printer_error())
+    except Exception:
+        return False
+
+
 # Contexte processeur pour rendre current_user disponible dans tous les templates (menu de page base.html)
 # NOTE : doit rester AVANT le bloc __main__ — socketio.run() bloque et tout code
 # placé après ne s'exécuterait jamais quand on lance `python app.py`.
@@ -929,6 +941,9 @@ def inject_user():
         page_editor_enabled=lambda page: page in enabled_pages(),
         # Bandeau « videz ADMIN_RESET_PASSWORD » (admin/base.html).
         account_reset_env_set=env_reset_still_set,
+        # Callable (et non valeur) : l'évaluation DB n'a lieu que si la page
+        # l'appelle — la barre latérale admin, pas la borne publique.
+        kiosk_alert_active=_kiosk_alert_active,
     )
 
 

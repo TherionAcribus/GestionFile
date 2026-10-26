@@ -1094,7 +1094,7 @@ class PrinterStatus(db.Model):
     un état PAR PROCESS — avec plusieurs workers web ou le conteneur scheduler,
     le tableau de bord ne voyait qu'une partie des statuts et un redémarrage
     effaçait tout. Une ligne par statut ; la purge paresseuse à l'insertion ne
-    conserve que les ``PRINTER_INFOS_LIMIT`` plus récents.
+    conserve que les ``PRINTER_STATUS_KEEP`` plus récents.
     """
     __tablename__ = 'printer_status'
     id = db.Column(db.Integer, primary_key=True)
@@ -1116,9 +1116,13 @@ class PrinterStatus(db.Model):
         return f'<PrinterStatus {self.borne_id}:{self.error_code}>'
 
 
-# Nombre de statuts imprimante conservés/affichés (même borne que l'ancien
-# app.config["PRINTER_INFOS"]).
+# Nombre de statuts affichés sur la carte « Imprimante » du tableau de bord.
 PRINTER_INFOS_LIMIT = 10
+
+# Rétention du journal en base, plus longue que l'affichage de la carte : la
+# page « Bornes » doit pouvoir remonter un incident survenu il y a quelques
+# dizaines d'évènements, pas seulement les 10 derniers.
+PRINTER_STATUS_KEEP = 50
 
 
 def _printer_status_is_error(error_code):
@@ -1196,7 +1200,7 @@ def record_printer_status(error_code, message, borne_id=None, generated_at=None,
             db.select(table.c.id)
             .where(table.c.error_code != PRINTER_HEARTBEAT_CODE)
             .order_by(table.c.id.desc())
-            .offset(PRINTER_INFOS_LIMIT)
+            .offset(PRINTER_STATUS_KEEP)
         ).scalars().all()
         heartbeat_ids = conn.execute(
             db.select(table.c.id)
@@ -1307,6 +1311,39 @@ def borne_printing_available(borne_id):
     if current is None:
         return True
     return not current.is_error and current.error_code != "no_paper"
+
+
+def borne_overview(now=None):
+    """Vue consolidée par borne pour la page « Bornes » de l'admin.
+
+    Une entrée par borne ayant déjà contacté le serveur :
+    ``{borne_id, reachable, last_contact, code, message, is_error,
+    status_at}`` — ``code``/``message``/``is_error`` décrivent le dernier
+    statut MÉTIER (papier, erreur) ; ``status_at`` privilégie l'horodatage
+    de génération par la borne (``generated_at``) comme l'affichage du
+    dashboard. ``last_contact`` et ``status_at`` sont des datetimes naïves
+    locales (même convention que ``_status_received_at``)."""
+    snapshots = _borne_status_snapshots()
+    overview = []
+    for borne_id, snapshot in snapshots.items():
+        last_seen = snapshot["last_seen"]
+        if last_seen is None:
+            continue
+        current = snapshot["current"]
+        status_at = None
+        if current is not None:
+            status_at = current.generated_at or _status_received_at(current)
+        overview.append({
+            "borne_id": borne_id,
+            "reachable": not _borne_is_stale(last_seen, now=now),
+            "last_contact": _status_received_at(last_seen),
+            "code": current.error_code if current is not None else None,
+            "message": current.message if current is not None else None,
+            "is_error": bool(current.is_error) if current is not None else False,
+            "status_at": status_at,
+        })
+    overview.sort(key=lambda b: b["borne_id"])
+    return overview
 
 
 def get_printer_infos(limit=PRINTER_INFOS_LIMIT):

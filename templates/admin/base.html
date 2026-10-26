@@ -236,6 +236,14 @@
                                 <i class="bi bi-tablet"></i> Borne patient
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.path == '/admin/bornes' else '' }}"
+                               {{ 'aria-current="page"' if request.path == '/admin/bornes' else '' }}
+                               href="/admin/bornes">
+                                <i class="bi bi-pc-display"></i> Bornes
+                                {% if kiosk_alert_active() %}<span class="badge text-bg-danger ms-1" title="Une borne nécessite une intervention">!</span>{% endif %}
+                            </a>
+                        </li>
                         {% endif %}
                         {% if user_has_permission(current_user, 'announce') %}
                         <li class="nav-item">
