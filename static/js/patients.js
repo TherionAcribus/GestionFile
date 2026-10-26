@@ -46,29 +46,47 @@ function kioskOfflineLabels() {
     var table = {
         fr: {
             title: "Borne momentanément indisponible",
-            message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants. Si l'attente se prolonge, merci de vous adresser à l'accueil."
+            message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants. Si l'attente se prolonge, merci de vous adresser à l'accueil.",
+            retry: "Réessayer"
         },
         en: {
             title: "Kiosk temporarily unavailable",
-            message: "We are experiencing a connection problem. The kiosk will be available again shortly. If the wait continues, please contact the reception desk."
+            message: "We are experiencing a connection problem. The kiosk will be available again shortly. If the wait continues, please contact the reception desk.",
+            retry: "Try again"
         }
     };
     return table[lang] || table.fr;
 }
 
-function setKioskOffline(show) {
+// options.buttons : [{label, onClick}] — des choix affichés sous le message
+// (« Réessayer » quand le serveur a répondu). Sans options, l'écran n'a pas
+// de bouton : il disparaît de lui-même à la reconnexion.
+function setKioskOffline(show, options) {
     var overlay = document.getElementById('kiosk_offline_overlay');
     if (!overlay) { return; }
-    if (show) {
-        var L = kioskOfflineLabels();
-        var title = overlay.querySelector('.kiosk_offline_title');
-        var message = overlay.querySelector('.kiosk_offline_message');
-        if (title) { title.textContent = L.title; }
-        if (message) { message.textContent = L.message; }
-        overlay.hidden = false;
-    } else {
+    if (!show) {
         overlay.hidden = true;
+        return;
     }
+    options = options || {};
+    var L = kioskOfflineLabels();
+    var title = overlay.querySelector('.kiosk_offline_title');
+    var message = overlay.querySelector('.kiosk_offline_message');
+    var buttons = overlay.querySelector('.kiosk_offline_buttons');
+    if (title) { title.textContent = options.title || L.title; }
+    if (message) { message.textContent = options.message || L.message; }
+    if (buttons) {
+        buttons.innerHTML = '';
+        (options.buttons || []).forEach(function(b) {
+            var el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'kiosk_offline_retry';
+            el.textContent = b.label;
+            el.addEventListener('click', b.onClick);
+            buttons.appendChild(el);
+        });
+    }
+    overlay.hidden = false;
 }
 
 // Un seul timer armé à la fois : la vérification finale relit l'état réel du
@@ -91,6 +109,46 @@ function clearKioskOfflineTimer() {
         _kioskOfflineTimer = null;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Échecs HTMX globaux : un appui sans réponse ne doit pas laisser la borne
+// muette. 'sendError'/'timeout' = requête perdue (serveur injoignable),
+// 'responseError' = le serveur a répondu une erreur. Dans les deux cas on
+// réactive les boutons neutralisés pendant la requête et on montre l'écran
+// d'incident ; « Réessayer » n'a de sens que si le socket est encore ouvert
+// (sinon l'écran part tout seul à la reconnexion).
+// ---------------------------------------------------------------------------
+
+// Les fragments neutralisent les boutons via des styles inline
+// (pointer-events/opacity) le temps d'une requête : si elle échouait, rien
+// ne les rendait et la borne semblait « morte ».
+function restoreDisabledButtons() {
+    document.querySelectorAll('.div_validation_one_button, .div_validation_one_button_with_img')
+        .forEach(function(btn) {
+            btn.style.pointerEvents = '';
+            btn.style.opacity = '';
+        });
+}
+
+function handleKioskRequestFailure(evt) {
+    restoreDisabledButtons();
+    var socketUp = window.__patientSocket && window.__patientSocket.connected;
+    var L = kioskOfflineLabels();
+    setKioskOffline(true, {
+        buttons: socketUp
+            ? [{ label: L.retry, onClick: function() { setKioskOffline(false); } }]
+            : []
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Délai max d'une requête HTMX : sans lui, une requête « pendue » côté
+    // réseau laissait l'écran bloqué indéfiniment (sendAbort n'est PAS écouté
+    // : un drop hx-sync n'est pas une panne).
+    document.body.addEventListener('htmx:sendError', handleKioskRequestFailure);
+    document.body.addEventListener('htmx:timeout', handleKioskRequestFailure);
+    document.body.addEventListener('htmx:responseError', handleKioskRequestFailure);
+});
 
 document.addEventListener('DOMContentLoaded', (event) => {
     var protocol = window.location.protocol;
@@ -1262,3 +1320,8 @@ document.addEventListener('click', function (e) {
     win.print();
     win.close();
 });
+
+// Délai max des requêtes HTMX, posé au chargement du script (avant les
+// requêtes hx-trigger="load") : une requête figée déclenche 'htmx:timeout'
+// au bout de 10 s au lieu de bloquer l'écran sans fin.
+if (window.htmx) { htmx.config.timeout = 10000; }

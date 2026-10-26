@@ -815,4 +815,25 @@ html, body {
     max-width: 44rem;
 }
 
+/* Choix proposés dans l'écran « connexion perdue » : « Réessayer » n'est
+   rendu par patients.js que quand le serveur reste joignable (erreur HTTP),
+   pour laisser le patient relancer sans attendre la reconnexion socket. */
+.kiosk_offline_buttons {
+    display: flex;
+    gap: 20px;
+    margin-top: 2rem;
+}
+
+.kiosk_offline_retry {
+    font: inherit;
+    font-size: 1.4rem;
+    font-weight: 600;
+    padding: 0.9rem 2.2rem;
+    border-radius: 10px;
+    border: 2px solid #30A99A;
+    background: transparent;
+    color: #E5F4EF;
+    cursor: pointer;
+}
+
 
