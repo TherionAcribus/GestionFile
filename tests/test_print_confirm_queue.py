@@ -313,8 +313,11 @@ def test_reponse_ancienne_ne_retire_pas_une_decision_plus_recente():
 
 def test_vidange_declenchee_sur_connect_chargement_et_minuterie():
     source = _lire("static/js/patients.js")
-    # connect Socket.IO (réseau de retour)
-    assert re.search(r"on\('connect'[^}]*drainPrintConfirmations", source, re.S)
+    # connect Socket.IO (réseau de retour) : fenêtre bornée plutôt que
+    # « [^}]* » — le handler contient des blocs internes (grace timer,
+    # rejoin, reload après coupure longue) dont les accolades ne doivent
+    # pas invalider le test.
+    assert re.search(r"on\('connect'[\s\S]{0,3000}?drainPrintConfirmations", source)
     # chargement de page + minuterie périodique
     assert re.search(r"DOMContentLoaded[^}]*drainPrintConfirmations", source, re.S)
     assert "setInterval(drainPrintConfirmations" in source
@@ -746,9 +749,17 @@ def test_resultat_incertain_tardif_laisse_le_patient_trancher(client, applicatio
         assert Patient.query.filter_by(print_job_id="job-x").one().status == "standing"
 
 
-def test_appel_personnel_sur_inscription_expiree_est_confirme(client, application):
+def test_appel_personnel_sur_inscription_expiree_est_confirme(client, application, monkeypatch):
     """Si le patient demande le personnel depuis un résultat incertain déjà
-    expiré, la demande est réellement signalée et la borne peut l'annoncer."""
+    expiré, la demande est réellement signalée et la borne peut l'annoncer.
+    L'alerte porte l'origine « patient_waiting » (point 13) : ce n'est pas
+    une panne d'imprimante mais un patient qui attend devant la borne."""
+    import routes.patient as patient_routes
+
+    messages = []
+    monkeypatch.setattr(
+        patient_routes, "send_app_notification",
+        lambda origin, data: messages.append((origin, data)))
     _patient_expire(application)
 
     r = client.post("/patient/print_call_staff", json={"print_job_id": "job-x"})
@@ -757,6 +768,34 @@ def test_appel_personnel_sur_inscription_expiree_est_confirme(client, applicatio
     assert r.status_code == 200
     assert donnees["status"] == "expired"
     assert donnees["staff_called"] is True
+    assert [origin for origin, _ in messages] == ["patient_waiting"]
+
+
+def test_appel_personnel_sur_pending_previent_avec_origine_patient_waiting(
+        client, application, monkeypatch):
+    """« Appeler le personnel » sur une inscription encore pending : le
+    patient entre en file sans ticket ET le comptoir reçoit une alerte
+    « patient_waiting » — visiblement et audiblement distincte d'un banal
+    ding (notification persistante + son d'attention, cf. notification_rules)."""
+    import routes.patient as patient_routes
+
+    messages = []
+    monkeypatch.setattr(
+        patient_routes, "send_app_notification",
+        lambda origin, data: messages.append((origin, data)))
+    _pending_patient(application)
+
+    r = client.post("/patient/print_call_staff", json={"print_job_id": "job-1"})
+
+    donnees = r.get_json()
+    assert r.status_code == 200
+    assert donnees["status"] == "activated_no_ticket"
+    assert donnees["staff_called"] is True
+    with application.app_context():
+        assert Patient.query.filter_by(print_job_id="job-1").one().status == "standing"
+    attentes = [data["message"] for origin, data in messages
+                if origin == "patient_waiting"]
+    assert len(attentes) == 1 and "call_staff" in attentes[0]
 
 
 def test_abandon_puis_succes_tardif_ne_ressuscite_pas(client, application):

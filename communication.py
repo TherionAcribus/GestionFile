@@ -123,6 +123,11 @@ def send_app_notification(origin, data):
         current_app.logger.debug('message_notif: %s', message)
     elif origin == "printer_error":
         message = f"Erreur d'impression: {data['message']}"
+    elif origin == "patient_waiting":
+        # Patient qui attend physiquement devant la borne : le comptoir doit
+        # intervenir — message explicite et origine propre (sticky + son
+        # d'attention côté App Comptoir).
+        message = f"Un patient attend à la borne : {data['message']}"
     elif origin == "kiosk_offline":
         message = f"Borne {data['borne_id']} injoignable : aucun contact récent."
     elif origin == "kiosk_online":

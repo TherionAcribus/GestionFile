@@ -461,15 +461,21 @@ def patient_return_validation_page_and_print_data(print_ticket):
         return redirect(url_for('patient.patient_conclusion_page', patient_id=new_patient.id))
 
 
-def _alert_staff_print_failure(patient, code, message, maybe_printed=False):
+def _alert_staff_print_failure(patient, code, message, maybe_printed=False, origin="printer_error"):
     """ Signale au personnel un échec ou un résultat d'impression incertain
-    (notification comptoir + trace dans le tableau de bord imprimante)."""
+    (notification comptoir + trace dans le tableau de bord imprimante).
+
+    ``origin`` distingue les alertes qui ne sont PAS des pannes d'imprimante :
+    « patient_waiting » signifie qu'un patient attend physiquement devant la
+    borne — l'App Comptoir lui donne une persistance et un son d'attention
+    distincts du banal « ding » (point 13). Le journal, lui, reste dans la
+    famille « imprimante » : le tableau de bord ne connaît que ce contexte."""
     if maybe_printed:
         detail = f"Résultat d'impression incertain pour le patient {patient.call_number} ({code or 'inconnu'})"
     else:
         detail = f"Ticket non imprimé pour le patient {patient.call_number} ({code or 'inconnu'})"
     try:
-        send_app_notification(origin="printer_error", data={"message": detail})
+        send_app_notification(origin=origin, data={"message": detail})
     except Exception as e:
         app.logger.error(f"Alerte personnel (impression) impossible: {e}")
 
@@ -745,7 +751,8 @@ def print_call_staff():
             # signale et on confirme explicitement l'appel au patient.
             _alert_staff_print_failure(
                 patient, 'call_staff',
-                "Le patient demande de l'aide (résultat d'impression incertain)")
+                "Le patient demande de l'aide (résultat d'impression incertain)",
+                origin="patient_waiting")
             return jsonify({
                 'status': 'expired',
                 'call_number': patient.call_number,
@@ -754,7 +761,9 @@ def print_call_staff():
         # Déjà traité (idempotence).
         return jsonify({'status': patient.status, 'call_number': patient.call_number}), 200
 
-    _alert_staff_print_failure(patient, 'call_staff', "Le patient demande de l'aide (ticket non imprimé)")
+    _alert_staff_print_failure(
+        patient, 'call_staff', "Le patient demande de l'aide (ticket non imprimé)",
+        origin="patient_waiting")
     if _activate_and_notify(patient):
         return jsonify({
             'status': 'activated_no_ticket',
