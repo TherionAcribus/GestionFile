@@ -26,6 +26,7 @@
                 <th>Imprimante</th>
                 <th>Page patient</th>
                 <th>Acquittements en attente</th>
+                <th>Dernier incident</th>
             </tr>
         </thead>
         <tbody>
@@ -63,6 +64,14 @@
                     <span class="badge text-bg-warning">{{ b.pending_acks }}</span>
                     {% elif b.pending_acks == 0 %}
                     <span class="text-muted">0</span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if b.last_incident %}
+                    <span class="{{ 'text-danger' if b.last_incident.error else 'text-muted' }} small">{{ b.last_incident.message }}</span>
+                    <span class="text-muted small">{{ b.last_incident.timestamp }}</span>
                     {% else %}
                     <span class="text-muted">—</span>
                     {% endif %}

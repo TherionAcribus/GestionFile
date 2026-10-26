@@ -29,6 +29,7 @@ from models import (
     PRINTER_STATUS_STALE_SECONDS,
     PrinterStatus,
     borne_overview,
+    borne_printing_available,
     db,
     get_printer_error,
     get_printer_infos,
@@ -254,3 +255,32 @@ def test_business_journal_keeps_printer_status_keep_rows(application):
         kept = PrinterStatus.query.filter(
             PrinterStatus.error_code != "heartbeat").count()
         assert kept == PRINTER_STATUS_KEEP
+
+
+def test_kiosk_event_does_not_mask_printer_state(application):
+    """Un incident borne (kiosk_*) rafraîchit le contact mais ne devient pas
+    le statut métier : no_paper continue de bloquer l'impression."""
+    with application.app_context():
+        record_printer_status("no_paper", "Plus de papier", borne_id="borne-1")
+        record_printer_status("kiosk_page_dead", "Page figée, rechargée",
+                              borne_id="borne-1", is_error=True)
+
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["code"] == "no_paper"
+        assert overview["borne-1"]["reachable"] is True
+        assert borne_printing_available("borne-1") is False
+
+        infos = get_printer_infos()
+        kiosk_rows = [i for i in infos if i.get("error_code") == "kiosk_page_dead"]
+        assert len(kiosk_rows) == 1
+        assert kiosk_rows[0]["error"] is True
+
+
+def test_kiosk_event_only_borne_stays_printable(application):
+    """Une borne n'ayant remonté que des incidents n'est pas signalée en
+    erreur imprimante : l'évènement n'est pas un état métier."""
+    with application.app_context():
+        record_printer_status("kiosk_session_fail", "Ticket refusé",
+                              borne_id="borne-1", is_error=True)
+        assert borne_printing_available("borne-1") is True
+        assert get_printer_error() is False

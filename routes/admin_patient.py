@@ -14,6 +14,7 @@ from models import (
     record_printer_status, get_printer_infos, get_printer_error,
     borne_printing_available, borne_overview,
     PRINTER_HEARTBEAT_CODE, PRINTER_STATUS_STALE_SECONDS,
+    KIOSK_EVENT_PREFIX,
 )
 from diagnostics import collect_patient_page_alerts
 from params_registry import get_spec
@@ -946,6 +947,13 @@ def admin_printer_status():
         except ValueError:
             app.logger.warning("Horodatage de statut imprimante illisible : %r", raw_timestamp)
 
+    # Les statuts kiosk_* transportent leur propre sévérité : un incident
+    # « page figée » n'a pas « error » dans son code mais mérite l'icône
+    # rouge du journal. Absent -> dérivation historique sur le code.
+    is_error = data.get('is_error')
+    if not isinstance(is_error, bool):
+        is_error = None
+
     # Persistance en base (record_printer_status) : l'état était auparavant
     # tenu dans app.config — par process — donc partiel avec plusieurs workers
     # et perdu au redémarrage. Les doublons rafraîchissent seulement le dernier
@@ -955,23 +963,31 @@ def admin_printer_status():
         error_message,
         borne_id=borne_id,
         generated_at=generated_at,
+        is_error=is_error,
     )
     printer_error = "error" in printer_error_code
     is_heartbeat = printer_error_code == PRINTER_HEARTBEAT_CODE
+    is_kiosk_event = printer_error_code.startswith(KIOSK_EVENT_PREFIX)
+    if is_error is not None:
+        printer_error = is_error
 
     if status_changed or is_heartbeat:
         communikation("admin", event="refresh_printer_dashboard")
 
-    if status_changed and not is_heartbeat:
-        # notification à Pyside
+    if status_changed and not is_heartbeat and not is_kiosk_event:
+        # notification à Pyside — pas pour les incidents borne : ils
+        # alimentent le journal / la page « Bornes », et le personnel est
+        # déjà notifié par le watchdog et les statuts papier.
         timestamp = datetime.datetime.now().strftime("%d/%m-%H:%M")
         send_app_notification(origin=printer_error_code, data={"error": printer_error, "message": error_message, "timestamp": timestamp, "borne_id": borne_id})
 
-    if not is_heartbeat and borne_id:
+    if not is_heartbeat and not is_kiosk_event and borne_id:
         # Bandeau « imprimante indisponible » sur la page de CETTE borne :
         # le patient est prévenu avant de choisir au lieu de découvrir
         # l'échec en fin de parcours. Envoyé à chaque statut métier, même
-        # dédupliqué — l'évènement est idempotent pour la page.
+        # dédupliqué — l'évènement est idempotent pour la page. Un incident
+        # borne (kiosk_*) ne change pas l'état imprimante : l'émission
+        # serait un scan de base pour rien.
         communikation(
             "patient", event="printer_state",
             data={"printing_ok": borne_printing_available(borne_id)},
@@ -1033,9 +1049,20 @@ def admin_bornes():
             page_path=page_seen["path"] if page_seen else None,
             pending_acks=page_seen["pending_acks"] if page_seen else None,
         ))
+    journal = get_printer_infos(limit=50)
+    for entry in bornes:
+        # Dernier incident borne (codes kiosk_*) : la vue en un coup d'œil
+        # « quel est le dernier problème remonté par cette borne ». Le
+        # journal est trié du plus ancien au plus récent : le dernier
+        # incident de la liste filtrée est le plus récent.
+        incidents = [i for i in journal
+                     if i.get("borne_id") == entry["borne_id"]
+                     and str(i.get("error_code") or "").startswith(
+                         KIOSK_EVENT_PREFIX)]
+        entry["last_incident"] = incidents[-1] if incidents else None
     return render_template(
         '/admin/bornes.html',
         bornes=bornes,
-        journal=get_printer_infos(limit=50),
+        journal=journal,
         stale_seconds=PRINTER_STATUS_STALE_SECONDS,
     )

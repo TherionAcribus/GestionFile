@@ -1078,6 +1078,11 @@ def bump_queue_revision():
 
 PRINTER_HEARTBEAT_CODE = 'heartbeat'
 KIOSK_OFFLINE_CODE = 'kiosk_offline'
+# Préfixe des codes remontés par l'appli borne pour des INCIDENTS (page
+# figée, récupération, session refusée) et non l'état de l'imprimante : ils
+# prouvent un contact et alimentent le journal, mais ne doivent jamais
+# devenir le statut métier « current » d'une borne.
+KIOSK_EVENT_PREFIX = "kiosk_"
 # Une borne envoie un heartbeat environ chaque minute ; trois intervalles
 # manqués permettent d'afficher « injoignable » sans réagir à un simple retard.
 PRINTER_STATUS_STALE_SECONDS = 180
@@ -1232,7 +1237,10 @@ def _borne_status_snapshots():
     """Retourne le dernier contact et le dernier statut métier par borne.
 
     Les heartbeats prouvent que la borne est en ligne mais ne doivent pas
-    remplacer l'état métier de l'imprimante (papier, erreur d'impression…)."""
+    remplacer l'état métier de l'imprimante (papier, erreur d'impression…).
+    Même traitement pour les incidents ``kiosk_*`` remontés par l'appli
+    borne (page perdue ou figée, ticket de session refusé) : ce sont des
+    signes de vie journalisés, pas des états imprimante."""
     rows = (
         db.session.query(PrinterStatus)
         .filter(PrinterStatus.borne_id.isnot(None))
@@ -1250,6 +1258,7 @@ def _borne_status_snapshots():
                 > _status_received_at(snapshot["last_seen"])):
             snapshot["last_seen"] = row
         if (row.error_code != PRINTER_HEARTBEAT_CODE
+                and not row.error_code.startswith(KIOSK_EVENT_PREFIX)
                 and (snapshot["current"] is None
                      or row.id > snapshot["current"].id)):
             snapshot["current"] = row
