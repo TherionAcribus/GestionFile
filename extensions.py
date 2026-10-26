@@ -49,7 +49,14 @@ scheduler = BackgroundScheduler(timezone=time_tz)
 
 def init_socketio(app):
     """Lie Socket.IO à l'application, avec le relais inter-processus optionnel."""
-    kwargs = {"async_mode": "eventlet"}
+    kwargs = {
+        "async_mode": "eventlet",
+        # Ping serré : les défauts (25+20 s) laissent un lien mort invisible
+        # pendant ~45 s alors que la borne doit réagir en ~15 s (les sondes
+        # applicatives complètent, ceci reste le filet de base).
+        "ping_interval": 10,
+        "ping_timeout": 5,
+    }
 
     if app.config.get("SOCKETIO_CORS_ALLOWED_ORIGINS") is not None:
         kwargs["cors_allowed_origins"] = app.config["SOCKETIO_CORS_ALLOWED_ORIGINS"]

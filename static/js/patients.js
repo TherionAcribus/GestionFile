@@ -36,14 +36,14 @@ function rejoinScanJourney() {
 // l'écran). Il est masqué à la reconnexion — les rattrapages d'état
 // (boutons/titre) restent dans le handler 'reconnect' du Manager.
 // ---------------------------------------------------------------------------
-var KIOSK_OFFLINE_GRACE_MS = 5000;
+var KIOSK_OFFLINE_GRACE_MS = 3000;
 var _kioskOfflineTimer = null;
 
 // Auto-test périodique + rechargement complet après une coupure longue :
 // les deux couvrent ce que la reconnexion socket seule ne voit pas (socket
 // « connecté » alors que le serveur HTTP est mort ; état de page périmé
 // après une longue panne).
-var KIOSK_SELFTEST_PERIOD_MS = 60000;
+var KIOSK_SELFTEST_PERIOD_MS = 20000;
 var KIOSK_HARD_RELOAD_AFTER_MS = 10 * 60 * 1000;
 var _socketDisconnectedAt = null;
 var _kioskBorneId = null;
@@ -77,6 +77,7 @@ function kioskOfflineLabels() {
             message: "Nous rencontrons un problème de connexion. La borne sera de nouveau disponible dans quelques instants.",
             orientation: "Si l'attente se prolonge, adressez-vous à l'accueil.",
             retry: "Réessayer",
+            busy: "Un instant…",
             printer_down: "L'imprimante est momentanément indisponible. Votre numéro vous sera indiqué à l'écran ou remis par l'accueil."
         },
         en: {
@@ -84,6 +85,7 @@ function kioskOfflineLabels() {
             message: "We are experiencing a connection problem. The kiosk will be available again shortly.",
             orientation: "If the wait continues, please contact the reception desk.",
             retry: "Try again",
+            busy: "One moment…",
             printer_down: "The printer is temporarily unavailable. Your number will be shown on screen or given at the reception desk."
         }
     };
@@ -151,6 +153,30 @@ function clearKioskOfflineTimer() {
         clearTimeout(_kioskOfflineTimer);
         _kioskOfflineTimer = null;
     }
+}
+
+// État de liaison poussé par l'appli borne : sa sonde HTTP voit la coupure
+// en ~15-20 s, bien avant le ping du socket — l'écran s'affiche sans
+// attendre que le navigateur s'en rende compte.
+window.__kioskLinkState = function(alive) {
+    if (alive) {
+        clearKioskOfflineTimer();
+        setKioskOffline(false);
+    } else {
+        setKioskOffline(true);
+    }
+};
+
+// Retour immédiat à l'appui : un écran muet pendant le délai réseau fait
+// croire au patient que la borne est cassée — l'indicateur prend le relais
+// dès que la requête dépasse ~1,5 s, bien avant le timeout.
+var HTMX_BUSY_DELAY_MS = 1500;
+var _htmxBusyTimer = null;
+var _htmxPending = 0;
+
+function _setHtmxBusy(busy) {
+    var el = document.getElementById('htmx_busy_indicator');
+    if (el) { el.hidden = !busy; }
 }
 
 // ---------------------------------------------------------------------------
@@ -233,6 +259,35 @@ document.addEventListener('DOMContentLoaded', function() {
     document.body.addEventListener('htmx:sendError', handleKioskRequestFailure);
     document.body.addEventListener('htmx:timeout', handleKioskRequestFailure);
     document.body.addEventListener('htmx:responseError', handleKioskRequestFailure);
+
+    document.body.addEventListener('htmx:beforeRequest', function() {
+        _htmxPending += 1;
+        if (_htmxBusyTimer === null) {
+            _htmxBusyTimer = setTimeout(function() {
+                _htmxBusyTimer = null;
+                if (_htmxPending > 0) { _setHtmxBusy(true); }
+            }, HTMX_BUSY_DELAY_MS);
+        }
+    });
+    ['htmx:afterRequest', 'htmx:timeout', 'htmx:sendError', 'htmx:responseError'].forEach(function(evt) {
+        document.body.addEventListener(evt, function() {
+            _htmxPending = Math.max(0, _htmxPending - 1);
+            if (_htmxPending === 0) {
+                if (_htmxBusyTimer !== null) {
+                    clearTimeout(_htmxBusyTimer);
+                    _htmxBusyTimer = null;
+                }
+                _setHtmxBusy(false);
+            }
+        });
+    });
+
+    // Libellé de l'indicateur dans la langue courante.
+    var busyEl = document.getElementById('htmx_busy_indicator');
+    if (busyEl) {
+        var busyText = busyEl.querySelector('.busy_text');
+        if (busyText) { busyText.textContent = kioskOfflineLabels().busy; }
+    }
 });
 
 document.addEventListener('DOMContentLoaded', (event) => {
@@ -1502,5 +1557,7 @@ document.addEventListener('click', function (e) {
 
 // Délai max des requêtes HTMX, posé au chargement du script (avant les
 // requêtes hx-trigger="load") : une requête figée déclenche 'htmx:timeout'
-// au bout de 10 s au lieu de bloquer l'écran sans fin.
-if (window.htmx) { htmx.config.timeout = 10000; }
+// au bout de 6 s au lieu de bloquer l'écran sans fin. Avec l'indicateur
+// « Un instant… » (HTMX_BUSY_DELAY_MS), 6 s visibles restent tolérables et
+// l'échec arrive plus tôt.
+if (window.htmx) { htmx.config.timeout = 6000; }

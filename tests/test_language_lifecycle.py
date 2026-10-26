@@ -50,6 +50,8 @@ def application():
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
         TESTING=True,
         PAGE_PATIENT_DISPLAY_TRANSLATIONS=False,
+        # Clé lue par /patient (texte d'orientation des écrans d'incident).
+        PAGE_PATIENT_INTERFACE_ORIENTATION="Adressez-vous à l'accueil.",
         PHONE_TITLE="Titre téléphone",
     )
     db.init_app(app)

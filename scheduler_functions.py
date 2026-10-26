@@ -753,7 +753,9 @@ def ensure_kiosk_watchdog_job():
         id=KIOSK_WATCHDOG_JOB_ID,
         func=kiosk_watchdog_job,
         trigger="interval",
-        seconds=60,
+        # 30 s : le seuil « injoignable » est passé à 90 s — un passage par
+        # minute ne l'atteindrait qu'au pire à 120 s.
+        seconds=30,
         misfire_grace_time=120,
         coalesce=True,
         max_instances=1,
@@ -766,9 +768,9 @@ def kiosk_watchdog_job():
 
     ``PrinterStatus`` ne servait qu'à l'affichage du tableau de bord — lu à
     la demande. Une borne qui meurt hors consultation n'était donc signalée
-    à personne. Ce job recalcule l'état chaque minute (rythme du heartbeat
-    borne) et émet une notification ``app_counter`` à chaque TRANSITION :
-    l'équipe sait qu'une borne est injoignable en moins de ~4 minutes
+    à personne. Ce job recalcule l'état toutes les 30 s (deux fois le rythme
+    du heartbeat borne) et émet une notification ``app_counter`` à chaque
+    TRANSITION : l'équipe sait qu'une borne est injoignable en ~2 minutes
     (3 heartbeats manqués + un passage), et qu'elle est revenue.
     """
     app = AppHolder.get_app()

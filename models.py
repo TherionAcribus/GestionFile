@@ -1083,9 +1083,9 @@ KIOSK_OFFLINE_CODE = 'kiosk_offline'
 # prouvent un contact et alimentent le journal, mais ne doivent jamais
 # devenir le statut métier « current » d'une borne.
 KIOSK_EVENT_PREFIX = "kiosk_"
-# Une borne envoie un heartbeat environ chaque minute ; trois intervalles
-# manqués permettent d'afficher « injoignable » sans réagir à un simple retard.
-PRINTER_STATUS_STALE_SECONDS = 180
+# Une borne envoie un heartbeat toutes les 30 s ; trois intervalles manqués
+# permettent d'afficher « injoignable » sans réagir à un simple retard.
+PRINTER_STATUS_STALE_SECONDS = 90
 # Les heartbeats sont dédupliqués par borne : cette limite borne uniquement un
 # client forgé qui inventerait une infinité d'identifiants de borne.
 PRINTER_HEARTBEAT_LIMIT = 20

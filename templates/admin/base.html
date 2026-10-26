@@ -241,7 +241,7 @@
                                {{ 'aria-current="page"' if request.path == '/admin/bornes' else '' }}
                                href="/admin/bornes">
                                 <i class="bi bi-pc-display"></i> Bornes
-                                {% if kiosk_alert_active() %}<span class="badge text-bg-danger ms-1" title="Une borne nécessite une intervention">!</span>{% endif %}
+                                {% if kiosk_alert_active is defined and kiosk_alert_active() %}<span class="badge text-bg-danger ms-1" title="Une borne nécessite une intervention">!</span>{% endif %}
                             </a>
                         </li>
                         {% endif %}

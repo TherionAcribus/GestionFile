@@ -872,4 +872,26 @@ html, body {
     display: none;
 }
 
+/* Indicateur « requête en cours » : discret mais visible — le patient sait
+   que la borne travaille au lieu de conclure qu'elle est cassée. Sous
+   l'écran de déconnexion (9999). */
+#htmx_busy_indicator {
+    position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%);
+    z-index: 9000;
+    display: flex; align-items: center; gap: .8rem;
+    padding: .9rem 1.8rem; border-radius: 999px;
+    background: rgba(23, 59, 75, .92); color: #E5F4EF;
+    font-size: clamp(1rem, 2.4vmin, 1.4rem); font-weight: 600;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+}
+#htmx_busy_indicator[hidden] {
+    display: none;
+}
+#htmx_busy_indicator .busy_spinner {
+    width: 1.3em; height: 1.3em; border-radius: 50%;
+    border: .18em solid rgba(229, 244, 239, .3); border-top-color: #30A99A;
+    animation: busy-spin 1s linear infinite;
+}
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+
 

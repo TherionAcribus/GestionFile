@@ -101,6 +101,14 @@
         <div class="kiosk_offline_buttons"></div>
     </div>
 
+    {# Indicateur « requête en cours » : affiché par patients.js si aucune
+       réponse après ~1,5 s — le patient ne doit jamais trouver les boutons
+       inertes. #}
+    <div id="htmx_busy_indicator" hidden>
+        <span class="busy_spinner" aria-hidden="true"></span>
+        <span class="busy_text"></span>
+    </div>
+
     {# Libellés d'incident injectés par le serveur (#kiosk_ui_labels, lus par
        patients.js) : texte d'orientation traduisible issu de la config,
        résolu dans la langue courante. Survit aux swaps HTMX comme les

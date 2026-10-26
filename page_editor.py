@@ -401,10 +401,15 @@ ADAPTERS = {
                         {"key": "page_patient_interface_print_failed_staff", "label": "Message si l'inscription est annulée (mode Annuler)", "type": "text"},
                         {"key": "page_patient_interface_staff_called", "label": "Message après « Appeler le personnel »", "type": "text"},
                         {"key": "page_patient_interface_print_uncertain", "label": "Message si le résultat d'impression est incertain", "type": "text"},
+                        {"key": "page_patient_interface_ticket_pending", "label": "Message quand le ticket est imprimé mais l'inscription attend le serveur", "type": "text"},
                         {"key": "page_patient_interface_retry", "label": "Bouton « Réessayer »", "type": "text"},
                         {"key": "page_patient_interface_ticket_received", "label": "Bouton « J'ai récupéré mon ticket »", "type": "text"},
                         {"key": "page_patient_interface_ticket_missing", "label": "Bouton « Je n'ai pas de ticket »", "type": "text"},
-                        {"key": "page_patient_interface_call_staff", "label": "Bouton « Appeler le personnel »", "type": "text"}]),
+                        {"key": "page_patient_interface_call_staff", "label": "Bouton « Appeler le personnel »", "type": "text"},
+                        # Texte d'orientation commun à tous les écrans
+                        # d'incident de la borne (hors ligne, imprimante
+                        # indisponible) — pas un libellé de l'overlay seul.
+                        {"key": "page_patient_interface_orientation", "label": "Texte d'orientation des écrans d'incident (perte de connexion, imprimante indisponible)", "type": "text"}]),
             "languages": _component("Choix de langue", "overlay", ".language-selector",
                 managed_bool="page_patient_display_translations",
                 layout_controls=["visible"],
@@ -739,10 +744,17 @@ _PRINT_ERROR_FIELD_SCENARIOS = {
     "page_patient_interface_print_failed_staff": ["print_error"],
     "page_patient_interface_staff_called": ["staff_called"],
     "page_patient_interface_print_uncertain": ["print_uncertain"],
+    # Ticket tiré mais acquittement serveur en attente : affiché à la place
+    # du message d'échec, sur les deux chemins (réessai, réponse incertaine).
+    "page_patient_interface_ticket_pending": ["print_error", "print_uncertain"],
     "page_patient_interface_retry": ["print_error"],
     "page_patient_interface_ticket_received": ["print_uncertain"],
     "page_patient_interface_ticket_missing": ["print_uncertain"],
     "page_patient_interface_call_staff": ["print_error"],
+    # L'écran hors ligne et le bandeau imprimante recouvrent n'importe quel
+    # état : le texte reste éditable sur tous les scénarios d'incident.
+    "page_patient_interface_orientation": [
+        "print_error", "printing", "print_uncertain", "staff_called"],
 }
 for _field in ADAPTERS["patient"]["components"]["print_error"]["config"]:
     _field["scenarios"] = _PRINT_ERROR_FIELD_SCENARIOS[_field["key"]]

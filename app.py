@@ -166,6 +166,10 @@ def load_configuration(app):
     # l'URL) : défauts tant que la ligne ConfigOption n'existe pas encore.
     app.config.setdefault("PHONE_WAITING_LINE1", "En attente de validation pour le numéro {N}")
     app.config.setdefault("PHONE_WAITING_LINE2", "Veuillez patienter....")
+    # Statiques sans durée de vie explicite : max-age=0 force la
+    # revalidation (304 via ETag) — une borne mise à jour charge le JS
+    # courant au lieu de tourner sur le cache QtWebEngine.
+    app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", timedelta(seconds=0))
 
     # Table clé -> (nom app.config, colonne ConfigOption) : dérivée du registre
     # centralisé (params_registry) afin que « clés chargées » et « clés
