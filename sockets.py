@@ -322,6 +322,22 @@ def join_printer_watch(msg):
     })
 
 
+#: Dernière activité JS de chaque page borne : distincte du heartbeat
+#: imprimante (processus borne vivant), elle prouve que la PAGE tourne —
+#: base pour repérer les bornes « vivantes mais page figée » en supervision.
+kiosk_page_last_seen = {}
+
+
+@socketio.on("kiosk_alive", namespace="/socket_patient")
+def kiosk_alive(msg):
+    borne_id = ""
+    if isinstance(msg, dict):
+        borne_id = str(msg.get("borne_id") or "")[:80]
+    if not borne_id:
+        return
+    kiosk_page_last_seen[borne_id] = time.time()
+
+
 # --- Parcours QR de la borne -------------------------------------------------
 # Chaque QR affiché par une borne correspond à un « parcours » identifié par un
 # UUID (généré dans left_page_validate_patient et encodé dans l'URL du QR). La

@@ -39,6 +39,15 @@ function rejoinScanJourney() {
 var KIOSK_OFFLINE_GRACE_MS = 5000;
 var _kioskOfflineTimer = null;
 
+// Auto-test périodique + rechargement complet après une coupure longue :
+// les deux couvrent ce que la reconnexion socket seule ne voit pas (socket
+// « connecté » alors que le serveur HTTP est mort ; état de page périmé
+// après une longue panne).
+var KIOSK_SELFTEST_PERIOD_MS = 60000;
+var KIOSK_HARD_RELOAD_AFTER_MS = 10 * 60 * 1000;
+var _socketDisconnectedAt = null;
+var _kioskBorneId = null;
+
 // Libellés dans la langue courante (attribut lang du document, mis à jour au
 // clic sur un drapeau) : pas de config serveur dédiée, repli FR.
 function kioskOfflineLabels() {
@@ -140,7 +149,8 @@ function joinPrinterWatch() {
     Promise.resolve(api.borne_id()).then(function(id) {
         var s = window.__patientSocket;
         if (id && s && s.connected) {
-            s.emit('join_printer_watch', { borne_id: String(id) });
+            _kioskBorneId = String(id);
+            s.emit('join_printer_watch', { borne_id: _kioskBorneId });
         }
     }).catch(function(err) {
         console.warn('Identification de la borne impossible :', err);
@@ -214,6 +224,15 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // (Re)déclaration de la borne : la salle Socket.IO ne survit pas à
         // une déconnexion, et l'état courant de l'imprimante est renvoyé.
         joinPrinterWatch();
+        // Coupure longue : trop d'états potentiellement différés (refreshs
+        // manqués, minuteurs, swaps) pour un rattrapage partiel fiable —
+        // rechargement complet, protégé par la sonde.
+        if (_socketDisconnectedAt !== null
+                && Date.now() - _socketDisconnectedAt > KIOSK_HARD_RELOAD_AFTER_MS) {
+            _socketDisconnectedAt = null;
+            refresh_page();
+        }
+        _socketDisconnectedAt = null;
         // Les salles Socket.IO ne survivent pas à une déconnexion : si un QR
         // est affiché à la (re)connexion, on rejoint à nouveau sa salle.
         rejoinScanJourney();
@@ -233,6 +252,9 @@ document.addEventListener('DOMContentLoaded', (event) => {
         // Grâce avant d'afficher l'écran : une reconnexion immédiate ne doit
         // pas faire clignoter la page.
         scheduleKioskOfflineCheck();
+        // Marque le début de la coupure (premier disconnect d'une série) :
+        // sert à décider du rechargement complet après une panne longue.
+        if (_socketDisconnectedAt === null) { _socketDisconnectedAt = Date.now(); }
     });
 
     patientSocket.on('refresh', function(msg) {
@@ -1284,6 +1306,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // patient doit rejoindre la file même si personne n'est plus devant).
     drainPrintConfirmations();
     setInterval(drainPrintConfirmations, PRINT_DRAIN_PERIOD_MS);
+
+    // Auto-test : le socket peut rester « connecté » alors que le serveur
+    // HTTP est mort (proxy défaillant) — seule une vraie requête le dénonce.
+    // Ignoré pendant le flux d'impression : ses écrans d'erreur dédiés
+    // prennent le relais.
+    setInterval(function() {
+        if (printFlowActive()) { return; }
+        var s = window.__patientSocket;
+        if (!s || !s.connected) { return; }
+        pingServer(8000).then(function(alive) {
+            if (!alive) { handleKioskRequestFailure(); }
+        });
+    }, KIOSK_SELFTEST_PERIOD_MS);
+
+    // Signe de vie de la PAGE (distinct du heartbeat imprimante de l'appli
+    // borne, remonté par printer.py) : il distingue « borne vivante mais
+    // page figée » côté supervision.
+    setInterval(function() {
+        var s = window.__patientSocket;
+        if (_kioskBorneId && s && s.connected) {
+            s.emit('kiosk_alive', { borne_id: _kioskBorneId });
+        }
+    }, 60000);
 
     // Écoute de l'événement htmx:afterSwap sur le document
     document.body.addEventListener('htmx:afterSwap', function(event) {
