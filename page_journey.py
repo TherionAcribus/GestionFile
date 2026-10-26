@@ -86,7 +86,11 @@ PATIENT_JOURNEY = {
             "choices": [
                 {"key": "page_patient_display_translations", "label": "Proposer le choix de la langue",
                  "help": "Des drapeaux permettent au patient de passer la borne dans sa langue."},
+                {"key": "page_patient_idle_timer", "label": "Retour à l’accueil sans contact du patient"},
             ],
+            "exit": [{"when": _is("page_patient_display_translations"),
+                      "text": "Reste affiché jusqu’au choix d’une activité. Dans une autre langue : retour au français après {=page_patient_idle_timer} s sans contact."},
+                     {"text": "Reste affiché jusqu’au choix d’une activité."}],
             "actions": [
                 {"id": "choose_activity", "label": "Choisir une activité", "target": "validation",
                  "when": _not({"fact": "children_parents"})},
@@ -143,6 +147,7 @@ PATIENT_JOURNEY = {
                 {"id": "choose_child", "label": "Choisir une sous-activité", "target": "validation"},
                 {"id": "children_back", "label": "Revenir à l’accueil", "target": "home", "tone": "secondary"},
             ],
+            "exit": [{"text": "Retour à l’accueil par le bouton de retour, ou après {=page_patient_idle_timer} s sans contact."}],
             "components": ["buttons", "back_button"],
         },
         {
@@ -184,6 +189,7 @@ PATIENT_JOURNEY = {
                 {"id": "cancel", "label": "Annuler", "finish": "Parcours annulé par le patient.",
                  "tone": "secondary"},
             ],
+            "exit": [{"text": "Sans contact pendant {=page_patient_idle_timer} s, retour à l’accueil en français : le QR code affiché disparaît, rien n’est inscrit."}],
             "components": ["buttons", "specific_message"],
         },
         {

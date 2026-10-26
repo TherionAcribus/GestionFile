@@ -116,6 +116,8 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_qrcode_data": ("PAGE_PATIENT_QRCODE_DATA", "value_str"),
     "page_patient_qrcode_display_specific_message": ("PAGE_PATIENT_QRCODE_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
     "page_patient_end_timer": ("PAGE_PATIENT_END_TIMER", "value_int"),
+    # Retour à l'accueil sans contact du patient (hors conclusion).
+    "page_patient_idle_timer": ("PAGE_PATIENT_IDLE_TIMER", "value_int"),
     "page_patient_display_conclusion": ("PAGE_PATIENT_DISPLAY_CONCLUSION", "value_bool"),
     "page_patient_display_specific_message": ("PAGE_PATIENT_DISPLAY_SPECIFIC_MESSAGE", "value_bool"),
     "page_patient_direct_print": ("PAGE_PATIENT_DIRECT_PRINT", "value_bool"),
@@ -379,6 +381,9 @@ _INT_RANGES = {
     "page_patient_print_uncertain_timer": (5, 600),
     # Le patient doit pouvoir lire (et noter) son numéro.
     "page_patient_print_message_timer": (3, 120),
+    # Pas de « 0 = jamais » : c'est le garde-fou d'une borne abandonnée.
+    # 15 s minimum pour laisser le temps de lire ou de scanner le QR code.
+    "page_patient_idle_timer": (15, 600),
 }
 
 

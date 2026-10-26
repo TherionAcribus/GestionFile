@@ -144,6 +144,10 @@ def load_configuration(app):
     # et « Je n'ai pas de ticket » relançait une impression en double).
     app.config.setdefault("PAGE_PATIENT_PRINT_UNCERTAIN_TIMER", 15)
     app.config.setdefault("PAGE_PATIENT_PRINT_UNCERTAIN_TIMEOUT_ACTION", "received")
+    # Retour automatique à l'accueil (en français) après ce délai sans contact,
+    # sur tout écran autre que l'accueil et la conclusion : un patient parti
+    # sur l'écran de validation ne doit pas laisser son QR au suivant.
+    app.config.setdefault("PAGE_PATIENT_IDLE_TIMER", 60)
     # Libellés patient du flux d'impression (traduisibles : FR = app.config,
     # autres langues via la table Translation avec repli FR).
     app.config.setdefault("PAGE_PATIENT_INTERFACE_PRINTING", "Impression en cours…")

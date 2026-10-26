@@ -31,7 +31,10 @@
     <script src="{{ url_for('static', filename='js/libs/htmx.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/libs/socket.io-4.7.4.min.js') }}"></script>
 </head>
-<body>
+{# data-idle-timer : retour automatique à l'accueil (en français) après ce
+   délai sans contact, lu par patient_idle.js. Sur <body> : il survit au
+   remplacement de #main lors d'un changement de langue. #}
+<body data-idle-timer="{{ page_patient_idle_timer | default(60) }}">
 
     <div id="main">
         {{ page_components.patient_title() }}
@@ -118,5 +121,6 @@
     <script src="{{ url_for('static', filename='js/libs/materialize.min.js') }}"></script>
 
     <script src="{{ url_for('static', filename='js/patients.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/patient_idle.js') }}"></script>
 </body>
 </html>

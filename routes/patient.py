@@ -58,6 +58,10 @@ def patients_front_page():
     return render_template('patient/patient_front_page.html',
                             languages=languages,
                             page_patient_display_translations=app.config["PAGE_PATIENT_DISPLAY_TRANSLATIONS"],
+                            # Retour automatique à l'accueil sans contact
+                            # (patient_idle.js) : la borne ne reste jamais sur
+                            # le choix d'un patient parti.
+                            page_patient_idle_timer=int(app.config.get("PAGE_PATIENT_IDLE_TIMER", 60)),
                             # Texte d'orientation des écrans d'incident
                             # (offline overlay, bandeau imprimante) : résolu
                             # dans la langue courante, {P} {D} {H} rendues.
