@@ -6,5 +6,8 @@
     <p class="no_buttons_subtitle">Merci de vous adresser à notre équipe.</p>
 </div>
 
-{# Vide le sous-titre « merci de vous enregistrer… » (contradictoire ici). #}
+{# Vide le sous-titre « merci de vous enregistrer… » (contradictoire ici) —
+   sauf quand la réponse porte déjà son propre message (activité fermée). #}
+{% if not keep_subtitle %}
 <div id="div_buttons_children" class="buttons_children_active" hx-swap-oob="true"></div>
+{% endif %}

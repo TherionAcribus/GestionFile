@@ -89,7 +89,10 @@ def application(tmp_path):
         TICKET_MESSAGE="{N}",
         TICKET_FOOTER="",
         PRINTER_WIDTH=48,
-        # Clés lues par display_activity_inactive (activité fermée).
+        # Clés lues par display_activity_inactive (activité fermée) — et par
+        # l'accueil, renvoyé avec le message quand le clic visait la zone
+        # centrale (display_inactive_on_home).
+        PAGE_PATIENT_INTERFACE_VALIDATE_CANCEL="Annuler",
         PAGE_PATIENT_SUBTITLE="Sous-titre",
         PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE="Activité indisponible",
         PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE=10,

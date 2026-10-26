@@ -18,11 +18,12 @@
 var PatientIdle = (function () {
     'use strict';
 
-    // Requêtes dont la réponse affiche l'accueil dans #div_buttons_parents.
-    // Tout autre écran central (y compris un chemin inconnu) compte comme
-    // « hors accueil » : en cas de doute, mieux vaut revenir à l'accueil.
-    var HOME_PATHS = ['/patient/patient_buttons', '/patient/patient_cancel',
-                      '/patient/cancel_patient'];
+    // Le serveur marque toute réponse qui affiche l'accueil dans
+    // #div_buttons_parents (en-tête X-Kiosk-Screen: home, routes/patient.py) —
+    // y compris l'accueil renvoyé après un clic sur une activité fermée.
+    // Tout autre écran central compte comme « hors accueil » : en cas de
+    // doute, mieux vaut revenir à l'accueil.
+    var SCREEN_HEADER = 'X-Kiosk-Screen';
     var HOME_LANGUAGE = 'fr';
     var RETRY_MS = 5000;
     var ACTIVITY_EVENTS = ['pointerdown', 'touchstart', 'mousedown', 'keydown'];
@@ -36,11 +37,11 @@ var PatientIdle = (function () {
         return (isFinite(seconds) && seconds > 0) ? seconds * 1000 : 0;
     }
 
-    function requestPath(detail) {
-        var path = (detail && detail.pathInfo && detail.pathInfo.requestPath)
-            || (detail && detail.requestConfig && detail.requestConfig.path) || '';
-        path = String(path).split('?')[0];
-        return path.charAt(0) === '/' ? path : '/' + path;
+    function showsHome(detail) {
+        var xhr = detail && detail.xhr;
+        var screen = (xhr && typeof xhr.getResponseHeader === 'function')
+            ? xhr.getResponseHeader(SCREEN_HEADER) : null;
+        return screen === 'home';
     }
 
     function isHome() {
@@ -87,7 +88,7 @@ var PatientIdle = (function () {
     function onAfterSwap(evt) {
         var target = evt && evt.detail && evt.detail.target;
         if (target && target.id === 'div_buttons_parents') {
-            _awayFromHome = HOME_PATHS.indexOf(requestPath(evt.detail)) < 0;
+            _awayFromHome = !showsHome(evt.detail);
         }
         // Nouvel écran : le patient dispose du délai complet pour le lire.
         restart();
@@ -101,7 +102,9 @@ var PatientIdle = (function () {
         restart();
     }
 
-    return { init: init, isHome: isHome, onIdle: onIdle };
+    // goHome : aussi utilisé après une erreur du serveur
+    // (patient_request_errors.js).
+    return { init: init, isHome: isHome, onIdle: onIdle, goHome: goHome };
 })();
 
 document.addEventListener('DOMContentLoaded', PatientIdle.init);

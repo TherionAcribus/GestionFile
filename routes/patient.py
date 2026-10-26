@@ -114,9 +114,29 @@ def _hide_uncallable(buttons, callable_ids):
             if b.activity_id is None or b.activity_id in callable_ids]
 
 
+#: En-tête des réponses qui affichent l'accueil dans la zone centrale :
+#: patient_idle.js sait ainsi que la borne est revenue à l'accueil, quel que
+#: soit le chemin de la requête (annulation, activité devenue indisponible…).
+KIOSK_SCREEN_HEADER = "X-Kiosk-Screen"
+
+
+def _home_response(html):
+    response = make_response(html)
+    response.headers[KIOSK_SCREEN_HEADER] = "home"
+    return response
+
+
 # affiche les boutons
 @patient_bp.route('/patient/patient_buttons')
 def patient_right_page():
+    return _home_page()
+
+
+def _home_page(subtitle_html=None):
+    """Accueil : boutons de premier niveau + sous-titre (échange hors bande).
+
+    ``subtitle_html`` remplace le sous-titre standard — c'est ainsi que le
+    message « activité indisponible » s'affiche SANS retirer les boutons."""
     buttons = Button.query.order_by(Button.sort_order).filter_by(is_present = True, parent_button_id = None).all()
 
     callable_ids = _callable_activity_ids()
@@ -129,8 +149,10 @@ def patient_right_page():
     # vide / d'un plantage. Le personnel est par ailleurs alerté côté admin
     # (carte « Alertes » : diagnostics.collect_patient_page_alerts -> no_usable_button).
     if not buttons:
-        communikation("patient", event="refresh_title")
-        return render_template('patient/no_buttons.html')
+        return _home_response(
+            render_template('patient/no_buttons.html',
+                            keep_subtitle=subtitle_html is not None)
+            + (subtitle_html or ""))
 
     language_code = session.get('language_code', 'fr')
     button_translations = {}
@@ -177,14 +199,17 @@ def patient_right_page():
                             page_patient_interface_validate_cancel=page_patient_interface_validate_cancel,
                             circle_image_above=app.config.get('PAGE_PATIENT_CIRCLE_IMAGE_ABOVE', True))
     
-    subtitle_content = render_template(
-        'patient/patient_default_subtitle.html', 
-        page_patient_subtitle=page_patient_subtitle,
-    )
-    
-    communikation("patient", event="refresh_title")
-    
-    return f"{buttons_content}{subtitle_content}"
+    if subtitle_html is None:
+        subtitle_html = render_template(
+            'patient/patient_default_subtitle.html',
+            page_patient_subtitle=page_patient_subtitle,
+        )
+
+    # Pas de diffusion « refresh_title » ici : elle faisait recharger le titre
+    # à TOUTES les bornes chaque fois que l'une revenait à l'accueil. La borne
+    # concernée rafraîchit le sien en voyant l'en-tête X-Kiosk-Screen
+    # (patients.js, htmx:afterSwap).
+    return _home_response(f"{buttons_content}{subtitle_html}")
 
 
 
@@ -201,8 +226,35 @@ def patients_submit():
         return display_validation_after_choice(request)
 
 
+def _activity_from_form(request):
+    """Activité désignée par le formulaire, ou None si l'identifiant est
+    absent, vide (bouton sans activité) ou invalide — jamais d'exception."""
+    try:
+        activity_id = int(request.form.get('activity_id') or "")
+    except (TypeError, ValueError):
+        return None
+    return db.session.get(Activity, activity_id)
+
+
 def display_activity_inactive(request):
-    activity = db.session.get(Activity, request.form.get('activity_id'))
+    """Message « activité indisponible », rendu DANS la zone du sous-titre
+    (bouton grisé : les boutons de l'accueil restent affichés)."""
+    return render_template('patient/activity_inactive.html',
+                           **_activity_inactive_context(request))
+
+
+def display_inactive_on_home(request):
+    """Activité devenue indisponible entre l'affichage et le clic (ou bouton
+    sans activité) : la requête visait la zone CENTRALE. Lui renvoyer le seul
+    message remplaçait les boutons — le patient restait sans rien à toucher.
+    On renvoie l'accueil, avec le message à la place du sous-titre."""
+    message = render_template('patient/activity_inactive_oob.html',
+                              **_activity_inactive_context(request))
+    return _home_page(subtitle_html=message)
+
+
+def _activity_inactive_context(request):
+    activity = _activity_from_form(request)
     # ``activity`` peut être None (activity_id périmé/supprimé sur un écran
     # resté ouvert) : le message par défaut s'affiche quand même.
     inactivity_message = activity.inactivity_message if activity else None
@@ -222,10 +274,9 @@ def display_activity_inactive(request):
         default_subtitle = app.config['PAGE_PATIENT_SUBTITLE']
         message = inactivity_message or app.config['PAGE_PATIENT_DISABLE_DEFAULT_MESSAGE']
 
-    return render_template('patient/activity_inactive.html',
-                            page_patient_disable_default_message=message,
-                            default_subtitle=default_subtitle,
-                            page_patient_timer_activity_inactive=app.config["PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE"])
+    return dict(page_patient_disable_default_message=message,
+                default_subtitle=default_subtitle,
+                page_patient_timer_activity_inactive=app.config["PAGE_PATIENT_TIMER_ACTIVITY_INACTIVE"])
 
 
 @patient_bp.route("/patient/default_subtitle")
@@ -282,20 +333,24 @@ def display_validation_after_choice(request):
     activity_id = request.form.get('activity_id')
     app.logger.debug('reason %s', activity_id)
 
-    # Si le bouton contient bien une activité
-    if activity_id != "":
-        if app.config.get("PAGE_PATIENT_DIRECT_PRINT", False):
-             return patient_return_validation_page_and_print_data(print_ticket=True)
-        activity = db.session.get(Activity, activity_id)
-        # Le flag ``is_active`` du formulaire date du rendu de la page : sur un
-        # écran resté ouvert, l'activité a pu fermer (horaires, désactivation)
-        # depuis. La disponibilité est revérifiée côté serveur au clic.
-        if activity is None or not activity_accepting_registrations(activity):
-            return display_activity_inactive(request)
-        return left_page_validate_patient(activity)
-    
-    app.logger.error("Le bouton ne possède pas d'activité")
-    
+    if not activity_id:
+        # Bouton sans activité (activité supprimée depuis, par exemple) :
+        # auparavant la vue ne renvoyait rien -> erreur 500, affichée à tort
+        # comme « connexion perdue » sur la borne.
+        app.logger.error("Le bouton ne possède pas d'activité")
+        return display_inactive_on_home(request)
+
+    if app.config.get("PAGE_PATIENT_DIRECT_PRINT", False):
+        return patient_return_validation_page_and_print_data(print_ticket=True)
+    activity = _activity_from_form(request)
+    # Le flag ``is_active`` du formulaire date du rendu de la page : sur un
+    # écran resté ouvert, l'activité a pu fermer (horaires, désactivation)
+    # depuis. La disponibilité est revérifiée côté serveur au clic.
+    if activity is None or not activity_accepting_registrations(activity):
+        return display_inactive_on_home(request)
+    return left_page_validate_patient(activity)
+
+
 
 # page de validation (QR Code, Impression, Validation, Annulation)
 def left_page_validate_patient(activity):
@@ -394,8 +449,7 @@ def patient_return_validation_page_and_print_data(print_ticket):
     immédiate dans la file (comportement inchangé)."""
 
     # Récupération et traitement des données comme avant
-    activity_id = request.form.get('activity_id')
-    activity = db.session.get(Activity, activity_id)
+    activity = _activity_from_form(request)
     journey_id = request.form.get('journey') or None
 
     # Un parcours = une inscription : on retrouve le patient du parcours
@@ -404,8 +458,8 @@ def patient_return_validation_page_and_print_data(print_ticket):
     if existing is None and not activity_accepting_registrations(activity):
         # Écran de validation périmé : l'activité a fermé entre l'affichage
         # de la page et le clic « Imprimer »/« Scan ». Aucune inscription —
-        # le patient voit la page « activité fermée » (avec message dédié).
-        return display_activity_inactive(request)
+        # retour à l'accueil avec le message « activité fermée ».
+        return display_inactive_on_home(request)
     if existing is None:
         if print_ticket:
             # Inscription en attente : elle sera activée à la confirmation d'impression.
@@ -445,7 +499,9 @@ def patient_return_validation_page_and_print_data(print_ticket):
         print_ticket = False
         print_job_id = None
 
-    print_data = format_ticket_text(new_patient, activity)
+    # Parcours déjà existant : son activité fait foi (le formulaire peut
+    # désigner une activité supprimée depuis).
+    print_data = format_ticket_text(new_patient, activity or new_patient.activity)
     # On ne journalise PAS le contenu du ticket, seulement sa taille encodée.
     app.logger.debug(f"print_data généré ({len(print_data)} caractères base64)")
 
@@ -1021,6 +1077,43 @@ def patient_refresh():
     return '', 204
 
 
+#: Durée de vie des cookies de suivi du téléphone (30 minutes).
+PHONE_COOKIE_MAX_AGE = 30 * 60
+
+#: Cookies que le JavaScript du téléphone lit (phone.js : numéro d'appel pour
+#: rejoindre la salle Socket.IO). Les autres sont HttpOnly : patient_id et le
+#: jeton signé ne servent qu'au serveur.
+_PHONE_COOKIES_READ_BY_JS = {'patient_call_number'}
+
+
+def _phone_cookie_options(name):
+    """Options communes : SameSite=Lax (pas d'envoi sur un POST d'un autre
+    site), Secure dès que le site est servi en HTTPS (même réglage
+    COOKIE_SECURE que le cookie de session), HttpOnly sauf pour ce que lit
+    phone.js."""
+    return dict(httponly=name not in _PHONE_COOKIES_READ_BY_JS,
+                samesite="Lax",
+                secure=bool(app.config.get("SESSION_COOKIE_SECURE", False)))
+
+
+def _set_phone_cookies(response, patient):
+    values = {
+        'patient_id': str(patient.id),
+        'patient_call_number': str(patient.call_number),
+        # Jeton signé liant ce couple de cookies : preuve opposable pour la
+        # salle /socket_phone, /patient/phone/status et le réaffichage au ping.
+        'patient_token': make_patient_phone_token(patient.id, patient.call_number),
+    }
+    for name, value in values.items():
+        response.set_cookie(name, value, max_age=PHONE_COOKIE_MAX_AGE,
+                            **_phone_cookie_options(name))
+
+
+def _clear_phone_cookies(response):
+    for name in ('patient_id', 'patient_call_number', 'patient_token'):
+        response.set_cookie(name, "", expires=0, **_phone_cookie_options(name))
+
+
 @patient_bp.route('/patient/phone/<language_code>/<patient_id>/<int:activity_id>', methods=['GET'])
 def phone_patient(language_code, patient_id, activity_id):
     """ 
@@ -1083,9 +1176,7 @@ def phone_patient(language_code, patient_id, activity_id):
                                                     phone_waiting_line1=phone_waiting_line1,
                                                     phone_waiting_line2=phone_waiting_line2,
                                                     page_revision=page_editor_published_revision("phone")))
-            response.set_cookie('patient_id', "", expires=0)
-            response.set_cookie('patient_call_number', "", expires=0)
-            response.set_cookie('patient_token', "", expires=0)
+            _clear_phone_cookies(response)
             return response
     return render_template('/patient/phone.html',
                             phone_title=phone_title,
@@ -1129,7 +1220,7 @@ def phone_patient_ping():
     """ 
     Fct qui s'execute une fois que la page phone est chargee.
     Renvoie la page de confirmation de l'activité
-    Place un cookie pendant 20 minutes. Le but du cookie est de stocker l'id du patient
+    Place les cookies de suivi pendant 30 minutes (PHONE_COOKIE_MAX_AGE). Le but du cookie est de stocker l'id du patient
     Si le cookie existe, c'est qu'il s,'est déja inscrit et qu'il ne faut pas l'inscrire une seconde fois
     mais simplement lui réafficher les informations. Cela arrive s'il rafraichit la page.
     S'il vient à la page phone avec un autre numéro (nouvelle inscription) le cookie est effacé dans la fonction précédente
@@ -1221,11 +1312,7 @@ def phone_patient_ping():
                                             specific_message = specific_message,
                                             phone_display_specific_message=app.config['PHONE_DISPLAY_SPECIFIC_MESSAGE'],
                                             phone_center=app.config['PHONE_CENTER']))
-    response.set_cookie('patient_id', str(patient.id), max_age=60*30)  # Cookie valable pour 20 minutes
-    response.set_cookie('patient_call_number', str(patient.call_number), max_age=60*30)
-    # Jeton signé liant ce couple de cookies : preuve opposable pour la salle
-    # /socket_phone, /patient/phone/status et la réaffichage ci-dessus.
-    response.set_cookie('patient_token', make_patient_phone_token(patient.id, patient.call_number), max_age=60*30)
+    _set_phone_cookies(response, patient)
     return response
 
 

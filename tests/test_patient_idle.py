@@ -88,10 +88,12 @@ _HARNESS = textwrap.dedent(r"""
                 live[0].fn();
                 return live[0].ms;
             },
-            swap(path, id) {
+            // screen : valeur de l'en-tête X-Kiosk-Screen de la réponse.
+            swap(screen, id) {
                 body.dispatch('htmx:afterSwap', { detail: {
                     target: { id: id || 'div_buttons_parents' },
-                    pathInfo: { requestPath: path } } });
+                    xhr: { getResponseHeader: name =>
+                        name === 'X-Kiosk-Screen' ? (screen || null) : null } } });
             },
         };
         return k;
@@ -117,15 +119,15 @@ _HARNESS = textwrap.dedent(r"""
 
     scenario('validation_abandonnee_retour_accueil_francais', () => {
         const k = kiosk();
-        k.swap('/patients_submit');
+        k.swap('validation');
         assert.strictEqual(k.fire(), 60000);
         assert.deepStrictEqual(plain(k.calls), [HOME_CALL]);
         assert.strictEqual(k.doc.documentElement.lang, 'fr');
     });
 
-    scenario('chemin_relatif_compte_hors_accueil', () => {
+    scenario('reponse_sans_marqueur_compte_hors_accueil', () => {
         const k = kiosk();
-        k.swap('patient/scan_and_validate');
+        k.swap(null);
         k.fire();
         assert.deepStrictEqual(plain(k.calls), [HOME_CALL]);
     });
@@ -138,15 +140,15 @@ _HARNESS = textwrap.dedent(r"""
 
     scenario('retour_accueil_par_le_patient_annule', () => {
         const k = kiosk();
-        k.swap('/patients_submit');
-        k.swap('/patient/patient_cancel');
+        k.swap('validation');
+        k.swap('home');
         k.fire();
         assert.deepStrictEqual(plain(k.calls), []);
     });
 
     scenario('contact_relance_le_delai_complet', () => {
         const k = kiosk();
-        k.swap('/patients_submit');
+        k.swap('validation');
         k.doc.dispatch('pointerdown');
         k.doc.dispatch('touchstart');
         assert.strictEqual(k.live().length, 1, 'le contact remplace le minuteur');
@@ -155,7 +157,7 @@ _HARNESS = textwrap.dedent(r"""
 
     scenario('jamais_pendant_une_impression', () => {
         const k = kiosk();
-        k.swap('/patient/print_and_validate');
+        k.swap('validation');
         k.ctx.printFlowActive = () => true;
         k.fire();
         assert.deepStrictEqual(plain(k.calls), []);
@@ -166,7 +168,7 @@ _HARNESS = textwrap.dedent(r"""
 
     scenario('conclusion_garde_son_propre_minuteur', () => {
         const k = kiosk();
-        k.swap('/patient/scan_and_validate');
+        k.swap('validation');
         k.elements.timer_gauge = { id: 'timer_gauge' };
         k.fire();
         assert.deepStrictEqual(plain(k.calls), []);
@@ -174,7 +176,7 @@ _HARNESS = textwrap.dedent(r"""
 
     scenario('pas_sous_l_ecran_connexion_perdue', () => {
         const k = kiosk();
-        k.swap('/patients_submit');
+        k.swap('validation');
         k.elements.kiosk_offline_overlay = { hidden: false };
         k.fire();
         assert.deepStrictEqual(plain(k.calls), []);
@@ -185,7 +187,7 @@ _HARNESS = textwrap.dedent(r"""
 
     scenario('pas_pendant_une_requete', () => {
         const k = kiosk();
-        k.swap('/patients_submit');
+        k.swap('validation');
         k.ctx._htmxPending = 1;
         k.fire();
         assert.deepStrictEqual(plain(k.calls), []);
@@ -195,14 +197,14 @@ _HARNESS = textwrap.dedent(r"""
         // Activité indisponible : message dans la zone du sous-titre, les
         // boutons de l'accueil restent affichés.
         const k = kiosk();
-        k.swap('/patients_submit', 'div_buttons_children');
+        k.swap('validation', 'div_buttons_children');
         k.fire();
         assert.deepStrictEqual(plain(k.calls), []);
     });
 
     scenario('delai_absent_ou_nul_desactive', () => {
         const k = kiosk({ idle: '0' });
-        k.swap('/patients_submit');
+        k.swap('validation');
         assert.strictEqual(k.live().length, 0);
     });
 
@@ -212,7 +214,7 @@ _HARNESS = textwrap.dedent(r"""
 _SCENARIOS = [
     "accueil_francais_rien_a_faire",
     "validation_abandonnee_retour_accueil_francais",
-    "chemin_relatif_compte_hors_accueil",
+    "reponse_sans_marqueur_compte_hors_accueil",
     "autre_langue_a_l_accueil_revient_au_francais",
     "retour_accueil_par_le_patient_annule",
     "contact_relance_le_delai_complet",

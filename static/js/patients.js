@@ -78,7 +78,10 @@ function kioskOfflineLabels() {
             orientation: "Si l'attente se prolonge, adressez-vous à l'accueil.",
             retry: "Réessayer",
             busy: "Un instant…",
-            printer_down: "L'imprimante est momentanément indisponible. Votre numéro vous sera indiqué à l'écran ou remis par l'accueil."
+            printer_down: "L'imprimante est momentanément indisponible. Votre numéro vous sera indiqué à l'écran ou remis par l'accueil.",
+            server_title: "Un problème est survenu",
+            server_message: "Votre demande n'a pas pu aboutir. Vous allez revenir à l'accueil pour recommencer.",
+            home: "Retour à l'accueil"
         },
         en: {
             title: "Kiosk temporarily unavailable",
@@ -86,7 +89,10 @@ function kioskOfflineLabels() {
             orientation: "If the wait continues, please contact the reception desk.",
             retry: "Try again",
             busy: "One moment…",
-            printer_down: "The printer is temporarily unavailable. Your number will be shown on screen or given at the reception desk."
+            printer_down: "The printer is temporarily unavailable. Your number will be shown on screen or given at the reception desk.",
+            server_title: "Something went wrong",
+            server_message: "Your request could not be completed. You will return to the home screen to try again.",
+            home: "Back to home"
         }
     };
     var labels = table[lang] || table.fr;
@@ -223,11 +229,12 @@ function joinPrinterWatch() {
 
 // ---------------------------------------------------------------------------
 // Échecs HTMX globaux : un appui sans réponse ne doit pas laisser la borne
-// muette. 'sendError'/'timeout' = requête perdue (serveur injoignable),
-// 'responseError' = le serveur a répondu une erreur. Dans les deux cas on
-// réactive les boutons neutralisés pendant la requête et on montre l'écran
-// d'incident ; « Réessayer » n'a de sens que si le socket est encore ouvert
-// (sinon l'écran part tout seul à la reconnexion).
+// muette. 'sendError'/'timeout' = requête perdue (serveur injoignable) ->
+// écran « connexion perdue » ; « Réessayer » n'a de sens que si le socket est
+// encore ouvert (sinon l'écran part tout seul à la reconnexion).
+// 'responseError' = le serveur a répondu une erreur -> message distinct et
+// retour à l'accueil (patient_request_errors.js). Dans tous les cas on
+// réactive les boutons neutralisés pendant la requête.
 // ---------------------------------------------------------------------------
 
 // Les fragments neutralisent les boutons via des styles inline
@@ -243,6 +250,16 @@ function restoreDisabledButtons() {
 
 function handleKioskRequestFailure(evt) {
     restoreDisabledButtons();
+    // Erreur renvoyée par le serveur ≠ réseau perdu (patient_request_errors.js).
+    var kind = (typeof kioskFailureKind === 'function') ? kioskFailureKind(evt) : 'network';
+    if (kind === 'ignore') { return; }
+    if (kind === 'server') {
+        showKioskServerError(evt);
+        return;
+    }
+    // Panne réseau : l'écran « connexion perdue » remplace un éventuel
+    // message d'erreur serveur, dont le retour automatique est annulé.
+    if (typeof clearKioskServerError === 'function') { clearKioskServerError(); }
     var socketUp = window.__patientSocket && window.__patientSocket.connected;
     var L = kioskOfflineLabels();
     setKioskOffline(true, {
@@ -1440,6 +1457,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Le fragment QR vient peut-être d'apparaître (ou de disparaître) :
             // rejoint/quitte la salle Socket.IO du parcours affiché.
             syncScanJourney();
+
+            // Retour à l'accueil (en-tête posé par le serveur) : le titre de
+            // CETTE borne est rechargé — langue revenue au français, date et
+            // heure à jour. Avant, le serveur le faisait recharger à toutes
+            // les bornes à chaque retour à l'accueil de l'une d'elles.
+            var xhr = event.detail.xhr;
+            if (xhr && xhr.getResponseHeader('X-Kiosk-Screen') === 'home') {
+                refresh_title();
+            }
 
             // Récupérer les données d'impression
             var printDataElement = document.getElementById('print_data');

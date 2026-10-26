@@ -1,0 +1,7 @@
+{# Message « activité indisponible » envoyé AVEC l'accueil (activité fermée
+   entre l'affichage et le clic) : il prend la place du sous-titre par échange
+   hors bande, les boutons restent affichés. patients.js
+   (initActiviteIndisponible) rétablit le sous-titre après le délai. #}
+<div id="div_buttons_children" class="buttons_children_active" hx-swap-oob="true">
+    {% include 'patient/activity_inactive.html' %}
+</div>
