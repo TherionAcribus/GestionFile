@@ -4,6 +4,7 @@ from datetime import datetime, date
 from flask import session, has_request_context, current_app as app
 from models import Button, Language, Translation, db
 from communication import send_app_notification
+import app_notification_texts
 from params_registry import BALISE_LETTERS, get_spec
 
 def validate_and_transform_text(user_input, allowed_letters):
@@ -121,6 +122,8 @@ def validate_config_text(key, value):
         return validate_int(value, positive=True)
     if spec.validator in BALISE_LETTERS:
         return validate_and_transform_text(value, BALISE_LETTERS[spec.validator])
+    if spec.validator == "app_notification":
+        return app_notification_texts.validate(key, value)
     return {"success": True, "value": value}
 
 

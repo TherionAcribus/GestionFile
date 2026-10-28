@@ -1,6 +1,7 @@
 import time
 import logging
 from flask import current_app
+from app_notification_texts import render_message
 from routes.pyside import create_patients_list_for_pyside
 from models import bump_queue_revision
 from extensions import socketio
@@ -118,31 +119,36 @@ def communication_websocket(stream, data=None, flag=None, client_id=None, event=
 def send_app_notification(origin, data):
     # for_counter = None si c'est pour tout le monde, sinon mettre l'id du comptoir
     for_counter = None
+    # Textes réglables dans Admin › Application › Notifications
+    # (app_notification_texts) ; repli sur le texte d'origine si vide.
+    config = current_app.config
     if origin == "activity":
-        message = f"{data['activity'].name} : {data['patient'].call_number}"
+        message = render_message(config, "activity",
+                                 A=data['activity'].name, N=data['patient'].call_number)
         current_app.logger.debug('message_notif: %s', message)
     elif origin == "printer_error":
-        message = f"Erreur d'impression: {data['message']}"
+        message = render_message(config, "printer_error", E=data['message'])
     elif origin == "patient_waiting":
         # Patient qui attend physiquement devant la borne : le comptoir doit
         # intervenir — message explicite et origine propre (sticky + son
         # d'attention côté App Comptoir).
-        message = f"Un patient attend à la borne : {data['message']}"
+        message = render_message(config, "patient_waiting", E=data['message'])
     elif origin == "kiosk_offline":
-        message = f"Borne {data['borne_id']} injoignable : aucun contact récent."
+        message = render_message(config, "kiosk_offline", B=data['borne_id'])
     elif origin == "kiosk_online":
-        message = f"Borne {data['borne_id']} de nouveau en ligne."
-    elif origin == "low_paper":
-        message = "On est quasiment au bout du rouleau"
-    elif origin == "no_paper":
-        message = "Il n'y a plus de papier dans la borne !"
-    elif origin == "paper_ok":
-        message = "Une gentille personne a remis du papier"
+        message = render_message(config, "kiosk_online", B=data['borne_id'])
+    elif origin in ("low_paper", "no_paper", "paper_ok"):
+        # Bouton papier désactivé depuis un comptoir : c'était annoncé comme
+        # « bout du rouleau » (et rallumait l'icône papier des autres App).
+        if (origin == "low_paper" and isinstance(data, dict)
+                and "add_paper" in data and not data["add_paper"]):
+            origin = "paper_ok"
+        message = render_message(config, origin)
     elif origin == "patient_taken":
-        message = f"Le patient {data['patient'].call_number} vient d'être appelé par un autre comptoir."
+        message = render_message(config, "patient_taken", N=data['patient'].call_number)
         for_counter = data['counter_id']
     elif origin == "patient_for_staff_from_app":
-        message = f"Le patient {data['patient'].call_number} est redirigé vers vous."
+        message = render_message(config, "patient_redirected", N=data['patient'].call_number)
         for_counter = data['counters']
     else:
         origin = origin

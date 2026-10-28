@@ -36,6 +36,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import app_notification_texts
+
 
 # ---------------------------------------------------------------------------
 # Table canonique clé -> (nom dans app.config, colonne ConfigOption)
@@ -241,6 +243,12 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
     "page_patient_interface_printer_down": ("PAGE_PATIENT_INTERFACE_PRINTER_DOWN", "value_str"),
     "page_patient_interface_ticket_pending": ("PAGE_PATIENT_INTERFACE_TICKET_PENDING", "value_str"),
 }
+
+# Textes des notifications de l'App Comptoir (Admin › Application ›
+# Notifications) : catalogue dans app_notification_texts. ``value_text`` :
+# certains messages dépassent les 200 caractères de ``value_str``.
+for _notif in app_notification_texts.CATALOGUE:
+    _CONFIG_TYPES[_notif.key] = (_notif.config_name, "value_text")
 
 
 # ---------------------------------------------------------------------------
@@ -554,6 +562,9 @@ def _validator_for(key: str, value_type: str) -> str:
         return "sound_file"
     if key in _HOUR_KEYS:
         return "hour"
+    # Balises propres à chaque message (app_notification_texts.validate).
+    if app_notification_texts.is_notification_key(key):
+        return "app_notification"
     return "text"
 
 
@@ -570,7 +581,7 @@ class ParamSpec:
     config_name: str
     value_type: str          # value_str | value_int | value_bool | value_text
     permission: str
-    validator: str           # bool | int | text | hour | welcome | before_call | after_call | ticket | theme | sound_file
+    validator: str           # bool | int | text | hour | welcome | before_call | after_call | ticket | theme | sound_file | app_notification
     kind: str                # switch | input | select
     restart_required: bool = False
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)

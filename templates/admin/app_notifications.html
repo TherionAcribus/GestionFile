@@ -1,0 +1,48 @@
+{# Onglet « Notifications du comptoir » : textes des notifications affichées
+   dans l'App Comptoir. Catalogue, balises autorisées et textes d'origine :
+   app_notification_texts.py (une seule source pour le serveur, l'App et
+   cette page). Un champ vidé revient au texte d'origine. #}
+
+<p class="text-muted">
+    Choisissez le texte affiché dans l'application comptoir pour chaque situation.
+    Les changements s'appliquent immédiatement à tous les comptoirs connectés.
+    Laissez un champ vide pour revenir au texte d'origine. L'affichage et le son
+    de chaque type de notification se règlent dans les préférences de l'application.
+</p>
+
+{% for group in app_notification_groups %}
+<section class="admin-setting-card algo-section" aria-labelledby="app_notif_group_{{ group.id }}">
+    <h5 id="app_notif_group_{{ group.id }}"><i class="bi {{ group.icon }}" aria-hidden="true"></i> {{ group.title }}</h5>
+    {% for item in group.messages %}
+    <div class="admin-text-setting{% if not loop.last %} border-bottom pb-3 mb-3{% endif %}">
+        <div class="d-flex align-items-start">
+            <div class="flex-grow-1">
+                {{ macros.textarea(item.key, item.value, item.label) }}
+                <p class="form-text mb-1">{{ item.when }}</p>
+                {% if item.markers %}
+                <div class="admin-markers" aria-label="Balises dynamiques">
+                    <div class="admin-markers-heading">Balises dynamiques</div>
+                    <div class="admin-marker-list">
+                        {% for token, label in item.markers %}
+                        {{ macros.marker_button(item.key, token, label) }}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if item.value != item.default %}
+                <p class="form-text mb-0">Texte d'origine : « {{ item.default }} »</p>
+                {% endif %}
+                <button type="button" class="btn btn-link btn-sm px-0"
+                        data-notif-reset="{{ item.key }}"
+                        data-default-text="{{ item.default }}">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Remettre le texte d'origine
+                </button>
+            </div>
+            <div class="ms-3">
+                {{ macros.button(item.key, "text") }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</section>
+{% endfor %}

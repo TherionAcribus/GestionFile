@@ -15,6 +15,7 @@ from sockets import connected_clients_info
 from audit_log import ACTION_CONNECT, ACTION_UPDATE, OUTCOME_SUCCESS, OUTCOME_FAILURE
 from audit_service import record_audit
 from python.engine import qr_png_bytes
+import app_notification_texts
 import config_sync
 from account_recovery import normalize_base_url
 from mail_settings import (
@@ -65,7 +66,7 @@ def list_admin_themes():
 @admin_app_bp.route('/admin/app/<tab>')
 @require_permission('app')
 def admin_app(tab=None):
-    valid_tabs = ['general', 'backups', 'mail', 'connexion']
+    valid_tabs = ['general', 'notifications', 'backups', 'mail', 'connexion']
     # /admin/app/<tab> était déclaré mais ignoré (seul ?tab= était lu).
     tab = tab or request.args.get('tab', 'general')
     if tab not in valid_tabs:
@@ -89,6 +90,7 @@ def admin_app(tab=None):
                                 "CALL_AUTO_VALIDATION_GRACE_SECONDS", 30),
                             call_auto_validation_extension_seconds=app.config.get(
                                 "CALL_AUTO_VALIDATION_EXTENSION_SECONDS", 60),
+                            app_notification_groups=app_notification_texts.admin_groups(app.config),
                             stress_test_enabled=app.config.get("STRESS_TEST_ENABLED", False),
                             stress_test_mode=app.config.get("STRESS_TEST_MODE", "disabled"),
                             stress_reference_patients=app.config.get(

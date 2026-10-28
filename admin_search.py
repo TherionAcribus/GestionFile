@@ -33,6 +33,7 @@ import re
 import unicodedata
 from functools import lru_cache
 
+import app_notification_texts
 from params_registry import PARAM_REGISTRY
 
 # --- Types de résultat ------------------------------------------------------
@@ -188,6 +189,9 @@ CATALOG = (
        "music_options", P_MUSIC, "volume spotify connexion", "bi-sliders"),
     _e(KIND_TAB, "Général (application)", "/admin/app?tab=general#focus=tab_general",
        "app", P_APP, "nom pharmacie numérotation messagerie réseau", "bi-sliders"),
+    _e(KIND_TAB, "Notifications du comptoir", "/admin/app?tab=notifications#focus=tab_notifications",
+       "app", P_APP, "messages textes alertes application comptoir déconnexion valider papier borne",
+       "bi-bell"),
     _e(KIND_TAB, "E-mails", "/admin/app?tab=mail#focus=tab_mail",
        "app", P_APP, "mail smtp courriel envoi serveur", "bi-envelope"),
     _e(KIND_TAB, "Connexions en direct", "/admin/app?tab=connexion#focus=tab_connexion",
@@ -456,11 +460,31 @@ def extract_settings(templates_dir, locations=None):
     return entries
 
 
+def notification_text_settings():
+    """Textes des notifications de l'App Comptoir : l'onglet est rendu en
+    boucle depuis ``app_notification_texts`` (aucune clé littérale dans le
+    gabarit à extraire), on indexe donc le catalogue lui-même."""
+    entries = []
+    for item in app_notification_texts.CATALOGUE:
+        entries.append({
+            "kind": KIND_SETTING,
+            "title": f"Notification : {item.label}",
+            "url": f"/admin/app?tab=notifications#focus={item.key}",
+            "permission": ("app", PARAM_REGISTRY[item.key].permission),
+            "permission_mode": "all",
+            "section": "Application › Notifications du comptoir",
+            "keywords": "message texte notification comptoir " + item.when,
+            "icon": "bi-bell",
+        })
+    return entries
+
+
 @lru_cache(maxsize=4)
 def static_index(templates_dir):
     """``templates_dir`` : dossier ``templates/admin``."""
     # Catalogue + réglages, calculés une fois par processus (gabarits figés).
-    return tuple(list(CATALOG) + extract_settings(templates_dir))
+    return tuple(list(CATALOG) + extract_settings(templates_dir)
+                 + notification_text_settings())
 
 
 # ---------------------------------------------------------------------------

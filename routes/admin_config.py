@@ -614,6 +614,11 @@ def special_functions_with_input(key):
     if key.startswith("call_auto_validation_"):
         from services import call_auto_validation
         call_auto_validation.announce_config_changed()
+    if key.startswith("app_notif_"):
+        # Les App Comptoir relisent leur état (et donc leurs textes) tout de
+        # suite, sans attendre une resynchronisation.
+        communikation("app_counter", event="counter_state_changed",
+                      data={"reason": "notification_texts_changed"})
     return warning
 
 
