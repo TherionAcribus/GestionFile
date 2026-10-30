@@ -38,7 +38,7 @@ from path_security import safe_path_under
 from audit_service import record_audit
 from audit_log import (
     ACTION_ACTIVATE, ACTION_CREATE, ACTION_DEACTIVATE, ACTION_DELETE,
-    ACTION_UPDATE, ACTION_DELETE, OUTCOME_FAILURE, OUTCOME_SUCCESS,
+    ACTION_UPDATE, OUTCOME_FAILURE, OUTCOME_SUCCESS,
 )
 
 admin_patient_bp = Blueprint('admin_patient', __name__)
