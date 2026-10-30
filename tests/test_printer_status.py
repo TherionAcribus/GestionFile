@@ -389,3 +389,112 @@ def test_reprise_n_est_pas_masquee_par_une_autre_borne(application):
         record_printer_status("init_ok", "Initialisée", borne_id="borne-1")
         assert borne_printing_available("borne-1") is True
         assert get_printer_error() is False
+
+
+# --- Arrêt volontaire annoncé par la borne (menu de maintenance, F10) -------------
+
+
+def _age_borne(borne_id, seconds):
+    """Recule le dernier contact de ``borne_id`` de ``seconds``."""
+    when = datetime.now(time_tz) - timedelta(seconds=seconds)
+    db.session.query(PrinterStatus).filter_by(
+        borne_id=borne_id).update({"received_at": when})
+    db.session.commit()
+
+
+def _silent_after(code, seconds, borne_id="borne-1"):
+    record_printer_status(PRINTER_HEARTBEAT_CODE, "Borne en ligne",
+                          borne_id=borne_id)
+    record_printer_status("paper_ok", "OK", borne_id=borne_id)
+    _age_borne(borne_id, seconds + 5)
+    # Le dernier message, juste avant le silence.
+    record_printer_status(code, "Annonce de la borne", borne_id=borne_id,
+                          is_error=False)
+    db.session.query(PrinterStatus).filter_by(
+        borne_id=borne_id, error_code=code).update({
+            "received_at": datetime.now(time_tz) - timedelta(seconds=seconds)})
+    db.session.commit()
+
+
+def test_borne_en_maintenance_n_est_pas_injoignable(application):
+    from models import BORNE_MAINTENANCE, KIOSK_MAINTENANCE_CODE, borne_reachability
+    with application.app_context():
+        _silent_after(KIOSK_MAINTENANCE_CODE, PRINTER_STATUS_STALE_SECONDS + 60)
+
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["state"] == BORNE_MAINTENANCE
+        assert overview["borne-1"]["reachable"] is False
+        # Ni alerte globale, ni ligne « injoignable », ni notification.
+        assert get_printer_error() is False
+        assert not [i for i in get_printer_infos()
+                    if i["error_code"] == KIOSK_OFFLINE_CODE]
+        assert borne_reachability() == {"borne-1": True}
+
+
+def test_maintenance_trop_longue_redevient_injoignable(application):
+    """La borne redémarre seule après sa configuration : un silence plus long
+    n'est plus expliqué par la maintenance."""
+    from models import (
+        BORNE_OFFLINE,
+        KIOSK_MAINTENANCE_CODE,
+        KIOSK_MAINTENANCE_MAX_SECONDS,
+        borne_reachability,
+    )
+    with application.app_context():
+        _silent_after(KIOSK_MAINTENANCE_CODE, KIOSK_MAINTENANCE_MAX_SECONDS + 60)
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["state"] == BORNE_OFFLINE
+        assert get_printer_error() is True
+        assert borne_reachability() == {"borne-1": False}
+
+
+def test_application_quittee_reste_arretee_sans_alerte(application):
+    from models import BORNE_STOPPED, KIOSK_STOPPED_CODE, borne_reachability
+    with application.app_context():
+        _silent_after(KIOSK_STOPPED_CODE, 24 * 3600)
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["state"] == BORNE_STOPPED
+        assert get_printer_error() is False
+        assert borne_reachability() == {"borne-1": True}
+
+
+def test_annonce_d_arret_ne_masque_pas_l_etat_imprimante(application):
+    """kiosk_maintenance est un évènement : l'état papier reste le dernier
+    statut métier."""
+    from models import KIOSK_MAINTENANCE_CODE
+    with application.app_context():
+        record_printer_status("no_paper", "Plus de papier", borne_id="borne-1")
+        record_printer_status(KIOSK_MAINTENANCE_CODE, "Configuration",
+                              borne_id="borne-1", is_error=False)
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["code"] == "no_paper"
+        assert overview["borne-1"]["state"] == "online"
+
+
+def test_borne_revenue_apres_maintenance_est_en_ligne(application):
+    from models import BORNE_ONLINE, KIOSK_MAINTENANCE_CODE
+    with application.app_context():
+        _silent_after(KIOSK_MAINTENANCE_CODE, PRINTER_STATUS_STALE_SECONDS + 60)
+        record_printer_status(PRINTER_HEARTBEAT_CODE, "Borne en ligne",
+                              borne_id="borne-1")
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["state"] == BORNE_ONLINE
+
+
+def test_silence_sans_annonce_reste_injoignable(application):
+    """Un autre incident borne (kiosk_*) n'explique pas un silence."""
+    from models import BORNE_OFFLINE
+    with application.app_context():
+        _silent_after("kiosk_page_dead", PRINTER_STATUS_STALE_SECONDS + 60)
+        overview = {b["borne_id"]: b for b in borne_overview()}
+        assert overview["borne-1"]["state"] == BORNE_OFFLINE
+        assert get_printer_error() is True
+
+
+def test_codes_alignes_avec_la_borne():
+    """Mêmes codes que maintenance_pin.SERVER_EVENT_* de la borne."""
+    from models import KIOSK_EVENT_PREFIX, KIOSK_MAINTENANCE_CODE, KIOSK_STOPPED_CODE
+    assert KIOSK_MAINTENANCE_CODE == "kiosk_maintenance"
+    assert KIOSK_STOPPED_CODE == "kiosk_stopped"
+    for code in (KIOSK_MAINTENANCE_CODE, KIOSK_STOPPED_CODE):
+        assert code.startswith(KIOSK_EVENT_PREFIX)

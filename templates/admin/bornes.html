@@ -6,7 +6,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <div>
         <h2 class="mb-0">Bornes patient</h2>
-        <p class="text-muted small mb-0">Santé des bornes en direct. Une borne est injoignable après {{ stale_seconds // 60 }} min sans contact.</p>
+        <p class="text-muted small mb-0">Santé des bornes en direct. Une borne est injoignable après {{ stale_seconds // 60 }} min sans contact, sauf si elle a été arrêtée depuis son menu de maintenance (touche F10) : elle apparaît alors « En maintenance » ou « Arrêtée ».</p>
     </div>
     <a class="btn btn-outline-secondary btn-sm" href="/admin/bornes">
         <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Actualiser
@@ -32,11 +32,15 @@
         </thead>
         <tbody>
         {% for b in bornes %}
-            <tr class="{{ 'table-danger' if (not b.reachable) or b.is_error else '' }}">
+            <tr class="{{ 'table-danger' if b.state == 'offline' or b.is_error else '' }}">
                 <td class="fw-semibold">{{ b.borne_id }}</td>
                 <td>
-                    {% if b.reachable %}
+                    {% if b.state == 'online' %}
                     <span class="badge text-bg-success">En ligne</span>
+                    {% elif b.state == 'maintenance' %}
+                    <span class="badge text-bg-info" title="Configuration en cours depuis le menu de maintenance de la borne">En maintenance</span>
+                    {% elif b.state == 'stopped' %}
+                    <span class="badge text-bg-secondary" title="Application quittée depuis le menu de maintenance de la borne">Arrêtée</span>
                     {% else %}
                     <span class="badge text-bg-danger">Injoignable</span>
                     {% endif %}

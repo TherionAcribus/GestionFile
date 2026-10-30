@@ -1086,6 +1086,21 @@ KIOSK_EVENT_PREFIX = "kiosk_"
 # Une borne envoie un heartbeat toutes les 30 s ; trois intervalles manqués
 # permettent d'afficher « injoignable » sans réagir à un simple retard.
 PRINTER_STATUS_STALE_SECONDS = 90
+# Arrêts VOLONTAIRES annoncés par la borne juste avant de se taire (menu de
+# maintenance, touche F10) : son silence est expliqué. Elle apparaît « en
+# maintenance » ou « arrêtée » au lieu de « injoignable », sans alerte au
+# comptoir.
+KIOSK_MAINTENANCE_CODE = 'kiosk_maintenance'
+KIOSK_STOPPED_CODE = 'kiosk_stopped'
+# Une maintenance n'explique le silence que ce temps-là : la borne redémarre
+# d'elle-même à la fermeture de sa configuration (fermée seule après 10 min
+# sans activité). Au-delà, elle redevient « injoignable ».
+KIOSK_MAINTENANCE_MAX_SECONDS = 30 * 60
+# États d'une borne (``borne_state``).
+BORNE_ONLINE = "online"
+BORNE_MAINTENANCE = "maintenance"
+BORNE_STOPPED = "stopped"
+BORNE_OFFLINE = "offline"
 # Les heartbeats sont dédupliqués par borne : cette limite borne uniquement un
 # client forgé qui inventerait une infinité d'identifiants de borne.
 PRINTER_HEARTBEAT_LIMIT = 20
@@ -1283,21 +1298,40 @@ def _borne_status_snapshots():
     return snapshots
 
 
-def _borne_is_stale(last_seen, now=None):
+def _seconds_since_contact(last_seen, now=None):
     if now is None:
         now = datetime.now(time_tz)
     if now.tzinfo is not None:
         now = now.astimezone(time_tz).replace(tzinfo=None)
-    return ((now - _status_received_at(last_seen)).total_seconds()
-            > PRINTER_STATUS_STALE_SECONDS)
+    return (now - _status_received_at(last_seen)).total_seconds()
+
+
+def borne_state(last_seen, now=None):
+    """État d'une borne d'après son dernier contact ``last_seen``.
+
+    ``BORNE_ONLINE`` : contact récent. Sinon, si son DERNIER message
+    annonçait un arrêt volontaire : ``BORNE_STOPPED`` (application quittée
+    depuis la borne) ou ``BORNE_MAINTENANCE`` (configuration en cours, au
+    plus ``KIOSK_MAINTENANCE_MAX_SECONDS``). Tout autre silence :
+    ``BORNE_OFFLINE`` (injoignable)."""
+    age = _seconds_since_contact(last_seen, now)
+    if age <= PRINTER_STATUS_STALE_SECONDS:
+        return BORNE_ONLINE
+    if last_seen.error_code == KIOSK_STOPPED_CODE:
+        return BORNE_STOPPED
+    if (last_seen.error_code == KIOSK_MAINTENANCE_CODE
+            and age <= KIOSK_MAINTENANCE_MAX_SECONDS):
+        return BORNE_MAINTENANCE
+    return BORNE_OFFLINE
 
 
 def _offline_status_infos(snapshots):
-    """Lignes synthétiques (non persistées) pour les bornes sans contact récent."""
+    """Lignes synthétiques (non persistées) pour les bornes sans contact
+    récent ni arrêt annoncé."""
     stale = [
         snapshot["last_seen"] for snapshot in snapshots.values()
         if snapshot["last_seen"] is not None
-        and _borne_is_stale(snapshot["last_seen"])
+        and borne_state(snapshot["last_seen"]) == BORNE_OFFLINE
     ]
     stale.sort(key=lambda row: _status_received_at(row), reverse=True)
     return [{
@@ -1315,12 +1349,14 @@ def borne_reachability(now=None):
     contact (heartbeat ou statut métier).
 
     ``{borne_id: True|False}`` — injoignable au-delà de
-    ``PRINTER_STATUS_STALE_SECONDS`` sans contact. Utilisé par le job de
-    surveillance (``scheduler_functions.kiosk_watchdog_job``) pour notifier
-    les transitions : ``_offline_status_infos`` sert, lui, l'affichage du
+    ``PRINTER_STATUS_STALE_SECONDS`` sans contact, sauf arrêt volontaire
+    annoncé (maintenance, application quittée : voir ``borne_state``).
+    Utilisé par le job de surveillance
+    (``scheduler_functions.kiosk_watchdog_job``) pour notifier les
+    transitions : ``_offline_status_infos`` sert, lui, l'affichage du
     dashboard."""
     return {
-        borne_id: not _borne_is_stale(snapshot["last_seen"], now=now)
+        borne_id: borne_state(snapshot["last_seen"], now=now) != BORNE_OFFLINE
         for borne_id, snapshot in _borne_status_snapshots().items()
         if snapshot["last_seen"] is not None
     }
@@ -1344,8 +1380,9 @@ def borne_overview(now=None):
     """Vue consolidée par borne pour la page « Bornes » de l'admin.
 
     Une entrée par borne ayant déjà contacté le serveur :
-    ``{borne_id, reachable, last_contact, code, message, is_error,
-    status_at}`` — ``code``/``message``/``is_error`` décrivent le dernier
+    ``{borne_id, state, reachable, last_contact, code, message, is_error,
+    status_at}`` — ``state`` vient de ``borne_state`` (``reachable`` : contact
+    récent) ; ``code``/``message``/``is_error`` décrivent le dernier
     statut MÉTIER (papier, erreur) ; ``status_at`` privilégie l'horodatage
     de génération par la borne (``generated_at``) comme l'affichage du
     dashboard. ``last_contact`` et ``status_at`` sont des datetimes naïves
@@ -1360,9 +1397,11 @@ def borne_overview(now=None):
         status_at = None
         if current is not None:
             status_at = current.generated_at or _status_received_at(current)
+        state = borne_state(last_seen, now=now)
         overview.append({
             "borne_id": borne_id,
-            "reachable": not _borne_is_stale(last_seen, now=now),
+            "state": state,
+            "reachable": state == BORNE_ONLINE,
             "last_contact": _status_received_at(last_seen),
             "code": current.error_code if current is not None else None,
             "message": current.message if current is not None else None,
@@ -1421,14 +1460,16 @@ def get_printer_error():
     """ Drapeau d'erreur courant.
 
     Avec plusieurs bornes, l'erreur est globale : une borne en erreur ou sans
-    contact récent suffit à signaler l'attention du personnel. ``None`` reste
+    contact récent suffit à signaler l'attention du personnel — pas une
+    borne arrêtée volontairement (maintenance annoncée). ``None`` reste
     réservé à l'absence totale de statut (« Pas d'infos »). """
     snapshots = _borne_status_snapshots()
     if snapshots:
         for snapshot in snapshots.values():
             last_seen = snapshot["last_seen"]
             current = snapshot["current"]
-            if last_seen is not None and _borne_is_stale(last_seen):
+            if (last_seen is not None
+                    and borne_state(last_seen) == BORNE_OFFLINE):
                 return True
             if current is not None and current.is_error:
                 return True
