@@ -16,6 +16,7 @@ from audit_log import ACTION_CONNECT, ACTION_UPDATE, OUTCOME_SUCCESS, OUTCOME_FA
 from audit_service import record_audit
 from python.engine import qr_png_bytes
 import app_notification_texts
+import quick_replies
 import config_sync
 from account_recovery import normalize_base_url
 from mail_settings import (
@@ -82,6 +83,10 @@ def admin_app(tab=None):
                             rabbitmq_url_set=bool(
                                 app.config.get("RABBITMQ_URL")),
                             app_messaging_enabled=app.config.get("APP_MESSAGING_ENABLED", False),
+                            app_quick_replies="\n".join(
+                                quick_replies.team_phrases(app.config)),
+                            quick_replies_max=quick_replies.MAX_TEAM,
+                            quick_replies_max_length=quick_replies.MAX_LENGTH,
                             call_auto_validation_enabled=app.config.get(
                                 "CALL_AUTO_VALIDATION_ENABLED", False),
                             call_auto_validation_warning_seconds=app.config.get(

@@ -205,6 +205,9 @@ class StaffSection(BackupSection):
                 "initials": p.initials,
                 "language": p.language,
                 "is_active": p.is_active,
+                # Phrases rapides personnelles (absentes des sauvegardes
+                # anciennes : la restauration les laisse alors vides).
+                "quick_replies": p.quick_replies,
                 "activities": [a.id for a in p.activities],
             }
             for p in pharmacists

@@ -63,6 +63,30 @@
         Permet aux membres de l'équipe de s'envoyer des messages d'un comptoir à l'autre. Désactivée, elle disparaît
         immédiatement des applications comptoir et aucun nouveau message ne peut être envoyé.
     </p>
+    {# Phrases du menu « ⚡ » (quick_replies.py) : une par ligne. Chaque
+       équipier peut y ajouter ses propres phrases depuis l'App. #}
+    <div class="d-flex align-items-start mt-3">
+        <div class="flex-grow-1">
+            <label for="app_quick_replies" class="form-label mb-0">Phrases rapides de l'équipe</label>
+            <textarea
+                id="app_quick_replies"
+                class="form-control"
+                rows="6"
+                aria-describedby="app_quick_replies_help"
+                data-config-key="app_quick_replies"
+                data-initial-value="{{ app_quick_replies }}"
+            >{{ app_quick_replies }}</textarea>
+            <p id="app_quick_replies_help" class="form-text mb-0">
+                Une phrase par ligne ({{ quick_replies_max }} au maximum, {{ quick_replies_max_length }} caractères chacune),
+                proposées à tous dans le menu « ⚡ » de la messagerie. La phrase choisie est placée dans le champ de
+                saisie, jamais envoyée directement. Chaque membre de l'équipe peut y ajouter ses propres phrases depuis
+                l'application comptoir. Videz le champ pour ne proposer que les phrases personnelles.
+            </p>
+        </div>
+        <div class="ms-3">
+            {{ macros.button("app_quick_replies", "text") }}
+        </div>
+    </div>
 </section>
 
 <section class="admin-setting-card algo-section" aria-labelledby="call_auto_validation_title">

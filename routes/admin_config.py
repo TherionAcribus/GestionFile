@@ -619,6 +619,10 @@ def special_functions_with_input(key):
         # suite, sans attendre une resynchronisation.
         communikation("app_counter", event="counter_state_changed",
                       data={"reason": "notification_texts_changed"})
+    if key == "app_quick_replies":
+        # Le menu « ⚡ » vient de l'état de messagerie : les App le relisent
+        # tout de suite (même signal que l'arrivée/départ d'un équipier).
+        communikation("app_counter", event="messaging_presence_changed")
     return warning
 
 

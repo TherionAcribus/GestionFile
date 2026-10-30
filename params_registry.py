@@ -37,6 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import app_notification_texts
+import quick_replies
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +250,10 @@ _CONFIG_TYPES: dict[str, tuple[str, str]] = {
 # certains messages dépassent les 200 caractères de ``value_str``.
 for _notif in app_notification_texts.CATALOGUE:
     _CONFIG_TYPES[_notif.key] = (_notif.config_name, "value_text")
+
+# Phrases rapides d'équipe de la messagerie (une par ligne, cf.
+# quick_replies.py).
+_CONFIG_TYPES[quick_replies.TEAM_KEY] = (quick_replies.TEAM_CONFIG_NAME, "value_text")
 
 
 # ---------------------------------------------------------------------------
@@ -565,6 +570,8 @@ def _validator_for(key: str, value_type: str) -> str:
     # Balises propres à chaque message (app_notification_texts.validate).
     if app_notification_texts.is_notification_key(key):
         return "app_notification"
+    if key == quick_replies.TEAM_KEY:
+        return "quick_replies"
     return "text"
 
 
@@ -581,7 +588,7 @@ class ParamSpec:
     config_name: str
     value_type: str          # value_str | value_int | value_bool | value_text
     permission: str
-    validator: str           # bool | int | text | hour | welcome | before_call | after_call | ticket | theme | sound_file | app_notification
+    validator: str           # bool | int | text | hour | welcome | before_call | after_call | ticket | theme | sound_file | app_notification | quick_replies
     kind: str                # switch | input | select
     restart_required: bool = False
     secret: bool = False     # valeur secrète (jamais exposée/exportée/journalisée)

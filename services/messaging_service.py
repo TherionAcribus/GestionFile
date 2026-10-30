@@ -15,6 +15,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
+import quick_replies
 from communication import communikation
 from config import time_tz
 from models import (
@@ -38,10 +39,12 @@ MESSAGING_ROOM_PREFIX = "messaging_counter_"
 
 
 class MessagingError(Exception):
-    def __init__(self, code: str, status: int = 400):
+    def __init__(self, code: str, status: int = 400, message: str | None = None):
         super().__init__(code)
         self.code = code
         self.status = status
+        # Texte affichable tel quel par l'App (refus de validation lisible).
+        self.message = message
 
 
 def now():
@@ -445,6 +448,9 @@ def state(counter_id):
         "unread_mentions": unread_mentions,
         "unread_urgent": unread_urgent,
         "online_count": sum(1 for person in people.values() if person["online"]),
+        # Menu « ⚡ » : phrases d'équipe (admin) + phrases de l'équipier.
+        "quick_replies": quick_replies.client_payload(
+            current_app.config, staff.quick_replies),
         "server_time": _iso(now()),
     }
 
@@ -656,6 +662,21 @@ def delete_message(counter_id, message_id):
     if rooms:
         _emit("messaging_changed", {"deleted": True}, rooms=rooms)
     return {"deleted": True, "message_id": message.id}
+
+
+def save_quick_replies(counter_id, phrases):
+    """Remplace les phrases rapides personnelles de l'équipier connecté au
+    comptoir. L'identité vient du comptoir (comme l'envoi d'un message) :
+    on ne modifie jamais les phrases d'un autre équipier."""
+    require_enabled()
+    _counter, staff = resolve_identity(counter_id)
+    try:
+        cleaned = quick_replies.validate_personal(phrases)
+    except quick_replies.QuickRepliesError as exc:
+        raise MessagingError(exc.code, 400, exc.message) from exc
+    staff.quick_replies = cleaned or None
+    db.session.commit()
+    return quick_replies.client_payload(current_app.config, staff.quick_replies)
 
 
 def mark_read(counter_id, message_ids):

@@ -61,7 +61,7 @@ def test_value_type_matches_validator():
             assert spec.validator in ("text", "welcome", "before_call",
                                       "after_call", "ticket", "theme",
                                       "sound_file", "hour", "positive_int",
-                                      "app_notification")
+                                      "app_notification", "quick_replies")
 
 
 def test_hour_keys_use_hour_validator():

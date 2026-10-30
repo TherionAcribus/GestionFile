@@ -1,13 +1,14 @@
 {
     "name": "config_backup",
     "type": "default",
-    "version": "0.47",
+    "version": "0.48",
     "timestamp": "2024-12-08 16:35:26",
     "comments": "Version de test",
         "configurations": {
             "network_adress": "",
             "pharmacy_name": "Pharmacie",
             "app_messaging_enabled": false,
+            "app_quick_replies": "J'arrive\nOccupé(e) 2 min\nEn réserve\nUn client m'attend",
             "call_auto_validation_enabled": false,
             "call_auto_validation_warning_seconds": 60,
             "call_auto_validation_grace_seconds": 30,

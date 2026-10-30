@@ -16,7 +16,10 @@ def _json():
 
 
 def _error(exc):
-    return jsonify({"error": exc.code}), exc.status
+    body = {"error": exc.code}
+    if getattr(exc, "message", None):
+        body["message"] = exc.message
+    return jsonify(body), exc.status
 
 
 @messaging_bp.route("/api/messaging/presence", methods=["POST"])
@@ -99,6 +102,20 @@ def read_messages():
     try:
         return jsonify(messaging.mark_read(
             data.get("counter_id"), message_ids,
+        ))
+    except messaging.MessagingError as exc:
+        return _error(exc)
+
+
+@messaging_bp.route("/api/messaging/quick_replies", methods=["PUT"])
+@require_app_token
+def save_quick_replies():
+    """Phrases rapides personnelles de l'équipier connecté au comptoir.
+    Corps JSON : {"counter_id": int, "personal": [str, ...]}."""
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(messaging.save_quick_replies(
+            data.get("counter_id"), data.get("personal"),
         ))
     except messaging.MessagingError as exc:
         return _error(exc)

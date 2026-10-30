@@ -415,6 +415,11 @@ class Pharmacist(db.Model):
     initials = db.Column(db.String(10), nullable=False)
     language = db.Column(db.String(20), default=False)
     is_active = db.Column(db.Boolean, default=False)
+    # Phrases rapides PERSONNELLES du menu « ⚡ » de la messagerie (liste de
+    # textes, cf. quick_replies.py) : sur la fiche, elles suivent l'équipier
+    # d'un comptoir à l'autre et disparaissent avec lui. Volontairement hors
+    # de to_dict() (envoyé dans l'état du comptoir).
+    quick_replies = db.Column(db.JSON, nullable=True)
     activities = db.relationship('Activity', secondary=pharmacists_activities, lazy='subquery',
         backref=db.backref('pharmacists', lazy=True))   
     
