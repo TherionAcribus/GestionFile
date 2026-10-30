@@ -1311,7 +1311,7 @@ def borne_state(last_seen, now=None):
 
     ``BORNE_ONLINE`` : contact récent. Sinon, si son DERNIER message
     annonçait un arrêt volontaire : ``BORNE_STOPPED`` (application quittée
-    depuis la borne) ou ``BORNE_MAINTENANCE`` (configuration en cours, au
+    ou PC éteint depuis la borne) ou ``BORNE_MAINTENANCE`` (configuration en cours, au
     plus ``KIOSK_MAINTENANCE_MAX_SECONDS``). Tout autre silence :
     ``BORNE_OFFLINE`` (injoignable)."""
     age = _seconds_since_contact(last_seen, now)

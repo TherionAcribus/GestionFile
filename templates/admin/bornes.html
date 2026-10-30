@@ -40,7 +40,7 @@
                     {% elif b.state == 'maintenance' %}
                     <span class="badge text-bg-info" title="Configuration en cours depuis le menu de maintenance de la borne">En maintenance</span>
                     {% elif b.state == 'stopped' %}
-                    <span class="badge text-bg-secondary" title="Application quittée depuis le menu de maintenance de la borne">Arrêtée</span>
+                    <span class="badge text-bg-secondary" title="Application quittée ou PC éteint depuis le menu de maintenance de la borne (voir le dernier incident)">Arrêtée</span>
                     {% else %}
                     <span class="badge text-bg-danger">Injoignable</span>
                     {% endif %}
