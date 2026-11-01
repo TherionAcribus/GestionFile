@@ -72,6 +72,9 @@ def messages():
             before_id=request.args.get("before_id"),
             after_id=request.args.get("after_id"),
             limit=request.args.get("limit", messaging.PAGE_SIZE_DEFAULT),
+            # Traces « message retiré » : seulement pour une App qui sait
+            # les afficher (une ancienne version verrait une bulle vide).
+            include_deleted=request.args.get("include_deleted") == "1",
         ))
     except messaging.MessagingError as exc:
         return _error(exc)

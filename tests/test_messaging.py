@@ -909,3 +909,89 @@ def test_list_messages_pages_older_messages_with_has_more(api):
         f"&before_id={page1['messages'][0]['id']}").get_json()
     assert page2["has_more"] is False
     assert [m["body"] for m in page2["messages"]] == ["msg0"]
+
+
+# --- Traces « message retiré » (include_deleted) ------------------------------
+
+def _thread(client, counter_id, peer_id, include_deleted=True, kind="direct"):
+    url = (f"/api/messaging/messages?counter_id={counter_id}&kind={kind}"
+           f"&peer_staff_id={peer_id}")
+    if include_deleted:
+        url += "&include_deleted=1"
+    return client.get(url).get_json()["messages"]
+
+
+def _delete(client, counter_id, message_id):
+    response = client.post("/api/messaging/delete", json={
+        "counter_id": counter_id, "message_id": message_id,
+    })
+    assert response.status_code == 200
+
+
+def test_deleted_message_leaves_a_contentless_trace_when_asked(api):
+    _app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"],
+                        body="secret patient", urgent=True)
+    message_id = response.get_json()["id"]
+    # L'App de Bob récupère l'état : le message lui est « remis ».
+    client.get("/api/messaging/state?counter_id=2")
+    _delete(client, 1, message_id)
+
+    for counter, peer in ((1, ids["bob"]), (2, ids["alice"])):
+        thread = _thread(client, counter, peer)
+        assert len(thread) == 1
+        trace = thread[0]
+        assert trace["id"] == message_id
+        assert trace["deleted"] is True
+        assert trace["deleted_at"]
+        assert trace["body"] == ""                    # jamais le contenu
+        assert "secret" not in str(trace)
+        assert trace["urgent"] is False
+        assert trace["is_unread"] is False
+        assert trace["read_at"] is None
+        assert trace["sender"]["name"] == "Alice"
+        # Sans le paramètre (ancienne App) : disparition comme avant.
+        assert _thread(client, counter, peer, include_deleted=False) == []
+    # La trace ne compte jamais comme non-lu.
+    assert client.get(
+        "/api/messaging/state?counter_id=2").get_json()["unread_total"] == 0
+
+
+def test_undelivered_recipient_sees_no_trace(api):
+    # Bob n'avait jamais reçu le message (App fermée) : rien à lui
+    # expliquer, le message disparaît sans trace. Alice garde la sienne.
+    app, client, ids = api
+    _presence(client, 1)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+    with app.app_context():
+        row = AppMessageRecipient.query.filter_by(message_id=message_id).one()
+        assert row.delivered_at is None
+    _delete(client, 1, message_id)
+    # Lire son fil marque les messages « remis » : jamais un message déjà
+    # retiré, sinon sa trace réapparaîtrait chez Bob.
+    assert _thread(client, 2, ids["alice"]) == []
+    with app.app_context():
+        row = AppMessageRecipient.query.filter_by(message_id=message_id).one()
+        assert row.delivered_at is None
+    assert [m["id"] for m in _thread(client, 1, ids["bob"])] == [message_id]
+
+
+def test_old_deleted_message_trace_does_not_outlive_the_day(api):
+    # Une trace n'est jamais « non lue » : elle suit la fenêtre de la
+    # journée, même si Bob n'avait pas lu le message retiré.
+    app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+    client.get("/api/messaging/state?counter_id=2")
+    _delete(client, 1, message_id)
+    with app.app_context():
+        db.session.get(AppMessage, message_id).created_at = (
+            messaging.now() - timedelta(days=2))
+        db.session.commit()
+    assert _thread(client, 2, ids["alice"]) == []
+    assert _thread(client, 1, ids["bob"]) == []

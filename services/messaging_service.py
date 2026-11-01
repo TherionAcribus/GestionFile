@@ -221,12 +221,31 @@ def _today_start():
     return local_midnight.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _visible_query(staff_id):
+def _visible_query(staff_id, include_deleted=False):
+    """Messages qui me concernent dans la fenêtre d'affichage.
+
+    Retrait logique : un message supprimé par son expéditeur sort des
+    états et compteurs de non-lus (l'enregistrement reste en base pour
+    l'audit). Avec ``include_deleted`` (fil d'une App qui sait les
+    afficher), il reste présent comme simple trace « message retiré » —
+    pour son expéditeur, et pour les destinataires dont l'App l'avait déjà
+    reçu (delivered_at) : ils ont pu le voir ou en avoir la notification.
+    Un destinataire qui ne l'a jamais reçu n'en voit aucune trace."""
+    if include_deleted:
+        deleted_filter = or_(
+            AppMessage.deleted_at.is_(None),
+            AppMessage.sender_staff_id == staff_id,
+            AppMessage.recipients.any(
+                and_(
+                    AppMessageRecipient.recipient_staff_id == staff_id,
+                    AppMessageRecipient.delivered_at.isnot(None),
+                ),
+            ),
+        )
+    else:
+        deleted_filter = AppMessage.deleted_at.is_(None)
     return AppMessage.query.filter(
-        # Retrait logique : un message supprimé par son expéditeur
-        # disparaît de tous les fils, états et compteurs de non-lus
-        # (l'enregistrement reste en base pour l'audit).
-        AppMessage.deleted_at.is_(None),
+        deleted_filter,
         # Je suis expéditeur ou destinataire.
         or_(
             AppMessage.sender_staff_id == staff_id,
@@ -235,19 +254,26 @@ def _visible_query(staff_id):
             ),
         ),
         # Fenêtre : journée locale, ou non-lu qui me concerne, ou envoyé
-        # par moi et pas encore lu par un destinataire quelconque.
+        # par moi et pas encore lu par un destinataire quelconque. Une
+        # trace de message retiré ne vaut que pour la journée : elle n'est
+        # jamais « non lue ».
         or_(
             AppMessage.created_at >= _today_start(),
-            AppMessage.recipients.any(
-                and_(
-                    AppMessageRecipient.recipient_staff_id == staff_id,
-                    AppMessageRecipient.read_at.is_(None),
-                ),
-            ),
             and_(
-                AppMessage.sender_staff_id == staff_id,
-                AppMessage.recipients.any(
-                    AppMessageRecipient.read_at.is_(None),
+                AppMessage.deleted_at.is_(None),
+                or_(
+                    AppMessage.recipients.any(
+                        and_(
+                            AppMessageRecipient.recipient_staff_id == staff_id,
+                            AppMessageRecipient.read_at.is_(None),
+                        ),
+                    ),
+                    and_(
+                        AppMessage.sender_staff_id == staff_id,
+                        AppMessage.recipients.any(
+                            AppMessageRecipient.read_at.is_(None),
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -275,7 +301,33 @@ def _recipient_payload(recipient):
     }
 
 
+def _deleted_payload(message):
+    """Trace d'un message retiré : qui, quand — jamais son contenu."""
+    return {
+        "id": message.id,
+        "client_message_id": message.client_message_id,
+        "kind": message.kind,
+        "body": "",
+        "urgent": False,
+        "deleted": True,
+        "deleted_at": _iso(message.deleted_at),
+        "created_at": _iso(message.created_at),
+        "sender": {
+            "staff_id": message.sender_staff_id,
+            "name": message.sender_name,
+            "counter_id": message.sender_counter_id,
+            "counter_name": message.sender_counter_name,
+        },
+        "recipients": [],
+        "delivered_at": None,
+        "read_at": None,
+        "is_unread": False,
+    }
+
+
 def serialize_message(message, viewer_staff_id):
+    if message.deleted_at is not None:
+        return _deleted_payload(message)
     recipients = [_recipient_payload(row) for row in message.recipients]
     viewer_recipient = next(
         (row for row in message.recipients if row.recipient_staff_id == viewer_staff_id),
@@ -304,6 +356,7 @@ def serialize_message(message, viewer_staff_id):
         "delivered_at": direct_delivered_at,
         "read_at": direct_read_at,
         "is_unread": bool(viewer_recipient and not viewer_recipient.read_at),
+        "deleted": False,
     }
 
 
@@ -315,6 +368,9 @@ def _mark_delivered(staff):
         .filter(
             AppMessageRecipient.recipient_staff_id == staff.id,
             AppMessageRecipient.delivered_at.is_(None),
+            # Un message déjà retiré n'est jamais « remis » : sa trace ne
+            # doit pas apparaître chez qui ne l'avait pas reçu à temps.
+            AppMessageRecipient.message.has(AppMessage.deleted_at.is_(None)),
         )
         .options(joinedload(AppMessageRecipient.message))
         .all()
@@ -456,7 +512,8 @@ def state(counter_id):
 
 
 def list_messages(counter_id, *, kind, peer_staff_id=None, before_id=None,
-                  after_id=None, limit=PAGE_SIZE_DEFAULT):
+                  after_id=None, limit=PAGE_SIZE_DEFAULT,
+                  include_deleted=False):
     require_enabled()
     _counter, staff = resolve_identity(counter_id)
     _mark_delivered(staff)
@@ -466,7 +523,9 @@ def list_messages(counter_id, *, kind, peer_staff_id=None, before_id=None,
         limit = max(1, min(PAGE_SIZE_MAX, int(limit)))
     except (TypeError, ValueError):
         limit = PAGE_SIZE_DEFAULT
-    query = _visible_query(staff.id).filter(AppMessage.kind == kind)
+    query = _visible_query(
+        staff.id, include_deleted=include_deleted,
+    ).filter(AppMessage.kind == kind)
     if kind == "direct":
         try:
             peer_staff_id = int(peer_staff_id)
