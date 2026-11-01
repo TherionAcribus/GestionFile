@@ -479,6 +479,25 @@
     return value < 1 ? `${number(value * 60, 0)} min` : `${number(value, 1)} h`;
   }
 
+  // Version de l'App du comptoir, avec un repère « ancienne » quand une
+  // version plus récente est en service ailleurs (à mettre à jour).
+  function appVersionCell(counter, latest) {
+    const td = cell(counter.app_version || "—");
+    if (!counter.app_version) {
+      td.title = "Version non transmise : App antérieure à l'envoi de sa version.";
+    } else if (counter.app_version.endsWith("-dev")) {
+      td.title = "Lancée depuis les sources (poste de développement).";
+    }
+    if (counter.app_version_outdated) {
+      const badge = document.createElement("span");
+      badge.className = "badge text-bg-warning ms-1";
+      badge.textContent = "ancienne";
+      badge.title = latest ? `Version la plus récente en service : ${latest}` : "";
+      td.append(" ", badge);
+    }
+    return td;
+  }
+
   async function loadRealtimeHealth() {
     const days = $("realtime-health-days").value;
     const body = $("realtime-health-body");
@@ -492,13 +511,13 @@
         const tr = document.createElement("tr");
         const [statusTone, statusLabel] = HEALTH_STATUS[counter.status] || ["secondary", counter.status];
         const name = cell(counter.counter_name || `Comptoir n°${counter.counter_id}`);
-        if (counter.app_version) name.title = `App ${counter.app_version}`;
+        const version = appVersionCell(counter, data.latest_app_version);
         const status = document.createElement("td");
         const badge = document.createElement("span");
         badge.className = `badge text-bg-${statusTone}`;
         badge.textContent = statusLabel;
         status.appendChild(badge);
-        tr.append(name, status,
+        tr.append(name, version, status,
           cell(number(counter.events, 0)),
           cell(`${number(counter.missed_events, 0)} (${number(counter.loss_percent, 2)} %)`,
             counter.missed_events ? "text-danger fw-semibold" : ""),
@@ -513,7 +532,7 @@
       if (!rows.length) {
         const tr = document.createElement("tr");
         const td = cell("Aucun rapport sur la période.", "text-muted");
-        td.colSpan = 10; tr.appendChild(td); rows.push(tr);
+        td.colSpan = 11; tr.appendChild(td); rows.push(tr);
       }
       body.replaceChildren(...rows);
     } catch (exception) {

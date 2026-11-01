@@ -10,8 +10,9 @@ os.environ.setdefault("SKIP_STARTUP_HOOKS", "1")
 import pytest
 from flask import Flask
 
-from counter_realtime_health import (ReportError, normalize_period, parse_report,
-                                     period_start, summarize, summary_message)
+from counter_realtime_health import (ReportError, mark_outdated_versions, normalize_period,
+                                     parse_report, period_start, release_version, summarize,
+                                     summary_message)
 from models import Counter, CounterRealtimeHealth, db
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -195,3 +196,54 @@ def test_only_the_broadcast_path_bumps_the_queue_revision():
                     getattr(node.func, 'id', getattr(node.func, 'attr', None)) == 'bump_queue_revision'):
                 offenders.append(f'{relative}:{node.lineno}')
     assert offenders == []
+
+
+# --- Version de l'App des comptoirs --------------------------------------------------
+
+@pytest.mark.parametrize('text,expected', [
+    ('1.2.0', (1, 2, 0)), (' 1.10.3 ', (1, 10, 3)),
+    ('1.2.0-dev', None), ('', None), (None, None), ('abc', None), ('1.2', None)])
+def test_release_version_only_accepts_published_versions(text, expected):
+    assert release_version(text) == expected
+
+
+def test_older_apps_are_flagged_against_the_latest_published_one():
+    counters = [{'app_version': '1.2.0'}, {'app_version': '1.10.0'},
+                {'app_version': '1.9.9'}, {'app_version': None},
+                {'app_version': '1.11.0-dev'}]
+    latest = mark_outdated_versions(counters)
+    # Comparaison numerique : 1.10.0 > 1.9.9 > 1.2.0. La version de
+    # developpement, plus haute, ne sert pas de reference.
+    assert latest == '1.10.0'
+    assert [item['app_version_outdated'] for item in counters] == [
+        True, False, True, True, False]
+
+
+def test_nothing_is_flagged_without_any_published_version():
+    counters = [{'app_version': None}, {'app_version': '1.2.0-dev'}]
+    assert mark_outdated_versions(counters) is None
+    assert not any(item['app_version_outdated'] for item in counters)
+
+
+def test_summary_reports_the_latest_version_from_the_newest_report():
+    later = NOW + timedelta(minutes=5)
+    rows = [_row(1, events=5, app_version='1.1.0'),
+            _row(1, events=5, app_version='1.2.0', updated_at=later),
+            _row(2, events=5, app_version='1.1.0')]
+    summary = summarize(rows, {1: 'C1', 2: 'C2'})
+    by_name = {item['counter_name']: item for item in summary['counters']}
+    assert summary['latest_app_version'] == '1.2.0'
+    assert by_name['C1']['app_version'] == '1.2.0'  # rapport le plus recent
+    assert by_name['C1']['app_version_outdated'] is False
+    assert by_name['C2']['app_version_outdated'] is True
+
+
+def test_performance_page_shows_the_app_version_column():
+    template = (ROOT / 'templates' / 'admin' / 'performance.html').read_text(encoding='utf-8')
+    header = template[template.index('<th>Comptoir</th>'):]
+    header = header[:header.index('</tr>')]
+    script = (ROOT / 'static' / 'js' / 'admin_performance.js').read_text(encoding='utf-8')
+    assert "<th>Version de l'App</th>" in header
+    # Ligne « aucun rapport » : elle couvre toutes les colonnes.
+    assert f"td.colSpan = {header.count('<th>')};" in script
+    assert 'appVersionCell(counter, data.latest_app_version)' in script

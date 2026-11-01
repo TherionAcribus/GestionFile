@@ -23,6 +23,7 @@ comptoir et par heure) puis resumes ici pour l'administration.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
 COUNTER_FIELDS = ('events', 'gaps', 'missed_events', 'reconnect_gaps',
@@ -73,6 +74,38 @@ def parse_report(data):
     report['app_version'] = (str(version)[:40] if version not in (None, '')
                              else None)
     return report
+
+
+# Version publiee de l'App : « X.Y.Z » exactement. Une App lancee depuis les
+# sources annonce « X.Y.Z-dev » : jamais comptee comme publiee.
+_RELEASE_VERSION = re.compile(r'^(\d+)\.(\d+)\.(\d+)$')
+
+
+def release_version(text):
+    """``'1.2.0'`` -> ``(1, 2, 0)`` ; ``None`` pour une version de
+    developpement, absente ou illisible."""
+    match = _RELEASE_VERSION.match(str(text or '').strip())
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def mark_outdated_versions(counters):
+    """Marque ``app_version_outdated`` sur chaque comptoir dont l'App est
+    plus ancienne que la plus recente version publiee vue. Une App qui ne
+    transmet pas sa version est forcement anterieure a l'envoi de la version :
+    elle est ancienne des qu'une version est connue. Les versions de
+    developpement ne sont ni la reference ni signalees. Renvoie la plus
+    recente version publiee (texte) ou ``None``."""
+    parsed = [release_version(item.get('app_version')) for item in counters]
+    latest = max((version for version in parsed if version), default=None)
+    for item, version in zip(counters, parsed, strict=True):
+        if latest is None:
+            outdated = False
+        elif version is None:
+            outdated = not item.get('app_version')
+        else:
+            outdated = version < latest
+        item['app_version_outdated'] = outdated
+    return '.'.join(str(part) for part in latest) if latest else None
 
 
 def hour_bucket(moment):
@@ -143,6 +176,8 @@ def summarize(rows, counter_names=None):
     counters.sort(key=lambda item: (order[item['status']],
                                     str(item['counter_name'] or item['counter_id'])))
 
+    latest_app_version = mark_outdated_versions(counters)
+
     totals = {key: sum(item[key] for item in counters) for key in COUNTER_FIELDS}
     received = totals['events'] + totals['missed_events']
     totals['loss_percent'] = totals['missed_events'] / received * 100 if received else 0
@@ -155,7 +190,8 @@ def summarize(rows, counter_names=None):
         status = 'watch'
     else:
         status = 'ok'
-    return {'status': status, 'counters': counters, 'totals': totals}
+    return {'status': status, 'counters': counters, 'totals': totals,
+            'latest_app_version': latest_app_version}
 
 
 def _fr(value, digits=1):
