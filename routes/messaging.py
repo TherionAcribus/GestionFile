@@ -110,6 +110,20 @@ def read_messages():
         return _error(exc)
 
 
+@messaging_bp.route("/api/messaging/unread", methods=["POST"])
+@require_app_token
+def mark_unread():
+    """« Marquer comme non lu » : {counter_id, kind, peer_staff_id?}."""
+    data = _json()
+    try:
+        return jsonify(messaging.mark_unread(
+            data.get("counter_id"), data.get("kind"),
+            data.get("peer_staff_id"),
+        ))
+    except messaging.MessagingError as exc:
+        return _error(exc)
+
+
 @messaging_bp.route("/api/messaging/quick_replies", methods=["PUT"])
 @require_app_token
 def save_quick_replies():

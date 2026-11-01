@@ -995,3 +995,98 @@ def test_old_deleted_message_trace_does_not_outlive_the_day(api):
         db.session.commit()
     assert _thread(client, 2, ids["alice"]) == []
     assert _thread(client, 1, ids["bob"]) == []
+
+
+# --- « Marquer comme non lu » ---------------------------------------------------
+
+def _mark_unread(client, counter_id, kind="direct", peer_staff_id=None):
+    payload = {"counter_id": counter_id, "kind": kind}
+    if peer_staff_id is not None:
+        payload["peer_staff_id"] = peer_staff_id
+    return client.post("/api/messaging/unread", json=payload)
+
+
+def test_mark_unread_restores_the_count_but_keeps_the_sender_read_receipt(
+        api, monkeypatch):
+    _app, client, ids = api
+    calls = _spy_communikation(monkeypatch)
+    _presence(client, 1)
+    _presence(client, 2)
+    _send(client, 1, recipient_staff_id=ids["bob"], body="premier")
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"], body="second")
+    last_id = response.get_json()["id"]
+    thread = _thread(client, 2, ids["alice"], include_deleted=False)
+    client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [m["id"] for m in thread]})
+    assert client.get(
+        "/api/messaging/state?counter_id=2").get_json()["unread_total"] == 0
+    calls.clear()
+
+    marked = _mark_unread(client, 2, peer_staff_id=ids["alice"])
+    assert marked.status_code == 200
+    assert marked.get_json() == {"unread": True, "message_id": last_id}
+    # Seul le comptoir de Bob est prévenu.
+    assert {c["room"] for c in _changed_events(calls)} == {"messaging_counter_2"}
+
+    bob_state = client.get("/api/messaging/state?counter_id=2").get_json()
+    assert bob_state["unread_total"] == 1          # seul le dernier reçu
+    bob_conv = next(c for c in bob_state["conversations"]
+                    if c["key"] == f"direct:{ids['alice']}")
+    assert bob_conv["unread_count"] == 1
+    flags = {m["id"]: m["is_unread"]
+             for m in _thread(client, 2, ids["alice"], include_deleted=False)}
+    assert flags[last_id] is True and list(flags.values()).count(True) == 1
+    # Alice garde son « Lu » : rien ne trahit la remise en non lu.
+    alice_thread = _thread(client, 1, ids["bob"], include_deleted=False)
+    assert all(m["read_at"] for m in alice_thread)
+
+
+def test_reading_again_clears_the_mark_without_changing_the_read_date(api):
+    _app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    message_id = response.get_json()["id"]
+    client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [message_id]})
+    first_read = _thread(client, 1, ids["bob"], include_deleted=False)[0]["read_at"]
+    _mark_unread(client, 2, peer_staff_id=ids["alice"])
+
+    reread = client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [message_id]})
+    assert reread.get_json()["read"] == 1
+    assert client.get(
+        "/api/messaging/state?counter_id=2").get_json()["unread_total"] == 0
+    assert _thread(client, 1, ids["bob"], include_deleted=False)[0]["read_at"] \
+        == first_read
+
+
+def test_mark_unread_works_for_team_messages_and_ignores_my_own(api):
+    _app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    sent, _ = _send(client, 1, kind="broadcast", recipient_staff_id=None,
+                    body="à tous")
+    team_id = sent.get_json()["id"]
+    client.post("/api/messaging/read", json={
+        "counter_id": 2, "message_ids": [team_id]})
+    marked = _mark_unread(client, 2, kind="broadcast")
+    assert marked.get_json()["message_id"] == team_id
+    # Alice n'a rien REÇU dans l'équipe (elle n'a qu'envoyé) : refus lisible.
+    refused = _mark_unread(client, 1, kind="broadcast")
+    assert refused.status_code == 400
+    body = refused.get_json()
+    assert body["error"] == "nothing_to_mark_unread"
+    assert body["message"]
+
+
+def test_mark_unread_skips_removed_messages_and_rejects_bad_input(api):
+    _app, client, ids = api
+    _presence(client, 1)
+    _presence(client, 2)
+    response, _ = _send(client, 1, recipient_staff_id=ids["bob"])
+    client.get("/api/messaging/state?counter_id=2")
+    _delete(client, 1, response.get_json()["id"])
+    assert _mark_unread(client, 2, peer_staff_id=ids["alice"]).status_code == 400
+    assert _mark_unread(client, 2, kind="bogus").status_code == 400
+    assert _mark_unread(client, 2, peer_staff_id="abc").status_code == 400

@@ -523,6 +523,10 @@ class AppMessageRecipient(db.Model):
     # appris que le message existe en interrogeant le serveur), distinct
     # de la lecture réelle. Un read_at implique toujours un delivered_at.
     delivered_at = db.Column(db.DateTime, nullable=True)
+    # « Marquer comme non lu » par le destinataire : le message compte de
+    # nouveau comme non lu POUR LUI, sans toucher à read_at — l'expéditeur
+    # garde son accusé « Lu ». Effacé à la prochaine lecture.
+    marked_unread_at = db.Column(db.DateTime, nullable=True)
 
     message = db.relationship("AppMessage", back_populates="recipients")
 

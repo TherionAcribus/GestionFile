@@ -265,7 +265,7 @@ def _visible_query(staff_id, include_deleted=False):
                     AppMessage.recipients.any(
                         and_(
                             AppMessageRecipient.recipient_staff_id == staff_id,
-                            AppMessageRecipient.read_at.is_(None),
+                            _recipient_unread_clause(),
                         ),
                     ),
                     and_(
@@ -278,6 +278,20 @@ def _visible_query(staff_id, include_deleted=False):
             ),
         ),
     )
+
+
+def _recipient_unread_clause():
+    """Non lu POUR LE DESTINATAIRE : jamais lu, ou remis en non lu par lui
+    (« Marquer comme non lu »)."""
+    return or_(
+        AppMessageRecipient.read_at.is_(None),
+        AppMessageRecipient.marked_unread_at.isnot(None),
+    )
+
+
+def _is_unread_for_recipient(row):
+    return bool(row and (row.read_at is None
+                         or row.marked_unread_at is not None))
 
 
 def _iso(value):
@@ -355,7 +369,7 @@ def serialize_message(message, viewer_staff_id):
         "recipients": recipients if message.kind == "direct" else [],
         "delivered_at": direct_delivered_at,
         "read_at": direct_read_at,
-        "is_unread": bool(viewer_recipient and not viewer_recipient.read_at),
+        "is_unread": _is_unread_for_recipient(viewer_recipient),
         "deleted": False,
     }
 
@@ -461,7 +475,7 @@ def state(counter_id):
             (row for row in message.recipients if row.recipient_staff_id == staff.id),
             None,
         )
-        if recipient and recipient.read_at is None:
+        if _is_unread_for_recipient(recipient):
             summary["unread_count"] += 1
             # Non-lu prioritaire (direct ou équipe) : compté à part pour
             # l'alerte « urgent » de l'App — comme les mentions.
@@ -752,25 +766,68 @@ def mark_read(counter_id, message_ids):
         .filter(
             AppMessageRecipient.recipient_staff_id == staff.id,
             AppMessageRecipient.message_id.in_(ids),
-            AppMessageRecipient.read_at.is_(None),
+            _recipient_unread_clause(),
         )
         .options(joinedload(AppMessageRecipient.message))
         .all()
     )
     read_at = now()
+    # Seules les PREMIÈRES lectures changent l'accusé de l'expéditeur ; un
+    # message remis en non lu puis relu garde sa date de lecture d'origine.
+    first_reads = [row for row in rows if row.read_at is None]
     for row in rows:
-        row.read_at = read_at
+        row.read_at = row.read_at or read_at
+        row.marked_unread_at = None
         # « Lu » implique « Remis » — même si l'app n'a jamais été marquée
         # destinataire d'un delivered_at avant (lecture directe du fil).
         row.delivered_at = row.delivered_at or read_at
     if rows:
         db.session.commit()
         # Ciblé : le comptoir du lecteur (son compteur de non-lus change)
-        # et le comptoir de chaque expéditeur (sa pastille « lu » change).
+        # et le comptoir de chaque expéditeur dont l'accusé change.
         rooms = {counter.id}
-        rooms.update(row.message.sender_counter_id for row in rows)
+        rooms.update(row.message.sender_counter_id for row in first_reads)
+        rooms.discard(None)
         _emit("messaging_changed", {"read": True}, rooms=rooms)
     return {"read": len(rows), "read_at": _iso(read_at) if rows else None}
+
+
+def mark_unread(counter_id, kind, peer_staff_id=None):
+    """« Marquer comme non lu » : le dernier message REÇU de la conversation
+    redevient non lu pour l'équipier du comptoir — rappel pour y revenir
+    plus tard. read_at n'est pas touché : l'expéditeur garde son « Lu ».
+    Seul le comptoir de l'équipier est prévenu (rien ne change ailleurs)."""
+    require_enabled()
+    counter, staff = resolve_identity(counter_id)
+    if kind not in {"direct", "broadcast"}:
+        raise MessagingError("invalid_message", 400)
+    query = (
+        AppMessageRecipient.query
+        .join(AppMessage, AppMessageRecipient.message_id == AppMessage.id)
+        .filter(
+            AppMessageRecipient.recipient_staff_id == staff.id,
+            AppMessage.kind == kind,
+            AppMessage.deleted_at.is_(None),
+            AppMessage.sender_staff_id != staff.id,
+        )
+    )
+    if kind == "direct":
+        try:
+            peer_staff_id = int(peer_staff_id)
+        except (TypeError, ValueError):
+            raise MessagingError("invalid_message", 400)
+        query = query.filter(AppMessage.sender_staff_id == peer_staff_id)
+    row = query.order_by(AppMessage.id.desc()).first()
+    if row is None:
+        # Rien de reçu dans cette conversation : rien à remettre en non lu.
+        raise MessagingError(
+            "nothing_to_mark_unread", 400,
+            "Aucun message reçu dans cette conversation.")
+    if row.marked_unread_at is None and row.read_at is not None:
+        row.marked_unread_at = now()
+        db.session.commit()
+        _emit("messaging_changed", {"unread": True}, rooms={counter.id})
+    return {"unread": True, "message_id": row.message_id}
 
 
 def purge_expired():
